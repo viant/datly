@@ -1838,7 +1838,12 @@ func Compile(component *spec.Component, inputType, outputType reflect.Type, oper
 			break
 		}
 	}
-	if metadata.CurrentField < 0 && operation != "post" && !(component.RootView.Auxiliary && len(component.RootView.Relations) == 0 && strings.TrimSpace(component.RootView.EntityHooks) != "") {
+	auxiliaryRoot := component.RootView.Auxiliary || strings.EqualFold(tagOption(rootViewTag, "auxiliary"), "true")
+	hookName := strings.TrimSpace(component.RootView.EntityHooks)
+	if hookName == "" {
+		hookName = tagOption(rootViewTag, "entityHooks")
+	}
+	if metadata.CurrentField < 0 && operation != "post" && !(auxiliaryRoot && len(component.RootView.Relations) == 0 && hookName != "") {
 		return nil, fmt.Errorf("writer input has no current-state collection for %s in %s", metadata.EntityType, describeFields(inputType))
 	}
 	for i := 0; i < outputType.NumField(); i++ {
@@ -1924,16 +1929,12 @@ func Compile(component *spec.Component, inputType, outputType reflect.Type, oper
 		copy := metadata.Keys[0]
 		metadata.Sequence = &copy
 	}
-	hookName := strings.TrimSpace(component.RootView.EntityHooks)
-	if hookName == "" {
-		hookName = tagOption(rootViewTag, "entityHooks")
-	}
 	if hookName != "" {
 		metadata.HookType = resolveHookType(component, hookName)
 	}
 	root := &Record{
 		Name: component.RootView.CanonicalName(), Path: component.RootView.CanonicalName(), EntityType: metadata.EntityType,
-		Auxiliary:    component.RootView.Auxiliary || strings.EqualFold(tagOption(rootViewTag, "auxiliary"), "true"),
+		Auxiliary:    auxiliaryRoot,
 		CurrentField: metadata.CurrentField, Table: metadata.Table, Keys: metadata.Keys, Fields: metadata.Fields,
 		Sequence: metadata.Sequence, DeleteMarker: metadata.DeleteMarker, ConcurrencyToken: metadata.ConcurrencyToken,
 		Invariants: metadata.Invariants, WriterIdentityPolicy: component.RootView.WriterIdentityPolicy, InsertValidationPresence: component.RootView.InsertValidationPresence, OnDeleteNotFound: component.RootView.OnDeleteNotFound, MutationPredicateGroup: component.RootView.MutationPredicateGroup, HookType: metadata.HookType,

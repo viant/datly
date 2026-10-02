@@ -75,7 +75,7 @@ type batchBinder struct{}
 func(batchBinder)Bind(context.Context,any)error{return nil}
 func(batchBinder)Lookup(context.Context,handler.ValueKey)(any,bool,error){return nil,false,fmt.Errorf("unexpected database capability lookup")}
 func TestAuxiliaryCanonicalInputOnce(t *testing.T){
- component:=&spec.Component{Key:spec.Key{Scope:linkedBatchType.PkgPath()},Settings:&spec.Settings{},RootView:&spec.View{Name:"e",Auxiliary:true,EntityHooks:"BatchLifecycle",Source:&spec.ViewSource{Table:"events"}}}
+ component:=&spec.Component{Key:spec.Key{Scope:linkedBatchType.PkgPath()},Settings:&spec.Settings{},RootView:&spec.View{Name:"e",Source:&spec.ViewSource{Table:"events"}}}
  h,err:=writer.New(component,reflect.TypeOf(EventsInput{}),reflect.TypeOf(EventsOutput{}),"patch");if err!=nil{t.Fatal(err)}
  for _,rows:=range [][]*EventsView{nil,{}, {new(EventsView),new(EventsView)}}{
   initCalls,validateCalls,finalizeCalls=0,0,0;expectedInput=&EventsInput{Events:rows};expectedOutput=nil
