@@ -2,17 +2,37 @@ package reader
 
 import (
 	"context"
+	"errors"
 	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/viant/datly/data"
 	"github.com/viant/datly/spec"
+	dsql "github.com/viant/datly/sql"
 	xhandler "github.com/viant/xdatly/handler"
 	xstate "github.com/viant/xdatly/state"
 )
 
 type selectorBinder struct{ selectors xstate.Selectors }
+
+func TestFieldSelectorRejectsSuppliedEmptyColumn(t *testing.T) {
+	for _, fields := range [][]string{{"ID", "", "STATUS"}, {" "}, {""}} {
+		selector := &xstate.Selector{Fields: []string{"previous"}}
+		err := applySelectorBinding(selector, SelectorBindingPlan{Property: spec.SelectorPropertyFields}, reflect.ValueOf(fields))
+		var unknown *dsql.UnknownProjectionColumnError
+		if !errors.As(err, &unknown) {
+			t.Fatalf("empty column accepted: %v", err)
+		}
+		if !reflect.DeepEqual(selector.Fields, []string{"previous"}) {
+			t.Fatal("failed selector partially applied")
+		}
+	}
+	selector := &xstate.Selector{}
+	if err := applySelectorBinding(selector, SelectorBindingPlan{Property: spec.SelectorPropertyFields}, reflect.ValueOf([]string{})); err != nil {
+		t.Fatalf("empty selection rejected: %v", err)
+	}
+}
 
 func (b selectorBinder) Bind(context.Context, any) error { return nil }
 func (b selectorBinder) Lookup(_ context.Context, key xhandler.ValueKey) (any, bool, error) {
