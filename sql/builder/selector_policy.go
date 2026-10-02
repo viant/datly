@@ -61,7 +61,7 @@ func (b *Builder) resolveControls(options *builderOptions, excludePagination boo
 		}
 		source.sqlText = prepared.sql
 	}
-	resolver := selectorResolver{policy: policy, sqlText: source.sqlText, view: source.view, projection: source.projection, reportOrderFields: options.reportOrderFields}
+	resolver := selectorResolver{policy: policy, sqlText: paginationInspectionSource(source.sqlText), view: source.view, projection: source.projection, reportOrderFields: options.reportOrderFields}
 	return resolver.controls(options.controls, options.selector, excludePagination)
 }
 

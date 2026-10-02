@@ -226,6 +226,7 @@ func (b *Builder) Build(ctx context.Context, opts ...BuilderOption) (*cache.Parm
 		}
 		bindingPositionalArgs = nil
 	}
+	sourceSQL, paginationConsumed := prepareSourcePagination(sourceSQL, controls)
 	if options.selector != nil && strings.TrimSpace(options.selector.OrderBy) != "" && len(options.projection) == 0 {
 		sourceSQL, err = (dsql.SelectorProjection{SQL: sourceSQL, View: options.view, Dialect: options.dialect}).Expand()
 		if err != nil {
@@ -262,7 +263,7 @@ func (b *Builder) Build(ctx context.Context, opts ...BuilderOption) (*cache.Parm
 	if err != nil {
 		return nil, err
 	}
-	boundSQL = dsql.PrepareExecutableSQL(projection.Render(boundSQL), controls)
+	boundSQL = dsql.PrepareExecutableSQL(projection.Render(boundSQL), remainingSourceControls(controls, paginationConsumed))
 	boundSQL, err = options.applyRowLock(boundSQL)
 	if err != nil {
 		return nil, err

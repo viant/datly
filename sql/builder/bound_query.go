@@ -26,7 +26,7 @@ func (b *Builder) ShapeBound(query *cache.ParmetrizedQuery, opts ...BuilderOptio
 	if err := b.validateProjection(options); err != nil {
 		return nil, err
 	}
-	sourceSQL := options.sqlText
+	sourceSQL, paginationConsumed := prepareSourcePagination(options.sqlText, controls)
 	positionalArgs := interfaceSlice(query.Args)
 	resolver := options.parameterResolver
 	if len(options.projection) > 0 {
@@ -61,7 +61,7 @@ func (b *Builder) ShapeBound(query *cache.ParmetrizedQuery, opts ...BuilderOptio
 	if err != nil {
 		return nil, err
 	}
-	boundSQL = dsql.PrepareExecutableSQL(projection.Render(boundSQL), controls)
+	boundSQL = dsql.PrepareExecutableSQL(projection.Render(boundSQL), remainingSourceControls(controls, paginationConsumed))
 	boundSQL, err = options.applyRowLock(boundSQL)
 	if err != nil {
 		return nil, err
