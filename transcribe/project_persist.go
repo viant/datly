@@ -8,8 +8,6 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
-
-	"golang.org/x/sys/unix"
 )
 
 const (
@@ -31,16 +29,16 @@ func (s *projectMetadataStore) lock(ctx context.Context) (func(), error) {
 		return nil, err
 	}
 	for {
-		err = unix.Flock(int(file.Fd()), unix.LOCK_EX|unix.LOCK_NB)
-		if err == nil {
+		unlock, blocked, lockErr := tryLockProjectMetadataFile(file)
+		if lockErr == nil && !blocked {
 			return func() {
-				_ = unix.Flock(int(file.Fd()), unix.LOCK_UN)
+				_ = unlock()
 				_ = file.Close()
 			}, nil
 		}
-		if err != unix.EWOULDBLOCK && err != unix.EAGAIN {
+		if lockErr != nil {
 			_ = file.Close()
-			return nil, err
+			return nil, lockErr
 		}
 		select {
 		case <-ctx.Done():
