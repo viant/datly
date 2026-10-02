@@ -23,6 +23,12 @@ and opt-in cube composition from selected linked packages. Preserve source auth,
 explicit SQL aliases and every warmed grouping dimension when reusing cube caches;
 see [reports](references/product/datly/doc/reports.md) for declared configuration and authorization requirements.
 
+## Preserve the database during migration
+
+A migration to Datly must preserve the existing database schema. Never propose a counter table, sequence ledger, reservation store, new column or other DDL as a migration prerequisite. Preserve MySQL's existing native auto-increment and the version-matched SQLX default transient allocation behavior; never replace internal auto-increment with external sequence storage.
+
+Scoped non-identity numbering is a separate capability. Its optional ledger is not a migration default or a substitute for native identity allocation. When the existing schema and transient mechanism cannot express the requested scope, report that specific framework gap and preserve the current behavior. Do not silently add storage or DDL. A separately requested new allocator design must be evaluated as a separate change.
+
 ## Read what the task needs
 
 - For Go field renames, outer projection versus inner SQL aliases, SQLX/JSON

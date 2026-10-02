@@ -1,5 +1,7 @@
 # Scoped writer sequences
 
+This is an **opt-in feature for a separately chosen allocator design**, not a Datly migration prerequisite. A migration must preserve the existing schema, MySQL native auto-increment and SQLX default transient allocation. Never propose this ledger as a replacement for internal auto-increment. If scoped behavior cannot use the existing schema and allocator, report the capability gap; do not silently provision storage or change DDL.
+
 A scoped sequence allocates a numeric **non-identity** column independently for
 one tuple of entity fields. For example, message IDs remain strings while each
 turn numbers its own messages.
