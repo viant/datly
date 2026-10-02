@@ -48,7 +48,9 @@ type EntityPlan struct {
 	// HooksScaffold marks an explicit unresolved local lifecycle declaration.
 	HooksScaffold bool
 	HooksBind     bool
-	LateWrite     LateWriteEffects
+	// HooksComponent invokes a leaf auxiliary root's lifecycle once with Input.
+	HooksComponent bool
+	LateWrite      LateWriteEffects
 }
 
 func (p *EntityPlan) Clone() *EntityPlan {

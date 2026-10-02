@@ -34,7 +34,7 @@ func (g *handlerGeneration) prepareMutationScaffold(semantic *plan.Plan, config 
 	resolver := xshape.Resolver{Package: config.PackagePath, Imports: imports}
 	var contracts []compiler.EntityHookRequest
 	for _, binding := range proposal.Bindings {
-		request := compiler.EntityHookRequest{Hook: binding.Hook, Entity: binding.Entity, Parent: binding.Parent}
+		request := compiler.EntityHookRequest{Hook: binding.Hook, Entity: binding.Entity, Parent: binding.Parent, Component: binding.Component}
 		request.Output, err = resolver.Canonical(config.OutputType)
 		if err != nil {
 			return nil, err

@@ -272,21 +272,22 @@ func (*Handler) RequiresReadMetadata() bool { return true }
 // Program is invocation-owned universal mutation state. The same type is used
 // for every writer component; only Metadata and values differ.
 type Program struct {
-	scopedService any
-	metadata      *Metadata
-	input         any
-	output        any
-	original      *OriginalInput
-	database      *DatabaseSnapshot
-	frames        *MutationFrames
-	actions       *MutationActions
-	validation    *FrameworkValidation
-	hooks         *Hooks
-	hook          reflect.Value
-	hooksByRecord map[*Record]reflect.Value
-	stage         Stage
-	failed        bool
-	finalized     bool
+	scopedService          any
+	metadata               *Metadata
+	input                  any
+	output                 any
+	original               *OriginalInput
+	database               *DatabaseSnapshot
+	frames                 *MutationFrames
+	actions                *MutationActions
+	validation             *FrameworkValidation
+	hooks                  *Hooks
+	hook                   reflect.Value
+	hooksByRecord          map[*Record]reflect.Value
+	stage                  Stage
+	failed                 bool
+	finalized              bool
+	componentHookAttempted bool
 	// graph caches insert lookups for the current frame topology.
 	graph *graphIndex
 	// typeFields caches the exported field set per Previous type.
@@ -691,6 +692,12 @@ func (h *Handler) FinalizeOutcome(ctx context.Context, invocation rhandler.Invoc
 	if !program.hook.IsValid() {
 		return nil
 	}
+	if program.componentHook() {
+		if program.finalized {
+			return nil
+		}
+		program.finalized = true
+	}
 	method := program.hook.MethodByName("Finalize")
 	if !method.IsValid() {
 		return nil
@@ -790,6 +797,35 @@ func (p *Program) prepareHooks(record *Record) {
 func (p *Program) prepare(ctx context.Context, binder xhandler.Binder) error {
 	if err := ctx.Err(); err != nil {
 		return err
+	}
+	if p.componentHook() {
+		if p.componentHookAttempted {
+			return fmt.Errorf("auxiliary component lifecycle already attempted")
+		}
+		p.componentHookAttempted = true
+		if binder == nil {
+			return fmt.Errorf("auxiliary component lifecycle requires a binder")
+		}
+		if err := binder.Bind(ctx, p.hook.Interface()); err != nil {
+			return err
+		}
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		entities := reflect.ValueOf(p.input).Elem().Field(p.metadata.InputField)
+		reflect.ValueOf(p.output).Elem().Field(p.metadata.OutputField).Set(entities)
+		frame := &Frame{Entity: reflect.ValueOf(p.input), Hook: p.hook, Record: p.metadata.Root}
+		if err := p.callEntityHook(ctx, "Init", frame); err != nil {
+			return err
+		}
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if err := p.callEntityHook(ctx, "Validate", frame); err != nil {
+			return err
+		}
+		p.failed = false
+		return nil
 	}
 	input := reflect.ValueOf(p.input).Elem()
 	entities := input.Field(p.metadata.InputField)
@@ -1015,6 +1051,10 @@ func (p *Program) prepare(ctx context.Context, binder xhandler.Binder) error {
 	}
 	p.failed = false
 	return nil
+}
+
+func (p *Program) componentHook() bool {
+	return p != nil && p.metadata != nil && p.metadata.Root != nil && p.metadata.Root.Auxiliary && len(p.metadata.Root.Relations) == 0 && p.hook.IsValid()
 }
 
 type frameIdentity struct {
@@ -1798,7 +1838,7 @@ func Compile(component *spec.Component, inputType, outputType reflect.Type, oper
 			break
 		}
 	}
-	if metadata.CurrentField < 0 && operation != "post" {
+	if metadata.CurrentField < 0 && operation != "post" && !(component.RootView.Auxiliary && len(component.RootView.Relations) == 0 && strings.TrimSpace(component.RootView.EntityHooks) != "") {
 		return nil, fmt.Errorf("writer input has no current-state collection for %s in %s", metadata.EntityType, describeFields(inputType))
 	}
 	for i := 0; i < outputType.NumField(); i++ {
@@ -1910,6 +1950,46 @@ func Compile(component *spec.Component, inputType, outputType reflect.Type, oper
 	}
 	if err := compileRelations(component, inputType, root, component.RootView); err != nil {
 		return nil, err
+	}
+	if root.Auxiliary && len(root.Relations) == 0 && hookName != "" {
+		if root.HookType == nil {
+			return nil, fmt.Errorf("auxiliary lifecycle requires a linked leaf root hook")
+		}
+		hook := reflect.New(root.HookType)
+		for _, name := range []string{"AfterSequence", "AfterQueue", "Recover"} {
+			if hook.MethodByName(name).IsValid() {
+				return nil, fmt.Errorf("auxiliary component lifecycle does not support %s", name)
+			}
+		}
+		if method := hook.MethodByName("Finalize"); method.IsValid() {
+			typ := method.Type()
+			if typ.NumIn() != 4 || typ.In(0) != reflect.TypeFor[context.Context]() || typ.In(1) != reflect.PointerTo(inputType) || typ.In(2) != reflect.PointerTo(outputType) || typ.In(3) != reflect.TypeFor[xhandler.Outcome]() || typ.NumOut() != 1 || typ.Out(0) != reflect.TypeFor[error]() || typ.IsVariadic() {
+				return nil, fmt.Errorf("auxiliary lifecycle Finalize requires canonical Input, Output and Outcome")
+			}
+		}
+		for _, name := range []string{"Init", "Validate"} {
+			method := hook.MethodByName(name)
+			if !method.IsValid() {
+				return nil, fmt.Errorf("auxiliary component lifecycle requires %s", name)
+			}
+			typ := method.Type()
+			if typ.NumIn() != 3 || typ.In(0) != reflect.TypeFor[context.Context]() || typ.In(1) != reflect.PointerTo(inputType) || typ.NumOut() != 1 || typ.Out(0) != reflect.TypeFor[error]() || typ.IsVariadic() || typ.In(2).Kind() != reflect.Struct {
+				return nil, fmt.Errorf("auxiliary lifecycle %s requires canonical Input and LifecycleContext", name)
+			}
+			state := typ.In(2)
+			previous, ok := state.FieldByName("Previous")
+			if !ok || previous.Type != reflect.PointerTo(inputType) {
+				return nil, fmt.Errorf("auxiliary lifecycle %s has invalid Previous type", name)
+			}
+			parent, ok := state.FieldByName("Parent")
+			if !ok || parent.Type != reflect.TypeFor[*xhandler.NoParent]() {
+				return nil, fmt.Errorf("auxiliary lifecycle %s has invalid Parent type", name)
+			}
+			output, ok := state.FieldByName("Output")
+			if !ok || output.Type != reflect.PointerTo(outputType) {
+				return nil, fmt.Errorf("auxiliary lifecycle %s has invalid Output type", name)
+			}
+		}
 	}
 	metadata.Root = root
 	if err := validateWriterIdentityPolicy(root, operation); err != nil {

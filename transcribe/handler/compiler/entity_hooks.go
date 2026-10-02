@@ -12,7 +12,10 @@ import (
 
 // EntityHookRequest carries canonical entity/parent identities, not runtime
 // values. Parent is empty only at the root, whose typed parent is NoParent.
-type EntityHookRequest struct{ Hook, Entity, Parent, Input, Output string }
+type EntityHookRequest struct {
+	Hook, Entity, Parent, Input, Output string
+	Component                           bool
+}
 
 // EntityHookCompiler validates authored hook contracts before target lowering.
 // Instantiation and Bindly invocation lifetime belong to the generated program.
@@ -61,6 +64,13 @@ func (c EntityHookCompiler) Compile(request EntityHookRequest) (spec.TypeRef, er
 	methods, err := shape.Methods(true)
 	if err != nil {
 		return spec.TypeRef{}, fmt.Errorf("entity hook %q: %w", request.Hook, err)
+	}
+	if request.Component {
+		for _, method := range methods {
+			if method.Name == "AfterSequence" || method.Name == "AfterQueue" || method.Name == "Recover" {
+				return spec.TypeRef{}, fmt.Errorf("auxiliary component hook %s does not support %s", resolved.Identity, method.Name)
+			}
+		}
 	}
 	if c.CanonicalType != nil {
 		for i := range methods {

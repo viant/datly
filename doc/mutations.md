@@ -669,8 +669,8 @@ lifecycle filename setting cannot redirect generation into a foreign package.
 An external default package remains authoritative for unqualified type names.
 
 No declaration means no application lifecycle binding or scaffold. Ordinary writes
-still execute framework validation and DML. Auxiliary views cannot declare mutation
-lifecycles. Declare child hooks independently with their actual typed parent;
+still execute framework validation and DML. Auxiliary leaf children cannot declare
+mutation lifecycles. Declare child hooks independently with their actual typed parent;
 when one entity participates under different parent types, explicitly choose
 separate lifecycle structs for those contracts. Root state uses `NoParent`;
 `SelfParent` identifies a recursive parent independently of the enclosing `Parent`.
@@ -681,6 +681,27 @@ writes. `entity_hooks` is unsupported DQL and produces an explicit diagnostic.
 
 `lifecycle_type` is accepted only for generated Go mutation writers. GET readers
 and other lowering modes reject the declaration before generating files.
+
+A leaf auxiliary root may explicitly declare a component lifecycle. Its SQL graph
+still generates the body, while `Init` and `Validate` receive the canonical Input
+once per request, including a nil or empty body:
+
+```go
+func (*PreferenceLifecycle) Init(ctx context.Context, input *Input,
+    state handler.LifecycleContext[Input, handler.NoParent, Output]) error
+func (*PreferenceLifecycle) Validate(ctx context.Context, input *Input,
+    state handler.LifecycleContext[Input, handler.NoParent, Output]) error
+```
+
+This role has no row Previous, Parent, Original or SelfParent. It receives the
+canonical Output and an invocation-local bound hook. It performs no parent Current
+read, sequence allocation, physical row validation or DML. Application code may
+invoke a declared child through its existing scoped invoker; the child owns its
+ordinary writer behavior and the invocation owner owns transaction completion.
+Hook failures stop subsequent work and preserve Output. Optional
+`Finalize(context.Context, *Input, *Output, handler.Outcome) error` observes
+completion once. Row signatures, AfterSequence, AfterQueue and Recover are rejected
+for this role. Relation-bearing roots retain their existing entity lifecycle.
 
 Reader request initialization belongs to the explicitly named `input_type`
 (`OrdersInput.Init`), and response finalization belongs to the named `output_type`

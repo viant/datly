@@ -22,6 +22,7 @@ type MutationScaffoldBinding struct {
 	Identity, Hook, Entity, Parent string
 	Path                           plan.FieldPath
 	Root                           bool
+	Component                      bool
 }
 
 // ScaffoldMutationHooks proposes invocation-scoped EntityHooks, never methods
@@ -54,7 +55,7 @@ func ScaffoldMutationHooks(value *plan.Plan, config Config) (*MutationScaffold, 
 	}
 	resolver := xshape.Resolver{Package: config.PackagePath, Imports: imports}
 	for _, record := range l.records {
-		if record.plan.Auxiliary {
+		if record.plan.Auxiliary && (record.plan.Entity == nil || !record.plan.Entity.HooksComponent) {
 			continue
 		}
 		if record.plan.Entity == nil {
@@ -71,7 +72,11 @@ func ScaffoldMutationHooks(value *plan.Plan, config Config) (*MutationScaffold, 
 		if err := l.reserveDeclaration(name); err != nil {
 			return nil, err
 		}
-		entity, err := resolver.Canonical(record.value.base)
+		entityType := record.value.base
+		if record.plan.Entity.HooksComponent {
+			entityType = config.InputType
+		}
+		entity, err := resolver.Canonical(entityType)
 		if err != nil {
 			return nil, err
 		}
@@ -84,7 +89,7 @@ func ScaffoldMutationHooks(value *plan.Plan, config Config) (*MutationScaffold, 
 			}
 			parentExpr = parseExpr(enclosing.value.base)
 		}
-		binding := MutationScaffoldBinding{Identity: record.plan.Identity, Path: append(plan.FieldPath(nil), record.plan.InputPath...), Hook: config.PackagePath + "." + name, Entity: entity, Parent: parent, Root: record.plan == result.Plan.Root}
+		binding := MutationScaffoldBinding{Identity: record.plan.Identity, Path: append(plan.FieldPath(nil), record.plan.InputPath...), Hook: config.PackagePath + "." + name, Entity: entity, Parent: parent, Root: record.plan == result.Plan.Root, Component: record.plan.Entity.HooksComponent}
 		result.Bindings = append(result.Bindings, binding)
 		record.plan.Entity.HooksScaffold = false
 		record.plan.Entity.HooksBind = false
@@ -102,10 +107,14 @@ func ScaffoldMutationHooks(value *plan.Plan, config Config) (*MutationScaffold, 
 			Names:  []*ast.Ident{ast.NewIdent(name + "Datly")},
 			Values: []ast.Expr{callExpr(ast.NewIdent(factory))},
 		}}})
-		for _, method := range []string{"Init", "Validate", "AfterSequence", "AfterQueue"} {
-			state := &ast.IndexListExpr{X: selectExpr(ast.NewIdent(l.handlerAlias), "LifecycleContext"), Indices: []ast.Expr{parseExpr(record.value.base), parentExpr, parseExpr(config.OutputType)}}
+		methods := []string{"Init", "Validate", "AfterSequence", "AfterQueue"}
+		if record.plan.Entity.HooksComponent {
+			methods = methods[:2]
+		}
+		for _, method := range methods {
+			state := &ast.IndexListExpr{X: selectExpr(ast.NewIdent(l.handlerAlias), "LifecycleContext"), Indices: []ast.Expr{parseExpr(entityType), parentExpr, parseExpr(config.OutputType)}}
 			file.Decls = append(file.Decls, (&mutationScaffoldEmitter{name: name}).method(method, []*ast.Field{
-				namedField("ctx", selectExpr(ast.NewIdent(l.contextAlias), "Context")), namedField("entity", &ast.StarExpr{X: parseExpr(record.value.base)}), namedField("state", state),
+				namedField("ctx", selectExpr(ast.NewIdent(l.contextAlias), "Context")), namedField("entity", &ast.StarExpr{X: parseExpr(entityType)}), namedField("state", state),
 			}))
 		}
 		if binding.Root {

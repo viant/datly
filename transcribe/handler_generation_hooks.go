@@ -88,7 +88,10 @@ func (c *entityHookCompilation) apply(record *plan.RecordPlan, parent string) er
 	}
 	if view := c.views[record.Identity]; view != nil && strings.TrimSpace(view.EntityHooks) != "" {
 		if record.Auxiliary && !hasWritableDescendant(record) {
-			return fmt.Errorf("auxiliary view %s cannot declare mutation entity hooks", record.Identity)
+			if parent != "" || len(record.Relations) != 0 || c.generation.options.Handler.Go.Execution != GoExecutionMutation {
+				return fmt.Errorf("auxiliary view %s cannot declare mutation entity hooks outside a leaf mutation root", record.Identity)
+			}
+			record.Entity = &plan.EntityPlan{HooksComponent: true}
 		}
 		if record.Entity == nil {
 			return fmt.Errorf("entity hook view %s has no entity metadata", record.Identity)
@@ -105,6 +108,9 @@ func (c *entityHookCompilation) apply(record *plan.RecordPlan, parent string) er
 			if err != nil {
 				return err
 			}
+		}
+		if record.Entity.HooksComponent {
+			request.Entity, request.Component = request.Input, true
 		}
 		hook, scaffold, err := c.compileHook(request)
 		if err != nil {
