@@ -143,3 +143,16 @@ keep SQL binding native and safe.
 Use the connected implementation as authority for registration and mapping
 options. If a required capability is missing, report it rather than inventing
 syntax or substituting a parallel auth framework.
+
+## Trusted failed-credential retention
+
+Native JWT verification failures expose `auth.VerificationFailure` through
+`errors.As`, with the original verifier cause available through `Unwrap`.
+Input conversion, missing credentials, claim-policy failures and cancellation
+retain their existing error boundaries. Failed credentials are not retained by
+default. A trusted standalone host can set `JWTRetainFailedCredential: true`
+(or `auth.Config.RetainFailedCredential` when constructing the auth factory).
+Only an explicitly configured application error hook should call
+`FailedCredential()` to reproduce an existing public error contract. Ordinary
+formatting and JSON serialization do not include the retained credential.
+The codec remains the native verifier for warmup, replay and authorization.

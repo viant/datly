@@ -48,14 +48,17 @@ type Config struct {
 	Cognito        *cognito.Config
 	Firebase       *firebase.Config
 	JWTClaims      *auth.ClaimPolicy
-	MCP            *MCP
-	RouteURL       string
-	PluginsURL     string
-	DependencyURL  string
-	Jobs           *Jobs
-	JobURL         string
-	FailedJobURL   string
-	MaxJobs        int
+	// JWTRetainFailedCredential allows trusted legacy error finalizers to access
+	// failed credentials privately. The safe default does not retain them.
+	JWTRetainFailedCredential bool
+	MCP                       *MCP
+	RouteURL                  string
+	PluginsURL                string
+	DependencyURL             string
+	Jobs                      *Jobs
+	JobURL                    string
+	FailedJobURL              string
+	MaxJobs                   int
 }
 
 type Packages struct {

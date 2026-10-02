@@ -4,6 +4,7 @@ package auth
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 	"strings"
@@ -20,6 +21,9 @@ const JwtClaim = "JwtClaim"
 type Config struct {
 	JWTValidator *verifier.Config
 	ClaimPolicy  *ClaimPolicy
+	// RetainFailedCredential enables deliberate legacy error-response parity.
+	// The credential is private to VerificationFailure and never formatted.
+	RetainFailedCredential bool
 }
 
 // ClaimPolicy binds a successfully verified JWT to the intended issuer,
@@ -34,8 +38,9 @@ type ClaimPolicy struct {
 // Service is an application-configured codec factory. Pass it through the
 // existing bootstrap CodecFactory input; only declared JwtClaim inputs use it.
 type Service struct {
-	verifier *verifier.Service
-	policy   ClaimPolicy
+	verifier               *verifier.Service
+	policy                 ClaimPolicy
+	retainFailedCredential bool
 }
 
 func New(ctx context.Context, config *Config) (*Service, error) {
@@ -60,7 +65,7 @@ func New(ctx context.Context, config *Config) (*Service, error) {
 	if err := service.Init(ctx); err != nil {
 		return nil, fmt.Errorf("initialize JWTValidator: %w", err)
 	}
-	return &Service{verifier: service, policy: policy}, nil
+	return &Service{verifier: service, policy: policy, retainFailedCredential: config.RetainFailedCredential}, nil
 }
 
 func (s *Service) New(config *xcodec.Config, _ ...xcodec.Option) (xcodec.Instance, error) {
@@ -79,12 +84,13 @@ func (s *Service) New(config *xcodec.Config, _ ...xcodec.Option) (xcodec.Instanc
 	if len(config.Args) != 0 {
 		return nil, fmt.Errorf("JwtClaim does not accept transformation arguments")
 	}
-	return &claimsCodec{verifier: s.verifier, policy: s.policy}, nil
+	return &claimsCodec{verifier: s.verifier, policy: s.policy, retainFailedCredential: s.retainFailedCredential}, nil
 }
 
 type claimsCodec struct {
-	verifier *verifier.Service
-	policy   ClaimPolicy
+	verifier               *verifier.Service
+	policy                 ClaimPolicy
+	retainFailedCredential bool
 }
 
 func (c *claimsCodec) Value(ctx context.Context, raw any, _ ...xcodec.Option) (any, error) {
@@ -104,7 +110,14 @@ func (c *claimsCodec) Value(ctx context.Context, raw any, _ ...xcodec.Option) (a
 	}
 	claims, err := c.verifier.VerifyClaims(ctx, parts[0])
 	if err != nil {
-		return nil, fmt.Errorf("verify JWT: %w", err)
+		if ctx.Err() != nil || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return nil, fmt.Errorf("verify JWT: %w", err)
+		}
+		failure := &VerificationFailure{cause: err}
+		if c.retainFailedCredential {
+			failure.credential, failure.retained = value, true
+		}
+		return nil, failure
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err

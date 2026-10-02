@@ -340,7 +340,7 @@ func (s *source) init(ctx context.Context, registry *x.Registry) (*typecatalog.C
 		return nil, err
 	}
 	if s.config.JWTValidator != nil {
-		s.codecs, err = auth.New(ctx, &auth.Config{JWTValidator: s.config.JWTValidator, ClaimPolicy: s.config.JWTClaims})
+		s.codecs, err = auth.New(ctx, &auth.Config{JWTValidator: s.config.JWTValidator, ClaimPolicy: s.config.JWTClaims, RetainFailedCredential: s.config.JWTRetainFailedCredential})
 		if err != nil {
 			if ctx.Err() != nil {
 				return nil, ctx.Err()
