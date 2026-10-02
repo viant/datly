@@ -2,6 +2,7 @@ package records
 
 import (
 	"context"
+	"embed"
 	"fmt"
 	"reflect"
 
@@ -23,6 +24,12 @@ type Record struct {
 type ReadInput struct {
 	ID int `parameter:"ID,kind=path,in=id,required"`
 }
+
+//go:embed queries
+var readResources embed.FS
+
+func (*ReadInput) EmbedFS() *embed.FS { return &readResources }
+
 type ReadOutput struct {
 	Rows []*Record `parameter:"Rows,kind=output,in=view" view:"records,table=records" sql:"uri=queries/read.sql" json:"rows"`
 }

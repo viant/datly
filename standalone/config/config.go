@@ -63,6 +63,10 @@ type Config struct {
 
 type Packages struct {
 	Packages, Exclude []string
+	// LinkedOnly uses linked Go contracts and embedded resources to build the
+	// lazy route index without accessing source modules. DQL overlays and source
+	// reloads require the default source-backed mode.
+	LinkedOnly bool
 	// EagerComponents explicitly opts into compiling every selected component
 	// at startup, for example when exporting complete OpenAPI schemas.
 	EagerComponents bool
@@ -128,6 +132,9 @@ func (c *Config) Validate() error {
 	}
 	if c.JWTClaims != nil && c.JWTValidator == nil {
 		return fmt.Errorf("JWTClaims requires JWTValidator")
+	}
+	if c.GoBootstrap != nil && c.GoBootstrap.LinkedOnly && c.GoBootstrap.EagerComponents {
+		return fmt.Errorf("GoBootstrap.LinkedOnly and EagerComponents are mutually exclusive")
 	}
 	if (c.GoBootstrap == nil || len(c.GoBootstrap.Packages) == 0) && len(c.StaticContent) == 0 {
 		return fmt.Errorf("GoBootstrap.Packages is required")

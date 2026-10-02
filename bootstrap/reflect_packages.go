@@ -5,8 +5,10 @@ import (
 	"go/token"
 	"path"
 	"reflect"
+	"runtime"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/viant/datly/tag"
 	"github.com/viant/datly/typecatalog"
@@ -22,62 +24,59 @@ type ReflectedPackages struct {
 	Packages   []string
 }
 
+type reflectedPackageResult struct {
+	components []*RouteSource
+	contracts  map[reflect.Type]bool
+	err        error
+}
+
 // ReflectPackages discovers every linked named type in the selected packages
 // and identifies tagged xdatly.Component holders from their runtime shape.
 // It is the instance-bootstrap counterpart to AST-based transcribe discovery.
 func ReflectPackages(includes []string) (*ReflectedPackages, error) {
-	packages := reflectedPackagePaths(includes)
+	return ReflectSelectedPackages(includes, nil)
+}
+
+// ReflectSelectedPackages discovers linked contracts in selected packages.
+// Independent package reflection is bounded and its results are merged in
+// package order, so errors and catalog registration stay deterministic.
+func ReflectSelectedPackages(includes, excludes []string) (*ReflectedPackages, error) {
+	packages := reflectedPackagePaths(includes, excludes)
 	result := &ReflectedPackages{Types: typecatalog.NewCatalog(), Packages: append([]string(nil), packages...)}
 	contracts := map[reflect.Type]bool{}
-	for _, packagePath := range packages {
-		for _, candidate := range xunsafe.PackageTypes(packagePath) {
-			typeOf := dereference(candidate)
-			if typeOf == nil || typeOf.Name() == "" || typeOf.PkgPath() != packagePath {
-				continue
-			}
-			// Package bootstrap is also the type authority for ordinary exported
-			// handlers and shared shapes that are not reachable from a component
-			// input/output. Unexported function-local helper types can share a
-			// runtime key, so they are deliberately excluded from package authority.
-			if token.IsExported(typeOf.Name()) {
-				collectContractTypes(contracts, typeOf)
-			}
-			if typeOf.Kind() != reflect.Struct {
-				continue
-			}
-			holder := reflect.New(typeOf).Interface()
-			for index := 0; index < typeOf.NumField(); index++ {
-				field := typeOf.Field(index)
-				componentTag, present, err := tag.ParseComponent(field.Tag)
-				if err != nil {
-					return nil, fmt.Errorf("reflect component %s.%s: %w", typeOf, field.Name, err)
+	results := make([]reflectedPackageResult, len(packages))
+	workers := runtime.GOMAXPROCS(0)
+	if workers > 8 {
+		workers = 8
+	}
+	if workers > len(packages) {
+		workers = len(packages)
+	}
+	if workers > 0 {
+		jobs := make(chan int)
+		var wg sync.WaitGroup
+		for range workers {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				for index := range jobs {
+					results[index] = reflectPackage(packages[index])
 				}
-				if !present {
-					continue
-				}
-				if err = componentTag.ValidateRoute(); err != nil {
-					return nil, fmt.Errorf("reflect component %s.%s: %w", typeOf, field.Name, err)
-				}
-				inputField, hasInput := field.Type.FieldByName("Inout")
-				if !hasInput {
-					inputField, hasInput = field.Type.FieldByName("Input")
-				}
-				outputField, hasOutput := field.Type.FieldByName("Output")
-				if !hasInput || !hasOutput {
-					return nil, fmt.Errorf("reflect component-tagged field %s.%s (%s) is not xdatly.Component[I,O]", typeOf, field.Name, field.Type)
-				}
-				source := &RouteSource{
-					HolderType: typeOf.Name(), FieldName: field.Name, PackagePath: packagePath,
-					Tag: componentTag, InputType: inputField.Type.String(), OutputType: outputField.Type.String(),
-					LinkedInputType: inputField.Type, LinkedOutputType: outputField.Type,
-				}
-				collectContractTypes(contracts, inputField.Type)
-				collectContractTypes(contracts, outputField.Type)
-				if provider, ok := holder.(linkedHandlerProvider); ok {
-					source.LinkedHandler = provider.DatlyHandler(componentTag.Handler)
-				}
-				result.Components = append(result.Components, source)
-			}
+			}()
+		}
+		for index := range packages {
+			jobs <- index
+		}
+		close(jobs)
+		wg.Wait()
+	}
+	for _, current := range results {
+		if current.err != nil {
+			return nil, current.err
+		}
+		result.Components = append(result.Components, current.components...)
+		for contract := range current.contracts {
+			contracts[contract] = true
 		}
 	}
 	if err := registerContractTypes(result.Types, contracts); err != nil {
@@ -94,6 +93,63 @@ func ReflectPackages(includes []string) (*ReflectedPackages, error) {
 		return left.FieldName < right.FieldName
 	})
 	return result, nil
+}
+
+func reflectPackage(packagePath string) (result reflectedPackageResult) {
+	result.contracts = map[reflect.Type]bool{}
+	for _, candidate := range xunsafe.PackageTypes(packagePath) {
+		typeOf := dereference(candidate)
+		if typeOf == nil || typeOf.Name() == "" || typeOf.PkgPath() != packagePath {
+			continue
+		}
+		// Package bootstrap is also the type authority for ordinary exported
+		// handlers and shared shapes that are not reachable from a component
+		// input/output. Unexported function-local helper types can share a
+		// runtime key, so they are deliberately excluded from package authority.
+		if token.IsExported(typeOf.Name()) {
+			collectContractTypes(result.contracts, typeOf)
+		}
+		if typeOf.Kind() != reflect.Struct {
+			continue
+		}
+		holder := reflect.New(typeOf).Interface()
+		for index := 0; index < typeOf.NumField(); index++ {
+			field := typeOf.Field(index)
+			componentTag, present, err := tag.ParseComponent(field.Tag)
+			if err != nil {
+				result.err = fmt.Errorf("reflect component %s.%s: %w", typeOf, field.Name, err)
+				return result
+			}
+			if !present {
+				continue
+			}
+			if err = componentTag.ValidateRoute(); err != nil {
+				result.err = fmt.Errorf("reflect component %s.%s: %w", typeOf, field.Name, err)
+				return result
+			}
+			inputField, hasInput := field.Type.FieldByName("Inout")
+			if !hasInput {
+				inputField, hasInput = field.Type.FieldByName("Input")
+			}
+			outputField, hasOutput := field.Type.FieldByName("Output")
+			if !hasInput || !hasOutput {
+				result.err = fmt.Errorf("reflect component-tagged field %s.%s (%s) is not xdatly.Component[I,O]", typeOf, field.Name, field.Type)
+				return result
+			}
+			source := &RouteSource{
+				HolderType: typeOf.Name(), FieldName: field.Name, PackagePath: packagePath,
+				Tag: componentTag, InputType: inputField.Type.String(), OutputType: outputField.Type.String(),
+				LinkedInputType: inputField.Type, LinkedOutputType: outputField.Type,
+			}
+			collectContractTypes(result.contracts, inputField.Type)
+			collectContractTypes(result.contracts, outputField.Type)
+			if provider, ok := holder.(linkedHandlerProvider); ok {
+				source.LinkedHandler = provider.DatlyHandler(componentTag.Handler)
+			}
+			result.components = append(result.components, source)
+		}
+	}
+	return result
 }
 
 func registerContractTypes(catalog *typecatalog.Catalog, contracts map[reflect.Type]bool) error {
@@ -140,7 +196,7 @@ func collectContractTypes(contracts map[reflect.Type]bool, typeOf reflect.Type) 
 	}
 }
 
-func reflectedPackagePaths(includes []string) []string {
+func reflectedPackagePaths(includes, excludes []string) []string {
 	seen := map[string]bool{}
 	var patterns []string
 	for _, include := range includes {
@@ -175,10 +231,30 @@ func reflectedPackagePaths(includes []string) []string {
 	}
 	result := make([]string, 0, len(seen))
 	for packagePath := range seen {
-		result = append(result, packagePath)
+		excluded := false
+		for _, pattern := range excludes {
+			if reflectedPackageMatch(pattern, packagePath) {
+				excluded = true
+				break
+			}
+		}
+		if !excluded {
+			result = append(result, packagePath)
+		}
 	}
 	sort.Strings(result)
 	return result
+}
+
+func reflectedPackageMatch(pattern, packagePath string) bool {
+	pattern = strings.TrimSpace(pattern)
+	if strings.HasSuffix(pattern, "...") {
+		return strings.HasPrefix(packagePath, strings.TrimSuffix(pattern, "..."))
+	}
+	if matched, err := path.Match(pattern, packagePath); err == nil {
+		return matched
+	}
+	return false
 }
 
 func dereference(typeOf reflect.Type) reflect.Type {

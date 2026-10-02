@@ -11,7 +11,10 @@ import (
 // validateConstants performs source/typed registration checks before opening
 // connectors. No generated artifacts are written and no SQL is sent to a DB.
 func (s *source) validateConstants(ctx context.Context, types *typecatalog.Catalog) error {
-	if s.config.GoBootstrap == nil {
+	if s.config.GoBootstrap == nil || s.config.GoBootstrap.LinkedOnly {
+		// Linked materialization validates constants against the selected typed
+		// contract on first use. Source discovery here would defeat source-free
+		// bootstrap and compile every component before it is requested.
 		return nil
 	}
 	project, err := (&transcribe.Discovery{Const: s.config.Const, Workspace: s.Workspace, BaseDir: s.config.BaseDir, ModuleDirs: s.config.ModuleDirs, Include: s.config.GoBootstrap.Packages, Exclude: s.config.GoBootstrap.Exclude, Connector: s.config.Connector, Types: types, Registry: s.registry, Holders: s.holders, RequireLinked: s.requireLinked}).Compile(ctx)

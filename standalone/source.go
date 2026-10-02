@@ -53,6 +53,9 @@ func (s *source) compile(ctx context.Context, types *typecatalog.Catalog) (*appl
 	if s.config.GoBootstrap != nil && s.config.GoBootstrap.EagerComponents {
 		return s.compileEager(ctx, types)
 	}
+	if s.config.GoBootstrap != nil && s.config.GoBootstrap.LinkedOnly {
+		return s.compileLinked(ctx, types)
+	}
 	if s.config.GoBootstrap == nil || len(s.config.GoBootstrap.Packages) == 0 {
 		return &application.Build{Resources: s.resources, Types: types, HTTP: s.http, Version: s.config.Version}, nil
 	}
@@ -89,7 +92,13 @@ func (s *source) compile(ctx context.Context, types *typecatalog.Catalog) (*appl
 	if err != nil {
 		return nil, err
 	}
-	built := &application.Build{Index: snapshot, Materializer: &indexedMaterializer{source: s, workspace: workspace, seed: seed}, Resources: assets.Store, Types: types, HTTP: s.http, Version: s.config.Version}
+	return s.buildIndexed(snapshot, &indexedMaterializer{source: s, workspace: workspace, seed: seed}, assets.Store, types, started)
+}
+
+func (s *source) buildIndexed(snapshot *bootstrapindex.Snapshot, materializer bootstrapindex.Materializer, resources *resource.Store, types *typecatalog.Catalog, started time.Time) (*application.Build, error) {
+	entries := snapshot.Entries()
+	var err error
+	built := &application.Build{Index: snapshot, Materializer: materializer, Resources: resources, Types: types, HTTP: s.http, Version: s.config.Version}
 	if len(s.providers) > 0 {
 		built.RuntimeOptions = append(built.RuntimeOptions, druntime.WithApplicationProviders(s.providers...))
 	}
@@ -107,6 +116,9 @@ func (s *source) compile(ctx context.Context, types *typecatalog.Catalog) (*appl
 			return nil, err
 		}
 		if built.HTTP.StaticLocalRoot == nil && built.HTTP.ContentURL == "" && content.ContentURL != "" && afsurl.IsRelative(content.ContentURL) {
+			if len(entry.Sources) == 0 {
+				return nil, fmt.Errorf("component %s has relative static content %q without a configured content root", entry.Key().String(), content.ContentURL)
+			}
 			content.ContentURL = entry.Sources[0].Dir + string(filepath.Separator) + content.ContentURL
 		}
 		built.HTTP.StaticContent = append(built.HTTP.StaticContent, content)
@@ -175,6 +187,69 @@ func (s *source) compile(ctx context.Context, types *typecatalog.Catalog) (*appl
 		s.logger.Info("datly bootstrap indexed done", "components", components, "routes", routes, "mcp", mcpTools, "preload", len(built.Preload), "elapsed", time.Since(started).String())
 	}
 	return built, nil
+}
+
+func (s *source) compileLinked(ctx context.Context, types *typecatalog.Catalog) (*application.Build, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if len(s.config.GoBootstrap.Packages) == 0 {
+		return &application.Build{Resources: s.resources, Types: types, HTTP: s.http, Version: s.config.Version}, nil
+	}
+	started := time.Now()
+	discovered, err := bootstrap.ReflectSelectedPackages(s.config.GoBootstrap.Packages, s.config.GoBootstrap.Exclude)
+	if err != nil {
+		return nil, err
+	}
+	byKey := map[string]*linkedComponent{}
+	for _, linked := range discovered.Components {
+		component, resolveErr := linked.Resolve(linked.LinkedInputType, linked.LinkedOutputType)
+		if resolveErr != nil {
+			return nil, resolveErr
+		}
+		// Source compilation applies the instance connector to components that
+		// omit one in their tag. Preserve that contract for reflected packages.
+		if component.Settings != nil && component.Settings.DefaultConnector == "" {
+			component.Settings.DefaultConnector = strings.TrimSpace(s.config.Connector)
+		}
+		key := component.Key.String()
+		if existing := byKey[key]; existing != nil {
+			for _, candidate := range component.Routes {
+				duplicate := false
+				for _, route := range existing.component.Routes {
+					if route != nil && candidate != nil && strings.EqualFold(route.Method, candidate.Method) && route.Path == candidate.Path {
+						duplicate = true
+						break
+					}
+				}
+				if !duplicate {
+					existing.component.Routes = append(existing.component.Routes, candidate)
+				}
+			}
+			continue
+		}
+		byKey[key] = &linkedComponent{component: component, source: linked}
+	}
+	components := make([]*spec.Component, 0, len(byKey))
+	for _, current := range byKey {
+		components = append(components, current.component)
+	}
+	snapshot, err := bootstrapindex.BuildLinked(discovered.Packages, components)
+	if err != nil {
+		return nil, err
+	}
+	resources := resource.New()
+	for _, packagePath := range discovered.Packages {
+		for namespace, embedded := range bootstrap.LinkedResources(s.holders, packagePath) {
+			if _, exists := resources.Lookup(namespace); exists {
+				return nil, fmt.Errorf("duplicate linked resource namespace %q", namespace)
+			}
+			if err := resources.Register(namespace, embedded); err != nil {
+				return nil, err
+			}
+		}
+	}
+	return s.buildIndexed(snapshot, &linkedMaterializer{source: s, components: byKey, types: discovered.Types, resources: resources}, resources, discovered.Types, started)
 }
 
 func indexedBootstrapCounts(snapshot *bootstrapindex.Snapshot) (components, routes, mcpTools int) {

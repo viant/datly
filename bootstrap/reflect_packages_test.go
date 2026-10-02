@@ -68,3 +68,16 @@ func TestReflectPackagesIncludesOrdinaryExportedTypes(t *testing.T) {
 		t.Fatalf("ordinary package type %s: resolved=%#v found=%v err=%v", key, resolved, ok, err)
 	}
 }
+
+func TestReflectSelectedPackagesExcludesAndOrdersLinkedPackages(t *testing.T) {
+	selected := []string{"github.com/viant/datly/bootstrap/connector", "github.com/viant/datly/bootstrap"}
+	for range 3 {
+		reflected, err := ReflectSelectedPackages(selected, []string{"github.com/viant/datly/bootstrap/connector"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(reflected.Packages) != 1 || reflected.Packages[0] != "github.com/viant/datly/bootstrap" {
+			t.Fatalf("selected packages = %v", reflected.Packages)
+		}
+	}
+}
