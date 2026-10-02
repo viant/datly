@@ -132,7 +132,7 @@ func setMarkerComponent() (*spec.Component, *spec.View, *spec.View) {
 		Columns: []*spec.Column{
 			{Name: "ID", Type: spec.TypeRef{Name: "int64"}, PrimaryKey: true},
 			{Name: "NAME", Type: spec.TypeRef{Name: "string"}},
-			{Name: "INTERNAL", Type: spec.TypeRef{Name: "string"}, Tag: `sqlx:"-"`},
+			{Name: "INTERNAL", Type: spec.TypeRef{Name: "string"}, Tag: `sqlx:"-" json:"-"`},
 		},
 		Relations: []*spec.Relation{{Name: "Items", Holder: "Items", Cardinality: spec.CardinalityMany, View: child}},
 	}

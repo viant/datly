@@ -157,7 +157,7 @@ func addViewSetMarker(plan *ViewPlan, view *spec.View) error {
 			return fmt.Errorf("generated view %q set marker column %q has no field", plan.Name, column.Name)
 		}
 		linked := relationKeys[strings.ToLower(strings.TrimSpace(column.Name))] || relationKeys[strings.ToLower(strings.TrimSpace(column.Source))]
-		if ignoredSQLXField(field.Tag) && !column.DeleteMarker && !linked {
+		if ignoredSQLXField(field.Tag) && !column.DeleteMarker && !linked && !publicLogicalField(field.Tag) {
 			continue
 		}
 		markerFields = append(markerFields, name)
@@ -215,4 +215,19 @@ func ignoredSQLXField(raw string) bool {
 		}
 	}
 	return false
+}
+
+// SQL persistence and request presence have independent authority. Logical
+// fields can carry client intent without becoming database columns.
+func publicLogicalField(raw string) bool {
+	tags := reflect.StructTag(strings.TrimSpace(raw))
+	if tags.Get("internal") == "true" {
+		return false
+	}
+	for _, key := range []string{"json", "format"} {
+		if strings.Split(tags.Get(key), ",")[0] == "-" {
+			return false
+		}
+	}
+	return true
 }
