@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"strings"
 
 	"github.com/viant/datly/data"
 	"github.com/viant/datly/spec"
+	dsql "github.com/viant/datly/sql"
 	xhandler "github.com/viant/xdatly/handler"
 	xstate "github.com/viant/xdatly/state"
 )
@@ -105,6 +107,11 @@ func applySelectorBinding(selector *xstate.Selector, binding SelectorBindingPlan
 		fields := make([]string, value.Len())
 		for i := range fields {
 			fields[i] = value.Index(i).String()
+			// Original field selectors validate every supplied name. An empty
+			// string is a valid list item but cannot name a projected column.
+			if strings.TrimSpace(fields[i]) == "" {
+				return &dsql.UnknownProjectionColumnError{Column: fields[i], RequestedColumn: fields[i]}
+			}
 		}
 		selector.Fields = fields
 	case spec.SelectorPropertyOrderBy:

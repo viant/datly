@@ -34,7 +34,7 @@ func TestDefaultQueryCSVAndRepeatedLists(t *testing.T) {
 		values  []string
 		want    []int
 		invalid bool
-	}{{"CSV", []string{"1001,1002"}, []int{1001, 1002}, false}, {"repeated", []string{"1001", "1002"}, []int{1001, 1002}, false}, {"mixed keeps occurrence order", []string{"3,1", "2", "1,4"}, []int{3, 1, 2, 1, 4}, false}, {"absent", nil, nil, false}, {"empty", []string{""}, nil, true}, {"empty token", []string{"1,,2"}, nil, true}, {"invalid token", []string{"1,no,3"}, nil, true}, {"overflow", []string{"999999999999999999999999"}, nil, true}} {
+	}{{"CSV", []string{"1001,1002"}, []int{1001, 1002}, false}, {"repeated", []string{"1001", "1002"}, []int{1001, 1002}, false}, {"mixed keeps occurrence order", []string{"3,1", "2", "1,4"}, []int{3, 1, 2, 1, 4}, false}, {"absent", nil, nil, false}, {"empty", []string{""}, []int{}, false}, {"empty token", []string{"1,,2"}, []int{1, 2}, false}, {"invalid token", []string{"1,no,3"}, nil, true}} {
 		t.Run(tc.name, func(t *testing.T) {
 			values := url.Values{"plain": {"a,b"}, "labels": {"a,b", "c"}}
 			if tc.values != nil {
@@ -108,14 +108,15 @@ func TestExplicitOptionalQueryListEmptyValue(t *testing.T) {
 		required *bool
 		raw      []string
 		invalid  bool
+		want     []int
 	}{
-		{"optional empty", &optional, []string{""}, false},
-		{"unspecified empty", nil, []string{""}, true},
-		{"required empty", &required, []string{""}, true},
-		{"optional CSV hole", &optional, []string{"1,,2"}, true},
-		{"optional mixed empty", &optional, []string{"", "1"}, true},
-		{"optional repeated empty", &optional, []string{"", ""}, true},
-		{"optional whitespace", &optional, []string{" "}, true},
+		{"optional empty", &optional, []string{""}, false, []int{}},
+		{"unspecified empty", nil, []string{""}, false, []int{}},
+		{"required empty transform", &required, []string{""}, false, []int{}},
+		{"optional CSV hole", &optional, []string{"1,,2"}, false, []int{1, 2}},
+		{"optional mixed empty", &optional, []string{"", "1"}, true, nil},
+		{"optional repeated empty", &optional, []string{"", ""}, true, nil},
+		{"optional whitespace", &optional, []string{" "}, false, []int{}},
 	} {
 		t.Run(item.name, func(t *testing.T) {
 			binding := bindly.BindingSpec{Required: item.required}
@@ -131,7 +132,7 @@ func TestExplicitOptionalQueryListEmptyValue(t *testing.T) {
 				return
 			}
 			ids, ok := got.([]int)
-			if err != nil || !ok || ids == nil || len(ids) != 0 {
+			if err != nil || !ok || ids == nil || !reflect.DeepEqual(ids, item.want) {
 				t.Fatalf("empty typed list: %T %v err%v", got, got, err)
 			}
 		})

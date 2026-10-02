@@ -11,6 +11,7 @@ import (
 	handlerprovider "github.com/viant/datly/runtime/handler/provider"
 	xexec "github.com/viant/xdatly/exec"
 	"reflect"
+	"strconv"
 	"strings"
 )
 
@@ -19,6 +20,7 @@ import (
 type queryListTransformer struct {
 	target     reflect.Type
 	allowEmpty bool
+	strict     bool // HTTP paths retain their existing conversion policy.
 }
 
 func (t *queryListTransformer) WireSourceType() reflect.Type { return t.target }
@@ -52,14 +54,28 @@ func (t *queryListTransformer) Transform(ctx context.Context, _ locator.Resolver
 	}
 	tokens := []string{}
 	for _, occurrence := range occurrences {
-		tokens = append(tokens, strings.Split(occurrence, ",")...)
+		if t.strict {
+			tokens = append(tokens, strings.Split(occurrence, ",")...)
+			continue
+		}
+		// Original Datly normalizes a single CSV value, but converts bare
+		// repeated occurrences directly. CSV occurrences in repeated keys are
+		// the supported merging extension and use the same CSV normalization.
+		if len(occurrences) == 1 || strings.Contains(occurrence, ",") || queryListEnclosed(occurrence) {
+			tokens = append(tokens, legacyQueryListTokens(occurrence, t.target.Elem().Kind() != reflect.String)...)
+		} else {
+			tokens = append(tokens, occurrence)
+		}
 	}
 	result := reflect.MakeSlice(t.target, len(tokens), len(tokens))
 	for index, token := range tokens {
-		if token == "" {
+		if t.strict && token == "" {
 			return nil, &bindinput.Error{Cause: fmt.Errorf("query list item %d is empty", index)}
 		}
 		item, err := (conv.ValueConverter{}).Convert(token, t.target.Elem())
+		if !t.strict && legacyQueryInteger(t.target.Elem().Kind()) {
+			item, err = legacyQueryListInteger(token, t.target.Elem())
+		}
 		if err != nil {
 			return nil, &bindinput.Error{Cause: fmt.Errorf("query list item %d: %w", index, err)}
 		}
@@ -71,6 +87,59 @@ func (t *queryListTransformer) Transform(ctx context.Context, _ locator.Resolver
 	}
 	return result.Interface(), nil
 }
+
+// queryListEnclosed deliberately matches the original first/last-character
+// check; whitespace outside the enclosure is not removed first.
+func queryListEnclosed(raw string) bool {
+	return len(raw) >= 2 && raw[0] == '[' && raw[len(raw)-1] == ']'
+}
+
+func legacyQueryListTokens(raw string, trim bool) []string {
+	if raw == "" {
+		return nil
+	}
+	if queryListEnclosed(raw) {
+		raw = raw[1 : len(raw)-1]
+	}
+	items := strings.Split(raw, ",")
+	if !trim {
+		return items
+	}
+	result := make([]string, 0, len(items))
+	for _, item := range items {
+		if item = strings.TrimSpace(item); item != "" {
+			result = append(result, item)
+		}
+	}
+	return result
+}
+
+func legacyQueryInteger(kind reflect.Kind) bool {
+	return kind == reflect.Int || kind == reflect.Int64 || kind == reflect.Uint || kind == reflect.Uint64
+}
+
+// Original integer lists parse scientific/fractional notation through a machine
+// int before widening or unsigned conversion. Keep that behavior for query wire
+// text; smaller integer kinds retain the existing range-checked converter.
+func legacyQueryListInteger(raw string, target reflect.Type) (any, error) {
+	var number int
+	if floating, err := strconv.ParseFloat(raw, 64); err == nil {
+		number = int(floating)
+	} else {
+		var err error
+		if number, err = strconv.Atoi(raw); err != nil {
+			return nil, err
+		}
+	}
+	result := reflect.New(target).Elem()
+	if target.Kind() == reflect.Uint || target.Kind() == reflect.Uint64 {
+		result.SetUint(uint64(uint(number)))
+	} else {
+		result.SetInt(int64(number))
+	}
+	return result.Interface(), nil
+}
+
 func applyQueryList(field reflect.StructField, paramCSV bool, binding *bindly.BindingSpec) error {
 	tag, hasTag := field.Tag.Lookup("queryList")
 	if hasTag && tag != "csv" {
@@ -129,7 +198,7 @@ func (t *pathListTransformer) Transform(ctx context.Context, resolver locator.Re
 		return nil, err
 	}
 	if !nativeToolArguments(ctx) {
-		return (&queryListTransformer{target: t.target}).Transform(ctx, resolver, raw)
+		return (&queryListTransformer{target: t.target, strict: true}).Transform(ctx, resolver, raw)
 	}
 	if raw != nil && reflect.TypeOf(raw).AssignableTo(t.target) {
 		return raw, nil
