@@ -34,8 +34,10 @@ func (r *planResolver) resolveClientInput() error {
 		if !allowed[field.Name] || shouldSkipHasMirror(field) || field.Source == "output" {
 			continue
 		}
-		field.Tag = writerScalarJSONTag(&Plan{Settings: r.plan.Settings}, field.Name, field.Tag)
 		client.Fields = append(client.Fields, field)
+	}
+	if err := applyInferredJSONTags(&Plan{Settings: r.plan.Settings}, client.Fields); err != nil {
+		return fmt.Errorf("generated client input %q: %w", name, err)
 	}
 	r.plan.ClientInput = client
 	return nil

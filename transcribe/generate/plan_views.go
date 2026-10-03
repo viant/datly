@@ -12,7 +12,6 @@ import (
 	"github.com/viant/datly/spec"
 	"github.com/viant/datly/tag"
 	"github.com/viant/datly/typecatalog"
-	"github.com/viant/tagly/format/text"
 	"github.com/viant/tagly/tags"
 	xshape "github.com/viant/x/shape"
 )
@@ -494,6 +493,9 @@ func (p *viewPlanner) fields(view *spec.View) ([]Field, error) {
 		selfTag := appendStructTag(`sqlx:"-"`, tag.SelfName, selfValue)
 		fields = append(fields, Field{Name: holder, Type: "[]*" + p.names[view], Tag: selfTag})
 	}
+	if err := applyInferredJSONTags(p.plan, fields); err != nil {
+		return nil, fmt.Errorf("generated view %q: %w", view.Name, err)
+	}
 	return fields, nil
 }
 
@@ -541,7 +543,6 @@ func resolveScalarViewFields(plan *Plan, view *spec.View, includeVelty bool) ([]
 			source = strings.TrimSpace(column.Name)
 		}
 		fieldTag := scalarColumnFieldTag(column, source, includeVelty)
-		fieldTag = writerScalarJSONTag(plan, name, fieldTag)
 		if column.Groupable != nil && *column.Groupable && !hasStructTag(fieldTag, "groupable") {
 			fieldTag = appendStructTag(fieldTag, "groupable", "true")
 		}
@@ -622,9 +623,6 @@ func (p *viewPlanner) relationField(relation *spec.Relation) (Field, error) {
 	}
 	if onValue != "" {
 		fieldTag = appendStructTag(fieldTag, tag.RelationName, onValue)
-	}
-	if format := text.NewCaseFormat(p.plan.Settings.CaseFormat); format != text.CaseFormatUndefined && !hasStructTag(fieldTag, "json") {
-		fieldTag = appendStructTag(fieldTag, "json", text.DetectCaseFormat(name).Format(name, format))
 	}
 	return Field{Name: name, Type: fieldType, Tag: fieldTag, RelationHolder: true}, nil
 }
