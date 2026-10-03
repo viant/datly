@@ -91,6 +91,13 @@ func (s wildcardSource) matchesQualifier(parts []string) bool {
 }
 
 func (s wildcardSource) query(ctes query.WithSelects) (*query.Select, string) {
+	return s.queryAtDepth(ctes, 0)
+}
+
+func (s wildcardSource) queryAtDepth(ctes query.WithSelects, depth int) (*query.Select, string) {
+	if depth > 32 {
+		return nil, ""
+	}
 	// Native table markers may carry a partially populated query in Raw.X.
 	// Their source identity, not that partial query, owns schema discovery.
 	switch s.node.(type) {
@@ -100,13 +107,14 @@ func (s wildcardSource) query(ctes query.WithSelects) (*query.Select, string) {
 		}
 	}
 	var nested *query.Select
+	var child node.Node
 	raw := ""
 	switch value := s.node.(type) {
 	case *expr.Raw:
-		nested, _ = value.X.(*query.Select)
+		child = value.X
 		raw = value.Raw
 	case *expr.Parenthesis:
-		nested, _ = value.X.(*query.Select)
+		child = value.X
 		raw = value.Raw
 	case *query.Select:
 		nested = value
@@ -119,8 +127,29 @@ func (s wildcardSource) query(ctes query.WithSelects) (*query.Select, string) {
 			}
 		}
 	}
-	raw = strings.TrimSuffix(strings.TrimPrefix(strings.TrimSpace(raw), "("), ")")
-	if nested == nil && raw != "" {
+	if child != nil {
+		var childSQL string
+		nested, childSQL = (wildcardSource{node: child}).queryAtDepth(ctes, depth+1)
+		if raw == "" {
+			raw = childSQL
+		}
+	}
+	// Peel only complete enclosures. UNION operands, expressions, and trailing
+	// clauses must not be mistaken for redundant query parentheses.
+	for wrappers := 0; ; wrappers++ {
+		raw = strings.TrimSpace(raw)
+		group, end, ok := sqltext.ReadGroupString(raw, 0, '(', ')')
+		if !ok || end != len(raw) {
+			break
+		}
+		if wrappers >= 32 {
+			return nil, ""
+		}
+		raw = group[1 : len(group)-1]
+	}
+	// The parser can retain an empty Select for a parenthesized SELECT. That
+	// partial AST is not authoritative when the raw source has a closed list.
+	if (nested == nil || len(nested.List) == 0) && raw != "" {
 		nested, _ = sqlparser.ParseQuery(raw)
 	}
 	return nested, raw
