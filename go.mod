@@ -16,8 +16,8 @@ require (
 	github.com/viant/mcp v0.24.0
 	github.com/viant/mcp-protocol v0.19.0
 	github.com/viant/parsly v0.3.3
-	github.com/viant/sqlparser v0.13.1-0.20261003112743-e9a52fbd71cb
-	github.com/viant/sqlx v0.26.1-0.20261003113248-3a68e7f3f299
+	github.com/viant/sqlparser v0.13.1-0.20261003124328-b8c0b54602af
+	github.com/viant/sqlx v0.26.1-0.20261003124505-e725e2a580af
 	github.com/viant/structology v0.10.1-0.20260925145657-42c5a7e1d1d7
 	github.com/viant/structql v0.5.4
 	github.com/viant/tagly v0.3.1-0.20260914020630-eadee36c3630
