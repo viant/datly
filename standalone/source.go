@@ -234,7 +234,7 @@ func (s *source) compileLinked(ctx context.Context, types *typecatalog.Catalog) 
 	for _, current := range byKey {
 		components = append(components, current.component)
 	}
-	snapshot, err := bootstrapindex.BuildLinked(discovered.Packages, components)
+	snapshot, err := bootstrapindex.BuildLinked(discovered.Packages, components, discovered.Components...)
 	if err != nil {
 		return nil, err
 	}
