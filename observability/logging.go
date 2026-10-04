@@ -1,11 +1,14 @@
 package observability
 
-import "github.com/viant/xdatly/response"
+import (
+	internallog "github.com/viant/datly/internal/logging"
+	"github.com/viant/xdatly/response"
+)
 
 // Read emits a summary only through an explicitly configured logger. Native
 // metrics and counters are captured independently of logging configuration.
 func (r *Recorder) Read(traceID string, m *response.Metric) {
-	if r == nil || r.logger == nil || m == nil {
+	if r == nil || r.logger == nil || m == nil || internallog.Configured(r) {
 		return
 	}
 	status := "ok"

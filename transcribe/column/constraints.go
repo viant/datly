@@ -73,6 +73,11 @@ func (m *discoveryMetadata) loadTableConstraints(ctx context.Context, db *sql.DB
 		}
 		return nil, fmt.Errorf("load SQLX foreign keys for %q: %w", table, err)
 	}
+	applyForeignKeyConstraints(result, keys, session.Schema, table)
+	return result, nil
+}
+
+func applyForeignKeyConstraints(result map[string]tableConstraint, keys []sink.Key, discoverySchema, sourceTable string) {
 	for index := range keys {
 		key := &keys[index]
 		name := normalizedName(key.Column)
@@ -81,13 +86,23 @@ func (m *discoveryMetadata) loadTableConstraints(ctx context.Context, db *sql.DB
 		}
 		constraint := result[name]
 		constraint.reference = &tableReference{
-			schema: strings.TrimSpace(key.ReferenceSchema),
+			schema: inferredReferenceSchema(key, discoverySchema, sourceTable),
 			table:  strings.TrimSpace(key.ReferenceTable),
 			column: strings.TrimSpace(key.ReferenceColumn),
 		}
 		result[name] = constraint
 	}
-	return result, nil
+}
+
+func inferredReferenceSchema(key *sink.Key, discoverySchema, sourceTable string) string {
+	// Only authoritative same-schema metadata for an unqualified source may
+	// become runtime-local. Schema names are case-sensitive provenance; unknown
+	// or cross-schema references and explicit source qualification stay intact.
+	if strings.TrimSpace(discoverySchema) != "" && key.Schema == discoverySchema && key.ReferenceSchema == discoverySchema &&
+		strings.TrimSpace(sourceTable) != "" && !strings.Contains(sourceTable, ".") {
+		return ""
+	}
+	return strings.TrimSpace(key.ReferenceSchema)
 }
 
 func constraintsFromColumns(columns []sink.Column) map[string]tableConstraint {

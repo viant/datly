@@ -53,7 +53,7 @@ func writeEncodedBytes(writer stdhttp.ResponseWriter, request *stdhttp.Request, 
 func (h *Handler) writeHTTPJSON(ctx context.Context, writer stdhttp.ResponseWriter, request *stdhttp.Request, status int, payload any) {
 	policy := h.responseCompression(ctx, request)
 	if policy == nil {
-		writeJSON(writer, status, payload)
+		recordHTTPError(ctx, writeJSON(writer, status, payload))
 		return
 	}
 	var data []byte
@@ -61,12 +61,12 @@ func (h *Handler) writeHTTPJSON(ctx context.Context, writer stdhttp.ResponseWrit
 		var err error
 		data, err = json.Marshal(payload)
 		if err != nil {
-			h.writeOutputError(writer, err)
+			h.writeOutputError(ctx, writer, err)
 			return
 		}
 	}
 	writer.Header().Set("Content-Type", "application/json")
 	if err := writeEncodedBytes(writer, request, status, data, policy); err != nil {
-		h.writeOutputError(writer, err)
+		h.writeOutputError(ctx, writer, err)
 	}
 }

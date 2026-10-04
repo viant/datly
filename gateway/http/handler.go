@@ -9,6 +9,7 @@ import (
 	"time"
 
 	dexec "github.com/viant/datly/exec"
+	internallog "github.com/viant/datly/internal/logging"
 	druntime "github.com/viant/datly/runtime"
 	"github.com/viant/datly/spec"
 	xexec "github.com/viant/xdatly/exec"
@@ -24,6 +25,7 @@ const (
 )
 
 type Handler struct {
+	serviceTimeHeader string
 	metrics           *MetricsConfig
 	async             *asyncRoutes
 	allowedSubnet     []string
@@ -58,6 +60,14 @@ func (h *Handler) ServeHTTP(writer stdhttp.ResponseWriter, req *stdhttp.Request)
 		writer.WriteHeader(stdhttp.StatusInternalServerError)
 		return
 	}
+	if owner := h.runtime.Observability(); owner != nil && owner.Recorder != nil && internallog.Enabled(owner.Recorder) && !internallog.HTTPObserved(req.Context()) {
+		serveHTTPObserved(writer, req, h.version, h.serveHTTP, func(ctx context.Context, e *xexec.Context) { internallog.LogHTTP(owner.Recorder, ctx, e) })
+		return
+	}
+	h.serveHTTP(writer, req)
+}
+
+func (h *Handler) serveHTTP(writer stdhttp.ResponseWriter, req *stdhttp.Request) {
 	if !h.allowsRemote(req) {
 		writer.WriteHeader(stdhttp.StatusForbidden)
 		return
@@ -115,6 +125,7 @@ func (h *Handler) ServeHTTP(writer stdhttp.ResponseWriter, req *stdhttp.Request)
 			return
 		}
 		if err := h.authorize(req.Context(), req, target); err != nil {
+			recordHTTPError(req.Context(), err)
 			statusCode := xresponse.ErrorStatusCode(err, stdhttp.StatusForbidden)
 			message := dexec.ErrorMessage(err, statusCode)
 			writeJSON(writer, statusCode, xresponse.Status{Status: "error", Message: message, Error: message})
@@ -126,7 +137,7 @@ func (h *Handler) ServeHTTP(writer stdhttp.ResponseWriter, req *stdhttp.Request)
 	// requesting CSV/XML/XLSX after a mutation has already been committed.
 	contract, formatErr := h.runtime.ResolveOutputByRoute(req.Context(), req.Method, escapedPath)
 	if formatErr != nil {
-		h.writeOutputError(writer, formatErr)
+		h.writeOutputError(req.Context(), writer, formatErr)
 		return
 	}
 	if !contract.TransportReady() {
@@ -145,7 +156,10 @@ func (h *Handler) ServeHTTP(writer stdhttp.ResponseWriter, req *stdhttp.Request)
 		}
 	}
 	started := time.Now()
-	ctx := context.WithValue(req.Context(), xexec.ContextKey, xexec.NewContext(req.Method, req.RequestURI, req.Header, h.version))
+	ctx := req.Context()
+	if !internallog.HTTPObserved(ctx) {
+		ctx = context.WithValue(ctx, xexec.ContextKey, xexec.NewContext(req.Method, req.RequestURI, req.Header, h.version))
+	}
 	ctx = dexec.CaptureOutputSelection(ctx)
 	asyncRoute := h.asyncRoute(req)
 	var asyncService AsyncService
@@ -167,6 +181,7 @@ func (h *Handler) ServeHTTP(writer stdhttp.ResponseWriter, req *stdhttp.Request)
 	pathParams, _ := h.runtime.MatchPathParams(req.Method, escapedPath)
 	requestScope, scopeErr := newHTTPRequestScope(req, pathParams)
 	if scopeErr != nil {
+		recordHTTPError(ctx, scopeErr)
 		if h.logger != nil {
 			h.logger.Error("HTTP request preparation failed", scopeErr)
 		} else {
@@ -192,6 +207,7 @@ func (h *Handler) ServeHTTP(writer stdhttp.ResponseWriter, req *stdhttp.Request)
 	} else {
 		actual, execErr = h.runtime.ExecuteRoute(ctx, req.Method, escapedPath, requestScope)
 	}
+	recordHTTPError(ctx, execErr)
 	if h.logger != nil {
 		if execErr != nil {
 			h.logger.Error("HTTP route execution failed", execErr)
@@ -229,7 +245,9 @@ func (h *Handler) ServeHTTP(writer stdhttp.ResponseWriter, req *stdhttp.Request)
 			Error:   message,
 		}
 	}
-	writer.Header().Set(datlyServiceTimeHeader, time.Since(started).String())
+	if h.serviceTimeHeader != "" {
+		writer.Header().Set(h.serviceTimeHeader, time.Since(started).String())
+	}
 	h.publishMetricsHeaders(writer, req, execCtx)
 	if response, ok := actual.(xresponse.Response); ok {
 		writeResponse(writer, statusCode, hasExplicitStatusCode(execCtx, execErr), response, req)

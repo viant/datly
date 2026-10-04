@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/viant/datly/internal/logging"
 	"github.com/viant/scy/auth/jwt"
 	"github.com/viant/scy/auth/jwt/verifier"
 	xcodec "github.com/viant/xdatly/codec"
@@ -134,5 +135,6 @@ func (c *claimsCodec) Value(ctx context.Context, raw any, _ ...xcodec.Option) (a
 	if c.policy.RequireSubject && strings.TrimSpace(claims.Subject) == "" {
 		return nil, fmt.Errorf("JWT subject is required by the configured policy")
 	}
+	logging.ObserveIdentity(ctx, logging.Identity{UserID: claims.UserID, Username: claims.Username, Email: claims.Email, Scope: claims.Scope})
 	return claims, nil
 }

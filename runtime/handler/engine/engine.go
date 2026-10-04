@@ -24,7 +24,8 @@ import (
 )
 
 type Request struct {
-	mutationAttempt int
+	mutationAttempt   int
+	phaseInvocationID uint64
 	// IndependentChildTransactions retains all invocation capabilities/context but
 	// prevents connector-only neutral ownership after strict source-less guards.
 	IndependentChildTransactions bool
@@ -60,6 +61,16 @@ func New() *Engine { return &Engine{} }
 
 func (e *Engine) Execute(ctx context.Context, request Request) (actual any, failure error) {
 	callContext := ctx
+	ctx, _ = rhandler.WithPhaseObserver(ctx, nil, 0, 0)
+	var phases *rhandler.PhaseScope
+	phaseEnded := false
+	endPhases := func(cause error) {
+		if !phaseEnded && phases != nil {
+			phaseEnded = true
+			phases.Notify(ctx, xhandler.PhaseInvocation, xhandler.PhaseEnd, cause)
+		}
+	}
+	defer func() { endPhases(failure) }()
 	if e == nil {
 		return nil, fmt.Errorf("handler engine is required")
 	}
@@ -165,6 +176,18 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 		}
 		return scope.Bind(ctx, value, bindly.WithPlan(request.OutputCapabilities), bindly.WithSource(input))
 	}
+	notifyCompletion := func(completionErr error) error {
+		if !ownsData || data == nil || request.Completion == nil {
+			return completionErr
+		}
+		if err := completionOperation("completion notification", func() error {
+			request.Completion(data.completionOutcome())
+			return nil
+		}); err != nil {
+			return errors.Join(completionErr, err)
+		}
+		return completionErr
+	}
 
 	finish := func(result any, operationErr error) (any, error) {
 		finishing = true
@@ -211,20 +234,15 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 					data.finishOutcome(completionFrame, invocation, completionFrame.result, errMutationRetry)
 					var finalizationError *FinalizationError
 					if finalErr := data.finalizeOutcomes(completionErr); errors.As(finalErr, &finalizationError) || completionIntroducedError(finalErr, completionErr) {
-						if request.Completion != nil {
-							request.Completion(data.completionOutcome())
-						}
-						return result, finalErr
+						return result, notifyCompletion(finalErr)
 					}
+					endPhases(completionErr)
 					retry := request
 					retry.mutationAttempt++
 					if mutationInput != nil {
 						retry.BoundInput, err = captureMutationInput(request.Input, mutationInput)
 						if err != nil {
-							if request.Completion != nil {
-								request.Completion(data.completionOutcome())
-							}
-							return nil, err
+							return nil, notifyCompletion(err)
 						}
 						retry.Replay = nil
 					} else {
@@ -242,10 +260,7 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 		if ownsData && data != nil {
 			completionErr = data.finalizeOutcomes(completionErr)
 		}
-		if ownsData && data != nil && request.Completion != nil {
-			request.Completion(data.completionOutcome())
-		}
-		return result, completionErr
+		return result, notifyCompletion(completionErr)
 	}
 	// User callbacks may panic after opening scoped Data. Complete through the
 	// canonical owner; never bypass rollback and outcome reporting in an adapter.
@@ -315,6 +330,28 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 		return finish(nil, fmt.Errorf("resolve invocation logger: %w", loggerErr))
 	}
 	ctx = xlogger.WithContext(ctx, invocationLogger)
+	if factory, ok := request.Handler.(rhandler.PhaseObserverFactory); ok {
+		var observer xhandler.PhaseObserver
+		func() {
+			defer func() {
+				if recover() != nil {
+					observer = nil
+					// Observation failures must not affect the invocation, including
+					// when reporting through an application-provided logger.
+					func() {
+						defer func() { _ = recover() }()
+						if invocationLogger != nil {
+							invocationLogger.Error("phase observer factory panicked")
+						}
+					}()
+				}
+			}()
+			observer = factory.NewPhaseObserver()
+		}()
+		ctx, phases = rhandler.WithPhaseObserver(ctx, observer, request.phaseInvocationID, request.mutationAttempt)
+		request.phaseInvocationID = phases.InvocationID()
+		phases.Notify(ctx, xhandler.PhaseInvocation, xhandler.PhaseBegin, nil)
+	}
 	if transaction, ok := request.Handler.(rhandler.PreBindingTransaction); ok && transaction.RequiresPreBindingTransaction() && data != nil {
 		resolved, resolveErr := data.resolve(ctx)
 		if resolveErr != nil {
@@ -328,29 +365,34 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 			return finish(nil, fmt.Errorf("start pre-binding transaction: %w", err))
 		}
 	}
-	bindPlan := inputPlan
-	if bound {
-		bindPlan, err = boundSupplementalPlan(root, request.Input)
-		if err != nil {
-			return finish(nil, err)
+	if err := phases.Run(ctx, xhandler.PhaseBinding, func() error {
+		bindPlan := inputPlan
+		if bound {
+			bindPlan, err = boundSupplementalPlan(root, request.Input)
+			if err != nil {
+				return err
+			}
 		}
-	}
-	if !bound || bindPlan != nil {
-		options := []bindly.BindOption{bindly.WithPlan(bindPlan), bindly.WithSource(input)}
-		if request.Replay != nil {
-			options = append(options, bindly.WithReplay(*request.Replay))
+		if !bound || bindPlan != nil {
+			options := []bindly.BindOption{bindly.WithPlan(bindPlan), bindly.WithSource(input)}
+			if request.Replay != nil {
+				options = append(options, bindly.WithReplay(*request.Replay))
+			}
+			if reads != nil {
+				options = append(options, bindly.WithBindingObserver(reads.observe))
+			}
+			if err := scope.Bind(ctx, input, options...); err != nil {
+				return err
+			}
 		}
-		if reads != nil {
-			options = append(options, bindly.WithBindingObserver(reads.observe))
+		if bound {
+			if err := validateRequiredBoundInputs(request.Input, input); err != nil {
+				return err
+			}
 		}
-		if err := scope.Bind(ctx, input, options...); err != nil {
-			return finish(nil, err)
-		}
-	}
-	if bound {
-		if err := validateRequiredBoundInputs(request.Input, input); err != nil {
-			return finish(nil, err)
-		}
+		return nil
+	}); err != nil {
+		return finish(nil, err)
 	}
 	ctx = context.WithValue(ctx, reflect.TypeOf(input), input)
 	if request.Replay != nil && request.Replay.Only {
@@ -385,18 +427,24 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 	snapshotReady = true
 	binder := rhandler.NewBinder(scope, input)
 	invocation.Binder = binder
-	if initializer, ok := input.(xhandler.Initializer); ok {
-		if err := initializer.Init(ctx); err != nil {
-			return finish(nil, fmt.Errorf("initialize handler input: %w", err))
-		}
-	}
-	if mcpContext, ok := xmcp.LookupContext(ctx); ok {
-		if initializer, ok := input.(xmcp.Initializer); ok {
-			if err := initializer.InitMCP(ctx, mcpContext); err != nil {
-				return finish(nil, fmt.Errorf("initialize MCP handler input: %w", err))
+	if err := phases.Run(ctx, xhandler.PhaseInputInitialization, func() error {
+		if initializer, ok := input.(xhandler.Initializer); ok {
+			if err := initializer.Init(ctx); err != nil {
+				return fmt.Errorf("initialize handler input: %w", err)
 			}
 		}
+		if mcpContext, ok := xmcp.LookupContext(ctx); ok {
+			if initializer, ok := input.(xmcp.Initializer); ok {
+				if err := initializer.InitMCP(ctx, mcpContext); err != nil {
+					return fmt.Errorf("initialize MCP handler input: %w", err)
+				}
+			}
+		}
+		return nil
+	}); err != nil {
+		return finish(nil, err)
 	}
+
 	dexec.BeginOutputSelection(ctx)
 	result, handlerErr := request.Handler.Execute(ctx, invocation)
 	if result == nil && handlerErr != nil && !outcomeAware {

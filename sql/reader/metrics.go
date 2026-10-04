@@ -3,6 +3,7 @@ package reader
 import (
 	"context"
 	"errors"
+	internallog "github.com/viant/datly/internal/logging"
 	"sync"
 	"time"
 
@@ -128,11 +129,16 @@ func (r *viewRead) completeSQL(e *response.SQLExecution, stats *cache.Stats, row
 		}
 		r.session.recorder.Cache(r.scope, e.CacheStats)
 	}
+}
+
+func (r *viewRead) emitSQL(e *response.SQLExecution, stats *cache.Stats) {
 	traceID := ""
 	if ec := xexec.GetContext(r.ctx); ec != nil {
 		traceID = ec.TraceID
 	}
-	r.session.recorder.SQL(traceID, r.metric.View, e)
+	if !internallog.LogSQL(r.session.recorder, traceID, r.metric.View, e, stats) {
+		r.session.recorder.SQL(traceID, r.metric.View, e)
+	}
 }
 
 var errReadPanic = errors.New("reader panicked")

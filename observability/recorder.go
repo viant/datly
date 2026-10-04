@@ -3,6 +3,7 @@
 package observability
 
 import (
+	internallog "github.com/viant/datly/internal/logging"
 	"sync"
 	"time"
 
@@ -14,7 +15,10 @@ import (
 
 // Recorder retains original gmetric operation/window semantics. One recorder
 // owns its service and serializes registration/update, as original gmetricx did.
+type loggingState = internallog.State
+
 type Recorder struct {
+	*loggingState
 	mu          sync.Mutex
 	service     *gmetric.Service
 	operations  map[string]*gmetric.Operation

@@ -126,6 +126,10 @@ func TestReaderObservabilitySQLite(t *testing.T) {
 					t.Fatalf("invoke: %v", err)
 				}
 				expectedCallbacks := 1
+				if mode == "SQL-error" {
+					// Missing records fails preparation before a database query attempt.
+					expectedCallbacks = 0
+				}
 				if mode == "relations" {
 					expectedCallbacks = 3
 				}

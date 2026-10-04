@@ -100,7 +100,9 @@ func (s *dataScope) finalizeOutcomes(completionErr error) error {
 		if frame.err != nil && !errors.Is(observed.Error, frame.err) {
 			observed.Error = errors.Join(observed.Error, frame.err)
 		}
-		if err := frame.finalizer.FinalizeOutcome(frame.ctx, frame.invocation, frame.result, observed.Clone()); err != nil {
+		if err := completionOperation("outcome finalizer", func() error {
+			return frame.finalizer.FinalizeOutcome(frame.ctx, frame.invocation, frame.result, observed.Clone())
+		}); err != nil {
 			result.add(&FinalizationError{Route: frame.route, Outcome: observed.Clone(), Err: err})
 		}
 	}

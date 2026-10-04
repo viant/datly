@@ -5,6 +5,7 @@ import (
 	stdhttp "net/http"
 
 	"github.com/felixge/httpsnoop"
+	"github.com/viant/datly/internal/logging"
 )
 
 // corsResponseWriter applies configured policy at header commitment, after any
@@ -43,7 +44,7 @@ func (w *corsResponseWriter) Write(data []byte) (int, error) {
 // wrap delegates optional-interface preservation to the existing native wrapper.
 // Each hook commits CORS before a supported operation can implicitly send headers.
 func (w *corsResponseWriter) wrap() stdhttp.ResponseWriter {
-	return httpsnoop.Wrap(w.ResponseWriter, httpsnoop.Hooks{
+	wrapped := httpsnoop.Wrap(w.ResponseWriter, httpsnoop.Hooks{
 		WriteHeader: func(httpsnoop.WriteHeaderFunc) httpsnoop.WriteHeaderFunc { return w.WriteHeader },
 		Write:       func(httpsnoop.WriteFunc) httpsnoop.WriteFunc { return w.Write },
 		Flush: func(next httpsnoop.FlushFunc) httpsnoop.FlushFunc {
@@ -63,4 +64,13 @@ func (w *corsResponseWriter) wrap() stdhttp.ResponseWriter {
 			}
 		},
 	})
+	if logging.HTTPObserved(w.request.Context()) {
+		wrapped = logging.PreserveFlushError(wrapped, w.ResponseWriter, func() error {
+			if !w.written {
+				w.WriteHeader(stdhttp.StatusOK)
+			}
+			return w.ResponseWriter.(interface{ FlushError() error }).FlushError()
+		})
+	}
+	return wrapped
 }

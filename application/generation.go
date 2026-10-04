@@ -16,6 +16,7 @@ import (
 	bootstrapindex "github.com/viant/datly/bootstrap/index"
 	"github.com/viant/datly/exec"
 	gateway "github.com/viant/datly/gateway/http"
+	internallog "github.com/viant/datly/internal/logging"
 	"github.com/viant/datly/mcp"
 	mcpserver "github.com/viant/datly/mcp/server"
 	"github.com/viant/datly/runtime"
@@ -76,6 +77,7 @@ type Request struct {
 }
 
 type generation struct {
+	version    string
 	revision   uint64
 	types      *typecatalog.Catalog
 	runtime    *runtime.Runtime
@@ -98,7 +100,10 @@ type generation struct {
 	docsReady  bool
 }
 
+type loggingState = internallog.State
+
 type Manager struct {
+	*loggingState
 	active          atomic.Pointer[generation]
 	seed            *typecatalog.Catalog
 	publication     sync.Mutex
@@ -141,6 +146,7 @@ func New(types *typecatalog.Catalog, configure ...Option) (*Manager, error) {
 		return nil, err
 	}
 	manager.observation = observation
+	manager.loggingState = internallog.ShareState(observation.Recorder)
 	manager.warmups = gateway.NewWarmupLifetime(context.Background())
 	return manager, nil
 }
@@ -351,7 +357,7 @@ func (m *Manager) Reload(ctx context.Context, request Request) error {
 	if err != nil {
 		return err
 	}
-	next := &generation{async: async, revision: request.Revision, types: types, runtime: rt, http: httpHandler, httpConfig: built.HTTP, mcp: service, sources: sources, index: indexRegistry, lease: indexLease, closed: make(chan struct{}), shutdown: built.Shutdown}
+	next := &generation{version: built.Version, async: async, revision: request.Revision, types: types, runtime: rt, http: httpHandler, httpConfig: built.HTTP, mcp: service, sources: sources, index: indexRegistry, lease: indexLease, closed: make(chan struct{}), shutdown: built.Shutdown}
 	if built.Index != nil && built.HTTP.OpenAPI != nil {
 		next.documents = func(loadCtx context.Context) (*gateway.Handler, error) {
 			var registrations []*registry.RegisteredComponent

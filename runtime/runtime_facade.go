@@ -74,7 +74,7 @@ func NewRuntime(components []*RegisteredComponent, runtimeOptions ...Option) (*R
 	}
 	observation := options.managedObservability
 	if observation == nil {
-		observation = &Observability{Recorder: observability.NewRecorder(options.observability.Logger, observability.WithReadingData(options.observability.ReadingData))}
+		observation = &Observability{Recorder: observability.NewRecorder(options.observability.Logger, observability.WithReadingData(options.observability.ReadingData), observability.WithLogging(options.observability.Logging))}
 	}
 	// Outbound client capabilities are composed here, once, for every
 	// component. Without explicit providers the runtime owns the default

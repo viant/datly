@@ -163,7 +163,7 @@ func (f *httpAsyncFixture) compile(ctx context.Context, _ *typecatalog.Catalog) 
 		{Component: status.Component, Input: status.Input, Output: status.Output, OutputType: reflect.TypeOf(httpAsyncOutput{}), Handler: rhandler.HandlerFunc(func(context.Context, rhandler.Invocation) (any, error) {
 			return nil, fmt.Errorf("status handler must not execute")
 		})},
-	}, HTTP: gateway.Config{Async: []gateway.AsyncRoute{
+	}, HTTP: gateway.Config{ServiceTimeHeader: "Datly-Service-Time", Async: []gateway.AsyncRoute{
 		{Route: spec.RouteRef{Method: "PATCH", Path: "/inventory"}, MatchKey: "Key", SyncFlag: "Sync"},
 		{Route: spec.RouteRef{Method: "GET", Path: "/job-status/{jobid}"}, Inspect: &gateway.AsyncInspect{JobID: "JobID", Target: spec.RouteRef{Method: "PATCH", Path: "/inventory"}}},
 	}}}, nil

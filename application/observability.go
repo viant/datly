@@ -7,6 +7,7 @@ import "github.com/viant/datly/runtime"
 func WithObservability(config runtime.ObservabilityConfig) Option {
 	return func(options *options) error {
 		copy := config
+		copy.Logging = config.Logging.Copy()
 		if config.OTel != nil {
 			export := *config.OTel
 			copy.OTel = &export

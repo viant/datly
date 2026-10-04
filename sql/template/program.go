@@ -283,6 +283,11 @@ func (c *compiled) Evaluate(ctx context.Context, invocation Invocation) (Result,
 		if err != nil {
 			return Result{}, err
 		}
+		// Each evaluation has fresh zero-initialized state. Keep an absent
+		// interface nil; the template setter cannot accept untyped nil.
+		if value.Kind() == reflect.Interface && value.IsNil() {
+			continue
+		}
 		if err := state.SetValue(variable.name, variableValue(value)); err != nil {
 			return Result{}, fmt.Errorf("set SQL template variable $%s: %w", variable.name, err)
 		}

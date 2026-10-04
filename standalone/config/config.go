@@ -4,6 +4,7 @@ package config
 import (
 	"fmt"
 	"github.com/viant/datly/constant"
+	"github.com/viant/datly/observability"
 	"net"
 	"strconv"
 	"time"
@@ -34,6 +35,7 @@ type Config struct {
 	Warmup            *Warmup
 	CacheInvalidation *CacheInvalidation
 	Observation       *Observation
+	Logging           *observability.Logging
 	// BaseDir and ModuleDirs locate trusted local source modules. Package selection
 	// retains original GoBootstrap names; discovery is owned by transcribe.
 	BaseDir    string

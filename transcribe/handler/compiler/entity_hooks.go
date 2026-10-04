@@ -86,6 +86,39 @@ func (c EntityHookCompiler) Compile(request EntityHookRequest) (spec.TypeRef, er
 			}
 		}
 	}
+	for _, method := range methods {
+		if method.Name != "ObservePhase" {
+			continue
+		}
+		if request.Component || parent != "github.com/viant/xdatly/handler.NoParent" || request.Input == "" || method.Variadic || !reflect.DeepEqual(method.Parameters, []string{"context.Context", "github.com/viant/xdatly/handler.PhaseEvent"}) || len(method.Results) != 0 {
+			return spec.TypeRef{}, fmt.Errorf("ObservePhase requires a physical root and canonical context.Context, handler.PhaseEvent signature")
+		}
+	}
+	aggregate := false
+	for _, method := range methods {
+		if method.Name != "ValidateInput" {
+			continue
+		}
+		if request.Component || parent != "github.com/viant/xdatly/handler.NoParent" || request.Input == "" {
+			return spec.TypeRef{}, fmt.Errorf("aggregate ValidateInput requires a physical root with canonical input")
+		}
+		input, resolveErr := (xshape.Resolver{}).Canonical(request.Input)
+		if resolveErr != nil {
+			return spec.TypeRef{}, resolveErr
+		}
+		expected := []string{"context.Context", "*" + input, "*" + output, "github.com/viant/xdatly/handler.ValidationReport"}
+		if method.Variadic || !reflect.DeepEqual(method.Parameters, expected) || !reflect.DeepEqual(method.Results, []string{"error"}) {
+			return spec.TypeRef{}, fmt.Errorf("entity hook %s.ValidateInput has incompatible aggregate validation signature", resolved.Identity)
+		}
+		aggregate = true
+	}
+	if aggregate {
+		for _, method := range methods {
+			if method.Name == "Validate" {
+				return spec.TypeRef{}, fmt.Errorf("aggregate ValidateInput cannot overlap row Validate")
+			}
+		}
+	}
 	lifecycle := "github.com/viant/xdatly/handler.LifecycleContext[" + entity + "," + parent + "," + output + "]"
 	expected := []string{"context.Context", "*" + entity, lifecycle}
 	for index, name := range []string{"Init", "Validate", "AfterSequence", "AfterQueue"} {
@@ -97,7 +130,7 @@ func (c EntityHookCompiler) Compile(request EntityHookRequest) (spec.TypeRef, er
 			}
 		}
 		if found == nil {
-			if index >= 2 {
+			if index >= 2 || name == "Validate" && aggregate {
 				continue
 			}
 			return spec.TypeRef{}, fmt.Errorf("entity hook %s requires %s(context.Context, *%s, handler.LifecycleContext[%s,%s,%s]) error", resolved.Identity, name, entity, entity, parent, output)

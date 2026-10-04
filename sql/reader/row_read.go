@@ -3,6 +3,7 @@ package reader
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"github.com/viant/datly/internal/txread"
 	"github.com/viant/datly/sql/reader/collector"
 
@@ -26,7 +27,9 @@ func (r rowRead) query(ctx context.Context, q rowQuery) (err error) {
 	execution := q.read.execution(q.query, q.id, q.parent)
 	rows := 0
 	delivered := 0
-	queried := false
+	queryReturned := false
+	queryAttempted := false
+	cacheAttempted := false
 	defer func() {
 		failure := err
 		panicked := recover()
@@ -37,14 +40,25 @@ func (r rowRead) query(ctx context.Context, q rowQuery) (err error) {
 			rows = q.collector.Len()
 		}
 		q.read.completeSQL(execution, r.stats, rows, failure)
-		if queried {
+		// A successful QueryAll also proves cache replay, including an empty
+		// cached result. Delivered rows prove replay when a visitor then fails.
+		if panicked == nil && queryReturned && (queryAttempted || cacheAttempted || err == nil || delivered > 0) {
 			q.read.session.recorder.QueryRead(q.read.metric.View, execution, delivered, err)
 		}
+		q.read.emitSQL(execution, r.stats)
 		if panicked != nil {
 			panic(panicked)
 		}
 	}()
 	options := r.options
+	if r.readCache != nil {
+		observed := &observedReadCache{Cache: r.readCache, attempted: &cacheAttempted}
+		var wrapped cache.Cache = observed
+		if lookup, ok := r.readCache.(cache.Lookup); ok {
+			wrapped = &observedLookupCache{observedReadCache: observed, lookup: lookup}
+		}
+		options = append(append([]sqlxread.Option(nil), options...), sqlxread.WithCache(wrapped))
+	}
 	if q.tx != nil {
 		options = append(append([]sqlxread.Option(nil), options...), sqlxread.WithTx(q.tx))
 	}
@@ -55,7 +69,23 @@ func (r rowRead) query(ctx context.Context, q rowQuery) (err error) {
 			options = append(append([]sqlxread.Option(nil), options...), sqlxread.WithRowMapper(capture.mapper))
 		}
 	}
-	reader, err := sqlxread.New(ctx, q.db, q.query.SQL, r.newRow, options...)
+	var reader *sqlxread.Reader
+	sampleQuery := func() {
+		if reader != nil && reader.Stmt() != nil {
+			queryAttempted = true
+		}
+	}
+	policy := r.retry
+	if policy.Recoverable != nil {
+		original := policy.Recoverable
+		policy.Recoverable = func(err error) bool {
+			// SQLX invokes recovery before it closes and clears the statement.
+			sampleQuery()
+			return original(err)
+		}
+		options = append(append([]sqlxread.Option(nil), options...), sqlxread.WithRetry(policy))
+	}
+	reader, err = sqlxread.New(ctx, q.db, q.query.SQL, r.newRow, options...)
 	if err != nil {
 		return err
 	}
@@ -86,7 +116,7 @@ func (r rowRead) query(ctx context.Context, q rowQuery) (err error) {
 				_ = stmt.Close()
 			}
 		}()
-		return reader.QueryAll(ctx, func(value any) error {
+		err = reader.QueryAll(ctx, func(value any) error {
 			delivered++
 			if capture != nil {
 				if err := capture.snapshot(); err != nil {
@@ -103,8 +133,14 @@ func (r rowRead) query(ctx context.Context, q rowQuery) (err error) {
 			}
 			return nil
 		}, q.query.Args...)
+		sampleQuery()
+		// These typed cache-only outcomes occur before any database fallback.
+		if r.cacheOnly && (errors.Is(err, cache.ErrMiss) || errors.Is(err, cache.ErrLookupUnsupported)) {
+			cacheAttempted = true
+		}
+		queryReturned = true
+		return err
 	}()
-	queried = true
 	if err == nil && q.tx != nil {
 		for i := 0; i < delivered; i++ {
 			var value any
@@ -128,4 +164,34 @@ func (r rowRead) query(ctx context.Context, q rowQuery) (err error) {
 		}
 	}
 	return err
+}
+
+// observedReadCache preserves the SQLX cache contract while capturing only
+// actual replay entry and failed cache lookup, independently of hit statistics.
+type observedReadCache struct {
+	cache.Cache
+	attempted *bool
+}
+
+func (c *observedReadCache) Get(ctx context.Context, sql string, args []interface{}, options ...interface{}) (*cache.Entry, error) {
+	entry, err := c.Cache.Get(ctx, sql, args, options...)
+	if err != nil {
+		*c.attempted = true
+	}
+	return entry, err
+}
+func (c *observedReadCache) AsSource(ctx context.Context, entry *cache.Entry) (cache.Source, error) {
+	*c.attempted = true
+	return c.Cache.AsSource(ctx, entry)
+}
+
+// Only caches that originally implement Lookup expose it through the adapter.
+type observedLookupCache struct {
+	*observedReadCache
+	lookup cache.Lookup
+}
+
+func (c *observedLookupCache) Lookup(ctx context.Context, sql string, args []interface{}, options ...interface{}) (*cache.Entry, error) {
+	*c.attempted = true
+	return c.lookup.Lookup(ctx, sql, args, options...)
 }

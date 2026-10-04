@@ -18,6 +18,7 @@ import (
 	"github.com/viant/datly/bootstrap/connector"
 	dexec "github.com/viant/datly/exec"
 	"github.com/viant/datly/internal/httpserver"
+	internallog "github.com/viant/datly/internal/logging"
 	mcpserver "github.com/viant/datly/mcp/server"
 	authprovider "github.com/viant/datly/runtime/auth/provider"
 	handlerprovider "github.com/viant/datly/runtime/handler/provider"
@@ -27,6 +28,7 @@ import (
 	xmodule "github.com/viant/x/module"
 	xauth "github.com/viant/xdatly/auth"
 	xcodec "github.com/viant/xdatly/codec"
+	xexec "github.com/viant/xdatly/exec"
 	xlogger "github.com/viant/xdatly/logger"
 )
 
@@ -316,6 +318,13 @@ func (s *Server) track(handler http.Handler) http.Handler {
 		s.mu.Lock()
 		if s.closed {
 			s.mu.Unlock()
+			if s.manager != nil && internallog.Enabled(s.manager) {
+				internallog.ServeHTTPObserved(w, r, "", func(w http.ResponseWriter, r *http.Request) {
+					internallog.RecordHTTPError(r.Context(), errors.New("application unavailable"))
+					http.Error(w, "application unavailable", http.StatusServiceUnavailable)
+				}, func(ctx context.Context, e *xexec.Context) { internallog.LogHTTP(s.manager, ctx, e) })
+				return
+			}
 			http.Error(w, "application unavailable", http.StatusServiceUnavailable)
 			return
 		}

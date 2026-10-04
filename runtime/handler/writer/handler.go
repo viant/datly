@@ -4,6 +4,7 @@ package writer
 import (
 	"container/heap"
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 	"sort"
@@ -630,7 +631,30 @@ func markSupplied(entity reflect.Value, field Field) {
 	}
 }
 
-func (h *Handler) Execute(ctx context.Context, invocation rhandler.Invocation) (any, error) {
+func (h *Handler) NewPhaseObserver() xhandler.PhaseObserver {
+	if h == nil || h.metadata == nil || h.metadata.Root == nil || h.metadata.Root.HookType == nil {
+		return nil
+	}
+	observer, _ := reflect.New(h.metadata.Root.HookType).Interface().(xhandler.PhaseObserver)
+	return observer
+}
+func (p *Program) usePhaseObserver(ctx context.Context) {
+	scope := rhandler.PhaseScopeFromContext(ctx)
+	if scope == nil || p.metadata.Root == nil || p.metadata.Root.HookType == nil {
+		return
+	}
+	observer := scope.Observer()
+	if observer != nil && reflect.TypeOf(observer) == reflect.PointerTo(p.metadata.Root.HookType) {
+		p.hook = reflect.ValueOf(observer)
+		p.hooksByRecord[p.metadata.Root] = p.hook
+	}
+}
+func (h *Handler) Execute(ctx context.Context, invocation rhandler.Invocation) (result any, err error) {
+	scope := rhandler.PhaseScopeFromContext(ctx)
+	err = scope.Run(ctx, xhandler.PhaseExecution, func() error { var failure error; result, failure = h.execute(ctx, invocation); return failure })
+	return result, err
+}
+func (h *Handler) execute(ctx context.Context, invocation rhandler.Invocation) (any, error) {
 	if h == nil || h.metadata == nil {
 		return nil, fmt.Errorf("writer handler is not initialized")
 	}
@@ -642,6 +666,7 @@ func (h *Handler) Execute(ctx context.Context, invocation rhandler.Invocation) (
 			return nil, err
 		}
 	}
+	program.usePhaseObserver(ctx)
 	if err = program.prepare(ctx, invocation.Binder); err != nil {
 		return program.output, err
 	}
@@ -662,6 +687,7 @@ func (h *Handler) CaptureInput(ctx context.Context, input any) (any, error) {
 	if err != nil {
 		return nil, err
 	}
+	program.usePhaseObserver(ctx)
 	if err = prepareReadIndexes(ctx, input); err != nil {
 		return nil, err
 	}
@@ -827,6 +853,7 @@ func (p *Program) prepare(ctx context.Context, binder xhandler.Binder) error {
 		p.failed = false
 		return nil
 	}
+	phases := rhandler.PhaseScopeFromContext(ctx)
 	input := reflect.ValueOf(p.input).Elem()
 	entities := input.Field(p.metadata.InputField)
 	if p.metadata.Root == nil {
@@ -867,69 +894,104 @@ func (p *Program) prepare(ctx context.Context, binder xhandler.Binder) error {
 			return err
 		}
 	}
-	initialized := map[frameIdentity]bool{}
-	for _, frame := range p.frames.Rows {
-		if err = p.callEntityHook(ctx, "Init", frame); err != nil {
-			return err
-		}
-		initialized[identityOfFrame(frame)] = true
-		// Init is the supported phase for marker-aware business defaults and
-		// sparse server-owned transitions. Frame presence is a live view of the
-		// entity marker, so setter changes are visible to validation and action
-		// selection without a synchronisation pass; invariant backfill stays in
-		// the writer overlay and never mutates client markers.
-	}
-	// A lifecycle may implement atomic replacement by appending explicit
-	// deletion rows derived from the assembled Previous graph. Rebuild frames
-	// once after Init so those new rows participate in validation, ordering and
-	// DML without invoking Init twice for the original topology.
-	p.frames = &MutationFrames{}
-	if err = p.buildRecordFrames(ctx, binder, p.metadata.Root, entities, nil); err != nil {
-		return err
-	}
-	if err = p.reconcileLinks(false); err != nil {
-		return err
-	}
-	for _, frame := range p.frames.Rows {
-		if err = p.applyInvariants(frame); err != nil {
-			return err
-		}
-		if err = p.checkConcurrency(frame); err != nil {
-			return err
-		}
-		if !initialized[identityOfFrame(frame)] {
+	if err = phases.Run(ctx, xhandler.PhaseInitialization, func() error {
+		initialized := map[frameIdentity]bool{}
+		for _, frame := range p.frames.Rows {
 			if err = p.callEntityHook(ctx, "Init", frame); err != nil {
 				return err
 			}
+			initialized[identityOfFrame(frame)] = true
+			// Init is the supported phase for marker-aware business defaults and
+			// sparse server-owned transitions. Frame presence is a live view of the
+			// entity marker, so setter changes are visible to validation and action
+			// selection without a synchronisation pass; invariant backfill stays in
+			// the writer overlay and never mutates client markers.
 		}
-	}
-	if err = p.orderFramesByReferences(); err != nil {
-		return err
-	}
-	if err = p.validateFrames(ctx, validator, false); err != nil {
-		return err
-	}
-	for _, frame := range p.frames.Rows {
-		if !frame.Record.Auxiliary && frame.Action == xhandler.WriteInsert {
-			if err = validateInsertIdentity(frame.Record, frame.Entity.Elem(), frame.Parent); err != nil {
-				return err
-			}
-		}
-		if err = p.callEntityHook(ctx, "Validate", frame); err != nil {
+		// A lifecycle may implement atomic replacement by appending explicit
+		// deletion rows derived from the assembled Previous graph. Rebuild frames
+		// once after Init so those new rows participate in validation, ordering and
+		// DML without invoking Init twice for the original topology.
+		p.frames = &MutationFrames{}
+		if err = p.buildRecordFrames(ctx, binder, p.metadata.Root, entities, nil); err != nil {
 			return err
 		}
-		if frame.Record.Auxiliary || frame.SkippedDelete || frame.NoopMissingIdentity {
-			continue
+		if err = p.reconcileLinks(false); err != nil {
+			return err
 		}
-		if frame.Action == xhandler.WriteUpdate && !hasMutableFields(frame) {
-			continue
+		for _, frame := range p.frames.Rows {
+			if err = p.applyInvariants(frame); err != nil {
+				return err
+			}
+			if err = p.checkConcurrency(frame); err != nil {
+				return err
+			}
+			if !initialized[identityOfFrame(frame)] {
+				if err = p.callEntityHook(ctx, "Init", frame); err != nil {
+					return err
+				}
+			}
 		}
-		action := &Action{Kind: frame.Action, Entity: frame.Entity}
-		if frame.Action == xhandler.WriteDelete {
-			p.actions.Rows = append([]*Action{action}, p.actions.Rows...)
-		} else {
-			p.actions.Rows = append(p.actions.Rows, action)
+		if err = p.orderFramesByReferences(); err != nil {
+			return err
 		}
+
+		return nil
+	}); err != nil {
+		return err
+	}
+	if err = phases.Run(ctx, xhandler.PhaseValidation, func() error {
+		initialError := p.validateFrames(ctx, validator, false)
+		if p.aggregateValidation() {
+			var schemaFailure *initialSchemaViolations
+			if initialError != nil && !errors.As(initialError, &schemaFailure) {
+				return initialError
+			}
+			report := &inputValidationReport{}
+			if schemaFailure != nil {
+				report.native = schemaFailure.validation
+			}
+			if err = ctx.Err(); err != nil {
+				return err
+			}
+			results := p.hook.MethodByName("ValidateInput").Call([]reflect.Value{reflect.ValueOf(ctx), reflect.ValueOf(p.input), reflect.ValueOf(p.output), reflect.ValueOf(report)})
+			if err = methodError("ValidateInput", results); err != nil {
+				return err
+			}
+			if err = ctx.Err(); err != nil {
+				return err
+			}
+			if err = report.result().Err(); err != nil {
+				return rhandler.ValidationPhaseFailure(err)
+			}
+		} else if initialError != nil {
+			return initialError
+		}
+		for _, frame := range p.frames.Rows {
+			if !frame.Record.Auxiliary && frame.Action == xhandler.WriteInsert {
+				if err = validateInsertIdentity(frame.Record, frame.Entity.Elem(), frame.Parent); err != nil {
+					return err
+				}
+			}
+			if err = p.callEntityHook(ctx, "Validate", frame); err != nil {
+				return err
+			}
+			if frame.Record.Auxiliary || frame.SkippedDelete || frame.NoopMissingIdentity {
+				continue
+			}
+			if frame.Action == xhandler.WriteUpdate && !hasMutableFields(frame) {
+				continue
+			}
+			action := &Action{Kind: frame.Action, Entity: frame.Entity}
+			if frame.Action == xhandler.WriteDelete {
+				p.actions.Rows = append([]*Action{action}, p.actions.Rows...)
+			} else {
+				p.actions.Rows = append(p.actions.Rows, action)
+			}
+		}
+
+		return nil
+	}); err != nil {
+		return err
 	}
 	if len(p.actions.Rows) > 0 {
 		starter, lookupErr := lookup[xhandler.TransactionStarter](ctx, binder, xhandler.TransactionStarterKey)
@@ -941,17 +1003,23 @@ func (p *Program) prepare(ctx context.Context, binder xhandler.Binder) error {
 		}
 	}
 	if hasAction(p.actions.Rows, xhandler.WriteInsert) {
-		sequencer, lookupErr := lookup[xhandler.Sequencer](ctx, binder, xhandler.SequencerKey)
-		if lookupErr != nil {
-			return lookupErr
-		}
-		if err = p.allocate(ctx, sequencer, p.metadata.Root, entities); err != nil {
-			return err
-		}
-		if err = p.reconcileLinks(false); err != nil {
-			return err
-		}
-		if err = p.allocateScoped(ctx, sequencer); err != nil {
+		if err = phases.Run(ctx, xhandler.PhaseAllocation, func() error {
+			sequencer, lookupErr := lookup[xhandler.Sequencer](ctx, binder, xhandler.SequencerKey)
+			if lookupErr != nil {
+				return lookupErr
+			}
+			if err = p.allocate(ctx, sequencer, p.metadata.Root, entities); err != nil {
+				return err
+			}
+			if err = p.reconcileLinks(false); err != nil {
+				return err
+			}
+			if err = p.allocateScoped(ctx, sequencer); err != nil {
+				return err
+			}
+
+			return nil
+		}); err != nil {
 			return err
 		}
 
@@ -967,78 +1035,84 @@ func (p *Program) prepare(ctx context.Context, binder xhandler.Binder) error {
 	if err = p.validateFrames(ctx, validator, true); err != nil {
 		return err
 	}
-	dml, err := lookup[xhandler.DML](ctx, binder, xhandler.DMLKey)
-	if err != nil {
-		return err
-	}
-	for _, action := range p.actions.Rows {
-		frame := p.frameFor(action.Entity)
-		value := action.Entity.Interface()
-		table := frame.Record.Table
-		var options []xhandler.Option
-		if token := frame.Record.ConcurrencyToken; token != nil && (action.Kind == xhandler.WriteUpdate || action.Kind == xhandler.WriteDelete) {
-			persisted := frame.Previous
-			if persisted.IsValid() && persisted.Kind() == reflect.Pointer {
-				persisted = persisted.Elem()
-			}
-			if !frame.ExpectedToken.IsValid() || !persisted.IsValid() || persisted.Kind() != reflect.Struct {
-				return &xhandler.Conflict{Entity: frame.Record.Path, Field: token.Name, Reason: "persisted concurrency token is unavailable"}
-			}
-			previousToken := persisted.FieldByName(token.Name)
-			if !previousToken.IsValid() {
-				return &xhandler.Conflict{Entity: frame.Record.Path, Field: token.Name, Reason: "persisted concurrency token is unavailable"}
-			}
-			options = append(options, xhandler.WithIfMatch(token.Column, previousToken.Interface()))
-		}
-		var criteria *sqlx.Criteria
-		if frame.Record.MutationPredicateGroup != nil && (action.Kind == xhandler.WriteUpdate || action.Kind == xhandler.WriteDelete) {
-			predicateCtx, dialectErr := mutationPredicateContext(ctx, binder)
-			if dialectErr != nil {
-				return fmt.Errorf("mutation predicate %s dialect: %w", frame.Record.Path, dialectErr)
-			}
-			criteria, err = p.metadata.Predicates.Criteria(predicateCtx, binder, *frame.Record.MutationPredicateGroup)
-			if err != nil {
-				return fmt.Errorf("mutation predicate %s: %w", frame.Record.Path, err)
-			}
-		}
-		switch action.Kind {
-		case xhandler.WriteInsert:
-			err = dml.Insert(table, value)
-		case xhandler.WriteUpdate, xhandler.WriteDelete:
-			if criteria != nil {
-				native, ok := dml.(rhandler.CriteriaDML)
-				if !ok {
-					return fmt.Errorf("mutation predicate requires native CriteriaDML")
-				}
-				if action.Kind == xhandler.WriteUpdate {
-					err = native.UpdateWithCriteria(table, value, criteria, options...)
-				} else {
-					err = native.DeleteWithCriteria(table, value, criteria, options...)
-				}
-			} else if len(options) != 0 {
-				native, ok := dml.(xhandler.MatchedDML)
-				if !ok {
-					return &xhandler.Conflict{Entity: frame.Record.Path, Reason: "atomic matched DML is unavailable"}
-				}
-				if action.Kind == xhandler.WriteUpdate {
-					err = native.UpdateWithOptions(table, value, options...)
-				} else {
-					err = native.DeleteWithOptions(table, value, options...)
-				}
-			} else if action.Kind == xhandler.WriteUpdate {
-				err = dml.Update(table, value)
-			} else {
-				err = dml.Delete(table, value)
-			}
-		default:
-			err = fmt.Errorf("unsupported writer action %q", action.Kind)
-		}
+	if err = phases.Run(ctx, xhandler.PhaseQueue, func() error {
+		dml, err := lookup[xhandler.DML](ctx, binder, xhandler.DMLKey)
 		if err != nil {
-			return fmt.Errorf("%s %s: %w", action.Kind, table, err)
-		}
-		if err = p.callEntityHook(ctx, "AfterQueue", frame); err != nil {
 			return err
 		}
+		for _, action := range p.actions.Rows {
+			frame := p.frameFor(action.Entity)
+			value := action.Entity.Interface()
+			table := frame.Record.Table
+			var options []xhandler.Option
+			if token := frame.Record.ConcurrencyToken; token != nil && (action.Kind == xhandler.WriteUpdate || action.Kind == xhandler.WriteDelete) {
+				persisted := frame.Previous
+				if persisted.IsValid() && persisted.Kind() == reflect.Pointer {
+					persisted = persisted.Elem()
+				}
+				if !frame.ExpectedToken.IsValid() || !persisted.IsValid() || persisted.Kind() != reflect.Struct {
+					return &xhandler.Conflict{Entity: frame.Record.Path, Field: token.Name, Reason: "persisted concurrency token is unavailable"}
+				}
+				previousToken := persisted.FieldByName(token.Name)
+				if !previousToken.IsValid() {
+					return &xhandler.Conflict{Entity: frame.Record.Path, Field: token.Name, Reason: "persisted concurrency token is unavailable"}
+				}
+				options = append(options, xhandler.WithIfMatch(token.Column, previousToken.Interface()))
+			}
+			var criteria *sqlx.Criteria
+			if frame.Record.MutationPredicateGroup != nil && (action.Kind == xhandler.WriteUpdate || action.Kind == xhandler.WriteDelete) {
+				predicateCtx, dialectErr := mutationPredicateContext(ctx, binder)
+				if dialectErr != nil {
+					return fmt.Errorf("mutation predicate %s dialect: %w", frame.Record.Path, dialectErr)
+				}
+				criteria, err = p.metadata.Predicates.Criteria(predicateCtx, binder, *frame.Record.MutationPredicateGroup)
+				if err != nil {
+					return fmt.Errorf("mutation predicate %s: %w", frame.Record.Path, err)
+				}
+			}
+			switch action.Kind {
+			case xhandler.WriteInsert:
+				err = dml.Insert(table, value)
+			case xhandler.WriteUpdate, xhandler.WriteDelete:
+				if criteria != nil {
+					native, ok := dml.(rhandler.CriteriaDML)
+					if !ok {
+						return fmt.Errorf("mutation predicate requires native CriteriaDML")
+					}
+					if action.Kind == xhandler.WriteUpdate {
+						err = native.UpdateWithCriteria(table, value, criteria, options...)
+					} else {
+						err = native.DeleteWithCriteria(table, value, criteria, options...)
+					}
+				} else if len(options) != 0 {
+					native, ok := dml.(xhandler.MatchedDML)
+					if !ok {
+						return &xhandler.Conflict{Entity: frame.Record.Path, Reason: "atomic matched DML is unavailable"}
+					}
+					if action.Kind == xhandler.WriteUpdate {
+						err = native.UpdateWithOptions(table, value, options...)
+					} else {
+						err = native.DeleteWithOptions(table, value, options...)
+					}
+				} else if action.Kind == xhandler.WriteUpdate {
+					err = dml.Update(table, value)
+				} else {
+					err = dml.Delete(table, value)
+				}
+			default:
+				err = fmt.Errorf("unsupported writer action %q", action.Kind)
+			}
+			if err != nil {
+				return fmt.Errorf("%s %s: %w", action.Kind, table, err)
+			}
+			if err = p.callEntityHook(ctx, "AfterQueue", frame); err != nil {
+				return err
+			}
+		}
+
+		return nil
+	}); err != nil {
+		return err
 	}
 	output := reflect.ValueOf(p.output).Elem()
 	output.Field(p.metadata.OutputField).Set(entities)
@@ -1286,7 +1360,13 @@ func (p *Program) orderFramesByReferences() error {
 	return nil
 }
 
+func (p *Program) aggregateValidation() bool {
+	return p.hook.IsValid() && p.hook.MethodByName("ValidateInput").IsValid()
+}
+
 func (p *Program) validateFrames(ctx context.Context, validator xhandler.Validator, transactionStarted bool) error {
+	collect := !transactionStarted && p.aggregateValidation()
+	aggregate := &xhandler.Validation{}
 	groups := map[*Record][]*Frame{}
 	var order []*Record
 	for _, frame := range p.frames.Rows {
@@ -1316,10 +1396,20 @@ func (p *Program) validateFrames(ctx context.Context, validator xhandler.Validat
 			return fmt.Errorf("validate writer %s: %w", record.Path, err)
 		}
 		if err = result.Err(); err != nil {
-			return fmt.Errorf("validate writer %s: %w", record.Path, err)
+			if !collect {
+				return rhandler.ValidationPhaseFailure(fmt.Errorf("validate writer %s: %w", record.Path, err))
+			}
+			aggregate.Failed = true
+			if aggregate.Code == 0 {
+				aggregate.Code = result.Code
+			}
+			aggregate.Violations = append(aggregate.Violations, result.Violations...)
 		}
 	}
-	return nil
+	if collect && aggregate.Err() != nil {
+		return &initialSchemaViolations{validation: aggregate}
+	}
+	return aggregate.Err()
 }
 
 func (p *Program) callEntityHook(ctx context.Context, name string, frame *Frame) error {
@@ -2017,6 +2107,9 @@ func Compile(component *spec.Component, inputType, outputType reflect.Type, oper
 			return nil, err
 		}
 		metadata.Predicates = predicates
+	}
+	if err := validateAggregateHooks(root, inputType, outputType); err != nil {
+		return nil, err
 	}
 	return metadata, nil
 }

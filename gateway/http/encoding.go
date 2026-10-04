@@ -15,7 +15,7 @@ import (
 func (h *Handler) writeEncoded(ctx context.Context, writer stdhttp.ResponseWriter, request *stdhttp.Request, status int, value any) {
 	contract, err := h.runtime.ResolveOutputByRoute(ctx, request.Method, request.URL.EscapedPath())
 	if err != nil {
-		h.writeOutputError(writer, err)
+		h.writeOutputError(ctx, writer, err)
 		return
 	}
 	format, err := h.outputFormatWithDefault(request, contract)
@@ -26,7 +26,7 @@ func (h *Handler) writeEncoded(ctx context.Context, writer stdhttp.ResponseWrite
 	}
 	encoded, err := contract.Encode(ctx, format, value)
 	if err != nil {
-		h.writeOutputError(writer, err)
+		h.writeOutputError(ctx, writer, err)
 		return
 	}
 	writer.Header().Set("Content-Type", encoded.ContentType)
@@ -34,11 +34,12 @@ func (h *Handler) writeEncoded(ctx context.Context, writer stdhttp.ResponseWrite
 		writer.Header().Set("Content-Disposition", encoded.ContentDisposition)
 	}
 	if err := writeEncodedBytes(writer, request, status, encoded.Data, contract.ResponseCompression()); err != nil {
-		h.writeOutputError(writer, err)
+		h.writeOutputError(ctx, writer, err)
 	}
 }
 
-func (h *Handler) writeOutputError(writer stdhttp.ResponseWriter, err error) {
+func (h *Handler) writeOutputError(ctx context.Context, writer stdhttp.ResponseWriter, err error) {
+	recordHTTPError(ctx, err)
 	if h.logger != nil {
 		h.logger.Error("failed to encode HTTP output", err)
 	}

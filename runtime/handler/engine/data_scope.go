@@ -613,7 +613,7 @@ func (s *dataScope) prepareUnit(ctx context.Context) error {
 		return nil
 	}
 	if preparer, ok := s.data.(invocationDataPreparer); ok {
-		return preparer.PrepareCompletion(ctx)
+		return completionOperation("data completion preparation", func() error { return preparer.PrepareCompletion(ctx) })
 	}
 	return nil
 }
@@ -631,7 +631,7 @@ func (s *dataScope) prepare(ctx context.Context) error {
 			return unit.err
 		}
 		if preparer, ok := unit.data.(invocationFinalizationPreparer); ok {
-			if err := preparer.PrepareFinalization(ctx); err != nil {
+			if err := completionOperation("data finalization preparation", func() error { return preparer.PrepareFinalization(ctx) }); err != nil {
 				return err
 			}
 		}
@@ -640,7 +640,14 @@ func (s *dataScope) prepare(ctx context.Context) error {
 }
 
 func (s *dataScope) completeUnit(ctx context.Context, handlerErr error) (completionErr error) {
-	defer func() { s.mu.Lock(); s.completionErr = completionErr; s.mu.Unlock() }()
+	defer func() {
+		if value := recover(); value != nil {
+			completionErr = errors.Join(handlerErr, dexec.NewPanicError("data unit completion", value))
+		}
+		s.mu.Lock()
+		s.completionErr = completionErr
+		s.mu.Unlock()
+	}()
 	if s.err != nil {
 		return errors.Join(handlerErr, s.err)
 	}
@@ -654,4 +661,15 @@ func (s *dataScope) completeUnit(ctx context.Context, handlerErr error) (complet
 		return handlerErr
 	}
 	return s.data.Flush(ctx, "")
+}
+
+// Recover only the current operation so its owner can continue cleanup and
+// record the failure before publishing completion evidence. Never replay it.
+func completionOperation(operation string, run func() error) (err error) {
+	defer func() {
+		if value := recover(); value != nil {
+			err = dexec.NewPanicError(operation, value)
+		}
+	}()
+	return run()
 }

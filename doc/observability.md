@@ -90,3 +90,40 @@ capture-only, export-enabled and exporter-failure runs under the same data and
 configuration. Include errors and cancellation. For grouped warmup, check
 the [backend-specific acceptance](cache-and-warmup.md#full-projection-and-narrower-regular-requests)
 before presenting a performance comparison as working cache reuse.
+
+## Optional compatibility audit and trace profile
+
+Standalone configuration accepts one optional root `Logging` profile:
+
+```json
+{"Logging":{"EnableAudit":true,"EnableTracing":false,"IncludeSQL":false}}
+```
+
+Omitting `Logging` preserves existing v1 behavior. An empty profile enables audit,
+disables tracing and hides SQL. Each flag is optional; explicit false is retained.
+Embedded applications select the same profile through
+`runtime.ObservabilityConfig{Logging: &observability.Logging{...}}` and the existing
+application/runtime options. The owner copies configuration once and survives
+reloads. There are no public completion callbacks or request-selected log sinks.
+
+Audit and trace records use the original stdout destination and are serialized
+synchronously at the outer HTTP boundary, including early transport failures.
+The committed HTTP status and observed write/encoding failures are retained;
+handler return does not prove delivery to the client. Verified identity observation
+copies only user ID, username, email and scope after JWT policy checks. Conflicting
+nested identities suppress attribution. This observation never authorizes a
+request. Native body metrics, HTTP metric headers and OTel remain separately
+configured. SQL diagnostic formatting is being reconciled independently; enabling
+this profile is not a claim of complete legacy observability parity.
+
+
+### Optional HTTP execution duration
+
+HTTP `ServiceTimeHeader` is empty by default, so no duration header is generated.
+Set it to `Datly-Service-Time` or a dedicated custom header name to opt in.
+The value uses Go duration syntax. Measurement starts after routing and output
+format checks and ends after execution/error processing, before final response
+encoding and transfer. Earlier rejected requests do not acquire a timing header.
+This policy is independent of logging and diagnostic metrics. Names must be valid
+HTTP field names; choose a dedicated name, not a transport, cookie, CORS or
+`Datly-Metrics-*` header. Application response headers retain existing precedence.

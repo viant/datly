@@ -88,6 +88,13 @@ func (h *outcomeAwareHandler) FinalizeOutcome(ctx context.Context, invocation rh
 	return h.finalize(ctx, invocation, result, outcome)
 }
 
+type observedOutcomeHandler struct {
+	*outcomeAwareHandler
+	observer *recoveryAttemptObserver
+}
+
+func (h *observedOutcomeHandler) NewPhaseObserver() xhandler.PhaseObserver { return h.observer }
+
 func TestOutcomeFinalizerPublishesOnlyConfirmedCommitSQLite(t *testing.T) {
 	for _, test := range []struct {
 		name, statement                    string
@@ -172,7 +179,20 @@ func TestOutcomeFinalizerPublishesOnlyConfirmedCommitSQLite(t *testing.T) {
 					return nil
 				},
 			}
-			_, err = New().Execute(ctx, Request{Input: testRouteInput(t, reflect.TypeOf(mcpEngineInput{})), BoundInput: input, DataSource: sqldml.Source{DB: h.DB, Tx: tx}, Capabilities: rhandler.InvocationCapabilities{MessageBus: bus}, Handler: adapter})
+			observer := &recoveryAttemptObserver{finalizes: &calls}
+			_, err = New().Execute(ctx, Request{Input: testRouteInput(t, reflect.TypeOf(mcpEngineInput{})), BoundInput: input, DataSource: sqldml.Source{DB: h.DB, Tx: tx}, Capabilities: rhandler.InvocationCapabilities{MessageBus: bus}, Handler: &observedOutcomeHandler{outcomeAwareHandler: adapter, observer: observer}})
+			if len(observer.events) < 4 || observer.terminalFinalizes != 1 {
+				t.Fatal("observer ended before outcome finalization")
+			}
+			terminal := observer.events[len(observer.events)-1]
+			wantPhaseResult := xhandler.PhaseSucceeded
+			if err != nil {
+				wantPhaseResult = xhandler.PhaseFailed
+			}
+			if terminal.Phase != xhandler.PhaseInvocation || terminal.Boundary != xhandler.PhaseEnd || terminal.Result != wantPhaseResult || terminal.Cause != err {
+				t.Fatalf("observer lost canonical outcome: %+v error=%v", terminal, err)
+			}
+
 			if calls != 1 || bus.pushes != test.pushes || len(output.order) != 0 || !reflect.DeepEqual(input.order, []string{"init", "mcp"}) {
 				t.Fatalf("calls=%d pushes=%d old hooks=%v init=%v", calls, bus.pushes, output.order, input.order)
 			}
