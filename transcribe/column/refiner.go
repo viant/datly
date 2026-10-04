@@ -257,6 +257,16 @@ func (r *Compilation) discover(ctx context.Context, view *spec.View, connector s
 	if err != nil {
 		return nil, err
 	}
+	// Resource expansion can reveal a parenthesized physical FROM source that
+	// was opaque when the outer graph was parsed. Preserve that explicit
+	// read-only authority before lineage inference inspects joined columns.
+	if strings.TrimSpace(source.Table) == "" {
+		if table := explicitAuxiliarySource(evaluated.SQL); table != "" {
+			source.Table = table
+			view.Source.Table = table
+			view.Auxiliary = true
+		}
+	}
 	if strings.TrimSpace(source.Table) == "" {
 		if table := directSourceTable(evaluated.SQL); table != "" {
 			source.Table = table
@@ -361,6 +371,42 @@ func schemaDiscoverySQL(SQL string) (string, error) {
 		}
 		end += start + len(prefix)
 		result = result[:start] + result[end+1:]
+	}
+}
+
+// explicitAuxiliarySource follows only the primary FROM chain. Joined tables
+// and converging UNION lineage cannot declare an auxiliary owner.
+func explicitAuxiliarySource(SQL string) string {
+	for {
+		parsed, err := sqlparser.ParseQuery(strings.TrimSpace(SQL))
+		if err != nil || parsed == nil || parsed.Union != nil || len(parsed.WithSelects) != 0 {
+			return ""
+		}
+		if table, auxiliary, err := sqlparser.SourceTable(parsed.From.X); err != nil || table != "" {
+			if err == nil && auxiliary {
+				return table
+			}
+			return ""
+		}
+		var nested string
+		switch source := parsed.From.X.(type) {
+		case *query.Select:
+			nested = sqlparser.Stringify(source)
+		case *expr.Raw:
+			nested = source.Raw
+		case *expr.Parenthesis:
+			nested = source.Raw
+		default:
+			return ""
+		}
+		nested = strings.TrimSpace(nested)
+		if len(nested) >= 2 && nested[0] == '(' && nested[len(nested)-1] == ')' {
+			nested = strings.TrimSpace(nested[1 : len(nested)-1])
+		}
+		if nested == "" || nested == strings.TrimSpace(SQL) {
+			return ""
+		}
+		SQL = nested
 	}
 }
 
