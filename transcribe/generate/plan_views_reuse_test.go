@@ -60,6 +60,22 @@ func TestResolvePlan_RejectsDifferentExplicitLeafShapes(t *testing.T) {
 		})
 	}
 	component, _ := sharedPayloadComponent()
-	_, err := New(Input{Component: component, SetMarkerViews: map[string]bool{"mutation": true}}).Plan()
+	identity, err := component.RootView.Relations[0].View.Identity()
+	require.NoError(t, err)
+	_, err = New(Input{Component: component, SetMarkerViews: map[string]bool{identity: true}}).Plan()
 	require.ErrorContains(t, err, "map to type")
+}
+
+func TestResolvePlan_ReusesReadOnlyLeavesBesideWritableRoot(t *testing.T) {
+	component, _ := sharedPayloadComponent()
+	identity, err := component.RootView.Identity()
+	require.NoError(t, err)
+	plan, err := New(Input{Component: component, SetMarkerViews: map[string]bool{identity: true}}).Plan()
+	require.NoError(t, err)
+	require.Len(t, plan.Views, 2)
+	require.Equal(t, "PayloadView", plan.Views[1].Name)
+	require.Equal(t, 1, strings.Count(viewFile("read", plan), "type PayloadView struct"))
+	for _, field := range plan.Views[1].Fields {
+		require.NotEqual(t, "Has", field.Name, "read-only shared type must not acquire mutation presence")
+	}
 }

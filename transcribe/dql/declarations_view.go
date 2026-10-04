@@ -107,6 +107,7 @@ func materializeDeclaredViews(params []*spec.Parameter, options map[string]decla
 					}
 				}
 				column.Type = columnType
+				column.ExplicitType = true
 			}
 			view.Columns = append(view.Columns, column)
 		}
