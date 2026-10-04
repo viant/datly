@@ -27,6 +27,11 @@ func (b *inputGeneration) currentName(view *spec.View) (string, error) {
 			if candidate == nil || candidate.Source == nil || view.Source == nil || candidate.Source.Table != view.Source.Table {
 				continue
 			}
+			// Explicit read-only evidence is not the Previous projection for a
+			// writable role, even when both queries read the same physical table.
+			if candidate.Auxiliary {
+				continue
+			}
 			identity, err := candidate.Identity()
 			if err != nil {
 				return "", err

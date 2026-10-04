@@ -26,7 +26,7 @@ type viewPlanner struct {
 	visiting       map[*spec.View]bool
 	ordered        []*spec.View
 	outputs        map[*spec.Relation]*spec.Parameter
-	setMarkerViews map[string]bool
+	reuseLeafTypes bool
 }
 
 func (r *planResolver) resolveViews() (map[string]int, error) {
@@ -40,7 +40,7 @@ func (r *planResolver) resolveViews() (map[string]int, error) {
 		plan: plan, velty: r.input.VeltyHandler != nil, names: map[*spec.View]string{}, owners: map[string]*spec.View{},
 		parents: map[*spec.View]string{}, dests: map[*spec.View]string{}, visiting: map[*spec.View]bool{},
 		outputs:        map[*spec.Relation]*spec.Parameter{},
-		setMarkerViews: r.input.SetMarkerViews,
+		reuseLeafTypes: len(r.input.SetMarkerViews) == 0,
 	}
 	for _, param := range preferDefinedParams(component.Parameters) {
 		if !param.IsDerivedOutput() {
@@ -378,9 +378,7 @@ func (p *viewPlanner) assign(view *spec.View, typeName, destination string) erro
 	if owner := p.owners[typeName]; owner != nil && owner != view {
 		// Explicit names can share one generated leaf contract. Keep inferred
 		// name collisions, mutation presence and relation-specific metadata strict.
-		ownerIdentity, ownerErr := owner.Identity()
-		viewIdentity, viewErr := view.Identity()
-		if ownerErr != nil || viewErr != nil || p.setMarkerViews[ownerIdentity] || p.setMarkerViews[viewIdentity] || owner.TypeName == "" || view.TypeName == "" ||
+		if !p.reuseLeafTypes || owner.TypeName == "" || view.TypeName == "" ||
 			len(owner.Relations) != 0 || len(view.Relations) != 0 || owner.SelfReference != nil || view.SelfReference != nil {
 			return fmt.Errorf("generated views %q and %q map to type %q", owner.Name, view.Name, typeName)
 		}
