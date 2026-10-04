@@ -5,6 +5,7 @@ import (
 	"github.com/go-sql-driver/mysql"
 	dexec "github.com/viant/datly/exec"
 	"reflect"
+	"strings"
 )
 
 func (d *Data) MutationReport() dexec.MutationReport {
@@ -42,7 +43,26 @@ func (d *Data) recordMutation(step executionStep, records int, affected int64, e
 	owner := d.owner()
 	owner.mu.Lock()
 	defer owner.mu.Unlock()
-	owner.mutationResults = append(owner.mutationResults, dexec.MutationResult{Operation: string(step.kind), Table: step.table, Records: records, Affected: affected, Error: err, Contention: mutationContention(err)})
+	dialectName := ""
+	if d.dialect != nil {
+		dialectName = d.dialect.Name
+	}
+	owner.mutationResults = append(owner.mutationResults, dexec.MutationResult{Operation: string(step.kind), Table: step.table, Records: records, Affected: affected, Error: err, Contention: mutationContention(err) || codedSQLiteContention(err, dialectName)})
+}
+
+// modernc-style SQLite drivers expose extended result codes through Code().
+// Interpret those codes only with a resolved SQLite dialect; an arbitrary
+// provider's numeric code must not be mistaken for SQLite lock contention.
+func codedSQLiteContention(err error, dialectName string) bool {
+	if !strings.EqualFold(dialectName, "SQLite") {
+		return false
+	}
+	var coded interface{ Code() int }
+	if !errors.As(err, &coded) {
+		return false
+	}
+	primary := coded.Code() & 0xff
+	return primary == 5 || primary == 6 // SQLITE_BUSY / SQLITE_LOCKED
 }
 
 func mutationContention(err error) bool {
