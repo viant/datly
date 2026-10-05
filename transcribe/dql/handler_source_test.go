@@ -74,3 +74,31 @@ func TestParseDeclarativeHandlerSource(t *testing.T) {
 	require.NoError(t, err)
 	require.Nil(t, h)
 }
+
+func TestParseReaderRouteName(t *testing.T) {
+	for _, tc := range []struct{ source, want string }{
+		{`/* {"Name":"EventList", "Description":"events", "MCPTool":true} */ SELECT 1`, "EventList"},
+		{`/* {"name":"Event List"} */ SELECT 1`, "Event List"},
+		{`/* {"Name":""} */ SELECT 1`, ""},
+		{`/* {"URI":"/events"} */ SELECT 1`, ""},
+		{"SELECT 1", ""},
+		{"/* { ordinary SQL comment } */ SELECT 1", ""},
+		{`SELECT 1 /* {"Name":"NotLeading"} */`, ""},
+		{`/* {"Name":"Convert","Type":"legacy.Handler"} */`, ""},
+		{`/* {"Name":"Convert","Factory":"app.New"} */`, ""},
+	} {
+		name, err := ParseReaderRouteName(tc.source)
+		require.NoError(t, err)
+		require.Equal(t, tc.want, name)
+	}
+	for _, source := range []string{
+		`/* {"Name":7} */`, `/* {"Name":null} */`,
+		`/* {"Name":"First","Name":"Second"} */`,
+		`/* {"Name":"First","name":"Second"} */`,
+		`/* {"Name":"Events","URI":"/one","uri":"/two"} */`,
+		`/* {"Name":"Events",} */`,
+	} {
+		_, err := ParseReaderRouteName(source)
+		require.Error(t, err, source)
+	}
+}

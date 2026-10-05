@@ -110,3 +110,61 @@ func ParseHandlerSource(source string) (*HandlerHeader, string, error) {
 	}
 	return &HandlerHeader{URI: d.Route.URI, Method: d.Route.Methods[0], Name: d.HandlerName, Factory: d.HandlerFactory, InputType: d.Settings.InputType, OutputType: d.Settings.OutputType, Connector: d.Settings.DefaultConnector, Internal: d.Internal, Declarative: true}, source, nil
 }
+
+// ParseReaderRouteName preserves an existing reader header's observability name.
+// It does not classify the source as a handler or change SQL/view identity.
+func ParseReaderRouteName(source string) (string, error) {
+	text := strings.TrimSpace(source)
+	if !strings.HasPrefix(text, "/*") {
+		return "", nil
+	}
+	end := strings.Index(text, "*/")
+	if end < 0 {
+		return "", nil
+	}
+	header := strings.TrimSpace(text[2:end])
+	if !strings.HasPrefix(header, "{") {
+		return "", nil
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(header), &fields); err != nil {
+		if strings.Contains(strings.ToLower(header), `"name"`) {
+			return "", fmt.Errorf("reader header: %w", err)
+		}
+		return "", nil
+	}
+	hasName := false
+	for key := range fields {
+		if strings.EqualFold(key, "Type") || strings.EqualFold(key, "Factory") {
+			return "", nil // Handler classification remains ParseHandlerSource's responsibility.
+		}
+		hasName = hasName || strings.EqualFold(key, "Name")
+	}
+	if !hasName {
+		return "", nil
+	}
+	scanner := json.NewDecoder(strings.NewReader(header))
+	_, _ = scanner.Token() // Unmarshal already validated syntax.
+	seen := map[string]bool{}
+	name := ""
+	for scanner.More() {
+		token, _ := scanner.Token()
+		key := token.(string)
+		normalized := strings.ToLower(key)
+		if seen[normalized] {
+			return "", fmt.Errorf("duplicate reader header field %q", key)
+		}
+		seen[normalized] = true
+		var value json.RawMessage
+		_ = scanner.Decode(&value)
+		if normalized == "name" {
+			if len(value) == 0 || value[0] != '"' {
+				return "", fmt.Errorf("reader header Name must be a string")
+			}
+			if err := json.Unmarshal(value, &name); err != nil {
+				return "", fmt.Errorf("reader header Name: %w", err)
+			}
+		}
+	}
+	return name, nil
+}

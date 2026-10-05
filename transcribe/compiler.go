@@ -79,6 +79,10 @@ func (c *Compiler) Compile(ctx context.Context, source *Source) (*Result, error)
 		}
 		return c.compileHandler(source, header, body)
 	}
+	readerName, err := dql.ParseReaderRouteName(source.Text)
+	if err != nil {
+		return nil, err
+	}
 	prepared := dql.PrepareSource(source.Text)
 	sourceMap := newSourceMap(len(source.Text), nil, prepared.TrimPrefix, source.Text)
 	if len(prepared.Diagnostics) > 0 {
@@ -117,6 +121,13 @@ func (c *Compiler) Compile(ctx context.Context, source *Source) (*Result, error)
 			sourceMap.Remap([]*Diagnostic{diagnostic})
 		}
 		return nil, &CompileError{Cause: err, Diagnostics: []*Diagnostic{diagnostic}}
+	}
+	if readerName != "" {
+		for _, route := range component.Routes {
+			if route != nil {
+				route.Name = readerName
+			}
+		}
 	}
 	if component.Static != nil {
 		if source.PackageComponent != nil || source.GoHandler != nil || source.VeltyHandler != nil {
