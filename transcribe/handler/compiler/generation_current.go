@@ -267,6 +267,16 @@ func currentSourceOutputs(SQL string) map[string]string {
 	if err != nil || parsed == nil {
 		return result
 	}
+	aliases := map[string]string{}
+	lineage := map[string]string{}
+	ambiguous := map[string]bool{}
+	addLineage := func(name, output string) {
+		name = strings.ToLower(strings.TrimSpace(name))
+		if previous := lineage[name]; previous != "" && previous != output {
+			ambiguous[name] = true
+		}
+		lineage[name] = output
+	}
 	for _, item := range parsed.List {
 		column := sqlparser.NewColumn(item)
 		if _, wildcard := item.Expr.(*expr.Star); wildcard && (column.Namespace == "" || column.Namespace == "*" || strings.EqualFold(column.Namespace, parsed.From.Alias)) {
@@ -298,20 +308,33 @@ func currentSourceOutputs(SQL string) map[string]string {
 					if excluded {
 						continue
 					}
-					result[name] = output
+					if strings.EqualFold(name, output) {
+						aliases[name] = output
+					} else {
+						addLineage(name, output)
+					}
 				}
 			}
 			continue
 		}
-		if column.Expression != "" || strings.TrimSpace(column.Name) == "" {
-			continue
-		}
 		output := strings.TrimSpace(column.Identity())
-		if output == "" {
-			output = strings.TrimSpace(column.Name)
+		if output != "" {
+			aliases[strings.ToLower(output)] = output
 		}
-		result[strings.ToLower(strings.TrimSpace(column.Name))] = output
-		result[strings.ToLower(output)] = output
+		if column.Expression == "" && strings.TrimSpace(column.Name) != "" && output != "" {
+			addLineage(column.Name, output)
+		}
+	}
+	for name, output := range lineage {
+		if !ambiguous[name] {
+			result[name] = output
+		}
+	}
+	// An exposed SQL output is authoritative even if another joined table has
+	// a physical column with the same name. Ambiguous physical lineage alone
+	// must not choose a joined alias by projection order.
+	for name, output := range aliases {
+		result[name] = output
 	}
 	return result
 }

@@ -37,3 +37,20 @@ func TestCurrentSourceWildcardDoesNotAdoptAnotherNamespace(t *testing.T) {
 		t.Fatalf("unrelated wildcard adopted root projection: %v", outputs)
 	}
 }
+
+func TestCurrentSQLResultWinsOverJoinedPhysicalColumnName(t *testing.T) {
+	for _, sql := range []string{
+		"SELECT o.id,viewer.id AS viewer_user_id FROM objectives o JOIN users viewer ON viewer.id=o.owner_id",
+		"SELECT * FROM (SELECT o.id,viewer.id AS viewer_user_id FROM objectives o JOIN users viewer ON viewer.id=o.owner_id) scope",
+		"SELECT scope.* FROM (SELECT viewer.id AS viewer_user_id,o.id FROM objectives o JOIN users viewer ON viewer.id=o.owner_id) scope",
+	} {
+		outputs := currentSourceOutputs(sql)
+		if outputs["id"] != "id" || outputs["viewer_user_id"] != "viewer_user_id" {
+			t.Fatalf("result labels lost: %v", outputs)
+		}
+	}
+	outputs := currentSourceOutputs("SELECT * FROM (SELECT p.id AS pod_id,s.id AS student_id FROM pods p JOIN students s ON s.pod_id=p.id) scope")
+	if outputs["id"] != "" || outputs["pod_id"] != "pod_id" || outputs["student_id"] != "student_id" {
+		t.Fatalf("ambiguous physical id adopted: %v", outputs)
+	}
+}
