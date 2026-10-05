@@ -144,7 +144,6 @@ func lowerColumnDeclarations(parsed *query.Select, root *spec.View, types *typec
 			}
 			nullability[column] = required
 			column.Required, column.Optional = required, !required
-			column.Nullable = !required
 		}
 
 		if name == "delete_marker" || name == "concurrency_token" {

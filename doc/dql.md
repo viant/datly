@@ -175,8 +175,11 @@ Generated scalar fields also carry the existing presentation settings
 into Go JSON tags for readers and writers. `case_format('lc')` supplies lower camel names when a field
 has no explicit JSON name, including `json:",omitempty"` tags. A nonempty
 explicit name, `json:"-"`, and internal-only fields retain their authored policy.
-`writer_omit_empty(true)` opts generated writer fields without an explicit JSON
-tag into omission of zero values; omission stays off when the setting is absent.
+Writer scalar columns inferred as nullable SQL columns omit empty values by
+default, matching original SQL-derived shapes. Required/optional Go shape and
+CAST declarations do not change SQL nullability. Nonnullable columns retain
+zero values by default. `writer_omit_empty(true)` also opts other generated
+writer fields without an explicit JSON tag into omission of zero values.
 An explicit tag such as `json:"id"` keeps that field present even when the
 component opts into omission. Presence markers keep their separate hidden tags.
 These policies change Go JSON presentation, not SQL column names, nullability,

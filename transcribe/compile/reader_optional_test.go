@@ -21,6 +21,7 @@ func TestReaderOptionalColumnDeclaration(t *testing.T) {
 			require.True(t, column.Optional)
 			require.False(t, column.Required)
 			require.True(t, column.EffectiveType().Pointer)
+			require.False(t, column.Nullable, "optional must not invent SQL nullability")
 			require.True(t, column.NotNull, "Go pointer shape must not change physical constraints")
 			require.NotContains(t, got.Source.SQL, "optional(")
 			require.Contains(t, got.Source.SQL, "WHERE r.id = ?")

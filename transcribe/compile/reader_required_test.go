@@ -25,7 +25,7 @@ func TestReaderRequiredColumnDeclaration(t *testing.T) {
 			require.Len(t, got.Columns, 1)
 			column := got.Columns[0]
 			require.True(t, column.Required)
-			require.False(t, column.Nullable)
+			require.True(t, column.Nullable, "required must preserve seeded SQL nullability")
 			require.False(t, column.NotNull, "required is not a database constraint")
 			require.Equal(t, strings.Contains(annotations, "cast("), column.EffectiveType().Pointer)
 			require.NotContains(t, strings.ToLower(got.Source.SQL), "required(")

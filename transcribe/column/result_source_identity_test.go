@@ -100,7 +100,7 @@ func TestResultSourceMergePreservesPhysicalAndLogicalMetadata(t *testing.T) {
 			if persisted.DatabaseType != "INTEGER" || persisted.Type != physical.Type || persisted.EffectiveType() != physical.EffectiveType() || persisted.Source != "STATUS" || persisted.Tag != physical.Tag || !persisted.PrimaryKey || !persisted.AutoIncrement || !persisted.Unique || persisted.Default == nil || *persisted.Default != defaultValue || !persisted.DeleteMarker || !persisted.ConcurrencyToken || persisted.Groupable == nil || *persisted.Groupable || !reflect.DeepEqual(persisted.Codec, physical.Codec) {
 				t.Fatalf("physical metadata=%+v", persisted)
 			}
-			if status.Type.Name != "string" || status.DatabaseType != "VARCHAR" || status.Source != "LOGICAL_STATUS" || status.Nullable || !status.Required || status.Tag != logical.Tag || status.PrimaryKey || status.Codec != nil {
+			if status.Type.Name != "string" || status.DatabaseType != "VARCHAR" || status.Source != "LOGICAL_STATUS" || !status.Nullable || !status.Required || status.Tag != logical.Tag || status.PrimaryKey || status.Codec != nil {
 				t.Fatalf("logical metadata=%+v", status)
 			}
 			persisted.Codec.Args[0] = "mutated"

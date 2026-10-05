@@ -76,7 +76,7 @@ func TestWildcardRenameMetadataPhysicalDeclarations(t *testing.T) {
 				byName[column.Name] = column
 			}
 			physical, logical := byName["PersistedStatus"], byName["Status"]
-			if physical == nil || logical == nil || physical.Source != "STATUS" || logical.Source != "LOGICAL_STATUS" || !physical.ExplicitType || physical.Type.Name != "int" || !physical.Optional || !physical.Nullable || !logical.ExplicitType || logical.Type.Name != "string" || !logical.Required {
+			if physical == nil || logical == nil || physical.Source != "STATUS" || logical.Source != "LOGICAL_STATUS" || !physical.ExplicitType || physical.Type.Name != "int" || !physical.Optional || physical.Nullable || !logical.ExplicitType || logical.Type.Name != "string" || !logical.Required {
 				t.Fatalf("physical/logical declarations: %+v", got.Columns)
 			}
 			physicalTags, logicalTags := reflect.StructTag(physical.Tag), reflect.StructTag(logical.Tag)

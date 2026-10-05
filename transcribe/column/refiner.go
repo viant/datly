@@ -665,7 +665,7 @@ func mergeColumnsWithSources(base, discovered []*spec.Column, identities resultS
 			if cloned.Type.IsZero() {
 				cloned.Type = fresh.Type
 			}
-			cloned.Nullable = fresh.Nullable && !cloned.Required
+			cloned.Nullable = fresh.Nullable
 			cloned.NotNull = fresh.NotNull
 			if cloned.Groupable == nil && fresh.Groupable != nil {
 				value := *fresh.Groupable

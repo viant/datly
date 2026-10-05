@@ -543,6 +543,11 @@ func resolveScalarViewFields(plan *Plan, view *spec.View, includeVelty bool) ([]
 			source = strings.TrimSpace(column.Name)
 		}
 		fieldTag := scalarColumnFieldTag(column, source, includeVelty)
+		// SQL nullability supplies the original writer omission default; Go
+		// requiredness and CAST shape do not change the physical fact.
+		if column.Nullable && strings.TrimSpace(plan.Settings.Mutation) != "" && !hasStructTag(fieldTag, "json") && !strings.EqualFold(reflect.StructTag(fieldTag).Get("internal"), "true") {
+			fieldTag = appendStructTag(fieldTag, "json", ",omitempty")
+		}
 		if column.Groupable != nil && *column.Groupable && !hasStructTag(fieldTag, "groupable") {
 			fieldTag = appendStructTag(fieldTag, "groupable", "true")
 		}

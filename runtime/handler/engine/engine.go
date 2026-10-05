@@ -319,6 +319,7 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 	if err != nil {
 		return finish(nil, err)
 	}
+	providers = withDefaultGenerator(root, providers)
 	scope, err = root.ForScope(providers...)
 	if err != nil {
 		return finish(nil, err)
