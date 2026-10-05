@@ -3,6 +3,7 @@ package transcribe
 import (
 	"github.com/viant/datly/spec"
 	gen "github.com/viant/datly/transcribe/generate"
+	"strings"
 	"testing"
 )
 
@@ -53,5 +54,20 @@ func TestDeleteStagingRejectsAuxiliaryOnlyAndExplicitInconsistentPolicy(t *testi
 				t.Fatal("inconsistent staged DELETE policy accepted")
 			}
 		})
+	}
+}
+
+func TestWriterRouteCompatibilityMatrix(t *testing.T) {
+	marked := &spec.View{Columns: []*spec.Column{{Name: "Remove", DeleteMarker: true}}}
+	auxiliary := &spec.View{Auxiliary: true, Columns: marked.Columns}
+	for _, operation := range []string{"get", "post", "patch", "put"} {
+		for _, method := range []string{"", "GET", "POST", "PATCH", "PUT", "DELETE", "HEAD", "OPTIONS", "patch"} {
+			for _, view := range []*spec.View{nil, marked, auxiliary} {
+				expected := operation == "get" || method == "" || strings.EqualFold(operation, method) || (operation == "post" && strings.EqualFold(method, "PATCH")) || ((operation == "patch" || operation == "put") && method == "DELETE" && view == marked)
+				if err := validateWriterRoute(operation, method, view); (err == nil) != expected {
+					t.Errorf("operation=%s method=%s view=%p expected=%v err=%v", operation, method, view, expected, err)
+				}
+			}
+		}
 	}
 }

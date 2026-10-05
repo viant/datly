@@ -216,6 +216,10 @@ func validateWriterRoute(operation, method string, root *spec.View) error {
 	if operation == "get" || method == "" || strings.EqualFold(method, operation) {
 		return nil
 	}
+	// Transport PATCH can preserve an explicitly selected insert-only policy.
+	if operation == "post" && strings.EqualFold(method, "PATCH") {
+		return nil
+	}
 	if strings.EqualFold(method, "DELETE") && (operation == "patch" || operation == "put") && gen.HasWritableDeleteMarker(root) {
 		return nil
 	}

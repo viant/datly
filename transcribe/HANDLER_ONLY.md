@@ -5,6 +5,12 @@ native Go handler. `get` selects reader generation; `post`, `put`, and `patch`
 select mutation generation except for the explicit SQL-free POST factory branch below. The authored HTTP method does not select execution
 semantics.
 
+An explicitly selected `post` mutation may retain an authored `PATCH` route when
+that endpoint's contract is insert-only. It still inserts supplied IDs, rejects
+existing IDs, and rolls back failures; it does not acquire PATCH update behavior.
+Ordinary `patch` generation keeps its existing insert/update policy. Other writer
+method combinations retain validation, including explicit delete-marker rules.
+
 ## Source-Authored Factory
 
 New registrations can declare the native factory directly, without compiling
