@@ -1,8 +1,8 @@
 # Handler-Only DQL Transcription
 
 Use `Generator{Operation: "handler"}` to generate a registration for an existing
-native Go handler. `get` remains reader generation; `post`, `put`, and `patch`
-remain mutation generation. The authored HTTP method does not select execution
+native Go handler. `get` selects reader generation; `post`, `put`, and `patch`
+select mutation generation except for the explicit SQL-free POST factory branch below. The authored HTTP method does not select execution
 semantics.
 
 ## Source-Authored Factory
@@ -60,6 +60,41 @@ No package ownership sidecar is read or written.
 
 Existing compiled mappings remain supported. If both forms select a legacy
 `Type`, factory, destination, and actual contract identities must agree.
+
+## Generated SQL-free POST contracts
+
+A canonical `handler_factory` can select native `transcribe post` when the
+factory and both Input/Output contracts belong to the explicit destination
+package. Declare the local generated contract names through `input_type` and
+`output_type`; existing DQL input/output declarations determine their fields.
+Existing logical Go types may be referenced through their canonical imports.
+
+```sql
+#package('example.com/app/archive')
+#import('archive','example.com/app/archive')
+#setting($_ = $route('/archive','POST'))
+#setting($_ = $handler_factory('archive.NewArchive','Archive'))
+#setting($_ = $input_type('ArchiveInput'))
+#setting($_ = $output_type('ArchiveOutput'))
+#define($_ = $Data<*archive.ArchiveRequest>(body/data).Optional())
+#define($_ = $Status<string>(output/status))
+#define($_ = $Results<[]*archive.ResultItem>(output/body).WithTag('json:"results"'))
+```
+
+The authored `NewArchive` must be an exported top-level function with exact
+signature `func() handler.Contract[ArchiveInput, ArchiveOutput]`. Its generated
+contracts need not exist before the first generation. Build-selected declaration
+metadata checks the factory's function identity; existing staged Go overlay
+validation checks its exact generic contract types before publication. The
+factory and package initialization are never executed during generation.
+Regeneration replaces generated contracts and preserves separate business files.
+
+This branch accepts only native POST generation and contains no SQL, reader
+views, physical mutation root, or generated mutation handler. Typed component
+dependencies own reads and generated child writers own persistence. Their normal
+invocation scope owns the shared unit; a parent handler does not acquire manual
+DML or application-controlled commit/rollback through this generation feature.
+Imported source contracts keep the existing `transcribe handler` behavior above.
 
 ## Legacy Declaration
 
@@ -161,3 +196,5 @@ Existing generated and application files are preserved on validation failure.
 `#setting($_ = $case_format('lc'))` may supplement the legacy header. It is
 preserved as component case-format metadata and uses normal native output
 encoding; linked contracts and explicit JSON tags are not rewritten.
+
+The generated POST branch requires unqualified exported `input_type` and `output_type` names. Qualified authored or imported contract references retain the existing linked source-backed handler path and its destination checks; they never opt into generated ownership.

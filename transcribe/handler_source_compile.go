@@ -2,18 +2,27 @@ package transcribe
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"go/ast"
+	"go/parser"
 	"go/token"
 	"go/types"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"reflect"
 	"strconv"
 	"strings"
 
 	"github.com/viant/bindly"
+	"github.com/viant/datly/bootstrap"
+	readerpredicate "github.com/viant/datly/runtime/predicate/velty"
 	"github.com/viant/datly/spec"
 	"github.com/viant/datly/tag"
 	"github.com/viant/datly/transcribe/dql"
 	gen "github.com/viant/datly/transcribe/generate"
+	"github.com/viant/datly/transcribe/gobuild"
 	"github.com/viant/datly/typecatalog"
 	"github.com/viant/x"
 )
@@ -41,6 +50,9 @@ func (c *Compiler) compileSourceHandler(ctx context.Context, source *Source, hea
 		return nil, fmt.Errorf("source handler requires an explicit #package destination")
 	}
 	destination := prepared.TypeContext.PackagePath
+	if names, ok := generatedPostFactory(header, prepared); ok {
+		return c.compileGeneratedPostFactory(ctx, source, header, prepared, settings, names)
+	}
 	refs := []string{header.Factory, header.InputType, header.OutputType}
 	packages, names := make([]string, 3), make([]string, 3)
 	for i, ref := range refs {
@@ -428,4 +440,157 @@ func sourceHandlerTagsMatch(existing reflect.StructTag, authored string, embedde
 		rest = strings.TrimSpace(rest)
 	}
 	return len(seen) != 0
+}
+
+// generatedPostFactory is deliberately narrower than source-backed handler
+// registration: canonical POST declarations own both local generated contracts.
+func generatedPostFactory(header *dql.HandlerHeader, prepared *dql.PreparedSource) ([3]string, bool) {
+	var names [3]string
+	if header == nil || !header.Declarative || !strings.EqualFold(header.Method, "POST") || prepared == nil || prepared.TypeContext == nil || prepared.TypeContext.PackagePath == "" {
+		return names, false
+	}
+	destination := prepared.TypeContext.PackagePath
+	for i, ref := range []string{header.Factory, header.InputType, header.OutputType} {
+		if token.IsIdentifier(ref) && token.IsExported(ref) {
+			names[i] = ref
+			continue
+		}
+		// Qualified contract references retain the existing source-backed path.
+		// Only bare local names explicitly opt into generated ownership.
+		if i > 0 {
+			return names, false
+		}
+		pkg, name, err := handlerSymbol(ref)
+		if err != nil {
+			return names, false
+		}
+		for _, imp := range prepared.TypeContext.Imports {
+			if pkg == imp.Alias {
+				pkg = imp.Package
+			}
+		}
+		if pkg != destination {
+			return names, false
+		}
+		names[i] = name
+	}
+	return names, true
+}
+
+func (c *Compiler) compileGeneratedPostFactory(ctx context.Context, source *Source, header *dql.HandlerHeader, prepared *dql.PreparedSource, settings *spec.Settings, names [3]string) (*Result, error) {
+	destination := prepared.TypeContext.PackagePath
+	build := source.GoBuild.WithContext(ctx)
+	if build.Dir == "" {
+		build.Dir = source.BaseDir()
+	}
+	if build.Dir == "" {
+		return nil, fmt.Errorf("source handler requires a Go build directory")
+	}
+	if err := requireSelectedFactoryFunction(ctx, build, destination, names[0]); err != nil {
+		return nil, err
+	}
+	for _, parameter := range prepared.Directives.Params {
+		if parameter != nil && (parameter.DeclarationSQL != "" || strings.EqualFold(parameter.Source.Kind, "view")) {
+			return nil, fmt.Errorf("generated POST factory cannot contain SQL or reader views")
+		}
+	}
+	settings.InputType, settings.OutputType = names[1], names[2]
+	connector := header.Connector
+	if source.Connector != "" {
+		if connector != "" && connector != source.Connector {
+			return nil, fmt.Errorf("handler connector declarations conflict")
+		}
+		connector = source.Connector
+	}
+	settings.DefaultConnector = connector
+	d := prepared.Directives
+	component := &spec.Component{Key: spec.Key{Kind: spec.KindComponent, Scope: source.Scope, Name: header.Name}, Name: header.Name,
+		Description: header.Description, Documentation: d.Documentation.Clone(), TypeContext: prepared.TypeContext, Settings: settings, Parameters: d.Params,
+		Routes: []*spec.Route{{Name: header.Name, Path: header.URI, Method: header.Method, Internal: d.Internal || d.MCPOnly, Handler: destination + "." + names[0], RequestBodyMode: d.Route.RequestBodyMode, APIKeyHeader: d.Route.APIKeyHeader, APIKeyValue: d.Route.APIKeyValue}}}
+	if d.MCP != nil {
+		component.Routes[0].MCP = []*spec.MCPExposure{d.MCP.Clone()}
+	}
+	copy := *source
+	copy.GoBuild = build.WithContext(nil)
+	copy.Types = typecatalog.NewCatalog()
+	var err error
+	if source.Types != nil {
+		copy.Types, err = source.Types.Clone()
+		if err != nil {
+			return nil, err
+		}
+	}
+	if err = synthesizeConstantParams(component); err != nil {
+		return nil, err
+	}
+	typeContext := compileTypeContext(&copy, prepared.TypeContext)
+	if err = (readerpredicate.DefinitionCompiler{Context: typeContext, Catalog: copy.Types, RequireAvailable: true}).Compile(component); err != nil {
+		return nil, err
+	}
+	resolver, err := typecatalog.NewResolver(copy.Types, typecatalog.TranscribeAuthority, typeContext)
+	if err != nil {
+		return nil, err
+	}
+	if !source.Const.Empty() {
+		if err = source.Const.Validate(component, resolver.Type); err != nil {
+			return nil, err
+		}
+	}
+	declarations, err := newDeclarationCompiler(component, nil).compile()
+	if err != nil {
+		return nil, err
+	}
+	if _, err = bootstrap.NormalizeCodecReferences(component, typeContext); err != nil {
+		return nil, err
+	}
+	return &Result{Source: &copy, Component: component, TypeContext: typeContext, TypeResolver: resolver, TypeAuthority: typecatalog.TranscribeAuthority,
+		Declarations: declarations.generation, ExternalHandler: &gen.ExternalHandler{Package: destination, Name: names[0], Build: build.WithContext(nil), GeneratedContracts: true}}, nil
+}
+
+// Go's selected source list is available before the generated contracts exist.
+// Only declaration kind is checked here; the existing staged Go build checks
+// the exact native generic factory signature with those generated contracts.
+func requireSelectedFactoryFunction(ctx context.Context, build *gobuild.Context, pkg, name string) error {
+	args := []string{"list", "-e", "-json"}
+	if build.Tags != "" {
+		args = append(args, "-tags", build.Tags)
+	}
+	env := append(os.Environ(), build.Env...)
+	flags := ""
+	for _, value := range env {
+		if v, ok := strings.CutPrefix(value, "GOFLAGS="); ok {
+			flags = v
+		}
+	}
+	for _, flag := range strings.Fields(flags) {
+		if strings.Trim(flag, "\"'") == "-mod=mod" {
+			args = append(args, "-mod=readonly")
+		}
+	}
+	args = append(args, "--", pkg)
+	cmd := exec.CommandContext(ctx, "go", args...)
+	cmd.Dir, cmd.Env = build.Dir, env
+	data, err := cmd.Output()
+	if err != nil {
+		return fmt.Errorf("handler factory build selection: %w", err)
+	}
+	var target struct {
+		Dir               string
+		GoFiles, CgoFiles []string
+	}
+	if err = json.Unmarshal(data, &target); err != nil {
+		return err
+	}
+	for _, file := range append(target.GoFiles, target.CgoFiles...) {
+		parsed, err := parser.ParseFile(token.NewFileSet(), filepath.Join(target.Dir, file), nil, 0)
+		if err != nil {
+			return err
+		}
+		for _, decl := range parsed.Decls {
+			if fn, ok := decl.(*ast.FuncDecl); ok && fn.Recv == nil && fn.Name.Name == name {
+				return nil
+			}
+		}
+	}
+	return fmt.Errorf("handler factory %s.%s must be a declared function in the selected build", pkg, name)
 }

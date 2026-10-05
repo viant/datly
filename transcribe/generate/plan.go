@@ -227,7 +227,7 @@ func (r *planResolver) resolveBase() (*Plan, error) {
 	var err error
 	// An external handler retains its compiled contracts. Planning replacement
 	// fields would unnecessarily resolve (and potentially reshape) their internals.
-	if r.input.ExternalHandler == nil {
+	if r.input.ExternalHandler == nil || r.input.ExternalHandler.GeneratedContracts {
 		outputFields, err = resolveOutputFields(component, declarations, rootViewType)
 		if err != nil {
 			return nil, err

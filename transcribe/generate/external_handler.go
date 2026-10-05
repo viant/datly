@@ -9,8 +9,10 @@ import (
 // ExternalHandler links an application-validated factory without copying its
 // implementation or generating replacement contracts.
 type ExternalHandler struct {
-	Package string
-	Name    string
+	// GeneratedContracts is the SQL-free canonical POST branch; the field planner owns local Input/Output.
+	GeneratedContracts bool
+	Package            string
+	Name               string
 	// Build validates source-authored factories and staged registrations without
 	// requiring their contracts to be linked into the transcription executable.
 	Build *gobuild.Context
@@ -30,7 +32,11 @@ func (r *planResolver) resolveExternalHandler() error {
 	if h == nil {
 		return nil
 	}
-	if h.Package == "" || !token.IsIdentifier(h.Name) || !token.IsExported(h.Name) || r.plan.Input.Ownership != ContractLinked || r.plan.Output.Ownership != ContractLinked {
+	if h.GeneratedContracts {
+		if h.Package != r.plan.Package || !token.IsIdentifier(h.Name) || !token.IsExported(h.Name) || r.plan.Input.Ownership != ContractGenerated || r.plan.Output.Ownership != ContractGenerated {
+			return fmt.Errorf("generated POST factory requires local generated contracts and an exported factory")
+		}
+	} else if h.Package == "" || !token.IsIdentifier(h.Name) || !token.IsExported(h.Name) || r.plan.Input.Ownership != ContractLinked || r.plan.Output.Ownership != ContractLinked {
 		return fmt.Errorf("external handler requires imported contracts and an exported factory")
 	}
 	if r.input.Component.RootView != nil || len(r.input.Component.Views) != 0 {
@@ -38,6 +44,11 @@ func (r *planResolver) resolveExternalHandler() error {
 	}
 	if r.plan.Handler != h.Package+"."+h.Name {
 		return fmt.Errorf("external handler factory conflicts with route handler")
+	}
+	if h.GeneratedContracts {
+		r.plan.ExternalHandler = h.Clone()
+		r.plan.FactoryExpression = h.Name
+		return nil
 	}
 	alias := uniqueImportAlias(r.plan, h.Package)
 	ensureImport(r.plan, alias, h.Package)

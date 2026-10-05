@@ -40,7 +40,7 @@ func (d *dqlPackageDiscovery) load(ctx context.Context, files []xmodule.File) ([
 		}
 		if header, _, err := dql.ParseHandlerSource(string(content)); err != nil {
 			return nil, err
-		} else if header != nil && header.Factory != "" {
+		} else if header != nil && header.Factory != "" && !isGeneratedPostFactorySource(header, string(content)) {
 			// Source-backed factories resolve their imports through Go export
 			// data, not the unfiltered AST/resource discovery path used by SQL.
 			continue
@@ -60,7 +60,7 @@ func (d *dqlPackageDiscovery) load(ctx context.Context, files []xmodule.File) ([
 func (d *dqlPackageDiscovery) loadSource(ctx context.Context, source, scope string) ([]string, error) {
 	if header, _, err := dql.ParseHandlerSource(source); err != nil {
 		return nil, err
-	} else if header != nil && header.Factory != "" {
+	} else if header != nil && header.Factory != "" && !isGeneratedPostFactorySource(header, source) {
 		return nil, nil
 	}
 	imports := map[string]bool{}
@@ -296,4 +296,9 @@ func loadAvailablePackage(ctx context.Context, workspace *xmodule.Workspace, pac
 		return nil, nil
 	}
 	return pkg, err
+}
+
+func isGeneratedPostFactorySource(header *dql.HandlerHeader, source string) bool {
+	_, ok := generatedPostFactory(header, dql.PrepareSource(source))
+	return ok
 }

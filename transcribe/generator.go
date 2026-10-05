@@ -117,12 +117,18 @@ func (g Generator) generateCompiled(ctx context.Context, root, dir string, compi
 func (g Generator) generate(ctx context.Context, root, dir string, compiled *Result) (*GeneratedPackage, error) {
 	operation := strings.ToLower(strings.TrimSpace(g.Operation))
 	if operation == "handler" {
-		if compiled.ExternalHandler == nil || (g.Language != "" && g.Language != HandlerGo) {
+		if compiled.ExternalHandler == nil || compiled.ExternalHandler.GeneratedContracts || (g.Language != "" && g.Language != HandlerGo) {
 			return nil, fmt.Errorf("handler operation requires an explicit native Go factory or compiled handler mapping")
 		}
 		return g.generateCompiled(ctx, root, dir, compiled)
 	}
 	if compiled.ExternalHandler != nil {
+		if compiled.ExternalHandler.GeneratedContracts {
+			if operation != "post" || (g.Language != "" && g.Language != HandlerGo) {
+				return nil, fmt.Errorf("generated factory contracts require native post operation")
+			}
+			return g.generateCompiled(ctx, root, dir, compiled)
+		}
 		return nil, fmt.Errorf("handler-only DQL requires operation handler, not %q", operation)
 	}
 	language := g.Language
