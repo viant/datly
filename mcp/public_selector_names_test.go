@@ -6,6 +6,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/viant/datly/bootstrap"
 	gateway "github.com/viant/datly/gateway/http"
+	"github.com/viant/datly/internal/testharness"
 	"github.com/viant/datly/internal/testharness/sqlite"
 	"github.com/viant/datly/mcp"
 	druntime "github.com/viant/datly/runtime"
@@ -36,14 +37,20 @@ type publicNamesOutput struct {
 
 func TestCompiledPublicFieldNamesHTTPMCP(t *testing.T) {
 	for _, format := range []string{"lc", ""} {
-		t.Run("format="+format, func(t *testing.T) { testCompiledPublicFieldNamesHTTPMCP(t, format) })
+		t.Run("format="+format, func(t *testing.T) { testCompiledPublicFieldNamesHTTPMCP(t, format, false) })
 	}
 }
-func testCompiledPublicFieldNamesHTTPMCP(t *testing.T, format string) {
+func TestDeclaredHiddenSQLProjectionRemainsAvailableInternally(t *testing.T) {
+	testCompiledPublicFieldNamesHTTPMCP(t, "lc", true)
+}
+func testCompiledPublicFieldNamesHTTPMCP(t *testing.T, format string, includeHiddenSQL bool) {
 	ctx := context.Background()
 	db := sqlite.New(t)
 	require.NoError(t, db.ExecStatements(ctx, "CREATE TABLE records(campaign_id INTEGER,http_code INTEGER,metric_3 TEXT,secret TEXT,sample_seen_1_day INTEGER)", "INSERT INTO records VALUES(2,202,'second','private',22),(1,201,'first','private',11)"))
-	component := &spec.Component{Key: spec.Key{Kind: spec.KindComponent, Name: "PublicNames"}, Routes: []*spec.Route{{Method: "GET", Path: "/public", MCP: []*spec.MCPExposure{{Kind: spec.MCPExposureTool, Name: "PublicNames"}}}}, Settings: &spec.Settings{CaseFormat: format}, RootView: &spec.View{Name: "records", Selector: &spec.Selector{AllowFields: true, AllowOrderBy: true, Orderable: []spec.FieldPath{"campaign_id"}}, Source: &spec.ViewSource{SQL: "SELECT campaign_id,http_code,metric_3,secret,sample_seen_1_day FROM records"}}}
+	component := &spec.Component{Key: spec.Key{Kind: spec.KindComponent, Name: "PublicNames"}, Routes: []*spec.Route{{Method: "GET", Path: "/public", MCP: []*spec.MCPExposure{{Kind: spec.MCPExposureTool, Name: "PublicNames"}}}}, Settings: &spec.Settings{CaseFormat: format}, RootView: &spec.View{Name: "records", Selector: &spec.Selector{AllowFields: true, AllowOrderBy: true, Orderable: []spec.FieldPath{"campaign_id"}}, Source: &spec.ViewSource{SQL: "SELECT campaign_id,http_code,metric_3,sample_seen_1_day FROM records"}}}
+	if includeHiddenSQL {
+		component.RootView.Source.SQL = "SELECT campaign_id,http_code,metric_3,secret,sample_seen_1_day FROM records"
+	}
 	artifact, err := bootstrap.BuildArtifact(bootstrap.ArtifactInput{Component: component, InputType: reflect.TypeFor[publicNamesInput](), OutputType: reflect.TypeFor[publicNamesOutput](), DirectViewField: "Data"})
 	require.NoError(t, err)
 	reader, err := artifact.ReaderCompilation().NewExecution(bootstrap.ReaderRuntimeConfig{SQL: &dsql.SQLComponent{DB: db.DB}})
@@ -92,6 +99,10 @@ func testCompiledPublicFieldNamesHTTPMCP(t *testing.T, format string) {
 				tc.expected = strings.ReplaceAll(tc.expected, `"httpcOde"`, `"HTTPCode"`)
 				tc.expected = strings.ReplaceAll(tc.expected, `"sampleSeen1Day"`, `"SampleSeen_1Day"`)
 			}
+			if includeHiddenSQL && (tc.name == "hidden SQL" || tc.name == "hidden Go") {
+				tc.bad = false
+				tc.expected = `{"data":[{},{}]}`
+			}
 			q := url.Values{"fields": tc.fields}
 			if tc.name == "CSV fields" {
 				q.Set("fields", strings.Join(tc.fields, ","))
@@ -117,6 +128,18 @@ func testCompiledPublicFieldNamesHTTPMCP(t *testing.T, format string) {
 			body, err := json.Marshal(result.StructuredContent)
 			require.NoError(t, err)
 			require.JSONEq(t, tc.expected, string(body))
+			if includeHiddenSQL && (tc.name == "hidden SQL" || tc.name == "hidden Go") {
+				scope, err := testharness.NewRequest("GET", "/public").WithQuery(q).Scope()
+				require.NoError(t, err)
+				defer scope.Close()
+				value, err := rt.ExecuteRoute(ctx, "GET", "/public", scope)
+				require.NoError(t, err)
+				native := value.(*publicNamesOutput)
+				require.Len(t, native.Data, 2)
+				require.Equal(t, "private", native.Data[0].Secret)
+				require.Equal(t, "private", native.Data[1].Secret)
+			}
+
 		})
 	}
 }

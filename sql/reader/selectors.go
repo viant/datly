@@ -54,7 +54,6 @@ func resolveInvocationSelectors(ctx context.Context, session *Session, input ref
 		selector.Columns = append([]string(nil), selector.Columns...)
 		for _, names := range [][]string{selector.Fields, selector.Columns} {
 			for i, name := range names {
-				matched := false
 				var resolved *data.SelectorField
 				for at := range view.SelectorFields {
 					field := &view.SelectorFields[at]
@@ -65,32 +64,9 @@ func resolveInvocationSelectors(ctx context.Context, session *Session, input ref
 						return nil, invalidSelectorField(name, "ambiguous public field")
 					}
 					resolved = field
-					matched = true
 				}
 				if resolved != nil && resolved.Holder {
 					names[i] = resolved.GoName
-				}
-				if !matched && view.SelectorFieldsBound {
-					for _, mapping := range view.Spec.Columns {
-						if mapping == nil || !(dsql.ProjectionNames{mapping.Name}).Matches(name) {
-							continue
-						}
-						public := false
-						for _, field := range view.SelectorFields {
-							if !field.Holder && (dsql.ProjectionNames{field.Column}).Matches(mapping.Source) {
-								public = true
-								break
-							}
-						}
-						if !public {
-							return nil, invalidSelectorField(name, "field is not public/selectable")
-						}
-					}
-					for _, column := range view.Columns {
-						if column != nil && (dsql.ProjectionNames{column.Name, column.Column}).Matches(name) {
-							return nil, invalidSelectorField(name, "field is not public/selectable")
-						}
-					}
 				}
 			}
 		}
