@@ -105,6 +105,9 @@ func (b *planCompiler) Compile() (*sqlreader.Plan, error) {
 		return nil, err
 	}
 	view := views.root
+	if err := b.compilePublicFields(views, directViewField); err != nil {
+		return nil, err
+	}
 	viewIndex := sqlreader.NewViewIndex(b.input.Component, view)
 	selectorBindings, err := compileSelectorBindings(b.input.Component, b.input.InputType, viewIndex, b.input.Bindings)
 	if err != nil {

@@ -87,10 +87,11 @@ type Endpoint struct {
 }
 
 type MCP struct {
-	Folders       []resource.Folder
-	Port          *int
-	Address       string
-	Authorization *authorization.Policy
+	StrictArguments bool
+	Folders         []resource.Folder
+	Port            *int
+	Address         string
+	Authorization   *authorization.Policy
 }
 
 func (e Endpoint) ListenAddress() (string, error) {

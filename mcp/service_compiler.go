@@ -124,7 +124,7 @@ func (c *serviceCompiler) plans(components []*registry.RegisteredComponent) (*co
 		return nil, err
 	}
 	result := &compiledPlans{inputs: inputs, tools: map[string]*tool.Plan{}}
-	toolCompiler := tool.NewCompiler()
+	toolCompiler := tool.NewCompiler(tool.WithStrictArguments(c.config.StrictArguments))
 	for _, registered := range components {
 		if mcpVisibility, ok := c.config.Invoker.(interface{ ExposesMCPComponent(spec.Key) bool }); ok {
 			if !mcpVisibility.ExposesMCPComponent(registered.Component.Key) {

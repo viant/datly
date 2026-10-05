@@ -330,6 +330,12 @@ func (p SelectorProjection) applyMappings(columns []ProjectionColumn) {
 			add(mapping.Name, mapping.Source)
 		}
 	}
+	for _, field := range p.View.SelectorFields {
+		if !field.Holder {
+			add(field.PublicName, field.Column)
+			add(field.GoName, field.Column)
+		}
+	}
 	for i := range columns {
 		columns[i].names = append(columns[i].names, aliases[i]...)
 	}

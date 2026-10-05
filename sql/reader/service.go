@@ -2,6 +2,7 @@ package reader
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 	"strings"
@@ -69,6 +70,14 @@ func (s *Service) Read(ctx context.Context, session *Session, input any, binder 
 		return nil, err
 	}
 	actual, err := s.readBound(ctx, session, value, binder, selectors)
+	var unknown *dsql.UnknownProjectionColumnError
+	if errors.As(err, &unknown) {
+		name := unknown.RequestedColumn
+		if name == "" {
+			name = unknown.Column
+		}
+		err = invalidSelectorFieldCause(name, "unknown field in the declared source projection", err)
+	}
 	if err == nil {
 		err = session.outputAccessors.writeMetrics(actual, session.Metrics)
 	}

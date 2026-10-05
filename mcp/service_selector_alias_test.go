@@ -103,7 +103,7 @@ func TestExplicitSelectorAliasCodecHTTPMCP(t *testing.T) {
 				{"unselected codec", []string{"id"}, `{"data":[{"id":1},{"id":2}]}`},
 				{"full after projection", nil, `{"data":[{"id":1,"adOrderChannelsV2":["Display"],"publicLabel":"first"},{"id":2,"adOrderChannelsV2":[],"publicLabel":"second"}]}`},
 				{"unknown", []string{"missing"}, ""},
-				{"JSON name is not an alias", []string{"publicLabel"}, ""},
+				{"public JSON override", []string{"publicLabel"}, `{"data":[{"publicLabel":"first"},{"publicLabel":"other"}]}`},
 			} {
 				t.Run(tc.name, func(t *testing.T) {
 					res := httptest.NewRecorder()
