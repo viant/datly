@@ -9,6 +9,7 @@ import (
 	"github.com/viant/datly/spec"
 	dsql "github.com/viant/datly/sql"
 	"github.com/viant/datly/tag"
+	"github.com/viant/datly/typecatalog"
 )
 
 // ValidateProjectionAnnotations checks authored projection annotations. The
@@ -70,11 +71,17 @@ func validateAnnotations(view *spec.View, projected []string, identities resultS
 
 // ValidateSourceProjections is the no-database validation path. An unresolved
 // wildcard needs discovery; authored annotations are not evidence of outputs.
-func (r *Refiner) ValidateSourceProjections(component *spec.Component, resources fs.FS) error {
+// An optional resolver validates input member paths using source or linked types.
+func (r *Refiner) ValidateSourceProjections(component *spec.Component, resources fs.FS, resolvers ...*typecatalog.Resolver) error {
 	if component == nil {
 		return fmt.Errorf("transcribe column: component is required")
 	}
 	visited := map[*spec.View]bool{}
+	var resolver *typecatalog.Resolver
+	if len(resolvers) != 0 {
+		resolver = resolvers[0]
+	}
+	inputs := newAnalysisInputs(component, resolver)
 	var validate func(*spec.View) error
 	validate = func(view *spec.View) error {
 		if view == nil || visited[view] {
@@ -100,7 +107,7 @@ func (r *Refiner) ValidateSourceProjections(component *spec.Component, resources
 				SQL = "SELECT * FROM " + source.Table
 			}
 			if SQL != "" {
-				analysis, err := projectionAnalysisSQL(SQL)
+				analysis, err := projectionAnalysisSQL(SQL, inputs)
 				if err != nil {
 					return fmt.Errorf("static projection for view %s: %w", view.Namespace, err)
 				}

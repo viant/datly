@@ -90,3 +90,21 @@ func TestProjectionAnalysisTemplateLexicalBoundaries(t *testing.T) {
 		require.Error(t, err, SQL)
 	}
 }
+
+func TestProjectionAnalysisInputValuesDoNotSupplyColumnAuthority(t *testing.T) {
+	component := &spec.Component{Parameters: []*spec.Parameter{{Name: "Jwt", Source: spec.BindSource{Kind: "header", Name: "Authorization"}, TypeExpr: "string", Codec: &spec.Codec{Body: "UnregisteredCodec"}}}}
+	inputs := newAnalysisInputs(component, nil)
+	SQL := `SELECT e.id, ${Jwt.UserID} AS owner FROM events e WHERE e.owner=${Jwt.UserID}`
+	analysis, err := projectionAnalysisSQL(SQL, inputs)
+	require.NoError(t, err, "unknown codec output type must not require construction during static analysis")
+	require.Contains(t, analysis, ":__datly_analysis_predicate_value_")
+	lineage, err := directProjectionLineage(&spec.ViewSource{SQL: analysis, Table: "events"})
+	require.NoError(t, err)
+	require.Equal(t, map[string]string{"id": "id"}, lineage.direct)
+	require.True(t, lineage.blocked["owner"])
+	_, err = resolveResultSources([]*spec.Column{{Name: "First", Source: "id"}, {Name: "Second", Source: "id"}}, &spec.ViewSource{SQL: analysis, Table: "events"})
+	require.ErrorContains(t, err, "ambiguous SQL result ownership")
+	component.Parameters[0].Codec.OutputType = "int"
+	_, err = projectionAnalysisSQL(SQL, inputs)
+	require.ErrorContains(t, err, "struct type int", "known codec output metadata must override its string input type")
+}

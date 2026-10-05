@@ -17,12 +17,13 @@ import (
 
 // projectionAnalysisSQL produces an analysis-only copy. Predicate bodies never
 // supply column or table authority, and no template code is executed here.
-func projectionAnalysisSQL(SQL string) (string, error) {
+func projectionAnalysisSQL(SQL string, inputs ...*analysisInputs) (string, error) {
 	prefix := "__datly_analysis_predicate_"
 	for strings.Contains(SQL, prefix) {
 		prefix += "_"
 	}
 	markers := map[string]string{}
+	values := map[string]string{}
 	var result strings.Builder
 	previous := 0
 	hasTemplate := false
@@ -46,11 +47,18 @@ func projectionAnalysisSQL(SQL string) (string, error) {
 			return "", fmt.Errorf("malformed SQL template at byte %d: %w", pos, err)
 		}
 		if selector.ID != "predicate" {
-			// Ordinary input operands remain SQLParser's responsibility. Braced
-			// SQL fragments cannot establish a static projection or source.
-			if strings.HasPrefix(SQL[pos:], "${") {
-				return "", fmt.Errorf("unsupported dynamic SQL structure at byte %d: only predicate clauses can be analyzed", pos)
+			if len(inputs) == 0 || inputs[0] == nil {
+				return "", fmt.Errorf("unsupported dynamic SQL structure at byte %d: input declaration context is unavailable", pos)
 			}
+			path, err := inputs[0].validate(selector)
+			if err != nil {
+				return "", fmt.Errorf("static SQL input at byte %d: %w", pos, err)
+			}
+			marker := fmt.Sprintf(":%svalue_%d", prefix, len(values))
+			values[marker] = path
+			result.WriteString(SQL[previous:pos])
+			result.WriteString(marker)
+			previous = cursor.Pos
 			continue
 		}
 		keyword, err := predicateAnalysisKeyword(selector)
@@ -72,7 +80,7 @@ func projectionAnalysisSQL(SQL string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("parse static SQL with predicate clauses: %w", err)
 	}
-	if err := validateAnalysisPredicates(parsed, markers); err != nil {
+	if err := validateAnalysisPredicates(parsed, markers, values); err != nil {
 		return "", err
 	}
 	return analysis, nil
@@ -137,8 +145,9 @@ func predicateAnalysisKeyword(selector *veltyexpr.Select) (string, error) {
 	return "", fmt.Errorf("predicate builder must end in Build")
 }
 
-func validateAnalysisPredicates(parsed *query.Select, markers map[string]string) error {
+func validateAnalysisPredicates(parsed *query.Select, markers map[string]string, values map[string]string) error {
 	seen := map[string]bool{}
+	seenValues := map[string]bool{}
 	var conditions func(node.Node, string)
 	conditions = func(value node.Node, clause string) {
 		sqlparser.Traverse(value, func(n node.Node) bool {
@@ -152,8 +161,12 @@ func validateAnalysisPredicates(parsed *query.Select, markers map[string]string)
 				// A subquery has its own clause boundaries.
 				return false
 			case *expr.Ident:
-				if keyword, ok := markers[actual.Name]; ok && (keyword != "WHERE" && keyword != "HAVING" || keyword == clause) {
+				if keyword, ok := markers[actual.Name]; ok && (clause == "WHERE" || clause == "HAVING" || clause == "ON") && (keyword != "WHERE" && keyword != "HAVING" || keyword == clause) {
 					seen[actual.Name] = true
+				}
+			case *expr.Placeholder:
+				if _, ok := values[actual.Name]; ok {
+					seenValues[actual.Name] = true
 				}
 			}
 			return true
@@ -176,6 +189,7 @@ func validateAnalysisPredicates(parsed *query.Select, markers map[string]string)
 				}
 				conditions(actual.Qualify, "WHERE")
 				conditions(actual.Having, "HAVING")
+				conditions(actual.QualifyClause, "QUALIFY")
 				for _, join := range actual.Joins {
 					if walkErr = validateAnalysisSource(join.With); walkErr != nil {
 						return false
@@ -183,6 +197,11 @@ func validateAnalysisPredicates(parsed *query.Select, markers map[string]string)
 					conditions(join.On, "ON")
 				}
 				for _, item := range actual.List {
+					if item != nil && item.Alias != "" {
+						// A fixed alias names an output slot; the operand never
+						// supplies source-column authority.
+						conditions(item.Expr, "SELECT")
+					}
 					if item != nil && item.Alias == "" && sqlsource.Token("$").Contains(sqlparser.Stringify(item.Expr)) {
 						walkErr = fmt.Errorf("unsupported dynamic SQL structure: projection has no static output name")
 						return false
@@ -228,6 +247,11 @@ func validateAnalysisPredicates(parsed *query.Select, markers map[string]string)
 	for marker := range markers {
 		if !seen[marker] {
 			return fmt.Errorf("unsupported dynamic SQL structure: predicate template must occur in a WHERE, HAVING or JOIN ON condition")
+		}
+	}
+	for marker, path := range values {
+		if !seenValues[marker] {
+			return fmt.Errorf("unsupported dynamic SQL structure: input %s must occur in a value operand, not a table, column or clause identity", path)
 		}
 	}
 	return nil
