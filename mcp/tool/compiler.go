@@ -80,6 +80,13 @@ func (c *Compiler) Compile(input Input) (*Plan, error) {
 		if compileField == nil {
 			continue
 		}
+		selectionField, err := inputField.StructField()
+		if err != nil {
+			return nil, fmt.Errorf("compile MCP tool %q: %w", name, err)
+		}
+		if internalInputField(input.Contract.Type(), selectionField.Index) {
+			continue
+		}
 		if inputField.Anonymous() {
 			if binding.BodyNullPolicy != "" {
 				return nil, fmt.Errorf("compile MCP tool %q: BodyNullPolicy does not support anonymous body projection", name)

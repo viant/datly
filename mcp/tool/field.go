@@ -13,12 +13,12 @@ type mcpField struct {
 }
 
 func publicFieldName(logicalName, sourceName string, field reflect.StructField) (string, []string, bool, error) {
+	if field.Tag.Get("setMarker") == "true" || field.Tag.Get("internal") == "true" {
+		return "", nil, true, nil
+	}
 	mcp, err := mcpFieldMetadata(field)
 	if err != nil {
 		return "", nil, false, err
-	}
-	if field.Tag.Get("setMarker") == "true" {
-		return "", nil, true, nil
 	}
 	if mcp.hidden {
 		return "", nil, true, nil
@@ -45,7 +45,7 @@ func publicFieldName(logicalName, sourceName string, field reflect.StructField) 
 }
 
 func jsonField(field reflect.StructField) (name string, hidden bool) {
-	if field.Tag.Get("setMarker") == "true" {
+	if field.Tag.Get("setMarker") == "true" || field.Tag.Get("internal") == "true" {
 		return "", true
 	}
 	name = field.Name

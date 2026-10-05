@@ -32,7 +32,7 @@ func (c *Compiler) compileAnonymousBody(inputField registry.InputField) ([]Argum
 	}
 	result := make([]Argument, 0, len(fields))
 	for _, projected := range fields {
-		if !projected.Field.Exported {
+		if !projected.Field.Exported || internalInputField(sourceType, projected.Field.Index) {
 			continue
 		}
 		field := projected.Field.StructField()

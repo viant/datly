@@ -63,7 +63,13 @@ func TestUnrepresentableContractsFailClosed(t *testing.T) {
 			}
 			entry, buildErr := f.build()
 			if tc.name == "duplicate query name" || tc.name == "duplicate case-folded header" {
-				require.ErrorContains(t, buildErr, "ambiguous input alias")
+				require.ErrorContains(t, buildErr, "input alias")
+				require.ErrorContains(t, buildErr, "targets both A and B")
+				if tc.name == "duplicate query name" {
+					require.ErrorContains(t, buildErr, `"q"`)
+				} else {
+					require.ErrorContains(t, buildErr, `"x-name"`)
+				}
 				return
 			}
 			require.NoError(t, buildErr)

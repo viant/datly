@@ -48,6 +48,9 @@ func (b *schemaBuilder) object(key schemaKey) (*openapi3.Schema, error) {
 	}
 	for _, projected := range fields {
 		field := projected.Field
+		if input && internalInputField(t, field.Index) {
+			continue
+		}
 		if field.Tag.Get("setMarker") == "true" {
 			if input {
 				continue
@@ -84,4 +87,18 @@ func (b *schemaBuilder) object(key schemaKey) (*openapi3.Schema, error) {
 		}
 	}
 	return &openapi3.Schema{Ref: "#/components/schemas/" + name}, nil
+}
+
+func internalInputField(owner reflect.Type, index []int) bool {
+	for _, position := range index {
+		for owner.Kind() == reflect.Pointer {
+			owner = owner.Elem()
+		}
+		field := owner.Field(position)
+		if field.Tag.Get("internal") == "true" {
+			return true
+		}
+		owner = field.Type
+	}
+	return false
 }

@@ -14,7 +14,7 @@ require (
 	github.com/viant/gmetric v0.3.2
 	github.com/viant/govalidator v0.3.4-0.20260913213120-027a9dd54d73
 	github.com/viant/mcp v0.24.0
-	github.com/viant/mcp-protocol v0.19.0
+	github.com/viant/mcp-protocol v0.19.1-0.20261005144737-c504db7a02bb
 	github.com/viant/parsly v0.3.3
 	github.com/viant/sqlparser v0.13.1-0.20261003124328-b8c0b54602af
 	github.com/viant/sqlx v0.26.1-0.20261003124505-e725e2a580af
@@ -124,7 +124,7 @@ require (
 	github.com/go-viper/mapstructure/v2 v2.2.1 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/viant/afs v1.30.1-0.20260914155934-90e95d483861
-	github.com/viant/bindly v0.2.1-0.20260915164201-7cf35da5bd9a
+	github.com/viant/bindly v0.3.1-0.20261005154615-b7ad422ba78f
 	github.com/viant/godiff v0.4.3-0.20260914060527-9f2005ca82e8
 	github.com/viant/jsonrpc v0.25.0
 	github.com/viant/scy v0.35.1-0.20260914041206-699e6c909726
