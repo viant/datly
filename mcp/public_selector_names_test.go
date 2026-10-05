@@ -24,20 +24,26 @@ type publicNamesInput struct {
 	OrderBy string   `parameter:"OrderBy,kind=query,in=sort" querySelector:"records"`
 }
 type publicNamesRow struct {
-	CampaignId int    `sqlx:"campaign_id"`
-	HTTPCode   int    `sqlx:"http_code"`
-	Metric3    string `sqlx:"metric_3" json:"metric-3"`
-	Secret     string `sqlx:"secret" internal:"true"`
+	CampaignId      int    `sqlx:"campaign_id"`
+	SampleSeen_1Day int    `sqlx:"sample_seen_1_day"`
+	HTTPCode        int    `sqlx:"http_code"`
+	Metric3         string `sqlx:"metric_3" json:"metric-3"`
+	Secret          string `sqlx:"secret" internal:"true" json:"-"`
 }
 type publicNamesOutput struct {
 	Data []publicNamesRow `parameter:",kind=output,in=view"`
 }
 
 func TestCompiledPublicFieldNamesHTTPMCP(t *testing.T) {
+	for _, format := range []string{"lc", ""} {
+		t.Run("format="+format, func(t *testing.T) { testCompiledPublicFieldNamesHTTPMCP(t, format) })
+	}
+}
+func testCompiledPublicFieldNamesHTTPMCP(t *testing.T, format string) {
 	ctx := context.Background()
 	db := sqlite.New(t)
-	require.NoError(t, db.ExecStatements(ctx, "CREATE TABLE records(campaign_id INTEGER,http_code INTEGER,metric_3 TEXT,secret TEXT)", "INSERT INTO records VALUES(2,202,'second','private'),(1,201,'first','private')"))
-	component := &spec.Component{Key: spec.Key{Kind: spec.KindComponent, Name: "PublicNames"}, Routes: []*spec.Route{{Method: "GET", Path: "/public", MCP: []*spec.MCPExposure{{Kind: spec.MCPExposureTool, Name: "PublicNames"}}}}, Settings: &spec.Settings{CaseFormat: "lc"}, RootView: &spec.View{Name: "records", Selector: &spec.Selector{AllowFields: true, AllowOrderBy: true, Orderable: []spec.FieldPath{"campaign_id"}}, Source: &spec.ViewSource{SQL: "SELECT campaign_id,http_code,metric_3,secret FROM records"}}}
+	require.NoError(t, db.ExecStatements(ctx, "CREATE TABLE records(campaign_id INTEGER,http_code INTEGER,metric_3 TEXT,secret TEXT,sample_seen_1_day INTEGER)", "INSERT INTO records VALUES(2,202,'second','private',22),(1,201,'first','private',11)"))
+	component := &spec.Component{Key: spec.Key{Kind: spec.KindComponent, Name: "PublicNames"}, Routes: []*spec.Route{{Method: "GET", Path: "/public", MCP: []*spec.MCPExposure{{Kind: spec.MCPExposureTool, Name: "PublicNames"}}}}, Settings: &spec.Settings{CaseFormat: format}, RootView: &spec.View{Name: "records", Selector: &spec.Selector{AllowFields: true, AllowOrderBy: true, Orderable: []spec.FieldPath{"campaign_id"}}, Source: &spec.ViewSource{SQL: "SELECT campaign_id,http_code,metric_3,secret,sample_seen_1_day FROM records"}}}
 	artifact, err := bootstrap.BuildArtifact(bootstrap.ArtifactInput{Component: component, InputType: reflect.TypeFor[publicNamesInput](), OutputType: reflect.TypeFor[publicNamesOutput](), DirectViewField: "Data"})
 	require.NoError(t, err)
 	reader, err := artifact.ReaderCompilation().NewExecution(bootstrap.ReaderRuntimeConfig{SQL: &dsql.SQLComponent{DB: db.DB}})
@@ -64,12 +70,28 @@ func TestCompiledPublicFieldNamesHTTPMCP(t *testing.T) {
 		{"SQL name", []string{"campaign_id"}, "campaign_id DESC", `{"data":[{"campaignId":2},{"campaignId":1}]}`, false},
 		{"custom numeric tag", []string{"metric-3"}, "campaignId ASC", `{"data":[{"metric-3":"first"},{"metric-3":"second"}]}`, false},
 		{"CSV fields", []string{"campaignId", "metric-3"}, "campaignId ASC", `{"data":[{"campaignId":1,"metric-3":"first"},{"campaignId":2,"metric-3":"second"}]}`, false},
+		{"acronym", []string{"httpcOde"}, "campaignId ASC", `{"data":[{"httpcOde":201},{"httpcOde":202}]}`, false},
+		{"numeric field", []string{"sampleSeen1Day"}, "campaignId ASC", `{"data":[{"sampleSeen1Day":11},{"sampleSeen1Day":22}]}`, false},
 		{"hidden SQL", []string{"secret"}, "", "", true},
 		{"hidden Go", []string{"Secret"}, "", "", true},
 		{"unknown", []string{"missing"}, "", "", true},
 		{"forbidden sort", []string{"campaignId"}, "metric-3 DESC", "", true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			if format == "" {
+				for i, name := range tc.fields {
+					if name == "httpcOde" {
+						tc.fields[i] = "HTTPCode"
+					}
+					if name == "sampleSeen1Day" {
+						tc.fields[i] = "SampleSeen_1Day"
+					}
+				}
+				tc.expected = strings.ReplaceAll(tc.expected, `"data"`, `"Data"`)
+				tc.expected = strings.ReplaceAll(tc.expected, `"campaignId"`, `"CampaignId"`)
+				tc.expected = strings.ReplaceAll(tc.expected, `"httpcOde"`, `"HTTPCode"`)
+				tc.expected = strings.ReplaceAll(tc.expected, `"sampleSeen1Day"`, `"SampleSeen_1Day"`)
+			}
 			q := url.Values{"fields": tc.fields}
 			if tc.name == "CSV fields" {
 				q.Set("fields", strings.Join(tc.fields, ","))
