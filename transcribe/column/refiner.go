@@ -385,7 +385,7 @@ func schemaDiscoverySQL(SQL string) (string, error) {
 // and converging UNION lineage cannot declare an auxiliary owner.
 func explicitAuxiliarySource(SQL string) string {
 	for {
-		parsed, err := sqlparser.ParseQuery(strings.TrimSpace(SQL))
+		parsed, err := parseProjectionAnalysis(strings.TrimSpace(SQL))
 		if err != nil || parsed == nil || parsed.Union != nil || len(parsed.WithSelects) != 0 {
 			return ""
 		}
@@ -418,7 +418,7 @@ func explicitAuxiliarySource(SQL string) string {
 }
 
 func directSourceTable(SQL string) string {
-	parsed, err := sqlparser.ParseQuery(strings.TrimSpace(SQL))
+	parsed, err := parseProjectionAnalysis(strings.TrimSpace(SQL))
 	if err != nil {
 		return ""
 	}

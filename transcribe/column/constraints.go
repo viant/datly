@@ -140,7 +140,7 @@ func directProjectionLineage(source *spec.ViewSource) (*projectionLineage, error
 		result.wildcard = true
 		return result, nil
 	}
-	parsed, err := sqlparser.ParseQuery(text)
+	parsed, err := parseProjectionAnalysis(text)
 	if err != nil {
 		return nil, fmt.Errorf("parse table projection lineage: %w", err)
 	}
@@ -241,7 +241,7 @@ func (r projectionLineageResolver) source(value node.Node) (*projectionLineage, 
 			if with.X != nil {
 				return r.query(with.X)
 			}
-			parsed, err := sqlparser.ParseQuery(trimParentheses(with.Raw))
+			parsed, err := parseProjectionAnalysis(trimParentheses(with.Raw))
 			if err != nil {
 				return nil, err
 			}
@@ -268,7 +268,7 @@ func (r projectionLineageResolver) source(value node.Node) (*projectionLineage, 
 	if strings.TrimSpace(raw) == "" {
 		return empty, nil
 	}
-	parsed, err := sqlparser.ParseQuery(trimParentheses(raw))
+	parsed, err := parseProjectionAnalysis(trimParentheses(raw))
 	if err != nil {
 		return nil, err
 	}

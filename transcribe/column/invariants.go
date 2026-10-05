@@ -100,6 +100,12 @@ func (r *Refiner) ValidateSourceProjections(component *spec.Component, resources
 				SQL = "SELECT * FROM " + source.Table
 			}
 			if SQL != "" {
+				analysis, err := projectionAnalysisSQL(SQL)
+				if err != nil {
+					return fmt.Errorf("static projection for view %s: %w", view.Namespace, err)
+				}
+				SQL = analysis
+				source.SQL = analysis
 				columns, err := (dsql.SelectorProjection{SQL: SQL}).Columns(nil)
 				if err != nil {
 					return fmt.Errorf("invariant projection for view %s requires column discovery: %w", view.Namespace, err)
