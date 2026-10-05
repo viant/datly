@@ -171,6 +171,7 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 	}
 	finishing := false
 	outputFinalized := false
+	var snapshotReady, initializationErrorReturned bool
 	var scope *bindly.Injector
 	bindOutput := func(value any) (err error) {
 		defer func() {
@@ -201,16 +202,25 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 		// Mutation adapters may opt into a declared error output before a
 		// program exists. Their outcome callback still owns once-only dispatch
 		// after root cleanup; this path never executes the output hook itself.
-		if operationErr != nil && outcomeAware && invocation.Snapshot == nil && result == nil {
-			if early, ok := request.Handler.(rhandler.EarlyErrorOutputFinalizer); ok && early.EarlyErrorOutputEnabled() {
-				result = errorAwareOutput(request.OutputType)
-				if result != nil {
-					if bindErr := bindOutput(result); bindErr != nil {
-						operationErr = errors.Join(operationErr, bindErr)
-					}
+		if operationErr != nil && outcomeAware && result == nil {
+			if invocation.Snapshot == nil {
+				if early, ok := request.Handler.(rhandler.EarlyErrorOutputFinalizer); ok && early.EarlyErrorOutputEnabled() {
+					result = errorAwareOutput(request.OutputType)
+				}
+			} else if snapshotReady && initializationErrorReturned {
+				var bridgeErr error
+				result, bridgeErr = capturedInitializationOutput(ctx, request, invocation, operationErr)
+				if bridgeErr != nil {
+					operationErr = errors.Join(operationErr, bridgeErr)
+				}
+			}
+			if result != nil {
+				if bindErr := bindOutput(result); bindErr != nil {
+					operationErr = errors.Join(operationErr, bindErr)
 				}
 			}
 		}
+
 		// Opted-in typed outputs can observe early binding/initialization/read
 		// failures. No successful finalizer is run on this path.
 		if operationErr != nil && !outputFinalized && !outcomeAware {
@@ -305,7 +315,6 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 		return reads, true, nil
 	}))
 	var snapshot any
-	var snapshotReady bool
 	runtimeProviders = append(runtimeProviders, handlerprovider.New(xhandler.InputSnapshotKey, func(context.Context) (any, bool, error) {
 		if !snapshotReady {
 			return nil, false, fmt.Errorf("input snapshot is unavailable during input binding")
@@ -444,12 +453,14 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 	if err := phases.Run(ctx, xhandler.PhaseInputInitialization, func() error {
 		if initializer, ok := input.(xhandler.Initializer); ok {
 			if err := initializer.Init(ctx); err != nil {
+				initializationErrorReturned = true
 				return fmt.Errorf("initialize handler input: %w", err)
 			}
 		}
 		if mcpContext, ok := xmcp.LookupContext(ctx); ok {
 			if initializer, ok := input.(xmcp.Initializer); ok {
 				if err := initializer.InitMCP(ctx, mcpContext); err != nil {
+					initializationErrorReturned = true
 					return fmt.Errorf("initialize MCP handler input: %w", err)
 				}
 			}

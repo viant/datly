@@ -20,3 +20,10 @@ type OutcomeFinalizer interface {
 type EarlyErrorOutputFinalizer interface {
 	EarlyErrorOutputEnabled() bool
 }
+
+// CapturedErrorOutput optionally preserves a canonical captured output after
+// an ordinary initializer error. A nil result declines. The additional error
+// is joined after the original failure; outcome finalization still owns cleanup.
+type CapturedErrorOutput interface {
+	CapturedErrorOutput(context.Context, Invocation, error) (any, error)
+}

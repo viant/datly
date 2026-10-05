@@ -22,6 +22,7 @@ import (
 	"github.com/viant/sqlx"
 	"github.com/viant/structology"
 	xhandler "github.com/viant/xdatly/handler"
+	xresponse "github.com/viant/xdatly/response"
 	"github.com/viant/xunsafe"
 )
 
@@ -765,6 +766,38 @@ func prepareReadIndexes(ctx context.Context, input any) error {
 }
 
 func (*Handler) EarlyErrorOutputEnabled() bool { return true }
+
+func (h *Handler) CapturedErrorOutput(_ context.Context, invocation rhandler.Invocation, cause error) (any, error) {
+	program, ok := invocation.Snapshot.(*Program)
+	if h == nil || h.metadata == nil || !ok || program == nil || program.metadata != h.metadata {
+		return nil, fmt.Errorf("captured writer output has invalid program ownership")
+	}
+	input := reflect.ValueOf(invocation.Input)
+	owner := reflect.ValueOf(program.input)
+	if !input.IsValid() || input.Type() != reflect.PointerTo(h.inputType) || input.IsNil() || !owner.IsValid() || owner.Type() != input.Type() || owner.Pointer() != input.Pointer() {
+		return nil, fmt.Errorf("captured writer output has invalid input ownership")
+	}
+	output := reflect.ValueOf(program.output)
+	if !output.IsValid() || output.Type() != reflect.PointerTo(h.outputType) || output.IsNil() {
+		return nil, fmt.Errorf("captured writer output has invalid canonical type")
+	}
+	var body xresponse.BodyError
+	if !errors.As(cause, &body) {
+		return nil, nil
+	}
+	public, ok := body.(*xresponse.Error)
+	if !ok || public == nil {
+		return nil, nil
+	}
+	payload := reflect.ValueOf(public.Payload)
+	if !payload.IsValid() || payload.Type() != output.Type() || payload.IsNil() {
+		return nil, nil
+	}
+	if payload.Pointer() != output.Pointer() {
+		output.Elem().Set(payload.Elem())
+	}
+	return program.output, nil
+}
 
 func (h *Handler) FinalizeOutcome(ctx context.Context, invocation rhandler.Invocation, result any, outcome xhandler.Outcome) error {
 	program, _ := invocation.Snapshot.(*Program)
