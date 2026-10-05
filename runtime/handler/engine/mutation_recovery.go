@@ -11,6 +11,7 @@ import (
 	"github.com/viant/sqlx/io/errx"
 	xshape "github.com/viant/x/shape"
 	xhandler "github.com/viant/xdatly/handler"
+	"time"
 )
 
 var errMutationRetry = errors.New("mutation attempt completed; native recovery requested a replay")
@@ -59,6 +60,9 @@ func recoverMutation(ctx context.Context, request Request, data *dataScope, invo
 		return rhandler.RecoveryNone, false, nil
 	}
 	report := reporter.MutationReport()
+	if classifier, ok := data.data.(dexec.TransactionContentionClassifier); ok {
+		report.Contention = classifier.TransactionContention(completionErr)
+	}
 
 	if native, ok := request.Handler.(rhandler.ScopedMutationRecoverer); ok {
 		outcome := data.completionOutcome()
@@ -71,7 +75,34 @@ func recoverMutation(ctx context.Context, request Request, data *dataScope, invo
 				if request.mutationAttempt >= native.ScopedMutationRetryLimit() {
 					return rhandler.RecoveryNone, false, fmt.Errorf("scoped sequence retry limit reached")
 				}
+				if report.Contention {
+					if err := waitContentionRetry(ctx, request.mutationAttempt); err != nil {
+						return rhandler.RecoveryNone, false, err
+					}
+				}
 				return rhandler.RecoveryRetry, true, nil
+			}
+		}
+	}
+	if retryer, ok := request.Handler.(rhandler.TransactionRetryer); ok && retryer.SupportsTransactionRetry() {
+		outcome := data.completionOutcome()
+		if ctx.Err() == nil && !report.Nested && len(outcome.Transactions) == 1 && outcome.Transactions[0].State == xhandler.TransactionRolledBack {
+			if mutation, eligible := rollbackRetryEvidence(report, data.finalizers[0].err, completionErr); eligible {
+				allowed, err := retryer.RetryTransaction(ctx, invocation, data.finalizers[0].result, rhandler.MutationOutcome{Outcome: outcome, Mutation: mutation, Attempt: request.mutationAttempt, RetryLimit: 1})
+				if err != nil {
+					return rhandler.RecoveryNone, false, err
+				}
+				if allowed {
+					if request.mutationAttempt >= 1 {
+						return rhandler.RecoveryNone, false, fmt.Errorf("transaction retry limit reached")
+					}
+					if mutation.Contention {
+						if err := waitContentionRetry(ctx, request.mutationAttempt); err != nil {
+							return rhandler.RecoveryNone, false, err
+						}
+					}
+					return rhandler.RecoveryRetry, true, nil
+				}
 			}
 		}
 	}
@@ -113,4 +144,53 @@ func recoverMutation(ctx context.Context, request Request, data *dataScope, invo
 		return decision, false, fmt.Errorf("mutation recovery retry limit reached")
 	}
 	return decision, true, nil
+}
+
+// Back off only after a confirmed rollback and an opted-in coded-contention
+// retry. No transaction is held while waiting, and cancellation stops replay.
+func waitContentionRetry(ctx context.Context, attempt int) error {
+	if attempt < 0 {
+		attempt = 0
+	}
+	if attempt > 4 {
+		attempt = 4
+	}
+	timer := time.NewTimer(time.Duration(1<<attempt) * 10 * time.Millisecond)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
+}
+
+func rollbackRetryEvidence(report dexec.MutationReport, operationErr, completionErr error) (dexec.MutationResult, bool) {
+	if completionErr == nil || report.Queued < 0 || len(report.Results) > report.Queued {
+		return dexec.MutationResult{}, false
+	}
+	var failure dexec.MutationResult
+	found := false
+	for _, result := range report.Results {
+		if found || result.Records < 1 || (result.Operation != "insert" && result.Operation != "update" && result.Operation != "delete") {
+			return failure, false
+		}
+		if result.Error != nil {
+			failure = result
+			found = true
+		}
+	}
+	if found {
+		if completionIntroducedError(completionErr, failure.Error) {
+			return failure, false
+		}
+		var conflict *xhandler.Conflict
+		return failure, failure.Contention || errx.IsDuplicateKey(failure.Error) || errors.As(failure.Error, &conflict)
+	}
+	// Binding/allocation contention may precede queued DML. The database owner
+	// classifies its error code; additional cleanup failures remain ineligible.
+	if report.Contention && operationErr != nil && !completionIntroducedError(completionErr, operationErr) {
+		return dexec.MutationResult{Error: operationErr, Contention: true}, true
+	}
+	return failure, false
 }

@@ -22,6 +22,33 @@ func (d *Data) MutationReport() dexec.MutationReport {
 	return report
 }
 
+func (d *Data) TransactionContention(err error) bool {
+	if err == nil {
+		return false
+	}
+	if joined, ok := err.(interface{ Unwrap() []error }); ok {
+		parts := joined.Unwrap()
+		if len(parts) == 0 {
+			return false
+		}
+		for _, part := range parts {
+			if !d.TransactionContention(part) {
+				return false
+			}
+		}
+		return true
+	}
+	if wrapped, ok := err.(interface{ Unwrap() error }); ok {
+		return d.TransactionContention(wrapped.Unwrap())
+	}
+	owner := d.owner()
+	name := ""
+	if owner.dialect != nil {
+		name = owner.dialect.Name
+	}
+	return mutationContention(err) || codedSQLiteContention(err, name)
+}
+
 func mutationRecordCount(data any) int {
 	value := reflect.ValueOf(data)
 	for value.IsValid() && (value.Kind() == reflect.Pointer || value.Kind() == reflect.Interface) {

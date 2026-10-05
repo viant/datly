@@ -29,6 +29,18 @@ func (*recoveryEntityHooks) Recover(context.Context, *hookInput, *hookOutput, rh
 
 type wrongRecoveryHooks struct{ rootEntityHooks }
 
+type transactionRetryHooks struct{ rootEntityHooks }
+
+func (*transactionRetryHooks) RetryTransaction(context.Context, *hookInput, *hookOutput, rhandler.MutationOutcome) (bool, error) {
+	return false, nil
+}
+
+type wrongTransactionRetryHooks struct{ rootEntityHooks }
+
+func (*wrongTransactionRetryHooks) RetryTransaction(context.Context, *hookInput, *hookOutput, rhandler.MutationOutcome) (rhandler.Recovery, error) {
+	return rhandler.RecoveryNone, nil
+}
+
 func (*wrongRecoveryHooks) Recover(context.Context, *hookInput, *hookOutput, h.Outcome) error {
 	return nil
 }
@@ -58,7 +70,7 @@ func TestEntityHookOptionalContracts(t *testing.T) {
 	for _, tc := range []struct {
 		value any
 		fail  bool
-	}{{rootEntityHooks{}, false}, {optionalEntityHooks{}, false}, {recoveryEntityHooks{}, false}, {wrongRecoveryHooks{}, true}, {wrongSequenceHooks{}, true}, {wrongQueueHooks{}, true}, {wrongCompletionHooks{}, true}} {
+	}{{rootEntityHooks{}, false}, {optionalEntityHooks{}, false}, {recoveryEntityHooks{}, false}, {transactionRetryHooks{}, false}, {wrongTransactionRetryHooks{}, true}, {wrongRecoveryHooks{}, true}, {wrongSequenceHooks{}, true}, {wrongQueueHooks{}, true}, {wrongCompletionHooks{}, true}} {
 		typ := reflect.TypeOf(tc.value)
 		t.Run(typ.Name(), func(t *testing.T) {
 			catalog := typecatalog.NewCatalog()

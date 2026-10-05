@@ -36,6 +36,37 @@ the generated typed reader or fresh Current data.
 
 ## Decisions
 
+### Explicit rolled-back graph retry
+
+A root with multiple queued writes can opt into a separate retry-only contract:
+
+```go
+func (*Lifecycle) RetryTransaction(ctx context.Context, input *Input, output *Output,
+    outcome handler.MutationOutcome) (bool, error)
+```
+
+This does not relax `Recover` admission or permit winner acceptance. `true`
+requests one fresh invocation only after a confirmed rollback of one locally
+owned database unit. Nested work, multiple finalizers, uncertain outcomes,
+unrelated failures, and extra completion diagnostics are excluded. Mutation
+evidence identifies the failed operation; earlier successful statements have
+also rolled back. Driver-coded contention before queued DML can carry an empty
+operation with `Contention=true`. Missing initialized hook state declines retry.
+Returning true after the retry limit fails; false retains the original failure.
+
+Native replay preserves original request presence and refreshes all reads.
+Coded contention uses a cancellable bounded backoff after rollback, never while
+holding a transaction. Root hooks must account for repeated external effects;
+commit-dependent actions still belong after confirmed completion. Leaf auxiliary
+component hooks and child hooks cannot declare this root policy.
+
+Writers with writable descendants start their managed transaction before input
+binding; read-only leaf auxiliary components do not. Scoped allocation's separate
+native replay policy also recognizes confirmed rolled-back driver contention
+during binding/allocation, without pretending that any DML executed.
+
+### Single-operation decisions
+
 - `RecoveryNone` preserves the original result/error.
 - `RecoveryAccept` returns the output corrected by the hook, suppressing an
   eligible operation error for the public result. Actual transaction evidence

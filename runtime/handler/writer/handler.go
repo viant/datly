@@ -253,9 +253,15 @@ type Link struct {
 
 // Handler is the universal writer. Component-specific behavior is Metadata.
 type Handler struct {
-	inputType  reflect.Type
-	outputType reflect.Type
-	metadata   *Metadata
+	inputType                 reflect.Type
+	outputType                reflect.Type
+	metadata                  *Metadata
+	preBindingTransaction     bool
+	transactionRetryMethod    int
+	transactionRetrySupported bool
+	recoveryMethod            int
+	recoverySupported         bool
+	scopedSequences           bool
 }
 
 func New(component *spec.Component, inputType, outputType reflect.Type, operation string) (*Handler, error) {
@@ -263,12 +269,47 @@ func New(component *spec.Component, inputType, outputType reflect.Type, operatio
 	if err != nil {
 		return nil, err
 	}
-	return &Handler{inputType: inputType, outputType: outputType, metadata: metadata}, nil
+	result := &Handler{inputType: inputType, outputType: outputType, metadata: metadata, preBindingTransaction: hasWritableRole(metadata.Root), scopedSequences: hasScopedSequences(metadata.Root)}
+	if metadata.Root != nil && metadata.Root.HookType != nil {
+		if method, ok := reflect.PointerTo(metadata.Root.HookType).MethodByName("Recover"); ok {
+			result.recoveryMethod, result.recoverySupported = method.Index, true
+		}
+		if method, ok := reflect.PointerTo(metadata.Root.HookType).MethodByName("RetryTransaction"); ok {
+			t := method.Type
+			if t.IsVariadic() || t.NumIn() != 5 || t.In(1) != reflect.TypeFor[context.Context]() || t.In(2) != reflect.PointerTo(inputType) || t.In(3) != reflect.PointerTo(outputType) || t.In(4) != reflect.TypeFor[rhandler.MutationOutcome]() || t.NumOut() != 2 || t.Out(0) != reflect.TypeFor[bool]() || t.Out(1) != reflect.TypeFor[error]() {
+				return nil, fmt.Errorf("RetryTransaction requires canonical Input, Output, MutationOutcome and (bool,error)")
+			}
+			result.transactionRetryMethod, result.transactionRetrySupported = method.Index, true
+		}
+	}
+	return result, nil
 }
 
 func (h *Handler) InputType() reflect.Type  { return h.inputType }
 func (h *Handler) OutputType() reflect.Type { return h.outputType }
 func (*Handler) RequiresReadMetadata() bool { return true }
+
+// Current and auxiliary evidence must be bound in the same owned transaction
+// as the writes that consume it. Leaf auxiliary components have no database
+// mutation and retain their non-transactional orchestration contract.
+func (h *Handler) RequiresPreBindingTransaction() bool {
+	return h != nil && h.preBindingTransaction
+}
+
+func hasWritableRole(record *Record) bool {
+	if record == nil {
+		return false
+	}
+	if !record.Auxiliary {
+		return true
+	}
+	for _, relation := range record.Relations {
+		if relation != nil && hasWritableRole(relation.Child) {
+			return true
+		}
+	}
+	return false
+}
 
 // Program is invocation-owned universal mutation state. The same type is used
 // for every writer component; only Metadata and values differ.
@@ -1914,21 +1955,15 @@ func Compile(component *spec.Component, inputType, outputType reflect.Type, oper
 		return nil, fmt.Errorf("writer input has no body entity collection")
 	}
 	metadata.Table = tagOption(rootViewTag, "table")
-	for i := 0; i < inputType.NumField(); i++ {
-		field := inputType.Field(i)
-		if field.Type.Kind() != reflect.Slice && field.Type.Kind() != reflect.Pointer || !strings.Contains(field.Tag.Get("parameter"), "kind=view") {
-			continue
-		}
-		candidate := dereference(field.Type)
-		sameRole := strings.EqualFold(strings.TrimSuffix(strings.TrimPrefix(field.Name, "Current"), "View"), strings.TrimSuffix(metadata.EntityType.Name(), "View"))
-		sameTable := metadata.Table != "" && strings.EqualFold(tagOption(field.Tag.Get("view"), "table"), metadata.Table)
-		if candidate != nil && candidate.Kind() == reflect.Struct && (sameRole || sameTable) {
-			metadata.CurrentField, metadata.CurrentType = i, candidate
-			metadata.Table = tagOption(field.Tag.Get("view"), "table")
-			break
-		}
-	}
 	auxiliaryRoot := component.RootView.Auxiliary || strings.EqualFold(tagOption(rootViewTag, "auxiliary"), "true")
+	currentIndex, currentType, currentErr := currentInputField(inputType, metadata.Table, auxiliaryRoot, component.RootView.CanonicalName(), metadata.EntityType.Name())
+	if currentErr != nil {
+		return nil, currentErr
+	}
+	metadata.CurrentField, metadata.CurrentType = currentIndex, currentType
+	if currentIndex >= 0 {
+		metadata.Table = tagOption(inputType.Field(currentIndex).Tag.Get("view"), "table")
+	}
 	hookName := strings.TrimSpace(component.RootView.EntityHooks)
 	if hookName == "" {
 		hookName = tagOption(rootViewTag, "entityHooks")
@@ -2047,7 +2082,7 @@ func Compile(component *spec.Component, inputType, outputType reflect.Type, oper
 			return nil, fmt.Errorf("auxiliary lifecycle requires a linked leaf root hook")
 		}
 		hook := reflect.New(root.HookType)
-		for _, name := range []string{"AfterSequence", "AfterQueue", "Recover"} {
+		for _, name := range []string{"AfterSequence", "AfterQueue", "Recover", "RetryTransaction"} {
 			if hook.MethodByName(name).IsValid() {
 				return nil, fmt.Errorf("auxiliary component lifecycle does not support %s", name)
 			}
@@ -2247,20 +2282,11 @@ func compileRecord(component *spec.Component, inputType reflect.Type, name, path
 	if err := compileScopedSequences(record); err != nil {
 		return nil, err
 	}
-	for i := 0; i < inputType.NumField(); i++ {
-		field := inputType.Field(i)
-		if field.Type.Kind() != reflect.Slice && field.Type.Kind() != reflect.Pointer || !strings.Contains(field.Tag.Get("parameter"), "kind=view") {
-			continue
-		}
-		candidate := dereference(field.Type)
-		if candidate == nil || candidate.Kind() != reflect.Struct {
-			continue
-		}
-		if strings.EqualFold(field.Name, "Current"+name) || strings.EqualFold(tagOption(field.Tag.Get("view"), "table"), record.Table) {
-			record.CurrentField = i
-			break
-		}
+	currentIndex, _, currentErr := currentInputField(inputType, record.Table, record.Auxiliary, name)
+	if currentErr != nil {
+		return nil, currentErr
 	}
+	record.CurrentField = currentIndex
 	if record.Sequence != nil {
 		record.Selector = strings.TrimPrefix(strings.TrimPrefix(path, component.RootView.CanonicalName()+"/"), "/")
 		if record.Selector != "" {

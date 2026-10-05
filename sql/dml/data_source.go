@@ -8,6 +8,7 @@ import (
 	dexec "github.com/viant/datly/exec"
 	"github.com/viant/datly/spec"
 	sqlconfig "github.com/viant/sqlx/io/config"
+	"github.com/viant/sqlx/metadata/info"
 	"github.com/viant/sqlx/metadata/info/dialect"
 	"github.com/viant/sqlx/option"
 	xhandler "github.com/viant/xdatly/handler"
@@ -19,6 +20,7 @@ type Source struct {
 	SequenceStrategy dialect.PresetIDStrategy
 	Tx               *sql.Tx
 	OnCommit         func(context.Context)
+	resolvedDialect  *info.Dialect
 }
 
 var (
@@ -42,7 +44,9 @@ func (s Source) Open(ctx context.Context) (xhandler.Data, error) {
 	if s.OnCommit != nil {
 		options = append(options, WithCommitObserver(s.OnCommit))
 	}
-	return NewData(s.DB, options...), nil
+	data := NewData(s.DB, options...)
+	data.dialect = s.resolvedDialect
+	return data, nil
 }
 
 // InvocationKey lets Datly's private invocation scope separate database units
@@ -82,7 +86,7 @@ func (s Source) ResolveSequenceStrategy(ctx context.Context) (dexec.DataSource, 
 	s.SequenceStrategy = strategy
 	return s, string(strategy), nil
 }
-func (s Source) resolveSequenceStrategy(ctx context.Context) (dialect.PresetIDStrategy, error) {
+func (s *Source) resolveSequenceStrategy(ctx context.Context) (dialect.PresetIDStrategy, error) {
 	if s.SequenceStrategy != "" && s.SequenceStrategy != dialect.PresetIDStrategyUndefined {
 		return s.SequenceStrategy, nil
 	}
@@ -97,5 +101,6 @@ func (s Source) resolveSequenceStrategy(ctx context.Context) (dialect.PresetIDSt
 	if err != nil {
 		return "", err
 	}
+	s.resolvedDialect = product
 	return product.SequenceStrategy(s.SequenceStrategy), nil
 }
