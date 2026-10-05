@@ -139,9 +139,15 @@ func predicateAnalysisKeyword(selector *veltyexpr.Select) (string, error) {
 
 func validateAnalysisPredicates(parsed *query.Select, markers map[string]string) error {
 	seen := map[string]bool{}
-	conditions := func(value node.Node, clause string) {
+	var conditions func(node.Node, string)
+	conditions = func(value node.Node, clause string) {
 		sqlparser.Traverse(value, func(n node.Node) bool {
 			switch actual := n.(type) {
+			case []node.Node:
+				for _, child := range actual {
+					conditions(child, clause)
+				}
+				return false
 			case *query.Select, *expr.Raw:
 				// A subquery has its own clause boundaries.
 				return false

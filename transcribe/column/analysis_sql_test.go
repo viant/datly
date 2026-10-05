@@ -66,3 +66,27 @@ func TestProjectionAnalysisBoundsAndMarkerIsolation(t *testing.T) {
 	require.Contains(t, analysis, "'"+staticWhere+"'")
 	require.Contains(t, analysis, "__datly_analysis_predicate__0 = 1")
 }
+
+func TestProjectionAnalysisTemplateLexicalBoundaries(t *testing.T) {
+	for _, SQL := range []string{
+		"SELECT `" + staticWhere + "` FROM events",
+		"SELECT [" + staticWhere + "] FROM events",
+		"SELECT 'literal } " + staticWhere + "' AS literal FROM events",
+	} {
+		analysis, err := projectionAnalysisSQL(SQL)
+		require.NoError(t, err)
+		require.Equal(t, SQL, analysis)
+	}
+	SQL := `SELECT e.id FROM events e ${predicate.Builder().CombineAnd("e.label = '}'").Build("WHERE")}`
+	analysis, err := projectionAnalysisSQL(SQL)
+	require.NoError(t, err)
+	require.Contains(t, analysis, "WHERE (__datly_analysis_predicate_0 = 1)")
+	for _, SQL := range []string{
+		`SELECT e.id FROM events e ${predicate.Builder().Build("WHERE")`,
+		`SELECT e.id FROM events e ${Other.Template}`,
+		`SELECT e.id ${predicate.Builder().CombineAnd("1").Build(",")} FROM events e`,
+	} {
+		_, err := projectionAnalysisSQL(SQL)
+		require.Error(t, err, SQL)
+	}
+}
