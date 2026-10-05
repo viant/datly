@@ -11,7 +11,11 @@ import (
 )
 
 type Plan struct {
-	handlerGoFiles []string
+	// Retain exact resolved local descriptor identity after Go alias normalization.
+	knownLocalTypes map[string]string
+	// Canonical descriptor proof retained when a reference moves to its owner.
+	resolvedNamedTypes map[string]bool
+	handlerGoFiles     []string
 	// Retain source dispatch requirements across intermediate shape planning.
 	lifecycleTargetError error
 	Generation           *spec.GenerationSettings
@@ -79,14 +83,15 @@ func (p *Plan) HolderName() string {
 // RoutePlan is the route-specific metadata emitted on one typed component
 // holder field. Handler identity remains component-wide on Plan.
 type RoutePlan struct {
-	Name         string
-	Internal     bool
-	Path         string
-	Method       string
-	Marshaller   string
-	APIKeyHeader string
-	APIKeyValue  string
-	MCP          []*spec.MCPExposure
+	RequestBodyMode string
+	Name            string
+	Internal        bool
+	Path            string
+	Method          string
+	Marshaller      string
+	APIKeyHeader    string
+	APIKeyValue     string
+	MCP             []*spec.MCPExposure
 }
 
 type ContractOwnership string
@@ -357,10 +362,14 @@ func resolveRoutes(routes []*spec.Route) ([]RoutePlan, string, error) {
 			}
 			handler = candidate
 		}
+		if err := route.ValidateRequestBodyMode(); err != nil {
+			return nil, "", err
+		}
 		cloned := route.Clone()
 		result = append(result, RoutePlan{
-			Internal: route.Internal,
-			Name:     strings.TrimSpace(route.Name), Path: path, Method: method,
+			RequestBodyMode: route.RequestBodyMode,
+			Internal:        route.Internal,
+			Name:            strings.TrimSpace(route.Name), Path: path, Method: method,
 			Marshaller: strings.TrimSpace(route.Marshaller), APIKeyHeader: strings.TrimSpace(route.APIKeyHeader),
 			APIKeyValue: route.APIKeyValue,
 			MCP:         cloned.MCP,

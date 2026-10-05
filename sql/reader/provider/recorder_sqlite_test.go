@@ -61,7 +61,7 @@ func TestDetachedViewRecorderSQLite(t *testing.T) {
 			t.Fatal(err)
 		}
 		input := new(providerMetadataInput)
-		if err := scope.Bind(ctx, input, bindly.WithPlan(plan)); err != nil {
+		if err := scope.Bind(ctx, input, bindly.WithPlan(plan), bindly.WithSource(input)); err != nil {
 			t.Fatal(err)
 		}
 		if len(input.Rows) != 2 || input.Rows[0].ID != 1 || input.Rows[1].Name != nil {

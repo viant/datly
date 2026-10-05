@@ -103,6 +103,29 @@ type recoveryReplayInput struct {
 
 func (i *recoveryReplayInput) Init(context.Context) error { i.ID += 10; return nil }
 
+type observedRecoveryProbe struct {
+	*recoveryProbe
+	observers []*recoveryAttemptObserver
+	finalizes *int
+}
+type recoveryAttemptObserver struct {
+	events            []xhandler.PhaseEvent
+	finalizes         *int
+	terminalFinalizes int
+}
+
+func (p *observedRecoveryProbe) NewPhaseObserver() xhandler.PhaseObserver {
+	observer := &recoveryAttemptObserver{finalizes: p.finalizes}
+	p.observers = append(p.observers, observer)
+	return observer
+}
+func (p *recoveryAttemptObserver) ObservePhase(_ context.Context, event xhandler.PhaseEvent) {
+	p.events = append(p.events, event)
+	if event.Phase == xhandler.PhaseInvocation && event.Boundary == xhandler.PhaseEnd {
+		p.terminalFinalizes = *p.finalizes
+	}
+}
+
 func TestMutationRecoveryRebindsOriginalFactsAndFreshDependencies(t *testing.T) {
 	for _, bound := range []bool{false, true} {
 		t.Run(map[bool]string{false: "transport", true: "trusted bound"}[bound], func(t *testing.T) {
@@ -145,7 +168,8 @@ func TestMutationRecoveryRebindsOriginalFactsAndFreshDependencies(t *testing.T) 
 				}
 				return nil
 			}
-			request := Request{Input: contract, Handler: probe, DataSource: dml.Source{DB: h.DB}, Providers: []locator.Provider{provider.Named("view", func(context.Context, reflect.Type, string) (any, bool, error) { reads++; return reads, true, nil })}, Completion: func(xhandler.Outcome) { observations++ }}
+			observed := &observedRecoveryProbe{recoveryProbe: probe, finalizes: &finalizes}
+			request := Request{Input: contract, Handler: observed, DataSource: dml.Source{DB: h.DB}, Providers: []locator.Provider{provider.Named("view", func(context.Context, reflect.Type, string) (any, bool, error) { reads++; return reads, true, nil })}, Completion: func(xhandler.Outcome) { observations++ }}
 			if bound {
 				request.BoundInput = &recoveryReplayInput{ID: 1, Current: 999, Has: &struct{ ID, Current bool }{ID: true, Current: true}}
 			} else {
@@ -154,6 +178,34 @@ func TestMutationRecoveryRebindsOriginalFactsAndFreshDependencies(t *testing.T) 
 			result, err := New().Execute(ctx, request)
 			if err != nil || result == nil || executes != 2 || recoveries != 1 || finalizes != 2 || reads != 2 || observations != 1 {
 				t.Fatalf("result=%v err=%v executes=%d recovery=%d finalizes=%d reads=%d observer=%d", result, err, executes, recoveries, finalizes, reads, observations)
+			}
+
+			if len(observed.observers) != 2 || observed.observers[0] == observed.observers[1] {
+				t.Fatal("retry reused observer state")
+			}
+			var invocationID uint64
+			for attempt, observer := range observed.observers {
+				if len(observer.events) < 4 {
+					t.Fatalf("attempt %d has incomplete boundaries", attempt)
+				}
+				first, last := observer.events[0], observer.events[len(observer.events)-1]
+				if attempt == 0 {
+					invocationID = first.InvocationID
+				}
+				if invocationID == 0 || first.Phase != xhandler.PhaseInvocation || first.Boundary != xhandler.PhaseBegin || last.Phase != xhandler.PhaseInvocation || last.Boundary != xhandler.PhaseEnd {
+					t.Fatal("unpaired retry invocation")
+				}
+				for _, event := range observer.events {
+					if event.InvocationID != invocationID || event.Attempt != attempt {
+						t.Fatalf("incorrect retry identity: %+v", event)
+					}
+				}
+				if observer.terminalFinalizes != attempt+1 {
+					t.Fatalf("terminal event preceded finalization or followed next attempt: %d", observer.terminalFinalizes)
+				}
+				if last.Result != xhandler.PhaseSucceeded {
+					t.Fatalf("successful zero-row attempt misclassified: %+v", last)
+				}
 			}
 		})
 	}

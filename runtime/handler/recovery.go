@@ -33,6 +33,14 @@ type MutationRecoverer interface {
 	RecoverMutation(context.Context, Invocation, any, MutationOutcome) (Recovery, error)
 }
 
+// TransactionRetryer explicitly opts a root graph into bounded replay after
+// confirmed rollback. It can only request a fresh invocation, never accept
+// partial output or acquire transaction ownership.
+type TransactionRetryer interface {
+	SupportsTransactionRetry() bool
+	RetryTransaction(context.Context, Invocation, any, MutationOutcome) (bool, error)
+}
+
 // ScopedMutationRecoverer is a framework-only policy for automatically allocated
 // scope values after a known root rollback. Caller transactions cannot enter it.
 type ScopedMutationRecoverer interface {

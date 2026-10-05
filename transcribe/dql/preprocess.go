@@ -65,10 +65,11 @@ type SourceSpan struct {
 }
 
 type RoutePlan struct {
-	URI          string
-	Methods      []string
-	APIKeyHeader string
-	APIKeyValue  string
+	RequestBodyMode string
+	URI             string
+	Methods         []string
+	APIKeyHeader    string
+	APIKeyValue     string
 }
 
 func (p *PreparedSource) Err() error {
@@ -233,7 +234,8 @@ func normalizeDirectivePlan(blocks []directiveBlock) (*DirectivePlan, error) {
 	}
 	if route != nil {
 		result.Route = &RoutePlan{
-			URI: route.URI, Methods: append([]string(nil), route.Methods...),
+			RequestBodyMode: route.RequestBodyMode,
+			URI:             route.URI, Methods: append([]string(nil), route.Methods...),
 			APIKeyHeader: route.APIKeyHeader, APIKeyValue: route.APIKeyValue,
 		}
 	}

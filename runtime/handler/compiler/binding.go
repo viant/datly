@@ -31,6 +31,11 @@ func BuildBindingSpecs(component *spec.Component, inputType reflect.Type, codecs
 		return nil, err
 	}
 	for _, param := range spec.EffectiveParameters(component.Parameters) {
+		if param != nil && param.BodyNullPolicy != "" {
+			if param.BodyNullPolicy != "empty-record" || param.EmitOutput || !strings.EqualFold(strings.TrimSpace(param.Source.Kind), "body") || strings.TrimSpace(param.Source.Name) != "" || param.Codec != nil {
+				return nil, fmt.Errorf("parameter %s BodyNullPolicy requires empty-record on a whole body input without a codec", param.Name)
+			}
+		}
 		if param == nil || param.EmitOutput || !param.IsTransportInput() {
 			continue
 		}
@@ -44,6 +49,9 @@ func BuildBindingSpecs(component *spec.Component, inputType reflect.Type, codecs
 	for _, item := range fields.items {
 		field, tagged, hasTag := item.field, item.binding, item.tagged
 		param := fieldParams[field.Name]
+		if param != nil && strings.EqualFold(param.Source.Kind, "internal") || param == nil && hasTag && strings.EqualFold(tagged.Location.Kind, "internal") {
+			continue
+		}
 		if param == nil {
 			if hasTag {
 				if err := applyQueryList(field, false, &tagged); err != nil {
@@ -53,6 +61,9 @@ func BuildBindingSpecs(component *spec.Component, inputType reflect.Type, codecs
 					return nil, err
 				}
 				if err := applyBodyFormat(field, &tagged); err != nil {
+					return nil, err
+				}
+				if err := tagged.ValidateBodyNullPolicy(field.Type); err != nil {
 					return nil, err
 				}
 				result = append(result, tagged)
@@ -73,6 +84,9 @@ func BuildBindingSpecs(component *spec.Component, inputType reflect.Type, codecs
 			if err := applyBodyFormat(field, &compiled); err != nil {
 				return nil, err
 			}
+			if err := compiled.ValidateBodyNullPolicy(field.Type); err != nil {
+				return nil, err
+			}
 			result = append(result, compiled)
 		}
 	}
@@ -89,6 +103,7 @@ func bindingSpecFromParam(field reflect.StructField, param *spec.Parameter, tagg
 		if !hasTag {
 			return bindly.BindingSpec{}, false, nil
 		}
+		tagged.BodyNullPolicy = param.BodyNullPolicy
 		tagged.Name = param.Name
 		tagged.Required = cloneBool(param.Required)
 		tagged.Cacheable = cloneBool(param.Cacheable)
@@ -121,6 +136,7 @@ func bindingSpecFromParam(field reflect.StructField, param *spec.Parameter, tagg
 		bindingName = field.Name
 	}
 	return bindly.BindingSpec{
+		BodyNullPolicy:    param.BodyNullPolicy,
 		Path:              field.Name,
 		SourceType:        codec.SourceType,
 		Name:              bindingName,

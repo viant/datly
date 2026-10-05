@@ -54,15 +54,18 @@ func newReaderOptions(session *Session, view *data.View, tx *sql.Tx) readerOptio
 }
 
 type rowRead struct {
-	stats    *cache.Stats
-	newRow   func() any
-	options  []sqlxread.Option
-	decoder  *rowcodec.Decoder
-	evidence *columnEvidence
+	retry     sqlxread.RetryPolicy
+	readCache cache.Cache
+	cacheOnly bool
+	stats     *cache.Stats
+	newRow    func() any
+	options   []sqlxread.Option
+	decoder   *rowcodec.Decoder
+	evidence  *columnEvidence
 }
 
 func (o readerOptions) rows(newRow func() any, resolve sqlxio.Resolve, matchers ...*cache.ParmetrizedQuery) rowRead {
-	result := rowRead{newRow: newRow, options: o.withResolver(resolve, matchers...)}
+	result := rowRead{retry: o.retry, readCache: o.readCache, cacheOnly: o.cacheOnly, newRow: newRow, options: o.withResolver(resolve, matchers...)}
 	if o.readCache != nil {
 		result.stats = &cache.Stats{}
 		result.options = append(result.options, sqlxread.WithCacheStats(result.stats))

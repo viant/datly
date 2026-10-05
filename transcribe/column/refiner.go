@@ -257,6 +257,16 @@ func (r *Compilation) discover(ctx context.Context, view *spec.View, connector s
 	if err != nil {
 		return nil, err
 	}
+	// Resource expansion can reveal a parenthesized physical FROM source that
+	// was opaque when the outer graph was parsed. Preserve that explicit
+	// read-only authority before lineage inference inspects joined columns.
+	if strings.TrimSpace(source.Table) == "" {
+		if table := explicitAuxiliarySource(evaluated.SQL); table != "" {
+			source.Table = table
+			view.Source.Table = table
+			view.Auxiliary = true
+		}
+	}
 	if strings.TrimSpace(source.Table) == "" {
 		if table := directSourceTable(evaluated.SQL); table != "" {
 			source.Table = table
@@ -310,7 +320,11 @@ func (r *Compilation) discover(ctx context.Context, view *spec.View, connector s
 	if strings.TrimSpace(query) == "" {
 		return evaluated, nil
 	}
-	detected, err := r.refiner.detectColumns(ctx, db, view, query, evaluated.Args...)
+	identities, err := resolveResultSources(view.Columns, source)
+	if err != nil {
+		return nil, err
+	}
+	detected, err := r.refiner.detectColumnsWithSources(ctx, db, view, identities, query, evaluated.Args...)
 	if err != nil {
 		return nil, fmt.Errorf("SQLX discovery failed for %q: %w", query, err)
 	}
@@ -322,7 +336,10 @@ func (r *Compilation) discover(ctx context.Context, view *spec.View, connector s
 	for _, column := range columns {
 		projected = append(projected, column.Name)
 	}
-	if err := ValidateProjectionAnnotations(view, projected); err != nil {
+	if err := validateResultAnnotations(view, projected, identities); err != nil {
+		return nil, err
+	}
+	if err := identities.validateResults(view.Columns, projected); err != nil {
 		return nil, err
 	}
 	// Discovery uses the resolved authoredSource, including embedded resources,
@@ -331,7 +348,7 @@ func (r *Compilation) discover(ctx context.Context, view *spec.View, connector s
 	// Persisting a projection quoted with the discovery connector's dialect
 	// would make portable resources depend on the schema fixture. Runtime
 	// selector lowering uses the actual execution dialect instead.
-	view.Columns = mergeColumns(view.Columns, columns)
+	view.Columns = mergeColumnsWithSources(view.Columns, columns, identities)
 	if table := strings.TrimSpace(source.Table); table != "" && !strings.Contains(table, "$") {
 		lineage, err := directProjectionLineage(source)
 		if err != nil {
@@ -361,6 +378,42 @@ func schemaDiscoverySQL(SQL string) (string, error) {
 		}
 		end += start + len(prefix)
 		result = result[:start] + result[end+1:]
+	}
+}
+
+// explicitAuxiliarySource follows only the primary FROM chain. Joined tables
+// and converging UNION lineage cannot declare an auxiliary owner.
+func explicitAuxiliarySource(SQL string) string {
+	for {
+		parsed, err := sqlparser.ParseQuery(strings.TrimSpace(SQL))
+		if err != nil || parsed == nil || parsed.Union != nil || len(parsed.WithSelects) != 0 {
+			return ""
+		}
+		if table, auxiliary, err := sqlparser.SourceTable(parsed.From.X); err != nil || table != "" {
+			if err == nil && auxiliary {
+				return table
+			}
+			return ""
+		}
+		var nested string
+		switch source := parsed.From.X.(type) {
+		case *query.Select:
+			nested = sqlparser.Stringify(source)
+		case *expr.Raw:
+			nested = source.Raw
+		case *expr.Parenthesis:
+			nested = source.Raw
+		default:
+			return ""
+		}
+		nested = strings.TrimSpace(nested)
+		if len(nested) >= 2 && nested[0] == '(' && nested[len(nested)-1] == ')' {
+			nested = strings.TrimSpace(nested[1 : len(nested)-1])
+		}
+		if nested == "" || nested == strings.TrimSpace(SQL) {
+			return ""
+		}
+		SQL = nested
 	}
 }
 
@@ -562,6 +615,22 @@ func canonicalType(source reflect.Type, nullable bool) (spec.TypeRef, bool) {
 }
 
 func mergeColumns(base, discovered []*spec.Column) []*spec.Column {
+	// Callers without SQL provenance can only use Source (or a truly sourceless
+	// Name). Production discovery supplies its resolved vendor identity plan.
+	identities := make(resultSourceIdentity, len(base))
+	for _, column := range base {
+		if column == nil {
+			continue
+		}
+		identities[column] = column.Source
+		if strings.TrimSpace(column.Source) == "" && !column.NameInferred {
+			identities[column] = column.Name
+		}
+	}
+	return mergeColumnsWithSources(base, discovered, identities)
+}
+
+func mergeColumnsWithSources(base, discovered []*spec.Column, identities resultSourceIdentity) []*spec.Column {
 	if len(base) == 0 {
 		return discovered
 	}
@@ -588,12 +657,8 @@ func mergeColumns(base, discovered []*spec.Column) []*spec.Column {
 				}
 			}
 		}
-		key := strings.ToLower(strings.TrimSpace(column.Name))
+		key := normalizedName(identities[column])
 		fresh := byName[key]
-		if fresh == nil && column.Source != "" {
-			key = strings.ToLower(strings.TrimSpace(column.Source))
-			fresh = byName[key]
-		}
 		if fresh != nil {
 			cloned.Source = firstValue(cloned.Source, fresh.Source)
 			cloned.DatabaseType = firstValue(fresh.DatabaseType, cloned.DatabaseType)

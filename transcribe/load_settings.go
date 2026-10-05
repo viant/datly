@@ -35,6 +35,14 @@ func (l *settingsLoader) Load() *spec.Settings {
 	l.setString(&result.Format, l.authored.Format)
 	l.setString(&result.DateFormat, l.authored.DateFormat)
 	l.setString(&result.CaseFormat, l.authored.CaseFormat)
+	// Merge only this opt-in output policy; explicit "null" overrides an inherited
+	// empty_array while absent policy preserves package-owned output settings.
+	if l.authored.Output != nil && l.authored.Output.NilSlicePolicy != "" {
+		if result.Output == nil {
+			result.Output = &spec.OutputSettings{}
+		}
+		result.Output.NilSlicePolicy = l.authored.Output.NilSlicePolicy
+	}
 	result.Report = l.mergeReport(result.Report, l.authored.Report)
 	result.Cache = l.mergeCache(result.Cache, l.authored.Cache)
 	if len(l.authored.Const) > 0 {

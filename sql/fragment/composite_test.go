@@ -6,6 +6,8 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/viant/datly/internal/dialectcontext"
+
 	"github.com/viant/sqlx/metadata/info"
 	xshape "github.com/viant/x/shape"
 )
@@ -117,5 +119,11 @@ func TestDialectRenderingContextIsScoped(t *testing.T) {
 	scoped := WithDialect(base, dialect)
 	if Dialect(base) != nil || Dialect(scoped) != dialect || Dialect(WithDialect(scoped, nil)) != nil {
 		t.Fatal("dialect metadata leaked across contexts")
+	}
+	if dialectcontext.Dialect(scoped) != dialect || Dialect(dialectcontext.WithDialect(base, dialect)) != dialect {
+		t.Fatal("writer metadata and fragment rendering use different context authority")
+	}
+	if dialectcontext.Dialect(WithDialect(scoped, nil)) != nil || Dialect(dialectcontext.WithDialect(scoped, nil)) != nil {
+		t.Fatal("dialect overrides do not agree across owners")
 	}
 }

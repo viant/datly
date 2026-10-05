@@ -11,6 +11,7 @@ import (
 
 	bindstate "github.com/viant/bindly/state"
 	"github.com/viant/datly/exec"
+	"github.com/viant/datly/internal/inputvisibility"
 	mcpinput "github.com/viant/datly/mcp/input"
 	"github.com/viant/datly/runtime/output"
 	"github.com/viant/datly/runtime/registry"
@@ -80,7 +81,17 @@ func (c *Compiler) Compile(input Input) (*Plan, error) {
 		if compileField == nil {
 			continue
 		}
+		selectionField, err := inputField.StructField()
+		if err != nil {
+			return nil, fmt.Errorf("compile MCP tool %q: %w", name, err)
+		}
+		if inputvisibility.Internal(input.Contract.Type(), selectionField.Index) {
+			continue
+		}
 		if inputField.Anonymous() {
+			if binding.BodyNullPolicy != "" {
+				return nil, fmt.Errorf("compile MCP tool %q: BodyNullPolicy does not support anonymous body projection", name)
+			}
 			flattened, err := c.compileAnonymousBody(inputField)
 			if err != nil {
 				return nil, fmt.Errorf("compile MCP tool %q: %w", name, err)
@@ -128,14 +139,14 @@ func (c *Compiler) Compile(input Input) (*Plan, error) {
 		argument.description, argument.example = annotation.Description, annotation.Example
 		arguments[index] = argument
 		sourceType := argument.sourceType
-		if argument.required {
+		if argument.required && argument.bodyNullPolicy == "" {
 			sourceType = (xshape.Runtime{}).Indirect(sourceType)
 		}
 		property, err := (&schemaProjector{docs: owner, schemas: argument.wireSchemas}).argument(sourceType, argument.path, argument.publicName, argument.wireSchema)
 		if err != nil {
 			return nil, fmt.Errorf("compile MCP tool %q argument %q: %w", name, argument.publicName, err)
 		}
-		if argument.required {
+		if argument.required && argument.bodyNullPolicy == "" {
 			if kinds, ok := property["type"].([]string); ok {
 				allowed := make([]string, 0, len(kinds))
 				for _, kind := range kinds {
@@ -252,7 +263,7 @@ func (c *Compiler) compileExternal(inputField registry.InputField, field reflect
 		publicName: publicName, aliases: aliases, path: inputField.Path(),
 		sourceKind: strings.ToLower(strings.TrimSpace(binding.Location.Kind)), sourceName: binding.Location.In,
 		sourceType: inputField.SourceType(), destinationType: inputField.DestinationType(),
-		wireSchema: inputField.WireSchema(), wireSchemas: inputField.WireSchemas(), required: required,
+		wireSchema: inputField.WireSchema(), wireSchemas: inputField.WireSchemas(), required: required, bodyNullPolicy: binding.BodyNullPolicy,
 	}
 	if param, ok := binding.Extension.(*spec.Parameter); ok && param != nil {
 		argument.description = strings.TrimSpace(param.Description)

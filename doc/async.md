@@ -140,6 +140,14 @@ names, not hardcoded HTTP parameter locations. The ordinary input tags determine
 where values come from. Register the application-owned async admission/service
 on the same Manager generation as the route.
 
+Match-key reuse is scoped to the same HTTP method and selected route instance,
+including its escaped path identity. The durable URI still retains the original
+query for replay, but query values and controls such as `SyncFlag` do not create
+another job with the same match key. Reusing a completed reader with changed
+SQL parameters must pass its persisted query-scope guard; an incompatible tenant
+or query returns 409 rather than scheduling a replacement or exposing other data.
+Inspection authorization is still evaluated from the current caller's inputs.
+
 For inspection, an independently authored route uses `AsyncInspect{JobID, Target,
 Result}`: `JobID` names a declared string input, `Target` identifies the protected
 route, and `Result=false` performs status-only inspection without a reader call.

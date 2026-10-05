@@ -58,6 +58,8 @@ func TestProviderComposerRejectsDuplicateAndProtectedAuthorities(t *testing.T) {
 		input providerComposition
 		want  string
 	}{
+		{name: "protocol cannot override differ", input: providerComposition{protocol: []locator.Provider{handlerprovider.Static(rhandler.DifferCapabilityKey, struct{}{})}}, want: "protected runtime kind"},
+		{name: "child cannot override differ", input: providerComposition{child: []locator.Provider{handlerprovider.Static(rhandler.DifferCapabilityKey, struct{}{})}}, want: "protected runtime kind"},
 		{name: "component cannot override differ", input: providerComposition{component: []locator.Provider{handlerprovider.Static(rhandler.DifferCapabilityKey, struct{}{})}}, want: "protected runtime kind"},
 		{name: "duplicate component kind", input: providerComposition{component: []locator.Provider{query, query}}, want: "duplicated"},
 		{name: "component protected kind", input: providerComposition{component: []locator.Provider{validator}}, want: "protected runtime kind"},

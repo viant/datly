@@ -94,7 +94,8 @@ func (s *RouteSource) canonicalComponent() (*spec.Component, error) {
 		Documentation: s.Tag.Documentation.Clone(),
 		Example:       s.Tag.Example,
 		Routes: []*spec.Route{{
-			Name: s.Tag.RouteName, Method: s.Tag.Method, Path: s.Tag.Path,
+			RequestBodyMode: s.Tag.RequestBodyMode,
+			Name:            s.Tag.RouteName, Method: s.Tag.Method, Path: s.Tag.Path,
 			Internal:   s.Tag.Internal,
 			Marshaller: strings.TrimSpace(s.Tag.Marshaller), Handler: strings.TrimSpace(s.Tag.Handler),
 			APIKeyHeader: strings.TrimSpace(s.Tag.APIKeyHeader), APIKeyValue: s.Tag.APIKeyValue,
@@ -325,25 +326,34 @@ func (r *packageComponentResolver) resolveParamType(role contractRole, field xsh
 
 func (r *packageComponentResolver) applyInput(resolved *resolvedContractField) error {
 	param := resolved.param
-	if param != nil && strings.EqualFold(param.Source.Kind, "body") && resolved.metadata.View != nil && resolved.metadata.View.InsertValidationPresence {
+	if param != nil && param.IsMutationInput() && resolved.metadata.View != nil && resolved.metadata.View.NestedNullPolicy != "" {
+		return fmt.Errorf("nested null policy requires a collection relation, not the root body")
+	}
+	if param != nil && param.IsMutationInput() && resolved.metadata.View != nil && resolved.metadata.View.RootNullPolicy != "" {
+		if r.component.RootView == nil {
+			return fmt.Errorf("root null body requires a root view")
+		}
+		r.component.RootView.RootNullPolicy = resolved.metadata.View.RootNullPolicy
+	}
+	if param != nil && param.IsMutationInput() && resolved.metadata.View != nil && resolved.metadata.View.InsertValidationPresence {
 		if r.component.RootView == nil {
 			return fmt.Errorf("insert validation body requires a root view")
 		}
 		r.component.RootView.InsertValidationPresence = true
 	}
-	if param != nil && strings.EqualFold(param.Source.Kind, "body") && resolved.metadata.View != nil && resolved.metadata.View.WriterIdentityPolicy != "" {
+	if param != nil && param.IsMutationInput() && resolved.metadata.View != nil && resolved.metadata.View.WriterIdentityPolicy != "" {
 		if r.component.RootView == nil {
 			return fmt.Errorf("writer identity body requires a root view")
 		}
 		r.component.RootView.WriterIdentityPolicy = resolved.metadata.View.WriterIdentityPolicy
 	}
-	if param != nil && strings.EqualFold(param.Source.Kind, "body") && resolved.metadata.View != nil && resolved.metadata.View.OnDeleteNotFound != "" {
+	if param != nil && param.IsMutationInput() && resolved.metadata.View != nil && resolved.metadata.View.OnDeleteNotFound != "" {
 		if r.component.RootView == nil {
 			return fmt.Errorf("onDeleteNotFound body requires a root view")
 		}
 		r.component.RootView.OnDeleteNotFound = resolved.metadata.View.OnDeleteNotFound
 	}
-	if param != nil && strings.EqualFold(strings.TrimSpace(param.Source.Kind), "body") && resolved.metadata.View != nil && resolved.metadata.View.MutationPredicateGroup != nil {
+	if param != nil && param.IsMutationInput() && resolved.metadata.View != nil && resolved.metadata.View.MutationPredicateGroup != nil {
 		if r.component.RootView == nil {
 			return fmt.Errorf("mutation predicate body requires a root view")
 		}
@@ -372,7 +382,16 @@ func (r *packageComponentResolver) applyInput(resolved *resolvedContractField) e
 
 func (r *packageComponentResolver) applyOutput(resolved *resolvedContractField) error {
 	param := resolved.param
-	if param != nil && strings.EqualFold(param.Source.Kind, "body") && resolved.metadata.View != nil && resolved.metadata.View.InsertValidationPresence {
+	if param != nil && param.IsMutationInput() && resolved.metadata.View != nil && resolved.metadata.View.NestedNullPolicy != "" {
+		return fmt.Errorf("nested null policy requires a collection relation, not the root body")
+	}
+	if param != nil && param.IsMutationInput() && resolved.metadata.View != nil && resolved.metadata.View.RootNullPolicy != "" {
+		if r.component.RootView == nil {
+			return fmt.Errorf("root null body requires a root view")
+		}
+		r.component.RootView.RootNullPolicy = resolved.metadata.View.RootNullPolicy
+	}
+	if param != nil && param.IsMutationInput() && resolved.metadata.View != nil && resolved.metadata.View.InsertValidationPresence {
 		if r.component.RootView == nil {
 			return fmt.Errorf("insert validation body requires a root view")
 		}
@@ -536,7 +555,8 @@ func (r *packageComponentResolver) param(role contractRole, field xshape.Field, 
 	param := &spec.Parameter{
 		Name: name, Source: spec.BindSource{Kind: binding.Location.Kind, Name: binding.Location.In},
 		QueryListCSV: metadata.QueryListCSV, TypeExpr: binding.DataType, Tag: string(field.Tag), Cardinality: binding.Cardinality,
-		Required: binding.Required, Cacheable: binding.Cacheable,
+		BodyNullPolicy: binding.BodyNullPolicy,
+		Required:       binding.Required, Cacheable: binding.Cacheable,
 		MinAllowedRecords: binding.MinAllowedRecords, MaxAllowedRecords: binding.MaxAllowedRecords, ExpectedReturned: binding.ExpectedReturned,
 		MCP: metadata.MCP, PathMCP: metadata.PathMCP,
 		When: binding.When, Scope: binding.Scope, With: binding.With,
@@ -662,6 +682,8 @@ func (r *packageComponentResolver) view(field xshape.Field, name string, metadat
 		view.RowLock = strings.TrimSpace(metadata.View.RowLock)
 		view.RowLockOrder = strings.TrimSpace(metadata.View.RowLockOrder)
 		view.WriterIdentityPolicy = metadata.View.WriterIdentityPolicy
+		view.RootNullPolicy = metadata.View.RootNullPolicy
+		view.NestedNullPolicy = metadata.View.NestedNullPolicy
 		view.InsertValidationPresence = metadata.View.InsertValidationPresence
 		view.OnDeleteNotFound = metadata.View.OnDeleteNotFound
 		view.MutationPredicateGroup = metadata.View.MutationPredicateGroup

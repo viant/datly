@@ -86,7 +86,7 @@ func TestViewProviderMetadataOptInUsesOneTypedSQLiteRead(t *testing.T) {
 			}
 			input := &providerMetadataInput{}
 			var events []bindly.BindingEvent
-			options := []bindly.BindOption{bindly.WithPlan(inputPlan)}
+			options := []bindly.BindOption{bindly.WithPlan(inputPlan), bindly.WithSource(input)}
 			if tc.observe {
 				options = append(options, bindly.WithBindingObserver(func(_ context.Context, event bindly.BindingEvent) error { events = append(events, event); return nil }))
 			}

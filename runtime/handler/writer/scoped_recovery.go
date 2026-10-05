@@ -26,8 +26,14 @@ func hasScopedSequences(record *Record) bool {
 }
 func (h *Handler) ScopedMutationRetryLimit() int { return 9 } // Initial attempt plus at most nine replays.
 func (h *Handler) RecoverScopedMutation(ctx context.Context, invocation rhandler.Invocation, report exec.MutationReport, outcome xhandler.Outcome) (bool, error) {
-	if !hasScopedSequences(h.metadata.Root) || report.Nested || len(outcome.Transactions) != 1 || outcome.Transactions[0].State != xhandler.TransactionRolledBack {
+	if h == nil || !h.scopedSequences || report.Nested || len(outcome.Transactions) != 1 || outcome.Transactions[0].State != xhandler.TransactionRolledBack {
 		return false, nil
+	}
+	// An early writer transaction can encounter a coded serialization/lock
+	// failure during binding or allocation, before any row reaches the queue.
+	// Its confirmed rollback permits the same bounded native replay policy.
+	if report.Contention {
+		return true, nil
 	}
 	duplicate := false
 	for _, result := range report.Results {
@@ -102,7 +108,7 @@ func (h *Handler) RecoverScopedMutation(ctx context.Context, invocation rhandler
 type scopedReplayKey struct{}
 
 func (h *Handler) MutationReplayContext(ctx context.Context, invocation rhandler.Invocation) context.Context {
-	if h == nil || h.metadata == nil || !hasScopedSequences(h.metadata.Root) {
+	if h == nil || !h.scopedSequences {
 		return ctx
 	}
 	mustInsert := map[rowIdentity]bool{}

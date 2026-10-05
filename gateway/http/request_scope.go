@@ -19,8 +19,14 @@ type httpRequestScope struct {
 	formQuery  locator.Provider
 }
 
-func newHTTPRequestScope(req *stdhttp.Request, path map[string]string) (*httpRequestScope, error) {
-	scope, err := requestprovider.New(req, requestprovider.WithPathParams(path))
+func newHTTPRequestScope(req *stdhttp.Request, path map[string]string, onDemand ...bool) (*httpRequestScope, error) {
+	var scope *requestprovider.Scope
+	var err error
+	if len(onDemand) > 0 && onDemand[0] {
+		scope, err = requestprovider.NewDeferred(req, requestprovider.WithPathParams(path))
+	} else {
+		scope, err = requestprovider.New(req, requestprovider.WithPathParams(path))
+	}
 	if err != nil {
 		return nil, err
 	}

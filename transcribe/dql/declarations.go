@@ -95,6 +95,9 @@ func parseDeclarations(blocks []directiveBlock) (result []*spec.Parameter, spans
 		if options.typeExpr != "" {
 			inputType = options.typeExpr
 		}
+		if options.bodyNullPolicy != "" && (!strings.EqualFold(kind, "body") || location != "" || options.codec != nil || options.emitOutput) {
+			return nil, nil, nil, fmt.Errorf("parameter %s BodyNullPolicy requires a whole body input without a codec", holder)
+		}
 		required := options.required
 		if required == nil {
 			switch strings.ToLower(strings.TrimSpace(kind)) {
@@ -114,7 +117,8 @@ func parseDeclarations(blocks []directiveBlock) (result []*spec.Parameter, spans
 				Kind: kind,
 				Name: location,
 			},
-			QueryListCSV: options.queryListCSV, TypeExpr: inputType,
+			BodyNullPolicy: options.bodyNullPolicy,
+			QueryListCSV:   options.queryListCSV, TypeExpr: inputType,
 			OutputTypeExpr:    outputType,
 			DeclarationSQL:    declarationSQL,
 			Tag:               options.tag,

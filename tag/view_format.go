@@ -17,6 +17,12 @@ func (v View) Value() (string, error) {
 	if v.MutationPredicateGroup != nil && *v.MutationPredicateGroup < 0 {
 		return "", fmt.Errorf("mutationPredicate must be a non-negative group")
 	}
+	if v.NestedNullPolicy != "" && v.NestedNullPolicy != "initial-validation" {
+		return "", fmt.Errorf("nestedNullPolicy must be initial-validation")
+	}
+	if v.RootNullPolicy != "" && v.RootNullPolicy != "initial-validation" {
+		return "", fmt.Errorf("rootNullPolicy must be initial-validation")
+	}
 	if v.OnDeleteNotFound != "" && v.OnDeleteNotFound != "error" && v.OnDeleteNotFound != "ignore" {
 		return "", fmt.Errorf("onDeleteNotFound must be error or ignore")
 	}
@@ -48,7 +54,7 @@ func (v View) Value() (string, error) {
 		return nil
 	}
 	for _, item := range []struct{ name, value string }{
-		{"writerIdentity", v.WriterIdentityPolicy}, {"onDeleteNotFound", v.OnDeleteNotFound}, {"type", v.TypeName}, {"dest", v.Dest}, {"entityHooks", v.EntityHooks}, {"rowLock", v.RowLock}, {"rowLockOrder", v.RowLockOrder}, {"uri", v.URI}, {"connector", v.Connector}, {"table", v.Table},
+		{"rootNullPolicy", v.RootNullPolicy}, {"nestedNullPolicy", v.NestedNullPolicy}, {"writerIdentity", v.WriterIdentityPolicy}, {"onDeleteNotFound", v.OnDeleteNotFound}, {"type", v.TypeName}, {"dest", v.Dest}, {"entityHooks", v.EntityHooks}, {"rowLock", v.RowLock}, {"rowLockOrder", v.RowLockOrder}, {"uri", v.URI}, {"connector", v.Connector}, {"table", v.Table},
 
 		{"cache", v.Cache}, {"cacheWarmup", v.CacheWarmup},
 		{"orderBy", v.OrderBy}, {"match", v.Match},

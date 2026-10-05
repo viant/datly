@@ -18,6 +18,7 @@ import (
 	"github.com/viant/datly/bootstrap/connector"
 	dexec "github.com/viant/datly/exec"
 	"github.com/viant/datly/internal/httpserver"
+	internallog "github.com/viant/datly/internal/logging"
 	mcpserver "github.com/viant/datly/mcp/server"
 	authprovider "github.com/viant/datly/runtime/auth/provider"
 	handlerprovider "github.com/viant/datly/runtime/handler/provider"
@@ -27,10 +28,15 @@ import (
 	xmodule "github.com/viant/x/module"
 	xauth "github.com/viant/xdatly/auth"
 	xcodec "github.com/viant/xdatly/codec"
+	xdiffer "github.com/viant/xdatly/differ"
+	xexec "github.com/viant/xdatly/exec"
 	xlogger "github.com/viant/xdatly/logger"
 )
 
 type Options struct {
+	// InvocationDiffer is the trusted host comparator bound to component contracts
+	// and lifecycle hooks. Nil preserves the missing-capability behavior.
+	InvocationDiffer xdiffer.Differ
 	// InvocationLogger is the trusted host logger statically bound to component
 	// contracts and lifecycle hooks. It is separate from bootstrap diagnostics.
 	InvocationLogger xlogger.Logger
@@ -114,7 +120,7 @@ func New(ctx context.Context, options Options) (_ *Server, err error) {
 		}
 		providers = append(providers, handlerprovider.Static(xauth.ProviderKind, service))
 	}
-	s := &Server{source: &source{Workspace: options.Workspace, config: options.Config, resources: options.Resources, holders: append([]any(nil), options.Holders...), invocationLogger: options.InvocationLogger, providers: providers, requireLinked: options.RequireLinked || options.Holders != nil}, done: make(chan struct{}), ready: make(chan struct{}), mcpResourceAuthorizer: options.MCPResourceAuthorizer}
+	s := &Server{source: &source{Workspace: options.Workspace, config: options.Config, resources: options.Resources, holders: append([]any(nil), options.Holders...), invocationLogger: options.InvocationLogger, invocationDiffer: options.InvocationDiffer, providers: providers, requireLinked: options.RequireLinked || options.Holders != nil}, done: make(chan struct{}), ready: make(chan struct{}), mcpResourceAuthorizer: options.MCPResourceAuthorizer}
 	s.source.codecFactories, err = normalizeCodecs(options.Codecs)
 	if err != nil {
 		return nil, err
@@ -316,6 +322,13 @@ func (s *Server) track(handler http.Handler) http.Handler {
 		s.mu.Lock()
 		if s.closed {
 			s.mu.Unlock()
+			if s.manager != nil && internallog.Enabled(s.manager) {
+				internallog.ServeHTTPObserved(w, r, "", func(w http.ResponseWriter, r *http.Request) {
+					internallog.RecordHTTPError(r.Context(), errors.New("application unavailable"))
+					http.Error(w, "application unavailable", http.StatusServiceUnavailable)
+				}, func(ctx context.Context, e *xexec.Context) { internallog.LogHTTP(s.manager, ctx, e) })
+				return
+			}
 			http.Error(w, "application unavailable", http.StatusServiceUnavailable)
 			return
 		}

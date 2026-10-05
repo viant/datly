@@ -2,8 +2,10 @@ package mcp
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	documentation "github.com/viant/datly/documentation"
+	"reflect"
 	"sort"
 	"strings"
 
@@ -211,6 +213,26 @@ func (c *serviceCompiler) publish(ctx context.Context, catalog *Catalog, policy 
 		}
 		return func(ctx context.Context, value any) ([]byte, error) {
 			encoded, err := plan.Encode(ctx, "json", value)
+			return encoded.Data, err
+		}
+	}, ErrorOutput: func(target exec.ComponentTarget) invocation.OutputEncoder {
+		plan := outputs[target.Component.String()]
+		if plan == nil || plan.NilSlicePolicy() != "empty_array" {
+			return nil
+		}
+		declared := plan.Type()
+		for declared != nil && declared.Kind() == reflect.Pointer {
+			declared = declared.Elem()
+		}
+		return func(ctx context.Context, body any) ([]byte, error) {
+			actual := reflect.TypeOf(body)
+			for actual != nil && actual.Kind() == reflect.Pointer {
+				actual = actual.Elem()
+			}
+			if declared == nil || actual != declared {
+				return json.Marshal(body)
+			}
+			encoded, err := plan.Encode(ctx, "json", body)
 			return encoded.Data, err
 		}
 	}})

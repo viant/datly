@@ -41,6 +41,16 @@ func (input *Input) ValidateLifecycleTarget(mutation bool) error {
 			return nil
 		}
 		visited[view] = true
+		if view.NestedNullPolicy != "" {
+			if view == input.Component.RootView || view.Auxiliary || !supported || view.Cardinality == spec.CardinalityOne || view.NestedNullPolicy != "initial-validation" {
+				return fmt.Errorf("nested_null_policy requires a generated writable collection relation and initial-validation")
+			}
+		}
+		if view.RootNullPolicy != "" {
+			if view != input.Component.RootView || view.Auxiliary || !supported || view.Cardinality == spec.CardinalityOne || view.RootNullPolicy != "initial-validation" {
+				return fmt.Errorf("root_null_policy requires a generated writable root and initial-validation")
+			}
+		}
 		if view.WriterIdentityPolicy != "" {
 			if view.WriterIdentityPolicy != "assigned-update" {
 				return fmt.Errorf("writer_identity must be assigned-update")

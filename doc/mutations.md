@@ -1003,3 +1003,69 @@ Regenerate through the same high-level command and preserve create-once lifecycl
 edits. Verify mixed mutations, identity-only deletes, omissions/false flags,
 parent/composite scope, token presence and instant equality, validation order,
 rollback/caller-owned transactions, and regeneration in the generated package.
+
+
+## Whole-input validation and phase observation
+
+A physical root lifecycle can independently opt into aggregate validation and
+phase observation. Declare the lifecycle with the existing `lifecycle_type`
+annotation and transcribe normally. These methods belong in authored Go, not
+in generated files. Existing row validation remains the default.
+
+To collect schema and business violations in one response, implement the exact
+root input/output signature (using your component's generated types):
+
+```go
+func (hooks *OrderLifecycle) ValidateInput(
+    ctx context.Context, input *OrdersInput, output *OrdersOutput,
+    report handler.ValidationReport,
+) error {
+    // Inspect the input and append business violations with report.Add(...).
+    // Return an error only for an operational failure.
+    return nil
+}
+```
+
+Here `handler` is `github.com/viant/xdatly/handler`. The callback runs once per
+input, including an empty collection, after initialization and initial native
+schema validation. Ordinary schema violations do not suppress it;
+`SchemaViolations()` returns detached string evidence and `SchemaFailed()`
+reports the initial schema result. `Add(handler.Violation{...})` appends business
+violations in call order. The combined result prevents allocation and writes.
+Operational validator failures stop before this callback. Cancellation, returned
+errors and panics retain the normal invocation error/transaction handling.
+Final native validation of produced values remains mandatory after sequencing.
+
+Aggregate validation is supported only on a physical root. A graph cannot mix
+it with row `Validate` methods, including child validators. Do not retain the
+report or access it concurrently, and keep business data fixed after validation.
+
+For logging at actual request boundaries, the root lifecycle may also implement:
+
+```go
+func (hooks *OrderLifecycle) ObservePhase(ctx context.Context, event handler.PhaseEvent) {
+    // Use the configured context logger and the application's logging policy.
+}
+```
+
+Events identify invocation, binding, input initialization, execution, record
+initialization, initial validation, allocation and queue phases. Only phases
+actually entered emit events. Whole-input initialization, validation and queue
+can occur with zero rows; allocation requires work. Begin events have no result;
+end events distinguish success, violations, failure, cancellation and panic.
+Invocation IDs distinguish requests, and attempts distinguish native replay.
+Terminal callbacks receive a context without cancellation so diagnostics can
+complete. Queue completion does not establish commit: `Outcome` remains the
+transaction authority, including caller-owned pending transactions.
+
+Before binding, only the trusted context logger is available; do not assume
+input, claims or Current data are ready. Callbacks must not mutate business state,
+control outcomes or retain invocation objects. Observer and observer-factory
+panics are contained with bounded diagnostics; logger panics during that reporting
+are contained too. Error causes are private diagnostics and must follow the
+application's existing redaction policy. Observation is optional and does not
+change the default lifecycle or error policy.
+
+See [root structural validation and queue observation](session-lifecycle.md) for
+the opt-in root null policy and per-item queue-attempt observer, including
+identity-only update evidence and transaction completion boundaries.

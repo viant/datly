@@ -44,6 +44,7 @@ type Plan struct {
 	exclude             exclusions
 	jsonEncoder         *structjson.Marshaller
 	standardJSON        *jsonmarshal.Standard
+	nilSlicePolicy      string
 	omitEmpty           bool
 	title               string
 	presentation        *presentation
@@ -107,6 +108,12 @@ func (c Compiler) Compile(input CompileInput) (*Plan, error) {
 			p.exclude = exclusions(append([]string(nil), settings.Output.Exclude...))
 			p.omitEmpty = settings.Output.OmitEmpty
 			p.title = settings.Output.Title
+			p.nilSlicePolicy = settings.Output.NilSlicePolicy
+			switch p.nilSlicePolicy {
+			case "", "null", "empty_array":
+			default:
+				return nil, fmt.Errorf("unsupported output nil slice policy %q", p.nilSlicePolicy)
+			}
 		}
 		if name := strings.TrimSpace(settings.JSONMarshalType); name != "" {
 			if c.Lookup == nil {
@@ -182,6 +189,14 @@ func (c Compiler) Compile(input CompileInput) (*Plan, error) {
 		p.standardJSON = jsonmarshal.NewStandard(p.typeOf)
 	}
 	return p, nil
+}
+
+// NilSlicePolicy returns the immutable compiled JSON collection policy.
+func (p *Plan) NilSlicePolicy() string {
+	if p == nil {
+		return ""
+	}
+	return p.nilSlicePolicy
 }
 
 func (p *Plan) Type() reflect.Type {
@@ -310,7 +325,7 @@ func (p *Plan) disposition(format string) string {
 }
 
 func (p *Plan) transformedJSON() bool {
-	return p.caseFormat != "" || p.timeLayout != "" || len(p.exclude) > 0 || p.omitEmpty
+	return p.nilSlicePolicy == "empty_array" || p.caseFormat != "" || p.timeLayout != "" || len(p.exclude) > 0 || p.omitEmpty
 }
 
 func (p *Plan) marshalJSON(ctx context.Context, value any, custom bool) ([]byte, error) {
@@ -343,6 +358,9 @@ func (p *Plan) marshalJSON(ctx context.Context, value any, custom bool) ([]byte,
 
 func (p *Plan) jsonOptions() []structjson.Option {
 	var options []structjson.Option
+	if p.nilSlicePolicy == "empty_array" {
+		options = append(options, structjson.WithNilSlicePolicy(structjson.NilSliceAsEmptyArray))
+	}
 	if len(p.exclude) > 0 {
 		options = append(options, structjson.WithExcludedFields(p.exclude...))
 	}

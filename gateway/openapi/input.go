@@ -58,8 +58,9 @@ func (b *inputBuilder) build(fields []registry.InputField, operation *openapi3.O
 		seen[key] = true
 		required := kind == "path" || binding.Required != nil && *binding.Required
 		sourceType := field.SourceType()
-		// Required transport values cannot be null in the Bindly plan.
-		if required || kind != "body" {
+		// Presence remains required while the opted whole body permits literal null.
+		strictValue := (required && binding.BodyNullPolicy == "") || kind != "body"
+		if strictValue {
 			sourceType = (xshape.Runtime{}).Indirect(sourceType)
 		}
 		originalDocs := b.schemas.docs
@@ -72,7 +73,7 @@ func (b *inputBuilder) build(fields []registry.InputField, operation *openapi3.O
 		if err != nil {
 			return fmt.Errorf("input %s: %w", field.Path(), err)
 		}
-		if (required || kind != "body") && schema.Nullable {
+		if strictValue && schema.Nullable {
 			copy := *schema
 			copy.Nullable = false
 			schema = &copy

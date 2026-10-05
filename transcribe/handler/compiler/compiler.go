@@ -70,6 +70,9 @@ func (c *compiler) compile(request Request) (*plan.Plan, error) {
 	if operation == plan.OperationPost && (strings.TrimSpace(request.Current) != "" || len(request.Currents) != 0) {
 		return nil, fmt.Errorf("current bindings are supported only for PATCH and PUT handler transcription")
 	}
+	if err := validateInternalRoot(request.Component, operation); err != nil {
+		return nil, err
+	}
 	if err := c.indexCurrentBindings(request); err != nil {
 		return nil, err
 	}
@@ -312,7 +315,7 @@ func (c *compiler) claimCurrent(paramIdentity, recordIdentity string) error {
 
 func (c *compiler) selectInput(component *spec.Component, name string) (*spec.Parameter, error) {
 	return c.selectParam(component, name, func(param *spec.Parameter) bool {
-		return param != nil && !param.EmitOutput && strings.EqualFold(strings.TrimSpace(param.Source.Kind), "body")
+		return mutationInput(param)
 	}, "body input", true)
 }
 

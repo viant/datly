@@ -3,11 +3,40 @@ package transcribe
 import (
 	"context"
 	"os/exec"
+	"strings"
 	"testing"
 
 	"github.com/viant/datly/internal/testharness"
 	"github.com/viant/datly/transcribe/column"
 )
+
+func TestGeneratedWriterWrappedKeyAliasSQLite(t *testing.T) {
+	ctx := context.Background()
+	db := testharness.NewSQLiteHarness(t)
+	if err := db.ExecStatements(ctx, "CREATE TABLE records(id TEXT PRIMARY KEY,name TEXT,preamble TEXT)"); err != nil {
+		t.Fatal(err)
+	}
+	root := t.TempDir()
+	(testharness.GeneratedModule{Path: "github.com/viant/datly/wildcardaliasfixture"}).Write(t, root)
+	source := `#package('github.com/viant/datly/wildcardaliasfixture/generated')
+#setting($_ = $connector('main'))
+#setting($_ = $route('/records','PATCH'))
+#setting($_ = $input_type('Input'))
+#setting($_ = $output_type('Output'))
+#setting($_ = $case_format('lc'))
+#define($_ = $Data<[]*Record>(output/body))
+SELECT rows.*,rows.preamble AS Caption,type(rows,'Record'),required(rows.root_key)
+FROM (SELECT c.id AS root_key,c.name,c.preamble FROM records c) rows`
+	if _, err := (Generator{Operation: "patch"}).Generate(ctx, GenerationRequest{Destination: root, Source: &Source{Name: "records", Scope: "github.com/viant/datly/wildcardaliasfixture/source", Text: source, Connector: "main", ColumnRefiner: column.New(column.Connections{"main": db.DB})}}); err != nil {
+		t.Fatal(err)
+	}
+	writeSourceFile(t, root, "generated/wrapped_key_test.go", strings.ReplaceAll(wildcardAliasGeneratedRuntime, `"id":`, `"rootKey":`))
+	command := exec.CommandContext(ctx, "go", "test", "-mod=mod", "-count=1", "./generated")
+	command.Dir = root
+	if out, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("generated wrapped-key SQLite runtime: %v\n%s", err, out)
+	}
+}
 
 func TestGeneratedWriterWildcardAliasedNonkeySQLite(t *testing.T) {
 	ctx := context.Background()

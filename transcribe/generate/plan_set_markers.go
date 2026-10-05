@@ -2,9 +2,7 @@ package generate
 
 import (
 	"fmt"
-	"reflect"
 	"sort"
-	"strings"
 
 	"github.com/viant/datly/spec"
 	"github.com/viant/datly/typecatalog"
@@ -135,31 +133,17 @@ func addViewSetMarker(plan *ViewPlan, view *spec.View) error {
 	if _, ok := fields["Has"]; ok {
 		return fmt.Errorf("generated view %q set marker collides with field Has", plan.Name)
 	}
-	relationKeys := map[string]bool{}
-	for _, relation := range view.Relations {
-		if relation == nil {
-			continue
-		}
-		for _, link := range relation.On {
-			if link != nil {
-				relationKeys[strings.ToLower(strings.TrimSpace(link.ParentColumn))] = true
-			}
-		}
-	}
 	markerFields := make([]string, 0, len(view.Columns))
 	for _, column := range view.Columns {
 		if column == nil {
 			continue
 		}
 		name := typecatalog.FieldName(column.Name)
-		field, ok := fields[name]
+		_, ok := fields[name]
 		if !ok {
 			return fmt.Errorf("generated view %q set marker column %q has no field", plan.Name, column.Name)
 		}
-		linked := relationKeys[strings.ToLower(strings.TrimSpace(column.Name))] || relationKeys[strings.ToLower(strings.TrimSpace(column.Source))]
-		if ignoredSQLXField(field.Tag) && !column.DeleteMarker && !linked && !publicLogicalField(field.Tag) {
-			continue
-		}
+		// Scalar presence is independent of persistence and transport visibility.
 		markerFields = append(markerFields, name)
 	}
 	for _, relation := range view.Relations {
@@ -205,29 +189,4 @@ func addViewSetMarker(plan *ViewPlan, view *spec.View) error {
 	})
 	plan.SetMarkerFields = markerFields
 	return nil
-}
-
-func ignoredSQLXField(raw string) bool {
-	value := reflect.StructTag(strings.TrimSpace(raw)).Get("sqlx")
-	for _, option := range strings.Split(value, ",") {
-		if strings.TrimSpace(option) == "-" {
-			return true
-		}
-	}
-	return false
-}
-
-// SQL persistence and request presence have independent authority. Logical
-// fields can carry client intent without becoming database columns.
-func publicLogicalField(raw string) bool {
-	tags := reflect.StructTag(strings.TrimSpace(raw))
-	if tags.Get("internal") == "true" {
-		return false
-	}
-	for _, key := range []string{"json", "format"} {
-		if strings.Split(tags.Get(key), ",")[0] == "-" {
-			return false
-		}
-	}
-	return true
 }

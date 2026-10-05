@@ -31,6 +31,9 @@ func applyBodyFormat(field reflect.StructField, binding *bindly.BindingSpec) err
 	if plan == nil || !plan.hasLayout(map[*bodyFormatPlan]bool{}) {
 		return nil
 	}
+	if binding.BodyNullPolicy != "" {
+		return fmt.Errorf("body field %s BodyNullPolicy does not support authored body date formats", field.Name)
+	}
 	binding.SourceType = reflect.TypeFor[json.RawMessage]()
 	binding.Transformer = &bodyFormatTransformer{target: field.Type, plan: plan}
 	return nil

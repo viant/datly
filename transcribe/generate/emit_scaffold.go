@@ -18,8 +18,16 @@ func EmitScaffold(dir string, plan *Plan) ([]EmittedFile, error) {
 	if plan != nil && plan.MutationHandler == nil && plan.lifecycleTargetError != nil {
 		return nil, plan.lifecycleTargetError
 	}
-	packages, err := plan.packages(dir)
+	packages, err := plan.packageTargets(dir)
 	if err != nil {
+		return nil, err
+	}
+	release, err := packages.lockTargets()
+	if err != nil {
+		return nil, err
+	}
+	defer release()
+	if err = packages.render(); err != nil {
 		return nil, err
 	}
 	if err = packages.validate(); err != nil {
@@ -32,7 +40,11 @@ func EmitScaffold(dir string, plan *Plan) ([]EmittedFile, error) {
 			return nil, err
 		}
 		persistence := &scaffoldPersistence{dir: packages.dirs[i], owner: p.ComponentName, files: files, userFiles: user, removals: removals, plan: p}
-		if err = persistence.Commit(); err != nil {
+		target, err := persistence.target()
+		if err != nil {
+			return nil, err
+		}
+		if err = persistence.commitLocked(target); err != nil {
 			return nil, err
 		}
 		result = append(result, persistence.files...)
@@ -44,8 +56,16 @@ func (p *Plan) ValidateDestination(dir string) error {
 	if p != nil && p.MutationHandler == nil && p.lifecycleTargetError != nil {
 		return p.lifecycleTargetError
 	}
-	packages, err := p.packages(dir)
+	packages, err := p.packageTargets(dir)
 	if err != nil {
+		return err
+	}
+	release, err := packages.lockTargets()
+	if err != nil {
+		return err
+	}
+	defer release()
+	if err = packages.render(); err != nil {
 		return err
 	}
 	return packages.validate()

@@ -16,6 +16,7 @@ func (c *Config) ResolveConstants() (*Config, error) {
 		return nil, fmt.Errorf("standalone configuration is required")
 	}
 	result := *c
+	result.Logging = c.Logging.Copy()
 	if c.JWTClaims != nil {
 		policy := *c.JWTClaims
 		result.JWTClaims = &policy

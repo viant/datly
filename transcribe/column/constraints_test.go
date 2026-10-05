@@ -1,11 +1,76 @@
 package column
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/viant/datly/spec"
+	sqlio "github.com/viant/sqlx/io"
 	"github.com/viant/sqlx/metadata/sink"
 )
+
+func TestInferredForeignKeySchemaRequiresExactLocalProvenance(t *testing.T) {
+	for _, tc := range []struct {
+		name, discovery, child, parent, source, want string
+	}{
+		{"local unqualified", "author_one", "author_one", "author_one", "child", ""},
+		{"independent author schema", "author_two", "author_two", "author_two", "`child`", ""},
+		{"qualified source", "author_one", "author_one", "author_one", "author_one.child", "author_one"},
+		{"quoted qualified source", "author_one", "author_one", "author_one", "`author_one`.`child`", "author_one"},
+		{"cross schema parent", "author_one", "author_one", "remote", "child", "remote"},
+		{"different child", "author_one", "remote", "author_one", "child", "author_one"},
+		{"unknown discovery", "", "author_one", "author_one", "child", "author_one"},
+		{"blank discovery", " ", " ", "author_one", "child", "author_one"},
+		{"unknown child", "author_one", "", "author_one", "child", "author_one"},
+		{"unknown parent", "author_one", "author_one", "", "child", ""},
+		{"unknown source", "author_one", "author_one", "author_one", "", "author_one"},
+		{"case different parent", "author_one", "author_one", "Author_One", "child", "Author_One"},
+		{"case different child", "author_one", "Author_One", "author_one", "child", "author_one"},
+		{"case different discovery", "Author_One", "author_one", "author_one", "child", "author_one"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			key := sink.Key{Schema: tc.child, ReferenceSchema: tc.parent}
+			if got := inferredReferenceSchema(&key, tc.discovery, tc.source); got != tc.want {
+				t.Fatalf("reference schema = %q, want %q", got, tc.want)
+			}
+			key.Column, key.ReferenceTable, key.ReferenceColumn = "PARENT_ID", "parent", "ID"
+			constraints := map[string]tableConstraint{"parent_id": {unique: true}}
+			applyForeignKeyConstraints(constraints, []sink.Key{key}, tc.discovery, tc.source)
+			column := &spec.Column{Name: "parent_id", Nullable: true}
+			applyTableConstraints([]*spec.Column{column}, constraints, &projectionLineage{wildcard: true})
+			tag := sqlio.ParseTag(reflect.StructTag(column.Tag))
+			if tag.RefDb != tc.want || tag.RefTable != "parent" || tag.RefColumn != "ID" || !column.Unique || !column.Nullable || column.NotNull {
+				t.Fatalf("reference or physical facts changed: tag=%+v column=%+v", tag, column)
+			}
+		})
+	}
+}
+
+func TestInferredForeignKeyPreservesPhysicalFactsAndAuthoredReference(t *testing.T) {
+	for _, authored := range []string{"", `sqlx:"PARENT_ID,refDb=explicit_db,refTable=explicit_parent,refColumn=explicit_id"`} {
+		for _, discovery := range []string{"author_one", "author_two"} {
+			t.Run(discovery+"/"+authored, func(t *testing.T) {
+				defaultValue := "42"
+				autoIncrement := true
+				constraints := constraintsFromColumns([]sink.Column{{Name: "PARENT_ID", Key: "PRI", Nullable: "NO", IsAutoincrement: &autoIncrement, Default: &defaultValue}})
+				applyForeignKeyConstraints(constraints, []sink.Key{{Column: "PARENT_ID", Schema: discovery, ReferenceSchema: discovery, ReferenceTable: "parent", ReferenceColumn: "ID"}}, discovery, "child")
+				column := &spec.Column{Name: "parent_id", Tag: authored}
+				applyTableConstraints([]*spec.Column{column}, constraints, &projectionLineage{wildcard: true})
+				if !column.PrimaryKey || !column.AutoIncrement || !column.NotNull || column.Unique || column.Default == nil || *column.Default != defaultValue {
+					t.Fatalf("physical facts changed: %+v", column)
+				}
+				tag := sqlio.ParseTag(reflect.StructTag(column.Tag))
+				if authored == "" {
+					if tag.RefDb != "" || tag.RefTable != "parent" || tag.RefColumn != "ID" {
+						t.Fatalf("inferred reference = %+v", tag)
+					}
+				} else if tag.RefDb != "explicit_db" || tag.RefTable != "explicit_parent" || tag.RefColumn != "explicit_id" {
+					t.Fatalf("authored reference changed: %+v", tag)
+				}
+			})
+		}
+	}
+}
 
 func TestConstraintsFromColumnsPreservesSQLXFacts(t *testing.T) {
 	autoIncrement := true

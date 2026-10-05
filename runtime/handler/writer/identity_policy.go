@@ -3,7 +3,7 @@ package writer
 import (
 	"context"
 	"fmt"
-	"github.com/viant/datly/sql/fragment"
+	"github.com/viant/datly/internal/dialectcontext"
 	xhandler "github.com/viant/xdatly/handler"
 	"reflect"
 )
@@ -61,7 +61,7 @@ func (p *Program) checkMissingIdentityGuards(ctx context.Context, binder xhandle
 		if err != nil {
 			return err
 		}
-		if fragment.Dialect(predicateCtx) == nil {
+		if dialectcontext.Dialect(predicateCtx) == nil {
 			return fmt.Errorf("mutation predicate %s requires a dialect", record.Path)
 		}
 		criteria, err := p.metadata.Predicates.Criteria(predicateCtx, binder, *record.MutationPredicateGroup)

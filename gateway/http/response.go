@@ -52,7 +52,10 @@ func writeResponse(writer stdhttp.ResponseWriter, statusCode int, explicitStatus
 		return
 	}
 	if body := response.Body(); body != nil {
-		_, _ = io.Copy(writer, body)
+		_, err := io.Copy(writer, body)
+		if len(requests) > 0 && requests[0] != nil {
+			recordHTTPError(requests[0].Context(), err)
+		}
 	}
 }
 

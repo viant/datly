@@ -15,6 +15,10 @@ import (
 type EntityHookRequest struct {
 	Hook, Entity, Parent, Input, Output string
 	Component                           bool
+	// WriteEligibilityAllowed is supplied only by canonical physical-root
+	// INSERT/UPDATE policy with no writable descendants. Omitted authority fails
+	// closed for WriteEligible and has no effect on hooks without that method.
+	WriteEligibilityAllowed bool
 }
 
 // EntityHookCompiler validates authored hook contracts before target lowering.
@@ -67,7 +71,7 @@ func (c EntityHookCompiler) Compile(request EntityHookRequest) (spec.TypeRef, er
 	}
 	if request.Component {
 		for _, method := range methods {
-			if method.Name == "AfterSequence" || method.Name == "AfterQueue" || method.Name == "Recover" {
+			if method.Name == "AfterSequence" || method.Name == "AfterQueue" || method.Name == "Recover" || method.Name == "RetryTransaction" {
 				return spec.TypeRef{}, fmt.Errorf("auxiliary component hook %s does not support %s", resolved.Identity, method.Name)
 			}
 		}
@@ -86,8 +90,61 @@ func (c EntityHookCompiler) Compile(request EntityHookRequest) (spec.TypeRef, er
 			}
 		}
 	}
+	for _, method := range methods {
+		if method.Name == "ObserveQueueAttempt" {
+			if request.Component || parent != "github.com/viant/xdatly/handler.NoParent" || request.Input == "" || method.Variadic || !reflect.DeepEqual(method.Parameters, []string{"context.Context", "github.com/viant/xdatly/handler.QueueAttemptEvent"}) || len(method.Results) != 0 {
+				return spec.TypeRef{}, fmt.Errorf("ObserveQueueAttempt requires a physical root and canonical context.Context, handler.QueueAttemptEvent signature")
+			}
+		}
+		if method.Name != "ObservePhase" {
+			continue
+		}
+		if request.Component || parent != "github.com/viant/xdatly/handler.NoParent" || request.Input == "" || method.Variadic || !reflect.DeepEqual(method.Parameters, []string{"context.Context", "github.com/viant/xdatly/handler.PhaseEvent"}) || len(method.Results) != 0 {
+			return spec.TypeRef{}, fmt.Errorf("ObservePhase requires a physical root and canonical context.Context, handler.PhaseEvent signature")
+		}
+	}
+	aggregate := false
+	for _, method := range methods {
+		if method.Name != "ValidateInput" {
+			continue
+		}
+		if request.Component || parent != "github.com/viant/xdatly/handler.NoParent" || request.Input == "" {
+			return spec.TypeRef{}, fmt.Errorf("aggregate ValidateInput requires a physical root with canonical input")
+		}
+		input, resolveErr := (xshape.Resolver{}).Canonical(request.Input)
+		if resolveErr != nil {
+			return spec.TypeRef{}, resolveErr
+		}
+		expected := []string{"context.Context", "*" + input, "*" + output, "github.com/viant/xdatly/handler.ValidationReport"}
+		if method.Variadic || !reflect.DeepEqual(method.Parameters, expected) || !reflect.DeepEqual(method.Results, []string{"error"}) {
+			return spec.TypeRef{}, fmt.Errorf("entity hook %s.ValidateInput has incompatible aggregate validation signature", resolved.Identity)
+		}
+		aggregate = true
+	}
+	if aggregate {
+		for _, method := range methods {
+			if method.Name == "Validate" {
+				return spec.TypeRef{}, fmt.Errorf("aggregate ValidateInput cannot overlap row Validate")
+			}
+		}
+	}
 	lifecycle := "github.com/viant/xdatly/handler.LifecycleContext[" + entity + "," + parent + "," + output + "]"
 	expected := []string{"context.Context", "*" + entity, lifecycle}
+	for _, method := range methods {
+		if method.Name != "WriteEligible" {
+			continue
+		}
+		if !request.WriteEligibilityAllowed || request.Component || parent != "github.com/viant/xdatly/handler.NoParent" || strings.TrimSpace(request.Input) == "" {
+			return spec.TypeRef{}, fmt.Errorf("entity hook %s.WriteEligible requires a physical INSERT/UPDATE root without writable descendants and canonical input", resolved.Identity)
+		}
+		if _, err := (xshape.Resolver{}).Canonical(request.Input); err != nil {
+			return spec.TypeRef{}, err
+		}
+		parameters := append(append([]string(nil), expected...), "github.com/viant/xdatly/handler.WriteAction")
+		if method.Variadic || !reflect.DeepEqual(method.Parameters, parameters) || !reflect.DeepEqual(method.Results, []string{"bool", "error"}) {
+			return spec.TypeRef{}, fmt.Errorf("entity hook %s.WriteEligible has incompatible signature: parameters=%v results=%v; expected parameters=%v and (bool, error) results", resolved.Identity, method.Parameters, method.Results, parameters)
+		}
+	}
 	for index, name := range []string{"Init", "Validate", "AfterSequence", "AfterQueue"} {
 		var found *xshape.Method
 		for i := range methods {
@@ -97,7 +154,7 @@ func (c EntityHookCompiler) Compile(request EntityHookRequest) (spec.TypeRef, er
 			}
 		}
 		if found == nil {
-			if index >= 2 {
+			if index >= 2 || name == "Validate" && aggregate {
 				continue
 			}
 			return spec.TypeRef{}, fmt.Errorf("entity hook %s requires %s(context.Context, *%s, handler.LifecycleContext[%s,%s,%s]) error", resolved.Identity, name, entity, entity, parent, output)
@@ -112,6 +169,13 @@ func (c EntityHookCompiler) Compile(request EntityHookRequest) (spec.TypeRef, er
 			return spec.TypeRef{}, err
 		}
 		for _, method := range methods {
+			if method.Name == "RetryTransaction" {
+				expected := []string{"context.Context", "*" + input, "*" + output, "github.com/viant/datly/runtime/handler.MutationOutcome"}
+				if parent != "github.com/viant/xdatly/handler.NoParent" || method.Variadic || !reflect.DeepEqual(method.Parameters, expected) || !reflect.DeepEqual(method.Results, []string{"bool", "error"}) {
+					return spec.TypeRef{}, fmt.Errorf("entity hook %s.RetryTransaction has incompatible root transaction retry signature", resolved.Identity)
+				}
+				continue
+			}
 			if method.Name == "Recover" {
 				expected := []string{"context.Context", "*" + input, "*" + output, "github.com/viant/datly/runtime/handler.MutationOutcome"}
 				if method.Variadic || !reflect.DeepEqual(method.Parameters, expected) || !reflect.DeepEqual(method.Results, []string{"github.com/viant/datly/runtime/handler.Recovery", "error"}) {

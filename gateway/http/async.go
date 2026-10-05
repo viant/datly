@@ -21,19 +21,23 @@ func (h *Handler) asyncRoute(req *http.Request) *asyncRoute {
 	if h.async == nil {
 		return nil
 	}
-	route, ok := h.runtime.RouteByMethodPath(req.Method, req.URL.EscapedPath())
+	route, ok := h.runtime.RouteByMethodPath(req.Method, h.routingPath(req))
 	if !ok || route == nil {
 		return nil
 	}
 	return h.async.routes[(spec.RouteRef{Method: route.Method, Path: route.Path}).String()]
 }
-func (r *asyncRoute) execute(ctx context.Context, req *http.Request, scope exec.ProviderScope, service AsyncService) (any, error) {
+func (r *asyncRoute) execute(ctx context.Context, req *http.Request, routingPath string, scope exec.ProviderScope, service AsyncService) (any, error) {
 	// The request path is the matched route instance, not a client-supplied target.
-	// Raw query/source values live in canonical SourceState instead of URI replay.
+	// Persist the selected escaped routing representation for native job replay.
+	// Preserve the original query while source values remain in canonical SourceState.
 	if r.targetAPIKeyHeader != "" && !(APIKey{Value: r.targetAPIKeyValue}).matchesValue(req.Header.Get(r.targetAPIKeyHeader)) {
 		return nil, &xresponse.Error{Code: 403, Payload: xresponse.Status{Status: "error", Message: "forbidden"}}
 	}
-	uri := req.URL.EscapedPath()
+	uri := routingPath
+	if req.URL.RawQuery != "" {
+		uri += "?" + req.URL.RawQuery
+	}
 	result, err := service.Exchange(ctx, jobs.Submission{Job: xasync.Job{Request: xasync.Request{Method: req.Method, URI: uri}, MainView: r.mainView, Module: r.module, JobType: r.jobType}, Source: scope, Policy: r.policy})
 	if errors.Is(err, cache.ErrMiss) {
 		return nil, &xresponse.Error{Code: 410, Payload: xresponse.Status{Status: "error", Message: "completed reader cache entry is missing or expired"}}

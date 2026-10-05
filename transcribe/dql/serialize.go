@@ -58,6 +58,9 @@ func (Serializer) Export(component *spec.Component, authored string) SourceExpor
 	route := component.Routes[0]
 	var text strings.Builder
 	fmt.Fprintf(&text, "#setting($_ = $route(%s, %s))\n", strconv.Quote(route.Path), strconv.Quote(route.Method))
+	if route.RequestBodyMode != "" {
+		fmt.Fprintf(&text, "#setting($_ = $request_body_mode(%s))\n", strconv.Quote(route.RequestBodyMode))
+	}
 	if component.Settings != nil && component.Settings.DefaultConnector != "" {
 		fmt.Fprintf(&text, "#setting($_ = $connector(%s))\n", strconv.Quote(component.Settings.DefaultConnector))
 	}

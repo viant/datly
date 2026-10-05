@@ -13,9 +13,9 @@ import (
 )
 
 func (h *Handler) writeEncoded(ctx context.Context, writer stdhttp.ResponseWriter, request *stdhttp.Request, status int, value any) {
-	contract, err := h.runtime.ResolveOutputByRoute(ctx, request.Method, request.URL.EscapedPath())
+	contract, err := h.runtime.ResolveOutputByRoute(ctx, request.Method, h.routingPath(request))
 	if err != nil {
-		h.writeOutputError(writer, err)
+		h.writeOutputError(ctx, writer, err)
 		return
 	}
 	format, err := h.outputFormatWithDefault(request, contract)
@@ -26,7 +26,7 @@ func (h *Handler) writeEncoded(ctx context.Context, writer stdhttp.ResponseWrite
 	}
 	encoded, err := contract.Encode(ctx, format, value)
 	if err != nil {
-		h.writeOutputError(writer, err)
+		h.writeOutputError(ctx, writer, err)
 		return
 	}
 	writer.Header().Set("Content-Type", encoded.ContentType)
@@ -34,11 +34,12 @@ func (h *Handler) writeEncoded(ctx context.Context, writer stdhttp.ResponseWrite
 		writer.Header().Set("Content-Disposition", encoded.ContentDisposition)
 	}
 	if err := writeEncodedBytes(writer, request, status, encoded.Data, contract.ResponseCompression()); err != nil {
-		h.writeOutputError(writer, err)
+		h.writeOutputError(ctx, writer, err)
 	}
 }
 
-func (h *Handler) writeOutputError(writer stdhttp.ResponseWriter, err error) {
+func (h *Handler) writeOutputError(ctx context.Context, writer stdhttp.ResponseWriter, err error) {
+	recordHTTPError(ctx, err)
 	if h.logger != nil {
 		h.logger.Error("failed to encode HTTP output", err)
 	}
@@ -50,7 +51,7 @@ func (h *Handler) writeOutputError(writer stdhttp.ResponseWriter, err error) {
 // outputFormat is shared by encoding and async dispatch policy, so invalid or
 // forced-synchronous formats are decided before a durable job is created.
 func (h *Handler) outputFormat(ctx context.Context, request *stdhttp.Request) (string, error) {
-	contract, err := h.runtime.ResolveOutputByRoute(ctx, request.Method, request.URL.EscapedPath())
+	contract, err := h.runtime.ResolveOutputByRoute(ctx, request.Method, h.routingPath(request))
 	if err != nil {
 		return "", err
 	}
@@ -59,7 +60,7 @@ func (h *Handler) outputFormat(ctx context.Context, request *stdhttp.Request) (s
 
 func (h *Handler) outputFormatWithDefault(request *stdhttp.Request, contract *output.Plan) (string, error) {
 	format := contract.DefaultFormat()
-	if route, ok := h.runtime.RouteByMethodPath(request.Method, request.URL.EscapedPath()); ok && route.Marshaller != "" {
+	if route, ok := h.runtime.RouteByMethodPath(request.Method, h.routingPath(request)); ok && route.Marshaller != "" {
 		format = route.Marshaller
 	}
 	source, explicit := contract.FormatSelector()

@@ -79,7 +79,7 @@ func TestViewProviderRelationProjectionObservesCompletedBatchesSQLite(t *testing
 			}
 			input := &relationMetadataInput{}
 			observations := 0
-			err = injector.Bind(ctx, input, bindly.WithPlan(inputPlan), bindly.WithBindingObserver(func(_ context.Context, event bindly.BindingEvent) error {
+			err = injector.Bind(ctx, input, bindly.WithPlan(inputPlan), bindly.WithSource(input), bindly.WithBindingObserver(func(_ context.Context, event bindly.BindingEvent) error {
 				if event.Target != input || event.Path != "Rows" {
 					return fmt.Errorf("unexpected observation target")
 				}

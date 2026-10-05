@@ -23,6 +23,9 @@ func (c *Compiler) BuildInput(request Request, rootType string) (Request, error)
 	default:
 		return Request{}, fmt.Errorf("unsupported generation operation %q", request.Operation)
 	}
+	if err := validateInternalRoot(request.Component, request.Operation); err != nil {
+		return Request{}, err
+	}
 	request.Component = request.Component.Clone()
 	bindings := map[string]string{}
 	for k, v := range request.ViewBindings {
@@ -38,7 +41,7 @@ func (c *Compiler) BuildInput(request Request, rootType string) (Request, error)
 	}
 	var body *spec.Parameter
 	for _, p := range spec.EffectiveParameters(request.Component.Parameters) {
-		if p != nil && p.Source.Kind == "body" && !p.EmitOutput {
+		if mutationInput(p) {
 			if body != nil {
 				return Request{}, fmt.Errorf("generation body input is ambiguous")
 			}

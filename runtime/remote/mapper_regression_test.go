@@ -141,7 +141,7 @@ func TestMapperRegressionRejectsDeclarationsBeforeProvider(t *testing.T) {
 		{"missing endpoint", func(c *Config) { c.Client.HTTP.URL = "" }, "url is required"},
 		{"method", func(c *Config) { c.Client.HTTP.Method = "TRACE" }, "http method"},
 		{"unknown input", func(c *Config) { c.Request = []RequestMapping{{Input: "Missing", Header: "X-Test"}} }, `input path "Missing"`},
-		{"unknown output", func(c *Config) { c.Response.Mappings[0].Output = "Missing" }, `field "Missing" was not found`},
+		{"unknown output", func(c *Config) { c.Response.Mappings[0].Output = "Missing" }, `binding path "Missing" is not defined`},
 		{"duplicate output", func(c *Config) {
 			c.Response.Mappings = append(c.Response.Mappings, ResponseMapping{Path: "/other", Output: "Value"})
 		}, "duplicate binding path"},

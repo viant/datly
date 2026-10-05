@@ -1,0 +1,225 @@
+{
+  "audit_off_tracing_on": [
+    {
+      "payload": {
+        "resource": {
+          "service.name": "datly",
+          "service.version": "synthetic-version"
+        },
+        "spans": [
+          {
+            "attributes": {
+              "http.method": "GET",
+              "http.url": "/synthetic/items",
+              "jwt.email": "synthetic@example.invalid",
+              "jwt.scope": "synthetic:read",
+              "jwt.uid": "42",
+              "jwt.username": "synthetic-user"
+            },
+            "endTime": "2026-01-02T03:04:05.003Z",
+            "kind": "SERVER",
+            "name": "HTTP GET /synthetic/items",
+            "spanId": "synthetic-root",
+            "startTime": "2026-01-02T03:04:05Z",
+            "status": {
+              "code": "OK",
+              "message": ""
+            }
+          },
+          {
+            "attributes": {
+              "elapsed": "2ms",
+              "elapsedMs": "2",
+              "rows": "1"
+            },
+            "endTime": "2026-01-02T03:04:05.002Z",
+            "kind": "CLIENT",
+            "name": "Assemble: synthetic_items",
+            "parentSpanId": "synthetic-root",
+            "spanId": "synthetic-metric",
+            "startTime": "2026-01-02T03:04:05Z",
+            "status": {
+              "code": "OK",
+              "message": ""
+            }
+          },
+          {
+            "attributes": {
+              "db.rows": "1",
+              "db.system": "sql"
+            },
+            "endTime": "2026-01-02T03:04:05.001Z",
+            "kind": "CLIENT",
+            "name": "SQL Select: synthetic_items",
+            "parentSpanId": "synthetic-metric",
+            "spanId": "synthetic-sql",
+            "startTime": "2026-01-02T03:04:05Z",
+            "status": {
+              "code": "OK",
+              "message": ""
+            }
+          }
+        ],
+        "traceId": "synthetic-trace"
+      },
+      "prefix": "[TRACE]"
+    }
+  ],
+  "both_plus_sql": [
+    {
+      "payload": {
+        "auth": {
+          "email": "synthetic@example.invalid",
+          "scope": "synthetic:read",
+          "user_id": 42,
+          "username": "synthetic-user"
+        },
+        "elapsedMs": "\u003cwall-clock-derived\u003e",
+        "header": {
+          "X-Request-Id": "synthetic-request"
+        },
+        "method": "GET",
+        "metrics": [
+          {
+            "elapsed": "2ms",
+            "elapsedMs": 2,
+            "endTime": "2026-01-02T03:04:05.002Z",
+            "executions": [
+              {
+                "args": [
+                  42
+                ],
+                "endTime": "2026-01-02T03:04:05.001Z",
+                "id": "synthetic-sql",
+                "rows": 1,
+                "sql": "SELECT id FROM synthetic_items WHERE id = ?",
+                "startTime": "2026-01-02T03:04:05Z"
+              }
+            ],
+            "id": "synthetic-metric",
+            "rows": 1,
+            "startTime": "2026-01-02T03:04:05Z",
+            "type": "SELECT",
+            "view": "synthetic_items"
+          }
+        ],
+        "startTime": "2026-01-02T03:04:05Z",
+        "status": "ok",
+        "statusCode": 200,
+        "traceId": "synthetic-trace",
+        "uri": "/synthetic/items"
+      },
+      "prefix": "[AUDIT]"
+    },
+    {
+      "payload": {
+        "resource": {
+          "service.name": "datly",
+          "service.version": "synthetic-version"
+        },
+        "spans": [
+          {
+            "attributes": {
+              "http.method": "GET",
+              "http.url": "/synthetic/items",
+              "jwt.email": "synthetic@example.invalid",
+              "jwt.scope": "synthetic:read",
+              "jwt.uid": "42",
+              "jwt.username": "synthetic-user"
+            },
+            "endTime": "2026-01-02T03:04:05.003Z",
+            "kind": "SERVER",
+            "name": "HTTP GET /synthetic/items",
+            "spanId": "synthetic-root",
+            "startTime": "2026-01-02T03:04:05Z",
+            "status": {
+              "code": "OK",
+              "message": ""
+            }
+          },
+          {
+            "attributes": {
+              "elapsed": "2ms",
+              "elapsedMs": "2",
+              "rows": "1"
+            },
+            "endTime": "2026-01-02T03:04:05.002Z",
+            "kind": "CLIENT",
+            "name": "Assemble: synthetic_items",
+            "parentSpanId": "synthetic-root",
+            "spanId": "synthetic-metric",
+            "startTime": "2026-01-02T03:04:05Z",
+            "status": {
+              "code": "OK",
+              "message": ""
+            }
+          },
+          {
+            "attributes": {
+              "db.args": "[42]",
+              "db.rows": "1",
+              "db.statement": "SELECT id FROM synthetic_items WHERE id = ?",
+              "db.system": "sql"
+            },
+            "endTime": "2026-01-02T03:04:05.001Z",
+            "kind": "CLIENT",
+            "name": "SQL Select: synthetic_items",
+            "parentSpanId": "synthetic-metric",
+            "spanId": "synthetic-sql",
+            "startTime": "2026-01-02T03:04:05Z",
+            "status": {
+              "code": "OK",
+              "message": ""
+            }
+          }
+        ],
+        "traceId": "synthetic-trace"
+      },
+      "prefix": "[TRACE]"
+    }
+  ],
+  "default": [
+    {
+      "payload": {
+        "auth": {
+          "email": "synthetic@example.invalid",
+          "scope": "synthetic:read",
+          "user_id": 42,
+          "username": "synthetic-user"
+        },
+        "elapsedMs": "\u003cwall-clock-derived\u003e",
+        "header": {
+          "X-Request-Id": "synthetic-request"
+        },
+        "method": "GET",
+        "metrics": [
+          {
+            "elapsed": "2ms",
+            "elapsedMs": 2,
+            "endTime": "2026-01-02T03:04:05.002Z",
+            "executions": [
+              {
+                "endTime": "2026-01-02T03:04:05.001Z",
+                "id": "synthetic-sql",
+                "rows": 1,
+                "startTime": "2026-01-02T03:04:05Z"
+              }
+            ],
+            "id": "synthetic-metric",
+            "rows": 1,
+            "startTime": "2026-01-02T03:04:05Z",
+            "type": "SELECT",
+            "view": "synthetic_items"
+          }
+        ],
+        "startTime": "2026-01-02T03:04:05Z",
+        "status": "ok",
+        "statusCode": 200,
+        "traceId": "synthetic-trace",
+        "uri": "/synthetic/items"
+      },
+      "prefix": "[AUDIT]"
+    }
+  ],
+  "explicitly_disabled": []
+}

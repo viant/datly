@@ -125,6 +125,9 @@ func overlayParam(base, authored *spec.Parameter) *spec.Parameter {
 	if authored.ExpectedReturned != nil {
 		result.ExpectedReturned = authoredCopy.ExpectedReturned
 	}
+	if authored.BodyNullPolicy != "" {
+		result.BodyNullPolicy = authored.BodyNullPolicy
+	}
 	if authored.QueryListCSV {
 		result.QueryListCSV = true
 	}

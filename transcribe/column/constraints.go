@@ -73,6 +73,11 @@ func (m *discoveryMetadata) loadTableConstraints(ctx context.Context, db *sql.DB
 		}
 		return nil, fmt.Errorf("load SQLX foreign keys for %q: %w", table, err)
 	}
+	applyForeignKeyConstraints(result, keys, session.Schema, table)
+	return result, nil
+}
+
+func applyForeignKeyConstraints(result map[string]tableConstraint, keys []sink.Key, discoverySchema, sourceTable string) {
 	for index := range keys {
 		key := &keys[index]
 		name := normalizedName(key.Column)
@@ -81,13 +86,23 @@ func (m *discoveryMetadata) loadTableConstraints(ctx context.Context, db *sql.DB
 		}
 		constraint := result[name]
 		constraint.reference = &tableReference{
-			schema: strings.TrimSpace(key.ReferenceSchema),
+			schema: inferredReferenceSchema(key, discoverySchema, sourceTable),
 			table:  strings.TrimSpace(key.ReferenceTable),
 			column: strings.TrimSpace(key.ReferenceColumn),
 		}
 		result[name] = constraint
 	}
-	return result, nil
+}
+
+func inferredReferenceSchema(key *sink.Key, discoverySchema, sourceTable string) string {
+	// Only authoritative same-schema metadata for an unqualified source may
+	// become runtime-local. Schema names are case-sensitive provenance; unknown
+	// or cross-schema references and explicit source qualification stay intact.
+	if strings.TrimSpace(discoverySchema) != "" && key.Schema == discoverySchema && key.ReferenceSchema == discoverySchema &&
+		strings.TrimSpace(sourceTable) != "" && !strings.Contains(sourceTable, ".") {
+		return ""
+	}
+	return strings.TrimSpace(key.ReferenceSchema)
 }
 
 func constraintsFromColumns(columns []sink.Column) map[string]tableConstraint {
@@ -294,10 +309,13 @@ func applyTableConstraints(columns []*spec.Column, constraints map[string]tableC
 		}
 		output := normalizedName(column.Name)
 		sourceName, ok := lineage.direct[output]
+		resultName := lineage.names[output]
 		if !ok && column.Source != "" {
 			// A configuration-only outer rename keeps the original SQL output in
 			// Source; prove its lineage before applying physical table constraints.
-			sourceName, ok = lineage.direct[normalizedName(column.Source)]
+			sourceOutput := normalizedName(column.Source)
+			sourceName, ok = lineage.direct[sourceOutput]
+			resultName = lineage.names[sourceOutput]
 		}
 		if !ok && lineage.wildcard && !lineage.blocked[output] {
 			sourceName = output
@@ -323,11 +341,11 @@ func applyTableConstraints(columns []*spec.Column, constraints map[string]tableC
 			value := *constraint.defaultValue
 			column.Default = &value
 		}
-		applyReferenceConstraint(column, constraint.reference)
+		applyReferenceConstraint(column, constraint.reference, resultName)
 	}
 }
 
-func applyReferenceConstraint(column *spec.Column, reference *tableReference) {
+func applyReferenceConstraint(column *spec.Column, reference *tableReference, resultName string) {
 	if column == nil || reference == nil {
 		return
 	}
@@ -335,6 +353,11 @@ func applyReferenceConstraint(column *spec.Column, reference *tableReference) {
 	sqlxTag := parsed.Lookup(sqlio.TagSqlx)
 	if sqlxTag == nil {
 		mapping := firstValue(column.Source, column.Name)
+		// Use the proven vendor result identity captured before Source became a
+		// DML name. Existing authored/compiler mappings remain authoritative.
+		if resultName = strings.TrimSpace(resultName); resultName != "" && !strings.EqualFold(mapping, resultName) {
+			mapping += "|" + resultName
+		}
 		parsed.Set(sqlio.TagSqlx, mapping)
 		sqlxTag = parsed.Lookup(sqlio.TagSqlx)
 	}

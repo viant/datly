@@ -112,10 +112,10 @@ func (h *Handler) serveCORS(writer stdhttp.ResponseWriter, req *stdhttp.Request)
 		method = req.Header.Get("Access-Control-Request-Method")
 	}
 	if req.Method == stdhttp.MethodOptions && !preflight {
-		if _, explicit := h.runtime.RouteByMethodPath(method, req.URL.EscapedPath()); !explicit {
+		if _, explicit := h.runtime.RouteByMethodPath(method, h.routingPath(req)); !explicit {
 			var allowed []string
-			for _, actual := range h.runtime.AllowedMethodsForPath(req.URL.EscapedPath()) {
-				endpoint, _ := h.runtime.RouteByMethodPath(actual, req.URL.EscapedPath())
+			for _, actual := range h.runtime.AllowedMethodsForPath(h.routingPath(req)) {
+				endpoint, _ := h.runtime.RouteByMethodPath(actual, h.routingPath(req))
 				policy := h.cors[(spec.RouteRef{Method: endpoint.Method, Path: endpoint.Path}).String()]
 				if policy != nil && (policy.config.AllowMethods == nil || policy.allows(policy.config.AllowMethods, actual, false)) {
 					allowed = append(allowed, actual)
@@ -128,7 +128,7 @@ func (h *Handler) serveCORS(writer stdhttp.ResponseWriter, req *stdhttp.Request)
 			}
 		}
 	}
-	endpoint, ok := h.runtime.RouteByMethodPath(method, req.URL.EscapedPath())
+	endpoint, ok := h.runtime.RouteByMethodPath(method, h.routingPath(req))
 	if !ok {
 		return writer, false
 	}

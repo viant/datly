@@ -8,22 +8,30 @@ import (
 )
 
 func (h *Handler) SupportsMutationRecovery() bool {
-	if h != nil && h.metadata != nil && hasScopedSequences(h.metadata.Root) {
-		return true
+	return h != nil && (h.transactionRetrySupported || h.recoverySupported || h.scopedSequences)
+}
+
+func (h *Handler) SupportsTransactionRetry() bool { return h != nil && h.transactionRetrySupported }
+
+func (h *Handler) RetryTransaction(ctx context.Context, invocation rhandler.Invocation, _ any, outcome rhandler.MutationOutcome) (bool, error) {
+	program, _ := invocation.Snapshot.(*Program)
+	if !h.SupportsTransactionRetry() || program == nil || !program.hook.IsValid() {
+		return false, nil
 	}
-	if h == nil || h.metadata == nil || h.metadata.Root == nil || h.metadata.Root.HookType == nil {
-		return false
+	method := program.hook.Method(h.transactionRetryMethod)
+	results := method.Call([]reflect.Value{reflect.ValueOf(ctx), reflect.ValueOf(program.input), reflect.ValueOf(program.output), reflect.ValueOf(outcome)})
+	if !results[1].IsNil() {
+		return false, results[1].Interface().(error)
 	}
-	_, ok := reflect.PointerTo(h.metadata.Root.HookType).MethodByName("Recover")
-	return ok
+	return results[0].Bool(), nil
 }
 
 func (h *Handler) RecoverMutation(ctx context.Context, invocation rhandler.Invocation, _ any, outcome rhandler.MutationOutcome) (rhandler.Recovery, error) {
 	program, _ := invocation.Snapshot.(*Program)
-	if program == nil || !program.hook.IsValid() {
+	if h == nil || !h.recoverySupported || program == nil || !program.hook.IsValid() {
 		return rhandler.RecoveryNone, nil
 	}
-	method := program.hook.MethodByName("Recover")
+	method := program.hook.Method(h.recoveryMethod)
 	if !method.IsValid() {
 		return rhandler.RecoveryNone, nil
 	}

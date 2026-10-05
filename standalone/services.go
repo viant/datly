@@ -43,7 +43,7 @@ func (s *source) services(ctx context.Context, logger *slog.Logger) (runtime.Obs
 			return admin.Authorize(request)
 		}}
 	}
-	result := runtime.ObservabilityConfig{}
+	result := runtime.ObservabilityConfig{Logging: s.config.Logging.Copy()}
 	if s.config.Observation == nil {
 		return result, nil
 	}

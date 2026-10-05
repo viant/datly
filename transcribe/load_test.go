@@ -519,3 +519,37 @@ func packageComponentFixture() *spec.Component {
 		}},
 	}
 }
+
+func TestComponentLoaderRequestBodyModeAuthority(t *testing.T) {
+	for _, tc := range []struct {
+		name, path, authored, base, want string
+		bad                              bool
+	}{
+		{"inherit", "/views", "", "on_demand", "on_demand", false},
+		{"same", "/views", "on_demand", "on_demand", "on_demand", false},
+		{"conflict", "/views", "eager", "on_demand", "", true},
+		{"different route", "/other", "", "on_demand", "", false},
+		{"invalid", "/views", "invalid", "", "", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			base := &spec.Route{Method: "DELETE", Path: "/views", RequestBodyMode: tc.base}
+			got, err := (&componentLoader{}).mergeRoutes([]*spec.Route{base}, []*spec.Route{{Method: "DELETE", Path: tc.path, RequestBodyMode: tc.authored}})
+			if tc.bad {
+				if err == nil {
+					t.Fatal("expected error")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got[0].RequestBodyMode != tc.want {
+				t.Fatalf("mode: %q", got[0].RequestBodyMode)
+			}
+			got[0].RequestBodyMode = "eager"
+			if base.RequestBodyMode != tc.base {
+				t.Fatal("modified package authority")
+			}
+		})
+	}
+}

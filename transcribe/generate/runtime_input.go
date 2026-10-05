@@ -236,7 +236,11 @@ func (m *runtimeInputMaterializer) descriptorType(name string) (reflect.Type, er
 	if m.resolver == nil {
 		return nil, fmt.Errorf("named type %q requires type authority", name)
 	}
-	descriptor, err := m.resolver.Descriptor(name)
+	key := name
+	if m.plan != nil && m.plan.knownLocalTypes[name] != "" {
+		key = m.plan.knownLocalTypes[name]
+	}
+	descriptor, err := m.resolver.Descriptor(key)
 	if err != nil {
 		return nil, err
 	}

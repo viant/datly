@@ -103,7 +103,7 @@ func newWarmupRoutes(rt *druntime.Runtime, c Config) (*warmupRoutes, error) {
 
 func (h *Handler) serveWarmup(writer stdhttp.ResponseWriter, req *stdhttp.Request) bool {
 	w := h.warmup
-	path := req.URL.EscapedPath()
+	path := h.routingPath(req)
 	if path != w.prefix && !strings.HasPrefix(path, w.prefix+"/") {
 		return false
 	}

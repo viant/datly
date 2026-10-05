@@ -2,6 +2,8 @@ package reader
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"reflect"
 	"testing"
 
@@ -9,6 +11,7 @@ import (
 	"github.com/viant/datly/data"
 	dexec "github.com/viant/datly/exec"
 	"github.com/viant/datly/internal/testharness/sqlite"
+	"github.com/viant/datly/observability"
 	"github.com/viant/datly/spec"
 	dsql "github.com/viant/datly/sql"
 	"github.com/viant/datly/sql/reader/collector"
@@ -51,6 +54,8 @@ func TestExecutionWarmupSQLite(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			events := []string{}
+			execution = execution.WithRecorder(observability.NewRecorder(phaseObservationLog{events: &events})).(*Execution)
 			bound := &input{Tenant: tc.tenant}
 			resolver := sqlx.ParameterResolver(func(name string) (any, bool, error) { return bound.Tenant, name == "tenant", nil })
 			if count, err := execution.Warmup(ctx, dexec.ReaderWarmupInvocation{Input: bound, Parameters: resolver}); err != nil || count != 1 {
@@ -63,6 +68,26 @@ func TestExecutionWarmupSQLite(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			events = nil
+			failingConfig := execution.config
+			failingConfig.ReadCaches = map[*data.View]cache.Cache{view: failedWarmupCache{Cache: service}}
+			failedExecution, err := NewExecution(failingConfig)
+			if err != nil {
+				t.Fatal(err)
+			}
+			failedExecution = failedExecution.WithRecorder(observability.NewRecorder(phaseObservationLog{events: &events})).(*Execution)
+			if _, err := failedExecution.Warmup(ctx, dexec.ReaderWarmupInvocation{Input: bound, Parameters: resolver}); err == nil {
+				t.Fatal("warmup unexpectedly succeeded despite cache failure")
+			}
+			failed := 0
+			for _, event := range events {
+				if event == "datly SQL read failed" {
+					failed++
+				}
+			}
+			if failed != 1 {
+				t.Fatalf("warmup SQL failure diagnostics=%d want1", failed)
+			}
 			rows := actual.(*output).Rows
 			if len(rows) != 0 || len(tc.want) != 0 {
 				if !reflect.DeepEqual(rows, tc.want) {
@@ -71,4 +96,10 @@ func TestExecutionWarmupSQLite(t *testing.T) {
 			}
 		})
 	}
+}
+
+type failedWarmupCache struct{ cache.Cache }
+
+func (failedWarmupCache) IndexBy(context.Context, *sql.DB, string, string, []interface{}, ...interface{}) (int, error) {
+	return 0, errors.New("warmup query failed")
 }

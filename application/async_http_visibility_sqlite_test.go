@@ -42,7 +42,7 @@ func TestHTTPAsyncExactStatusOwnerAndVisibilitySQLite(t *testing.T) {
 	var result httpAsyncOutput
 	require.NoError(t, json.Unmarshal(response.Body.Bytes(), &result))
 	require.Equal(t, "PATCH", result.Job.Method)
-	require.Equal(t, "/inventory", result.Job.URI)
+	require.Equal(t, "/inventory?id=7&key=target&target=/current", result.Job.URI)
 	other, err := manager.ScheduleJob(context.Background(), jobs.Submission{Job: xasync.Job{Request: xasync.Request{Method: "GET", URI: "/current"}}, SourceState: `{"ID":7}`})
 	require.NoError(t, err)
 	inspected := f.request("GET", "/job-status/"+other.Job.ID, "", "allowed")

@@ -36,17 +36,17 @@ func TestRefinerDiscoversAndMergesSQLiteColumns(t *testing.T) {
 		Settings: &spec.Settings{DefaultConnector: "main"},
 		RootView: &spec.View{
 			Name: "Events", Groupable: &groupable, Source: &spec.ViewSource{Table: "events"},
-			Columns: []*spec.Column{{Name: "name", Source: "display_name", Tag: `json:"name"`}},
+			Columns: []*spec.Column{{Name: "display_name", Source: "name", Tag: `json:"name"`}},
 		},
 	}
 	if err := New(Connections{"main": harness.DB}).Refine(ctx, component, nil, nil); err != nil {
 		t.Fatalf("Refine() error = %v", err)
 	}
 	columns := component.RootView.Columns
-	if len(columns) != 4 || columns[0].Name != "name" || columns[1].Name != "id" || columns[2].Name != "score" || columns[3].Name != "enabled" {
+	if len(columns) != 4 || columns[0].Name != "display_name" || columns[1].Name != "id" || columns[2].Name != "score" || columns[3].Name != "enabled" {
 		t.Fatalf("columns = %+v", columns)
 	}
-	if columns[0].Source != "display_name" || columns[0].Tag != `json:"name"` || columns[0].Type.Name != "string" {
+	if columns[0].Source != "name" || columns[0].Tag != `json:"name"` || columns[0].Type.Name != "string" {
 		t.Fatalf("merged name column = %+v", columns[0])
 	}
 	for _, column := range columns {
@@ -56,6 +56,11 @@ func TestRefinerDiscoversAndMergesSQLiteColumns(t *testing.T) {
 	}
 	if columns[1].Type.Name != "int" || columns[2].Type.Name != "float64" || columns[3].Type.Name != "bool" {
 		t.Fatalf("column types = %+v", columns)
+	}
+	// A Go-field name cannot authorize a different, absent SQL result source.
+	invalid := &spec.Component{Settings: &spec.Settings{DefaultConnector: "main"}, RootView: &spec.View{Name: "Events", Source: &spec.ViewSource{Table: "events"}, Columns: []*spec.Column{{Name: "name", Source: "display_name", Tag: `json:"name"`}}}}
+	if err := New(Connections{"main": harness.DB}).Refine(ctx, invalid, nil, nil); err == nil {
+		t.Fatal("absent SQL result source was satisfied by an unrelated Go name")
 	}
 }
 

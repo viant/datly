@@ -245,7 +245,7 @@ func (d *Data) Complete(ctx context.Context, cause error) error {
 		cause = errors.Join(cause, failed)
 	}
 	if cause == nil {
-		cause = owner.flushLocked(ctx, "", nil)
+		cause = completeOperation("DML completion flush", func() error { return owner.flushLocked(ctx, "", nil) })
 		if cause != nil {
 			localErr = errors.Join(localErr, cause)
 		}
@@ -259,7 +259,7 @@ func (d *Data) Complete(ctx context.Context, cause error) error {
 	if cause != nil {
 		if tx != nil && !external {
 			state = xhandler.TransactionRollbackUnknown
-			if rollbackErr := tx.Rollback(); rollbackErr != nil {
+			if rollbackErr := completeOperation("DML completion rollback", tx.Rollback); rollbackErr != nil {
 				localErr = errors.Join(localErr, rollbackErr)
 				return errors.Join(cause, rollbackErr)
 			}
@@ -269,14 +269,28 @@ func (d *Data) Complete(ctx context.Context, cause error) error {
 	}
 	if tx != nil && !external {
 		state = xhandler.TransactionCommitUnknown
-		if err := tx.Commit(); err != nil {
+		if err := completeOperation("DML completion commit", tx.Commit); err != nil {
 			localErr = errors.Join(localErr, err)
 			return err
 		}
 		state = xhandler.TransactionCommitted
 		if owner.onCommit != nil {
-			owner.onCommit(ctx)
+			if err := completeOperation("DML post-commit observer", func() error { owner.onCommit(ctx); return nil }); err != nil {
+				localErr = errors.Join(localErr, err)
+				return err
+			}
 		}
 	}
 	return nil
+}
+
+// Completion stays with the existing owner: a flush failure can roll back,
+// while an attempted commit or rollback is never repeated after a panic.
+func completeOperation(operation string, run func() error) (err error) {
+	defer func() {
+		if value := recover(); value != nil {
+			err = dexec.NewPanicError(operation, value)
+		}
+	}()
+	return run()
 }

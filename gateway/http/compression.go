@@ -6,16 +6,19 @@ import (
 	"context"
 	"encoding/json"
 	stdhttp "net/http"
+	"reflect"
 	"strconv"
 
+	"github.com/viant/datly/runtime/output"
 	"github.com/viant/datly/spec"
+	xresponse "github.com/viant/xdatly/response"
 )
 
 func (h *Handler) responseCompression(ctx context.Context, request *stdhttp.Request) *spec.ResponseCompression {
 	if h == nil || h.runtime == nil || request == nil {
 		return nil
 	}
-	return h.runtime.ResponseCompressionByRoute(request.Method, request.URL.EscapedPath())
+	return h.runtime.ResponseCompressionByRoute(request.Method, h.routingPath(request))
 }
 
 // writeEncodedBytes applies component policy only to framework-encoded output.
@@ -50,10 +53,26 @@ func writeEncodedBytes(writer stdhttp.ResponseWriter, request *stdhttp.Request, 
 	return nil
 }
 
-func (h *Handler) writeHTTPJSON(ctx context.Context, writer stdhttp.ResponseWriter, request *stdhttp.Request, status int, payload any) {
+func (h *Handler) writeHTTPJSON(ctx context.Context, writer stdhttp.ResponseWriter, request *stdhttp.Request, status int, payload any, contract *output.Plan) {
+	// A typed error payload keeps its opted-in output authority. Generic errors
+	// and default policies retain their existing JSON path.
+	_, rawResponse := payload.(xresponse.Response)
+	if !rawResponse && payload != nil && contract != nil && contract.NilSlicePolicy() == "empty_array" && matchingOutputType(contract.Type(), reflect.TypeOf(payload)) {
+		encoded, err := contract.Encode(ctx, "json", payload)
+		if err != nil {
+			h.writeOutputError(ctx, writer, err)
+			return
+		}
+		writer.Header().Set("Content-Type", encoded.ContentType)
+		if err = writeEncodedBytes(writer, request, status, encoded.Data, contract.ResponseCompression()); err != nil {
+			h.writeOutputError(ctx, writer, err)
+		}
+		return
+	}
+
 	policy := h.responseCompression(ctx, request)
 	if policy == nil {
-		writeJSON(writer, status, payload)
+		recordHTTPError(ctx, writeJSON(writer, status, payload))
 		return
 	}
 	var data []byte
@@ -61,12 +80,25 @@ func (h *Handler) writeHTTPJSON(ctx context.Context, writer stdhttp.ResponseWrit
 		var err error
 		data, err = json.Marshal(payload)
 		if err != nil {
-			h.writeOutputError(writer, err)
+			h.writeOutputError(ctx, writer, err)
 			return
 		}
 	}
 	writer.Header().Set("Content-Type", "application/json")
 	if err := writeEncodedBytes(writer, request, status, data, policy); err != nil {
-		h.writeOutputError(writer, err)
+		h.writeOutputError(ctx, writer, err)
 	}
+}
+
+func matchingOutputType(expected, actual reflect.Type) bool {
+	if expected == nil || actual == nil {
+		return false
+	}
+	for expected.Kind() == reflect.Pointer {
+		expected = expected.Elem()
+	}
+	for actual.Kind() == reflect.Pointer {
+		actual = actual.Elem()
+	}
+	return expected == actual
 }

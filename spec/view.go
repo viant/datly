@@ -25,6 +25,8 @@ type View struct {
 	TypeName string `json:"typeName,omitempty"`
 	Dest     string `json:"dest,omitempty"`
 	// EntityHooks is generation-only metadata for the authored entity hook reference.
+	RootNullPolicy           string         `json:"rootNullPolicy,omitempty"`
+	NestedNullPolicy         string         `json:"nestedNullPolicy,omitempty"`
 	InsertValidationPresence bool           `json:"insertValidationPresence,omitempty"`
 	WriterIdentityPolicy     string         `json:"writerIdentityPolicy,omitempty"`
 	OnDeleteNotFound         string         `json:"onDeleteNotFound,omitempty"`
