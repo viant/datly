@@ -24,6 +24,7 @@ const (
 
 // Component is the metadata carried by a component holder field.
 type Component struct {
+	RequestBodyMode       string
 	Documentation         xdocs.Source
 	Name                  string
 	RouteName             string
@@ -57,6 +58,9 @@ type Component struct {
 }
 
 func (c Component) ValidateRoute() error {
+	if err := (&spec.Route{RequestBodyMode: c.RequestBodyMode}).ValidateRequestBodyMode(); err != nil {
+		return err
+	}
 	if strings.TrimSpace(c.Path) == "" {
 		return fmt.Errorf("component tag path is required")
 	}
@@ -73,6 +77,7 @@ func (c Component) value() string {
 	appendNonEmpty(builder, "method", c.Method)
 	appendNonEmpty(builder, "connector", c.Connector)
 	appendNonEmpty(builder, "marshaller", c.Marshaller)
+	appendNonEmpty(builder, "requestBodyMode", c.RequestBodyMode)
 	appendNonEmpty(builder, "handler", c.Handler)
 	appendNonEmpty(builder, "input", c.Input)
 	appendNonEmpty(builder, "output", c.Output)
@@ -108,6 +113,9 @@ func (c Component) value() string {
 }
 
 func (c Component) StructTag() (string, error) {
+	if err := (&spec.Route{RequestBodyMode: c.RequestBodyMode}).ValidateRequestBodyMode(); err != nil {
+		return "", err
+	}
 	if err := validateComponentValues(c); err != nil {
 		return "", err
 	}
@@ -229,6 +237,9 @@ func ParseComponentValue(value string) (Component, error) {
 			result.Method = value
 		case "connector":
 			result.Connector = value
+		case "requestbodymode":
+			result.RequestBodyMode = value
+			return (&spec.Route{RequestBodyMode: value}).ValidateRequestBodyMode()
 		case "marshaller":
 			result.Marshaller = value
 		case "handler":

@@ -163,6 +163,9 @@ func (plan *Plan) referencedPlaceholderTypes() []string {
 }
 
 func shouldSkipPlaceholderType(plan *Plan, name string) bool {
+	if plan != nil && plan.knownLocalTypes[name] != "" {
+		return true
+	}
 	if name == "" || strings.Contains(name, ".") || name == plan.Input.Type || name == plan.Output.Type || name == "Component" || name == "Route" {
 		return true
 	}

@@ -23,6 +23,18 @@ type packageSet struct {
 }
 
 func (p *Plan) packages(dir string) (*packageSet, error) {
+	result, err := p.packageTargets(dir)
+	if err != nil {
+		return nil, err
+	}
+	if err := result.render(); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// packageTargets resolves destinations without inspecting their current files.
+func (p *Plan) packageTargets(dir string) (*packageSet, error) {
 	result := &packageSet{plans: []*Plan{p}, dirs: []string{dir}}
 	if len(p.ShapePackages) > 0 {
 		authority, err := typecatalog.NewDestinationAuthority(p.ProjectRoot)
@@ -38,15 +50,47 @@ func (p *Plan) packages(dir string) (*packageSet, error) {
 			result.dirs = append(result.dirs, filepath.Join(p.ProjectRoot, dest.Directory))
 		}
 	}
-	for i, plan := range result.plans {
-		files, _, _, err := scaffoldArtifacts(result.dirs[i], plan)
+	return result, nil
+}
+
+func (s *packageSet) render() error {
+	for i, plan := range s.plans {
+		files, _, _, err := scaffoldArtifacts(s.dirs[i], plan)
+		if err != nil {
+			return err
+		}
+		s.files = append(s.files, files)
+	}
+	return nil
+}
+
+// lockTargets holds destination ownership across preview, validation and
+// persistence. A preview must never see another writer's directory swap gap.
+func (s *packageSet) lockTargets() (func(), error) {
+	targets := make(map[string]bool, len(s.dirs))
+	for i, dir := range s.dirs {
+		target, err := (&scaffoldPersistence{dir: dir, owner: s.plans[i].ComponentName}).target()
 		if err != nil {
 			return nil, err
 		}
-		result.files = append(result.files, files)
+		targets[target] = true
 	}
-	return result, nil
+	ordered := make([]string, 0, len(targets))
+	for target := range targets {
+		ordered = append(ordered, target)
+	}
+	sort.Strings(ordered)
+	releases := make([]func(), 0, len(ordered))
+	for _, target := range ordered {
+		releases = append(releases, scaffoldLocks.acquire(target))
+	}
+	return func() {
+		for i := len(releases) - 1; i >= 0; i-- {
+			releases[i]()
+		}
+	}, nil
 }
+
 func (s *packageSet) validate() error {
 	s.removals = make([]map[string]bool, len(s.plans))
 	for i, p := range s.plans {

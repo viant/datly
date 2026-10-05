@@ -13,12 +13,13 @@ import (
 
 // Execution is the protocol-neutral outcome of one exact MCP component call.
 type Execution struct {
-	encodeOutput    OutputEncoder
-	encodingContext context.Context
-	selection       exec.OutputFieldFilter
-	value           interface{}
-	err             error
-	context         *xexec.Context
+	encodeOutput      OutputEncoder
+	encodeErrorOutput OutputEncoder
+	encodingContext   context.Context
+	selection         exec.OutputFieldFilter
+	value             interface{}
+	err               error
+	context           *xexec.Context
 }
 
 func (e *Execution) Value() interface{} {

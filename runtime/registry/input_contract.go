@@ -96,7 +96,7 @@ func NewInputContract(inputType reflect.Type, projection *bindly.Projection, rou
 				return nil, fmt.Errorf("route input contract %s field %s: %w", key, binding.Path, err)
 			}
 			binding = cloneBindingSpec(binding)
-			if binding.SourceType == nil {
+			if binding.SourceType == nil && binding.BodyNullPolicy == "" {
 				binding.SourceType = destinationType
 			}
 			var dependency *spec.RouteRef
@@ -281,6 +281,9 @@ func (f InputField) DestinationType() reflect.Type { return f.destinationType }
 func (f InputField) SourceType() reflect.Type {
 	if source, ok := f.binding.Transformer.(interface{ WireSourceType() reflect.Type }); ok {
 		return source.WireSourceType()
+	}
+	if f.binding.SourceType == nil {
+		return f.destinationType
 	}
 	return f.binding.SourceType
 }

@@ -10,9 +10,17 @@ import (
 
 // Keep the concrete Data implementation behind the focused capability so
 // handlers cannot type-assert their way into transaction completion methods.
-type transactionStarter struct{ service xhandler.TransactionStarter }
+type transactionStarter struct {
+	service xhandler.TransactionStarter
+	guard   *mutationGuard
+}
 
-func (s transactionStarter) Start(ctx context.Context) error { return s.service.Start(ctx) }
+func (s transactionStarter) Start(ctx context.Context) error {
+	if err := s.guard.check("Start"); err != nil {
+		return err
+	}
+	return s.service.Start(ctx)
+}
 
 func (s *dataScope) transactionStarterProvider() locator.Provider {
 	return provider.New(xhandler.TransactionStarterKey, func(ctx context.Context) (any, bool, error) {
@@ -24,6 +32,6 @@ func (s *dataScope) transactionStarterProvider() locator.Provider {
 		if !ok {
 			return nil, false, nil
 		}
-		return transactionStarter{service: starter}, true, nil
+		return transactionStarter{service: starter, guard: s.mutationGuard()}, true, nil
 	})
 }

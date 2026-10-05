@@ -29,10 +29,12 @@ import (
 	"github.com/viant/x"
 	xmodule "github.com/viant/x/module"
 	xcodec "github.com/viant/xdatly/codec"
+	xdiffer "github.com/viant/xdatly/differ"
 	xlogger "github.com/viant/xdatly/logger"
 )
 
 type source struct {
+	invocationDiffer xdiffer.Differ
 	invocationLogger xlogger.Logger
 	Workspace        *xmodule.Workspace
 	resources        *resource.Store

@@ -21,6 +21,7 @@ import (
 type dataScopeContextKey struct{}
 
 type dataScope struct {
+	writeEligibility  mutationGuard
 	sequenceOnce      sync.Once
 	sequenceSource    dexec.DataSource
 	sequenceResolved  string
@@ -79,6 +80,7 @@ type invocationTransactionSource interface {
 }
 
 type transactionSQLCapability struct {
+	guard   *mutationGuard
 	service rhandler.TransactionSQL
 }
 
@@ -91,6 +93,9 @@ func (c transactionSQLCapability) QueryRowContext(ctx context.Context, query str
 }
 
 func (c transactionSQLCapability) ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error) {
+	if err := c.guard.check("ExecContext"); err != nil {
+		return nil, err
+	}
 	return c.service.ExecContext(ctx, query, args...)
 }
 
@@ -130,11 +135,12 @@ func (p transactionSQLProvider) Connector(ctx context.Context, name string) (rha
 	if !ok {
 		return nil, fmt.Errorf("transaction SQL is unavailable for connector %q", name)
 	}
-	return transactionSQLCapability{service: txSQL}, nil
+	return transactionSQLCapability{service: txSQL, guard: p.scope.mutationGuard()}, nil
 }
 
 // dmlCapability exposes only buffered writes under the focused DML key.
 type dmlCapability struct {
+	guard   *mutationGuard
 	service xhandler.DML
 }
 
@@ -147,18 +153,30 @@ func (c dmlCapability) Dialect(ctx context.Context) (*info.Dialect, error) {
 }
 
 func (c dmlCapability) Insert(tableName string, data any) error {
+	if err := c.guard.check("Insert"); err != nil {
+		return err
+	}
 	return c.service.Insert(tableName, data)
 }
 
 func (c dmlCapability) Update(tableName string, data any) error {
+	if err := c.guard.check("Update"); err != nil {
+		return err
+	}
 	return c.service.Update(tableName, data)
 }
 
 func (c dmlCapability) Delete(tableName string, data any) error {
+	if err := c.guard.check("Delete"); err != nil {
+		return err
+	}
 	return c.service.Delete(tableName, data)
 }
 
 func (c dmlCapability) UpdateWithOptions(tableName string, data any, options ...xhandler.Option) error {
+	if err := c.guard.check("UpdateWithOptions"); err != nil {
+		return err
+	}
 	service, ok := c.service.(xhandler.MatchedDML)
 	if !ok {
 		return fmt.Errorf("atomic matched update is unavailable for %s", tableName)
@@ -167,6 +185,9 @@ func (c dmlCapability) UpdateWithOptions(tableName string, data any, options ...
 }
 
 func (c dmlCapability) DeleteWithOptions(tableName string, data any, options ...xhandler.Option) error {
+	if err := c.guard.check("DeleteWithOptions"); err != nil {
+		return err
+	}
 	service, ok := c.service.(xhandler.MatchedDML)
 	if !ok {
 		return fmt.Errorf("atomic matched delete is unavailable for %s", tableName)
@@ -175,6 +196,9 @@ func (c dmlCapability) DeleteWithOptions(tableName string, data any, options ...
 }
 
 func (c dmlCapability) UpdateWithCriteria(tableName string, data any, criteria *sqlx.Criteria, options ...xhandler.Option) error {
+	if err := c.guard.check("UpdateWithCriteria"); err != nil {
+		return err
+	}
 	service, ok := c.service.(rhandler.CriteriaDML)
 	if !ok {
 		return fmt.Errorf("native update criteria unavailable for %s", tableName)
@@ -183,6 +207,9 @@ func (c dmlCapability) UpdateWithCriteria(tableName string, data any, criteria *
 }
 
 func (c dmlCapability) DeleteWithCriteria(tableName string, data any, criteria *sqlx.Criteria, options ...xhandler.Option) error {
+	if err := c.guard.check("DeleteWithCriteria"); err != nil {
+		return err
+	}
 	service, ok := c.service.(rhandler.CriteriaDML)
 	if !ok {
 		return fmt.Errorf("native delete criteria unavailable for %s", tableName)
@@ -191,22 +218,32 @@ func (c dmlCapability) DeleteWithCriteria(tableName string, data any, criteria *
 }
 
 func (c dmlCapability) Execute(dml string, args ...any) error {
+	if err := c.guard.check("Execute"); err != nil {
+		return err
+	}
 	return c.service.Execute(dml, args...)
 }
 
 // sequencerCapability exposes allocation and optional pending-ID reservation
 // under the focused sequencer key, without exposing database ownership.
 type sequencerCapability struct {
+	guard   *mutationGuard
 	service xhandler.Sequencer
 }
 
 func (c sequencerCapability) Allocate(ctx context.Context, tableName string, dest any, selector string) error {
+	if err := c.guard.check("Allocate"); err != nil {
+		return err
+	}
 	return c.service.Allocate(ctx, tableName, dest, selector)
 }
 
 // Reserve forwards the optional reservation hint. Custom allocators without
 // this capability retain their allocation contract and final identity guards.
 func (c sequencerCapability) Reserve(ctx context.Context, tableName string, dest any, selector string) error {
+	if err := c.guard.check("Reserve"); err != nil {
+		return err
+	}
 	if service, ok := c.service.(interface {
 		Reserve(context.Context, string, any, string) error
 	}); ok {
@@ -218,10 +255,14 @@ func (c sequencerCapability) Reserve(ctx context.Context, tableName string, dest
 // flusherCapability exposes explicit buffered-write execution without leaking
 // the concrete SQL implementation.
 type flusherCapability struct {
+	guard   *mutationGuard
 	service xhandler.Flusher
 }
 
 func (c flusherCapability) Flush(ctx context.Context, tableName string) error {
+	if err := c.guard.check("Flush"); err != nil {
+		return err
+	}
 	return c.service.Flush(ctx, tableName)
 }
 
@@ -233,11 +274,11 @@ type dataCapability struct {
 	flusherCapability
 }
 
-func newHandlerData(service xhandler.Data) dataCapability {
+func newHandlerData(service xhandler.Data, guard *mutationGuard) dataCapability {
 	return dataCapability{
-		dmlCapability:       dmlCapability{service: service},
-		sequencerCapability: sequencerCapability{service: service},
-		flusherCapability:   flusherCapability{service: service},
+		dmlCapability:       dmlCapability{service: service, guard: guard},
+		sequencerCapability: sequencerCapability{service: service, guard: guard},
+		flusherCapability:   flusherCapability{service: service, guard: guard},
 	}
 }
 
@@ -524,14 +565,14 @@ func (s *dataScope) providers() []locator.Provider {
 			if err != nil || data == nil {
 				return nil, false, err
 			}
-			return newHandlerData(data), true, nil
+			return newHandlerData(data, s.mutationGuard()), true, nil
 		}),
 		handlerprovider.New(xhandler.DMLKey, func(ctx context.Context) (any, bool, error) {
 			data, err := s.resolve(ctx)
 			if err != nil || data == nil {
 				return nil, false, err
 			}
-			return dmlCapability{service: data}, true, nil
+			return dmlCapability{service: data, guard: s.mutationGuard()}, true, nil
 		}),
 		handlerprovider.New(xhandler.SequencerKey, func(ctx context.Context) (any, bool, error) {
 			data, err := s.resolve(ctx)
@@ -542,14 +583,14 @@ func (s *dataScope) providers() []locator.Provider {
 			if !ok {
 				return nil, false, nil
 			}
-			return sequencerCapability{service: sequencer}, true, nil
+			return sequencerCapability{service: sequencer, guard: s.mutationGuard()}, true, nil
 		}),
 		handlerprovider.New(xhandler.FlusherKey, func(ctx context.Context) (any, bool, error) {
 			data, err := s.resolve(ctx)
 			if err != nil || data == nil {
 				return nil, false, err
 			}
-			return flusherCapability{service: data}, true, nil
+			return flusherCapability{service: data, guard: s.mutationGuard()}, true, nil
 		}),
 	}
 	if s.connectors != nil {

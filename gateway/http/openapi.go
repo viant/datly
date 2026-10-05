@@ -43,7 +43,7 @@ func (h *Handler) ExportOpenAPI(request openapi.ExportRequest) ([]byte, error) {
 
 func (h *Handler) serveDocuments(writer stdhttp.ResponseWriter, req *stdhttp.Request) bool {
 	d := h.documents
-	path := req.URL.EscapedPath()
+	path := h.routingPath(req)
 	isUI := d.uiPath != "" && path == d.uiPath
 	if !isUI && path != d.prefix && !strings.HasPrefix(path, d.prefix+"/") {
 		return false

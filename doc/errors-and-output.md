@@ -146,3 +146,12 @@ commit. Commit-dependent messages use the mutation outcome contract. An output
 finalizer's ordering depends on its selected interface; injector-aware finalization
 can compose child work before completion, while outcome finalization observes
 the resulting transaction evidence. See [custom handlers](custom-handlers.md#finalization-and-commit-evidence).
+
+
+For source-compatible nil collection output, declare
+`#setting($_ = $nil_slice_policy('empty_array'))`. Explicit `null` or omission
+retains existing defaults. The option affects native JSON output and tabular
+JSON envelopes, not shared Go types or stored JSON. It opts into the existing
+native encoder semantics, including byte arrays and tag/embedding behavior;
+custom JSON values retain their authored serializer. See
+[output encoding](../runtime/output/README.md) for schema and format behavior.

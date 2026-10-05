@@ -65,6 +65,7 @@ DSNs and Scy secret content are not rewritten as relative file locations.
 | `GoBootstrap.EagerComponents` | Explicitly compile every selected component at startup. The default is `false`; use this only when an operator intentionally accepts eager startup work. |
 | `Connector` | Exact default connector name. Unknown names fail. |
 | `Connectors` | Named DB configuration: driver, DSN, optional Scy secret and SQL pool settings. SQLite is linked by the command; other drivers must be linked by the app. |
+| `PathSemantics` | Empty or `escaped` preserves native escaped-path routing. Opt-in `decoded` uses the once-decoded URL path to determine HTTP route boundaries, so an encoded slash is a separator. It applies consistently to HTTP component lookup and policies; original URL, RawPath and RequestURI remain available for observation and static security checks. MCP and stored async job URIs retain their native semantics. Unknown values fail configuration validation. |
 | `Endpoint.Port` | Zero/absent defaults to 8080. |
 | `Endpoint.Address` | Explicit override, mutually exclusive with nonzero Port; `127.0.0.1:0` requests an allocated port. |
 | `Endpoint.ReadHeaderTimeoutMs` / `IdleTimeoutMs` | Zero/absent defaults to 10s / 120s on HTTP and MCP; negative explicitly disables the respective deadline. |

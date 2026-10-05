@@ -13,11 +13,11 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/viant/datly/internal/dialectcontext"
 	rhandler "github.com/viant/datly/runtime/handler"
 	handlerengine "github.com/viant/datly/runtime/handler/engine"
 	predicate "github.com/viant/datly/runtime/predicate/velty"
 	"github.com/viant/datly/spec"
-	"github.com/viant/datly/sql/fragment"
 	"github.com/viant/datly/typecatalog"
 	"github.com/viant/sqlx"
 	"github.com/viant/structology"
@@ -91,6 +91,9 @@ func entityMarker(entityType reflect.Type) *structology.Marker {
 
 // Record is one writable role in a component graph.
 type Record struct {
+	writeEligibility         bool
+	RootNullPolicy           string
+	NestedNullPolicy         string
 	InsertValidationPresence bool
 	WriterIdentityPolicy     string
 	OnDeleteNotFound         string
@@ -330,6 +333,11 @@ type Program struct {
 	failed                 bool
 	finalized              bool
 	componentHookAttempted bool
+	structuralError        error
+	queueItems             []*Action
+	queueObserverPanic     bool
+	queueInvocationID      uint64
+	previousFields         map[*Record]fieldSet
 	// graph caches insert lookups for the current frame topology.
 	graph *graphIndex
 	// typeFields caches the exported field set per Previous type.
@@ -404,7 +412,7 @@ func (p *Program) graphIndex() *graphIndex {
 		if frame.Entity.IsValid() && !frame.Entity.IsNil() {
 			index.byPointer[frame.Entity.Pointer()] = frame
 		}
-		if frame.Action != xhandler.WriteInsert || frame.Record == nil || !frame.Entity.IsValid() {
+		if frame.ExcludedWrite || frame.Action != xhandler.WriteInsert || frame.Record == nil || !frame.Entity.IsValid() {
 			continue
 		}
 		entity := frame.Entity.Elem()
@@ -530,6 +538,7 @@ type Frame struct {
 	Entity, Previous    reflect.Value
 	ExpectedToken       reflect.Value
 	Fields              *presence
+	ExcludedWrite       bool
 	SkippedDelete       bool
 	NoopMissingIdentity bool
 	Action              xhandler.WriteAction
@@ -676,7 +685,13 @@ func (h *Handler) NewPhaseObserver() xhandler.PhaseObserver {
 	if h == nil || h.metadata == nil || h.metadata.Root == nil || h.metadata.Root.HookType == nil {
 		return nil
 	}
-	observer, _ := reflect.New(h.metadata.Root.HookType).Interface().(xhandler.PhaseObserver)
+	hook := reflect.New(h.metadata.Root.HookType)
+	observer, _ := hook.Interface().(xhandler.PhaseObserver)
+	if observer == nil {
+		if _, ok := hook.Interface().(xhandler.QueueAttemptObserver); ok {
+			return &queuePhaseObserver{hook: hook}
+		}
+	}
 	return observer
 }
 func (p *Program) usePhaseObserver(ctx context.Context) {
@@ -685,6 +700,11 @@ func (p *Program) usePhaseObserver(ctx context.Context) {
 		return
 	}
 	observer := scope.Observer()
+	if wrapper, ok := observer.(*queuePhaseObserver); ok && wrapper.hook.Type() == reflect.PointerTo(p.metadata.Root.HookType) {
+		p.hook = wrapper.hook
+		p.hooksByRecord[p.metadata.Root] = p.hook
+		return
+	}
 	if observer != nil && reflect.TypeOf(observer) == reflect.PointerTo(p.metadata.Root.HookType) {
 		p.hook = reflect.ValueOf(observer)
 		p.hooksByRecord[p.metadata.Root] = p.hook
@@ -711,7 +731,7 @@ func (h *Handler) execute(ctx context.Context, invocation rhandler.Invocation) (
 	if err = program.prepare(ctx, invocation.Binder); err != nil {
 		return program.output, err
 	}
-	if handlerengine.IsImperativeComponent(ctx) {
+	if handlerengine.IsImperativeComponent(ctx) && (program.queueObserver() == nil || len(program.actions.Rows) > 0) {
 		flusher, lookupErr := lookup[xhandler.Flusher](ctx, invocation.Binder, xhandler.FlusherKey)
 		if lookupErr != nil {
 			return program.output, lookupErr
@@ -798,6 +818,11 @@ func (h *Handler) program(input any) (*Program, error) {
 }
 
 func (p *Program) captureOriginal(record *Record, rows reflect.Value) error {
+	return p.captureOriginalAt(record, rows, nil)
+}
+
+func (p *Program) captureOriginalAt(record *Record, rows reflect.Value, parent *Frame) error {
+	indexed := rows.Kind() == reflect.Slice
 	if rows.Kind() == reflect.Pointer {
 		if rows.IsNil() {
 			return nil
@@ -812,11 +837,15 @@ func (p *Program) captureOriginal(record *Record, rows reflect.Value) error {
 	for i := 0; i < rows.Len(); i++ {
 		entity := rows.Index(i)
 		if entity.IsNil() {
+			if p.deferRootNull(record, i, indexed) || p.deferNestedNull(record, p.rowLocation(record, parent, i, indexed), indexed) {
+				continue
+			}
 			return fmt.Errorf("writer row %d is nil", i)
 		}
 		p.captureEntityOriginal(record, entity)
 		for _, relation := range record.Relations {
-			if err := p.captureOriginal(relation.Child, entity.Elem().FieldByIndex(relation.Field)); err != nil {
+			location := &Frame{Record: record, Location: p.rowLocation(record, parent, i, indexed)}
+			if err := p.captureOriginalAt(relation.Child, entity.Elem().FieldByIndex(relation.Field), location); err != nil {
 				return err
 			}
 		}
@@ -981,6 +1010,9 @@ func (p *Program) prepare(ctx context.Context, binder xhandler.Binder) error {
 		return err
 	}
 	if err = phases.Run(ctx, xhandler.PhaseValidation, func() error {
+		if p.structuralError != nil {
+			return p.structuralError
+		}
 		initialError := p.validateFrames(ctx, validator, false)
 		if p.aggregateValidation() {
 			var schemaFailure *initialSchemaViolations
@@ -1020,13 +1052,22 @@ func (p *Program) prepare(ctx context.Context, binder xhandler.Binder) error {
 				continue
 			}
 			if frame.Action == xhandler.WriteUpdate && !hasMutableFields(frame) {
+				if p.queueObserver() != nil && frame.Previous.IsValid() {
+					p.queueItems = append(p.queueItems, &Action{Kind: frame.Action, Entity: frame.Entity})
+				}
 				continue
 			}
 			action := &Action{Kind: frame.Action, Entity: frame.Entity}
 			if frame.Action == xhandler.WriteDelete {
 				p.actions.Rows = append([]*Action{action}, p.actions.Rows...)
+				if p.queueObserver() != nil {
+					p.queueItems = append([]*Action{action}, p.queueItems...)
+				}
 			} else {
 				p.actions.Rows = append(p.actions.Rows, action)
+				if p.queueObserver() != nil {
+					p.queueItems = append(p.queueItems, action)
+				}
 			}
 		}
 
@@ -1073,88 +1114,19 @@ func (p *Program) prepare(ctx context.Context, binder xhandler.Binder) error {
 	if err = p.reconcileLinks(true); err != nil {
 		return err
 	}
+	if err = p.evaluateWriteEligibility(ctx); err != nil {
+		return err
+	}
 	if err = p.validateFrames(ctx, validator, true); err != nil {
 		return err
 	}
+	p.filterIneligibleActions()
 	if err = phases.Run(ctx, xhandler.PhaseQueue, func() error {
-		dml, err := lookup[xhandler.DML](ctx, binder, xhandler.DMLKey)
-		if err != nil {
-			return err
-		}
-		for _, action := range p.actions.Rows {
-			frame := p.frameFor(action.Entity)
-			value := action.Entity.Interface()
-			table := frame.Record.Table
-			var options []xhandler.Option
-			if token := frame.Record.ConcurrencyToken; token != nil && (action.Kind == xhandler.WriteUpdate || action.Kind == xhandler.WriteDelete) {
-				persisted := frame.Previous
-				if persisted.IsValid() && persisted.Kind() == reflect.Pointer {
-					persisted = persisted.Elem()
-				}
-				if !frame.ExpectedToken.IsValid() || !persisted.IsValid() || persisted.Kind() != reflect.Struct {
-					return &xhandler.Conflict{Entity: frame.Record.Path, Field: token.Name, Reason: "persisted concurrency token is unavailable"}
-				}
-				previousToken := persisted.FieldByName(token.Name)
-				if !previousToken.IsValid() {
-					return &xhandler.Conflict{Entity: frame.Record.Path, Field: token.Name, Reason: "persisted concurrency token is unavailable"}
-				}
-				options = append(options, xhandler.WithIfMatch(token.Column, previousToken.Interface()))
-			}
-			var criteria *sqlx.Criteria
-			if frame.Record.MutationPredicateGroup != nil && (action.Kind == xhandler.WriteUpdate || action.Kind == xhandler.WriteDelete) {
-				predicateCtx, dialectErr := mutationPredicateContext(ctx, binder)
-				if dialectErr != nil {
-					return fmt.Errorf("mutation predicate %s dialect: %w", frame.Record.Path, dialectErr)
-				}
-				criteria, err = p.metadata.Predicates.Criteria(predicateCtx, binder, *frame.Record.MutationPredicateGroup)
-				if err != nil {
-					return fmt.Errorf("mutation predicate %s: %w", frame.Record.Path, err)
-				}
-			}
-			switch action.Kind {
-			case xhandler.WriteInsert:
-				err = dml.Insert(table, value)
-			case xhandler.WriteUpdate, xhandler.WriteDelete:
-				if criteria != nil {
-					native, ok := dml.(rhandler.CriteriaDML)
-					if !ok {
-						return fmt.Errorf("mutation predicate requires native CriteriaDML")
-					}
-					if action.Kind == xhandler.WriteUpdate {
-						err = native.UpdateWithCriteria(table, value, criteria, options...)
-					} else {
-						err = native.DeleteWithCriteria(table, value, criteria, options...)
-					}
-				} else if len(options) != 0 {
-					native, ok := dml.(xhandler.MatchedDML)
-					if !ok {
-						return &xhandler.Conflict{Entity: frame.Record.Path, Reason: "atomic matched DML is unavailable"}
-					}
-					if action.Kind == xhandler.WriteUpdate {
-						err = native.UpdateWithOptions(table, value, options...)
-					} else {
-						err = native.DeleteWithOptions(table, value, options...)
-					}
-				} else if action.Kind == xhandler.WriteUpdate {
-					err = dml.Update(table, value)
-				} else {
-					err = dml.Delete(table, value)
-				}
-			default:
-				err = fmt.Errorf("unsupported writer action %q", action.Kind)
-			}
-			if err != nil {
-				return fmt.Errorf("%s %s: %w", action.Kind, table, err)
-			}
-			if err = p.callEntityHook(ctx, "AfterQueue", frame); err != nil {
-				return err
-			}
-		}
-
-		return nil
+		return p.queue(ctx, binder)
 	}); err != nil {
 		return err
 	}
+
 	output := reflect.ValueOf(p.output).Elem()
 	output.Field(p.metadata.OutputField).Set(entities)
 	if status := output.FieldByName("Status"); status.IsValid() && status.CanSet() && status.Kind() == reflect.String && status.String() == "" {
@@ -1165,6 +1137,80 @@ func (p *Program) prepare(ctx context.Context, binder xhandler.Binder) error {
 		}
 	}
 	p.failed = false
+	return nil
+}
+
+func (p *Program) queuePhysical(ctx context.Context, binder xhandler.Binder, dml xhandler.DML, action *Action, frame *Frame, queued *bool) error {
+	var err error
+	value := action.Entity.Interface()
+	table := frame.Record.Table
+	var options []xhandler.Option
+	if token := frame.Record.ConcurrencyToken; token != nil && (action.Kind == xhandler.WriteUpdate || action.Kind == xhandler.WriteDelete) {
+		persisted := frame.Previous
+		if persisted.IsValid() && persisted.Kind() == reflect.Pointer {
+			persisted = persisted.Elem()
+		}
+		if !frame.ExpectedToken.IsValid() || !persisted.IsValid() || persisted.Kind() != reflect.Struct {
+			return &xhandler.Conflict{Entity: frame.Record.Path, Field: token.Name, Reason: "persisted concurrency token is unavailable"}
+		}
+		previousToken := persisted.FieldByName(token.Name)
+		if !previousToken.IsValid() {
+			return &xhandler.Conflict{Entity: frame.Record.Path, Field: token.Name, Reason: "persisted concurrency token is unavailable"}
+		}
+		options = append(options, xhandler.WithIfMatch(token.Column, previousToken.Interface()))
+	}
+	var criteria *sqlx.Criteria
+	if frame.Record.MutationPredicateGroup != nil && (action.Kind == xhandler.WriteUpdate || action.Kind == xhandler.WriteDelete) {
+		predicateCtx, dialectErr := mutationPredicateContext(ctx, binder)
+		if dialectErr != nil {
+			return fmt.Errorf("mutation predicate %s dialect: %w", frame.Record.Path, dialectErr)
+		}
+		criteria, err = p.metadata.Predicates.Criteria(predicateCtx, binder, *frame.Record.MutationPredicateGroup)
+		if err != nil {
+			return fmt.Errorf("mutation predicate %s: %w", frame.Record.Path, err)
+		}
+	}
+	switch action.Kind {
+	case xhandler.WriteInsert:
+		err = dml.Insert(table, value)
+	case xhandler.WriteUpdate, xhandler.WriteDelete:
+		if criteria != nil {
+			native, ok := dml.(rhandler.CriteriaDML)
+			if !ok {
+				return fmt.Errorf("mutation predicate requires native CriteriaDML")
+			}
+			if action.Kind == xhandler.WriteUpdate {
+				err = native.UpdateWithCriteria(table, value, criteria, options...)
+			} else {
+				err = native.DeleteWithCriteria(table, value, criteria, options...)
+			}
+		} else if len(options) != 0 {
+			native, ok := dml.(xhandler.MatchedDML)
+			if !ok {
+				return &xhandler.Conflict{Entity: frame.Record.Path, Reason: "atomic matched DML is unavailable"}
+			}
+			if action.Kind == xhandler.WriteUpdate {
+				err = native.UpdateWithOptions(table, value, options...)
+			} else {
+				err = native.DeleteWithOptions(table, value, options...)
+			}
+		} else if action.Kind == xhandler.WriteUpdate {
+			err = dml.Update(table, value)
+		} else {
+			err = dml.Delete(table, value)
+		}
+	default:
+		err = fmt.Errorf("unsupported writer action %q", action.Kind)
+	}
+	if err != nil {
+		return fmt.Errorf("%s %s: %w", action.Kind, table, err)
+	}
+	if queued != nil {
+		*queued = true
+	}
+	if err = p.callEntityHook(ctx, "AfterQueue", frame); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -1416,7 +1462,8 @@ func (p *Program) validateFrames(ctx context.Context, validator xhandler.Validat
 		}
 		// An identity-only update writes nothing, so there is nothing for the
 		// framework validator to check; entity Validate hooks still run for it.
-		if frame.Action == xhandler.WriteUpdate && !hasMutableFields(frame) {
+		// Eligibility roots retain full validation before any exclusion decision.
+		if !frame.Record.writeEligibility && frame.Action == xhandler.WriteUpdate && !hasMutableFields(frame) {
 			continue
 		}
 		if _, ok := groups[frame.Record]; !ok {
@@ -1454,6 +1501,15 @@ func (p *Program) validateFrames(ctx context.Context, validator xhandler.Validat
 }
 
 func (p *Program) callEntityHook(ctx context.Context, name string, frame *Frame) error {
+	// Init can invalidate a later collection slot after frames were built.
+	// Never pass that null to an entity hook or dereference its frame. Only the
+	// approved root policy can retain it until initial structural validation.
+	if p.metadata != nil && p.metadata.Root != nil && (p.metadata.Root.RootNullPolicy == "initial-validation" || (frame != nil && frame.Record != nil && frame.Record.NestedNullPolicy == "initial-validation")) && frame != nil && frame.Entity.IsValid() && frame.Entity.Kind() == reflect.Pointer && frame.Entity.IsNil() {
+		if name == "Init" && (p.deferRootNullFrame(frame) || p.deferNestedNull(frame.Record, frame.Location, true)) {
+			return nil
+		}
+		return fmt.Errorf("writer row at %s is nil", frame.Location)
+	}
 	if frame == nil || frame.SkippedDelete || !frame.Hook.IsValid() {
 		return nil
 	}
@@ -1465,7 +1521,13 @@ func (p *Program) callEntityHook(ctx context.Context, name string, frame *Frame)
 	if methodType.NumIn() != 3 {
 		return fmt.Errorf("writer hook %s has %d arguments, want 3", name, methodType.NumIn())
 	}
-	state := reflect.New(methodType.In(2)).Elem()
+	state := p.entityHookState(methodType.In(2), frame)
+	results := method.Call([]reflect.Value{reflect.ValueOf(ctx), frame.Entity, state})
+	return methodError(name, results)
+}
+
+func (p *Program) entityHookState(stateType reflect.Type, frame *Frame) reflect.Value {
+	state := reflect.New(stateType).Elem()
 	entityState := state.FieldByName("EntityState")
 	if entityState.IsValid() {
 		if location := entityState.FieldByName("Location"); location.IsValid() && location.CanSet() {
@@ -1496,8 +1558,7 @@ func (p *Program) callEntityHook(ctx context.Context, name string, frame *Frame)
 			original.Set(value)
 		}
 	}
-	results := method.Call([]reflect.Value{reflect.ValueOf(ctx), frame.Entity, state})
-	return methodError(name, results)
+	return state
 }
 
 func methodError(name string, results []reflect.Value) error {
@@ -1537,15 +1598,29 @@ func (p *Program) indexCurrent(record *Record, rows reflect.Value) error {
 	// of two FieldByName lookups per field per row.
 	type fieldCopy struct{ source, destination []int }
 	copies := make([]fieldCopy, 0, len(record.Fields))
+	var loaded fieldSet
+	if p.queueObserver() != nil {
+		loaded = fieldSet{}
+	}
 	if rows.Len() > 0 {
 		sourceType := dereference(rows.Type().Elem())
 		for _, field := range record.Fields {
 			source, sourceOK := sourceType.FieldByName(field.Name)
 			destination, destinationOK := record.EntityType.FieldByName(field.Name)
-			if sourceOK && destinationOK && source.Type.AssignableTo(destination.Type) {
+			if sourceOK && destinationOK && (source.Type.AssignableTo(destination.Type) ||
+				destination.Type.Kind() == reflect.Pointer && source.Type.AssignableTo(destination.Type.Elem())) {
 				copies = append(copies, fieldCopy{source: source.Index, destination: destination.Index})
+				if loaded != nil {
+					loaded[field.Name] = true
+				}
 			}
 		}
+	}
+	if loaded != nil {
+		if p.previousFields == nil {
+			p.previousFields = map[*Record]fieldSet{}
+		}
+		p.previousFields[record] = loaded
 	}
 	for i := 0; i < rows.Len(); i++ {
 		row := rows.Index(i)
@@ -1554,7 +1629,9 @@ func (p *Program) indexCurrent(record *Record, rows reflect.Value) error {
 		}
 		previous := reflect.New(record.EntityType)
 		for _, copy := range copies {
-			previous.Elem().FieldByIndex(copy.destination).Set(row.Elem().FieldByIndex(copy.source))
+			if err := assignLinkedValue(previous.Elem().FieldByIndex(copy.destination), row.Elem().FieldByIndex(copy.source)); err != nil {
+				return fmt.Errorf("current writer row for %s: %w", record.Path, err)
+			}
 		}
 		key, ok := record.loadedKey(previous.Elem())
 		if !ok {
@@ -1712,6 +1789,9 @@ func (p *Program) buildEntityFrame(ctx context.Context, binder xhandler.Binder, 
 	{
 		i := position
 		if entity.IsNil() {
+			if (parent == nil && p.deferRootNull(record, i, indexed)) || p.deferNestedNull(record, p.rowLocation(record, parent, i, indexed), indexed) {
+				return nil
+			}
 			return fmt.Errorf("writer row %d is nil", i)
 		}
 		key, complete := record.key(entity.Elem())
@@ -1940,12 +2020,15 @@ func Compile(component *spec.Component, inputType, outputType reflect.Type, oper
 	if operation != "patch" && operation != "post" && operation != "put" {
 		return nil, fmt.Errorf("generic writer requires patch, post, or put metadata, got %q", operation)
 	}
+	if err := spec.ValidateInternalMutationRoot(component, operation); err != nil {
+		return nil, err
+	}
 	metadata := &Metadata{Component: component.Clone(), Operation: operation, CurrentField: -1, OutputField: -1, Invariants: map[string][]Field{}}
 	rootViewTag := ""
 	for i := 0; i < inputType.NumField(); i++ {
 		field := inputType.Field(i)
 		parameter := field.Tag.Get("parameter")
-		if strings.Contains(parameter, "kind=body") && (field.Type.Kind() == reflect.Slice || field.Type.Kind() == reflect.Pointer) {
+		if (strings.Contains(parameter, "kind=body") || strings.Contains(parameter, "kind=internal")) && (field.Type.Kind() == reflect.Slice || field.Type.Kind() == reflect.Pointer) {
 			metadata.InputField = i
 			metadata.EntityType = dereference(field.Type)
 			rootViewTag = field.Tag.Get("view")
@@ -2062,7 +2145,7 @@ func Compile(component *spec.Component, inputType, outputType reflect.Type, oper
 		Auxiliary:    auxiliaryRoot,
 		CurrentField: metadata.CurrentField, Table: metadata.Table, Keys: metadata.Keys, Fields: metadata.Fields,
 		Sequence: metadata.Sequence, DeleteMarker: metadata.DeleteMarker, ConcurrencyToken: metadata.ConcurrencyToken,
-		Invariants: metadata.Invariants, WriterIdentityPolicy: component.RootView.WriterIdentityPolicy, InsertValidationPresence: component.RootView.InsertValidationPresence, OnDeleteNotFound: component.RootView.OnDeleteNotFound, MutationPredicateGroup: component.RootView.MutationPredicateGroup, HookType: metadata.HookType,
+		Invariants: metadata.Invariants, WriterIdentityPolicy: component.RootView.WriterIdentityPolicy, InsertValidationPresence: component.RootView.InsertValidationPresence, RootNullPolicy: component.RootView.RootNullPolicy, NestedNullPolicy: component.RootView.NestedNullPolicy, OnDeleteNotFound: component.RootView.OnDeleteNotFound, MutationPredicateGroup: component.RootView.MutationPredicateGroup, HookType: metadata.HookType,
 	}
 	if root.Name == "" {
 		root.Name = metadata.EntityType.Name()
@@ -2143,7 +2226,13 @@ func Compile(component *spec.Component, inputType, outputType reflect.Type, oper
 		}
 		metadata.Predicates = predicates
 	}
+	if err := validateRootNullPolicy(root, inputType.Field(metadata.InputField).Type); err != nil {
+		return nil, err
+	}
 	if err := validateAggregateHooks(root, inputType, outputType); err != nil {
+		return nil, err
+	}
+	if err := validateWriteEligibilityHooks(metadata, outputType); err != nil {
 		return nil, err
 	}
 	return metadata, nil
@@ -2203,9 +2292,17 @@ func compileRelations(component *spec.Component, inputType reflect.Type, parent 
 
 func compileRecord(component *spec.Component, inputType reflect.Type, name, path string, entityType reflect.Type, view *spec.View, viewTag string) (*Record, error) {
 	record := &Record{Name: name, Path: path, EntityType: entityType, CurrentField: -1, Table: tagOption(viewTag, "table"), Auxiliary: strings.EqualFold(tagOption(viewTag, "auxiliary"), "true"), Invariants: map[string][]Field{}}
+	record.RootNullPolicy = tagOption(viewTag, "rootNullPolicy")
+	record.NestedNullPolicy = tagOption(viewTag, "nestedNullPolicy")
 	if view != nil {
 		record.Auxiliary = record.Auxiliary || view.Auxiliary
 		record.WriterIdentityPolicy = view.WriterIdentityPolicy
+		if view.RootNullPolicy != "" {
+			record.RootNullPolicy = view.RootNullPolicy
+		}
+		if view.NestedNullPolicy != "" {
+			record.NestedNullPolicy = view.NestedNullPolicy
+		}
 		record.InsertValidationPresence = view.InsertValidationPresence
 		record.OnDeleteNotFound = view.OnDeleteNotFound
 		record.MutationPredicateGroup = view.MutationPredicateGroup
@@ -2547,7 +2644,7 @@ func lookup[T any](ctx context.Context, binder xhandler.Binder, key xhandler.Val
 }
 
 func mutationPredicateContext(ctx context.Context, binder xhandler.Binder) (context.Context, error) {
-	if fragment.Dialect(ctx) != nil || binder == nil {
+	if dialectcontext.Dialect(ctx) != nil || binder == nil {
 		return ctx, nil
 	}
 	value, found, err := binder.Lookup(ctx, xhandler.DMLKey)
@@ -2568,7 +2665,7 @@ func mutationPredicateContext(ctx context.Context, binder xhandler.Binder) (cont
 	if dialect == nil {
 		return ctx, nil
 	}
-	return fragment.WithDialect(ctx, dialect), nil
+	return dialectcontext.WithDialect(ctx, dialect), nil
 }
 
 func hasMutationPredicate(record *Record) bool {

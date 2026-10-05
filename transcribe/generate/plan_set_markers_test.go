@@ -30,7 +30,7 @@ func TestGeneratorEmitsSetMarkersForGeneratedWritableViews(t *testing.T) {
 	}
 	rootPlan := generatedViewByIdentity(result.Plan, rootIdentity)
 	childPlan := generatedViewByIdentity(result.Plan, childIdentity)
-	if rootPlan == nil || !reflect.DeepEqual(rootPlan.SetMarkerFields, []string{"Id", "Name", "Items"}) ||
+	if rootPlan == nil || !reflect.DeepEqual(rootPlan.SetMarkerFields, []string{"Id", "Name", "Internal", "Items"}) ||
 		childPlan == nil || !reflect.DeepEqual(childPlan.SetMarkerFields, []string{"Id", "OrderId"}) {
 		t.Fatalf("root = %+v, child = %+v", rootPlan, childPlan)
 	}
@@ -44,7 +44,7 @@ func TestGeneratorEmitsSetMarkersForGeneratedWritableViews(t *testing.T) {
 	text := string(content)
 	for _, expected := range []string{
 		`Has *OrdersViewHas ` + "`" + `setMarker:"true" format:"-" sqlx:"-" diff:"-" json:"-" typeName:"OrdersViewHas"` + "`",
-		"type OrdersViewHas struct {\n\tId bool\n\tName bool\n\tItems bool\n}",
+		"type OrdersViewHas struct {\n\tId bool\n\tName bool\n\tInternal bool\n\tItems bool\n}",
 		"type ItemsViewHas struct {\n\tId bool\n\tOrderId bool\n}",
 	} {
 		if !containsNormalized(text, expected) {

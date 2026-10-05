@@ -11,9 +11,20 @@ import (
 	"github.com/viant/datly/tag"
 )
 
-// ValidateProjectionAnnotations checks SQL view annotations against authoritative output
-// names, supplied by the SQL projection or by SQLX column discovery.
+// ValidateProjectionAnnotations checks authored projection annotations. The
+// compiler retains its closed-projection policy here; discovery validates actual
+// SQL results separately using resolved vendor identities.
 func ValidateProjectionAnnotations(view *spec.View, projected []string) error {
+	return validateAnnotations(view, projected, nil)
+}
+
+// validateResultAnnotations applies SQL-result authority separately from the
+// compiler's authored outer projection and its closed-projection guards.
+func validateResultAnnotations(view *spec.View, projected []string, identities resultSourceIdentity) error {
+	return validateAnnotations(view, projected, identities)
+}
+
+func validateAnnotations(view *spec.View, projected []string, identities resultSourceIdentity) error {
 	if view == nil {
 		return nil
 	}
@@ -39,7 +50,11 @@ func ValidateProjectionAnnotations(view *spec.View, projected []string) error {
 		matches := 0
 		for _, output := range projected {
 			name := normalizedName(output)
-			if (!column.NameInferred && name == normalizedName(column.Name)) || (column.Source != "" && name == normalizedName(column.Source)) {
+			if identities != nil {
+				if name == normalizedName(identities[column]) {
+					matches++
+				}
+			} else if (!column.NameInferred && name == normalizedName(column.Name)) || (column.Source != "" && name == normalizedName(column.Source)) {
 				matches++
 			}
 		}
@@ -93,7 +108,14 @@ func (r *Refiner) ValidateSourceProjections(component *spec.Component, resources
 				for _, column := range columns {
 					names = append(names, column.OutputName())
 				}
-				if err := ValidateProjectionAnnotations(view, names); err != nil {
+				if source.Table == "" {
+					source.Table = directSourceTable(SQL)
+				}
+				identities, err := resolveResultSources(view.Columns, source)
+				if err != nil {
+					return err
+				}
+				if err := validateResultAnnotations(view, names, identities); err != nil {
 					return err
 				}
 			}

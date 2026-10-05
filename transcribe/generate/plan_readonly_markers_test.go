@@ -22,7 +22,7 @@ func TestGeneratedPresenceExcludesReadOnlyRelations(t *testing.T) {
 				t.Fatal(err)
 			}
 			view := generatedViewByIdentity(generated, identity)
-			if view == nil || !reflect.DeepEqual(view.SetMarkerFields, []string{"Id", "Name"}) {
+			if view == nil || !reflect.DeepEqual(view.SetMarkerFields, []string{"Id", "Name", "Internal"}) {
 				t.Fatalf("read-only relation got presence metadata: %+v", view)
 			}
 			if field, _ := view.Field("Items"); field.Name == "" {

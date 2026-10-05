@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"github.com/viant/datly/internal/testharness"
 	"github.com/viant/datly/internal/testharness/mcpclient"
 	"github.com/viant/datly/mcp/developer/skills"
 	"github.com/viant/mcp-protocol/schema"
@@ -11,7 +12,6 @@ import (
 	"io/fs"
 	"net/url"
 	"os"
-	"os/exec"
 	"path"
 	"path/filepath"
 	"strings"
@@ -53,7 +53,7 @@ func TestDeveloperEmbeddedBinaryOutsideSource(t *testing.T) {
 	}
 	outside := t.TempDir()
 	binary := filepath.Join(outside, "developer")
-	build := exec.Command("go", "build", "-o", binary, "../../cmd/datly-developer")
+	build := testharness.SourceGoCommand(t, "../..", "build", "-o", binary, "./cmd/datly-developer")
 	if output, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("build %v %s", err, output)
 	}

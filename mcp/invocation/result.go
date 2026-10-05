@@ -19,7 +19,7 @@ func (e *Execution) ToolResult() *schema.CallToolResult {
 	status := e.StatusCode()
 	if invokeErr := e.Error(); invokeErr != nil {
 		if body, explicit := response.ErrorBody(invokeErr); explicit {
-			payload, err := encodePayload(body)
+			payload, err := e.errorPayload(body)
 			if err != nil {
 				return errorResult(http.StatusInternalServerError, err)
 			}
@@ -127,4 +127,14 @@ func errorResult(status int, err error) *schema.CallToolResult {
 		Content: []schema.CallToolResultContentElem{schema.TextContent{Type: "text", Text: string(encoded)}},
 		IsError: &isError, StructuredContent: payload,
 	}
+}
+
+func (e *Execution) errorPayload(body any) ([]byte, error) {
+	if _, raw := body.(response.Response); raw {
+		return encodePayload(body)
+	}
+	if e.encodeErrorOutput != nil {
+		return e.encodeErrorOutput(e.encodingContext, body)
+	}
+	return encodePayload(body)
 }

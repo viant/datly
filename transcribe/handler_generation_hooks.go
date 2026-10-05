@@ -96,7 +96,7 @@ func (c *entityHookCompilation) apply(record *plan.RecordPlan, parent string) er
 		if record.Entity == nil {
 			return fmt.Errorf("entity hook view %s has no entity metadata", record.Identity)
 		}
-		request := compiler.EntityHookRequest{Hook: view.EntityHooks, Entity: entity, Parent: parent}
+		request := compiler.EntityHookRequest{Hook: view.EntityHooks, Entity: entity, Parent: parent, WriteEligibilityAllowed: writeEligibilityAllowed(record, parent == "")}
 		if c.generated.Output.Type != "" {
 			request.Output, err = c.generated.CanonicalType(c.generation.input.TargetPackage, c.generated.Output.Type)
 			if err != nil {
@@ -134,6 +134,27 @@ func (c *entityHookCompilation) apply(record *plan.RecordPlan, parent string) er
 		}
 	}
 	return nil
+}
+
+// writeEligibilityAllowed derives admission from the compiled role, never an
+// authoring switch. An auxiliary root or any writable descendant is outside
+// the initial eligibility contract, including writable children behind an
+// auxiliary relation. Missing or unknown write policy also fails closed.
+func writeEligibilityAllowed(record *plan.RecordPlan, root bool) bool {
+	if record == nil || !root || record.Auxiliary || record.Entity == nil || record.Entity.HooksComponent || len(record.SelfRelations) != 0 || hasWritableDescendant(record) || len(record.Write.Allowed) == 0 || record.Write.DeleteMarker.Field != "" {
+		return false
+	}
+	for _, action := range record.Write.Allowed {
+		if action != plan.ActionInsert && action != plan.ActionUpdate {
+			return false
+		}
+	}
+	for _, action := range []plan.Action{record.Write.Existing, record.Write.Missing} {
+		if action != "" && action != plan.ActionInsert && action != plan.ActionUpdate {
+			return false
+		}
+	}
+	return true
 }
 
 // refreshLocalTypes reads the authored destination on regeneration, including

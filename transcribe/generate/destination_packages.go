@@ -147,6 +147,13 @@ func (d *shapeDestinations) partition(p *Plan) error {
 							a = packageAlias(imp.Package)
 						}
 						if a == ref.Qualifier && imp.Package == g.Package {
+							key := g.Package + "." + ref.Name
+							if p.resolvedNamedTypes[key] {
+								if g.knownLocalTypes == nil {
+									g.knownLocalTypes = map[string]string{}
+								}
+								g.knownLocalTypes[ref.Name] = key
+							}
 							return ref.Name, nil
 						}
 					}

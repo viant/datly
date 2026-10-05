@@ -1153,6 +1153,8 @@ github.com/viant/xdatly v1.0.1-0.20261001162605-e2b68d4babd9 h1:4FT48ql7Tpp7f77G
 github.com/viant/xdatly v1.0.1-0.20261001162605-e2b68d4babd9/go.mod h1:ubkUNBQv1if6sPTZCP5Qm9Opf+JZBIAxAWIqHX7U2Mo=
 github.com/viant/xdatly v1.0.1-0.20261004012855-455c8546f229 h1:6CClwV1rLBKrZmV3h+xt0XMJOl6lAtFy+4IwG0cPH4w=
 github.com/viant/xdatly v1.0.1-0.20261004012855-455c8546f229/go.mod h1:ubkUNBQv1if6sPTZCP5Qm9Opf+JZBIAxAWIqHX7U2Mo=
+github.com/viant/xdatly v1.0.1-0.20261005144549-60dd64a21442 h1:CYcLESFw+DqAkVxc12Bveg2+Iuq0MHkW2f8Rxg6tQy4=
+github.com/viant/xdatly v1.0.1-0.20261005144549-60dd64a21442/go.mod h1:ubkUNBQv1if6sPTZCP5Qm9Opf+JZBIAxAWIqHX7U2Mo=
 github.com/viant/xlsy v0.3.1 h1:KwA7PxOTVg+ns4CCPOdfNy5aEA9OUlIByUbuNC9ju0s=
 github.com/viant/xlsy v0.3.1/go.mod h1:RajfF9HkL/PfIxRCvZSubpNlpdMUNDKYZp8C1o3vF4Q=
 github.com/viant/xmlify v0.1.2-0.20260914155716-e525a8788fd0 h1:KOvP8KJgM8+SmrsnPOOnZ6EPhAvivMj7dS/QCfBk++U=

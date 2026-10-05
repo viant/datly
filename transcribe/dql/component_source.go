@@ -87,12 +87,13 @@ func ParsePreparedComponentSource(scope, name string, prepared *PreparedSource) 
 	}
 	for _, method := range methods {
 		routeSpec := &spec.Route{
-			Method:       strings.TrimSpace(method),
-			Path:         path,
-			Name:         name,
-			APIKeyHeader: route.APIKeyHeader,
-			APIKeyValue:  route.APIKeyValue,
-			Internal:     prepared.Directives.Internal || prepared.Directives.MCPOnly,
+			RequestBodyMode: route.RequestBodyMode,
+			Method:          strings.TrimSpace(method),
+			Path:            path,
+			Name:            name,
+			APIKeyHeader:    route.APIKeyHeader,
+			APIKeyValue:     route.APIKeyValue,
+			Internal:        prepared.Directives.Internal || prepared.Directives.MCPOnly,
 		}
 		if prepared.Directives.MCP != nil {
 			routeSpec.MCP = []*spec.MCPExposure{prepared.Directives.MCP.Clone()}

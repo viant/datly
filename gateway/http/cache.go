@@ -86,7 +86,7 @@ func newCacheRoutes(rt *druntime.Runtime, c Config) (*cacheRoutes, error) {
 }
 func (h *Handler) serveCacheInvalidation(writer stdhttp.ResponseWriter, req *stdhttp.Request) bool {
 	routes := h.cacheInvalidation
-	path := req.URL.EscapedPath()
+	path := h.routingPath(req)
 	if path != routes.prefix && !strings.HasPrefix(path, routes.prefix+"/") {
 		return false
 	}

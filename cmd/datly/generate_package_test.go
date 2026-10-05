@@ -16,7 +16,7 @@ import (
 func TestGenExecutableRequiresPackage(t *testing.T) {
 	ctx := context.Background()
 	binary := filepath.Join(t.TempDir(), "datly")
-	build := exec.CommandContext(ctx, "go", "build", "-o", binary, ".")
+	build := testharness.SourceGoCommand(t, "../..", "build", "-o", binary, "./cmd/datly")
 	if output, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("build datly: %v\n%s", err, output)
 	}

@@ -19,6 +19,11 @@ import (
 // Config is the application HTTP policy. A nil CORS policy selects
 // safe noncredentialed defaults; an explicit empty CORS policy remains empty.
 type Config struct {
+	// PathSemantics selects HTTP route segmentation. Empty or "escaped" preserves
+	// native escaped segments; "decoded" uses the once-decoded URL.Path boundaries.
+	// Original request URLs remain intact for security checks and observation.
+	PathSemantics string `json:"PathSemantics,omitempty" yaml:"PathSemantics,omitempty"`
+
 	// ServiceTimeHeader opts into execution-duration reporting under this name.
 	// Empty disables generated timing. Use Datly-Service-Time or a dedicated custom
 	// header, never a transport, CORS, cookie, or diagnostic metrics header.
@@ -138,6 +143,9 @@ func (c Config) Build(ctx context.Context, input HandlerInput) (*Handler, error)
 	if c.ServiceTimeHeader != "" && !httpguts.ValidHeaderFieldName(c.ServiceTimeHeader) {
 		return nil, fmt.Errorf("ServiceTimeHeader must be a valid HTTP header name")
 	}
+	if err := c.ValidatePathSemantics(); err != nil {
+		return nil, err
+	}
 	c = c.resolved()
 	keys, err := c.APIKeys.Resolve(ctx)
 	if err != nil {
@@ -149,6 +157,7 @@ func (c Config) Build(ctx context.Context, input HandlerInput) (*Handler, error)
 		}
 	}
 	h := NewHandler(rt, log, version)
+	h.pathSemantics = c.PathSemantics
 	h.serviceTimeHeader = c.ServiceTimeHeader
 	h.authorize = c.Authorize
 	h.allowedSubnet = c.Meta.AllowedSubnet

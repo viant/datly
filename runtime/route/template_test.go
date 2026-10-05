@@ -52,3 +52,44 @@ func TestPathTemplateStaticSegmentRejectsEncodedSlash(t *testing.T) {
 		t.Fatalf("static encoded slash matched: ok=%v err=%v", ok, err)
 	}
 }
+
+func TestPathTemplatePlaceholderBoundaries(t *testing.T) {
+	template, err := CompilePathTemplate("/orders/{id}/items")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name, path, value string
+		match             bool
+	}{
+		{"empty", "/orders//items", "", false},
+		{"missing", "/orders/items", "", false},
+		{"space", "/orders/%20/items", " ", true},
+		{"encoded slash", "/orders/a%2Fb/items", "a/b", true},
+		{"double encoded slash", "/orders/%252F/items", "%2F", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			values, ok, err := template.MatchEscapedPath(tc.path)
+			if err != nil || ok != tc.match {
+				t.Fatalf("match=%v err=%v", ok, err)
+			}
+			if ok && values["id"] != tc.value {
+				t.Fatalf("id=%q want=%q", values["id"], tc.value)
+			}
+		})
+	}
+	literal, err := CompilePathTemplate("/orders//items")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok, err := literal.MatchEscapedPath("/orders//items"); err != nil || !ok {
+		t.Fatalf("literal empty segment changed: match=%v err=%v", ok, err)
+	}
+	trailing, err := CompilePathTemplate("/orders/{id}")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok, err := trailing.MatchEscapedPath("/orders/"); err != nil || ok {
+		t.Fatalf("trailing placeholder matched: match=%v err=%v", ok, err)
+	}
+}

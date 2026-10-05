@@ -67,3 +67,28 @@ The immutable output plan carries it; ordinary `Encode` stays uncompressed so
 internal/MCP consumers keep typed/raw output. HTTP applies gzip after encoding
 only for lengths strictly above the threshold, independently of Accept-Encoding.
 Explicit response objects own their streams/headers/encoding and bypass this policy.
+
+
+Native JSON nil slices can be presented as arrays with an explicit component policy:
+
+```sql
+#setting($_ = $nil_slice_policy('empty_array'))
+```
+
+The programmatic equivalent is `spec.OutputSettings{NilSlicePolicy: "empty_array"}`,
+carried in the existing output settings tag. Omission and explicit `null` preserve
+existing encoder selection and defaults. An authored explicit `null` overrides an
+inherited `empty_array` policy. Unknown values or repeated directives fail validation.
+
+The policy uses the existing native JSON encoder, including when no other output
+transformation is enabled. This also selects that encoder's byte-slice, embedding
+and tag semantics: ordinary bytes are arrays rather than standard JSON base64.
+Components already using native casing or other transformations retain that engine.
+Custom JSON marshalers retain precedence and their opaque values are not rewritten.
+
+Ordinary nil slices become arrays; pointer nullability and maps retain their existing
+semantics. The compiled Wire and JSONSchema describe this policy without changing
+Go values. Plain `encoding/json` and persistence serialization remain unchanged.
+Existing CSV/XML/XLS formats remain available for their supported shapes; tabular
+JSON applies the same policy to the surrounding envelope as ordinary JSON, while its
+row representation remains tabular. This option does not make a component JSON-only.

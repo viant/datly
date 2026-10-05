@@ -15,6 +15,10 @@ import (
 type EntityHookRequest struct {
 	Hook, Entity, Parent, Input, Output string
 	Component                           bool
+	// WriteEligibilityAllowed is supplied only by canonical physical-root
+	// INSERT/UPDATE policy with no writable descendants. Omitted authority fails
+	// closed for WriteEligible and has no effect on hooks without that method.
+	WriteEligibilityAllowed bool
 }
 
 // EntityHookCompiler validates authored hook contracts before target lowering.
@@ -87,6 +91,11 @@ func (c EntityHookCompiler) Compile(request EntityHookRequest) (spec.TypeRef, er
 		}
 	}
 	for _, method := range methods {
+		if method.Name == "ObserveQueueAttempt" {
+			if request.Component || parent != "github.com/viant/xdatly/handler.NoParent" || request.Input == "" || method.Variadic || !reflect.DeepEqual(method.Parameters, []string{"context.Context", "github.com/viant/xdatly/handler.QueueAttemptEvent"}) || len(method.Results) != 0 {
+				return spec.TypeRef{}, fmt.Errorf("ObserveQueueAttempt requires a physical root and canonical context.Context, handler.QueueAttemptEvent signature")
+			}
+		}
 		if method.Name != "ObservePhase" {
 			continue
 		}
@@ -121,6 +130,21 @@ func (c EntityHookCompiler) Compile(request EntityHookRequest) (spec.TypeRef, er
 	}
 	lifecycle := "github.com/viant/xdatly/handler.LifecycleContext[" + entity + "," + parent + "," + output + "]"
 	expected := []string{"context.Context", "*" + entity, lifecycle}
+	for _, method := range methods {
+		if method.Name != "WriteEligible" {
+			continue
+		}
+		if !request.WriteEligibilityAllowed || request.Component || parent != "github.com/viant/xdatly/handler.NoParent" || strings.TrimSpace(request.Input) == "" {
+			return spec.TypeRef{}, fmt.Errorf("entity hook %s.WriteEligible requires a physical INSERT/UPDATE root without writable descendants and canonical input", resolved.Identity)
+		}
+		if _, err := (xshape.Resolver{}).Canonical(request.Input); err != nil {
+			return spec.TypeRef{}, err
+		}
+		parameters := append(append([]string(nil), expected...), "github.com/viant/xdatly/handler.WriteAction")
+		if method.Variadic || !reflect.DeepEqual(method.Parameters, parameters) || !reflect.DeepEqual(method.Results, []string{"bool", "error"}) {
+			return spec.TypeRef{}, fmt.Errorf("entity hook %s.WriteEligible has incompatible signature: parameters=%v results=%v; expected parameters=%v and (bool, error) results", resolved.Identity, method.Parameters, method.Results, parameters)
+		}
+	}
 	for index, name := range []string{"Init", "Validate", "AfterSequence", "AfterQueue"} {
 		var found *xshape.Method
 		for i := range methods {

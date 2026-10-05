@@ -274,10 +274,10 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 		}
 	}()
 	if request.Components != nil {
-		runtimeProviders = append(runtimeProviders, request.Components)
+		runtimeProviders = append(runtimeProviders, retainProviderMutationAuthority(ctx, request.Components, false))
 	}
 	if request.ComponentInvoker != nil {
-		runtimeProviders = append(runtimeProviders, request.ComponentInvoker)
+		runtimeProviders = append(runtimeProviders, retainProviderMutationAuthority(ctx, request.ComponentInvoker, true))
 	}
 	runtimeProviders = append(runtimeProviders, handlerprovider.CallerOutput(request.BindingOutput))
 	runtimeProviders = append(runtimeProviders, handlerprovider.Parameter())
@@ -368,6 +368,9 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 	if err := phases.Run(ctx, xhandler.PhaseBinding, func() error {
 		bindPlan := inputPlan
 		if bound {
+			if err := normalizeBoundBodyNulls(request.Input, input); err != nil {
+				return err
+			}
 			bindPlan, err = boundSupplementalPlan(root, request.Input)
 			if err != nil {
 				return err

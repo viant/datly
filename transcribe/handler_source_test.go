@@ -128,10 +128,12 @@ func TestSourceHandlerFailuresDoNotPublish(t *testing.T) {
 }
 
 func TestSourceHandlerStagedBuildAndBuildSelection(t *testing.T) {
-	for _, kind := range []string{"cycle", "internal", "excluded", "tags", "excluded cycle", "excluded syntax"} {
+	for _, kind := range []string{"cycle", "internal", "excluded", "tags", "excluded cycle", "excluded syntax", "excluded different package"} {
 		t.Run(kind, func(t *testing.T) {
 			root, source := sourceHandlerFixture(t)
 			switch kind {
+			case "excluded different package":
+				writeSourceHandlerFile(t, root, "registration/excluded.go", "//go:build excluded\n\npackage other\nthis is not valid Go\n")
 			case "excluded syntax":
 				writeSourceHandlerFile(t, root, "registration/excluded.go", "//go:build excluded\n\npackage registration\nthis is not valid Go\n")
 			case "cycle", "excluded cycle":
@@ -156,7 +158,7 @@ func TestSourceHandlerStagedBuildAndBuildSelection(t *testing.T) {
 			}
 			before := sourceHandlerSnapshot(t, root)
 			_, err := (Generator{Operation: "handler"}).Generate(context.Background(), GenerationRequest{Source: source, Destination: root})
-			if kind == "tags" || kind == "excluded cycle" || kind == "excluded syntax" {
+			if kind == "tags" || kind == "excluded cycle" || kind == "excluded syntax" || kind == "excluded different package" {
 				require.NoError(t, err)
 				return
 			}

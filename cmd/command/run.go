@@ -14,10 +14,13 @@ import (
 	"github.com/viant/x"
 	xmodule "github.com/viant/x/module"
 	xauth "github.com/viant/xdatly/auth"
+	xdiffer "github.com/viant/xdatly/differ"
 	xlogger "github.com/viant/xdatly/logger"
 )
 
 type Service struct {
+	// InvocationDiffer is statically injected by the trusted application host.
+	InvocationDiffer xdiffer.Differ
 	// InvocationLogger is statically injected by the trusted application host.
 	InvocationLogger     xlogger.Logger
 	Workspace            *xmodule.Workspace
@@ -64,7 +67,7 @@ func (s Service) Run(ctx context.Context, args []string, stdout, stderr io.Write
 		fmt.Fprintln(stderr, err)
 		return 1
 	}
-	server, err := standalone.New(ctx, standalone.Options{Config: cfg, Registry: s.Registry, Workspace: s.Workspace, Holders: s.Holders, Providers: s.Providers, InvocationLogger: s.InvocationLogger, DefaultAuthenticator: s.DefaultAuthenticator, RequireLinked: true, Diagnostics: stderr})
+	server, err := standalone.New(ctx, standalone.Options{Config: cfg, Registry: s.Registry, Workspace: s.Workspace, Holders: s.Holders, Providers: s.Providers, InvocationLogger: s.InvocationLogger, InvocationDiffer: s.InvocationDiffer, DefaultAuthenticator: s.DefaultAuthenticator, RequireLinked: true, Diagnostics: stderr})
 	if err != nil {
 		fmt.Fprintln(stderr, err)
 		return 1

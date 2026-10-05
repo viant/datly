@@ -1,6 +1,7 @@
 package developer_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"github.com/viant/datly/internal/testharness/devapp"
@@ -9,6 +10,7 @@ import (
 	"github.com/viant/mcp-protocol/schema"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 )
 
@@ -100,8 +102,40 @@ func TestDeveloperTranscribeInspectAndProtection(t *testing.T) {
 	if err = os.WriteFile(path, append(data, []byte("\n// authored change\n")...), 0644); err != nil {
 		t.Fatal(err)
 	}
+	// Generated artifacts remain DQL-owned even when directly edited.
+	regenerated := call(t, s, developer.TranscribeTool, map[string]any{"target": "reader", "source": devapp.ReadDQL})
+	if regenerated.IsError != nil && *regenerated.IsError {
+		t.Fatalf("generated artifact regeneration: %+v", regenerated.Content)
+	}
+	current, err := os.ReadFile(path)
+	if err != nil || !bytes.Equal(current, data) {
+		t.Fatalf("generated artifact was not restored: %v", err)
+	}
+	// An application-owned file occupying the generated destination must be
+	// rejected atomically, rather than treated as an edit to generated source.
+	if err = os.WriteFile(path, []byte("package generated\nconst AuthoredArtifact = true\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	snapshot := func() map[string]string {
+		result := map[string]string{}
+		if err := filepath.WalkDir(f.Root, func(path string, entry os.DirEntry, err error) error {
+			if err != nil || entry.IsDir() {
+				return err
+			}
+			content, err := os.ReadFile(path)
+			result[path] = string(content)
+			return err
+		}); err != nil {
+			t.Fatal(err)
+		}
+		return result
+	}
+	beforeConflict := snapshot()
 	conflict := call(t, s, developer.TranscribeTool, map[string]any{"target": "reader", "source": devapp.ReadDQL})
 	if conflict.IsError == nil || !*conflict.IsError {
 		t.Fatal("authored artifact overwritten")
+	}
+	if !reflect.DeepEqual(beforeConflict, snapshot()) {
+		t.Fatal("rejected authored-artifact collision changed application files")
 	}
 }

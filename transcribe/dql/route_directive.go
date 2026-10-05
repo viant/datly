@@ -2,18 +2,20 @@ package dql
 
 import (
 	"fmt"
+	"github.com/viant/datly/spec"
 	"net/http"
 	"strings"
 )
 
 type routeDirective struct {
-	URI          string
-	Methods      []string
-	PathParams   []string
-	APIKeyHeader string
-	APIKeyValue  string
-	start        int
-	end          int
+	RequestBodyMode string
+	URI             string
+	Methods         []string
+	PathParams      []string
+	APIKeyHeader    string
+	APIKeyValue     string
+	start           int
+	end             int
 }
 
 func parseRouteDirective(blocks []directiveBlock) (ret *routeDirective, err error) {
@@ -24,7 +26,7 @@ func parseRouteDirective(blocks []directiveBlock) (ret *routeDirective, err erro
 			continue
 		}
 		active = block
-		name, args, _, ok := parseDirectiveCall(block.body)
+		name, args, tail, ok := parseDirectiveCall(block.body)
 		if !ok {
 			continue
 		}
@@ -56,6 +58,21 @@ func parseRouteDirective(blocks []directiveBlock) (ret *routeDirective, err erro
 			ret.PathParams = pathParams
 			ret.start = block.start
 			ret.end = block.end
+		case strings.EqualFold(name, "request_body_mode"):
+			if ret == nil {
+				ret = &routeDirective{}
+			}
+			if len(args) != 1 || tail != "" || ret.RequestBodyMode != "" {
+				return nil, fmt.Errorf("request_body_mode requires one quoted value, once, without modifiers")
+			}
+			mode, ok := parseQuotedLiteral(args[0])
+			if !ok || mode == "" {
+				return nil, fmt.Errorf("request_body_mode requires eager or on_demand")
+			}
+			if err := (&spec.Route{RequestBodyMode: mode}).ValidateRequestBodyMode(); err != nil {
+				return nil, err
+			}
+			ret.RequestBodyMode = mode
 		case strings.EqualFold(name, "api_key"):
 			if len(args) < 2 {
 				return nil, fmt.Errorf("invalid api_key directive: expected header and value")

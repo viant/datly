@@ -16,7 +16,20 @@ import (
 // type authorizes missing driver type metadata independently of SQL provenance
 // or DML mapping. Literal defaults are optional and never authorize other names.
 func (r *Refiner) detectColumns(ctx context.Context, db *sql.DB, view *spec.View, query string, args ...any) ([]*sink.Column, error) {
-	detector := io.ColumnDetector{ResolveTypes: func(columns []io.Column) map[int]reflect.Type {
+	source := &spec.ViewSource{SQL: query, Table: directSourceTable(query)}
+	identities, err := resolveResultSources(view.Columns, source)
+	if err != nil {
+		return nil, err
+	}
+	return r.detectColumnsWithSources(ctx, db, view, identities, query, args...)
+}
+
+func (r *Refiner) detectColumnsWithSources(ctx context.Context, db *sql.DB, view *spec.View, identities resultSourceIdentity, query string, args ...any) ([]*sink.Column, error) {
+	declared, err := declaredResultColumns(view.Columns, identities)
+	if err != nil {
+		return nil, err
+	}
+	detector := io.ColumnDetector{DeclaredColumns: declared, ResolveTypes: func(columns []io.Column) map[int]reflect.Type {
 		labels := make([]string, len(columns))
 		for i, column := range columns {
 			labels[i] = column.Name()
@@ -33,19 +46,18 @@ func (r *Refiner) detectColumns(ctx context.Context, db *sql.DB, view *spec.View
 		}
 		return result
 	}}
-	for _, column := range view.Columns {
+	return detector.Detect(ctx, db, query, args...)
+}
+
+func declaredResultColumns(columns []*spec.Column, identities resultSourceIdentity) ([]string, error) {
+	var declared []string
+	for _, column := range columns {
 		if column != nil && column.ExplicitType && column.Type.IsZero() {
 			return nil, fmt.Errorf("CAST column %s has no Go type", column.Name)
 		}
-		if column == nil || !column.ExplicitType {
-			continue
-		}
-		if !column.NameInferred {
-			detector.DeclaredColumns = append(detector.DeclaredColumns, column.Name)
-		}
-		if column.Source != "" {
-			detector.DeclaredColumns = append(detector.DeclaredColumns, column.Source)
+		if column != nil && column.ExplicitType && identities[column] != "" {
+			declared = append(declared, identities[column])
 		}
 	}
-	return detector.Detect(ctx, db, query, args...)
+	return declared, nil
 }

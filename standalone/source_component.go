@@ -127,6 +127,7 @@ func (c *sourceComponent) Configure(ctx context.Context, artifact *report.Compon
 	// handlers: both route kinds execute under the same configured SQL host.
 	result.Invocation.Connector = c.source.connections.SQL
 	result.Invocation.Logger = c.source.invocationLogger
+	result.Invocation.Differ = c.source.invocationDiffer
 	var err error
 	component := artifact.Component()
 	independentSourceLess := artifact.HasLinkedHandler() && component.Settings != nil && component.Settings.IndependentChildTransactions && component.Settings.DefaultConnector == ""

@@ -25,6 +25,7 @@ const (
 )
 
 type Handler struct {
+	pathSemantics     string
 	serviceTimeHeader string
 	metrics           *MetricsConfig
 	async             *asyncRoutes
@@ -89,7 +90,7 @@ func (h *Handler) serveHTTP(writer stdhttp.ResponseWriter, req *stdhttp.Request)
 	if handled {
 		return
 	}
-	escapedPath := req.URL.EscapedPath()
+	escapedPath := h.routingPath(req)
 	if methods := h.runtime.AllowedMethodsForPath(escapedPath); len(methods) == 0 {
 		if h.warmupPrefix != "" && (escapedPath == h.warmupPrefix || strings.HasPrefix(escapedPath, h.warmupPrefix+"/")) {
 			writeWarmupNotFound(writer)
@@ -179,7 +180,11 @@ func (h *Handler) serveHTTP(writer stdhttp.ResponseWriter, req *stdhttp.Request)
 		}
 	}
 	pathParams, _ := h.runtime.MatchPathParams(req.Method, escapedPath)
-	requestScope, scopeErr := newHTTPRequestScope(req, pathParams)
+	onDemand := false
+	if route, ok := h.runtime.RouteByMethodPath(req.Method, escapedPath); ok && asyncRoute == nil {
+		onDemand = route.RequestBodyMode == spec.RequestBodyOnDemand
+	}
+	requestScope, scopeErr := newHTTPRequestScope(req, pathParams, onDemand)
 	if scopeErr != nil {
 		recordHTTPError(ctx, scopeErr)
 		if h.logger != nil {
@@ -202,7 +207,7 @@ func (h *Handler) serveHTTP(writer stdhttp.ResponseWriter, req *stdhttp.Request)
 	if asyncRoute != nil {
 		asyncRoute, execErr = h.prepareAsyncRoute(ctx, req, asyncRoute)
 		if execErr == nil {
-			actual, execErr = asyncRoute.execute(ctx, req, requestScope, asyncService)
+			actual, execErr = asyncRoute.execute(ctx, req, escapedPath, requestScope, asyncService)
 		}
 	} else {
 		actual, execErr = h.runtime.ExecuteRoute(ctx, req.Method, escapedPath, requestScope)
@@ -254,7 +259,7 @@ func (h *Handler) serveHTTP(writer stdhttp.ResponseWriter, req *stdhttp.Request)
 		return
 	}
 	if execErr != nil {
-		h.writeHTTPJSON(ctx, writer, req, statusCode, actual)
+		h.writeHTTPJSON(ctx, writer, req, statusCode, actual, contract)
 		return
 	}
 	h.writeEncoded(ctx, writer, req, statusCode, actual)
@@ -264,7 +269,7 @@ func (h *Handler) canHandle(req *stdhttp.Request) bool {
 	if h == nil || h.runtime == nil || req == nil {
 		return false
 	}
-	route, ok := h.runtime.RouteByMethodPath(req.Method, req.URL.EscapedPath())
+	route, ok := h.runtime.RouteByMethodPath(req.Method, h.routingPath(req))
 	if !ok || route == nil {
 		return true
 	}

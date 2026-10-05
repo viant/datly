@@ -10,6 +10,7 @@ import (
 )
 
 type declarationOptions struct {
+	bodyNullPolicy                                         string
 	queryListCSV                                           bool
 	declarationSQL                                         string
 	typeExpr                                               string
@@ -54,6 +55,14 @@ func (p *declarationOptionParser) parse() (declarationOptions, error) {
 		name, args := cursor.option()
 		key := strings.ToLower(strings.TrimSpace(name))
 		switch key {
+		case "withbodynullpolicy":
+			if err := p.single(cursor, key, args, 1, 1); err != nil {
+				return declarationOptions{}, err
+			}
+			p.result.bodyNullPolicy = strings.TrimSpace(trimQuote(args[0]))
+			if p.result.bodyNullPolicy != "empty-record" {
+				return declarationOptions{}, p.fail(cursor, "WithBodyNullPolicy requires empty-record")
+			}
 		case "withmcp", "withpathmcp":
 			if err := p.single(cursor, key, args, 1, 1); err != nil {
 				return declarationOptions{}, err
