@@ -57,6 +57,16 @@ type through bootstrap's type authority. It must implement
 `Marshal(any) ([]byte, error)`; as in original Datly, a custom JSON marshaller
 owns the complete JSON representation instead of the default formatting policy.
 
+With Tagly `8165180`, case conversion preserves numeric segments:
+`SampleSeen_1Day` and `SampleSeen_7Day` format as `sampleSeen1Day` and
+`sampleSeen7Day` under `caseFormat:"lc"`. Older versions collapsed both to
+`sampleSeen_Day`. Rebuilding changes untagged output names and MCP schemas;
+explicit JSON names remain authoritative. Regeneration also changes inferred
+Go fields such as `SampleSeen_1Day` to `SampleSeen1Day`, while preserving SQL
+column tags. Coordinate client expectations and handwritten field references
+when upgrading, and regenerate previously inferred explicit JSON tags.
+Collision checks still apply to other names that format identically.
+
 CSV and XML codec metadata is reused safely by a registered plan. Each XLSX
 workbook keeps its own mutable native encoder session. Field/type discovery and
 serialization-shape construction use `viant/x/shape`.

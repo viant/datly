@@ -101,11 +101,11 @@ func TestNativeCaseFormatHTTPMCP(t *testing.T) {
 				fields []string
 				want   string
 			}{
-				{"full", nil, `{"status":"ok","data":[{"candidateId":"public","nullable":null,"zero":0,"enabled":false,"empty":"","sampleSeen_Day":77}],"metrics":[]}`},
+				{"full", nil, `{"status":"ok","data":[{"candidateId":"public","nullable":null,"zero":0,"enabled":false,"empty":"","sampleSeen1Day":11,"sampleSeen7Day":77}],"metrics":[]}`},
 				{"projected", []string{"candidate_id", "nullable", "zero", "enabled", "empty"}, `{"status":"ok","data":[{"candidateId":"public","nullable":null,"zero":0,"enabled":false,"empty":""}],"metrics":[]}`},
-				{"day", []string{"day"}, `{"status":"ok","data":[{"sampleSeen_Day":11}],"metrics":[]}`},
-				{"week", []string{"week"}, `{"status":"ok","data":[{"sampleSeen_Day":77}],"metrics":[]}`},
-				{"full after projection", nil, `{"status":"ok","data":[{"candidateId":"public","nullable":null,"zero":0,"enabled":false,"empty":"","sampleSeen_Day":77}],"metrics":[]}`},
+				{"day", []string{"day"}, `{"status":"ok","data":[{"sampleSeen1Day":11}],"metrics":[]}`},
+				{"week", []string{"week"}, `{"status":"ok","data":[{"sampleSeen7Day":77}],"metrics":[]}`},
+				{"full after projection", nil, `{"status":"ok","data":[{"candidateId":"public","nullable":null,"zero":0,"enabled":false,"empty":"","sampleSeen1Day":11,"sampleSeen7Day":77}],"metrics":[]}`},
 			} {
 				t.Run(tc.name, func(t *testing.T) {
 					args := map[string]any{}
@@ -128,8 +128,8 @@ func TestNativeCaseFormatHTTPMCP(t *testing.T) {
 					require.Equal(t, 200, res.Code, res.Body.String())
 					require.JSONEq(t, tc.want, res.Body.String())
 					if tc.name == "day" || tc.name == "week" {
-						require.Equal(t, 1, strings.Count(text, `"sampleSeen_Day":`))
-						require.Equal(t, 1, strings.Count(res.Body.String(), `"sampleSeen_Day":`))
+						require.Equal(t, 1, strings.Count(text, `"sampleSeen`))
+						require.Equal(t, 1, strings.Count(res.Body.String(), `"sampleSeen`))
 					}
 				})
 			}

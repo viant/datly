@@ -120,13 +120,31 @@ func TestJSONSchemaUsesFieldFormatsAndCanonicalExclusions(t *testing.T) {
 
 func TestJSONSchemaDeclinesAmbiguousNames(t *testing.T) {
 	type value struct {
-		SampleSeen_1Day int
-		SampleSeen_7Day int
+		SampleSeenDay  int
+		SampleSeen_Day int
 	}
 	plan, err := (Compiler{}).Compile(CompileInput{Type: reflect.TypeFor[value](), Component: &spec.Component{Settings: &spec.Settings{CaseFormat: "lc"}}})
 	require.NoError(t, err)
 	_, err = plan.JSONSchema()
 	require.ErrorIs(t, err, ErrSchemaUnavailable)
+}
+
+func TestJSONSchemaPreservesNumericNames(t *testing.T) {
+	type value struct {
+		SampleSeen_1Day int
+		SampleSeen_7Day int
+	}
+	plan, err := (Compiler{}).Compile(CompileInput{Type: reflect.TypeFor[value](), Component: &spec.Component{Settings: &spec.Settings{CaseFormat: "lc"}}})
+	require.NoError(t, err)
+	document, err := plan.JSONSchema()
+	require.NoError(t, err)
+	properties := document["properties"].(map[string]any)
+	require.Len(t, properties, 2)
+	require.Contains(t, properties, "sampleSeen1Day")
+	require.Contains(t, properties, "sampleSeen7Day")
+	encoded, err := plan.Encode(context.Background(), "json", &value{11, 77})
+	require.NoError(t, err)
+	assertJSONSchemaValid(t, document, encoded.Data)
 }
 
 func assertJSONSchemaValid(t *testing.T, document map[string]any, data []byte) {

@@ -31,7 +31,15 @@ func TestInferredJSONTagCollisions(t *testing.T) {
 				{Name: "SampleSeen_7Day", Tag: `sqlx:"sample_seen_7_day"`},
 				{Name: "CandidateId", Tag: `sqlx:"candidate_id" json:",omitempty"`},
 			},
-			want: []string{",omitempty,string", "", "candidateId,omitempty"},
+			want: []string{"sampleSeen1Day,omitempty,string", "sampleSeen7Day", "candidateId,omitempty"},
+		},
+		{
+			name: "colliding siblings retain original options",
+			fields: []Field{
+				{Name: "SampleSeenDay", Tag: `sqlx:"seen_day" json:",omitempty,string"`},
+				{Name: "SampleSeen_Day", Tag: `sqlx:"other_day"`},
+			},
+			want: []string{",omitempty,string", ""},
 		},
 		{
 			name: "explicit name wins without being rewritten",
@@ -40,13 +48,21 @@ func TestInferredJSONTagCollisions(t *testing.T) {
 				{Name: "SampleSeen_7Day"},
 				{Name: "CandidateId", Tag: `json:"publicId,omitempty"`},
 			},
-			want: []string{"sampleSeen_Day,string", "", "publicId,omitempty"},
+			want: []string{"sampleSeen_Day,string", "sampleSeen7Day", "publicId,omitempty"},
+		},
+		{
+			name: "explicit collision restores only inferred name",
+			fields: []Field{
+				{Name: "SampleSeenDay", Tag: `json:"sampleSeenDay,string"`},
+				{Name: "SampleSeen_Day"},
+			},
+			want: []string{"sampleSeenDay,string", ""},
 		},
 		{
 			name: "relation holder participates",
 			fields: []Field{
-				{Name: "SampleSeen_1Day"},
-				{Name: "SampleSeen_7Day", Tag: `view:"samples"`, RelationHolder: true},
+				{Name: "SampleSeenDay"},
+				{Name: "SampleSeen_Day", Tag: `view:"samples"`, RelationHolder: true},
 				{Name: "OtherRelation", Tag: `view:"other"`, RelationHolder: true},
 			},
 			want: []string{"", "", "otherRelation"},
@@ -58,7 +74,7 @@ func TestInferredJSONTagCollisions(t *testing.T) {
 				{Name: "SampleSeen_7Day"},
 				{Name: "Hidden", Tag: `json:"-"`},
 			},
-			want: []string{"-", "sampleSeen_Day", "-"},
+			want: []string{"-", "sampleSeen7Day", "-"},
 		},
 		{
 			name: "explicit conflict is reported",
@@ -71,11 +87,11 @@ func TestInferredJSONTagCollisions(t *testing.T) {
 		{
 			name: "restored name still conflicts",
 			fields: []Field{
-				{Name: "SampleSeen_1Day"},
-				{Name: "SampleSeen_7Day"},
-				{Name: "Other", Tag: `json:"SampleSeen_1Day"`},
+				{Name: "SampleSeenDay"},
+				{Name: "SampleSeen_Day"},
+				{Name: "Other", Tag: `json:"SampleSeenDay"`},
 			},
-			err: `JSON name "SampleSeen_1Day" conflicts`,
+			err: `JSON name "SampleSeenDay" conflicts`,
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -97,7 +113,7 @@ func TestInferredJSONTagCollisions(t *testing.T) {
 	}
 }
 
-func numericJSONCollisionComponent() *spec.Component {
+func numericJSONComponent() *spec.Component {
 	return &spec.Component{Name: "Signals", Settings: &spec.Settings{CaseFormat: "lc"}, RootView: &spec.View{Name: "signals", Columns: []*spec.Column{
 		{Name: "sample_seen_1_day", Type: spec.TypeRef{Name: "int", Pointer: true}},
 		{Name: "sample_seen_7_day", Type: spec.TypeRef{Name: "int", Pointer: true}},
@@ -105,14 +121,18 @@ func numericJSONCollisionComponent() *spec.Component {
 	}}}
 }
 
-func TestGeneratedJSONCollisionsPreserveOutputProjection(t *testing.T) {
-	component := numericJSONCollisionComponent()
+func TestGeneratedNumericJSONPreservesOutputProjection(t *testing.T) {
+	component := numericJSONComponent()
 	plan := testPlan(t, component)
 	require.Len(t, plan.Views, 1)
 	fields := plan.Views[0].Fields
 	require.Len(t, fields, 3)
-	require.Equal(t, "", reflect.StructTag(fields[0].Tag).Get("json"))
-	require.Equal(t, "", reflect.StructTag(fields[1].Tag).Get("json"))
+	require.Equal(t, "SampleSeen1Day", fields[0].Name)
+	require.Equal(t, "SampleSeen7Day", fields[1].Name)
+	require.Equal(t, "sample_seen_1_day", reflect.StructTag(fields[0].Tag).Get("sqlx"))
+	require.Equal(t, "sample_seen_7_day", reflect.StructTag(fields[1].Tag).Get("sqlx"))
+	require.Equal(t, "sampleSeen1Day", reflect.StructTag(fields[0].Tag).Get("json"))
+	require.Equal(t, "sampleSeen7Day", reflect.StructTag(fields[1].Tag).Get("json"))
 	require.Equal(t, "candidateId", reflect.StructTag(fields[2].Tag).Get("json"))
 	require.Equal(t, "*int", fields[0].Type)
 	require.Equal(t, "*int", fields[1].Type)
@@ -140,8 +160,8 @@ func TestGeneratedJSONCollisionsPreserveOutputProjection(t *testing.T) {
 	encoder, err := (output.Compiler{}).Compile(output.CompileInput{Type: reflect.TypeOf(value), Component: component})
 	require.NoError(t, err)
 	for _, tc := range []struct{ field, want string }{
-		{"SampleSeen_1Day", `{"data":[{"sampleSeen_Day":11}]}`},
-		{"SampleSeen_7Day", `{"data":[{"sampleSeen_Day":77}]}`},
+		{"SampleSeen1Day", `{"data":[{"sampleSeen1Day":11}]}`},
+		{"SampleSeen7Day", `{"data":[{"sampleSeen7Day":77}]}`},
 		{"CandidateId", `{"data":[{"candidateId":"public"}]}`},
 	} {
 		t.Run(tc.field, func(t *testing.T) {
@@ -168,23 +188,24 @@ func TestGeneratedJSONCollisionsPreserveOutputProjection(t *testing.T) {
 	require.NoError(t, err)
 	actual, err := encoder.Encode(context.Background(), "json", value)
 	require.NoError(t, err)
-	// Compare bytes, including the legacy duplicate formatted names; do not
-	// silently change full-response casing while fixing canonical projection.
+	// Explicit inferred tags and runtime formatting must agree on full output.
 	require.Equal(t, string(want.Data), string(actual.Data))
+	require.JSONEq(t, `{"data":[{"sampleSeen1Day":11,"sampleSeen7Day":77,"candidateId":"public"}]}`, string(actual.Data))
 }
 
 func TestGeneratedJSONCollisionRegenerationBuilds(t *testing.T) {
 	root := t.TempDir()
 	testharness.WriteGeneratedGoMod(t, root)
 	dir := filepath.Join(root, "signals")
-	generator, err := newTestGenerator(numericJSONCollisionComponent(), nil)
+	generator, err := newTestGenerator(numericJSONComponent(), nil)
 	require.NoError(t, err)
 	// Seed the package with the previous per-field inference behavior, then
 	// verify normal regeneration replaces the conflicting generated tags.
-	previous := testPlan(t, numericJSONCollisionComponent())
-	for i := range previous.Views[0].Fields {
+	previous := testPlan(t, numericJSONComponent())
+	for i, name := range []string{"SampleSeen_1Day", "SampleSeen_7Day"} {
 		field := &previous.Views[0].Fields[i]
-		field.Tag = writerScalarJSONTag(previous, field.Name, field.Tag)
+		field.Name = name
+		field.Tag = appendStructTag(withoutStructTags(field.Tag, "json"), "json", "sampleSeen_Day")
 	}
 	_, err = EmitScaffold(dir, previous)
 	require.NoError(t, err)
@@ -197,6 +218,10 @@ func TestGeneratedJSONCollisionRegenerationBuilds(t *testing.T) {
 	before, err := os.ReadFile(path)
 	require.NoError(t, err)
 	require.NotContains(t, string(before), `json:"sampleSeen_Day`)
+	require.NotContains(t, string(before), "SampleSeen_1Day")
+	require.NotContains(t, string(before), "SampleSeen_7Day")
+	require.Contains(t, string(before), `json:"sampleSeen1Day"`)
+	require.Contains(t, string(before), `json:"sampleSeen7Day"`)
 	require.Contains(t, string(before), `json:"candidateId"`)
 	_, err = generator.Generate(dir)
 	require.NoError(t, err)

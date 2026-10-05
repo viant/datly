@@ -31,8 +31,8 @@ func TestOutputSchemaUsesCompiledPlan(t *testing.T) {
 
 func TestOutputSchemaDoesNotInventCollisionMapping(t *testing.T) {
 	type row struct {
-		SampleSeen_1Day int
-		SampleSeen_7Day int
+		SampleSeenDay  int
+		SampleSeen_Day int
 	}
 	plan, err := (output.Compiler{}).Compile(output.CompileInput{
 		Type: reflect.TypeFor[row](), Component: &spec.Component{Settings: &spec.Settings{CaseFormat: "lc"}},
@@ -41,4 +41,22 @@ func TestOutputSchemaDoesNotInventCollisionMapping(t *testing.T) {
 	result, err := outputContractSchema(reflect.TypeFor[row](), plan)
 	require.NoError(t, err, "optional discovery schema must not block existing execution")
 	require.Nil(t, result, "neither raw Go names nor an arbitrary colliding field describe the wire contract")
+}
+
+func TestOutputSchemaPreservesNumericNames(t *testing.T) {
+	type row struct {
+		SampleSeen_1Day int
+		SampleSeen_7Day int
+	}
+	plan, err := (output.Compiler{}).Compile(output.CompileInput{
+		Type: reflect.TypeFor[row](), Component: &spec.Component{Settings: &spec.Settings{CaseFormat: "lc"}},
+	})
+	require.NoError(t, err)
+	result, err := outputContractSchema(reflect.TypeFor[row](), plan)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.Len(t, result.Properties, 2)
+	require.Contains(t, result.Properties, "sampleSeen1Day")
+	require.Contains(t, result.Properties, "sampleSeen7Day")
+	require.ElementsMatch(t, []string{"sampleSeen1Day", "sampleSeen7Day"}, result.Required)
 }
