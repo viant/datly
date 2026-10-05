@@ -96,6 +96,19 @@ markers. `ExtraInput` is excluded from JSON and public HTTP/MCP inputs. It canno
 combine with `Input`, replay, mutation/custom handlers or operational preparation.
 The caller must not mutate the supplied input during capture.
 
+```go
+value, err := invoker.InvokeComponent(ctx, exec.ComponentRequest{
+    Target: target,
+    ExtraInput: exec.WithInput(readerInput),
+    Providers: providers,
+})
+```
+
+Here `readerInput` is the registered reader's canonical input pointer with the
+selected presence markers set. Pass it only from trusted application code;
+HTTP/MCP callers continue through ordinary credential verification and binding.
+The seed belongs to this invocation and does not install a shared input cache.
+
 MCP transport authorization, HTTP API keys, JWT input verification and business
 row predicates serve different purposes. An authenticated MCP connection does
 not silently create a component JWT input. OpenAPI document access is also a

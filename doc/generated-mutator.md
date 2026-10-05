@@ -25,6 +25,21 @@ returned generation plan/file list rather than guessing paths. Generated-owned
 files are replaced from current DQL on regeneration; create-once hook
 files and authored edits must be preserved.
 
+## Shared primary-key relations
+
+A writable child can inherit its sole numeric primary key from its parent when
+MySQL metadata declares that key as a foreign key to the parent's sole primary
+key and the writer graph links those exact fields. For an unqualified same-schema
+relation whose child key is not `AUTO_INCREMENT`, the writer preserves that
+inherited identity instead of synthesizing a separate child allocator.
+
+Keep the generated FK annotations and the authored relation. The parent retains
+its normal allocator; reconciliation propagates its identity to the child.
+Explicit SQLX sequence/generator settings and Go generator tags take precedence.
+Autoincrement children, composite keys, auxiliary records and qualified or
+ambiguous references keep their existing behavior. This changes neither MySQL
+schema nor transaction ownership and introduces no allocator tables.
+
 ## Four different kinds of state
 
 1. **Original request values and presence:** captured before `Init`/`InitMCP`.
