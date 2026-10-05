@@ -154,7 +154,7 @@ func TestConnectorTypedInjectionAndMCPVisibilitySQLite(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	service, err := mcp.New(mcp.Config{Components: []*registry.RegisteredComponent{registered}, Invoker: rt})
+	service, err := mcp.New(mcp.Config{Components: []*registry.RegisteredComponent{registered}, Invoker: rt, StrictArguments: true})
 	if err != nil {
 		t.Fatal(err)
 	}
