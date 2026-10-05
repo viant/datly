@@ -43,6 +43,13 @@ func (r *inputValidationReport) result() *xhandler.Validation {
 
 func validateAggregateHooks(root *Record, inputType, outputType reflect.Type) error {
 	if root != nil && root.HookType != nil {
+		queue := reflect.New(root.HookType).MethodByName("ObserveQueueAttempt")
+		if queue.IsValid() {
+			typ := queue.Type()
+			if root.Auxiliary || typ.IsVariadic() || typ.NumIn() != 2 || typ.NumOut() != 0 || typ.In(0) != reflect.TypeFor[context.Context]() || typ.In(1) != reflect.TypeFor[xhandler.QueueAttemptEvent]() {
+				return fmt.Errorf("ObserveQueueAttempt requires physical root and canonical QueueAttemptEvent signature")
+			}
+		}
 		method := reflect.New(root.HookType).MethodByName("ObservePhase")
 		if method.IsValid() {
 			typ := method.Type()
@@ -69,6 +76,9 @@ func validateAggregateHooks(root *Record, inputType, outputType reflect.Type) er
 		}
 		if record.HookType != nil {
 			hook := reflect.New(record.HookType)
+			if record != root && hook.MethodByName("ObserveQueueAttempt").IsValid() {
+				return fmt.Errorf("ObserveQueueAttempt is only supported on the writer root")
+			}
 			if record != root && hook.MethodByName("ObservePhase").IsValid() {
 				return fmt.Errorf("ObservePhase is only supported on the writer root")
 			}

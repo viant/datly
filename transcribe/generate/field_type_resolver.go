@@ -171,6 +171,22 @@ func (r *fieldTypeResolver) emittedNamedType(authored string, descriptor *x.Type
 	if descriptor == nil || strings.TrimSpace(descriptor.Name) == "" {
 		return ""
 	}
+	packagePath := strings.TrimSpace(descriptor.PkgPath)
+	if packagePath != "" && r.plan != nil {
+		if r.plan.resolvedNamedTypes == nil {
+			r.plan.resolvedNamedTypes = map[string]bool{}
+		}
+		r.plan.resolvedNamedTypes[packagePath+"."+descriptor.Name] = true
+	}
+	if packagePath != "" && packagePath == strings.TrimSpace(r.targetPackage) {
+		if r.plan != nil {
+			if r.plan.knownLocalTypes == nil {
+				r.plan.knownLocalTypes = map[string]string{}
+			}
+			r.plan.knownLocalTypes[descriptor.Name] = packagePath + "." + descriptor.Name
+		}
+		return descriptor.Name
+	}
 	if qualifier, name, found := strings.Cut(unwrapQualifiedTypeName(authored), "."); found && name == descriptor.Name && !strings.Contains(qualifier, "/") && r.context != nil {
 		for _, item := range r.context.Imports {
 			if item.Alias == qualifier {
@@ -179,8 +195,7 @@ func (r *fieldTypeResolver) emittedNamedType(authored string, descriptor *x.Type
 			}
 		}
 	}
-	packagePath := strings.TrimSpace(descriptor.PkgPath)
-	if packagePath == "" || packagePath == strings.TrimSpace(r.targetPackage) {
+	if packagePath == "" {
 		return descriptor.Name
 	}
 	if qualifier, name, found := strings.Cut(unwrapQualifiedTypeName(authored), "."); found && name == descriptor.Name && !strings.Contains(qualifier, "/") {

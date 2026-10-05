@@ -524,7 +524,7 @@ func resolveScalarViewFields(plan *Plan, view *spec.View, includeVelty bool) ([]
 				return nil, fmt.Errorf("view %s column %s type: %w", view.Name, column.Name, err)
 			}
 		}
-		if packagePath := strings.TrimSpace(effectiveType.Package); packagePath != "" {
+		if packagePath := strings.TrimSpace(effectiveType.Package); packagePath != "" && packagePath != strings.TrimSpace(plan.Package) {
 			alias := uniqueImportAlias(plan, packagePath)
 			ensureImport(plan, alias, packagePath)
 			typeName = alias + "." + typeName
@@ -566,6 +566,9 @@ func emittedMapColumnType(plan *Plan, expression string) (string, error) {
 				packagePath = imported.Package
 				break
 			}
+		}
+		if packagePath == strings.TrimSpace(plan.Package) {
+			return ref.Name, nil
 		}
 		alias := uniqueImportAlias(plan, packagePath)
 		ensureImport(plan, alias, packagePath)
@@ -643,7 +646,7 @@ func appendViewTagsWithMatch(fieldTag string, view *spec.View, match string) (st
 		return fieldTag, nil
 	}
 	fieldTag = withoutStructTags(fieldTag, tag.ViewName, tag.SQLName)
-	metadata := tag.View{Name: view.CanonicalName(), TypeName: view.TypeName, Dest: view.Dest, EntityHooks: view.EntityHooks, WriterIdentityPolicy: view.WriterIdentityPolicy, InsertValidationPresence: view.InsertValidationPresence, RowLock: view.RowLock, RowLockOrder: view.RowLockOrder, OnDeleteNotFound: view.OnDeleteNotFound, MutationPredicateGroup: view.MutationPredicateGroup, Batch: view.BatchSize,
+	metadata := tag.View{Name: view.CanonicalName(), TypeName: view.TypeName, Dest: view.Dest, EntityHooks: view.EntityHooks, WriterIdentityPolicy: view.WriterIdentityPolicy, InsertValidationPresence: view.InsertValidationPresence, RootNullPolicy: view.RootNullPolicy, NestedNullPolicy: view.NestedNullPolicy, RowLock: view.RowLock, RowLockOrder: view.RowLockOrder, OnDeleteNotFound: view.OnDeleteNotFound, MutationPredicateGroup: view.MutationPredicateGroup, Batch: view.BatchSize,
 		BatchConcurrency: view.BatchConcurrency,
 		Auxiliary:        view.Auxiliary,
 		Match:            match,

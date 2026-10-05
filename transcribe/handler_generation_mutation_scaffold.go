@@ -35,6 +35,10 @@ func (g *handlerGeneration) prepareMutationScaffold(semantic *plan.Plan, config 
 	var contracts []compiler.EntityHookRequest
 	for _, binding := range proposal.Bindings {
 		request := compiler.EntityHookRequest{Hook: binding.Hook, Entity: binding.Entity, Parent: binding.Parent, Component: binding.Component}
+		// Recheck existing create-once source against the same canonical root
+		// policy as directly resolved hooks; optional authored methods are not
+		// limited to the proposal's default scaffold methods.
+		request.WriteEligibilityAllowed = binding.Root && writeEligibilityAllowed(proposal.Plan.Root, true)
 		request.Output, err = resolver.Canonical(config.OutputType)
 		if err != nil {
 			return nil, err

@@ -1,6 +1,8 @@
 package spec
 
 const (
+	ViewControlRootNullPolicy           = "root_null_policy"
+	ViewControlNestedNullPolicy         = "nested_null_policy"
 	ViewControlInsertValidationPresence = "insert_validation_presence"
 	ViewControlWriterIdentity           = "writer_identity"
 	ViewControlOnDeleteNotFound         = "delete_not_found"

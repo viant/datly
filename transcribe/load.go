@@ -112,6 +112,16 @@ func (l *componentLoader) mergeRoutes(base, authored []*spec.Route) ([]*spec.Rou
 			item.Marshaller = marshaller
 		}
 		identity := (spec.RouteRef{Method: item.Method, Path: item.Path}).String()
+		if inherited := baseByIdentity[identity]; inherited != nil {
+			if item.RequestBodyMode == "" {
+				item.RequestBodyMode = inherited.RequestBodyMode
+			} else if inherited.RequestBodyMode != "" && item.RequestBodyMode != inherited.RequestBodyMode {
+				return nil, fmt.Errorf("conflicting request body modes for %s", identity)
+			}
+		}
+		if err := item.ValidateRequestBodyMode(); err != nil {
+			return nil, err
+		}
 		if len(item.MCP) == 0 {
 			if inherited := baseByIdentity[identity]; inherited != nil {
 				inherited = inherited.Clone()

@@ -2,7 +2,6 @@ package bootstrap
 
 import (
 	"fmt"
-	"go/ast"
 	"reflect"
 
 	readerpredicate "github.com/viant/datly/runtime/predicate/velty"
@@ -111,34 +110,34 @@ func predicateFieldOwner(descriptor *x.Type, index []int, lookup xshape.Lookup) 
 					resolver.Imports[alias] = item.Path
 				}
 			}
-			structure, ok := source.TypeSpec.Type.(*ast.StructType)
-			var expression ast.Expr
-			if !ok {
-				expression = source.TypeSpec.Type
-			} else {
+			// The native resolver owns alias syntax; fields retain their actual
+			// declaring import scope and indexes even through promotion.
+			canonical, err := resolver.Canonical(source.TypeSpec.Type)
+			if err != nil {
+				return nil, err
+			}
+			if _, err := resolver.Reference(canonical); err != nil {
+				fields, err := xshape.New(descriptor, lookup).Fields()
+				if err != nil {
+					return nil, err
+				}
 				if len(index) <= 1 {
 					return descriptor, nil
 				}
-				position := 0
-				for _, field := range structure.Fields.List {
-					count := len(field.Names)
-					if count == 0 {
-						count = 1
-					}
-					if index[0] >= position && index[0] < position+count {
-						expression = field.Type
+				canonical = ""
+				for _, field := range fields {
+					if len(field.Index) == 1 && field.Index[0] == index[0] {
+						canonical, err = field.CanonicalType()
+						if err != nil {
+							return nil, err
+						}
 						break
 					}
-					position += count
+				}
+				if canonical == "" {
+					return nil, fmt.Errorf("invalid embedded field index")
 				}
 				index = index[1:]
-			}
-			if expression == nil {
-				return nil, fmt.Errorf("invalid embedded field index")
-			}
-			canonical, err := resolver.Canonical(expression)
-			if err != nil {
-				return nil, err
 			}
 			resolved, err := resolver.Resolve(canonical)
 			if err != nil {

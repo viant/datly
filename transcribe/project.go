@@ -74,6 +74,7 @@ type ProjectMigrationComponent struct {
 
 type preparedProjectComponent struct {
 	compiled      *Result
+	rootDir       string
 	key           spec.Key
 	identity      string
 	slug          string
@@ -146,6 +147,13 @@ func (g *ProjectGeneration) prepareWithManifest(rootDir string, existing *Projec
 }
 
 func (g *ProjectGeneration) prepareWithValidation(rootDir string, existing *ProjectManifest) ([]preparedProjectComponent, error) {
+	return g.prepareAtRoots(rootDir, existing, nil)
+}
+
+// prepareAtRoots retains project-wide dependency and route checks while static
+// validation plans each discovered component within its configured source root.
+// Persisting project generation continues to use a single destination root.
+func (g *ProjectGeneration) prepareAtRoots(rootDir string, existing *ProjectManifest, sourceRoot func(*Source) (string, error)) ([]preparedProjectComponent, error) {
 	seen := map[string]bool{}
 	result := make([]preparedProjectComponent, 0, len(g.Components))
 	for _, source := range g.Components {
@@ -162,9 +170,16 @@ func (g *ProjectGeneration) prepareWithValidation(rootDir string, existing *Proj
 			return nil, fmt.Errorf("project component %q occurs more than once", identity)
 		}
 		seen[identity] = true
+		componentRoot := rootDir
+		if sourceRoot != nil {
+			componentRoot, err = sourceRoot(compiled.Source)
+			if err != nil {
+				return nil, fmt.Errorf("plan component %q source root: %w", identity, err)
+			}
+		}
 		slug := projectComponentSlug(key)
 		packagePath := filepath.Join("generated", slug)
-		input, packagePath, err := generationInput(rootDir, packagePath, compiled)
+		input, packagePath, err := generationInput(componentRoot, packagePath, compiled)
 		if err != nil {
 			return nil, fmt.Errorf("plan component %q: %w", identity, err)
 		}
@@ -173,11 +188,11 @@ func (g *ProjectGeneration) prepareWithValidation(rootDir string, existing *Proj
 			return nil, fmt.Errorf("plan component %q: %w", identity, err)
 		}
 		validate := plan.ValidateDestination
-		if err = validate(filepath.Join(rootDir, packagePath)); err != nil {
+		if err = validate(filepath.Join(componentRoot, packagePath)); err != nil {
 			return nil, fmt.Errorf("validate component %q destination: %w", identity, err)
 		}
 		result = append(result, preparedProjectComponent{
-			compiled: compiled, key: key, identity: identity, slug: slug,
+			compiled: compiled, rootDir: componentRoot, key: key, identity: identity, slug: slug,
 			packagePath: packagePath, targetPackage: input.TargetPackage, plan: plan,
 		})
 	}
@@ -191,7 +206,7 @@ func (g *ProjectGeneration) prepareWithValidation(rootDir string, existing *Proj
 	}
 	for index := range result {
 		component := &result[index]
-		input, _, err := generationInput(rootDir, component.packagePath, component.compiled)
+		input, _, err := generationInput(component.rootDir, component.packagePath, component.compiled)
 		if err != nil {
 			return nil, fmt.Errorf("plan component %q: %w", component.identity, err)
 		}
@@ -200,7 +215,7 @@ func (g *ProjectGeneration) prepareWithValidation(rootDir string, existing *Proj
 			return nil, fmt.Errorf("plan component %q: %w", component.identity, err)
 		}
 		validate := component.plan.ValidateDestination
-		if err = validate(filepath.Join(rootDir, component.packagePath)); err != nil {
+		if err = validate(filepath.Join(component.rootDir, component.packagePath)); err != nil {
 			return nil, fmt.Errorf("validate component %q destination: %w", component.identity, err)
 		}
 	}
@@ -211,7 +226,7 @@ func (g *ProjectGeneration) prepareWithValidation(rootDir string, existing *Proj
 	}
 	var packages gen.Packages
 	for _, entry := range result {
-		packages = append(packages, gen.PackagePlan{Plan: entry.plan, Directory: filepath.Join(rootDir, entry.packagePath)})
+		packages = append(packages, gen.PackagePlan{Plan: entry.plan, Directory: filepath.Join(entry.rootDir, entry.packagePath)})
 	}
 	validatePackages := packages.Validate
 	if err := validatePackages(); err != nil {

@@ -63,6 +63,12 @@ func (s *PhaseScope) Observer() h.PhaseObserver {
 	}
 	return s.observer
 }
+func (s *PhaseScope) Attempt() int {
+	if s == nil {
+		return 0
+	}
+	return s.attempt
+}
 func (s *PhaseScope) InvocationID() uint64 {
 	if s == nil {
 		return 0

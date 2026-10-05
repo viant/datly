@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"reflect"
 	"strings"
@@ -96,7 +97,17 @@ func newAsyncReaderFixture(t *testing.T, settings ...*spec.Settings) *asyncReade
 	return &asyncReaderFixture{runtime: runtime, harness: h, store: store, target: dexec.ComponentTarget{Component: component.Key, Route: spec.RouteRef{Method: "GET", Path: "/jobs/users/{id}"}}}
 }
 func (f *asyncReaderFixture) submission(input *asyncReaderInput) jobs.Submission {
-	return jobs.Submission{Job: xasync.Job{Request: xasync.Request{Method: "GET", URI: "/jobs/users/7"}, MatchKey: "users-7", MainView: "Users"}, Input: input}
+	// Query-list binding is a transformer: persist its original parameter-keyed
+	// source representation rather than submitting decoded codec output.
+	raw, err := json.Marshal(struct {
+		ID     int
+		Tenant int
+		Values []int
+	}{input.ID, input.Tenant, input.Values})
+	if err != nil {
+		panic(err) // This fixture contains only JSON primitive fields.
+	}
+	return jobs.Submission{Job: xasync.Job{Request: xasync.Request{Method: "GET", URI: "/jobs/users/7"}, MatchKey: "users-7", MainView: "Users"}, SourceState: string(raw)}
 }
 
 func TestAsyncOriginalSchemaDryRunReplaySQLite(t *testing.T) {
@@ -426,5 +437,26 @@ func TestAsyncCustomHandlerHasNoMutationDryRunSQLite(t *testing.T) {
 	}
 	if !called {
 		t.Fatal("custom handler was not invoked")
+	}
+}
+
+func TestAsyncQueryListRequiresOriginalSourceSQLite(t *testing.T) {
+	f := newAsyncReaderFixture(t)
+	service, err := f.runtime.NewAsyncService(jobs.Config{Store: f.store, Authorize: func(context.Context, jobs.Access) error { return nil }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	input := &asyncReaderInput{ID: 7, Tenant: 1, Values: []int{3}}
+	submission := f.submission(input)
+	submission.Input, submission.SourceState = input, ""
+	if _, err := service.Schedule(context.Background(), submission); err == nil || !strings.Contains(err.Error(), "requires raw source JSON") {
+		t.Fatalf("decoded query-list submission must retain the raw-source guard: %v", err)
+	}
+	var count int
+	if err := f.harness.DB.QueryRow("SELECT count(*) FROM DATLY_JOBS").Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Fatalf("rejected submission persisted %d jobs", count)
 	}
 }

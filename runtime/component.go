@@ -40,23 +40,30 @@ func (r *Runtime) componentProvider(scope dexec.ProviderScope, parent *spec.Comp
 }
 
 type scopedComponentInvoker struct {
-	runtime *Runtime
-	scope   dexec.ProviderScope
+	runtime   *Runtime
+	scope     dexec.ProviderScope
+	authority func(context.Context) context.Context
 }
 
 func (i *scopedComponentInvoker) InvokeComponent(ctx context.Context, request dexec.ComponentRequest) (any, error) {
 	if i == nil || i.runtime == nil {
 		return nil, fmt.Errorf("component invoker is not configured")
 	}
+	if i.authority != nil {
+		ctx = i.authority(ctx)
+	}
 	ctx = handlerengine.PrepareComponent(ctx, handlerengine.ComponentImperative, "")
 	return i.runtime.invokeComponent(ctx, request, i.scope)
 }
 
 func (r *Runtime) componentInvokerProvider(scope dexec.ProviderScope) locator.Provider {
-	return handlerprovider.Static(dexec.ComponentInvokerKey, dexec.ComponentInvoker(&scopedComponentInvoker{
-		runtime: r,
-		scope:   scope,
-	}))
+	return handlerprovider.New(dexec.ComponentInvokerKey, func(ctx context.Context) (any, bool, error) {
+		return dexec.ComponentInvoker(&scopedComponentInvoker{
+			runtime:   r,
+			scope:     scope,
+			authority: handlerengine.RetainMutationAuthority(ctx),
+		}), true, nil
+	})
 }
 
 // InvokeComponent executes one exact component target without route lookup.
@@ -123,6 +130,9 @@ func (r *Runtime) invokeComponent(ctx context.Context, request dexec.ComponentRe
 	}
 	if !componentOwnsRoute(registered.Component, route) {
 		return nil, fmt.Errorf("component %s does not own route %s", identity, route.String())
+	}
+	if err := handlerengine.CheckComponentMutation(ctx, registered.Handler == nil && registered.Reader != nil); err != nil {
+		return nil, err
 	}
 	if registered.Input == nil {
 		return nil, fmt.Errorf("registered input contract not found: %s", identity)

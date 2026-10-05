@@ -132,3 +132,59 @@ func TestDifferenceNativeErrorsRemainVisible(t *testing.T) {
 		t.Fatalf("lost comparison error: %+v", records)
 	}
 }
+
+func TestSharedDifferConcurrentInvocationOptionsAndContextIsolation(t *testing.T) {
+	type detail struct{ Count int }
+	type marker struct{ Name, Detail, Omitted bool }
+	type record struct {
+		Name    string
+		Detail  *detail
+		Omitted string
+		Has     *marker `setMarker:"true"`
+	}
+	service := differ.New()
+	from := &record{Name: "before", Detail: &detail{Count: 1}, Omitted: "before", Has: &marker{Name: true, Detail: true}}
+	to := &record{Name: "after", Detail: &detail{Count: 2}, Omitted: "after", Has: &marker{Name: true, Detail: true}}
+	type contextKey struct{}
+	var wg sync.WaitGroup
+	for i := 0; i < 32; i++ {
+		wg.Add(1)
+		go func(id int) {
+			defer wg.Done()
+			shallow, presence := id%2 == 0, id%4 < 2
+			want := 3
+			if shallow {
+				want--
+			}
+			if presence {
+				want--
+			}
+			ctx, cancel := context.WithCancel(context.WithValue(context.Background(), contextKey{}, id))
+			defer cancel()
+			for j := 0; j < 10; j++ {
+				// Options observe their own invocation's context and apply to a fresh
+				// Options value while the comparator registry is shared.
+				changes, err := service.Diff(ctx, from, to, xdiffer.WithShallow(shallow), func(o *xdiffer.Options) {
+					if ctx.Value(contextKey{}) != id {
+						t.Error("invocation context leaked")
+					}
+					o.WithSetMarker = presence
+				})
+				if err != nil || changes == nil || len(changes.Changes) != want {
+					t.Errorf("id=%d shallow=%v presence=%v changes=%+v err=%v", id, shallow, presence, changes, err)
+					return
+				}
+				changes.Changes[0].Error = "caller-owned result"
+			}
+			cancel()
+			if _, err := service.Diff(ctx, from, to); !errors.Is(err, context.Canceled) {
+				t.Errorf("id=%d cancellation=%v", id, err)
+			}
+			fresh, err := service.Diff(context.Background(), from, to)
+			if err != nil || len(fresh.Changes) != 3 || fresh.Changes[0].Error != "" {
+				t.Errorf("id=%d context/results retained: %+v %v", id, fresh, err)
+			}
+		}(i)
+	}
+	wg.Wait()
+}

@@ -15,6 +15,8 @@ type View struct {
 	Name                     string
 	TypeName                 string
 	Dest                     string
+	RootNullPolicy           string
+	NestedNullPolicy         string
 	InsertValidationPresence bool
 	WriterIdentityPolicy     string
 	OnDeleteNotFound         string
@@ -70,6 +72,16 @@ func ParseView(value string) (*View, error) {
 			result.TypeName = value
 		case "dest":
 			result.Dest = value
+		case "nestednullpolicy":
+			if result.NestedNullPolicy != "" || value != "initial-validation" {
+				return fmt.Errorf("nestedNullPolicy requires one initial-validation value")
+			}
+			result.NestedNullPolicy = value
+		case "rootnullpolicy":
+			if result.RootNullPolicy != "" || value != "initial-validation" {
+				return fmt.Errorf("rootNullPolicy requires one initial-validation value")
+			}
+			result.RootNullPolicy = value
 		case "insertvalidationpresence":
 			var err error
 			result.InsertValidationPresence, err = strconv.ParseBool(value)

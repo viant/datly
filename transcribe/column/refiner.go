@@ -310,7 +310,11 @@ func (r *Compilation) discover(ctx context.Context, view *spec.View, connector s
 	if strings.TrimSpace(query) == "" {
 		return evaluated, nil
 	}
-	detected, err := r.refiner.detectColumns(ctx, db, view, query, evaluated.Args...)
+	identities, err := resolveResultSources(view.Columns, source)
+	if err != nil {
+		return nil, err
+	}
+	detected, err := r.refiner.detectColumnsWithSources(ctx, db, view, identities, query, evaluated.Args...)
 	if err != nil {
 		return nil, fmt.Errorf("SQLX discovery failed for %q: %w", query, err)
 	}
@@ -322,7 +326,10 @@ func (r *Compilation) discover(ctx context.Context, view *spec.View, connector s
 	for _, column := range columns {
 		projected = append(projected, column.Name)
 	}
-	if err := ValidateProjectionAnnotations(view, projected); err != nil {
+	if err := validateResultAnnotations(view, projected, identities); err != nil {
+		return nil, err
+	}
+	if err := identities.validateResults(view.Columns, projected); err != nil {
 		return nil, err
 	}
 	// Discovery uses the resolved authoredSource, including embedded resources,
@@ -331,7 +338,7 @@ func (r *Compilation) discover(ctx context.Context, view *spec.View, connector s
 	// Persisting a projection quoted with the discovery connector's dialect
 	// would make portable resources depend on the schema fixture. Runtime
 	// selector lowering uses the actual execution dialect instead.
-	view.Columns = mergeColumns(view.Columns, columns)
+	view.Columns = mergeColumnsWithSources(view.Columns, columns, identities)
 	if table := strings.TrimSpace(source.Table); table != "" && !strings.Contains(table, "$") {
 		lineage, err := directProjectionLineage(source)
 		if err != nil {
@@ -562,6 +569,22 @@ func canonicalType(source reflect.Type, nullable bool) (spec.TypeRef, bool) {
 }
 
 func mergeColumns(base, discovered []*spec.Column) []*spec.Column {
+	// Callers without SQL provenance can only use Source (or a truly sourceless
+	// Name). Production discovery supplies its resolved vendor identity plan.
+	identities := make(resultSourceIdentity, len(base))
+	for _, column := range base {
+		if column == nil {
+			continue
+		}
+		identities[column] = column.Source
+		if strings.TrimSpace(column.Source) == "" && !column.NameInferred {
+			identities[column] = column.Name
+		}
+	}
+	return mergeColumnsWithSources(base, discovered, identities)
+}
+
+func mergeColumnsWithSources(base, discovered []*spec.Column, identities resultSourceIdentity) []*spec.Column {
 	if len(base) == 0 {
 		return discovered
 	}
@@ -588,12 +611,8 @@ func mergeColumns(base, discovered []*spec.Column) []*spec.Column {
 				}
 			}
 		}
-		key := strings.ToLower(strings.TrimSpace(column.Name))
+		key := normalizedName(identities[column])
 		fresh := byName[key]
-		if fresh == nil && column.Source != "" {
-			key = strings.ToLower(strings.TrimSpace(column.Source))
-			fresh = byName[key]
-		}
 		if fresh != nil {
 			cloned.Source = firstValue(cloned.Source, fresh.Source)
 			cloned.DatabaseType = firstValue(fresh.DatabaseType, cloned.DatabaseType)

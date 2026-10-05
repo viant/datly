@@ -1112,3 +1112,24 @@ primitive slice, and cannot replace an explicit codec.
 Verified regressions cover default CSV/repeated/mixed HTTP int and string
 lists, malformed values, numeric scalar wrapping, native MCP arrays with
 comma-containing strings, and a generated reader running against SQLite.
+
+### Native JSON nil slice presentation
+
+```dql
+#setting($_ = $nil_slice_policy('empty_array'))
+```
+
+The optional output policy accepts exactly one quoted value, `empty_array` or
+`null`, once per component, without modifiers. Omission preserves existing
+encoder selection and defaults. Explicit `null` also preserves default encoder
+selection and overrides an inherited package `empty_array` policy in an authored
+DQL overlay. The generated component's `output` settings metadata retains the
+policy; it does not change the generated Go collection types or values.
+
+`empty_array` enables Datly's existing native JSON presentation semantics, even
+when no casing/date/omit/exclude transformation is requested. This activation
+also inherits that encoder's byte-slice, embedding and tag behavior; it is not a
+guarantee that standard `encoding/json` changes only nil slices. Custom JSON
+marshalers retain their existing precedence and opaque custom values are not
+rewritten. The policy does not change standalone Go/storage JSON serialization
+or classify the component as JSON-only.

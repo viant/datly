@@ -38,5 +38,6 @@ func (p *Plan) selectedPresentation(value any, filter dexec.OutputFieldFilter) (
 	}
 	plan.caseFormat, plan.timeLayout, plan.omitEmpty = p.caseFormat, p.timeLayout, p.omitEmpty
 	plan.title = p.title
+	plan.nilSlicePolicy = p.nilSlicePolicy
 	return plan, projected.Interface(), nil
 }

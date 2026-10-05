@@ -28,7 +28,17 @@ func (p *Plan) JSONSchema() (map[string]any, error) {
 		return nil, ErrSchemaUnavailable
 	}
 	t := p.typeOf
-	for t.Kind() == reflect.Pointer {
+	// Preserve root slice pointer nullability when empty-array presentation
+	// removes null from the slice itself. Other root conventions stay intact.
+	rootSlicePointer := false
+	if p.nilSlicePolicy == "empty_array" && t.Kind() == reflect.Pointer {
+		base := t
+		for base.Kind() == reflect.Pointer {
+			base = base.Elem()
+		}
+		rootSlicePointer = base.Kind() == reflect.Slice
+	}
+	for !rootSlicePointer && t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}
 	b := jsonSchemaBuilder{plan: p, active: map[reflect.Type]string{}}
@@ -122,7 +132,7 @@ func (b *jsonSchemaBuilder) value(t reflect.Type, ref, path string) (map[string]
 		result["type"], result["items"] = "array", item
 		if t.Kind() == reflect.Array {
 			result["minItems"], result["maxItems"] = t.Len(), t.Len()
-		} else {
+		} else if b.plan.nilSlicePolicy != "empty_array" {
 			result = nullableJSONSchema(result)
 		}
 	case reflect.Map:

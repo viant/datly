@@ -64,7 +64,7 @@ func parseViewDirective(item *query.Item) (viewDirective, bool, error) {
 	}
 	name := normalizeViewDirectiveName(sqlparser.Stringify(call.X))
 	switch name {
-	case spec.ViewControlInsertValidationPresence, spec.ViewControlWriterIdentity, spec.ViewControlOnDeleteNotFound, spec.ViewControlMutationPredicate, spec.ViewControlOrderBy, spec.ViewControlSetLimit, spec.ViewControlUseConnector,
+	case spec.ViewControlNestedNullPolicy, spec.ViewControlRootNullPolicy, spec.ViewControlInsertValidationPresence, spec.ViewControlWriterIdentity, spec.ViewControlOnDeleteNotFound, spec.ViewControlMutationPredicate, spec.ViewControlOrderBy, spec.ViewControlSetLimit, spec.ViewControlUseConnector,
 		spec.ViewControlUseCache, spec.ViewControlCacheWarmup,
 		spec.ViewControlAllowNulls, spec.ViewControlGroupable, spec.ViewControlGrouping,
 		spec.ViewControlAllowedOrder, spec.ViewControlCardinality, spec.ViewControlSelfRef,
@@ -78,7 +78,7 @@ func parseViewDirective(item *query.Item) (viewDirective, bool, error) {
 	default:
 		return viewDirective{}, false, nil
 	}
-	if (name == spec.ViewControlInsertValidationPresence || name == spec.ViewControlWriterIdentity || name == spec.ViewControlMutationPredicate || name == spec.ViewControlOnDeleteNotFound) && item.Alias != "" {
+	if (name == spec.ViewControlNestedNullPolicy || name == spec.ViewControlRootNullPolicy || name == spec.ViewControlInsertValidationPresence || name == spec.ViewControlWriterIdentity || name == spec.ViewControlMutationPredicate || name == spec.ViewControlOnDeleteNotFound) && item.Alias != "" {
 		return viewDirective{}, true, &Error{Code: CodeViewDirective, Cause: fmt.Errorf("%s must be a standalone annotation without an alias", name)}
 	}
 	minimum, maximum := 2, 2
@@ -169,7 +169,7 @@ func parseViewDirective(item *query.Item) (viewDirective, bool, error) {
 func containsViewDirective(source node.Node) bool {
 	return containsSQLCall(source, func(name string) bool {
 		switch name {
-		case spec.ViewControlInsertValidationPresence, spec.ViewControlWriterIdentity, spec.ViewControlOnDeleteNotFound, spec.ViewControlMutationPredicate, spec.ViewControlOrderBy, spec.ViewControlSetLimit, spec.ViewControlUseConnector,
+		case spec.ViewControlNestedNullPolicy, spec.ViewControlRootNullPolicy, spec.ViewControlInsertValidationPresence, spec.ViewControlWriterIdentity, spec.ViewControlOnDeleteNotFound, spec.ViewControlMutationPredicate, spec.ViewControlOrderBy, spec.ViewControlSetLimit, spec.ViewControlUseConnector,
 			spec.ViewControlUseCache, spec.ViewControlCacheWarmup,
 			spec.ViewControlAllowNulls, spec.ViewControlGroupable, spec.ViewControlGrouping,
 			spec.ViewControlAllowedOrder, spec.ViewControlCardinality, spec.ViewControlSelfRef,
@@ -345,6 +345,16 @@ func applyViewDirectives(root *spec.View, directives []viewDirective) error {
 			target.Source = &spec.ViewSource{}
 		}
 		switch directive.name {
+		case spec.ViewControlNestedNullPolicy:
+			if target == root || target.Auxiliary || target.Cardinality == spec.CardinalityOne || directive.value != "initial-validation" {
+				return &Error{Code: CodeViewDirective, Cause: fmt.Errorf("nested_null_policy requires a writable collection relation and initial-validation")}
+			}
+			target.NestedNullPolicy = directive.value
+		case spec.ViewControlRootNullPolicy:
+			if target != root || target.Auxiliary || directive.value != "initial-validation" {
+				return &Error{Code: CodeViewDirective, Cause: fmt.Errorf("root_null_policy requires a writable root and initial-validation")}
+			}
+			target.RootNullPolicy = directive.value
 		case spec.ViewControlInsertValidationPresence:
 			target.InsertValidationPresence, _ = strconv.ParseBool(directive.value)
 		case spec.ViewControlWriterIdentity:

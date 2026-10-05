@@ -27,6 +27,10 @@ func readViewProjection(parsed *query.Select, root, view *spec.View) (query.List
 	if err := validateRelationSourceOutputs(parsed, root, view); err != nil {
 		return nil, err
 	}
+	renames, err := planWildcardRenameMetadata(parsed, root, view)
+	if err != nil {
+		return nil, err
+	}
 	var result query.List
 	wildcard := false
 	outputs := map[string]bool{}
@@ -68,15 +72,22 @@ func readViewProjection(parsed *query.Select, root, view *spec.View) (query.List
 			// This SELECT describes the component shape, not a vendor SQL alias.
 			// Record the Go name against the independently executed source output.
 			var metadata *spec.Column
-			for _, existing := range view.Columns {
-				if existing != nil && strings.EqualFold(existing.Name, item.Alias) {
-					metadata = existing
-					break
+			if renames != nil {
+				metadata = renames[item]
+			} else {
+				for _, existing := range view.Columns {
+					if existing != nil && strings.EqualFold(existing.Name, item.Alias) {
+						metadata = existing
+						break
+					}
 				}
 			}
 			if metadata == nil {
 				metadata = &spec.Column{Name: item.Alias}
 				view.Columns = append(view.Columns, metadata)
+			}
+			if renames != nil {
+				metadata.Name = item.Alias
 			}
 			metadata.Source = column.Name
 			if reflect.StructTag(metadata.Tag).Get(sqlio.TagSqlx) == "" {

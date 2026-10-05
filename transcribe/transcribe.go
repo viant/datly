@@ -176,6 +176,15 @@ func generationInput(rootDir, packageDir string, compiled *Result) (gen.Input, s
 	}
 	if strings.TrimSpace(authored) != "" {
 		input.PackageName = destination.Name
+		if input.ExternalHandler == nil || input.ExternalHandler.Build == nil {
+			name, err := existingPrimaryPackageName(filepath.Join(rootDir, packageDir))
+			if err != nil {
+				return gen.Input{}, "", err
+			}
+			if name != "" {
+				input.PackageName = name
+			}
+		}
 	}
 	if compiled.TypeResolver != nil {
 		input.TypeResolver = compiled.TypeResolver

@@ -9,6 +9,7 @@ import (
 	"github.com/viant/datly/runtime/handler/custom"
 	"github.com/viant/datly/spec"
 	"github.com/viant/xdatly"
+	xdiffer "github.com/viant/xdatly/differ"
 	h "github.com/viant/xdatly/handler"
 	"github.com/viant/xdatly/logger"
 	"reflect"
@@ -20,6 +21,7 @@ var Queries embed.FS
 const Package = "github.com/viant/datly/standalone/testdata/loggerapp/components"
 
 type Component struct {
+	Patch  xdatly.Component[PatchInput, PatchOutput]   `component:"Patch,path=/differ,method=PATCH,connector=main,view=Records" mutation:"patch"`
 	Read   xdatly.Component[ReadInput, ReadOutput]     `component:"Read,path=/logged/{id},method=GET,connector=main,view=Records"`
 	Parent xdatly.Component[ParentInput, ParentOutput] `component:"Parent,path=/parent/{id},method=GET,handler=NewParent"`
 	Write  xdatly.Component[WriteInput, WriteOutput]   `component:"Write,path=/logged,method=POST,connector=main,view=Records" mutation:"post"`
@@ -124,3 +126,40 @@ func (hook *RecordLifecycle) Finalize(_ context.Context, _ *WriteInput, _ *Write
 	hook.Logger.Info("writer.finalize", "transaction", outcome.State())
 	return nil
 }
+
+// Patch exercises trusted Differ binding on the same metadata-driven writer
+// used by generated mutation components.
+type PatchInput struct {
+	Rows    []*Record `parameter:"Rows,kind=body,in=data,required=true" view:"Records,table=records,entityHooks=DifferLifecycle" sql:"uri=queries/write.sql"`
+	Current []*Record `parameter:"Current,kind=view,in=Current" view:"Current,table=records" sql:"uri=queries/write.sql"`
+}
+type PatchOutput struct {
+	Rows          []*Record               `parameter:"Rows,kind=output,in=body" json:"rows"`
+	Changes       []*xdiffer.ChangeRecord `json:"changes"`
+	PreviousNames []string                `json:"previousNames"`
+	BoundDiffer   xdiffer.Differ          `json:"-"`
+}
+type DifferLifecycle struct {
+	Differ xdiffer.Differ `bind:"kind=differ,required"`
+}
+
+func DifferLifecycleDatlyType() reflect.Type { return reflect.TypeFor[DifferLifecycle]() }
+
+var DifferLifecycleDatly = DifferLifecycleDatlyType()
+
+func (hook *DifferLifecycle) Init(ctx context.Context, row *Record, state h.LifecycleContext[Record, h.NoParent, PatchOutput]) error {
+	state.Output.BoundDiffer = hook.Differ
+	if state.Previous != nil {
+		state.Output.PreviousNames = append(state.Output.PreviousNames, state.Previous.Name)
+	}
+	changes, err := hook.Differ.Diff(ctx, state.Previous, row, xdiffer.WithShallow(true), xdiffer.WithSetMarker(true))
+	if err != nil {
+		return err
+	}
+	state.Output.Changes = append(state.Output.Changes, changes.ToChangeRecords()...)
+	return nil
+}
+
+func (ReadInput) EmbedFS() *embed.FS  { return &Queries }
+func (WriteInput) EmbedFS() *embed.FS { return &Queries }
+func (PatchInput) EmbedFS() *embed.FS { return &Queries }

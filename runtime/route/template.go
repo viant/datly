@@ -108,6 +108,9 @@ func (t *PathTemplate) MatchEscapedPath(escapedPath string) (map[string]string, 
 			return nil, false, fmt.Errorf("decode route path segment %d: %w", i, err)
 		}
 		if segment.placeholder {
+			if value == "" {
+				return nil, false, nil
+			}
 			params[segment.value] = value
 			continue
 		}

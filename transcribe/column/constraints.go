@@ -309,10 +309,13 @@ func applyTableConstraints(columns []*spec.Column, constraints map[string]tableC
 		}
 		output := normalizedName(column.Name)
 		sourceName, ok := lineage.direct[output]
+		resultName := lineage.names[output]
 		if !ok && column.Source != "" {
 			// A configuration-only outer rename keeps the original SQL output in
 			// Source; prove its lineage before applying physical table constraints.
-			sourceName, ok = lineage.direct[normalizedName(column.Source)]
+			sourceOutput := normalizedName(column.Source)
+			sourceName, ok = lineage.direct[sourceOutput]
+			resultName = lineage.names[sourceOutput]
 		}
 		if !ok && lineage.wildcard && !lineage.blocked[output] {
 			sourceName = output
@@ -338,11 +341,11 @@ func applyTableConstraints(columns []*spec.Column, constraints map[string]tableC
 			value := *constraint.defaultValue
 			column.Default = &value
 		}
-		applyReferenceConstraint(column, constraint.reference)
+		applyReferenceConstraint(column, constraint.reference, resultName)
 	}
 }
 
-func applyReferenceConstraint(column *spec.Column, reference *tableReference) {
+func applyReferenceConstraint(column *spec.Column, reference *tableReference, resultName string) {
 	if column == nil || reference == nil {
 		return
 	}
@@ -350,6 +353,11 @@ func applyReferenceConstraint(column *spec.Column, reference *tableReference) {
 	sqlxTag := parsed.Lookup(sqlio.TagSqlx)
 	if sqlxTag == nil {
 		mapping := firstValue(column.Source, column.Name)
+		// Use the proven vendor result identity captured before Source became a
+		// DML name. Existing authored/compiler mappings remain authoritative.
+		if resultName = strings.TrimSpace(resultName); resultName != "" && !strings.EqualFold(mapping, resultName) {
+			mapping += "|" + resultName
+		}
 		parsed.Set(sqlio.TagSqlx, mapping)
 		sqlxTag = parsed.Lookup(sqlio.TagSqlx)
 	}

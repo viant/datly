@@ -132,6 +132,9 @@ func (c *Config) Validate() error {
 	if c == nil {
 		return fmt.Errorf("standalone configuration is required")
 	}
+	if err := c.Config.ValidatePathSemantics(); err != nil {
+		return err
+	}
 	if c.JWTClaims != nil && c.JWTValidator == nil {
 		return fmt.Errorf("JWTClaims requires JWTValidator")
 	}

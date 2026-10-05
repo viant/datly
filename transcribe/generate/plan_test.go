@@ -905,8 +905,10 @@ func TestEmitScaffoldSerializesConcurrentTargetWriters(t *testing.T) {
 		t.Fatalf("successful writers = %d, want %d", succeeded, writers)
 	}
 	for i := 0; i < writers; i++ {
-		if _, err := os.Stat(filepath.Join(dir, fmt.Sprintf("users%d_router.go", i))); err != nil {
-			t.Fatal(err)
+		for _, role := range []string{"router", "input", "output"} {
+			if _, err := os.Stat(filepath.Join(dir, fmt.Sprintf("users%d_%s.go", i, role))); err != nil {
+				t.Fatal(err)
+			}
 		}
 	}
 }

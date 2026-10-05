@@ -20,7 +20,7 @@ import (
 func TestGenExecutableOuterProjection(t *testing.T) {
 	ctx := context.Background()
 	binary := filepath.Join(t.TempDir(), "datly")
-	if output, err := exec.CommandContext(ctx, "go", "build", "-o", binary, ".").CombinedOutput(); err != nil {
+	if output, err := testharness.SourceGoCommand(t, "../..", "build", "-o", binary, "./cmd/datly").CombinedOutput(); err != nil {
 		t.Fatalf("build: %v\n%s", err, output)
 	}
 	for _, operation := range []string{"get", "patch"} {

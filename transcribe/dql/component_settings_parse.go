@@ -41,7 +41,7 @@ func parseComponentSettings(blocks []directiveBlock) (ret *componentSettings, er
 				}
 				ret.HandlerName = name
 			}
-		case strings.EqualFold(name, "route"), strings.EqualFold(name, "api_key"):
+		case strings.EqualFold(name, "route"), strings.EqualFold(name, "api_key"), strings.EqualFold(name, "request_body_mode"):
 			// Route settings are validated by parseRouteDirective.
 		case strings.EqualFold(name, "internal"):
 			if internalDeclared || len(args) != 1 || tail != "" {
@@ -379,6 +379,18 @@ func parseComponentSettings(blocks []directiveBlock) (ret *componentSettings, er
 			if err := ret.ResponseCompression.Validate(); err != nil {
 				return nil, err
 			}
+		case strings.EqualFold(name, "nil_slice_policy"):
+			if len(args) != 1 || tail != "" || (ret.Output != nil && ret.Output.NilSlicePolicy != "") {
+				return nil, fmt.Errorf("nil_slice_policy requires one quoted policy, once, without modifiers")
+			}
+			policy, quoted := parseQuotedLiteral(args[0])
+			if !quoted || (policy != "empty_array" && policy != "null") {
+				return nil, fmt.Errorf("nil_slice_policy requires quoted 'empty_array' or 'null'")
+			}
+			if ret.Output == nil {
+				ret.Output = &spec.OutputSettings{}
+			}
+			ret.Output.NilSlicePolicy = policy
 		case strings.EqualFold(name, "output_exclude"):
 			if len(args) == 0 {
 				return nil, fmt.Errorf("output_exclude requires at least one field path")

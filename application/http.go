@@ -57,7 +57,7 @@ func (m *Manager) serveGenerationHTTP(current *generation, w http.ResponseWriter
 		if docURI == "" {
 			docURI = gateway.DefaultDocURI
 		}
-		path := r.URL.EscapedPath()
+		path := current.httpConfig.RoutingPath(r)
 		if path == docURI || prefix != "" && (path == prefix || strings.HasPrefix(path, prefix+"/")) {
 			if err := current.ensureDocuments(ctx); err != nil {
 				internallog.RecordHTTPError(ctx, err)

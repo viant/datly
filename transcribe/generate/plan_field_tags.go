@@ -45,6 +45,7 @@ func fieldTag(param *spec.Parameter, tagName string, metadata []structTagValue) 
 			parts = append(parts, key+"="+encode(value))
 		}
 	}
+	appendValue("bodyNullPolicy", param.BodyNullPolicy)
 	appendValue("when", param.When)
 	appendValue("scope", param.Scope)
 	appendValue("with", param.With)
@@ -90,6 +91,11 @@ func fieldTag(param *spec.Parameter, tagName string, metadata []structTagValue) 
 	}
 	if param.QueryListCSV {
 		base = appendStructTag(base, "queryList", "csv")
+	}
+	if strings.EqualFold(kind, "internal") {
+		base = withoutStructTags(base, "json", "internal")
+		base = appendStructTag(base, "json", "-")
+		base = appendStructTag(base, "internal", "true")
 	}
 	return base
 }

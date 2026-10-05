@@ -19,7 +19,7 @@ import (
 func TestGenExecutableValidAlias(t *testing.T) {
 	ctx := context.Background()
 	binary := filepath.Join(t.TempDir(), "datly")
-	if out, err := exec.CommandContext(ctx, "go", "build", "-o", binary, ".").CombinedOutput(); err != nil {
+	if out, err := testharness.SourceGoCommand(t, "../..", "build", "-o", binary, "./cmd/datly").CombinedOutput(); err != nil {
 		t.Fatalf("build: %v\n%s", err, out)
 	}
 	for _, alias := range []string{"value", "_value"} {

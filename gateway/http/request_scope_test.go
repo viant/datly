@@ -83,3 +83,42 @@ func TestHTTPMultipartFormDoesNotInheritQuery(t *testing.T) {
 		}
 	}
 }
+
+func TestHTTPDeferredMergedFormAndUnusedBody(t *testing.T) {
+	for _, onDemand := range []bool{false, true} {
+		req := httptest.NewRequest("POST", "/?value=query&empty=", strings.NewReader("value=body&empty="))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		scope, err := newHTTPRequestScope(req, nil, onDemand)
+		require.NoError(t, err)
+		for _, p := range scope.Providers() {
+			if p.Kind() == "form" {
+				v, ok, err := p.Locate(nil).Value(context.Background(), reflect.TypeFor[[]string](), "value")
+				require.NoError(t, err)
+				require.True(t, ok)
+				require.Equal(t, []string{"body", "query"}, v)
+				v, ok, err = p.Locate(nil).Value(context.Background(), reflect.TypeFor[[]string](), "empty")
+				require.NoError(t, err)
+				require.True(t, ok)
+				require.Equal(t, []string{"", ""}, v)
+			}
+		}
+		require.NoError(t, scope.Close())
+	}
+	req := httptest.NewRequest("DELETE", "/views/1", strings.NewReader("bad"))
+	req.Header.Set("Content-Type", "multipart/form-data")
+	scope, err := newHTTPRequestScope(req, map[string]string{"id": "1"}, true)
+	require.NoError(t, err)
+	for _, p := range scope.Providers() {
+		if p.Kind() == "path" {
+			v, ok, err := p.Locate(nil).Value(context.Background(), nil, "id")
+			require.NoError(t, err)
+			require.True(t, ok)
+			require.Equal(t, "1", v)
+		}
+	}
+	require.NoError(t, scope.Close())
+	req = httptest.NewRequest("DELETE", "/views/1", strings.NewReader("bad"))
+	req.Header.Set("Content-Type", "multipart/form-data")
+	_, err = newHTTPRequestScope(req, nil)
+	require.Error(t, err)
+}

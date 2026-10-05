@@ -81,7 +81,11 @@ func (v *Validator) Validate(ctx context.Context) (*ValidationReport, error) {
 	if err = ctx.Err(); err != nil {
 		return report, report.failure(err)
 	}
-	prepared, err := project.prepare(base)
+	sourceRoot, err := validationSourceRoots(base, moduleDirs)
+	if err != nil {
+		return report, report.failure(err)
+	}
+	prepared, err := project.prepareAtRoots(base, nil, sourceRoot)
 	if err != nil {
 		return report, report.failure(err)
 	}

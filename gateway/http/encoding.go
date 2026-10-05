@@ -13,7 +13,7 @@ import (
 )
 
 func (h *Handler) writeEncoded(ctx context.Context, writer stdhttp.ResponseWriter, request *stdhttp.Request, status int, value any) {
-	contract, err := h.runtime.ResolveOutputByRoute(ctx, request.Method, request.URL.EscapedPath())
+	contract, err := h.runtime.ResolveOutputByRoute(ctx, request.Method, h.routingPath(request))
 	if err != nil {
 		h.writeOutputError(ctx, writer, err)
 		return
@@ -51,7 +51,7 @@ func (h *Handler) writeOutputError(ctx context.Context, writer stdhttp.ResponseW
 // outputFormat is shared by encoding and async dispatch policy, so invalid or
 // forced-synchronous formats are decided before a durable job is created.
 func (h *Handler) outputFormat(ctx context.Context, request *stdhttp.Request) (string, error) {
-	contract, err := h.runtime.ResolveOutputByRoute(ctx, request.Method, request.URL.EscapedPath())
+	contract, err := h.runtime.ResolveOutputByRoute(ctx, request.Method, h.routingPath(request))
 	if err != nil {
 		return "", err
 	}
@@ -60,7 +60,7 @@ func (h *Handler) outputFormat(ctx context.Context, request *stdhttp.Request) (s
 
 func (h *Handler) outputFormatWithDefault(request *stdhttp.Request, contract *output.Plan) (string, error) {
 	format := contract.DefaultFormat()
-	if route, ok := h.runtime.RouteByMethodPath(request.Method, request.URL.EscapedPath()); ok && route.Marshaller != "" {
+	if route, ok := h.runtime.RouteByMethodPath(request.Method, h.routingPath(request)); ok && route.Marshaller != "" {
 		format = route.Marshaller
 	}
 	source, explicit := contract.FormatSelector()

@@ -1065,3 +1065,7 @@ panics are contained with bounded diagnostics; logger panics during that reporti
 are contained too. Error causes are private diagnostics and must follow the
 application's existing redaction policy. Observation is optional and does not
 change the default lifecycle or error policy.
+
+See [root structural validation and queue observation](session-lifecycle.md) for
+the opt-in root null policy and per-item queue-attempt observer, including
+identity-only update evidence and transaction completion boundaries.

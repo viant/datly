@@ -80,7 +80,7 @@ func TestGenCommandSQLite(t *testing.T) {
 	}
 
 	// Compile the actual executable without this test binary's SQLite metadata imports.
-	command := exec.CommandContext(ctx, "go", append([]string{"run", "."}, args...)...)
+	command := testharness.SourceGoCommand(t, "../..", "run", append([]string{"./cmd/datly"}, args...)...)
 	if output, err := command.CombinedOutput(); err != nil {
 		t.Fatalf("real gen command: %v\n%s", err, output)
 	}
@@ -163,7 +163,7 @@ func TestGenExecutableDestinations(t *testing.T) {
 	}
 	args := []string{"run", ".", "transcribe", "patch", "-dir", root, "-schema", "-connector", "main", "-driver", "sqlite3", "-dsn", filepath.Join(db.TempDir, "test.db"), module + "/source"}
 	for iteration := 0; iteration < 2; iteration++ {
-		command := exec.CommandContext(ctx, "go", args...)
+		command := testharness.SourceGoCommand(t, "../..", args[0], append([]string{"./cmd/datly"}, args[2:]...)...)
 		if output, err := command.CombinedOutput(); err != nil {
 			t.Fatalf("destination gen executable: %v\n%s", err, output)
 		}
@@ -186,7 +186,7 @@ func TestGenExecutableDestinations(t *testing.T) {
 func TestTranscribeOperationsSQLite(t *testing.T) {
 	ctx := context.Background()
 	binary := filepath.Join(t.TempDir(), "datly")
-	if output, err := exec.CommandContext(ctx, "go", "build", "-o", binary, ".").CombinedOutput(); err != nil {
+	if output, err := testharness.SourceGoCommand(t, "../..", "build", "-o", binary, "./cmd/datly").CombinedOutput(); err != nil {
 		t.Fatalf("build CLI: %v\n%s", err, output)
 	}
 	db := sqlite.New(t)

@@ -35,7 +35,7 @@ func resolveInputFields(component *spec.Component, declarations Declarations) ([
 			return nil, err
 		}
 		if ok {
-			if component.Settings != nil && component.Settings.Mutation != "" && strings.EqualFold(strings.TrimSpace(param.Source.Kind), "body") {
+			if component.Settings != nil && component.Settings.Mutation != "" && param.IsMutationInput() {
 				field.Tag, err = appendViewTags(field.Tag, component.RootView)
 				if err != nil {
 					return nil, err

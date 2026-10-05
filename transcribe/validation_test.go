@@ -89,3 +89,53 @@ func TestValidatorRejectsMalformedGoShapeSQL(t *testing.T) {
 		t.Fatalf("malformed Go-shape SQL accepted: report=%+v err=%v", report, err)
 	}
 }
+
+func TestValidatorConfiguredNestedModules(t *testing.T) {
+	for _, test := range []struct {
+		name, destination, secondRoute, errorText string
+		valid                                     bool
+	}{
+		{"own-module", "example.com/app/reader/api", "/writer", "", true},
+		{"sibling-module", "example.com/app/writer/api", "/writer", "outside project module", false},
+		{"parent-module", "example.com/app/api", "/writer", "outside project module", false},
+		{"cross-module-route-collision", "example.com/app/reader/api", "/reader", "is shared by components", false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			base := t.TempDir()
+			writeSourceFile(t, base, "go.mod", discoverGoMod)
+			writeSourceFile(t, base, "reader/go.mod", "module example.com/app/reader\n\ngo 1.25.0\n")
+			writeSourceFile(t, base, "writer/go.mod", "module example.com/app/writer\n\ngo 1.25.0\n")
+			reader := "#package('" + test.destination + "')\n#setting($_ = $route('/reader', 'GET'))\nSELECT 1 AS ID"
+			writer := "#package('example.com/app/writer/api')\n#setting($_ = $route('" + test.secondRoute + "', 'GET'))\nSELECT 1 AS ID"
+			writeSourceFile(t, base, "reader/source/Reader.dql", reader)
+			writeSourceFile(t, base, "writer/source/Writer.dql", writer)
+			report, err := (&Validator{BaseDir: base, ModuleDirs: []string{"reader", "writer"},
+				Include: []string{"example.com/app/reader/source", "example.com/app/writer/source"}}).Validate(context.Background())
+			if (err == nil) != test.valid || report.Valid != test.valid {
+				t.Fatalf("report=%+v err=%v", report, err)
+			}
+			if test.errorText != "" && (err == nil || !strings.Contains(err.Error(), test.errorText)) {
+				t.Fatalf("expected %q error, got %v", test.errorText, err)
+			}
+			if test.valid && len(report.Components) != 2 {
+				t.Fatalf("components=%v", report.Components)
+			}
+			for _, destination := range []string{"api", "reader/api", "writer/api", "generated"} {
+				if _, err := os.Stat(filepath.Join(base, destination)); !os.IsNotExist(err) {
+					t.Fatalf("validation changed destination %s: %v", destination, err)
+				}
+			}
+		})
+	}
+}
+
+func TestValidatorConfiguredRootDoesNotExpandToWholeModule(t *testing.T) {
+	base := t.TempDir()
+	writeSourceFile(t, base, "go.mod", discoverGoMod)
+	writeSourceFile(t, base, "reader/go.mod", "module example.com/app/reader\n\ngo 1.25.0\n")
+	writeSourceFile(t, base, "reader/scoped/source/Reader.dql", "#package('example.com/app/reader/outside')\n#setting($_ = $route('/reader', 'GET'))\nSELECT 1 AS ID")
+	report, err := (&Validator{BaseDir: base, ModuleDirs: []string{"reader/scoped"}, Include: []string{"example.com/app/reader/scoped/source"}}).Validate(context.Background())
+	if err == nil || report.Valid || !strings.Contains(err.Error(), "escapes project root") {
+		t.Fatalf("report=%+v err=%v", report, err)
+	}
+}

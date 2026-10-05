@@ -73,7 +73,7 @@ func (h *Handler) serveStatic(writer stdhttp.ResponseWriter, req *stdhttp.Reques
 		return false
 	}
 	// Any component path owns all methods, including its 405 and CORS behavior.
-	if len(h.runtime.AllowedMethodsForPath(req.URL.EscapedPath())) > 0 || len(h.runtime.AllowedMethodsForPath(req.URL.Path)) > 0 {
+	if len(h.runtime.AllowedMethodsForPath(h.routingPath(req))) > 0 {
 		return false
 	}
 	for _, route := range h.static {

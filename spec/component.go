@@ -59,9 +59,12 @@ type Settings struct {
 
 // OutputSettings describes presentation policy independently of the row shape.
 type OutputSettings struct {
-	Exclude   []string `json:"exclude,omitempty"`
-	OmitEmpty bool     `json:"omitEmpty,omitempty"`
-	Title     string   `json:"title,omitempty"`
+	// NilSlicePolicy selects native JSON slice presentation: empty_array or null.
+	// An empty value leaves the existing encoder selection and defaults unchanged.
+	NilSlicePolicy string   `json:"nilSlicePolicy,omitempty"`
+	Exclude        []string `json:"exclude,omitempty"`
+	OmitEmpty      bool     `json:"omitEmpty,omitempty"`
+	Title          string   `json:"title,omitempty"`
 }
 
 // GenerationSettings contains transcription controls that are consumed while
@@ -158,16 +161,17 @@ type CacheWarmupParam struct {
 }
 
 type Route struct {
-	CORS         *CORS          `json:"cors,omitempty"`
-	Method       string         `json:"method"`
-	Path         string         `json:"path"`
-	Name         string         `json:"name,omitempty"`
-	Internal     bool           `json:"internal,omitempty"`
-	Marshaller   string         `json:"marshaller,omitempty"`
-	Handler      string         `json:"handler,omitempty"`
-	APIKeyHeader string         `json:"apiKeyHeader,omitempty"`
-	APIKeyValue  string         `json:"apiKeyValue,omitempty"`
-	MCP          []*MCPExposure `json:"mcp,omitempty"`
+	RequestBodyMode string         `json:"requestBodyMode,omitempty"`
+	CORS            *CORS          `json:"cors,omitempty"`
+	Method          string         `json:"method"`
+	Path            string         `json:"path"`
+	Name            string         `json:"name,omitempty"`
+	Internal        bool           `json:"internal,omitempty"`
+	Marshaller      string         `json:"marshaller,omitempty"`
+	Handler         string         `json:"handler,omitempty"`
+	APIKeyHeader    string         `json:"apiKeyHeader,omitempty"`
+	APIKeyValue     string         `json:"apiKeyValue,omitempty"`
+	MCP             []*MCPExposure `json:"mcp,omitempty"`
 }
 
 // IsZero reports whether any component settings are configured.

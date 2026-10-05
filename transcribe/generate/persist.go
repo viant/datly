@@ -64,6 +64,13 @@ func (p *scaffoldPersistence) Commit() error {
 	}
 	release := scaffoldLocks.acquire(target)
 	defer release()
+	return p.commitLocked(target)
+}
+
+// commitLocked retains the existing transactional persistence behavior while
+// EmitScaffold holds the target lock through the preceding preflight.
+func (p *scaffoldPersistence) commitLocked(target string) error {
+	var err error
 	parent := filepath.Dir(target)
 	if err = os.MkdirAll(parent, 0o755); err != nil {
 		return err
