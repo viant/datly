@@ -120,7 +120,7 @@ column_type_name = identifier, [".", identifier] ;
    channel/generic-instantiation AST expressions are rejected. Named rich types
    remain possible. WithColumnType/ColumnType use this same production. *)
 column_tag = "tag", "(", column_ref, ",", string, ")" ;
-internal_column = "internal", "(", column_ref, ")" ;
+internal_column = ("internal" | "internal_transient"), "(", column_ref, ")" ;
 invariant = "invariant", "(", column_ref, ",", string, ")" ;
 mutation_marker = ("delete_marker" | "concurrency_token"), "(", column_ref, ")" ;
 (* One of each per mutable view, generated PATCH/PUT Go policy only.
@@ -130,7 +130,9 @@ mutation_marker = ("delete_marker" | "concurrency_token"), "(", column_ref, ")" 
 column_ref = view_name, ".", sql_column ;
 outer_sql_expression = ? expression accepted by SQLparser and outer projection
                         compiler; not a substitute for declaring column authority ? ;
-(* Rich CAST, tag, internal and invariant address named outer views, not inner aliases.
+(* internal_transient lowers to sqlx:"-" diff:"-" internal:"true" json:"-".
+   It retains scalar presence and rejects conflicting authored tags. *)
+(* Rich CAST, tag, internal/internal_transient and invariant address named outer views, not inner aliases.
    Inner CAST(expr AS database_type) is SQL, not a Go type annotation. *)
 
 view_control = named_binding_control | numeric_control | flag_control

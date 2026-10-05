@@ -37,7 +37,7 @@ func TestGeneratedLogicalRequestPresence(t *testing.T) {
 #define($_ = $Events<[]*EventsView>(body/data))
 #define($_ = $CurrentEvents<?>(view/CurrentEvents).Cardinality('Many') /* SELECT id,name FROM events WHERE id IN (#foreach($event in $Events)$event.Id#if($foreach.HasNext),#end#end) */)
 #define($_ = $Data<[]*EventsView>(output/body))
-SELECT e.*,CAST(e.category AS '*string'),CAST(e.labels AS '[]string'),CAST(e.enabled AS bool),CAST(e.count AS int),CAST(e.signals AS '*domain.Signals'),CAST(e.trustedsignals AS '*domain.Signals'),CAST(e.internalfalse AS bool),CAST(e.internalzero AS int),tag(e.category,'sqlx:"-"'),tag(e.labels,'sqlx:"-"'),tag(e.enabled,'sqlx:"-"'),tag(e.count,'sqlx:"-"'),tag(e.signals,'sqlx:"-"'),tag(e.hidden,'sqlx:"-" json:"-"'),tag(e.internal,'sqlx:"-" internal:"true"'),tag(e.hiddenformat,'sqlx:"-" format:"-"'),tag(e.trustedsignals,'sqlx:"-" internal:"true"'),tag(e.internalfalse,'sqlx:"-" internal:"true"'),tag(e.internalzero,'sqlx:"-" internal:"true"')
+SELECT e.*,CAST(e.category AS '*string'),CAST(e.labels AS '[]string'),CAST(e.enabled AS bool),CAST(e.count AS int),CAST(e.signals AS '*domain.Signals'),CAST(e.trustedsignals AS '*domain.Signals'),CAST(e.internalfalse AS bool),CAST(e.internalzero AS int),tag(e.category,'sqlx:"-"'),tag(e.labels,'sqlx:"-"'),tag(e.enabled,'sqlx:"-"'),tag(e.count,'sqlx:"-"'),tag(e.signals,'sqlx:"-"'),tag(e.hidden,'sqlx:"-" json:"-"'),tag(e.internal,'sqlx:"-" internal:"true"'),tag(e.hiddenformat,'sqlx:"-" format:"-"'),tag(e.trustedsignals,'sqlx:"-" internal:"true"'),internal_transient(e.internalfalse),internal_transient(e.internalzero)
 FROM (SELECT id,name,'' AS category,'' AS labels,0 AS enabled,0 AS count,'' AS signals,'' AS hidden,'' AS internal,'' AS hiddenformat,'' AS trustedsignals,0 AS internalfalse,0 AS internalzero FROM events) e`}
 	request := Request{Source: source, Destination: root, Options: Options{Handler: HandlerOptions{Target: HandlerGo, Operation: WritePatch, Current: "CurrentEvents"}}}
 	var first map[string]string
@@ -139,6 +139,7 @@ import (
  "github.com/viant/bindly/resource"
  requestprovider "github.com/viant/bindly/provider/request"
  "github.com/viant/datly/bootstrap"
+ "github.com/viant/datly/runtime/differ"
  dexec "github.com/viant/datly/exec"
  tformat "github.com/viant/tagly/format"
  gateway "github.com/viant/datly/gateway/http"
@@ -163,7 +164,12 @@ import (
 var internalPresenceFields=[]string{"Hidden","Internal","Hiddenformat","Trustedsignals","Internalfalse","Internalzero"}
 var privateTransportFields=[]string{"Hidden","Internal","Trustedsignals","Internalfalse","Internalzero"}
 func formatLiteralName()string{field,_:=reflect.TypeOf(EventsView{}).FieldByName("Hiddenformat");name:=strings.Split(field.Tag.Get("json"),",")[0];if name==""{name=field.Name};return name}
+func TestInternalTransientDiffExclusion(t *testing.T){
+ from,to:=&EventsView{},&EventsView{};from.SetInternalfalse(false);to.SetInternalfalse(true);from.SetInternalzero(0);to.SetInternalzero(9)
+ changes,err:=differ.New().Diff(context.Background(),from,to);if err!=nil{t.Fatal(err)};if records:=changes.ToChangeRecords();len(records)!=0{t.Fatalf("transient fields appeared in diff: %+v",records)}
+}
 func TestInternalPresenceFieldMetadata(t *testing.T){
+ for _,name:=range []string{"Internalfalse","Internalzero"}{field,ok:=reflect.TypeOf(EventsView{}).FieldByName(name);if !ok{t.Fatal("missing transient field")};for key,want:=range map[string]string{"sqlx":"-","diff":"-","internal":"true","json":"-"}{if field.Tag.Get(key)!=want{t.Fatalf("%s %s=%q",name,key,field.Tag.Get(key))}};if _,ok:=reflect.TypeOf(EventsViewHas{}).FieldByName(name);!ok{t.Fatalf("missing transient Has %s",name)}}
  metadata:=map[string]any{};for _,entry:=range []struct{name string;typ reflect.Type}{{"body",reflect.TypeOf(EventsView{})},{"Has",reflect.TypeOf(EventsViewHas{})}}{var fields []map[string]string;for i:=0;i<entry.typ.NumField();i++{field:=entry.typ.Field(i);fields=append(fields,map[string]string{"name":field.Name,"type":field.Type.String(),"tag":string(field.Tag)})};metadata[entry.name]=fields};data,err:=json.Marshal(metadata);if err!=nil{t.Fatal(err)};t.Logf("BODY_FIELD_METADATA %s",data)
  field,_:=reflect.TypeOf(EventsView{}).FieldByName("Hiddenformat");parsed,err:=tformat.Parse(field.Tag);if err!=nil||parsed.Ignore||parsed.CaseFormat!="-"{t.Fatalf("pinned literal format semantics %+v %v",parsed,err)}
 }

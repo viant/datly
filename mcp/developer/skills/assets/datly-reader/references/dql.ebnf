@@ -121,7 +121,7 @@ column_type_name = identifier, [".", identifier] ;
    channel/generic-instantiation AST expressions are rejected. Named rich types
    remain possible. WithColumnType/ColumnType use this same production. *)
 column_tag = "tag", "(", column_ref, ",", string, ")" ;
-internal_column = "internal", "(", column_ref, ")" ;
+internal_column = ("internal" | "internal_transient"), "(", column_ref, ")" ;
 column_nullability = ("required" | "optional"), "(", column_ref, ")" ;
 invariant = "invariant", "(", column_ref, ",", string, ")" ;
 mutation_marker = ("delete_marker" | "concurrency_token"), "(", column_ref, ")" ;

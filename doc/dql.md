@@ -653,6 +653,7 @@ Syntax fragment; adapt within the [complete reader contract](dql.md#a-shared-vie
 CAST(r.bounds AS model.Bounds)
 tag(r.bounds, 'sqlx:"-"')
 internal(r.BOUND_UNIT) -- shorthand for tag(r.BOUND_UNIT, 'internal:"true"')
+internal_transient(r.CALLER) -- sqlx:"-" diff:"-" internal:"true" json:"-"
 tag(r.name, 'validate:"required"')
 ~~~~
 
@@ -660,6 +661,13 @@ tag(r.name, 'validate:"required"')
 invocation and omits it from external HTTP routing. `internal(view.column)`
 annotates one output field with `internal:"true"`; it does not change route
 visibility or remove the field's SQL mapping. These are independent controls.
+
+Use `internal_transient(view.column)` for application-only scalar fields excluded
+from SQL mapping, diffs, and JSON. It lowers to
+`sqlx:"-" diff:"-" internal:"true" json:"-"`, preserving unrelated tags and
+the generated field and presence marker. Like other column annotations, it
+belongs on the outer projection, requires one qualified column, and rejects
+conflicting tags. Public logical fields can still use `sqlx:"-"` alone.
 
 Prefer an outer CAST to declare the intended Go type, especially for rich hook-populated fields:
 

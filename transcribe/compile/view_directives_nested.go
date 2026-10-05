@@ -82,7 +82,7 @@ func validateDatabaseSQL(parsed *query.Select) error {
 	}
 	marker := ""
 	if containsViewDirective(parsed) || containsSQLCall(parsed, func(name string) bool {
-		if name == "delete_marker" || name == "concurrency_token" {
+		if name == "delete_marker" || name == "concurrency_token" || name == "internal_transient" {
 			marker = name
 			return true
 		}
