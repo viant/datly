@@ -278,6 +278,7 @@ func TestGeneratedCurrentKeyHelpersSupportPhysicalAndProjectedColumns(t *testing
 	}{
 		{name: "physical", want: "pod_id"},
 		{name: "projected alias", parameterTag: `compositeAlias:"PodId"`, want: "PodId"},
+		{name: "derived SQL alias differs from Go field", parameterTag: `compositeAlias:"PodId=pod_id"`, want: "pod_id"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			param := &spec.Parameter{Name: "PatchKeys", Source: spec.BindSource{Kind: "param", Name: "Patch"}, Tag: tc.parameterTag}

@@ -106,8 +106,8 @@ func (r *planResolver) concretizeGeneratedHelperFields() error {
 				// physical SQLX column (TENANT_ID). Only keys explicitly renamed by
 				// the current view's outer projection address the derived table by
 				// their logical output alias (RootKey).
-				if aliasColumns[helper.Fields[index].Name] {
-					valueSQLX = projected.Name
+				if output := aliasColumns[helper.Fields[index].Name]; output != "" {
+					valueSQLX = output
 				}
 				if valueSQLX != "" {
 					helper.Fields[index].Tag = appendStructTag(helper.Fields[index].Tag, sqlio.TagSqlx, valueSQLX)
@@ -123,15 +123,20 @@ func (r *planResolver) concretizeGeneratedHelperFields() error {
 	return nil
 }
 
-func compositeAliasColumns(param *spec.Parameter) map[string]bool {
-	result := map[string]bool{}
+func compositeAliasColumns(param *spec.Parameter) map[string]string {
+	result := map[string]string{}
 	if param == nil {
 		return result
 	}
 	value := reflect.StructTag(param.Tag).Get("compositeAlias")
 	for _, item := range strings.Split(value, ",") {
-		if name := strings.TrimSpace(item); name != "" {
-			result[name] = true
+		name, output, mapped := strings.Cut(strings.TrimSpace(item), "=")
+		name, output = strings.TrimSpace(name), strings.TrimSpace(output)
+		if name != "" {
+			if !mapped {
+				output = name
+			}
+			result[name] = output
 		}
 	}
 	return result

@@ -46,6 +46,13 @@ predicates and writer Current/Previous queries use actual SQL result/source
 columns; typed matching, setters and presence use the Go fields. A field rename
 must not remove primary-key metadata, broaden row scope or change relation keys.
 
+Writer Current projections follow explicit inner SQL aliases through named-view
+wildcard wrappers. For example, a query exposing `pod_id` is read and filtered
+through `pod_id`, even when its underlying physical column is `id` and its Go
+field is `PodId`. Composite lookup helpers retain each SQL output name separately;
+two tables exposing different aliases of `id` must not collapse to one key. Alias
+resolution belongs to the compiled plan and does not inspect runtime row values.
+
 ## Public naming and types
 
 - Outer direct-column `AS` renames a generated Go field.

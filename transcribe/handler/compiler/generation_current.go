@@ -10,6 +10,8 @@ import (
 	plan "github.com/viant/datly/transcribe/handler/ast"
 	"github.com/viant/datly/typecatalog"
 	"github.com/viant/sqlparser"
+	"github.com/viant/sqlparser/expr"
+	"github.com/viant/sqlparser/query"
 )
 
 func (b *inputGeneration) currentName(view *spec.View) (string, error) {
@@ -64,12 +66,14 @@ func (b *inputGeneration) addCurrent(view *spec.View, body string, path []string
 			return fmt.Errorf("generation key %s has no source column", key.Field)
 		}
 		alias := ""
+		columnName := ""
 		for _, col := range view.Columns {
 			if col != nil && effectivePrimaryKey(col) && typecatalog.FieldName(col.Name) == key.Field {
 				// StructQL helper projections are Go shapes. Keep the physical
 				// database name in SQLX metadata and use the canonical exported
 				// field name for the generated helper contract.
 				alias = key.Field
+				columnName = col.Name
 				break
 			}
 		}
@@ -77,12 +81,16 @@ func (b *inputGeneration) addCurrent(view *spec.View, body string, path []string
 			return fmt.Errorf("generation key %s has no projection", key.Field)
 		}
 		source := key.Field
-		if output := outputs[strings.ToLower(strings.TrimSpace(key.Source))]; output != "" {
+		output := outputs[strings.ToLower(strings.TrimSpace(columnName))]
+		if output == "" {
+			output = outputs[strings.ToLower(strings.TrimSpace(key.Source))]
+		}
+		if output != "" {
 			alias = typecatalog.FieldName(output)
 			// StructQL reads the entity Go field; the destination alias names
 			// the current SQL output. An outer field-only rename can differ.
 			if !strings.EqualFold(strings.TrimSpace(output), strings.TrimSpace(key.Source)) {
-				aliased = append(aliased, alias)
+				aliased = append(aliased, alias+"="+output)
 			}
 		}
 		projection = append(projection, source+" AS "+alias)
@@ -261,6 +269,40 @@ func currentSourceOutputs(SQL string) map[string]string {
 	}
 	for _, item := range parsed.List {
 		column := sqlparser.NewColumn(item)
+		if _, wildcard := item.Expr.(*expr.Star); wildcard && (column.Namespace == "" || column.Namespace == "*" || strings.EqualFold(column.Namespace, parsed.From.Alias)) {
+			// A named-view wrapper exposes its subquery's output labels, not
+			// the physical columns behind them. Resolve this once while building
+			// the plan; never teach the runtime to guess aliases from row values.
+			var nested string
+			switch source := parsed.From.X.(type) {
+			case *query.Select:
+				nested = sqlparser.Stringify(source)
+			case *expr.Raw:
+				nested = source.Raw
+			case *expr.Parenthesis:
+				nested = source.Raw
+			}
+			nested = strings.TrimSpace(nested)
+			for len(nested) >= 2 && nested[0] == '(' && nested[len(nested)-1] == ')' {
+				nested = strings.TrimSpace(nested[1 : len(nested)-1])
+			}
+			if nested != "" && nested != SQL {
+				for name, output := range currentSourceOutputs(nested) {
+					excluded := false
+					for _, except := range column.Except {
+						if strings.EqualFold(strings.TrimSpace(except), output) {
+							excluded = true
+							break
+						}
+					}
+					if excluded {
+						continue
+					}
+					result[name] = output
+				}
+			}
+			continue
+		}
 		if column.Expression != "" || strings.TrimSpace(column.Name) == "" {
 			continue
 		}
