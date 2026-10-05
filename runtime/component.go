@@ -141,6 +141,17 @@ func (r *Runtime) invokeComponent(ctx context.Context, request dexec.ComponentRe
 	if !ok {
 		return nil, fmt.Errorf("registered route input contract not found: %s", route.String())
 	}
+	var resolvedInput any
+	var resolvedPaths []string
+	if request.ExtraInput != nil {
+		if err := validateSeedAdmission(request, registered); err != nil {
+			return nil, err
+		}
+		resolvedInput, resolvedPaths, err = r.prepareReaderSeed(ctx, registered, inputRoute, request.ExtraInput)
+		if err != nil {
+			return nil, err
+		}
+	}
 	if len(request.WarmupOmitInput) > 0 {
 		inputRoute, err = inputRoute.WithOptionalBindings(request.WarmupOmitInput...)
 		if err != nil {
@@ -241,6 +252,8 @@ func (r *Runtime) invokeComponent(ctx context.Context, request dexec.ComponentRe
 		OutputType:                   registered.OutputType,
 		OutputCapabilities:           outputPlan,
 		BoundInput:                   request.Input,
+		ResolvedInput:                resolvedInput,
+		ResolvedPaths:                resolvedPaths,
 		Replay:                       request.Replay,
 		BindingOutput:                request.BindingOutput,
 		Injectors:                    (&componentInjectors{runtime: r, scope: effectiveScope}).Lookup,

@@ -2285,9 +2285,67 @@ func compileRelations(component *spec.Component, inputType reflect.Type, parent 
 		if len(relation.Links) == 0 {
 			return fmt.Errorf("writer relation %s has no typed links", child.Path)
 		}
+		retainInheritedIdentity(parent, relation)
 		parent.Relations = append(parent.Relations, relation)
 	}
 	return nil
+}
+
+// A shared primary key inherits its identity from the immediate parent. Keep
+// the physical key and relation metadata, but do not allocate a second identity.
+// Qualified and ambiguous ownership remains outside this classification.
+func retainInheritedIdentity(parent *Record, relation *Relation) {
+	child := relation.Child
+	if parent.Auxiliary || child.Auxiliary || len(parent.Keys) != 1 || len(child.Keys) != 1 || child.Sequence == nil || child.Sequence.AutoIncrement {
+		return
+	}
+	parentKey, childKey := parent.Keys[0], child.Keys[0]
+	if !numericField(child.EntityType, childKey) || !sameIdentityField(childKey, *child.Sequence) || childKey.RefDB != "" ||
+		!unqualifiedIdentity(parent.Table) || !unqualifiedIdentity(child.Table) || !unqualifiedIdentity(parentKey.Column) || !unqualifiedIdentity(childKey.Column) ||
+		childKey.RefTable != parent.Table || childKey.RefColumn != parentKey.Column {
+		return
+	}
+	field := child.EntityType.FieldByIndex(childKey.Index)
+	if _, declared := field.Tag.Lookup("generator"); declared {
+		return
+	}
+	for _, option := range strings.Split(field.Tag.Get("sqlx"), ",")[1:] {
+		name, _, _ := strings.Cut(strings.TrimSpace(option), "=")
+		if strings.EqualFold(name, "sequence") || strings.EqualFold(name, "generator") {
+			return
+		}
+	}
+	linked := 0
+	for _, link := range relation.Links {
+		if !sameIdentityField(link.Child, childKey) {
+			continue
+		}
+		linked++
+		if !sameIdentityField(link.Parent, parentKey) {
+			return
+		}
+	}
+	if linked == 1 {
+		child.Sequence = nil
+		child.Selector = ""
+	}
+}
+
+func sameIdentityField(left, right Field) bool {
+	return left.Name == right.Name && left.Column == right.Column && reflect.DeepEqual(left.Index, right.Index)
+}
+
+func unqualifiedIdentity(name string) bool {
+	if name == "" {
+		return false
+	}
+	for i, char := range name {
+		if char == '_' || char == '$' || char >= 'a' && char <= 'z' || char >= 'A' && char <= 'Z' || i > 0 && char >= '0' && char <= '9' {
+			continue
+		}
+		return false
+	}
+	return true
 }
 
 func compileRecord(component *spec.Component, inputType reflect.Type, name, path string, entityType reflect.Type, view *spec.View, viewTag string) (*Record, error) {

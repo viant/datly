@@ -85,6 +85,17 @@ from HTTP routes/MCP tools; privacy is not an authorization bypass. Explicit
 trusted typed input forwarding is a separate operation and must not be exposed
 as a client-controlled service override.
 
+An internal Go caller can supply `ComponentRequest.ExtraInput: exec.WithInput(extra)`
+to reuse explicitly marked values from the exact registered native reader input
+type. This is trusted application input, including any supplied Jwt/Auth values;
+it does not establish verifier provenance or recheck credential expiry. Selected
+data is cloned for the invocation. Missing, scoped and noncacheable fields bind
+normally; runtime capabilities are excluded. Unsupported mutable graphs fail.
+The canonical plan still evaluates conditions, validates values and sets presence
+markers. `ExtraInput` is excluded from JSON and public HTTP/MCP inputs. It cannot
+combine with `Input`, replay, mutation/custom handlers or operational preparation.
+The caller must not mutate the supplied input during capture.
+
 MCP transport authorization, HTTP API keys, JWT input verification and business
 row predicates serve different purposes. An authenticated MCP connection does
 not silently create a component JWT input. OpenAPI document access is also a

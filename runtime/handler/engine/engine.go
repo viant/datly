@@ -36,12 +36,16 @@ type Request struct {
 	Injector           *bindly.Injector
 	Input              *registry.RouteInputContract
 	BoundInput         any
-	Replay             *bindly.ReplayBinding
-	BindingOutput      any
-	Injectors          func(context.Context, any, xhandler.Route) (xhandler.Binder, error)
-	Scope              dexec.ProviderScope
-	Capabilities       rhandler.InvocationCapabilities
-	Providers          []locator.Provider
+	// ResolvedInput/ResolvedPaths are dispatcher-owned reader seeds, not a
+	// replacement for BoundInput or transport replay.
+	ResolvedInput any
+	ResolvedPaths []string
+	Replay        *bindly.ReplayBinding
+	BindingOutput any
+	Injectors     func(context.Context, any, xhandler.Route) (xhandler.Binder, error)
+	Scope         dexec.ProviderScope
+	Capabilities  rhandler.InvocationCapabilities
+	Providers     []locator.Provider
 	// Constants is runtime-derived canonical constant authority. It remains
 	// separate from caller-controlled providers so authority cannot be forged.
 	Constants locator.Provider
@@ -99,6 +103,9 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 	}
 	if request.Replay != nil && request.BoundInput != nil {
 		return nil, fmt.Errorf("replay requires canonical binding, not BoundInput")
+	}
+	if request.ResolvedInput != nil && (request.BoundInput != nil || request.Replay != nil) {
+		return nil, fmt.Errorf("resolved reader input cannot combine with BoundInput or replay")
 	}
 	input, bound, err := invocationInput(inputType, request.BoundInput)
 	if err != nil {
@@ -381,6 +388,9 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 			options := []bindly.BindOption{bindly.WithPlan(bindPlan), bindly.WithSource(input)}
 			if request.Replay != nil {
 				options = append(options, bindly.WithReplay(*request.Replay))
+			}
+			if request.ResolvedInput != nil {
+				options = append(options, bindly.WithResolvedInput(inputPlan, request.ResolvedInput, request.ResolvedPaths...))
 			}
 			if reads != nil {
 				options = append(options, bindly.WithBindingObserver(reads.observe))

@@ -35,6 +35,9 @@ type ComponentRequest struct {
 	IndependentChildTransactions bool
 	Target                       ComponentTarget
 	Input                        any
+	// ExtraInput explicitly seeds trusted data on an ordinary native reader.
+	// It is never deserialized or populated by HTTP/MCP request binding.
+	ExtraInput *InputSeed `json:"-"`
 	// Replay is a native binding seed, never pre-bound component input.
 	Replay *bindly.ReplayBinding
 	// BindingOutput supplies the calling output to explicitly declared output bindings.
