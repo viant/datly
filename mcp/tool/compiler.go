@@ -11,6 +11,7 @@ import (
 
 	bindstate "github.com/viant/bindly/state"
 	"github.com/viant/datly/exec"
+	"github.com/viant/datly/internal/inputvisibility"
 	mcpinput "github.com/viant/datly/mcp/input"
 	"github.com/viant/datly/runtime/output"
 	"github.com/viant/datly/runtime/registry"
@@ -78,6 +79,13 @@ func (c *Compiler) Compile(input Input) (*Plan, error) {
 		binding := inputField.Binding()
 		compileField := c.fields[strings.ToLower(strings.TrimSpace(binding.Location.Kind))]
 		if compileField == nil {
+			continue
+		}
+		selectionField, err := inputField.StructField()
+		if err != nil {
+			return nil, fmt.Errorf("compile MCP tool %q: %w", name, err)
+		}
+		if inputvisibility.Internal(input.Contract.Type(), selectionField.Index) {
 			continue
 		}
 		if inputField.Anonymous() {

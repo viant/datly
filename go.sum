@@ -1085,6 +1085,8 @@ github.com/viant/assertly v0.9.1-0.20220620174148-bab013f93a60 h1:VFJvCOHKXv4IqX
 github.com/viant/assertly v0.9.1-0.20220620174148-bab013f93a60/go.mod h1:aGifi++jvCrUaklKEKT0BU95igDNaqkvz+49uaYMPRU=
 github.com/viant/bindly v0.2.1-0.20260915164201-7cf35da5bd9a h1:/3xeUEE2zmYpreibDQ9sXt+CsMiXIhxVkzDeJs1nWKw=
 github.com/viant/bindly v0.2.1-0.20260915164201-7cf35da5bd9a/go.mod h1:09YU4fJL0QlMmtrPZRZVx005W9Lsgp0pREeUzSVgHyo=
+github.com/viant/bindly v0.3.0 h1:8Ikb0n2cAX5l03v/vB2WOiT4gyTc94br2O5d+tfEXvc=
+github.com/viant/bindly v0.3.0/go.mod h1:vaA54vSN+4hcYVRl9//J+e9zsffhVUx4uHVylep8+10=
 github.com/viant/bindly v0.3.1-0.20261005154615-b7ad422ba78f h1:o0cJ18rvb3p8VXHThKE/aaG2K7iLNIsl/Qw3E/62xrA=
 github.com/viant/bindly v0.3.1-0.20261005154615-b7ad422ba78f/go.mod h1:q+opZUeH4hMeN+yqvoxEWy5dwBD6ln9vI75AZT14H5U=
 github.com/viant/bindly v0.4.0 h1:7ApxucQTlw8M1SkWdEGaFRIkEALDX7SGy22upDct8W8=
