@@ -253,7 +253,7 @@ func (c *Compiler) Compile(ctx context.Context, source *Source) (*Result, error)
 		if err = columnCompilation.RefineViews(ctx, component, source.Resources, templateInput); err != nil {
 			return nil, err
 		}
-	} else if err := column.New(nil).ValidateSourceProjections(component, source.Resources); err != nil {
+	} else if err := column.New(nil).ValidateSourceProjections(component, source.Resources, typeResolver); err != nil {
 		return nil, err
 	}
 	if _, err := bootstrap.NormalizeCodecReferences(component, compiledTypeContext); err != nil {
