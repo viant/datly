@@ -158,8 +158,18 @@ func (s *Service) inspect(ctx context.Context, request inspection) (*Record, err
 	if policy != nil && !policy.Owns(&record.Job) {
 		return nil, ErrNotFound
 	}
-	if owner != nil && (record.Method != owner.Method || record.URI != owner.URI) {
-		return nil, ErrNotFound
+	if owner != nil {
+		storedRoute, err := routeURI(record.URI)
+		if err != nil {
+			return nil, err
+		}
+		requestedRoute, err := routeURI(owner.URI)
+		if err != nil {
+			return nil, err
+		}
+		if record.Method != owner.Method || storedRoute != requestedRoute {
+			return nil, ErrNotFound
+		}
 	}
 	public, err := record.Public()
 	if err != nil {

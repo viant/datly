@@ -124,11 +124,26 @@ func (s *SQLStore) changed(count int64, err error) error {
 }
 
 func (s *SQLStore) match(ctx context.Context, owner *Record, ttl, errorTTL time.Duration) (*Record, error) {
-	now := time.Now().UTC()
-	rows, err := s.read(ctx, "WHERE MatchKey = ? AND Method = ? AND URI = ? AND COALESCE(Deactivated, FALSE) = FALSE AND ((CreationTime >= ? AND Status <> ?) OR (CreationTime >= ? AND Status = ?)) ORDER BY CreationTime DESC", owner.MatchKey, owner.Method, owner.URI, now.Add(-ttl), xasync.StatusError, now.Add(-errorTTL), xasync.StatusError)
+	identity, err := routeURI(owner.URI)
 	if err != nil {
 		return nil, err
 	}
+	now := time.Now().UTC()
+	rows, err := s.read(ctx, "WHERE MatchKey = ? AND Method = ? AND COALESCE(Deactivated, FALSE) = FALSE AND ((CreationTime >= ? AND Status <> ?) OR (CreationTime >= ? AND Status = ?)) ORDER BY CreationTime DESC", owner.MatchKey, owner.Method, now.Add(-ttl), xasync.StatusError, now.Add(-errorTTL), xasync.StatusError)
+	if err != nil {
+		return nil, err
+	}
+	matched := rows[:0]
+	for _, row := range rows {
+		candidate, err := routeURI(row.URI)
+		if err != nil {
+			return nil, err
+		}
+		if candidate == identity {
+			matched = append(matched, row)
+		}
+	}
+	rows = matched
 	if len(rows) == 0 {
 		return nil, nil
 	}
