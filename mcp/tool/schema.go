@@ -20,7 +20,7 @@ func (p *schemaProjector) argument(t reflect.Type, path, property string, schema
 	if schema != nil {
 		return wireSchemaMap(schema), nil
 	}
-	result, err := (jsonschema.Reflector{Annotate: func(path string, field reflect.StructField) (string, any) {
+	result, err := (jsonschema.Reflector{ExcludeInternal: true, Annotate: func(path string, field reflect.StructField) (string, any) {
 		annotation := p.docs.StructField(path, field)
 		var example any
 		if annotation.Example != "" {

@@ -63,7 +63,11 @@ func TestUnrepresentableContractsFailClosed(t *testing.T) {
 			}
 			entry, buildErr := f.build()
 			if tc.name == "duplicate query name" || tc.name == "duplicate case-folded header" {
-				require.ErrorContains(t, buildErr, "ambiguous input alias")
+				// Bindly rejects conflicting aliases before schema generation.
+				// Assert the conflicting destinations, not its previous wording.
+				require.ErrorContains(t, buildErr, "input alias")
+				require.ErrorContains(t, buildErr, "targets both A and B")
+				require.Nil(t, entry)
 				return
 			}
 			require.NoError(t, buildErr)

@@ -6,6 +6,7 @@ import (
 	"reflect"
 
 	"github.com/viant/datly/gateway/openapi/openapi3"
+	"github.com/viant/datly/internal/inputvisibility"
 	xshape "github.com/viant/x/shape"
 )
 
@@ -48,6 +49,9 @@ func (b *schemaBuilder) object(key schemaKey) (*openapi3.Schema, error) {
 	}
 	for _, projected := range fields {
 		field := projected.Field
+		if input && inputvisibility.Internal(t, field.Index) {
+			continue
+		}
 		if field.Tag.Get("setMarker") == "true" {
 			if input {
 				continue
