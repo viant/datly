@@ -33,7 +33,7 @@ var embeddedWarmupKey struct {
 func internalWarmupKey() (*rsa.PrivateKey, []byte, error) {
 	embeddedWarmupKey.once.Do(func() {
 		loader := scy.New()
-		private, err := loader.Load(context.Background(), &scy.Resource{URL: "datly-internal-warmup-private", Data: warmupPrivateEncrypted, Key: "blowfish://default"})
+		private, err := loader.Load(context.Background(), &scy.Resource{URL: "datly-internal-warmup-private", Data: append([]byte(nil), warmupPrivateEncrypted...), Key: "blowfish://default"})
 		if err != nil {
 			embeddedWarmupKey.err = fmt.Errorf("load embedded warmup RSA private key: %w", err)
 			return
@@ -43,7 +43,7 @@ func internalWarmupKey() (*rsa.PrivateKey, []byte, error) {
 			embeddedWarmupKey.err = fmt.Errorf("parse embedded warmup RSA private key: %w", err)
 			return
 		}
-		public, err := loader.Load(context.Background(), &scy.Resource{URL: "datly-internal-warmup-public", Data: warmupPublicEncrypted, Key: "blowfish://default"})
+		public, err := loader.Load(context.Background(), &scy.Resource{URL: "datly-internal-warmup-public", Data: append([]byte(nil), warmupPublicEncrypted...), Key: "blowfish://default"})
 		if err != nil {
 			embeddedWarmupKey.err = fmt.Errorf("load embedded warmup RSA public key: %w", err)
 			return
