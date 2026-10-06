@@ -14,6 +14,7 @@ import (
 )
 
 type ObservabilityConfig struct {
+	Policy      *observability.Policy
 	Logging     *observability.Logging
 	Logger      xlogger.Logger
 	ReadingData observability.ReadingData
@@ -41,6 +42,7 @@ func WithObservability(config ObservabilityConfig) Option {
 		options.observabilityConfigured = true
 		copy := config
 		copy.Logging = config.Logging.Copy()
+		copy.Policy = config.Policy.Copy()
 		if config.OTel != nil {
 			export := *config.OTel
 			copy.OTel = &export
@@ -58,7 +60,10 @@ func (r *Runtime) Observability() *Observability {
 
 // NewObservability creates one application-scoped capture/export owner.
 func NewObservability(config ObservabilityConfig) (*Observability, error) {
-	o := &Observability{Recorder: observability.NewRecorder(config.Logger, observability.WithReadingData(config.ReadingData), observability.WithLogging(config.Logging))}
+	if err := config.Policy.Validate(); err != nil {
+		return nil, err
+	}
+	o := &Observability{Recorder: observability.NewRecorder(config.Logger, observability.WithReadingData(config.ReadingData), observability.WithLogging(config.Logging), observability.WithPolicy(config.Policy))}
 	if err := o.initialize(config); err != nil {
 		return nil, err
 	}

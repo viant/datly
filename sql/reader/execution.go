@@ -19,6 +19,8 @@ import (
 // Config contains immutable dependencies for a registered reader execution.
 type Config struct {
 	metricScope     string
+	observations    map[*data.View]observability.Resolution
+	observationErr  error
 	Component       *spec.Component
 	InputType       reflect.Type
 	OutputType      reflect.Type
@@ -161,6 +163,8 @@ func (e *Execution) session() *Session {
 	return &Session{
 		Component:       e.config.Component,
 		metricScope:     e.config.metricScope,
+		observations:    e.config.observations,
+		observationErr:  e.config.observationErr,
 		InputType:       e.config.InputType,
 		OutputType:      e.config.OutputType,
 		Artifact:        e.config.Plan,
@@ -192,5 +196,54 @@ func (e *Execution) WithRecorder(recorder *observability.Recorder) dexec.Reader 
 	service := *e.service
 	service.recorder = recorder
 	result.service = &service
+	result.config.observationErr = nil
+	if recorder == nil {
+		result.config.observations = nil
+		return &result
+	}
+	result.config.observations = map[*data.View]observability.Resolution{}
+	for _, view := range e.observationViews() {
+		resolved, err := recorder.Resolve(e.config.Component.Key, &view.Spec)
+		if err != nil {
+			result.config.observationErr = err
+			break
+		}
+		result.config.observations[view] = resolved
+	}
 	return &result
+}
+
+func (e *Execution) observationViews() []*data.View {
+	if e == nil || e.config.Plan == nil {
+		return nil
+	}
+	var result []*data.View
+	seen := map[*ViewPlan]bool{}
+	var visit func(*ViewPlan)
+	visit = func(plan *ViewPlan) {
+		if plan == nil || seen[plan] {
+			return
+		}
+		seen[plan] = true
+		if plan.View != nil {
+			result = append(result, plan.View)
+		}
+		for _, relation := range plan.Relations {
+			if relation != nil {
+				visit(relation.Target)
+			}
+		}
+	}
+	visit(e.config.Plan.Root)
+	return result
+}
+func (e *Execution) ObservationTargets() []observability.ViewTarget {
+	if e == nil || e.config.Component == nil {
+		return nil
+	}
+	var result []observability.ViewTarget
+	for _, view := range e.observationViews() {
+		result = append(result, observability.ViewTarget{Component: e.config.Component.Key, View: &view.Spec})
+	}
+	return result
 }

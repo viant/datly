@@ -8,6 +8,7 @@ func WithObservability(config runtime.ObservabilityConfig) Option {
 	return func(options *options) error {
 		copy := config
 		copy.Logging = config.Logging.Copy()
+		copy.Policy = config.Policy.Copy()
 		if config.OTel != nil {
 			export := *config.OTel
 			copy.OTel = &export

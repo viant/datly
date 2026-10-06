@@ -8,6 +8,7 @@ import (
 	"time"
 
 	gateway "github.com/viant/datly/gateway/http"
+	"github.com/viant/datly/observability"
 	"github.com/viant/datly/observability/otel"
 )
 
@@ -26,6 +27,7 @@ type CacheInvalidation struct {
 // Observation configures the existing native capture owner. Logging summaries
 // is independent of OTel; neither option disables native Datly capture.
 type Observation struct {
+	Policy       *observability.Policy
 	LogSummaries bool
 	OTel         *OTel
 }
@@ -83,6 +85,11 @@ func (c *Config) validateServices() error {
 		}
 		if c.Meta.CacheInvalidateURI != "" && strings.TrimSpace(c.Meta.CacheInvalidateURI) == "" {
 			return fmt.Errorf("CacheInvalidation requires an enabled Meta.CacheInvalidateURI")
+		}
+	}
+	if c.Observation != nil {
+		if err := c.Observation.Policy.Validate(); err != nil {
+			return err
 		}
 	}
 	if c.Observation != nil && c.Observation.OTel != nil {

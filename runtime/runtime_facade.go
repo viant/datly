@@ -64,6 +64,10 @@ func (r *Runtime) Resources() *resource.Store {
 }
 
 func NewRuntime(components []*RegisteredComponent, runtimeOptions ...Option) (*Runtime, error) {
+	return newRuntime(components, true, runtimeOptions...)
+}
+
+func newRuntime(components []*RegisteredComponent, validateTargets bool, runtimeOptions ...Option) (*Runtime, error) {
 	options := &options{}
 	for _, configure := range runtimeOptions {
 		if configure != nil {
@@ -74,7 +78,10 @@ func NewRuntime(components []*RegisteredComponent, runtimeOptions ...Option) (*R
 	}
 	observation := options.managedObservability
 	if observation == nil {
-		observation = &Observability{Recorder: observability.NewRecorder(options.observability.Logger, observability.WithReadingData(options.observability.ReadingData), observability.WithLogging(options.observability.Logging))}
+		if err := options.observability.Policy.Validate(); err != nil {
+			return nil, err
+		}
+		observation = &Observability{Recorder: observability.NewRecorder(options.observability.Logger, observability.WithReadingData(options.observability.ReadingData), observability.WithLogging(options.observability.Logging), observability.WithPolicy(options.observability.Policy))}
 	}
 	// Outbound client capabilities are composed here, once, for every
 	// component. Without explicit providers the runtime owns the default
@@ -118,6 +125,9 @@ func NewRuntime(components []*RegisteredComponent, runtimeOptions ...Option) (*R
 			}
 		}
 		specs = append(specs, component.Component)
+		if err := validateRegistrationObservation(component, observation.Recorder); err != nil {
+			return nil, err
+		}
 		entry := registrationWithRecorder(component, observation.Recorder)
 		if entry.Output == nil {
 			var outputErr error
@@ -140,6 +150,15 @@ func NewRuntime(components []*RegisteredComponent, runtimeOptions ...Option) (*R
 		}
 		registered[component.Component.Key.String()] = &entry
 		metadata[component.Component.Key.String()] = component.Component
+	}
+	if validateTargets {
+		var keys []spec.Key
+		for _, component := range specs {
+			keys = append(keys, component.Key)
+		}
+		if err := observation.Recorder.ValidateComponents(keys); err != nil {
+			return nil, err
+		}
 	}
 	bundle, err := rroute.NewBundle(specs)
 	if err != nil {
@@ -178,7 +197,7 @@ func NewIndexedRuntime(components []*spec.Component, preloaded []*RegisteredComp
 	if loader == nil {
 		return nil, fmt.Errorf("indexed runtime component loader is required")
 	}
-	r, err := NewRuntime(preloaded, runtimeOptions...)
+	r, err := newRuntime(preloaded, false, runtimeOptions...)
 	if err != nil {
 		return nil, err
 	}
@@ -221,6 +240,13 @@ func NewIndexedRuntime(components []*spec.Component, preloaded []*RegisteredComp
 	}
 	r.publicBundle, err = publicRouteBundle(specs, options.exposure)
 	if err != nil {
+		return nil, err
+	}
+	var keys []spec.Key
+	for _, component := range specs {
+		keys = append(keys, component.Key)
+	}
+	if err := r.observability.Recorder.ValidateComponents(keys); err != nil {
 		return nil, err
 	}
 	r.loader = loader
@@ -278,6 +304,9 @@ func (r *Runtime) prepareLoadedComponent(registered *RegisteredComponent) (*Regi
 		return nil, fmt.Errorf("loaded component is required")
 	}
 	if err := registered.Component.Settings.ValidateComponentCallPolicy(); err != nil {
+		return nil, err
+	}
+	if err := validateRegistrationObservation(registered, r.observability.Recorder); err != nil {
 		return nil, err
 	}
 	entry := registrationWithRecorder(registered, r.observability.Recorder)
@@ -462,4 +491,22 @@ func (r *Runtime) ExecuteRoute(ctx context.Context, method, path string, scope d
 		execCtx.Status = "error"
 	}
 	return nil, fmt.Errorf("runtime is not configured")
+}
+
+// observationTargeter supplies completed native plans; it never executes reads.
+type observationTargeter interface {
+	ObservationTargets() []observability.ViewTarget
+}
+
+func validateRegistrationObservation(entry *RegisteredComponent, recorder *observability.Recorder) error {
+	var targets []observability.ViewTarget
+	if reader, ok := entry.Reader.(observationTargeter); ok {
+		targets = append(targets, reader.ObservationTargets()...)
+	}
+	for _, provider := range entry.Providers {
+		if targeter, ok := provider.(observationTargeter); ok {
+			targets = append(targets, targeter.ObservationTargets()...)
+		}
+	}
+	return recorder.ValidateTargets(targets, entry.Component.Key)
 }

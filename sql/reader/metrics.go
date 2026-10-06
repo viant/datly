@@ -43,6 +43,9 @@ func (s *Session) initMetrics(owner *observability.Recorder) {
 	s.pendingScope = s.metricScope
 	if s.Artifact != nil && s.Artifact.Root != nil {
 		s.pendingScope += "/" + viewName(s.Artifact.Root.View)
+		if resolved, exists := s.observations[s.Artifact.Root.View]; exists {
+			s.pendingScope = resolved.Operation
+		}
 	}
 }
 func (s *Session) beginView(ctx context.Context, v *data.View) *viewRead {
@@ -51,6 +54,9 @@ func (s *Session) beginView(ctx context.Context, v *data.View) *viewRead {
 	scope := name
 	if s.metricScope != "" {
 		scope = s.metricScope + "/" + name
+	}
+	if resolved, exists := s.observations[v]; exists {
+		name, scope = resolved.Diagnostic, resolved.Operation
 	}
 	r := &viewRead{session: s, ctx: ctx, scope: scope, metric: &response.Metric{ID: uuid.NewString(), View: name, Type: "SELECT", StartTime: start}}
 	r.counterDone = s.recorder.Begin(scope, start)

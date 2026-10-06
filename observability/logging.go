@@ -5,10 +5,13 @@ import (
 	"github.com/viant/xdatly/response"
 )
 
-// Read emits a summary only through an explicitly configured logger. Native
-// metrics and counters are captured independently of logging configuration.
+// Read emits one completion through configured compatibility logging or the
+// native logger. Metrics and counters are independent of logging configuration.
 func (r *Recorder) Read(traceID string, m *response.Metric) {
-	if r == nil || r.logger == nil || m == nil || internallog.Configured(r) {
+	if r == nil || m == nil {
+		return
+	}
+	if internallog.LogRead(r, traceID, m) || r.logger == nil {
 		return
 	}
 	status := "ok"

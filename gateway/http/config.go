@@ -57,6 +57,7 @@ const DefaultCacheWarmURI = "/v1/api/cache/warmup"
 // a nonempty whitespace value explicitly disables warmup route activation.
 type Meta struct {
 	// AllowedSubnet retains original RemoteAddr prefix matching (not CIDR parsing).
+	MetricURI          string   `json:"MetricURI,omitempty" yaml:"MetricURI,omitempty"`
 	AllowedSubnet      []string `json:"AllowedSubnet,omitempty" yaml:"AllowedSubnet,omitempty"`
 	OpenApiURI         string   `json:"OpenApiURI,omitempty" yaml:"OpenApiURI,omitempty"`
 	DocURI             string   `json:"DocURI,omitempty" yaml:"DocURI,omitempty"`
@@ -159,7 +160,12 @@ func (c Config) Build(ctx context.Context, input HandlerInput) (*Handler, error)
 			return nil, fmt.Errorf("APIKeys must be staged on canonical routes through application.Manager")
 		}
 	}
+	metricPrefix, err := c.metricPrefix(input)
+	if err != nil {
+		return nil, err
+	}
 	h := NewHandler(rt, log, version)
+	h.metricPrefix = metricPrefix
 	h.pathSemantics = c.PathSemantics
 	h.serviceTimeHeader = c.ServiceTimeHeader
 	h.authorize = c.Authorize
