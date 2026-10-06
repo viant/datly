@@ -1,0 +1,16 @@
+#package('github.com/viant/datly/stockcurrentfixture/generated')
+#setting($_ = $connector('main'))
+#setting($_ = $route('/stock-current','PATCH'))
+#setting($_ = $input_type('Input'))
+#setting($_ = $output_type('Output'))
+#define($_ = $Rows<[]*Root>(body/data))
+#define($_ = $Data<[]*Root>(output/body))
+#define($_ = $CurrentProbe<?>(view/CurrentProbe).Cardinality('Many') /* SELECT * FROM roots WHERE id=1 */)
+#define($_ = $PriorCarrierOne<?>(view/PriorCarrierOne).Cardinality('Many') /* SELECT * FROM carriers WHERE root_id=1 AND id=10 */)
+#define($_ = $PriorCarrierTwo<?>(view/PriorCarrierTwo).Cardinality('Many') /* SELECT * FROM carriers WHERE root_id=1 AND id=20 */)
+#define($_ = $CurrentChildren<?>(view/CurrentChildren).Cardinality('Many') /* SELECT * FROM children WHERE root_id=1 */)
+
+SELECT r.*,Carrier.*,Children.*,type(r,'Root'),type(Carrier,'Carrier'),type(Children,'PhysicalChild')
+FROM roots r
+JOIN (SELECT * FROM (carriers)) Carrier ON Carrier.root_id=r.id
+JOIN children Children ON Children.carrier_id=Carrier.id

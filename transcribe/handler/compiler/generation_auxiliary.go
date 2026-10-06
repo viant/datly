@@ -11,7 +11,7 @@ import (
 // auxiliary derives a lookup from its authored parent equality. Current-parent
 // values come from the already bound, scoped read; no second table read supplies
 // missing FKs. A typed Go projection feeds the normal SQL fragment owner.
-func (b *inputGeneration) auxiliary(parent *spec.View, relation *spec.Relation, body string) error {
+func (b *inputGeneration) auxiliary(parent *spec.View, relation *spec.Relation, body string, path []string) error {
 	view := relation.View
 	identity, err := view.Identity()
 	if err != nil {
@@ -30,7 +30,9 @@ func (b *inputGeneration) auxiliary(parent *spec.View, relation *spec.Relation, 
 			return fmt.Errorf("auxiliary current %s conflicts with authored binding", currentName)
 		}
 		b.request.Currents = append(b.request.Currents, CurrentBinding{ViewIdentity: identity, Param: currentName})
-		return nil
+		// Descendants use this admitted, scoped auxiliary Current as their
+		// immediate authority. Do not re-enter the already visited role.
+		return b.relations(view, body, path, currentName)
 	}
 	if len(view.Relations) > 0 {
 		return fmt.Errorf("auxiliary lookup %s with nested relations requires explicit authored current authority", identity)

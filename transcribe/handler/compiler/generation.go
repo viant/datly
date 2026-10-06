@@ -162,6 +162,10 @@ func (b *inputGeneration) record(view *spec.View, body string, path []string, sc
 	if !found {
 		b.request.Currents = append(b.request.Currents, CurrentBinding{ViewIdentity: identity, Param: currentName})
 	}
+	return b.relations(view, body, path, currentName)
+}
+
+func (b *inputGeneration) relations(view *spec.View, body string, path []string, currentName string) error {
 	for _, rel := range view.Relations {
 		if rel == nil {
 			return fmt.Errorf("generation contains a nil relation")
@@ -175,7 +179,7 @@ func (b *inputGeneration) record(view *spec.View, body string, path []string, sc
 		}
 		next := append(append([]string(nil), path...), typecatalog.FieldName(holder))
 		if rel.View != nil && rel.View.Auxiliary {
-			if err := b.auxiliary(view, rel, body); err != nil {
+			if err := b.auxiliary(view, rel, body, next); err != nil {
 				return err
 			}
 		} else if err := b.record(rel.View, body, next, &currentParentScope{view: view, relation: rel, input: currentName}); err != nil {

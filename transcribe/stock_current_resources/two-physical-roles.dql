@@ -1,0 +1,15 @@
+#package('github.com/viant/datly/stockcurrentfixture/generated')
+#setting($_ = $connector('main'))
+#setting($_ = $route('/stock-current','PATCH'))
+#setting($_ = $input_type('Input'))
+#setting($_ = $output_type('Output'))
+#define($_ = $Rows<[]*Root>(body/data))
+#define($_ = $Data<[]*Root>(output/body))
+#define($_ = $CurrentProbe<?>(view/CurrentProbe).Cardinality('Many') /* SELECT * FROM roots WHERE id=1 */)
+#define($_ = $CurrentInsertions<?>(view/CurrentInsertions).Cardinality('Many') /* SELECT * FROM children WHERE root_id=1 AND carrier_id=10 */)
+#define($_ = $CurrentReplacements<?>(view/CurrentReplacements).Cardinality('Many') /* SELECT * FROM children WHERE root_id=1 AND carrier_id=20 */)
+
+SELECT r.*,Insertions.*,Replacements.*,type(r,'Root'),type(Insertions,'PhysicalInsertion'),type(Replacements,'PhysicalReplacement')
+FROM roots r
+JOIN children Insertions ON Insertions.root_id=r.id
+JOIN children Replacements ON Replacements.root_id=r.id
