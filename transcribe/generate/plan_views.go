@@ -52,7 +52,11 @@ func (r *planResolver) resolveViews() (map[string]int, error) {
 		}
 		planner.outputs[relation] = param
 	}
-	if root := component.RootView; root != nil {
+	root := component.RootView
+	if root == nil && r.input.ExternalHandler != nil {
+		root = r.input.ExternalHandler.InputShape
+	}
+	if root != nil {
 		rootIdentity, err := root.Identity()
 		if err != nil {
 			return nil, fmt.Errorf("plan root view: %w", err)

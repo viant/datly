@@ -41,10 +41,15 @@ func (c *Compiler) compileSourceHandler(ctx context.Context, source *Source, hea
 	if source.PackageComponent != nil || source.GoHandler != nil || source.VeltyHandler != nil {
 		return nil, fmt.Errorf("source handler cannot overlay another component or handler asset")
 	}
-	prepared, settings, err := prepareHandlerSource(body)
-	if err != nil {
+	prepared := dql.PrepareSource(body)
+	if err := prepared.Err(); err != nil {
 		return nil, err
 	}
+	settings := prepared.Directives.Settings.Clone()
+	if settings == nil {
+		settings = &spec.Settings{}
+	}
+
 	d := prepared.Directives
 	if prepared.TypeContext == nil || prepared.TypeContext.PackagePath == "" {
 		return nil, fmt.Errorf("source handler requires an explicit #package destination")
@@ -52,6 +57,10 @@ func (c *Compiler) compileSourceHandler(ctx context.Context, source *Source, hea
 	destination := prepared.TypeContext.PackagePath
 	if names, ok := generatedPostFactory(header, prepared); ok {
 		return c.compileGeneratedPostFactory(ctx, source, header, prepared, settings, names)
+	}
+	var err error
+	if prepared, settings, err = prepareHandlerSource(body); err != nil {
+		return nil, err
 	}
 	refs := []string{header.Factory, header.InputType, header.OutputType}
 	packages, names := make([]string, 3), make([]string, 3)
@@ -495,6 +504,9 @@ func (c *Compiler) compileGeneratedPostFactory(ctx context.Context, source *Sour
 			return nil, fmt.Errorf("generated POST factory cannot contain SQL or reader views")
 		}
 	}
+	if prepared.Directives.Static != nil || len(prepared.Directives.Views) != 0 {
+		return nil, fmt.Errorf("generated POST factory cannot contain static content or independent views")
+	}
 	settings.InputType, settings.OutputType = names[1], names[2]
 	connector := header.Connector
 	if source.Connector != "" {
@@ -537,6 +549,13 @@ func (c *Compiler) compileGeneratedPostFactory(ctx context.Context, source *Sour
 			return nil, err
 		}
 	}
+	inputShape, err := c.compileFactoryInputShape(ctx, &copy, prepared, component, connector, resolver, build)
+	if err != nil {
+		return nil, fmt.Errorf("generated POST factory cannot contain SQL except a validated auxiliary input shape: %w", err)
+	}
+	if inputShape != nil {
+		settings.DefaultConnector = ""
+	}
 	declarations, err := newDeclarationCompiler(component, nil).compile()
 	if err != nil {
 		return nil, err
@@ -545,7 +564,7 @@ func (c *Compiler) compileGeneratedPostFactory(ctx context.Context, source *Sour
 		return nil, err
 	}
 	return &Result{Source: &copy, Component: component, TypeContext: typeContext, TypeResolver: resolver, TypeAuthority: typecatalog.TranscribeAuthority,
-		Declarations: declarations.generation, ExternalHandler: &gen.ExternalHandler{Package: destination, Name: names[0], Build: build.WithContext(nil), GeneratedContracts: true}}, nil
+		Declarations: declarations.generation, ExternalHandler: &gen.ExternalHandler{Package: destination, Name: names[0], Build: build.WithContext(nil), GeneratedContracts: true, InputShape: inputShape}}, nil
 }
 
 // Go's selected source list is available before the generated contracts exist.
