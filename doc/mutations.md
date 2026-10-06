@@ -595,6 +595,47 @@ changes are not partially applied when synchronization fails. Hooks running afte
 this phase should use the generated marker-aware setters for business changes;
 do not expect a later hidden SyncPresence pass to repair arbitrary direct writes.
 
+## Explicit insert/delete leaf policy
+
+A PATCH physical leaf can opt into insert/delete semantics when an update would
+change the original application behavior. Add the policy to that leaf's outer
+projection, alongside its genuine Current read, inferred keys and logical delete
+marker:
+
+```sql
+SELECT records.*, type(records, 'Record'),
+       writer_action_policy(records, 'insert-delete'),
+       CAST(records.should_delete AS bool),
+       delete_marker(records.should_delete)
+FROM (SELECT r.*, '' AS should_delete FROM RECORDS r) records
+```
+
+A true delete marker requests an authorized DELETE. Every other admitted row
+requests INSERT, including a row with a matching Previous identity. It does not
+borrow omitted business fields from Previous for an insert. Database constraints
+still apply. One DELETE and one INSERT with the same complete key in the same
+role may express replacement; repeated actions of the same kind and collisions
+between roles fail. Do not use this policy to deduplicate repeated input.
+
+The policy is explicit per role and is not inherited. It requires PATCH, a
+physical leaf, a genuine Current read, keys and a delete marker. A physical leaf
+below an auxiliary parent is supported. Readers, POST/PUT, auxiliary targets,
+roles with descendants, identity overrides, concurrency tokens, mutation
+predicates, scoped sequences and recovery hooks are unsupported combinations.
+Other roles retain their ordinary policy and native allocation mechanism.
+
+The native writer retains the captured role, row association, identity and
+removal decision through queueing and transaction completion. A captured program
+belongs to its exact handler, input and binder and may be attempted only once;
+retries require a fresh native capture. Caught failures from opted executions
+remain failures of their shared transaction. Caller-owned transactions retain
+caller-pending completion and remain the caller's responsibility.
+
+Managed `TransactionSQL.QueryContext` and `QueryRowContext` are unsupported in an
+invocation enrolled in these captured execution guards, including earlier use
+in that invocation. Native typed transaction-aware Current reads remain
+supported. This restriction does not change ordinary writer invocations.
+
 ## Backfill invariant groups
 
 The outer `invariant` annotations place WINDOW_START and WINDOW_END in the
