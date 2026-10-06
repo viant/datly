@@ -12,6 +12,7 @@ import (
 	dexec "github.com/viant/datly/exec"
 	druntime "github.com/viant/datly/runtime"
 	dsql "github.com/viant/datly/sql"
+	xexec "github.com/viant/xdatly/exec"
 )
 
 type warmupGate struct {
@@ -65,6 +66,8 @@ func TestHTTPWarmupServerLifetimeSQLite(t *testing.T) {
 			f := newConfigFixture(t)
 			rt, gate := f.gated(t)
 			config := warmupConfig()
+			var completed WarmupResult
+			config.Warmup.Completed = func(result WarmupResult, _ error) { completed = result }
 			serverCtx, stopServer := context.WithCancel(context.Background())
 			defer stopServer()
 			config.Warmup.Lifetime = NewWarmupLifetime(serverCtx)
@@ -92,6 +95,10 @@ func TestHTTPWarmupServerLifetimeSQLite(t *testing.T) {
 			if operation.Value(secretKey{}) != nil {
 				t.Fatal("retained caller context")
 			}
+			execution := xexec.GetContext(operation)
+			if execution == nil || execution.TraceID == "" || execution.TraceID == "unknown" {
+				t.Fatal("warmup has no operation trace")
+			}
 			switch mode {
 			case "client cancellation":
 				cancel()
@@ -110,6 +117,12 @@ func TestHTTPWarmupServerLifetimeSQLite(t *testing.T) {
 			case <-done:
 			case <-time.After(5 * time.Second):
 				t.Fatal("warmup did not finish")
+			}
+			if completed.TraceID != execution.TraceID {
+				t.Fatal("completion lost operation correlation")
+			}
+			if completed.Elapsed <= 0 {
+				t.Fatal("completion lost operation duration")
 			}
 			if mode != "client cancellation" {
 				if (res.Code != 503 && res.Code != 504) || !errors.Is(operation.Err(), context.Canceled) && !errors.Is(operation.Err(), context.DeadlineExceeded) {

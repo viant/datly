@@ -2,9 +2,12 @@ package standalone
 
 import (
 	"context"
+	"encoding/json"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	gateway "github.com/viant/datly/gateway/http"
@@ -33,6 +36,7 @@ func TestStandaloneLinkedOnlyColdChildWarmup(t *testing.T) {
 		"summaryWarmup":  {Warmup: &spec.CacheWarmupSettings{Connector: "main", IndexColumn: "parent_id"}},
 	}
 	cfg.Warmup = &config.Warmup{TimeoutMs: 2000, Admin: &gateway.DocumentAccess{APIKeyHeader: "X-Admin", APIKeyValue: "admin-key"}}
+	cfg.Observation = &config.Observation{LogSummaries: true}
 	diagnostics := &synchronizedBuffer{}
 	server, err := New(ctx, Options{Config: cfg, Diagnostics: diagnostics})
 	require.NoError(t, err)
@@ -58,11 +62,60 @@ func TestStandaloneLinkedOnlyColdChildWarmup(t *testing.T) {
 		res := call("POST", path, credentials[0], credentials[1])
 		require.Equal(t, 403, res.Code, res.Body.String())
 	}
+	require.NotContains(t, diagnostics.text(), "datly cache warmup started", "denied requests must not log a start")
+	before := len(diagnostics.text())
 	warm := call("POST", path, true, true)
 	require.Equal(t, 200, warm.Code, warm.Body.String())
+	var traceID string
+	views := 0
+	started := 0
+	completed := 0
+	var target string
+	for _, line := range strings.Split(strings.TrimSpace(diagnostics.text()[before:]), "\n") {
+		var record map[string]any
+		require.NoError(t, json.Unmarshal([]byte(line), &record))
+		switch record["msg"] {
+		case "datly view read", "datly cache read", "datly cache warmup started", "datly cache warmup completed":
+			id, _ := record["reqTraceId"].(string)
+			require.NotEmpty(t, id)
+			require.NotEqual(t, "unknown", id)
+			if traceID == "" {
+				traceID = id
+			}
+			require.Equal(t, traceID, id)
+			if record["msg"] == "datly cache warmup started" {
+				require.Zero(t, views, "start must precede preparation/read summaries")
+				require.Zero(t, completed)
+				require.Equal(t, "INFO", record["level"])
+				target, _ = record["target"].(string)
+				require.NotEmpty(t, target)
+				started++
+			}
+			if record["msg"] == "datly view read" {
+				views++
+			}
+			if record["msg"] == "datly cache warmup completed" {
+				require.Equal(t, 1, started)
+				require.Equal(t, target, record["target"])
+				elapsed, err := time.ParseDuration(record["elapsed"].(string))
+				require.NoError(t, err)
+				require.Positive(t, elapsed)
+				completed++
+			}
+		}
+	}
+	require.GreaterOrEqual(t, views, 2, "both child caches must have correlated population summaries")
+	require.Equal(t, 1, started)
+	require.Equal(t, 1, completed)
+	for _, secret := range []string{"read-key", "admin-key", "SELECT "} {
+		require.NotContains(t, diagnostics.text()[before:], secret)
+	}
 	require.NoError(t, f.DB.ExecStatements(ctx, "DROP TABLE warm_timeline", "DROP TABLE warm_summary"))
+	before = len(diagnostics.text())
 	read := call("GET", "/child-warmup", true, false)
 	require.Equal(t, 200, read.Code, read.Body.String())
+	require.NotContains(t, diagnostics.text()[before:], traceID, "ordinary reads must not inherit the warmup context")
+	require.NotContains(t, diagnostics.text()[before:], `"reqTraceId":"unknown"`)
 	require.JSONEq(t, `{"rows":[{"id":1,"name":"first","timeline":[{"parentId":1,"value":11}],"summary":[{"parentId":1,"value":77}]}]}`, read.Body.String())
 	require.NotContains(t, diagnostics.text(), ":Unrelated", "unrelated components must stay lazy")
 }

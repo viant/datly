@@ -210,6 +210,20 @@ The operation still binds the target's declared credentials/parameters. Its acce
 with a bounded timeout; client disconnection does not define success or abandon
 completion accounting. Use the `Completed` callback for the actual result/error.
 
+Each accepted HTTP warmup creates a fresh operation trace on its server-owned
+context before authorization and preparation. Preparation, child readers, cache
+cases and completion/error logs share that `reqTraceId`. `WarmupResult.TraceID`
+exposes it to completion callbacks without changing the HTTP response body.
+Request trace headers and mutable caller execution state are not inherited;
+client disconnection does not cancel the operation.
+With a configured logger, `datly cache warmup started` is emitted after admin
+and component API-key authorization, before credential creation and preparation.
+Denied requests do not emit a start event. Standalone completion logs include
+`elapsed` for the total operation, including authorization, preparation and fill;
+completion callbacks receive the duration as `WarmupResult.Elapsed`.
+Embedders can observe the start through `WarmupConfig.Started`; otherwise the
+gateway emits it through its configured logger.
+
 For a standalone service with `Warmup` administration and `JWTValidator` configured,
 Datly loads the encrypted RSA key pair embedded from original Datly's mock JWT
 resources once per process. After the
