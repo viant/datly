@@ -102,19 +102,3 @@ func TestPendingAllocationCancelAndOverflowAreNotPublished(t *testing.T) {
 		t.Fatal("partial allocation escaped overflow preflight")
 	}
 }
-
-func TestPendingAllocationRejectsAliasedEmptyHolders(t *testing.T) {
-	type row struct{ ID *int64 }
-	zero := int64(0)
-	for _, rows := range [][]*row{{{ID: &zero}, {ID: &zero}}, {nil, {}, nil}} {
-		if len(rows) == 3 {
-			rows[2] = rows[1]
-		}
-		if err := New(nil).Allocate(context.Background(), "records", rows, "ID"); err == nil {
-			t.Fatal("accepted aliased empty holders")
-		}
-		if zero != 0 {
-			t.Fatal("alias failure changed the original holder")
-		}
-	}
-}

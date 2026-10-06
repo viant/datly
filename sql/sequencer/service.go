@@ -111,18 +111,22 @@ func (s *Service) allocate(ctx context.Context, table string, dest any, selector
 	if err != nil {
 		return err
 	}
+	// Reserve every initially empty occurrence, including aliases. Publish only
+	// once per writable holder, in first-occurrence order, as the legacy walker
+	// skips later visits after the first one fills that holder.
 	empty := make([]*integerCell, 0, len(cells))
+	assignments := make([]*integerCell, 0, len(cells))
 	locations := make(map[uintptr]bool)
 	for _, cell := range cells {
 		if zero, err := cell.isZero(); err != nil {
 			return err
 		} else if zero {
 			location := cell.location()
-			if locations[location] {
-				return fmt.Errorf("empty sequence fields share a writable identity holder")
-			}
-			locations[location] = true
 			empty = append(empty, cell)
+			if !locations[location] {
+				locations[location] = true
+				assignments = append(assignments, cell)
+			}
 		}
 	}
 	if len(cells) == 0 {
@@ -185,7 +189,7 @@ func (s *Service) allocate(ctx context.Context, table string, dest any, selector
 		}
 		count = len(empty) - len(values)
 	}
-	for i, cell := range empty {
+	for i, cell := range assignments {
 		if err := cell.check(values[i]); err != nil {
 			return err
 		}
@@ -193,7 +197,7 @@ func (s *Service) allocate(ctx context.Context, table string, dest any, selector
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	for i, cell := range empty {
+	for i, cell := range assignments {
 		if err := cell.set(values[i]); err != nil {
 			return err
 		}
