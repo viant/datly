@@ -3,6 +3,7 @@ package writer
 import (
 	"context"
 	"errors"
+	"fmt"
 	dexec "github.com/viant/datly/exec"
 	rhandler "github.com/viant/datly/runtime/handler"
 	xshape "github.com/viant/x/shape"
@@ -30,7 +31,11 @@ func (p *Program) queue(ctx context.Context, binder xhandler.Binder) error {
 			return err
 		}
 		for _, action := range p.actions.Rows {
-			if err = p.queuePhysical(ctx, binder, dml, action, p.frameFor(action.Entity), nil); err != nil {
+			frame := p.actionFrame(action)
+			if frame == nil {
+				return fmt.Errorf("writer action has no authoritative frame")
+			}
+			if err = p.queuePhysical(ctx, binder, dml, action, frame, nil); err != nil {
 				return err
 			}
 		}
@@ -41,7 +46,10 @@ func (p *Program) queue(ctx context.Context, binder xhandler.Binder) error {
 		physical[action] = true
 	}
 	for position, action := range p.queueItems {
-		frame := p.frameFor(action.Entity)
+		frame := p.actionFrame(action)
+		if frame == nil {
+			return fmt.Errorf("writer action has no authoritative frame")
+		}
 		disposition := xhandler.QueuePhysical
 		if !physical[action] {
 			disposition = xhandler.QueueNoop

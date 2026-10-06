@@ -54,6 +54,31 @@ func MutationInvariantSupport(value *plan.Plan, config Config, entities *EntityA
 		previous := selectExpr(state, "Previous")
 		loaded := selectExpr(state, "PreviousFields")
 		loop := []ast.Stmt{checkContext(), &ast.IfStmt{Cond: &ast.BinaryExpr{X: &ast.BinaryExpr{X: id("frame"), Op: token.EQL, Y: nilExpr}, Op: token.LOR, Y: &ast.BinaryExpr{X: entity, Op: token.EQL, Y: nilExpr}}, Body: &ast.BlockStmt{List: []ast.Stmt{returnStmt(errExpr("invariant frame requires an entity"))}}}}
+		if record.plan.Write.ActionPolicy == "insert-delete" {
+			var association *EntityAssociation
+			for i := range entities.Associations {
+				candidate := &entities.Associations[i]
+				if candidate.Identity == record.plan.Identity && strings.Join(candidate.Path, ".") == strings.Join(record.plan.InputPath, ".") {
+					if association != nil {
+						return nil, fmt.Errorf("duplicate invariant action association for %s", record.plan.Identity)
+					}
+					association = candidate
+				}
+			}
+			if association == nil || !token.IsIdentifier(association.StateType) || !token.IsIdentifier(association.KeyAdapterType) {
+				return nil, fmt.Errorf("invariant action association missing for %s", record.plan.Identity)
+			}
+			loop = append(loop,
+				&ast.AssignStmt{Lhs: []ast.Expr{id("original"), id("ok")}, Tok: token.DEFINE, Rhs: []ast.Expr{&ast.TypeAssertExpr{X: selectExpr(state, "Original"), Type: &ast.StarExpr{X: id(association.StateType)}}}},
+				&ast.IfStmt{Cond: &ast.BinaryExpr{X: &ast.UnaryExpr{Op: token.NOT, X: id("ok")}, Op: token.LOR, Y: &ast.BinaryExpr{X: id("original"), Op: token.EQL, Y: nilExpr}}, Body: &ast.BlockStmt{List: []ast.Stmt{returnStmt(errExpr("invariant action requires captured original state"))}}},
+			)
+			adapter := &ast.CompositeLit{Type: id(association.KeyAdapterType + "Operation"), Elts: []ast.Expr{&ast.KeyValueExpr{Key: id(association.KeyAdapterType), Value: &ast.CompositeLit{Type: id(association.KeyAdapterType), Elts: []ast.Expr{&ast.KeyValueExpr{Key: id("owner"), Value: selectExpr(id("original"), "owner")}}}}}}
+			loop = append(loop,
+				&ast.AssignStmt{Lhs: []ast.Expr{id("actionKey"), id("_"), id("err")}, Tok: token.DEFINE, Rhs: []ast.Expr{callExpr(selectExpr(&ast.ParenExpr{X: adapter}, "Key"), id("original"))}},
+				&ast.IfStmt{Cond: &ast.BinaryExpr{X: id("err"), Op: token.NEQ, Y: nilExpr}, Body: &ast.BlockStmt{List: []ast.Stmt{returnStmt(id("err"))}}},
+				&ast.IfStmt{Cond: &ast.UnaryExpr{Op: token.NOT, X: selectExpr(id("actionKey"), "Delete")}, Body: &ast.BlockStmt{List: []ast.Stmt{&ast.BranchStmt{Tok: token.CONTINUE}}}},
+			)
+		}
 		unknown := callExpr(selectExpr(&ast.ParenExpr{X: &ast.CompositeLit{Type: selectExpr(id(shapeAlias), "Runtime")}}, "IsNil"), loaded)
 		loop = append(loop, &ast.IfStmt{Cond: &ast.BinaryExpr{X: &ast.BinaryExpr{X: previous, Op: token.NEQ, Y: nilExpr}, Op: token.LAND, Y: unknown}, Body: &ast.BlockStmt{List: []ast.Stmt{returnStmt(errExpr("invariant previous row requires actual loaded-field evidence"))}}})
 		for _, group := range record.plan.Entity.Invariants {

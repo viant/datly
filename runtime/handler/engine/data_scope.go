@@ -44,6 +44,11 @@ type dataScope struct {
 	finalizers        []*outcomeFrame
 	finalized         bool
 	completionStarted bool
+	guardedExecution  bool
+	resolving         sync.WaitGroup
+	registering       sync.WaitGroup
+	enrollmentMu      sync.Mutex
+	guardedFailure    error
 	contextReleases   []context.CancelFunc
 	connectors        connector.Provider
 }
@@ -52,6 +57,16 @@ type invocationData interface {
 	xhandler.Data
 	BeginInvocation() error
 	Complete(context.Context, error) error
+}
+
+// Guard registration and preflight are capabilities of the same unit owner.
+type guardedInvocationData interface {
+	invocationData
+	invocationDataPreparer
+	RegisterExecutionGuard(func(context.Context) error) error
+	EnableCapturedExecutionGuards() error
+	ValidateExecutionGuards(context.Context) error
+	CloseMutationAdmission() error
 }
 
 type invocationDataPreparer interface {
@@ -85,10 +100,16 @@ type transactionSQLCapability struct {
 }
 
 func (c transactionSQLCapability) QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error) {
+	if err := c.guard.admitStreamingQuery(); err != nil {
+		return nil, err
+	}
 	return c.service.QueryContext(ctx, query, args...)
 }
 
 func (c transactionSQLCapability) QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row {
+	if err := c.guard.admitStreamingQuery(); err != nil {
+		return guardedQueryErrorRow(ctx, err)
+	}
 	return c.service.QueryRowContext(ctx, query, args...)
 }
 
@@ -365,11 +386,13 @@ func (s *dataScope) resolve(ctx context.Context) (xhandler.Data, error) {
 		root = s
 	}
 	root.mu.Lock()
-	closed := root.completionStarted
-	root.mu.Unlock()
-	if closed {
+	if root.completionStarted {
+		root.mu.Unlock()
 		return nil, fmt.Errorf("invocation completion has already started")
 	}
+	root.resolving.Add(1)
+	root.mu.Unlock()
+	defer root.resolving.Done()
 	s.once.Do(func() {
 		if s.parent != nil {
 			parentData, err := s.parent.resolve(ctx)
@@ -455,6 +478,24 @@ func (s *dataScope) resolve(ctx context.Context) (xhandler.Data, error) {
 			}
 		}
 	})
+	if s.err != nil {
+		return nil, s.err
+	}
+	root.mu.Lock()
+	guarded, failure := root.guardedExecution, root.guardedFailure
+	root.mu.Unlock()
+	if failure != nil {
+		return nil, failure
+	}
+	if guarded && s.data != nil {
+		unit := s.unit
+		if unit == nil {
+			unit = root
+		}
+		if err := root.enrollExecutionOwner(unit); err != nil {
+			return nil, err
+		}
+	}
 	return s.data, s.err
 }
 
@@ -609,14 +650,22 @@ func (s *dataScope) complete(ctx context.Context, handlerErr error) (completionE
 	root.mu.Lock()
 	// Completion admission is restricted only for the opt-in outcome owner;
 	// ordinary handlers retain their existing post-completion capability usage.
-	root.completionStarted = len(root.finalizers) != 0
+	root.completionStarted = len(root.finalizers) != 0 || root.guardedExecution
 	closeResolution := root.completionStarted
 	for _, frame := range root.finalizers {
 		if !frame.finished {
 			handlerErr = errors.Join(handlerErr, fmt.Errorf("component %s has not finished before root completion", frame.route))
 		}
 	}
+	root.mu.Unlock()
+	if closeResolution {
+		root.resolving.Wait()
+		root.registering.Wait()
+	}
+	root.mu.Lock()
 	units := append([]*dataScope{root}, root.units...)
+	guardedExecution := root.guardedExecution
+	guardedFailure := root.guardedFailure
 	root.mu.Unlock()
 	// Join any source opening already in progress, and close unopened units.
 	// An unfinished child cannot create a transaction after rollback begins.
@@ -626,7 +675,33 @@ func (s *dataScope) complete(ctx context.Context, handlerErr error) (completionE
 		}
 	}
 	defer func() { root.recordCompletion(units, completionErr) }()
+	// A canonical guard can fail owner resolution before enrollment completes.
+	// Its latched failure must veto completion even without enrolled owners.
+	if guardedFailure != nil {
+		handlerErr = errors.Join(handlerErr, guardedFailure)
+	}
+	if guardedExecution {
+		handlerErr = errors.Join(handlerErr, root.writeEligibility.capturedExecutionFailure())
+		root.writeEligibility.closeCompletion()
+		for _, unit := range units {
+			if unit.data == nil {
+				continue
+			}
+			owner, ok := unit.data.(guardedInvocationData)
+			if !ok {
+				handlerErr = errors.Join(handlerErr, fmt.Errorf("captured writer execution requires a guarded invocation owner"))
+				continue
+			}
+			handlerErr = errors.Join(handlerErr, completionOperation("close unit mutation admission", owner.CloseMutationAdmission))
+		}
+	}
 	if handlerErr != nil {
+		for index := len(units) - 1; index >= 0; index-- {
+			handlerErr = units[index].completeUnit(ctx, handlerErr)
+		}
+		return handlerErr
+	}
+	if handlerErr = validateUnitExecutionGuards(ctx, units); handlerErr != nil {
 		for index := len(units) - 1; index >= 0; index-- {
 			handlerErr = units[index].completeUnit(ctx, handlerErr)
 		}
@@ -640,10 +715,115 @@ func (s *dataScope) complete(ctx context.Context, handlerErr error) (completionE
 			return handlerErr
 		}
 	}
+	if handlerErr = validateUnitExecutionGuards(ctx, units); handlerErr != nil {
+		for index := len(units) - 1; index >= 0; index-- {
+			handlerErr = units[index].completeUnit(ctx, handlerErr)
+		}
+		return handlerErr
+	}
 	for _, unit := range units {
 		handlerErr = unit.completeUnit(ctx, handlerErr)
 	}
 	return handlerErr
+}
+
+// Enrollment is monotonic; a caught opt-in failure remains an invocation error.
+func (s *dataScope) failGuardedExecution(err error) error {
+	root := s.root
+	if root == nil {
+		root = s
+	}
+	root.mu.Lock()
+	if root.guardedFailure == nil {
+		root.guardedFailure = err
+	}
+	failure := root.guardedFailure
+	root.mu.Unlock()
+	return failure
+}
+func (s *dataScope) enrollExecutionOwner(unit *dataScope) error {
+	owner, ok := unit.data.(guardedInvocationData)
+	if !ok {
+		return s.failGuardedExecution(fmt.Errorf("captured writer execution requires an enrolled invocation owner"))
+	}
+	if err := completionOperation("enroll captured writer owner", owner.EnableCapturedExecutionGuards); err != nil {
+		return s.failGuardedExecution(err)
+	}
+	return nil
+}
+func (s *dataScope) registerExecutionGuard(ctx context.Context, check func(context.Context) error) error {
+	root := s.root
+	if root == nil {
+		root = s
+	}
+	root.enrollmentMu.Lock()
+	defer root.enrollmentMu.Unlock()
+	root.mu.Lock()
+	if root.completionStarted {
+		root.mu.Unlock()
+		return fmt.Errorf("invocation completion has already started")
+	}
+	root.guardedExecution = true
+	failure := root.writeEligibility.enableCapturedExecution()
+	if root.guardedFailure == nil {
+		root.guardedFailure = failure
+	}
+	root.registering.Add(1)
+	root.mu.Unlock()
+	defer root.registering.Done()
+	if failure != nil {
+		return root.failGuardedExecution(failure)
+	}
+	// Each snapshot owner joins its existing once.Do resolution boundary.
+	// Later owners enroll before publishing their capabilities.
+	root.mu.Lock()
+	units := append([]*dataScope{root}, root.units...)
+	root.mu.Unlock()
+	for _, unit := range units {
+		if unit.source == nil && unit.data == nil {
+			continue
+		}
+		if _, err := unit.resolve(ctx); err != nil {
+			return root.failGuardedExecution(err)
+		}
+		if err := root.enrollExecutionOwner(unit); err != nil {
+			return err
+		}
+	}
+	root.mu.Lock()
+	failure = root.guardedFailure
+	root.mu.Unlock()
+	if failure != nil {
+		return failure
+	}
+	unit := s.unit
+	if unit == nil {
+		unit = root
+	}
+	owner, ok := unit.data.(guardedInvocationData)
+	if !ok {
+		return root.failGuardedExecution(fmt.Errorf("captured writer execution requires an enrolled invocation owner"))
+	}
+	if err := completionOperation("register captured writer execution guard", func() error { return owner.RegisterExecutionGuard(check) }); err != nil {
+		return root.failGuardedExecution(err)
+	}
+	return nil
+}
+
+// All units preflight before any owned commit, including journals already
+// drained by an imperative flush or pre-completion output finalizer.
+func validateUnitExecutionGuards(ctx context.Context, units []*dataScope) error {
+	for _, unit := range units {
+		if unit.err != nil {
+			return unit.err
+		}
+		if guarded, ok := unit.data.(interface{ ValidateExecutionGuards(context.Context) error }); ok {
+			if err := completionOperation("captured unit execution guard", func() error { return guarded.ValidateExecutionGuards(ctx) }); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 func (s *dataScope) prepareUnit(ctx context.Context) error {

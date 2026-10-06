@@ -16,9 +16,13 @@ import (
 var ErrWriteEligibilityMutation = errors.New("managed mutation is forbidden during WriteEligible")
 
 type mutationGuard struct {
-	mu        sync.Mutex
-	depth     int
-	violation error
+	mu                 sync.Mutex
+	depth              int
+	completionClosed   bool
+	guardedExecution   bool
+	streamingQueryUsed bool
+	guardedFailure     error
+	violation          error
 }
 
 func (s *dataScope) mutationGuard() *mutationGuard {
@@ -37,6 +41,9 @@ func (g *mutationGuard) check(operation string) error {
 	}
 	g.mu.Lock()
 	defer g.mu.Unlock()
+	if g.completionClosed {
+		return fmt.Errorf("invocation mutation admission is closed: %s", operation)
+	}
 	if g.depth == 0 {
 		return nil
 	}
@@ -92,10 +99,20 @@ func RetainMutationAuthority(ctx context.Context) func(context.Context) context.
 // CheckComponentMutation admits canonical readers while rejecting writers and
 // unknown custom effects before child binding or data-unit creation.
 func CheckComponentMutation(ctx context.Context, canonicalReader bool) error {
+	scope, _ := ctx.Value(dataScopeContextKey{}).(*dataScope)
 	if canonicalReader {
+		guard := scope.mutationGuard()
+		if guard == nil {
+			return nil
+		}
+		guard.mu.Lock()
+		closed := guard.completionClosed
+		guard.mu.Unlock()
+		if closed {
+			return guard.check("component invocation")
+		}
 		return nil
 	}
-	scope, _ := ctx.Value(dataScopeContextKey{}).(*dataScope)
 	return scope.mutationGuard().check("component invocation")
 }
 
@@ -148,5 +165,45 @@ func (g *mutationGuard) active() bool {
 	}
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	return g.depth != 0
+	return g.depth != 0 || g.completionClosed || g.guardedExecution
+}
+
+func (g *mutationGuard) closeCompletion() {
+	g.mu.Lock()
+	g.completionClosed = true
+	g.mu.Unlock()
+}
+
+// Proxy admission linearizes invocation-wide opt-in before driver dispatch.
+func (g *mutationGuard) admitStreamingQuery() error {
+	if g == nil {
+		return nil
+	}
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.completionClosed {
+		return errors.New("invocation mutation admission is closed")
+	}
+	if g.guardedExecution {
+		if g.guardedFailure == nil {
+			g.guardedFailure = errors.New("managed streaming SQL is unsupported in a captured writer invocation")
+		}
+		return g.guardedFailure
+	}
+	g.streamingQueryUsed = true
+	return nil
+}
+func (g *mutationGuard) enableCapturedExecution() error {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.guardedExecution = true
+	if g.streamingQueryUsed && g.guardedFailure == nil {
+		g.guardedFailure = errors.New("managed streaming SQL predates a captured writer invocation")
+	}
+	return g.guardedFailure
+}
+func (g *mutationGuard) capturedExecutionFailure() error {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return g.guardedFailure
 }

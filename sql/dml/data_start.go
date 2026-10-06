@@ -25,6 +25,8 @@ func (d *Data) Start(ctx context.Context) error {
 	owner.mu.Lock()
 	var err error
 	switch {
+	case owner.mutationAdmissionClosed:
+		err = ErrMutationAdmissionClosed
 	case owner.completed:
 		err = ErrInvocationCompleted
 	case owner.failed != nil:

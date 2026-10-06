@@ -19,36 +19,42 @@ import (
 )
 
 var (
-	ErrInvocationCompleted = errors.New("DML data invocation is completed")
-	ErrInvocationFailed    = errors.New("DML data invocation failed")
-	ErrComponentSealed     = errors.New("DML component frame is sealed")
-	ErrBindingFlush        = errors.New("cannot flush a binding component while its ancestor is open")
+	ErrGuardedStreamingQuery   = errors.New("managed streaming SQL is unsupported in a captured writer invocation")
+	ErrMutationAdmissionClosed = errors.New("DML invocation mutation admission is closed")
+	ErrInvocationCompleted     = errors.New("DML data invocation is completed")
+	ErrInvocationFailed        = errors.New("DML data invocation failed")
+	ErrComponentSealed         = errors.New("DML component frame is sealed")
+	ErrBindingFlush            = errors.New("cannot flush a binding component while its ancestor is open")
 )
 
 type Data struct {
-	mu              sync.Mutex
-	executionMu     sync.Mutex
-	db              *sql.DB
-	tx              *sql.Tx
-	txIsolation     sql.IsolationLevel
-	externalTx      bool
-	onCommit        func(context.Context)
-	queue           []*dataOperation
-	dialect         *info.Dialect
-	invocation      bool
-	completed       bool
-	failed          error
-	outcome         xhandler.TransactionOutcome
-	outcomeReady    bool
-	root            *Data
-	parent          *Data
-	relation        string
-	order           string
-	open            bool
-	markers         []componentMarker
-	bindings        []*Data
-	nextOp          uint64
-	mutationResults []dexec.MutationResult
+	mu                      sync.Mutex
+	executionMu             sync.Mutex
+	db                      *sql.DB
+	tx                      *sql.Tx
+	txIsolation             sql.IsolationLevel
+	externalTx              bool
+	onCommit                func(context.Context)
+	queue                   []*dataOperation
+	executionGuards         []func(context.Context) error
+	mutationAdmissionClosed bool
+	guardsEnabled           bool
+	streamingQueryUsed      bool
+	dialect                 *info.Dialect
+	invocation              bool
+	completed               bool
+	failed                  error
+	outcome                 xhandler.TransactionOutcome
+	outcomeReady            bool
+	root                    *Data
+	parent                  *Data
+	relation                string
+	order                   string
+	open                    bool
+	markers                 []componentMarker
+	bindings                []*Data
+	nextOp                  uint64
+	mutationResults         []dexec.MutationResult
 
 	insertServices     map[string]*insert.Service
 	updateServices     map[string]*update.Service
@@ -114,6 +120,10 @@ func (d *Data) sequence(ctx context.Context, run func(*sequencer.Service) error)
 		return run(owner.sequencer)
 	}
 	owner.mu.Lock()
+	if owner.mutationAdmissionClosed {
+		owner.mu.Unlock()
+		return ErrMutationAdmissionClosed
+	}
 	if owner.completed {
 		owner.mu.Unlock()
 		return ErrInvocationCompleted

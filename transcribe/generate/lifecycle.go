@@ -69,6 +69,38 @@ func (input *Input) validateLifecycleTarget(mutation, pendingDiscovery bool) err
 				return fmt.Errorf("root_null_policy requires a generated writable root and initial-validation")
 			}
 		}
+		if view.WriterActionPolicy != "" {
+			if view.WriterActionPolicy != "insert-delete" {
+				return fmt.Errorf("writer_action_policy must be insert-delete")
+			}
+			if !mutation || !mutationViews[view] || view.Auxiliary || policy != "" && policy != "patch" {
+				return fmt.Errorf("writer_action_policy requires a generated PATCH writable view")
+			}
+			for _, route := range input.Component.Routes {
+				if route != nil && !strings.EqualFold(route.Method, "PATCH") {
+					return fmt.Errorf("writer_action_policy requires PATCH routes")
+				}
+			}
+			if len(view.Relations) != 0 {
+				return fmt.Errorf("writer_action_policy insert-delete requires a leaf view")
+			}
+			if view.WriterIdentityPolicy != "" || view.MutationPredicateGroup != nil {
+				return fmt.Errorf("writer_action_policy does not support identity overrides or mutation predicates")
+			}
+			marker := false
+			for _, column := range view.Columns {
+				if column == nil {
+					continue
+				}
+				marker = marker || column.DeleteMarker
+				if column.ConcurrencyToken {
+					return fmt.Errorf("writer_action_policy does not support concurrency tokens")
+				}
+			}
+			if !pendingDiscovery && !marker {
+				return fmt.Errorf("writer_action_policy requires delete_marker")
+			}
+		}
 		if view.WriterIdentityPolicy != "" {
 			if view.WriterIdentityPolicy != "assigned-update" {
 				return fmt.Errorf("writer_identity must be assigned-update")

@@ -425,7 +425,7 @@ func TestQueueAttemptPreparationFailureAndCauseIsolation(t *testing.T) {
 	record := &Record{Path: "Rows", Table: "parents", EntityType: reflect.TypeFor[sqPlainParent](), ConcurrencyToken: &Field{Name: "Name"}}
 	row := &sqPlainParent{ID: ptr(1), Name: ptr("old"), Has: &sqPlainParentHas{ID: true}}
 	frame := &Frame{Record: record, Entity: reflect.ValueOf(row), Location: "Rows[0]", Fields: livePresence(record, reflect.ValueOf(row).Elem()), Original: originalPresence{presence: snapshotPresence(record, reflect.ValueOf(row).Elem()), available: true}}
-	action := &Action{Kind: h.WriteUpdate, Entity: frame.Entity}
+	action := &Action{Kind: h.WriteUpdate, Entity: frame.Entity, frame: frame}
 	program := &Program{input: &sqPlainInput{}, metadata: &Metadata{Root: record}, hook: reflect.ValueOf(probe), frames: &MutationFrames{Rows: []*Frame{frame}}, actions: &MutationActions{Rows: []*Action{action}}, queueItems: []*Action{action}}
 	caps := &queueCaps{}
 	err := program.queue(context.Background(), caps)
@@ -535,7 +535,7 @@ func TestQueueAttemptFollowsNativeSiblingDependencyOrder(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, frame := range program.frames.Rows {
-		action := &Action{Entity: frame.Entity, Kind: frame.Action}
+		action := &Action{Entity: frame.Entity, Kind: frame.Action, frame: frame}
 		program.actions.Rows = append(program.actions.Rows, action)
 		program.queueItems = append(program.queueItems, action)
 	}
@@ -558,7 +558,7 @@ func TestQueueAttemptEvidenceFailureDoesNotControlWork(t *testing.T) {
 	record := &Record{Path: "opaque", Table: "opaque", EntityType: reflect.TypeFor[queueOpaqueRow](), Fields: []Field{{Name: "ID", Index: []int{0}}}}
 	frame := &Frame{Record: record, Entity: reflect.ValueOf(row), Location: "Rows[0]", Fields: livePresence(record, reflect.ValueOf(row).Elem()), Original: originalPresence{presence: snapshotPresence(record, reflect.ValueOf(row).Elem())}}
 	recorder := &queueRecorder{}
-	action := &Action{Kind: h.WriteInsert, Entity: frame.Entity}
+	action := &Action{Kind: h.WriteInsert, Entity: frame.Entity, frame: frame}
 	program := &Program{metadata: &Metadata{Root: record}, hook: reflect.ValueOf(recorder), frames: &MutationFrames{Rows: []*Frame{frame}}, actions: &MutationActions{Rows: []*Action{action}}, queueItems: []*Action{action}}
 	caps := &queueCaps{}
 	if err := program.queue(context.Background(), caps); err != nil {

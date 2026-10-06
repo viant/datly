@@ -149,7 +149,7 @@ func TestPolicies(t *testing.T){for _,tc:=range []struct{name,body,stored string
  resources:=resource.New();if err=resources.Register(RecordsDatlyResourceNamespace,RecordsDatlyResources);err!=nil{t.Fatal(err)}
  artifact,err:=bootstrap.BuildArtifact(bootstrap.ArtifactInput{Component:component,InputType:reflect.TypeFor[Input](),OutputType:reflect.TypeFor[Output](),Resources:resources});if err!=nil{t.Fatal(err)}
  views,err:=viewprovider.New(viewprovider.Config{Dependencies:artifact.ViewDependencies,Input:artifact.Input,SQL:&dsql.SQLComponent{DB:db}});if err!=nil{t.Fatal(err)}
- handler,err:=writer.New(artifact.Component,reflect.TypeFor[Input](),reflect.TypeFor[Output](),"patch");if err!=nil{t.Fatal(err)};if handler.NewPhaseObserver()==nil{t.Fatalf("hook not linked: %v",reflect.TypeFor[Lifecycle]())}
+ handler,err:=writer.New(artifact.Component,reflect.TypeFor[Input](),reflect.TypeFor[Output](),"patch");if err!=nil{t.Fatal(err)};if handler.NewPhaseObserver()==nil{t.Fatal("hook not linked")}
  dataSource:=dml.Source{DB:db};if tc.caller{tx,err:=db.Begin();if err!=nil{t.Fatal(err)};defer tx.Rollback();dataSource.Tx=tx}
  receipt:=&receipt{}
  rt,err:=druntime.NewRuntime([]*registry.RegisteredComponent{{Component:artifact.Component,Input:artifact.Input,Output:artifact.Output,OutputType:reflect.TypeFor[Output](),Handler:handler,Providers:[]locator.Provider{views},DataSource:dataSource,Capabilities:rh.InvocationCapabilities{Logger:receipt}}},druntime.WithResources(resources));if err!=nil{t.Fatal(err)}

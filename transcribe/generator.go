@@ -62,13 +62,16 @@ func (g Generator) Generate(ctx context.Context, request GenerationRequest) (*Ge
 		}
 	}
 
+	hasActionPolicy, hasScoped := false, false
 	var checkScoped func(*spec.View) error
 	checkScoped = func(view *spec.View) error {
 		if view == nil {
 			return nil
 		}
+		hasActionPolicy = hasActionPolicy || view.WriterActionPolicy == "insert-delete"
 		for _, column := range view.Columns {
 			if column != nil && reflect.StructTag(column.Tag).Get("sequenceScope") != "" {
+				hasScoped = true
 				operation := strings.ToLower(g.Operation)
 				if operation != "patch" && operation != "post" && operation != "put" {
 					return fmt.Errorf("sequence_scope requires a generated mutation operation")
@@ -89,6 +92,9 @@ func (g Generator) Generate(ctx context.Context, request GenerationRequest) (*Ge
 	}
 	if err := checkScoped(compiled.Component.RootView); err != nil {
 		return nil, err
+	}
+	if hasActionPolicy && hasScoped {
+		return nil, fmt.Errorf("writer_action_policy insert-delete does not support graph-wide scoped recovery")
 	}
 	key, err := compiled.projectKey()
 	if err != nil {

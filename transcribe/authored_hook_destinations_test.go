@@ -22,7 +22,7 @@ func TestAuthoredHookDestinations(t *testing.T) {
 		name                string
 		rootHook, childHook bool
 		invalid             string
-	}{{"root", true, false, ""}, {"child", false, true, ""}, {"root_and_child", true, true, ""}, {"stale_root_identity", true, false, "root"}, {"stale_child_parent", false, true, "child"}} {
+	}{{"root", true, false, ""}, {"child", false, true, ""}, {"root_and_child", true, true, ""}, {"linked_root_and_child", true, true, ""}, {"stale_root_identity", true, false, "root"}, {"stale_child_parent", false, true, "child"}} {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx := context.Background()
 			db := testharness.NewSQLiteHarness(t)
@@ -106,16 +106,45 @@ FROM EVENTS e LEFT JOIN ITEMS i ON e.ID=i.EVENT_ID`}
 				if holder == "" {
 					t.Fatal("child holder absent")
 				}
+				if tc.name == "linked_root_and_child" {
+					decoy := &Source{Name: "Decoy", Scope: "authored-hooks", Connector: "main", ColumnRefiner: tcolumn.New(tcolumn.Connections{"main": db.DB}), Text: `#package('api/events')
+#setting($_ = $file_prefix('decoy_'))
+#setting($_ = $route('/decoy','POST'))
+#setting($_ = $input_type('DecoyInput'))
+#setting($_ = $output_type('DecoyOutput'))
+#define($_ = $Data<[]*DecoyRecord>(output/body))
+SELECT d.*,type(d,'DecoyRecord'),lifecycle_type(d,'RootHooks') FROM EVENTS d`}
+					result, err := (Generator{Operation: "post"}).Generate(ctx, GenerationRequest{Source: decoy, Destination: root})
+					if err != nil {
+						t.Fatal(err)
+					}
+					if result.Result.Plan.HookScaffold == nil && iteration == 0 {
+						t.Fatal("native decoy hook scaffold absent")
+					}
+					writeSourceFile(t, root, filepath.Join("api/events", "decoy_lifecycle.go"), `package events
+import("context";"fmt";h "github.com/viant/xdatly/handler")
+type RootHooks struct{}
+var localDecoyCalls int
+func(*RootHooks)Init(context.Context,*DecoyRecord,h.LifecycleContext[DecoyRecord,h.NoParent,DecoyOutput])error{localDecoyCalls++;return fmt.Errorf("local decoy selected")}
+func(*RootHooks)Validate(context.Context,*DecoyRecord,h.LifecycleContext[DecoyRecord,h.NoParent,DecoyOutput])error{return nil}
+`)
+				}
 				runtimeSource := generatedGoWriteRuntimeSource(WritePost)
 				runtimeSource = strings.NewReplacer("EventsInput", "Request", "EventsOutput", "Response").Replace(runtimeSource)
 				lifecycleMetadata := `component.TypeContext=&spec.TypeContext{Imports:[]spec.ImportSpec{{Alias:"rh",Package:"example.com/generated/hooks/root"},{Alias:"ch",Package:"example.com/generated/hooks/child"}}}`
 				if tc.rootHook {
 					lifecycleMetadata += `;component.RootView.EntityHooks="rh.RootHooks"`
 				}
+				if tc.name == "linked_root_and_child" {
+					lifecycleMetadata = `reflected,e:=bootstrap.ReflectSelectedPackages([]string{"example.com/generated/api/events"},nil);if e!=nil||len(reflected.Components)!=2{t.Fatalf("native package discovery failed: %+v %v",reflected,e)};var selected *bootstrap.RouteSource;for _,candidate:=range reflected.Components{if candidate.Tag.Path=="/events"{selected=candidate}};if selected==nil{t.Fatal("events source missing")};component,e=selected.Resolve(reflect.TypeOf(Request{}),reflect.TypeOf(Response{}));if e!=nil{t.Fatal(e)}`
+				}
 				runtimeSource = strings.Replace(runtimeSource, "artifact, err :=", lifecycleMetadata+"\n\tartifact, err :=", 1)
 				runtimeSource = strings.Replace(runtimeSource, "defer db.Close()", "defer db.Close()\n if _,err=db.Exec(\"CREATE TABLE ITEMS(ID INTEGER PRIMARY KEY AUTOINCREMENT,EVENT_ID INTEGER,NAME TEXT NOT NULL)\");err!=nil{t.Fatal(err)}", 1)
 				runtimeSource = strings.Replace(runtimeSource, `{"Data":[{"name":"one"},{"name":"two"}]}`, `{"Data":[{"name":"one","`+holder+`":[{"name":"first"}]},{"name":"two","`+holder+`":[{"name":"second"}]}]}`, 1)
 				runtimeSource = strings.Replace(runtimeSource, `"/events", strings.NewReader`, `"/events?suffix=authored", strings.NewReader`, 1)
+				if tc.name == "linked_root_and_child" {
+					runtimeSource = strings.Replace(runtimeSource, "var count int", `if localDecoyCalls!=0{t.Fatalf("local decoy called %d times",localDecoyCalls)};var count int`, 1)
+				}
 				rootWant, childWant := "one,two", "first,second"
 				if tc.rootHook {
 					rootWant = "one:authored,two:authored"
@@ -149,7 +178,11 @@ FROM EVENTS e LEFT JOIN ITEMS i ON e.ID=i.EVENT_ID`}
 				// Hook ownership and regeneration are asserted for every destination;
 				// nested race instrumentation is covered by the canonical mutation
 				// runtime fixture rather than rebuilt for each hook permutation.
-				cmd := exec.Command("go", "test", "-mod=mod", "-count=1", "./...")
+				args := []string{"test", "-mod=mod", "-count=1", "./..."}
+				if tc.name == "linked_root_and_child" {
+					args = []string{"test", "-mod=mod", "-race", "-count=1", "./..."}
+				}
+				cmd := exec.Command("go", args...)
 				cmd.Dir = root
 				cmd.Env = os.Environ()
 				if output, err := cmd.CombinedOutput(); err != nil {
@@ -165,7 +198,11 @@ FROM EVENTS e LEFT JOIN ITEMS i ON e.ID=i.EVENT_ID`}
 					if err != nil {
 						t.Fatalf("automatic hook build: %v", err)
 					}
-					if built.Components != 1 {
+					wantComponents := 1
+					if tc.name == "linked_root_and_child" {
+						wantComponents = 2
+					}
+					if built.Components != wantComponents {
 						t.Fatalf("automatic hook discovery: %+v", built)
 					}
 				}

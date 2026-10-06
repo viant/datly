@@ -1,7 +1,9 @@
 package generate
 
 import (
+	"crypto/sha256"
 	"fmt"
+	"go/token"
 	"strconv"
 	"strings"
 
@@ -117,6 +119,9 @@ func componentFileText(packageName string, plan *Plan) (string, error) {
 		b.WriteString(anchor.expression)
 		b.WriteString("]()\n")
 	}
+	for _, anchor := range localLifecycleAnchors(plan) {
+		b.WriteString("\nvar " + anchor.symbol + " = " + reflectAlias + ".TypeFor[" + anchor.expression + "]()\n")
+	}
 	if plan.Handler != "" && (plan.MutationHandler != nil || plan.ContractHandler != nil || plan.ExternalHandler != nil) {
 		name := availableImportAlias(imports, "name")
 		b.WriteString("\nfunc (")
@@ -165,6 +170,38 @@ func componentFileText(packageName string, plan *Plan) (string, error) {
 
 type lifecycleAnchor struct {
 	alias, path, expression, symbol string
+}
+
+// Local hooks need the same native type reachability as imported hooks. The
+// lifecycle declarations have already passed canonical authoring validation.
+func localLifecycleAnchors(plan *Plan) []lifecycleAnchor {
+	if plan == nil {
+		return nil
+	}
+	imports := map[string]string{}
+	for _, item := range plan.Imports {
+		imports[item.Alias] = item.Package
+	}
+	seen := map[string]bool{}
+	var result []lifecycleAnchor
+	for _, expression := range plan.LifecycleTypes {
+		expression = strings.TrimSpace(strings.TrimPrefix(expression, "*"))
+		name := expression
+		if alias, local, qualified := strings.Cut(expression, "."); qualified {
+			if !token.IsIdentifier(alias) || imports[alias] != plan.Package {
+				continue
+			}
+			name = local
+		}
+		if !token.IsIdentifier(name) || seen[name] {
+			continue
+		}
+		seen[name] = true
+		digest := sha256.Sum256([]byte(name))
+		symbol := "_datlyLifecycle_" + plan.HolderName() + "_" + fmt.Sprintf("%x", digest)
+		result = append(result, lifecycleAnchor{expression: name, symbol: symbol})
+	}
+	return result
 }
 
 func externalLifecycleAnchors(plan *Plan) []lifecycleAnchor {

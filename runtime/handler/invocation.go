@@ -29,6 +29,14 @@ type InputCapturer interface {
 	CaptureInput(context.Context, any) (any, error)
 }
 
+// CapturedExecutionGuard is an optional Datly-internal lifecycle seam. The
+// canonical handler owns a side-effect-free check of its captured invocation.
+// The engine retains it on the native journal owner before initialization.
+type CapturedExecutionGuard interface {
+	CapturedExecutionGuard(Invocation) (func(context.Context) error, error)
+	CapturedExecutionGuardRegistered(Invocation) error
+}
+
 // PreBindingTransaction requests that the engine start its managed data
 // transaction before binding input views. Mutation Current/Previous and
 // auxiliary reads can then share the same transaction as the queued writes.

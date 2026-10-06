@@ -33,5 +33,28 @@ func (c *compiler) mutationMarkers(record *plan.RecordPlan, view *spec.View, ope
 			record.Write.Allowed = append(record.Write.Allowed, plan.ActionDelete)
 		}
 	}
+	return compileWriterActionPolicy(record, view, operation)
+}
+
+func compileWriterActionPolicy(record *plan.RecordPlan, view *spec.View, operation plan.Operation) error {
+	if view.WriterActionPolicy == "" {
+		return nil
+	}
+	if view.WriterActionPolicy != "insert-delete" {
+		return fmt.Errorf("writer_action_policy must be insert-delete")
+	}
+	if operation != plan.OperationPatch || record.Auxiliary || record.Table == "" || record.Current == nil || len(record.Keys) == 0 || record.Write.DeleteMarker.Field == "" {
+		return fmt.Errorf("writer_action_policy insert-delete requires a PATCH physical leaf with Current, keys and delete marker")
+	}
+	if len(view.Relations) != 0 || len(record.SelfRelations) != 0 {
+		return fmt.Errorf("writer_action_policy insert-delete requires a leaf view")
+	}
+	if view.WriterIdentityPolicy != "" || view.MutationPredicateGroup != nil || record.Write.ConcurrencyToken.Field != "" {
+		return fmt.Errorf("writer_action_policy insert-delete does not support identity overrides, concurrency tokens or mutation predicates")
+	}
+	record.Write.ActionPolicy = view.WriterActionPolicy
+	record.Write.Existing = plan.ActionInsert
+	record.Write.Missing = plan.ActionInsert
+	record.Write.Allowed = []plan.Action{plan.ActionInsert, plan.ActionDelete}
 	return nil
 }

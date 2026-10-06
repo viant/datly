@@ -171,7 +171,7 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 	}
 	finishing := false
 	outputFinalized := false
-	var snapshotReady, initializationErrorReturned bool
+	var snapshotReady, initializationErrorReturned, ownCapturedGuard bool
 	var scope *bindly.Injector
 	bindOutput := func(value any) (err error) {
 		defer func() {
@@ -234,6 +234,9 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 				outputFinalized = true
 				result, operationErr = finalizeBeforeCompletion(ctx, result, operationErr)
 			}
+		}
+		if ownCapturedGuard && operationErr != nil && data != nil {
+			_ = data.failGuardedExecution(operationErr)
 		}
 		if data != nil {
 			data.finishOutcome(completionFrame, invocation, result, operationErr)
@@ -447,9 +450,30 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 			return finish(nil, fmt.Errorf("capture handler input: %w", err))
 		}
 	}
-	snapshotReady = true
 	binder := rhandler.NewBinder(scope, input)
 	invocation.Binder = binder
+	if guarded, ok := request.Handler.(rhandler.CapturedExecutionGuard); ok {
+		check, guardErr := guarded.CapturedExecutionGuard(invocation)
+		if guardErr != nil {
+			return finish(nil, guardErr)
+		}
+		if check != nil {
+			ownCapturedGuard = true
+			if data == nil {
+				return finish(nil, fmt.Errorf("captured writer execution requires an owned data unit"))
+			}
+			if _, resolveErr := data.resolve(ctx); resolveErr != nil {
+				return finish(nil, resolveErr)
+			}
+			if guardErr = data.registerExecutionGuard(ctx, check); guardErr != nil {
+				return finish(nil, guardErr)
+			}
+			if guardErr = guarded.CapturedExecutionGuardRegistered(invocation); guardErr != nil {
+				return finish(nil, guardErr)
+			}
+		}
+	}
+	snapshotReady = true
 	if err := phases.Run(ctx, xhandler.PhaseInputInitialization, func() error {
 		if initializer, ok := input.(xhandler.Initializer); ok {
 			if err := initializer.Init(ctx); err != nil {

@@ -146,7 +146,7 @@ func (p *Program) filterIneligibleActions() {
 	keep := func(actions []*Action) []*Action {
 		result := actions[:0]
 		for _, action := range actions {
-			frame := p.frameFor(action.Entity)
+			frame := p.actionFrame(action)
 			if frame == nil || !frame.ExcludedWrite {
 				result = append(result, action)
 			}

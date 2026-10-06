@@ -46,6 +46,7 @@ func (e *entityEmitter) syncDeclarations(record *recordLowering) ([]ast.Decl, er
 		return nil, err
 	}
 	result = append(result, node, e.syncCollectionDeclaration(record), e.snapshotSyncDeclaration(record))
+	result = append(result, e.actionMatchDeclarations(record)...)
 	if record.plan.Entity.Owned {
 		key := record.value.base + ".SyncPresence"
 		signature := record.plan.Entity.MarkerField + "|" + strconv.FormatBool(record.plan.Entity.MarkerPointer)
@@ -64,8 +65,14 @@ func (e *entityEmitter) syncDeclarations(record *recordLowering) ([]ast.Decl, er
 
 func (e *entityEmitter) syncCollectionDeclaration(record *recordLowering) ast.Decl {
 	current, original, context := ast.NewIdent("current"), ast.NewIdent("original"), ast.NewIdent("context")
-	matcherType := e.genericType("CollectionMatcher", parseExpr(record.value.base), ast.NewIdent(e.matchKeyName(record)), e.statePointer(record))
-	matcher := &ast.CompositeLit{Type: matcherType, Elts: []ast.Expr{&ast.KeyValueExpr{Key: ast.NewIdent("Adapter"), Value: &ast.CompositeLit{Type: ast.NewIdent(e.matchAdapterName(record)), Elts: []ast.Expr{&ast.KeyValueExpr{Key: ast.NewIdent("owner"), Value: selectExpr(context, "owner")}}}}}}
+	keyName := e.matchKeyName(record)
+	var adapter ast.Expr = &ast.CompositeLit{Type: ast.NewIdent(e.matchAdapterName(record)), Elts: []ast.Expr{&ast.KeyValueExpr{Key: ast.NewIdent("owner"), Value: selectExpr(context, "owner")}}}
+	if record.plan.Write.ActionPolicy == "insert-delete" {
+		keyName += "Operation"
+		adapter = &ast.CompositeLit{Type: ast.NewIdent(e.matchAdapterName(record) + "Operation"), Elts: []ast.Expr{&ast.KeyValueExpr{Key: ast.NewIdent(e.matchAdapterName(record)), Value: adapter}}}
+	}
+	matcherType := e.genericType("CollectionMatcher", parseExpr(record.value.base), ast.NewIdent(keyName), e.statePointer(record))
+	matcher := &ast.CompositeLit{Type: matcherType, Elts: []ast.Expr{&ast.KeyValueExpr{Key: ast.NewIdent("Adapter"), Value: adapter}}}
 	request := &ast.CompositeLit{Type: e.genericType("CollectionMatchInput", parseExpr(record.value.base), e.statePointer(record)), Elts: []ast.Expr{&ast.KeyValueExpr{Key: ast.NewIdent("Current"), Value: current}, &ast.KeyValueExpr{Key: ast.NewIdent("Original"), Value: original}, &ast.KeyValueExpr{Key: ast.NewIdent("ByPointer"), Value: selectExpr(selectExpr(context, "owner"), e.recordsName(record))}, &ast.KeyValueExpr{Key: ast.NewIdent("PointerIdentity"), Value: ast.NewIdent("pointerIdentity")}}}
 	body := []ast.Stmt{&ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent("matched"), ast.NewIdent("err")}, Tok: token.DEFINE, Rhs: []ast.Expr{callExpr(selectExpr(&ast.ParenExpr{X: matcher}, "Match"), request)}}, &ast.IfStmt{Cond: &ast.BinaryExpr{X: ast.NewIdent("err"), Op: token.NEQ, Y: ast.NewIdent("nil")}, Body: &ast.BlockStmt{List: []ast.Stmt{returnStmt(ast.NewIdent("false"), ast.NewIdent("err"))}}}}
 	call := callExpr(selectExpr(context, e.syncNodeName(record)), ast.NewIdent("entity"), &ast.IndexExpr{X: selectExpr(ast.NewIdent("matched"), "Original"), Index: ast.NewIdent("index")})

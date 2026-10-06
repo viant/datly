@@ -74,7 +74,7 @@ func eligibilityFixture(t *testing.T) (*Program, *eligibleProbe) {
 		}
 		frame := &Frame{Record: root, Entity: reflect.ValueOf(row), Previous: reflect.ValueOf(&eligibleRow{Name: "previous", Has: &eligibleHas{}}), Hook: reflect.ValueOf(probe), Action: action}
 		p.frames.Rows = append(p.frames.Rows, frame)
-		item := &Action{Kind: action, Entity: frame.Entity}
+		item := &Action{Kind: action, Entity: frame.Entity, frame: frame}
 		p.actions.Rows = append(p.actions.Rows, item)
 		p.queueItems = append(p.queueItems, item)
 	}

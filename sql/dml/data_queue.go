@@ -130,6 +130,9 @@ func pendingOperations(operations []*dataOperation) []*dataOperation {
 }
 
 func (d *Data) appendableLocked() error {
+	if d.mutationAdmissionClosed {
+		return ErrMutationAdmissionClosed
+	}
 	if d.completed {
 		return ErrInvocationCompleted
 	}

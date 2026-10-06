@@ -23,6 +23,10 @@ func (d *Data) ComponentData(relation, order string) xhandler.Data {
 	owner := d.owner()
 	owner.mu.Lock()
 	defer owner.mu.Unlock()
+	if owner.mutationAdmissionClosed {
+		// Return a rejected capability without admitting a new journal frame.
+		return &Data{root: owner, parent: d, relation: relation, order: order, open: false}
+	}
 	// A dispatcher can retain the context of a completed child invocation.
 	// Repeated dispatch from that context creates a sibling under the nearest
 	// open ancestor, matching the root unit-of-work frame semantics.

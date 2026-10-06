@@ -12,6 +12,9 @@ func (d *Data) QueryContext(ctx context.Context, query string, args ...any) (*sq
 	owner := d.owner()
 	owner.executionMu.Lock()
 	defer owner.executionMu.Unlock()
+	if err := owner.admitStreamingQueryLocked(); err != nil {
+		return nil, err
+	}
 	tx, err := owner.transaction(ctx)
 	if err != nil {
 		return nil, err
@@ -24,6 +27,10 @@ func (d *Data) QueryContext(ctx context.Context, query string, args ...any) (*sq
 func (d *Data) QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row {
 	owner := d.owner()
 	owner.executionMu.Lock()
+	if err := owner.admitStreamingQueryLocked(); err != nil {
+		owner.executionMu.Unlock()
+		return errorRow(ctx, err)
+	}
 	tx, err := owner.transaction(ctx)
 	if err != nil {
 		owner.executionMu.Unlock()
@@ -40,6 +47,9 @@ func (d *Data) ExecContext(ctx context.Context, query string, args ...any) (sql.
 	owner := d.owner()
 	owner.executionMu.Lock()
 	defer owner.executionMu.Unlock()
+	if err := owner.checkMutationAdmissionLocked(); err != nil {
+		return nil, err
+	}
 	tx, err := owner.transaction(ctx)
 	if err != nil {
 		return nil, err

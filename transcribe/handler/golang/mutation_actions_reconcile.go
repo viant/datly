@@ -101,7 +101,20 @@ func (e *actionEmitter) reconcile() (ast.Decl, error) {
 			}
 		}
 		index := &ast.IndexExpr{X: ast.NewIdent(owner.field + "Identities"), Index: identityKey}
-		loop = append(loop, &ast.IfStmt{Init: defineStmt("prior", index), Cond: &ast.BinaryExpr{X: ast.NewIdent("prior"), Op: token.NEQ, Y: ast.NewIdent("nil")}, Body: &ast.BlockStmt{List: []ast.Stmt{returnStmt(e.errorExpr("reconciled mutation identities are duplicated"))}}}, assignStmt(index, selectExpr(ast.NewIdent("entry"), "Payload")))
+		var duplicate ast.Expr = &ast.BinaryExpr{X: ast.NewIdent("prior"), Op: token.NEQ, Y: ast.NewIdent("nil")}
+		if role.record.plan.Write.ActionPolicy == "insert-delete" {
+			// One physical identity may appear once per action in this same role.
+			// A collision from a different role still fails through the shared map.
+			masks := ast.NewIdent(role.field + "ReplacementActions")
+			body = append(body, defineStmt(masks.Name, callExpr(ast.NewIdent("make"), &ast.MapType{Key: ast.NewIdent(owner.association.KeyType), Value: ast.NewIdent("uint8")})))
+			mask := &ast.IndexExpr{X: masks, Index: identityKey}
+			duplicate = &ast.BinaryExpr{X: duplicate, Op: token.LAND, Y: &ast.BinaryExpr{X: mask, Op: token.EQL, Y: &ast.BasicLit{Kind: token.INT, Value: "0"}}}
+			loop = append(loop, defineStmt("actionBit", callExpr(ast.NewIdent("uint8"), &ast.BasicLit{Kind: token.INT, Value: "1"})), &ast.IfStmt{Cond: &ast.BinaryExpr{X: selectExpr(ast.NewIdent("entry"), "Action"), Op: token.EQL, Y: selectExpr(ast.NewIdent(e.l.handlerAlias), "WriteInsert")}, Body: &ast.BlockStmt{List: []ast.Stmt{assignStmt(ast.NewIdent("actionBit"), &ast.BasicLit{Kind: token.INT, Value: "2"})}}}, &ast.IfStmt{Cond: &ast.BinaryExpr{X: &ast.BinaryExpr{X: mask, Op: token.AND, Y: ast.NewIdent("actionBit")}, Op: token.NEQ, Y: &ast.BasicLit{Kind: token.INT, Value: "0"}}, Body: &ast.BlockStmt{List: []ast.Stmt{returnStmt(e.errorExpr("reconciled replacement action is duplicated"))}}})
+			loop = append(loop, &ast.IfStmt{Init: defineStmt("prior", index), Cond: duplicate, Body: &ast.BlockStmt{List: []ast.Stmt{returnStmt(e.errorExpr("reconciled replacement identity crosses writer roles"))}}}, assignStmt(mask, &ast.BinaryExpr{X: mask, Op: token.OR, Y: ast.NewIdent("actionBit")}))
+		} else {
+			loop = append(loop, &ast.IfStmt{Init: defineStmt("prior", index), Cond: duplicate, Body: &ast.BlockStmt{List: []ast.Stmt{returnStmt(e.errorExpr("reconciled mutation identities are duplicated"))}}})
+		}
+		loop = append(loop, assignStmt(index, selectExpr(ast.NewIdent("entry"), "Payload")))
 		body = append(body, e.decisionLoop(role, loop))
 	}
 	for _, role := range e.roles {

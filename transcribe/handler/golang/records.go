@@ -233,13 +233,16 @@ func validateRecordPolicy(operation plan.Operation, record *plan.RecordPlan) err
 		return fmt.Errorf("generated Go record %q write value path does not match its input path", record.Identity)
 	}
 	if record.Auxiliary {
-		if record.Sequence != nil || record.Write.Existing != "" || record.Write.Missing != "" || len(record.Write.Allowed) != 0 {
+		if record.Write.ActionPolicy != "" || record.Sequence != nil || record.Write.Existing != "" || record.Write.Missing != "" || len(record.Write.Allowed) != 0 {
 			return fmt.Errorf("auxiliary record %q has mutation operations", record.Identity)
 		}
 		return nil
 	}
 
 	markerActions := 0
+	if record.Write.ActionPolicy != "" && (operation != plan.OperationPatch || record.Write.ActionPolicy != "insert-delete") {
+		return fmt.Errorf("writer action policy requires PATCH insert-delete")
+	}
 	if record.Write.DeleteMarker.Field != "" {
 		if !containsAction(record.Write.Allowed, plan.ActionDelete) {
 			return fmt.Errorf("delete_marker requires an allowed delete action")
@@ -273,6 +276,12 @@ func validateRecordPolicy(operation plan.Operation, record *plan.RecordPlan) err
 		if !containsAction(record.Write.Allowed, action) {
 			return fmt.Errorf("Go PATCH record %q action %q is not allowed by the semantic write policy", record.Identity, action)
 		}
+	}
+	if record.Write.ActionPolicy == "insert-delete" {
+		if record.Table == "" || len(record.Keys) == 0 || len(record.Relations) != 0 || len(record.SelfRelations) != 0 || record.Write.ConcurrencyToken.Field != "" || record.Write.DeleteMarker.Field == "" || record.Write.Existing != plan.ActionInsert || record.Write.Missing != plan.ActionInsert || len(record.Write.Allowed) != 2 || !containsAction(record.Write.Allowed, plan.ActionDelete) {
+			return fmt.Errorf("Go PATCH insert-delete policy requires a physical leaf, Current, keys, delete marker and insert/delete actions")
+		}
+		return nil
 	}
 	if record.Write.Existing != plan.ActionUpdate || record.Write.Missing != plan.ActionInsert || len(record.Write.Allowed) != 2+markerActions {
 		return fmt.Errorf("Go PATCH record %q requires update-or-insert write policy", record.Identity)

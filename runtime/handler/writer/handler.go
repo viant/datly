@@ -10,9 +10,11 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"unsafe"
 
+	dexec "github.com/viant/datly/exec"
 	"github.com/viant/datly/internal/dialectcontext"
 	rhandler "github.com/viant/datly/runtime/handler"
 	handlerengine "github.com/viant/datly/runtime/handler/engine"
@@ -97,6 +99,7 @@ type Record struct {
 	NestedNullPolicy         string
 	InsertValidationPresence bool
 	WriterIdentityPolicy     string
+	WriterActionPolicy       string
 	OnDeleteNotFound         string
 	MutationPredicateGroup   *int
 	Name                     string
@@ -318,27 +321,35 @@ func hasWritableRole(record *Record) bool {
 // Program is invocation-owned universal mutation state. The same type is used
 // for every writer component; only Metadata and values differ.
 type Program struct {
-	scopedService          any
-	metadata               *Metadata
-	input                  any
-	output                 any
-	original               *OriginalInput
-	database               *DatabaseSnapshot
-	frames                 *MutationFrames
-	actions                *MutationActions
-	validation             *FrameworkValidation
-	hooks                  *Hooks
-	hook                   reflect.Value
-	hooksByRecord          map[*Record]reflect.Value
-	stage                  Stage
-	failed                 bool
-	finalized              bool
-	componentHookAttempted bool
-	structuralError        error
-	queueItems             []*Action
-	queueObserverPanic     bool
-	queueInvocationID      uint64
-	previousFields         map[*Record]fieldSet
+	guardMu                  sync.Mutex
+	guardIssued              bool
+	guardBinder              xhandler.Binder
+	executionAttempted       bool
+	executionFailure         error
+	executionGuardRegistered bool
+	executionGuardReady      bool
+	actionPolicyFacts        map[frameIdentity]*actionPolicyFacts
+	scopedService            any
+	metadata                 *Metadata
+	input                    any
+	output                   any
+	original                 *OriginalInput
+	database                 *DatabaseSnapshot
+	frames                   *MutationFrames
+	actions                  *MutationActions
+	validation               *FrameworkValidation
+	hooks                    *Hooks
+	hook                     reflect.Value
+	hooksByRecord            map[*Record]reflect.Value
+	stage                    Stage
+	failed                   bool
+	finalized                bool
+	componentHookAttempted   bool
+	structuralError          error
+	queueItems               []*Action
+	queueObserverPanic       bool
+	queueInvocationID        uint64
+	previousFields           map[*Record]fieldSet
 	// graph caches insert lookups for the current frame topology.
 	graph *graphIndex
 	// typeFields caches the exported field set per Previous type.
@@ -557,6 +568,8 @@ type Frame struct {
 type Action struct {
 	Kind   xhandler.WriteAction
 	Entity reflect.Value
+	// Native actions retain their graph role even when entity pointers alias.
+	frame *Frame
 }
 
 func (p *Program) allocate(ctx context.Context, sequencer xhandler.Sequencer, record *Record, roots reflect.Value) error {
@@ -574,8 +587,21 @@ func (p *Program) allocate(ctx context.Context, sequencer xhandler.Sequencer, re
 	}
 
 	if record.Sequence != nil {
+		if err := p.validateActionPolicyFacts(); err != nil {
+			return err
+		}
 		if err := sequencer.Allocate(ctx, record.Table, roots.Interface(), record.Selector); err != nil {
 			return fmt.Errorf("allocate %s: %w", record.Path, err)
+		}
+		for _, frame := range p.frames.Rows {
+			if frame.Record == record {
+				if err := p.advanceActionPolicyKey(frame, *record.Sequence); err != nil {
+					return err
+				}
+			}
+		}
+		if err := p.validateActionPolicyFacts(); err != nil {
+			return err
 		}
 	}
 	for _, relation := range record.Relations {
@@ -587,6 +613,9 @@ func (p *Program) allocate(ctx context.Context, sequencer xhandler.Sequencer, re
 }
 
 func (p *Program) reconcileLinks(requireResolved bool) error {
+	if err := p.validateActionPolicyFacts(); err != nil {
+		return err
+	}
 	for _, frame := range p.frames.Rows {
 		if frame == nil || frame.SkippedDelete || frame.Parent == nil || frame.Record == nil {
 			continue
@@ -606,6 +635,9 @@ func (p *Program) reconcileLinks(requireResolved bool) error {
 			child := frame.Entity.Elem().FieldByIndex(link.Child.Index)
 			if err := assignLinkedValue(child, parent); err != nil {
 				return fmt.Errorf("writer relation %s link %s=%s: %w", frame.Record.Path, link.Parent.Name, link.Child.Name, err)
+			}
+			if err := p.advanceActionPolicyKey(frame, link.Child); err != nil {
+				return err
 			}
 			// Updates stay sparse: a matched Previous row already carries this
 			// foreign key (buildRecordFrames rejects parent-scope mismatches), so
@@ -716,7 +748,79 @@ func (p *Program) usePhaseObserver(ctx context.Context) {
 }
 func (h *Handler) Execute(ctx context.Context, invocation rhandler.Invocation) (result any, err error) {
 	scope := rhandler.PhaseScopeFromContext(ctx)
+	// Keep policy capture before execution-begin observation when invoked without
+	// the engine's ordinary CaptureInput snapshot. Policy-free behavior is unchanged.
+	if h != nil && h.metadata != nil && hasWriterActionPolicy(h.metadata.Root) && invocation.Snapshot == nil {
+		program, captureErr := h.program(invocation.Input)
+		if captureErr != nil {
+			return nil, captureErr
+		}
+		invocation.Snapshot = program
+	}
+	if h != nil && h.metadata != nil && hasWriterActionPolicy(h.metadata.Root) {
+		program, guardErr := h.capturedProgram(invocation)
+		if guardErr != nil {
+			return nil, guardErr
+		}
+		defer func() {
+			if value := recover(); value != nil {
+				program.retainExecutionFailure(dexec.NewPanicError("captured writer execution", value))
+				panic(value)
+			}
+			program.retainExecutionFailure(err)
+		}()
+		program.guardMu.Lock()
+		issued, registered := program.guardIssued, program.executionGuardRegistered
+		program.guardMu.Unlock()
+		if issued && !registered {
+			return nil, fmt.Errorf("captured writer guard registration did not succeed; fresh capture required")
+		}
+		if !issued {
+			check, guardErr := h.CapturedExecutionGuard(invocation)
+			if guardErr != nil {
+				return nil, guardErr
+			}
+			service, guardErr := lookup[xhandler.DML](ctx, invocation.Binder, xhandler.DMLKey)
+			if guardErr != nil {
+				return nil, guardErr
+			}
+			registrar, supported := service.(interface {
+				RegisterExecutionGuard(func(context.Context) error) error
+				EnableCapturedExecutionGuards() error
+				ValidateExecutionGuards(context.Context) error
+				CloseMutationAdmission() error
+			})
+			if !supported {
+				return nil, fmt.Errorf("captured writer execution requires a guarded DML journal")
+			}
+			if guardErr = registrar.EnableCapturedExecutionGuards(); guardErr != nil {
+				return nil, guardErr
+			}
+			if guardErr = registrar.RegisterExecutionGuard(check); guardErr != nil {
+				return nil, guardErr
+			}
+			if guardErr = h.CapturedExecutionGuardRegistered(invocation); guardErr != nil {
+				return nil, guardErr
+			}
+		}
+		if guardErr = program.admitCapturedExecution(invocation); guardErr != nil {
+			return nil, guardErr
+		}
+	}
 	err = scope.Run(ctx, xhandler.PhaseExecution, func() error { var failure error; result, failure = h.execute(ctx, invocation); return failure })
+	// Buffered DML is completed by the engine after this boundary. An execution
+	// end observer must not change the validated rows which the queue retains.
+	if err == nil {
+		if program, ok := invocation.Snapshot.(*Program); ok && program.metadata != nil && hasWriterActionPolicy(program.metadata.Root) {
+			err = program.validateActionPolicyFacts()
+			if err == nil {
+				err = program.validateActionPolicyActions()
+			}
+			if err != nil {
+				program.failed = true
+			}
+		}
+	}
 	return result, err
 }
 func (h *Handler) execute(ctx context.Context, invocation rhandler.Invocation) (any, error) {
@@ -757,6 +861,100 @@ func (h *Handler) CaptureInput(ctx context.Context, input any) (any, error) {
 		return nil, err
 	}
 	return program, nil
+}
+
+// CapturedExecutionGuard retains this exact native Program through deferred
+// SQL execution. Registration does not arm unfinished action state.
+func (h *Handler) capturedProgram(invocation rhandler.Invocation) (*Program, error) {
+	program, ok := invocation.Snapshot.(*Program)
+	if !ok || program == nil || program.metadata != h.metadata {
+		return nil, fmt.Errorf("captured writer guard has invalid program ownership")
+	}
+	input, owner := reflect.ValueOf(invocation.Input), reflect.ValueOf(program.input)
+	if !input.IsValid() || input.Kind() != reflect.Pointer || input.IsNil() || input.Type() != reflect.PointerTo(h.inputType) || !owner.IsValid() || owner.Type() != input.Type() || owner.Pointer() != input.Pointer() {
+		return nil, fmt.Errorf("captured writer guard has invalid input ownership")
+	}
+	binding := reflect.ValueOf(invocation.Binder)
+	if !binding.IsValid() || binding.Kind() != reflect.Pointer || binding.IsNil() {
+		return nil, fmt.Errorf("captured writer guard requires definite invocation binder ownership")
+	}
+	return program, nil
+}
+func (p *Program) sameGuardBinder(invocation rhandler.Invocation) bool {
+	binding := reflect.ValueOf(invocation.Binder)
+	return binding.IsValid() && binding.Kind() == reflect.Pointer && !binding.IsNil() && p.guardBinder != nil && invocation.Binder == p.guardBinder
+}
+func (p *Program) retainExecutionFailure(err error) {
+	if err == nil {
+		return
+	}
+	p.guardMu.Lock()
+	if p.executionFailure == nil {
+		p.executionFailure = err
+	}
+	p.guardMu.Unlock()
+}
+func (p *Program) admitCapturedExecution(invocation rhandler.Invocation) error {
+	p.guardMu.Lock()
+	defer p.guardMu.Unlock()
+	if !p.guardIssued || !p.executionGuardRegistered || !p.sameGuardBinder(invocation) {
+		return fmt.Errorf("captured writer execution has invalid registration or binder ownership")
+	}
+	if p.executionAttempted || p.finalized {
+		return fmt.Errorf("captured writer execution already attempted or finalized; fresh capture required")
+	}
+	p.executionAttempted = true
+	return nil
+}
+func (h *Handler) CapturedExecutionGuard(invocation rhandler.Invocation) (func(context.Context) error, error) {
+	if h == nil || h.metadata == nil || !hasWriterActionPolicy(h.metadata.Root) {
+		return nil, nil
+	}
+	program, err := h.capturedProgram(invocation)
+	if err != nil {
+		return nil, err
+	}
+	program.guardMu.Lock()
+	if program.guardIssued || program.executionAttempted || program.finalized {
+		program.guardMu.Unlock()
+		return nil, fmt.Errorf("captured writer guard already issued or finalized; fresh capture required")
+	}
+	program.guardIssued, program.guardBinder = true, invocation.Binder
+	program.guardMu.Unlock()
+	return func(ctx context.Context) error {
+		program.guardMu.Lock()
+		ready, failure := program.executionGuardReady, program.executionFailure
+		program.guardMu.Unlock()
+		if failure != nil {
+			return failure
+		}
+		if !ready {
+			return nil
+		}
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if err := program.validateActionPolicyFacts(); err != nil {
+			return err
+		}
+		return program.validateActionPolicyActions()
+	}, nil
+}
+func (h *Handler) CapturedExecutionGuardRegistered(invocation rhandler.Invocation) error {
+	if h == nil || h.metadata == nil || !hasWriterActionPolicy(h.metadata.Root) {
+		return nil
+	}
+	program, err := h.capturedProgram(invocation)
+	if err != nil {
+		return err
+	}
+	program.guardMu.Lock()
+	defer program.guardMu.Unlock()
+	if !program.guardIssued || program.executionGuardRegistered || program.executionAttempted || program.finalized || !program.sameGuardBinder(invocation) {
+		return fmt.Errorf("captured writer guard acknowledgment has invalid issuance or binder ownership")
+	}
+	program.executionGuardRegistered = true
+	return nil
 }
 
 func prepareReadIndexes(ctx context.Context, input any) error {
@@ -812,10 +1010,20 @@ func (h *Handler) FinalizeOutcome(ctx context.Context, invocation rhandler.Invoc
 		}
 		return nil
 	}
+	guarded := program.metadata != nil && hasWriterActionPolicy(program.metadata.Root)
+	if guarded {
+		program.guardMu.Lock()
+		alreadyFinalized := program.finalized
+		program.finalized = true
+		program.guardMu.Unlock()
+		if alreadyFinalized {
+			return nil
+		}
+	}
 	if !program.hook.IsValid() {
 		return nil
 	}
-	if program.componentHook() {
+	if program.componentHook() && !guarded {
 		if program.finalized {
 			return nil
 		}
@@ -879,8 +1087,9 @@ func (p *Program) captureOriginalAt(record *Record, rows reflect.Value, parent *
 			return fmt.Errorf("writer row %d is nil", i)
 		}
 		p.captureEntityOriginal(record, entity)
+		location := &Frame{Record: record, Entity: reflect.ValueOf(entity.Interface()), framedEntity: reflect.ValueOf(entity.Interface()), holderPosition: i, holderIndexed: indexed, holderTracked: true, Parent: parent, Location: p.rowLocation(record, parent, i, indexed)}
+		p.captureActionPolicyOwner(location)
 		for _, relation := range record.Relations {
-			location := &Frame{Record: record, Location: p.rowLocation(record, parent, i, indexed)}
 			if err := p.captureOriginalAt(relation.Child, entity.Elem().FieldByIndex(relation.Field), location); err != nil {
 				return err
 			}
@@ -894,6 +1103,7 @@ func (p *Program) captureOriginalAt(record *Record, rows reflect.Value, parent *
 // explicit deletions derived from Previous) are captured when first framed, so
 // their authored token remains available to the concurrency check.
 func (p *Program) captureEntityOriginal(record *Record, entity reflect.Value) originalPresence {
+	p.captureActionPolicyFacts(record, entity)
 	if existing, ok := p.original.Presence[entity.Pointer()]; ok {
 		return existing
 	}
@@ -1103,11 +1313,11 @@ func (p *Program) prepare(ctx context.Context, binder xhandler.Binder) error {
 			}
 			if frame.Action == xhandler.WriteUpdate && !hasMutableFields(frame) {
 				if p.queueObserver() != nil && frame.Previous.IsValid() {
-					p.queueItems = append(p.queueItems, &Action{Kind: frame.Action, Entity: frame.Entity})
+					p.queueItems = append(p.queueItems, &Action{Kind: frame.Action, Entity: frame.Entity, frame: frame})
 				}
 				continue
 			}
-			action := &Action{Kind: frame.Action, Entity: frame.Entity}
+			action := &Action{Kind: frame.Action, Entity: frame.Entity, frame: frame}
 			if frame.Action == xhandler.WriteDelete {
 				p.actions.Rows = append([]*Action{action}, p.actions.Rows...)
 				if p.queueObserver() != nil {
@@ -1177,6 +1387,13 @@ func (p *Program) prepare(ctx context.Context, binder xhandler.Binder) error {
 		return err
 	}
 	p.filterIneligibleActions()
+	p.freezeActionPolicyParticipants()
+	p.guardMu.Lock()
+	p.executionGuardReady = true
+	p.guardMu.Unlock()
+	if err = p.validateActionPolicyActions(); err != nil {
+		return err
+	}
 	if err = phases.Run(ctx, xhandler.PhaseQueue, func() error {
 		return p.queue(ctx, binder)
 	}); err != nil {
@@ -1184,6 +1401,9 @@ func (p *Program) prepare(ctx context.Context, binder xhandler.Binder) error {
 	}
 
 	if err = p.validateAuxiliaryTopology(); err != nil {
+		return err
+	}
+	if err = p.validateActionPolicyFacts(); err != nil {
 		return err
 	}
 	output := reflect.ValueOf(p.output).Elem()
@@ -1200,6 +1420,9 @@ func (p *Program) prepare(ctx context.Context, binder xhandler.Binder) error {
 }
 
 func (p *Program) queuePhysical(ctx context.Context, binder xhandler.Binder, dml xhandler.DML, action *Action, frame *Frame, queued *bool) error {
+	if err := p.validateActionPolicyFacts(); err != nil {
+		return err
+	}
 	if err := p.validateAuxiliaryFrameIdentity(frame); err != nil {
 		return err
 	}
@@ -1295,6 +1518,24 @@ func identityOfFrame(frame *Frame) frameIdentity {
 	return frameIdentity{record: frame.Record, pointer: frame.Entity.Pointer()}
 }
 
+// actionFrame retains the native action's authoritative role, never a
+// last-wins entity-pointer lookup. An uncaptured association fails closed.
+func (p *Program) actionFrame(action *Action) *Frame {
+	if action == nil || action.frame == nil || !action.Entity.IsValid() || action.Entity.Kind() != reflect.Pointer || action.Entity.IsNil() {
+		return nil
+	}
+	frame := action.frame
+	if !frame.Entity.IsValid() || frame.Entity.Kind() != reflect.Pointer || frame.Entity.IsNil() || frame.Entity.Pointer() != action.Entity.Pointer() {
+		return nil
+	}
+	for _, owned := range p.frames.Rows {
+		if owned == frame {
+			return frame
+		}
+	}
+	return nil
+}
+
 func (p *Program) frameFor(entity reflect.Value) *Frame {
 	if !entity.IsValid() || entity.IsNil() {
 		return nil
@@ -1361,7 +1602,7 @@ func (p *Program) validationOptions(frame *Frame, transactionStarted bool) xhand
 		options.HonorPresence = true
 		options.Fields = frame.Fields
 	}
-	if frame.Previous.IsValid() {
+	if frame.Previous.IsValid() && !isPolicyInsert(frame) {
 		options.Previous = frame.Previous.Interface()
 		options.PreviousFields = p.fieldsOf(frame.Previous.Elem().Type())
 		options.Fields = frame.Fields
@@ -1566,6 +1807,9 @@ func (p *Program) validateFrames(ctx context.Context, validator xhandler.Validat
 }
 
 func (p *Program) callEntityHook(ctx context.Context, name string, frame *Frame) error {
+	if err := p.validateActionPolicyFacts(); err != nil {
+		return err
+	}
 	if err := p.validateAuxiliaryFrameIdentity(frame); err != nil {
 		return err
 	}
@@ -1598,6 +1842,9 @@ func (p *Program) callEntityHook(ctx context.Context, name string, frame *Frame)
 	state := p.entityHookState(methodType.In(2), frame)
 	results := method.Call([]reflect.Value{reflect.ValueOf(ctx), frame.Entity, state})
 	if err := methodError(name, results); err != nil {
+		return err
+	}
+	if err := p.validateActionPolicyFacts(); err != nil {
 		return err
 	}
 	if err := p.validateAuxiliaryFrameIdentity(frame); err != nil {
@@ -1879,6 +2126,10 @@ func (p *Program) buildEntityFrame(ctx context.Context, binder xhandler.Binder, 
 			}
 			return fmt.Errorf("writer row %d is nil", i)
 		}
+		p.captureActionPolicyFacts(record, entity)
+		if err := p.validateActionPolicyFrameFacts(&Frame{Record: record, Entity: entity}); err != nil {
+			return err
+		}
 		key, complete := record.key(entity.Elem())
 		previous := p.database.Rows[rowIdentity{record: record, key: key}]
 		if record.WriterIdentityPolicy == assignedUpdateIdentity && !requestedNonzeroIdentity(record, entity.Elem()) {
@@ -1925,7 +2176,7 @@ func (p *Program) buildEntityFrame(ctx context.Context, binder xhandler.Binder, 
 			}
 			action = xhandler.WriteUpdate
 		case "patch":
-			if previous.IsValid() {
+			if previous.IsValid() && record.WriterActionPolicy != insertDeleteActionPolicy {
 				action = xhandler.WriteUpdate
 			}
 		default:
@@ -1947,6 +2198,7 @@ func (p *Program) buildEntityFrame(ctx context.Context, binder xhandler.Binder, 
 		}
 		original := p.captureEntityOriginal(record, entity)
 		frame := &Frame{framedEntity: reflect.ValueOf(entity.Interface()), holderPosition: position, holderIndexed: indexed, holderTracked: true, Entity: entity, Previous: previous, ExpectedToken: original.token, Fields: fields, SkippedDelete: skipDelete, NoopMissingIdentity: noopMissing, Action: action, Record: record, Location: p.rowLocation(record, parent, position, indexed), Parent: parent, Original: original, Hook: p.hooksByRecord[record]}
+		p.captureActionPolicyOwner(frame)
 		p.frames.Rows = append(p.frames.Rows, frame)
 		for _, relation := range record.Relations {
 			children := entity.Elem().FieldByIndex(relation.Field)
@@ -2030,7 +2282,7 @@ func scalarFamily(kind reflect.Kind) uint8 {
 }
 
 func (p *Program) applyInvariants(frame *Frame) error {
-	if !frame.Previous.IsValid() {
+	if !frame.Previous.IsValid() || isPolicyInsert(frame) {
 		return nil
 	}
 	current, previous := frame.Entity.Elem(), frame.Previous.Elem()
@@ -2230,7 +2482,7 @@ func Compile(component *spec.Component, inputType, outputType reflect.Type, oper
 		Auxiliary:    auxiliaryRoot,
 		CurrentField: metadata.CurrentField, Table: metadata.Table, Keys: metadata.Keys, Fields: metadata.Fields,
 		Sequence: metadata.Sequence, DeleteMarker: metadata.DeleteMarker, ConcurrencyToken: metadata.ConcurrencyToken,
-		Invariants: metadata.Invariants, WriterIdentityPolicy: component.RootView.WriterIdentityPolicy, InsertValidationPresence: component.RootView.InsertValidationPresence, RootNullPolicy: component.RootView.RootNullPolicy, NestedNullPolicy: component.RootView.NestedNullPolicy, OnDeleteNotFound: component.RootView.OnDeleteNotFound, MutationPredicateGroup: component.RootView.MutationPredicateGroup, HookType: metadata.HookType,
+		Invariants: metadata.Invariants, WriterActionPolicy: component.RootView.WriterActionPolicy, WriterIdentityPolicy: component.RootView.WriterIdentityPolicy, InsertValidationPresence: component.RootView.InsertValidationPresence, RootNullPolicy: component.RootView.RootNullPolicy, NestedNullPolicy: component.RootView.NestedNullPolicy, OnDeleteNotFound: component.RootView.OnDeleteNotFound, MutationPredicateGroup: component.RootView.MutationPredicateGroup, HookType: metadata.HookType,
 	}
 	if root.Name == "" {
 		root.Name = metadata.EntityType.Name()
@@ -2286,6 +2538,9 @@ func Compile(component *spec.Component, inputType, outputType reflect.Type, oper
 		}
 	}
 	metadata.Root = root
+	if err := validateWriterActionPolicy(root, operation); err != nil {
+		return nil, err
+	}
 	if err := validateWriterIdentityPolicy(root, operation); err != nil {
 		return nil, err
 	}
@@ -2439,6 +2694,7 @@ func compileRecord(component *spec.Component, inputType reflect.Type, name, path
 	record.NestedNullPolicy = tagOption(viewTag, "nestedNullPolicy")
 	if view != nil {
 		record.Auxiliary = record.Auxiliary || view.Auxiliary
+		record.WriterActionPolicy = view.WriterActionPolicy
 		record.WriterIdentityPolicy = view.WriterIdentityPolicy
 		if view.RootNullPolicy != "" {
 			record.RootNullPolicy = view.RootNullPolicy

@@ -151,6 +151,9 @@ func (d *Data) flushLocked(ctx context.Context, tableName string, target *Data) 
 		}
 		owner.mu.Unlock()
 	}
+	if err := owner.validateExecutionGuardsLocked(ctx); err != nil {
+		return err
+	}
 	matched := owner.operations(tableName, target)
 	if len(matched) == 0 {
 		return nil

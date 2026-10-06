@@ -133,6 +133,7 @@ func (b *inputGeneration) appendCurrent(view *spec.View, currentName, predicate 
 	current.Dest = ""
 	current.EntityHooks = ""
 	current.WriterIdentityPolicy = ""
+	current.WriterActionPolicy = ""
 	current.RootNullPolicy = ""
 	current.NestedNullPolicy = ""
 	current.InsertValidationPresence = false

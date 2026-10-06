@@ -19,6 +19,7 @@ type View struct {
 	NestedNullPolicy         string
 	InsertValidationPresence bool
 	WriterIdentityPolicy     string
+	WriterActionPolicy       string
 	OnDeleteNotFound         string
 	MutationPredicateGroup   *int
 	EntityHooks              string
@@ -88,6 +89,11 @@ func ParseView(value string) (*View, error) {
 			if err != nil {
 				return fmt.Errorf("insertValidationPresence must be true or false")
 			}
+		case "writeractionpolicy":
+			if result.WriterActionPolicy != "" || value != "insert-delete" {
+				return fmt.Errorf("writerActionPolicy requires one insert-delete value")
+			}
+			result.WriterActionPolicy = value
 		case "writeridentity":
 			if result.WriterIdentityPolicy != "" {
 				return fmt.Errorf("writerIdentity is duplicated")
