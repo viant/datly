@@ -32,6 +32,78 @@ type warmupJWTInput struct {
 	JWT    *jwt.Claims `parameter:"JWT,kind=header,in=Authorization,dataType=string,required,errorCode=401" codec:"JwtClaim" predicate:"handler,example.WarmupJWTPolicy" json:"-"`
 }
 
+type warmupInternalJWTInput struct {
+	Tenant int
+	JWT    *jwt.Claims `parameter:"JWT,kind=header,in=Authorization,dataType=string,required,errorCode=401" codec:"JwtClaim" json:"-"`
+}
+
+func TestHTTPWarmupInternalRSAJWTIsWarmupOnly(t *testing.T) {
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, err := x509.MarshalPKIXPublicKey(&key.PublicKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	factory, err := runtimeauth.New(context.Background(), &runtimeauth.Config{JWTValidator: &verifier.Config{RSA: []*scy.Resource{{URL: "production-public-key", Data: pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: encoded})}}}, InternalWarmupJWT: true, InternalWarmupClaims: map[string]any{"sub": "warmup-service", "user_id": 1}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := newConfigFixture(t)
+	artifact, err := bootstrap.BuildArtifact(bootstrap.ArtifactInput{Component: f.component, InputType: reflect.TypeFor[warmupInternalJWTInput](), OutputType: reflect.TypeFor[configOutput](), DirectViewField: "Rows", CodecFactory: factory})
+	if err != nil {
+		t.Fatal(err)
+	}
+	reader, err := artifact.ReaderCompilation().NewExecution(bootstrap.ReaderRuntimeConfig{SQL: &dsql.SQLComponent{DB: f.db.DB}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rt, err := druntime.NewRuntime([]*druntime.RegisteredComponent{{Component: artifact.Component, Input: artifact.Input, OutputType: reflect.TypeFor[configOutput](), Reader: reader}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	configuration := warmupConfig()
+	configuration.Warmup.InternalCredential = factory.WarmupCredential
+	h, err := configuration.NewHandler(rt, nil, "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer h.Shutdown(context.Background())
+	internal, err := factory.WarmupCredential(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest("POST", "/admin/warm/records", nil)
+	request.Header.Set("X-Admin", "admin")
+	response := httptest.NewRecorder()
+	h.ServeHTTP(response, request)
+	if response.Code != 200 {
+		t.Fatalf("internal warmup failed: %d %s", response.Code, response.Body.String())
+	}
+	ordinary := httptest.NewRequest("GET", "/api/records?tenant=1", nil)
+	ordinary.Header.Set("Authorization", internal)
+	rejected := httptest.NewRecorder()
+	h.ServeHTTP(rejected, ordinary)
+	if rejected.Code != 401 {
+		t.Fatalf("ordinary request accepted warmup JWT: %d %s", rejected.Code, rejected.Body.String())
+	}
+	production, err := jwtv5.NewWithClaims(jwtv5.SigningMethodRS256, jwtv5.MapClaims{"sub": "user-one", "exp": time.Now().Add(time.Hour).Unix()}).SignedString(key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.db.ExecStatements(context.Background(), "DROP TABLE records"); err != nil {
+		t.Fatal(err)
+	}
+	read := httptest.NewRequest("GET", "/api/records?tenant=1", nil)
+	read.Header.Set("Authorization", "Bearer "+production)
+	cached := httptest.NewRecorder()
+	h.ServeHTTP(cached, read)
+	if cached.Code != 200 {
+		t.Fatalf("production JWT did not reuse warmup: %d %s", cached.Code, cached.Body.String())
+	}
+}
+
 type warmupJWTPolicy struct {
 	Input *warmupJWTInput `bind:"kind=input,required"`
 }

@@ -209,6 +209,32 @@ authorizer. Merely setting a URI does not install those services.
 The operation still binds the target's declared credentials/parameters. Its accepted work uses the server lifetime
 with a bounded timeout; client disconnection does not define success or abandon
 completion accounting. Use the `Completed` callback for the actual result/error.
+
+For a standalone service with `Warmup` administration and `JWTValidator` configured,
+Datly generates a private, process-local RSA key pair at startup. After the
+administrator and component API-key checks, it supplies a short-lived internal
+JWT to the reader's declared JWT header bindings. The `JwtClaim` codec verifies
+that key only during the server-owned warmup preparation and fill phases. Ordinary
+GET requests still use the configured production `JWTValidator` and reject the
+internal credential. `Warmup.JWTClaims` may supply trusted application claims,
+such as `sub`, `user_id`, and `scope`, for warmup authorization logic. Datly owns
+`exp`, `iat`, `nbf`, `iss`, and `aud`; those names cannot be overridden. An
+embedding application can opt in with `auth.Config.InternalWarmupJWT`, pass
+`auth.Config.InternalWarmupClaims`, and wire `auth.Service.WarmupCredential` to
+`gateway/http.WarmupConfig.InternalCredential`. This does not bypass a custom
+authorization predicate that requires particular claims; such predicates must
+explicitly handle the trusted warmup invocation if broad warmup is intended.
+
+For example, a standalone warmup policy can include:
+
+```json
+"Warmup": {
+  "TimeoutMs": 60000,
+  "Admin": {"APIKeyHeader": "X-Admin", "APIKeyValue": "configured-secret"},
+  "JWTClaims": {"sub": "cache-warmer", "user_id": 17, "scope": "cache:populate"}
+}
+```
+
 Configured defaults and case budgets must be authorized as deliberately as an
 ordinary request. [HTTP warmup tests](../gateway/http/warmup_policy_test.go) cover
 partial results, limits and failed setup; [JWT warmup tests](../gateway/http/warmup_jwt_sqlite_test.go)

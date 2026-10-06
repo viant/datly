@@ -33,6 +33,9 @@ func (s *source) services(ctx context.Context, logger *slog.Logger) (runtime.Obs
 		}, Completed: func(result gateway.WarmupResult, err error) {
 			logger.Info("datly cache warmup completed", "target", result.Target, "status", result.Status, "groups", result.Groups, "failed", err != nil)
 		}}
+		if s.warmupAuth != nil {
+			s.http.Warmup.InternalCredential = s.warmupAuth.WarmupCredential
+		}
 	}
 	if policy := s.config.CacheInvalidation; policy != nil {
 		admin := *policy.Admin

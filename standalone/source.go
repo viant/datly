@@ -42,6 +42,7 @@ type source struct {
 	config           *config.Config
 	connections      *connector.Set
 	codecs           xcodec.Factory
+	warmupAuth       *auth.Service
 	codecFactories   map[string]xcodec.Factory
 	registry         *x.Registry
 	http             gateway.Config
@@ -417,13 +418,18 @@ func (s *source) init(ctx context.Context, registry *x.Registry) (*typecatalog.C
 		return nil, err
 	}
 	if s.config.JWTValidator != nil {
-		s.codecs, err = auth.New(ctx, &auth.Config{JWTValidator: s.config.JWTValidator, ClaimPolicy: s.config.JWTClaims, RetainFailedCredential: s.config.JWTRetainFailedCredential})
+		warmupClaims := map[string]any{}
+		if s.config.Warmup != nil {
+			warmupClaims = s.config.Warmup.JWTClaims
+		}
+		s.warmupAuth, err = auth.New(ctx, &auth.Config{JWTValidator: s.config.JWTValidator, ClaimPolicy: s.config.JWTClaims, RetainFailedCredential: s.config.JWTRetainFailedCredential, InternalWarmupJWT: s.config.Warmup != nil, InternalWarmupClaims: warmupClaims})
 		if err != nil {
 			if ctx.Err() != nil {
 				return nil, ctx.Err()
 			}
 			return nil, fmt.Errorf("JWTValidator initialization failed")
 		}
+		s.codecs = s.warmupAuth
 	}
 	if len(s.codecFactories) > 0 {
 		s.codecs = &applicationCodecs{factories: s.codecFactories, fallback: s.codecs}

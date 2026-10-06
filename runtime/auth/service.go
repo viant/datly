@@ -4,15 +4,24 @@ package auth
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"reflect"
 	"strings"
+	"time"
 
+	jwtv5 "github.com/golang-jwt/jwt/v5"
 	"github.com/viant/datly/internal/logging"
+	"github.com/viant/scy"
 	"github.com/viant/scy/auth/jwt"
 	"github.com/viant/scy/auth/jwt/verifier"
 	xcodec "github.com/viant/xdatly/codec"
+	handlerexec "github.com/viant/xdatly/handler/exec"
 )
 
 const JwtClaim = "JwtClaim"
@@ -25,6 +34,10 @@ type Config struct {
 	// RetainFailedCredential enables deliberate legacy error-response parity.
 	// The credential is private to VerificationFailure and never formatted.
 	RetainFailedCredential bool
+	// InternalWarmupJWT enables a server-owned RSA credential for cache warmup only.
+	InternalWarmupJWT bool
+	// InternalWarmupClaims adds trusted application claims to the warmup-only JWT.
+	InternalWarmupClaims map[string]any
 }
 
 // ClaimPolicy binds a successfully verified JWT to the intended issuer,
@@ -40,6 +53,9 @@ type ClaimPolicy struct {
 // existing bootstrap CodecFactory input; only declared JwtClaim inputs use it.
 type Service struct {
 	verifier               *verifier.Service
+	warmupVerifier         *verifier.Service
+	warmupSigner           *rsa.PrivateKey
+	warmupClaimsJSON       []byte
 	policy                 ClaimPolicy
 	retainFailedCredential bool
 }
@@ -66,7 +82,82 @@ func New(ctx context.Context, config *Config) (*Service, error) {
 	if err := service.Init(ctx); err != nil {
 		return nil, fmt.Errorf("initialize JWTValidator: %w", err)
 	}
-	return &Service{verifier: service, policy: policy, retainFailedCredential: config.RetainFailedCredential}, nil
+	result := &Service{verifier: service, policy: policy, retainFailedCredential: config.RetainFailedCredential}
+	if len(config.InternalWarmupClaims) > 0 && !config.InternalWarmupJWT {
+		return nil, fmt.Errorf("internal warmup JWT claims require InternalWarmupJWT")
+	}
+	if config.InternalWarmupJWT {
+		for name, value := range config.InternalWarmupClaims {
+			if strings.TrimSpace(name) == "" {
+				return nil, fmt.Errorf("internal warmup JWT claim name is required")
+			}
+			switch strings.ToLower(name) {
+			case "exp", "iat", "nbf", "iss", "aud":
+				return nil, fmt.Errorf("internal warmup JWT claim %q is reserved", name)
+			case "sub":
+				if subject, ok := value.(string); !ok || strings.TrimSpace(subject) == "" {
+					return nil, fmt.Errorf("internal warmup JWT subject must be a nonempty string")
+				}
+			}
+		}
+		if len(config.InternalWarmupClaims) > 0 {
+			claimsJSON, err := json.Marshal(config.InternalWarmupClaims)
+			if err != nil {
+				return nil, fmt.Errorf("encode internal warmup JWT claims: %w", err)
+			}
+			result.warmupClaimsJSON = claimsJSON
+		}
+		key, err := rsa.GenerateKey(rand.Reader, 2048)
+		if err != nil {
+			return nil, fmt.Errorf("generate internal warmup RSA key: %w", err)
+		}
+		encoded, err := x509.MarshalPKIXPublicKey(&key.PublicKey)
+		if err != nil {
+			return nil, fmt.Errorf("encode internal warmup RSA key: %w", err)
+		}
+		internal := verifier.New(&verifier.Config{RSA: []*scy.Resource{{URL: "datly-internal-warmup", Data: pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: encoded})}}})
+		if err := internal.Init(ctx); err != nil {
+			return nil, fmt.Errorf("initialize internal warmup JWT verifier: %w", err)
+		}
+		result.warmupSigner, result.warmupVerifier = key, internal
+	}
+	return result, nil
+}
+
+// WarmupCredential creates a short-lived credential accepted only while the
+// canonical component engine is executing a server-owned warmup phase.
+func (s *Service) WarmupCredential(ctx context.Context) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+	if s == nil || s.warmupSigner == nil {
+		return "", fmt.Errorf("internal warmup JWT is not enabled")
+	}
+	expires := time.Now().Add(time.Minute)
+	if deadline, ok := ctx.Deadline(); ok && deadline.After(expires) {
+		expires = deadline.Add(time.Minute)
+	}
+	claims := jwtv5.MapClaims{}
+	if len(s.warmupClaimsJSON) > 0 {
+		if err := json.Unmarshal(s.warmupClaimsJSON, &claims); err != nil {
+			return "", fmt.Errorf("decode internal warmup JWT claims: %w", err)
+		}
+	}
+	if _, ok := claims["sub"]; !ok {
+		claims["sub"] = "datly-internal-warmup"
+	}
+	claims["exp"] = expires.Unix()
+	if s.policy.Issuer != "" {
+		claims["iss"] = s.policy.Issuer
+	}
+	if s.policy.Audience != "" {
+		claims["aud"] = s.policy.Audience
+	}
+	token, err := jwtv5.NewWithClaims(jwtv5.SigningMethodRS256, claims).SignedString(s.warmupSigner)
+	if err != nil {
+		return "", err
+	}
+	return "Bearer " + token, nil
 }
 
 func (s *Service) New(config *xcodec.Config, _ ...xcodec.Option) (xcodec.Instance, error) {
@@ -85,11 +176,12 @@ func (s *Service) New(config *xcodec.Config, _ ...xcodec.Option) (xcodec.Instanc
 	if len(config.Args) != 0 {
 		return nil, fmt.Errorf("JwtClaim does not accept transformation arguments")
 	}
-	return &claimsCodec{verifier: s.verifier, policy: s.policy, retainFailedCredential: s.retainFailedCredential}, nil
+	return &claimsCodec{verifier: s.verifier, warmupVerifier: s.warmupVerifier, policy: s.policy, retainFailedCredential: s.retainFailedCredential}, nil
 }
 
 type claimsCodec struct {
 	verifier               *verifier.Service
+	warmupVerifier         *verifier.Service
 	policy                 ClaimPolicy
 	retainFailedCredential bool
 }
@@ -109,7 +201,14 @@ func (c *claimsCodec) Value(ctx context.Context, raw any, _ ...xcodec.Option) (a
 	if len(parts) != 1 {
 		return nil, fmt.Errorf("JwtClaim requires a token or Bearer credential")
 	}
-	claims, err := c.verifier.VerifyClaims(ctx, parts[0])
+	var claims *jwt.Claims
+	var err error
+	if c.warmupVerifier != nil && handlerexec.IsCacheWarmup(ctx) {
+		claims, err = c.warmupVerifier.VerifyClaims(ctx, parts[0])
+	}
+	if claims == nil {
+		claims, err = c.verifier.VerifyClaims(ctx, parts[0])
+	}
 	if err != nil {
 		if ctx.Err() != nil || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 			return nil, fmt.Errorf("verify JWT: %w", err)

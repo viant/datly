@@ -107,6 +107,9 @@ type WarmupConfig struct {
 	Lifetime  *WarmupLifetime
 	Timeout   time.Duration
 	Authorize func(context.Context, *stdhttp.Request, dexec.ComponentTarget) error
+	// InternalCredential, when set, supplies a server-owned JWT after administrator
+	// authorization. It replaces caller JWT values only for this warmup invocation.
+	InternalCredential func(context.Context) (string, error)
 	// AdminHeaders are the extra request headers available to Authorize. API-key
 	// and canonical JWT headers are copied automatically; bodies are never retained.
 	AdminHeaders []string

@@ -44,6 +44,15 @@ func (e *warmupRoute) execute(ctx context.Context, policy WarmupConfig, req *std
 	if err := policy.Authorize(ctx, req, e.target); err != nil {
 		return result, warmupErrorStatus(ctx, 403), err
 	}
+	if policy.InternalCredential != nil && len(e.credentials) > 0 {
+		credential, err := policy.InternalCredential(ctx)
+		if err != nil {
+			return result, warmupErrorStatus(ctx, 500), err
+		}
+		for _, name := range e.credentials {
+			headers[name] = credential
+		}
+	}
 	if err := ctx.Err(); err != nil {
 		return result, warmupErrorStatus(ctx, 500), err
 	}

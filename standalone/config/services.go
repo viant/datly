@@ -14,6 +14,8 @@ import (
 type Warmup struct {
 	TimeoutMs int64
 	Admin     *gateway.DocumentAccess
+	// JWTClaims are signed only into the server-owned warmup JWT.
+	JWTClaims map[string]any
 }
 
 type CacheInvalidation struct {
@@ -40,6 +42,22 @@ type OTel struct {
 func (c *Config) validateServices() error {
 	const maxMs = int64((1<<63 - 1) / int64(time.Millisecond))
 	if w := c.Warmup; w != nil {
+		if len(w.JWTClaims) > 0 && c.JWTValidator == nil {
+			return fmt.Errorf("Warmup.JWTClaims requires JWTValidator")
+		}
+		for name, value := range w.JWTClaims {
+			if strings.TrimSpace(name) == "" {
+				return fmt.Errorf("Warmup.JWTClaims requires nonempty names")
+			}
+			switch strings.ToLower(name) {
+			case "exp", "iat", "nbf", "iss", "aud":
+				return fmt.Errorf("Warmup.JWTClaims.%s is reserved", name)
+			case "sub":
+				if subject, ok := value.(string); !ok || strings.TrimSpace(subject) == "" {
+					return fmt.Errorf("Warmup.JWTClaims.sub must be a nonempty string")
+				}
+			}
+		}
 		if c.Config.Warmup != nil {
 			return fmt.Errorf("configured and supplied Warmup policies conflict")
 		}

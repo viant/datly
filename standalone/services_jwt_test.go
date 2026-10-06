@@ -76,8 +76,8 @@ SELECT records.* FROM (SELECT id,name FROM records WHERE id=:ID) records`, filep
 	for _, tc := range []struct {
 		name, admin, token string
 		status             int
-	}{{"token is not admin", "", "Bearer " + signed, 403}, {"missing JWT", "admin-key", "", 401}, {"bad JWT", "admin-key", "Bearer invalid", 401},
-		{"wrong audience", "admin-key", "Bearer " + wrongAudience, 401}, {"wrong issuer", "admin-key", "Bearer " + wrongIssuer, 401},
+	}{{"token is not admin", "", "Bearer " + signed, 403}, {"missing JWT uses internal credential", "admin-key", "", 200}, {"bad caller JWT is replaced", "admin-key", "Bearer invalid", 200},
+		{"wrong caller audience is replaced", "admin-key", "Bearer " + wrongAudience, 200}, {"wrong caller issuer is replaced", "admin-key", "Bearer " + wrongIssuer, 200},
 		{"admin key and declared JWT", "admin-key", "Bearer " + signed, 200}} {
 		t.Run(tc.name, func(t *testing.T) {
 			req := httptest.NewRequest("POST", "/warm/protected/1", nil)
@@ -90,5 +90,17 @@ SELECT records.* FROM (SELECT id,name FROM records WHERE id=:ID) records`, filep
 				t.Fatalf("%d %s", res.Code, res.Body.String())
 			}
 		})
+	}
+	internal, err := s.source.warmupAuth.WarmupCredential(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	ordinary := httptest.NewRequest("GET", "/protected/1", nil)
+	ordinary.Header.Set("X-Read", "read-key")
+	ordinary.Header.Set("Authorization", internal)
+	rejected := httptest.NewRecorder()
+	s.manager.ServeHTTP(rejected, ordinary)
+	if rejected.Code != 401 {
+		t.Fatalf("ordinary GET accepted internal warmup JWT: %d %s", rejected.Code, rejected.Body.String())
 	}
 }

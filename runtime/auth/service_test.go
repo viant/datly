@@ -20,7 +20,66 @@ import (
 	"github.com/viant/scy/auth/jwt"
 	"github.com/viant/scy/auth/jwt/verifier"
 	xcodec "github.com/viant/xdatly/codec"
+	handlerexec "github.com/viant/xdatly/handler/exec"
 )
+
+func TestInternalWarmupJWTIsRejectedByOrdinaryRequests(t *testing.T) {
+	productionKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, err := x509.MarshalPKIXPublicKey(&productionKey.PublicKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	service, err := New(context.Background(), &Config{JWTValidator: &verifier.Config{RSA: []*scy.Resource{{URL: "production-public-key", Data: pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: encoded})}}}, InternalWarmupJWT: true, InternalWarmupClaims: map[string]any{"sub": "warmup-service", "user_id": 17, "scope": "cache:populate"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	codec, err := service.New(&xcodec.Config{Body: JwtClaim, SourceType: reflect.TypeFor[string](), DestinationType: reflect.TypeFor[*jwt.Claims]()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	internal, err := service.WarmupCredential(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := codec.Value(context.Background(), internal); err == nil {
+		t.Fatal("ordinary request accepted internal warmup credential")
+	}
+	for _, phase := range []handlerexec.WarmupPhase{handlerexec.WarmupPhasePrepare, handlerexec.WarmupPhaseFill} {
+		claims, err := codec.Value(handlerexec.WithCacheWarmup(context.Background(), phase), internal)
+		if err != nil || claims.(*jwt.Claims).Subject != "warmup-service" || claims.(*jwt.Claims).UserID != 17 || claims.(*jwt.Claims).Scope != "cache:populate" {
+			t.Fatalf("warmup phase %v: claims=%v error=%v", phase, claims, err)
+		}
+	}
+	production, err := jwtv5.NewWithClaims(jwtv5.SigningMethodRS256, jwtv5.MapClaims{"sub": "ordinary-user", "exp": time.Now().Add(time.Hour).Unix()}).SignedString(productionKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := codec.Value(context.Background(), production); err != nil {
+		t.Fatalf("ordinary production credential rejected: %v", err)
+	}
+}
+
+func TestInternalWarmupJWTRejectsReservedClaims(t *testing.T) {
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, err := x509.MarshalPKIXPublicKey(&key.PublicKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	validator := &verifier.Config{RSA: []*scy.Resource{{URL: "production-public-key", Data: pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: encoded})}}}
+	for _, name := range []string{"exp", "iss", "aud", "iat", "nbf"} {
+		t.Run(name, func(t *testing.T) {
+			if _, err := New(context.Background(), &Config{JWTValidator: validator, InternalWarmupJWT: true, InternalWarmupClaims: map[string]any{name: "override"}}); err == nil {
+				t.Fatal("reserved warmup claim accepted")
+			}
+		})
+	}
+}
 
 func TestJwtClaimOriginalVerifierConfiguration(t *testing.T) {
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
