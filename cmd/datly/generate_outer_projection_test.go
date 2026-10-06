@@ -165,11 +165,16 @@ func TestGenExecutableOuterProjection(t *testing.T) {
 						if step.rootName != "" {
 							body += `,"` + strings.ToLower(step.rootName[:1]) + step.rootName[1:] + `":"changed"`
 						}
-						body += `,"Items":[{"` + strings.ToLower(childKey[:1]) + childKey[1:] + `":` + strconv.Itoa(childID)
-						if step.childName != "" {
-							body += `,"` + strings.ToLower(step.childName[:1]) + step.childName[1:] + `":"changed child"`
+						// Internal matching keys are not public mutation identity.
+						// An unlisted child remains readable through Current but is omitted from this PATCH.
+						if step.child != "" {
+							body += `,"Items":[{"` + strings.ToLower(childKey[:1]) + childKey[1:] + `":` + strconv.Itoa(childID)
+							if step.childName != "" {
+								body += `,"` + strings.ToLower(step.childName[:1]) + step.childName[1:] + `":"changed child"`
+							}
+							body += `}]`
 						}
-						body += `}]}]}`
+						body += `}]}`
 						wantRoot, wantChild := "before", "old"
 						if childID == 11 {
 							wantChild = "hidden child"
@@ -177,10 +182,17 @@ func TestGenExecutableOuterProjection(t *testing.T) {
 						if step.rootName != "" {
 							wantRoot = "changed"
 						}
-						if step.childName != "" {
+						if step.childName != "" && step.name != "internal keys" {
 							wantChild = "changed child"
 						}
 						writer = strings.NewReplacer("BODY", strconv.Quote(body), "WANT_ROOT", strconv.Quote(wantRoot), "WANT_CHILD", strconv.Quote(wantChild), "CHILD_ID", strconv.Itoa(childID)).Replace(genpatch.OuterProjectionWriterTest)
+						if step.name == "internal keys" {
+							// A supplied hidden root ID is deliberately not public binding authority.
+							// Preserve the native incomplete-insert failure instead of selecting an existing row.
+							writer = strings.Replace(writer,
+								`if _,err=rt.ExecuteRoute(ctx,"PATCH","/orders",scope);err!=nil{t.Fatal(err)}`,
+								`if _,err=rt.ExecuteRoute(ctx,"PATCH","/orders",scope);err==nil||!strings.Contains(err.Error(),"validate writer Orders: field End failed notnull validation; field KindId failed notnull validation; field Start failed notnull validation"){t.Fatalf("hidden identity rejection changed: %v",err)}`, 1)
+						}
 					}
 					consumer := strings.NewReplacer("WRITER_IMPORTS", imports, "WRITER_TEST", writer, "ROOT_KEY", rootKey, "CHILD_KEY", childKey, "CHILD_FK", childFK, "ROOT_NAME", step.rootName, "CHILD_NAME", step.childName, "CHILD_ID", strconv.Itoa(childID)).Replace(genpatch.OuterProjectionRuntime)
 					if operation == "patch" {
