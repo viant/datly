@@ -424,7 +424,7 @@ func (p *Program) graphIndex() *graphIndex {
 		if frame.Entity.IsValid() && !frame.Entity.IsNil() {
 			index.byPointer[frame.Entity.Pointer()] = frame
 		}
-		if frame.ExcludedWrite || frame.Action != xhandler.WriteInsert || frame.Record == nil || !frame.Entity.IsValid() {
+		if frame.ExcludedWrite || frame.Action != xhandler.WriteInsert || frame.Record == nil || frame.Record.Auxiliary || !frame.Entity.IsValid() {
 			continue
 		}
 		entity := frame.Entity.Elem()
@@ -573,7 +573,7 @@ type Action struct {
 }
 
 func (p *Program) allocate(ctx context.Context, sequencer xhandler.Sequencer, record *Record, roots reflect.Value) error {
-	if record.WriterIdentityPolicy == assignedUpdateIdentity {
+	if !record.Auxiliary && record.WriterIdentityPolicy == assignedUpdateIdentity {
 		selected := reflect.MakeSlice(reflect.SliceOf(reflect.PointerTo(record.EntityType)), 0, 0)
 		for _, frame := range p.frames.Rows {
 			if frame.Record == record && frame.Action == xhandler.WriteInsert && !frame.NoopMissingIdentity {
@@ -586,7 +586,9 @@ func (p *Program) allocate(ctx context.Context, sequencer xhandler.Sequencer, re
 		roots = selected
 	}
 
-	if record.Sequence != nil {
+	// Auxiliary carriers retain SQL identities but never own allocation. Always
+	// recurse below so physical descendants and same-table siblings remain owned.
+	if !record.Auxiliary && record.Sequence != nil {
 		if err := p.validateActionPolicyFacts(); err != nil {
 			return err
 		}
@@ -1620,14 +1622,15 @@ func (p *Program) validationOptions(frame *Frame, transactionStarted bool) xhand
 		options.Fields = frame.Fields.excluding(excluded)
 	}
 	if frame.Action == xhandler.WriteInsert && frame.Parent != nil {
+		physicalParentInsert := frame.Parent.Record != nil && !frame.Parent.Record.Auxiliary && !frame.Parent.ExcludedWrite && frame.Parent.Action == xhandler.WriteInsert
 		if relation := relationFor(frame.Parent.Record, frame.Record); relation != nil {
 			deferred := fieldSet{}
 			for _, link := range relation.Links {
-				if !transactionStarted && frame.Parent.Action == xhandler.WriteInsert || !linkValueResolved(frame.Parent.Entity.Elem().FieldByIndex(link.Parent.Index)) {
+				if !transactionStarted && physicalParentInsert || !frame.Parent.Record.Auxiliary && !linkValueResolved(frame.Parent.Entity.Elem().FieldByIndex(link.Parent.Index)) {
 					deferred[link.Child.Name] = true
 					continue
 				}
-				if transactionStarted && frame.Parent.Action == xhandler.WriteInsert && strings.EqualFold(link.Child.RefTable, frame.Parent.Record.Table) && strings.EqualFold(link.Child.RefColumn, link.Parent.Column) {
+				if transactionStarted && physicalParentInsert && strings.EqualFold(link.Child.RefTable, frame.Parent.Record.Table) && strings.EqualFold(link.Child.RefColumn, link.Parent.Column) {
 					options.SatisfiedReferences = append(options.SatisfiedReferences, xhandler.ValidationReference{Field: link.Child.Name, Schema: link.Child.RefDB, Table: link.Child.RefTable, Column: link.Child.RefColumn})
 				}
 			}
@@ -2450,7 +2453,7 @@ func Compile(component *spec.Component, inputType, outputType reflect.Type, oper
 		if typecatalog.SQLXPrimaryKey(field.Tag, column != nil && column.PrimaryKey) {
 			metadata.Keys = append(metadata.Keys, compiled)
 		}
-		if column != nil && column.AutoIncrement || strings.Contains(strings.ToLower(sqlx), "autoincrement") {
+		if !auxiliaryRoot && (column != nil && column.AutoIncrement || strings.Contains(strings.ToLower(sqlx), "autoincrement")) {
 			compiled.AutoIncrement = true
 			copy := compiled
 			metadata.Sequence = &copy
@@ -2470,7 +2473,7 @@ func Compile(component *spec.Component, inputType, outputType reflect.Type, oper
 	if len(metadata.Keys) == 0 {
 		return nil, fmt.Errorf("writer entity %s has no primary key", metadata.EntityType)
 	}
-	if metadata.Sequence == nil && len(metadata.Keys) == 1 && numericField(metadata.EntityType, metadata.Keys[0]) {
+	if !auxiliaryRoot && metadata.Sequence == nil && len(metadata.Keys) == 1 && numericField(metadata.EntityType, metadata.Keys[0]) {
 		copy := metadata.Keys[0]
 		metadata.Sequence = &copy
 	}
@@ -2750,7 +2753,7 @@ func compileRecord(component *spec.Component, inputType reflect.Type, name, path
 		if typecatalog.SQLXPrimaryKey(field.Tag, column != nil && column.PrimaryKey) {
 			record.Keys = append(record.Keys, compiled)
 		}
-		if column != nil && column.AutoIncrement || strings.Contains(strings.ToLower(sqlx), "autoincrement") {
+		if !record.Auxiliary && (column != nil && column.AutoIncrement || strings.Contains(strings.ToLower(sqlx), "autoincrement")) {
 			compiled.AutoIncrement = true
 			copy := compiled
 			record.Sequence = &copy
@@ -2770,7 +2773,7 @@ func compileRecord(component *spec.Component, inputType reflect.Type, name, path
 	if len(record.Keys) == 0 {
 		return nil, fmt.Errorf("writer entity %s has no primary key", entityType)
 	}
-	if record.Sequence == nil && len(record.Keys) == 1 && numericField(entityType, record.Keys[0]) {
+	if !record.Auxiliary && record.Sequence == nil && len(record.Keys) == 1 && numericField(entityType, record.Keys[0]) {
 		copy := record.Keys[0]
 		record.Sequence = &copy
 	}
