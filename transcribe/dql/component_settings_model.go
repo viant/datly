@@ -10,6 +10,7 @@ type componentSettings struct {
 	HandlerName                  string
 	ResponseCompression          *spec.ResponseCompression
 	IndependentChildTransactions bool
+	ComponentCallPolicy          string
 	SequenceStrategy             string
 	MCPFolders                   []spec.ResourceFolder
 	Documentation                xdocs.Source

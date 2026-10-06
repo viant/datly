@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"github.com/viant/datly/internal/drainowner"
 	"reflect"
 	"sync"
 
@@ -21,36 +22,44 @@ import (
 type dataScopeContextKey struct{}
 
 type dataScope struct {
-	writeEligibility  mutationGuard
-	sequenceOnce      sync.Once
-	sequenceSource    dexec.DataSource
-	sequenceResolved  string
-	sequenceError     error
-	sequenceStrategy  string
-	mu                sync.Mutex
-	source            dexec.DataSource
-	root              *dataScope
-	parent            *dataScope
-	unit              *dataScope
-	units             []*dataScope
-	bySource          map[any]*dataScope
-	relation          ComponentRelation
-	order             string
-	once              sync.Once
-	data              xhandler.Data
-	err               error
-	completionErr     error
-	completion        xhandler.Outcome
-	finalizers        []*outcomeFrame
-	finalized         bool
-	completionStarted bool
-	guardedExecution  bool
-	resolving         sync.WaitGroup
-	registering       sync.WaitGroup
-	enrollmentMu      sync.Mutex
-	guardedFailure    error
-	contextReleases   []context.CancelFunc
-	connectors        connector.Provider
+	nativeInvocation         *drainowner.Invocation
+	nativeHandle             drainowner.Handle
+	nativeCleanup            bool
+	writeEligibility         mutationGuard
+	sequenceOnce             sync.Once
+	sequenceSource           dexec.DataSource
+	sequenceResolved         string
+	sequenceError            error
+	sequenceStrategy         string
+	mu                       sync.Mutex
+	source                   dexec.DataSource
+	root                     *dataScope
+	parent                   *dataScope
+	unit                     *dataScope
+	units                    []*dataScope
+	bySource                 map[any]*dataScope
+	requireBufferedOwner     bool
+	bufferedScopeEnrolled    bool
+	relation                 ComponentRelation
+	order                    string
+	once                     sync.Once
+	data                     xhandler.Data
+	err                      error
+	completionErr            error
+	completion               xhandler.Outcome
+	finalizers               []*outcomeFrame
+	finalized                bool
+	completionStarted        bool
+	protectedCompletionOnce  sync.Once
+	protectedCompletionUnits []*dataScope
+	protectedCompletionErr   error
+	guardedExecution         bool
+	resolving                sync.WaitGroup
+	registering              sync.WaitGroup
+	enrollmentMu             sync.Mutex
+	guardedFailure           error
+	contextReleases          []context.CancelFunc
+	connectors               connector.Provider
 }
 
 type invocationData interface {
@@ -331,6 +340,66 @@ func invocationDataScope(ctx context.Context, source dexec.DataSource) (*dataSco
 	return created, created != nil
 }
 
+// bufferedLifetimeClosed is an owner lifetime check, not a caller policy switch.
+func (s *dataScope) bufferedLifetimeClosed() bool {
+	if s == nil {
+		return false
+	}
+	root := s
+	if s.root != nil {
+		root = s.root
+	}
+	root.mu.Lock()
+	defer root.mu.Unlock()
+	return (root.bufferedScopeEnrolled || root.guardedExecution || drainowner.ActivitiesEnrolled(root.nativeInvocation)) && root.completionStarted
+}
+
+// enrollBufferedScope keeps caller policy local while making owner lifetime closure monotonic.
+func (s *dataScope) nativeIssuerLocked() *drainowner.Invocation {
+	if s.nativeInvocation == nil {
+		s.nativeInvocation = drainowner.NewInvocation()
+	}
+	return s.nativeInvocation
+}
+func (s *dataScope) admitActivity() (drainowner.Activity, error) {
+	root := s
+	if s.root != nil {
+		root = s.root
+	}
+	root.mu.Lock()
+	defer root.mu.Unlock()
+	return drainowner.AdmitActivity(root.nativeIssuerLocked())
+}
+func (s *dataScope) finishActivity(token drainowner.Activity, cause error) error {
+	root := s
+	if s.root != nil {
+		root = s.root
+	}
+	root.mu.Lock()
+	issuer := root.nativeIssuerLocked()
+	root.mu.Unlock()
+	return drainowner.FinishActivity(issuer, token, cause)
+}
+func (s *dataScope) enrollBufferedScope() error {
+	root := s
+	if s.root != nil {
+		root = s.root
+	}
+	root.mu.Lock()
+	defer root.mu.Unlock()
+	issuer := root.nativeIssuerLocked()
+	enrollErr := drainowner.EnrollActivities(issuer)
+	if bindErr := root.writeEligibility.bindProtectedIssuer(issuer); bindErr != nil {
+		enrollErr = errors.Join(enrollErr, bindErr)
+	}
+	if err := enrollErr; err != nil {
+		return err
+	}
+	s.requireBufferedOwner = true
+	root.bufferedScopeEnrolled = true
+	return nil
+}
+
 func withDataScope(ctx context.Context, scope *dataScope) context.Context {
 	return context.WithValue(ctx, dataScopeContextKey{}, scope)
 }
@@ -387,8 +456,12 @@ func (s *dataScope) resolve(ctx context.Context) (xhandler.Data, error) {
 	}
 	root.mu.Lock()
 	if root.completionStarted {
+		err := root.rejectProtectedLocked(fmt.Errorf("invocation completion has already started"))
 		root.mu.Unlock()
-		return nil, fmt.Errorf("invocation completion has already started")
+		return nil, err
+	}
+	if root.nativeInvocation == nil {
+		root.nativeInvocation = drainowner.NewInvocation()
 	}
 	root.resolving.Add(1)
 	root.mu.Unlock()
@@ -473,8 +546,18 @@ func (s *dataScope) resolve(ctx context.Context) (xhandler.Data, error) {
 		}
 		s.data, s.err = s.sequenceSource.Open(ctx)
 		if s.err == nil {
-			if lifecycle, ok := s.data.(invocationData); ok {
-				s.err = lifecycle.BeginInvocation()
+			handle, claimErr := drainowner.Claim(s.data, root.nativeInvocation)
+			if claimErr == nil {
+				s.nativeHandle = handle
+				s.err = s.attachNativeOwner(root.nativeInvocation)
+			} else if errors.Is(claimErr, drainowner.ErrOwner) {
+				// Ordinary custom sources retain their existing lifecycle. They do not
+				// acquire native authority and cannot later stand in for a native owner.
+				if lifecycle, ok := s.data.(invocationData); ok {
+					s.err = lifecycle.BeginInvocation()
+				}
+			} else {
+				s.err = claimErr
 			}
 		}
 	})
@@ -494,6 +577,29 @@ func (s *dataScope) resolve(ctx context.Context) (xhandler.Data, error) {
 		}
 		if err := root.enrollExecutionOwner(unit); err != nil {
 			return nil, err
+		}
+	}
+	if s.requireBufferedOwner || root.requireBufferedOwner || s.relation == ComponentBufferedImperative {
+		if s.data != nil {
+			if _, ok := s.data.(componentData); !ok {
+				return nil, fmt.Errorf("buffered component calls require native component journal ownership")
+			}
+			if _, ok := s.data.(componentDataSealer); !ok {
+				return nil, fmt.Errorf("buffered component calls require native component journal sealing")
+			}
+			unit := s.unit
+			if unit == nil {
+				unit = root
+			}
+			if _, ok := unit.data.(invocationData); !ok {
+				return nil, fmt.Errorf("buffered component calls require native owner invocation lifecycle")
+			}
+			if _, ok := unit.data.(invocationDataPreparer); !ok {
+				return nil, fmt.Errorf("buffered component calls require native owner completion preparation")
+			}
+			if _, ok := unit.data.(invocationFinalizationPreparer); !ok {
+				return nil, fmt.Errorf("buffered component calls require native owner finalization preparation")
+			}
 		}
 	}
 	return s.data, s.err
@@ -565,8 +671,9 @@ func sameIdentity(a, b any) bool {
 func (s *dataScope) databaseUnit(ctx context.Context, source dexec.DataSource, key any, strategy string) (*dataScope, error) {
 	s.mu.Lock()
 	if s.completionStarted {
+		err := s.rejectProtectedLocked(fmt.Errorf("invocation completion has already started"))
 		s.mu.Unlock()
-		return nil, fmt.Errorf("invocation completion has already started")
+		return nil, err
 	}
 	if unit := s.bySource[key]; unit != nil {
 		if childTx := sourceTransactionKey(source); childTx != nil && !sameIdentity(childTx, sourceTransactionKey(unit.source)) {
@@ -647,54 +754,69 @@ func (s *dataScope) complete(ctx context.Context, handlerErr error) (completionE
 	if root.root != nil {
 		root = root.root
 	}
-	root.mu.Lock()
-	// Completion admission is restricted only for the opt-in outcome owner;
-	// ordinary handlers retain their existing post-completion capability usage.
-	root.completionStarted = len(root.finalizers) != 0 || root.guardedExecution
-	closeResolution := root.completionStarted
-	for _, frame := range root.finalizers {
-		if !frame.finished {
-			handlerErr = errors.Join(handlerErr, fmt.Errorf("component %s has not finished before root completion", frame.route))
+	var units []*dataScope
+	if root.protectedLifetime() {
+		var barrierErr error
+		units, barrierErr = root.beginProtectedCompletion(ctx)
+		if barrierErr != nil {
+			handlerErr = errors.Join(handlerErr, barrierErr)
 		}
-	}
-	root.mu.Unlock()
-	if closeResolution {
-		root.resolving.Wait()
-		root.registering.Wait()
-	}
-	root.mu.Lock()
-	units := append([]*dataScope{root}, root.units...)
-	guardedExecution := root.guardedExecution
-	guardedFailure := root.guardedFailure
-	root.mu.Unlock()
-	// Join any source opening already in progress, and close unopened units.
-	// An unfinished child cannot create a transaction after rollback begins.
-	if closeResolution {
-		for _, unit := range units {
-			unit.once.Do(func() {})
+		handlerErr = root.protectedCompletionFailure(handlerErr)
+	} else {
+		root.mu.Lock()
+		if root.nativeInvocation != nil {
+			if activityErr := drainowner.CloseActivities(root.nativeInvocation); activityErr != nil {
+				handlerErr = errors.Join(handlerErr, activityErr)
+			}
+		}
+		// Completion admission is restricted only for the opt-in outcome owner;
+		// ordinary handlers retain their existing post-completion capability usage.
+		root.completionStarted = root.completionStarted || len(root.finalizers) != 0 || root.guardedExecution || root.bufferedScopeEnrolled
+		closeResolution := root.completionStarted
+		for _, frame := range root.finalizers {
+			if !frame.finished {
+				handlerErr = errors.Join(handlerErr, fmt.Errorf("component %s has not finished before root completion", frame.route))
+			}
+		}
+		root.mu.Unlock()
+		if closeResolution {
+			root.resolving.Wait()
+			root.registering.Wait()
+		}
+		root.mu.Lock()
+		units = append([]*dataScope{root}, root.units...)
+		guardedExecution := root.guardedExecution
+		guardedFailure := root.guardedFailure
+		root.mu.Unlock()
+		// Join any source opening already in progress, and close unopened units.
+		// An unfinished child cannot create a transaction after rollback begins.
+		if closeResolution {
+			for _, unit := range units {
+				unit.once.Do(func() {})
+			}
+		}
+		// A canonical guard can fail owner resolution before enrollment completes.
+		// Its latched failure must veto completion even without enrolled owners.
+		if guardedFailure != nil {
+			handlerErr = errors.Join(handlerErr, guardedFailure)
+		}
+		if guardedExecution {
+			handlerErr = errors.Join(handlerErr, root.writeEligibility.capturedExecutionFailure())
+			root.writeEligibility.closeCompletion()
+			for _, unit := range units {
+				if unit.data == nil {
+					continue
+				}
+				owner, ok := unit.data.(guardedInvocationData)
+				if !ok {
+					handlerErr = errors.Join(handlerErr, fmt.Errorf("captured writer execution requires a guarded invocation owner"))
+					continue
+				}
+				handlerErr = errors.Join(handlerErr, completionOperation("close unit mutation admission", owner.CloseMutationAdmission))
+			}
 		}
 	}
 	defer func() { root.recordCompletion(units, completionErr) }()
-	// A canonical guard can fail owner resolution before enrollment completes.
-	// Its latched failure must veto completion even without enrolled owners.
-	if guardedFailure != nil {
-		handlerErr = errors.Join(handlerErr, guardedFailure)
-	}
-	if guardedExecution {
-		handlerErr = errors.Join(handlerErr, root.writeEligibility.capturedExecutionFailure())
-		root.writeEligibility.closeCompletion()
-		for _, unit := range units {
-			if unit.data == nil {
-				continue
-			}
-			owner, ok := unit.data.(guardedInvocationData)
-			if !ok {
-				handlerErr = errors.Join(handlerErr, fmt.Errorf("captured writer execution requires a guarded invocation owner"))
-				continue
-			}
-			handlerErr = errors.Join(handlerErr, completionOperation("close unit mutation admission", owner.CloseMutationAdmission))
-		}
-	}
 	if handlerErr != nil {
 		for index := len(units) - 1; index >= 0; index-- {
 			handlerErr = units[index].completeUnit(ctx, handlerErr)
@@ -721,8 +843,20 @@ func (s *dataScope) complete(ctx context.Context, handlerErr error) (completionE
 		}
 		return handlerErr
 	}
+	if root.protectedLifetime() {
+		handlerErr = root.protectedCompletionFailure(handlerErr)
+		if handlerErr != nil {
+			for index := len(units) - 1; index >= 0; index-- {
+				handlerErr = units[index].completeUnit(ctx, handlerErr)
+			}
+			return handlerErr
+		}
+	}
 	for _, unit := range units {
 		handlerErr = unit.completeUnit(ctx, handlerErr)
+	}
+	if root.protectedLifetime() {
+		handlerErr = root.protectedCompletionFailure(handlerErr)
 	}
 	return handlerErr
 }
@@ -760,8 +894,18 @@ func (s *dataScope) registerExecutionGuard(ctx context.Context, check func(conte
 	defer root.enrollmentMu.Unlock()
 	root.mu.Lock()
 	if root.completionStarted {
+		err := root.rejectProtectedLocked(fmt.Errorf("invocation completion has already started"))
 		root.mu.Unlock()
-		return fmt.Errorf("invocation completion has already started")
+		return err
+	}
+	issuer := root.nativeIssuerLocked()
+	enrollErr := drainowner.EnrollActivities(issuer)
+	if bindErr := root.writeEligibility.bindProtectedIssuer(issuer); bindErr != nil {
+		enrollErr = errors.Join(enrollErr, bindErr)
+	}
+	if err := enrollErr; err != nil {
+		root.mu.Unlock()
+		return root.failGuardedExecution(err)
 	}
 	root.guardedExecution = true
 	failure := root.writeEligibility.enableCapturedExecution()
@@ -834,7 +978,12 @@ func (s *dataScope) prepareUnit(ctx context.Context) error {
 		return nil
 	}
 	if preparer, ok := s.data.(invocationDataPreparer); ok {
-		return completionOperation("data completion preparation", func() error { return preparer.PrepareCompletion(ctx) })
+		return completionOperation("data completion preparation", func() error {
+			if s.nativeCleanup {
+				return s.callNativeDrain(ctx, drainowner.AllPreparation, nil)
+			}
+			return preparer.PrepareCompletion(ctx)
+		})
 	}
 	return nil
 }
@@ -852,7 +1001,12 @@ func (s *dataScope) prepare(ctx context.Context) error {
 			return unit.err
 		}
 		if preparer, ok := unit.data.(invocationFinalizationPreparer); ok {
-			if err := completionOperation("data finalization preparation", func() error { return preparer.PrepareFinalization(ctx) }); err != nil {
+			if err := completionOperation("data finalization preparation", func() error {
+				if unit.nativeCleanup {
+					return unit.callNativeDrain(ctx, drainowner.LocalPreparation, nil)
+				}
+				return preparer.PrepareFinalization(ctx)
+			}); err != nil {
 				return err
 			}
 		}
@@ -870,18 +1024,47 @@ func (s *dataScope) completeUnit(ctx context.Context, handlerErr error) (complet
 		s.mu.Unlock()
 	}()
 	if s.err != nil {
-		return errors.Join(handlerErr, s.err)
+		cause := errors.Join(handlerErr, s.err)
+		if s.nativeCleanup {
+			if _, ok := s.data.(invocationData); ok {
+				return s.callNativeDrain(ctx, drainowner.Abort, cause)
+			}
+		}
+		return cause
 	}
 	if s.data == nil {
 		return handlerErr
 	}
 	if lifecycle, ok := s.data.(invocationData); ok {
+		if s.nativeCleanup {
+			operation := drainowner.Completion
+			if handlerErr != nil {
+				operation = drainowner.Abort
+			}
+			err := s.callNativeDrain(ctx, operation, handlerErr)
+			if operation == drainowner.Completion && drainowner.IsAdmissionDenied(err) {
+				return s.callNativeDrain(ctx, drainowner.Abort, err)
+			}
+			return err
+		}
 		return lifecycle.Complete(ctx, handlerErr)
 	}
 	if handlerErr != nil {
 		return handlerErr
 	}
 	return s.data.Flush(ctx, "")
+}
+
+// Native drain authority stays with the actual unit's retained owner handle.
+func (s *dataScope) callNativeDrain(ctx context.Context, operation drainowner.Operation, cause error) error {
+	root := s
+	if root.root != nil {
+		root = root.root
+	}
+	root.mu.Lock()
+	issuer := root.nativeInvocation
+	root.mu.Unlock()
+	return s.nativeHandle.Call(ctx, s.data, issuer, operation, cause)
 }
 
 // Recover only the current operation so its owner can continue cleanup and
@@ -893,4 +1076,16 @@ func completionOperation(operation string, run func() error) (err error) {
 		}
 	}()
 	return run()
+}
+
+// Attach on the actual unit before any component capability is published.
+// Deferred evidence capture also runs when native attachment panics.
+func (s *dataScope) attachNativeOwner(issuer *drainowner.Invocation) (err error) {
+	defer func() {
+		s.nativeCleanup = s.nativeHandle.OwnsAttachment(s.data, issuer)
+		if value := recover(); value != nil {
+			err = dexec.NewPanicError("native data attachment", value)
+		}
+	}()
+	return s.nativeHandle.Attach(s.data, issuer)
 }

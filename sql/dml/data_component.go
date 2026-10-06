@@ -1,6 +1,7 @@
 package dml
 
 import (
+	"github.com/viant/datly/internal/drainowner"
 	"sort"
 
 	xhandler "github.com/viant/xdatly/handler"
@@ -24,6 +25,7 @@ func (d *Data) ComponentData(relation, order string) xhandler.Data {
 	owner.mu.Lock()
 	defer owner.mu.Unlock()
 	if owner.mutationAdmissionClosed {
+		owner.failProtectedMutationLocked(ErrMutationAdmissionClosed)
 		// Return a rejected capability without admitting a new journal frame.
 		return &Data{root: owner, parent: d, relation: relation, order: order, open: false}
 	}
@@ -52,6 +54,9 @@ func (d *Data) SealComponent() {
 	owner := d.owner()
 	owner.mu.Lock()
 	d.open = false
+	if d == owner {
+		drainowner.Seal(owner)
+	}
 	owner.mu.Unlock()
 }
 

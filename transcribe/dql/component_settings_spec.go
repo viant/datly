@@ -25,6 +25,7 @@ func toSpecSettings(input *componentSettings) *spec.Settings {
 		Format:                       strings.TrimSpace(input.Format),
 		DateFormat:                   strings.TrimSpace(input.DateFormat),
 		IndependentChildTransactions: input.IndependentChildTransactions,
+		ComponentCallPolicy:          input.ComponentCallPolicy,
 		IgnoreEmptyQueryParameters:   input.IgnoreEmptyQueryParameters,
 		CaseFormat:                   strings.TrimSpace(input.CaseFormat),
 		Output:                       (&spec.Settings{Output: input.Output}).Clone().Output,

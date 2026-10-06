@@ -11,6 +11,7 @@ import (
 	"github.com/viant/bindly"
 	"github.com/viant/bindly/locator"
 	dexec "github.com/viant/datly/exec"
+	"github.com/viant/datly/internal/drainowner"
 	rhandler "github.com/viant/datly/runtime/handler"
 	handlerprovider "github.com/viant/datly/runtime/handler/provider"
 	"github.com/viant/datly/runtime/registry"
@@ -26,6 +27,8 @@ import (
 type Request struct {
 	mutationAttempt   int
 	phaseInvocationID uint64
+	// BufferedComponentCalls is dispatcher-owned canonical caller metadata.
+	BufferedComponentCalls bool
 	// IndependentChildTransactions retains all invocation capabilities/context but
 	// prevents connector-only neutral ownership after strict source-less guards.
 	IndependentChildTransactions bool
@@ -78,6 +81,9 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 	if e == nil {
 		return nil, fmt.Errorf("handler engine is required")
 	}
+	if request.BufferedComponentCalls && request.IndependentChildTransactions {
+		return nil, fmt.Errorf("buffered component calls cannot use independent child transactions")
+	}
 	if request.Handler == nil {
 		return nil, fmt.Errorf("invocation handler is required")
 	}
@@ -119,11 +125,8 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 	}
 	// Every component shadows inherited evidence, including ordinary handlers.
 	ctx = xhandler.WithReadMetadata(ctx, readAccess)
-	runtimeProviders := handlerprovider.Capabilities(request.Capabilities)
-	protocolProviders := []locator.Provider(nil)
-	if request.Scope != nil {
-		protocolProviders = request.Scope.Providers()
-	}
+	var runtimeProviders []locator.Provider
+	var protocolProviders []locator.Provider
 	if request.IndependentChildTransactions {
 		if err := validateIndependentChildren(ctx, request); err != nil {
 			return nil, err
@@ -136,17 +139,71 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 	} else if request.SequenceStrategy != "" {
 		return nil, fmt.Errorf("sequence_strategy requires a data source")
 	}
-	runtimeProviders = append(runtimeProviders, data.frameworkValidatorProvider())
 	outcomeFinalizer, outcomeAware := request.Handler.(rhandler.OutcomeFinalizer)
 	// Opted-in outputs need a neutral root even when their handler has no DB.
 	// Ordinary source-less handlers retain their existing child ownership.
-	if data == nil && (outcomeAware || request.Completion != nil || request.hasInjectorFinalizer()) {
+	if data == nil && (outcomeAware || request.Completion != nil || request.hasInjectorFinalizer() || request.BufferedComponentCalls) {
 		data, ownsData = neutralDataScope(), true
 	}
 	if data == nil && request.Capabilities.Connector != nil && !request.IndependentChildTransactions {
 		data, ownsData = neutralDataScope(), true
 	}
+	var activity drainowner.Activity
+	activityActive := false
+	finishing := false
+	var finish func(any, error) (any, error)
+	retireActivity := func(cause error) error {
+		if !activityActive {
+			return nil
+		}
+		activityActive = false
+		return data.finishActivity(activity, cause)
+	}
+	// This covers roots established up front and dynamically discovered output roots.
+	defer func() {
+		if ownsData && data != nil {
+			data.releaseContexts()
+		}
+	}()
+	// Admission and recovery precede providers, source resolution and capture.
+	defer func() {
+		if value := recover(); value != nil {
+			failure = dexec.NewPanicError("handler invocation", value)
+			actual = nil
+			if !finishing && finish != nil {
+				actual, failure = finish(nil, failure)
+			} else {
+				if activityErr := retireActivity(failure); activityErr != nil {
+					failure = errors.Join(failure, activityErr)
+				}
+				if !finishing {
+					actual, failure = finishDataScope(ctx, data, ownsData, nil, failure)
+				}
+			}
+		} else if activityActive {
+			if activityErr := retireActivity(failure); activityErr != nil {
+				failure = errors.Join(failure, activityErr)
+			}
+		}
+	}()
 	if data != nil {
+		activity, err = data.admitActivity()
+		if err != nil && !(errors.Is(err, drainowner.ErrDormantActivityClosed) && !request.BufferedComponentCalls) {
+			return nil, err
+		}
+		activityActive = err == nil
+	}
+	runtimeProviders = handlerprovider.Capabilities(request.Capabilities)
+	if request.Scope != nil {
+		protocolProviders = request.Scope.Providers()
+	}
+	runtimeProviders = append(runtimeProviders, data.frameworkValidatorProvider())
+	if data != nil {
+		if request.BufferedComponentCalls {
+			if err := data.enrollBufferedScope(); err != nil {
+				return nil, err
+			}
+		}
 		if data.connectors == nil {
 			data.connectors = request.Capabilities.Connector
 		}
@@ -156,20 +213,10 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 		ctx = withDataScope(ctx, data)
 		ctx = dexec.WithInvocationTransactionLookup(ctx, data.transactionForDatabase)
 	}
-	if ownsData {
-		defer data.releaseContexts()
-	}
 	invocation := rhandler.Invocation{Input: input, Response: newResponseWriter(ctx)}
 	var mutationReplay *bindly.Replay
 	var mutationInput any
 	var completionFrame *outcomeFrame
-	if outcomeAware {
-		completionFrame, err = data.registerOutcome(ctx, request.Input.Route().String(), outcomeFinalizer)
-		if err != nil {
-			return finishDataScope(ctx, data, ownsData, nil, err)
-		}
-	}
-	finishing := false
 	outputFinalized := false
 	var snapshotReady, initializationErrorReturned, ownCapturedGuard bool
 	var scope *bindly.Injector
@@ -197,15 +244,25 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 		return completionErr
 	}
 
-	finish := func(result any, operationErr error) (any, error) {
+	finish = func(result any, operationErr error) (any, error) {
 		finishing = true
+		protectedPrepareFailed := false
+		protectedCompletionFailed := false
 		// Mutation adapters may opt into a declared error output before a
 		// program exists. Their outcome callback still owns once-only dispatch
 		// after root cleanup; this path never executes the output hook itself.
 		if operationErr != nil && outcomeAware && result == nil {
 			if invocation.Snapshot == nil {
-				if early, ok := request.Handler.(rhandler.EarlyErrorOutputFinalizer); ok && early.EarlyErrorOutputEnabled() {
-					result = errorAwareOutput(request.OutputType)
+				if early, ok := request.Handler.(rhandler.EarlyErrorOutputFinalizer); ok {
+					enabled := false
+					if optInErr := completionOperation("early error output opt-in", func() error {
+						enabled = early.EarlyErrorOutputEnabled()
+						return nil
+					}); optInErr != nil {
+						operationErr = errors.Join(operationErr, optInErr)
+					} else if enabled {
+						result = errorAwareOutput(request.OutputType)
+					}
 				}
 			} else if snapshotReady && initializationErrorReturned {
 				var bridgeErr error
@@ -231,14 +288,36 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 				if bindErr := bindOutput(result); bindErr != nil {
 					operationErr = errors.Join(operationErr, bindErr)
 				}
-				outputFinalized = true
-				result, operationErr = finalizeBeforeCompletion(ctx, result, operationErr)
+				if !ownsData || !data.protectedLifetime() {
+					outputFinalized = true
+					result, operationErr = finalizeBeforeCompletion(ctx, result, operationErr)
+				}
 			}
 		}
 		if ownCapturedGuard && operationErr != nil && data != nil {
 			_ = data.failGuardedExecution(operationErr)
 		}
+		if activityErr := retireActivity(operationErr); activityErr != nil {
+			operationErr = errors.Join(operationErr, activityErr)
+		}
 		if data != nil {
+			data.finishOutcome(completionFrame, invocation, result, operationErr)
+		}
+		if ownsData && data.protectedLifetime() {
+			if _, barrierErr := data.beginProtectedCompletion(ctx); barrierErr != nil {
+				protectedCompletionFailed = operationErr == nil
+				operationErr = errors.Join(operationErr, barrierErr)
+			}
+			if !outcomeAware && !outputFinalized {
+				if _, errorAware := result.(xhandler.ErrorFinalizer); errorAware && operationErr == nil {
+					if prepareErr := data.prepareProtectedFinalization(ctx); prepareErr != nil {
+						operationErr = prepareErr
+						protectedPrepareFailed = true
+					}
+				}
+				outputFinalized = true
+				result, operationErr = finalizeBeforeCompletion(ctx, result, operationErr)
+			}
 			data.finishOutcome(completionFrame, invocation, result, operationErr)
 		}
 		result, completionErr := finishDataScope(ctx, data, ownsData, result, operationErr)
@@ -280,19 +359,22 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 		if ownsData && data != nil {
 			completionErr = data.finalizeOutcomes(completionErr)
 		}
+		if protectedPrepareFailed || protectedCompletionFailed {
+			result = nil
+		}
 		return result, notifyCompletion(completionErr)
 	}
-	// User callbacks may panic after opening scoped Data. Complete through the
-	// canonical owner; never bypass rollback and outcome reporting in an adapter.
-	defer func() {
-		if value := recover(); value != nil {
-			failure = dexec.NewPanicError("handler invocation", value)
-			actual = nil
-			if !finishing {
-				actual, failure = finish(nil, failure)
-			}
+	if request.BufferedComponentCalls && data != nil && (data.source != nil || data.parent != nil) {
+		if _, err := data.resolve(ctx); err != nil {
+			return finish(nil, err)
 		}
-	}()
+	}
+	if outcomeAware {
+		completionFrame, err = data.registerOutcome(ctx, request.Input.Route().String(), outcomeFinalizer)
+		if err != nil {
+			return finish(nil, err)
+		}
+	}
 	if request.Components != nil {
 		runtimeProviders = append(runtimeProviders, retainProviderMutationAuthority(ctx, request.Components, false))
 	}
@@ -514,10 +596,14 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 		// Its conditional child calls still need an owner before lookup starts.
 		if data == nil {
 			data, ownsData = neutralDataScope(), true
+			activity, err = data.admitActivity()
+			if err != nil {
+				return finish(result, err)
+			}
+			activityActive = true
 			ctx = withDataScope(ctx, data)
-			defer data.releaseContexts()
 		}
-		if handlerErr == nil && ownsData {
+		if handlerErr == nil && ownsData && !data.protectedLifetime() {
 			injectorPrepareErr = data.prepare(ctx)
 			handlerErr = injectorPrepareErr
 		}
@@ -527,15 +613,20 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 	// A transactional prepare can fail before commit. Let the single
 	// error-aware finalizer observe that failure while it can still veto the
 	// locally owned transaction. Plain success finalizers remain post-commit.
+	// Protected roots finish output composition before closure/preparation and
+	// terminal observation. Nested components retain their existing callbacks.
+	protected := ownsData && data.protectedLifetime()
 	var prepareErr error
-	if _, errorAware := result.(xhandler.ErrorFinalizer); errorAware && handlerErr == nil && ownsData && data != nil {
+	if _, errorAware := result.(xhandler.ErrorFinalizer); errorAware && !protected && handlerErr == nil && ownsData && data != nil {
 		prepareErr = data.prepare(ctx)
 		if prepareErr != nil {
 			handlerErr = prepareErr
 		}
 	}
-	outputFinalized = true
-	result, handlerErr = finalizeBeforeCompletion(ctx, result, handlerErr)
+	if !protected {
+		outputFinalized = true
+		result, handlerErr = finalizeBeforeCompletion(ctx, result, handlerErr)
+	}
 	if data != nil && !ownsData && hasCompletionHooks(ctx, result) {
 		var registerErr error
 		completionFrame, registerErr = data.registerOutcome(ctx, request.Input.Route().String(), outputCompletion{})

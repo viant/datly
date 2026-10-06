@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/viant/datly/internal/drainowner"
 	xhandler "github.com/viant/xdatly/handler"
 )
 
@@ -20,13 +21,19 @@ func (d *Data) Start(ctx context.Context) error {
 		return err
 	}
 	owner := d.owner()
+	if err := owner.precheckProtectedMutation(); err != nil {
+		return err
+	}
 	owner.executionMu.Lock()
 	defer owner.executionMu.Unlock()
 	owner.mu.Lock()
 	var err error
+	protectedFailure := drainowner.ProtectedOwnerFailure(owner)
 	switch {
+	case protectedFailure != nil:
+		err = protectedFailure
 	case owner.mutationAdmissionClosed:
-		err = ErrMutationAdmissionClosed
+		err = owner.failProtectedMutationLocked(ErrMutationAdmissionClosed)
 	case owner.completed:
 		err = ErrInvocationCompleted
 	case owner.failed != nil:

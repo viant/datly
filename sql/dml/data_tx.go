@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	dexec "github.com/viant/datly/exec"
+	"github.com/viant/datly/internal/drainowner"
 	xhandler "github.com/viant/xdatly/handler"
 )
 
@@ -79,25 +80,42 @@ func (d *Data) Flush(ctx context.Context, tableName string) error {
 // finalizer before commit. A supplied transaction retains its existing ordering:
 // no queued writes execute until the finalizer has completed successfully.
 func (d *Data) PrepareFinalization(ctx context.Context) error {
-	owner := d.owner()
-	owner.mu.Lock()
-	external := owner.externalTx
-	owner.mu.Unlock()
-	if external {
-		return nil
-	}
-	return owner.PrepareCompletion(ctx)
+	return d.prepareNative(ctx, nil, drainowner.LocalPreparation)
 }
 
-// PrepareCompletion drains the complete invocation journal into its owned or
-// supplied transaction without completing that transaction. The engine uses
-// this internal lifecycle seam to prepare every database unit before any local
-// unit is committed.
+// PrepareCompletion keeps standalone preparation public; engine-owned protected
+// preparation is dispatched through its constructor-bound exact operation.
 func (d *Data) PrepareCompletion(ctx context.Context) error {
+	return d.prepareNative(ctx, nil, drainowner.AllPreparation)
+}
+
+func (d *Data) admitNativeDrain(permit *drainowner.DrainPermit, operation drainowner.Operation, cause error) (*drainowner.DrainRecord, error) {
+	if permit == nil {
+		return drainowner.BeginPublicDrain(d.owner())
+	}
+	return drainowner.ConsumeDrain(d.owner(), permit, operation, cause)
+}
+
+func (d *Data) prepareNative(ctx context.Context, permit *drainowner.DrainPermit, operation drainowner.Operation) error {
 	owner := d.owner()
+	if permit == nil {
+		if err := drainowner.CheckPublicDrain(owner); err != nil {
+			return err
+		}
+	}
 	owner.executionMu.Lock()
 	defer owner.executionMu.Unlock()
+	record, err := owner.admitNativeDrain(permit, operation, nil)
+	if err != nil {
+		return err
+	}
+	defer drainowner.EndDrain(record)
 	owner.mu.Lock()
+	// Admission precedes the caller-owned local-preparation early return.
+	if operation == drainowner.LocalPreparation && owner.externalTx {
+		owner.mu.Unlock()
+		return nil
+	}
 	if owner.completed {
 		owner.mu.Unlock()
 		return ErrInvocationCompleted
@@ -113,6 +131,9 @@ func (d *Data) PrepareCompletion(ctx context.Context) error {
 
 func (d *Data) flush(ctx context.Context, tableName string, target *Data) error {
 	owner := d.owner()
+	if err := drainowner.CheckPublicDrain(owner); err != nil {
+		return err
+	}
 	if target != nil {
 		owner.mu.Lock()
 		for frame := target; frame != nil; frame = frame.parent {
@@ -130,6 +151,11 @@ func (d *Data) flush(ctx context.Context, tableName string, target *Data) error 
 	}
 	owner.executionMu.Lock()
 	defer owner.executionMu.Unlock()
+	record, err := drainowner.BeginPublicDrain(owner)
+	if err != nil {
+		return err
+	}
+	defer drainowner.EndDrain(record)
 	return owner.flushLocked(ctx, tableName, target)
 }
 
@@ -229,9 +255,23 @@ func (d *Data) flushLocked(ctx context.Context, tableName string, target *Data) 
 // Complete drains the invocation journal and completes only locally owned
 // transactions. Caller-supplied transactions always remain open.
 func (d *Data) Complete(ctx context.Context, cause error) error {
+	return d.completeNative(ctx, cause, nil, drainowner.Completion)
+}
+
+func (d *Data) completeNative(ctx context.Context, cause error, permit *drainowner.DrainPermit, operation drainowner.Operation) error {
 	owner := d.owner()
+	if permit == nil {
+		if err := drainowner.CheckPublicDrain(owner); err != nil {
+			return err
+		}
+	}
 	owner.executionMu.Lock()
 	defer owner.executionMu.Unlock()
+	record, admissionErr := owner.admitNativeDrain(permit, operation, cause)
+	if admissionErr != nil {
+		return admissionErr
+	}
+	defer drainowner.EndDrain(record)
 	owner.SealComponent()
 	owner.mu.Lock()
 	if owner.completed {
@@ -239,6 +279,7 @@ func (d *Data) Complete(ctx context.Context, cause error) error {
 		return errors.Join(cause, ErrInvocationCompleted)
 	}
 	owner.completed = true
+	drainowner.Retire(owner)
 	failed := owner.failed
 	owner.mu.Unlock()
 	state := xhandler.TransactionNone

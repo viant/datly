@@ -3,10 +3,12 @@ package engine_test
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"github.com/viant/bindly"
 	"github.com/viant/bindly/locator"
 	bindstate "github.com/viant/bindly/state"
+	"github.com/viant/datly/internal/drainowner"
 	"github.com/viant/datly/internal/testharness/sqlite"
 	rhandler "github.com/viant/datly/runtime/handler"
 	"github.com/viant/datly/runtime/handler/compiler"
@@ -153,7 +155,7 @@ func TestInsertDeleteTypedCallerSourceReplay(t *testing.T) {
 // A composing parent keeps the native child buffer until root completion.
 // Its post-child callback must not retarget an already admitted physical action.
 func TestInsertDeleteComposingParentRetainedPhysicalIdentity(t *testing.T) {
-	for _, mode := range []string{"ID", "delete", "presence", "slot", "DataFlush", "FocusedFlush", "imperative", "finalizer", "childEnd", "outputBinding", "caller"} {
+	for _, mode := range []string{"ID", "delete", "presence", "slot", "DataFlush", "FocusedFlush", "imperative", "bufferedComposition", "finalizer", "childEnd", "outputBinding", "caller"} {
 		t.Run(mode, func(t *testing.T) {
 			ctx := context.Background()
 			db := sqlite.New(t)
@@ -202,6 +204,8 @@ func TestInsertDeleteComposingParentRetainedPhysicalIdentity(t *testing.T) {
 				childContext := ctx
 				if mode == "imperative" {
 					childContext = engine.PrepareComponent(ctx, engine.ComponentImperative, "")
+				} else if mode == "bufferedComposition" {
+					childContext = engine.PrepareComponent(ctx, engine.ComponentBufferedImperative, "")
 				}
 				var childHandler rhandler.Handler = native
 				if mode == "childEnd" {
@@ -265,7 +269,11 @@ func TestInsertDeleteComposingParentRetainedPhysicalIdentity(t *testing.T) {
 				}
 				return result, nil
 			})})
-			if !childReturned {
+			if mode == "imperative" {
+				if childReturned || !errors.Is(err, drainowner.ErrDrain) {
+					t.Fatalf("protected imperative must reject before SQL: returned=%t error=%v", childReturned, err)
+				}
+			} else if !childReturned {
 				t.Fatalf("native child never returned: %v", err)
 			}
 			if mode == "childEnd" && childEndCalls != 1 {

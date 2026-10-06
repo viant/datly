@@ -4,6 +4,7 @@ import (
 	"errors"
 	"strings"
 
+	"github.com/viant/datly/internal/drainowner"
 	"github.com/viant/sqlx"
 	xhandler "github.com/viant/xdatly/handler"
 )
@@ -130,8 +131,11 @@ func pendingOperations(operations []*dataOperation) []*dataOperation {
 }
 
 func (d *Data) appendableLocked() error {
+	if err := drainowner.ProtectedOwnerFailure(d); err != nil {
+		return err
+	}
 	if d.mutationAdmissionClosed {
-		return ErrMutationAdmissionClosed
+		return d.failProtectedMutationLocked(ErrMutationAdmissionClosed)
 	}
 	if d.completed {
 		return ErrInvocationCompleted

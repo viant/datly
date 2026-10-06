@@ -59,7 +59,7 @@ func (i *componentInjectors) Lookup(ctx context.Context, output any, route xhand
 		return nil, err
 	}
 	return &componentBinder{
-		invoker:  &scopedComponentInvoker{runtime: r, scope: selectedScope},
+		invoker:  &scopedComponentInvoker{runtime: r, scope: selectedScope, authority: handlerengine.RetainMutationAuthority(ctx), buffered: handlerengine.IsBufferedComponent(ctx)},
 		request:  dexec.ComponentRequest{Target: dexec.ComponentTarget{Component: component.Key, Route: spec.RouteRef{Method: endpoint.Method, Path: endpoint.Path}}, BindingOutput: output},
 		injector: r.injector,
 	}, nil

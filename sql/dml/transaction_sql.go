@@ -10,6 +10,9 @@ import (
 // It never flushes pending buffered writes implicitly.
 func (d *Data) QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error) {
 	owner := d.owner()
+	if err := owner.precheckProtectedMutation(); err != nil {
+		return nil, err
+	}
 	owner.executionMu.Lock()
 	defer owner.executionMu.Unlock()
 	if err := owner.admitStreamingQueryLocked(); err != nil {
@@ -26,6 +29,9 @@ func (d *Data) QueryContext(ctx context.Context, query string, args ...any) (*sq
 // It never flushes pending buffered writes implicitly.
 func (d *Data) QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row {
 	owner := d.owner()
+	if err := owner.precheckProtectedMutation(); err != nil {
+		return errorRow(ctx, err)
+	}
 	owner.executionMu.Lock()
 	if err := owner.admitStreamingQueryLocked(); err != nil {
 		owner.executionMu.Unlock()
@@ -45,6 +51,9 @@ func (d *Data) QueryRowContext(ctx context.Context, query string, args ...any) *
 // It never flushes pending buffered writes implicitly.
 func (d *Data) ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error) {
 	owner := d.owner()
+	if err := owner.precheckProtectedMutation(); err != nil {
+		return nil, err
+	}
 	owner.executionMu.Lock()
 	defer owner.executionMu.Unlock()
 	if err := owner.checkMutationAdmissionLocked(); err != nil {

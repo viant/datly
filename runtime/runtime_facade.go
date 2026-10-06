@@ -100,6 +100,9 @@ func NewRuntime(components []*RegisteredComponent, runtimeOptions ...Option) (*R
 		if component == nil || component.Component == nil {
 			continue
 		}
+		if err := component.Component.Settings.ValidateComponentCallPolicy(); err != nil {
+			return nil, err
+		}
 		if err := component.Component.Settings.ValidateSequenceStrategy(); err != nil {
 			return nil, err
 		}
@@ -194,6 +197,9 @@ func NewIndexedRuntime(components []*spec.Component, preloaded []*RegisteredComp
 			return nil, fmt.Errorf("indexed runtime component metadata is required")
 		}
 		clone := component.Clone()
+		if err := clone.Settings.ValidateComponentCallPolicy(); err != nil {
+			return nil, err
+		}
 		identity := clone.Key.String()
 		if r.metadata[identity] != nil {
 			return nil, fmt.Errorf("duplicate indexed runtime component %s", identity)
@@ -270,6 +276,9 @@ func (r *Runtime) registeredComponent(ctx context.Context, key spec.Key) (*Regis
 func (r *Runtime) prepareLoadedComponent(registered *RegisteredComponent) (*RegisteredComponent, error) {
 	if registered == nil || registered.Component == nil {
 		return nil, fmt.Errorf("loaded component is required")
+	}
+	if err := registered.Component.Settings.ValidateComponentCallPolicy(); err != nil {
+		return nil, err
 	}
 	entry := registrationWithRecorder(registered, r.observability.Recorder)
 	entry.Providers = withDefaultClientProviders(append([]locator.Provider(nil), registered.Providers...), r.defaultProviders)

@@ -169,8 +169,8 @@ func TestGuardedCompletionRejectsRetainedLaterUnitWork(t *testing.T) {
 		t.Fatal(err)
 	}
 	restore = RetainMutationAuthority(withDataScope(ctx, root))
-	if err = root.complete(ctx, nil); err != nil {
-		t.Fatal(err)
+	if err = root.complete(ctx, nil); err == nil {
+		t.Fatal("ignored protected terminal attempts permitted root success")
 	}
 	if calls != 1 || len(failures) != 10 {
 		t.Fatalf("callbacks=%d attempts=%d", calls, len(failures))
@@ -183,7 +183,7 @@ func TestGuardedCompletionRejectsRetainedLaterUnitWork(t *testing.T) {
 			t.Fatalf("%s=%v", name, e)
 		}
 	}
-	for _, db := range []*sql.DB{first.DB, second.DB} {
+	for index, db := range []*sql.DB{first.DB, second.DB} {
 		var rows, audit int
 		if err = db.QueryRow("SELECT COUNT(*) FROM records WHERE id=1").Scan(&rows); err != nil {
 			t.Fatal(err)
@@ -191,12 +191,17 @@ func TestGuardedCompletionRejectsRetainedLaterUnitWork(t *testing.T) {
 		if err = db.QueryRow("SELECT COUNT(*) FROM audit").Scan(&audit); err != nil {
 			t.Fatal(err)
 		}
-		if rows != 1 || audit != 1 {
-			t.Fatalf("late work escaped rows=%d audit=%d", rows, audit)
+		want := 1
+		if index == 1 {
+			want = 0
+		}
+		if rows != want || audit != want {
+			t.Fatalf("late work escaped unit=%d rows=%d audit=%d want=%d", index, rows, audit, want)
 		}
 	}
-	if !root.completionOutcome().CommitConfirmed() {
-		t.Fatalf("admitted commits not truthful: %+v", root.completionOutcome())
+	outcome := root.completionOutcome()
+	if outcome.Error == nil || len(outcome.Transactions) != 2 || outcome.Transactions[0].State != xhandler.TransactionCommitted || outcome.Transactions[1].State != xhandler.TransactionRolledBack || outcome.CommitConfirmed() {
+		t.Fatalf("partial native outcomes not truthful: %+v", outcome)
 	}
 }
 

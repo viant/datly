@@ -30,6 +30,7 @@ const (
 // constants are deliberately excluded because transcription consumes or
 // materializes them before package bootstrap.
 type Settings struct {
+	ComponentCallPolicy          string
 	ResponseCompression          *spec.ResponseCompression
 	IndependentChildTransactions bool
 	Mutation                     string
@@ -54,6 +55,7 @@ func SettingsFromSpec(source *spec.Settings) Settings {
 	return Settings{
 		ResponseCompression:          cloned.ResponseCompression,
 		IndependentChildTransactions: cloned.IndependentChildTransactions,
+		ComponentCallPolicy:          cloned.ComponentCallPolicy,
 		Mutation:                     cloned.Mutation,
 		SequenceStrategy:             cloned.SequenceStrategy,
 		MCPFolders:                   cloned.MCPFolders,
@@ -70,6 +72,7 @@ func (s Settings) Apply(target *spec.Settings) {
 		return
 	}
 	target.IndependentChildTransactions = s.IndependentChildTransactions
+	target.ComponentCallPolicy = s.ComponentCallPolicy
 	target.ResponseCompression = s.ResponseCompression.Clone()
 	target.SequenceStrategy = s.SequenceStrategy
 	target.Mutation = s.Mutation
@@ -96,6 +99,9 @@ func (s Settings) Apply(target *spec.Settings) {
 }
 
 func (s Settings) StructTag() (string, error) {
+	if err := (&spec.Settings{ComponentCallPolicy: s.ComponentCallPolicy, IndependentChildTransactions: s.IndependentChildTransactions}).ValidateComponentCallPolicy(); err != nil {
+		return "", err
+	}
 	if err := validateMutation(s.Mutation); err != nil {
 		return "", err
 	}
@@ -111,6 +117,7 @@ func (s Settings) StructTag() (string, error) {
 			tags = append(tags, name+":"+strconv.Quote(value))
 		}
 	}
+	appendValue("componentCallPolicy", s.ComponentCallPolicy)
 	if s.IndependentChildTransactions {
 		appendValue("independentChildTransactions", "true")
 	}
@@ -164,6 +171,12 @@ func ParseSettings(structTag reflect.StructTag) (Settings, error) {
 		JSONUnmarshalType: structTag.Get(JSONUnmarshalTag), XMLUnmarshalType: structTag.Get(XMLUnmarshalTag),
 		Format: structTag.Get(FormatTag), DateFormat: structTag.Get(DateFormatTag),
 	}
+	if value, ok := structTag.Lookup("componentCallPolicy"); ok {
+		if value == "" {
+			return Settings{}, fmt.Errorf("component call policy tag cannot be empty")
+		}
+		result.ComponentCallPolicy = value
+	}
 	if value, ok := structTag.Lookup("independentChildTransactions"); ok {
 		parsed, err := strconv.ParseBool(value)
 		if err != nil {
@@ -213,6 +226,9 @@ func ParseSettings(structTag reflect.StructTag) (Settings, error) {
 		return Settings{}, err
 	}
 	if err := validateMutation(result.Mutation); err != nil {
+		return Settings{}, err
+	}
+	if err := (&spec.Settings{ComponentCallPolicy: result.ComponentCallPolicy, IndependentChildTransactions: result.IndependentChildTransactions}).ValidateComponentCallPolicy(); err != nil {
 		return Settings{}, err
 	}
 	return result, nil

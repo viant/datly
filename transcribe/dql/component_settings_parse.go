@@ -338,6 +338,24 @@ func parseComponentSettings(blocks []directiveBlock) (ret *componentSettings, er
 				return nil, fmt.Errorf("invalid format directive: missing format")
 			}
 			ret.Format = normalizeFormat(trimQuote(args[len(args)-1]))
+		case strings.EqualFold(name, "component_call_policy"):
+			if tail != "" {
+				return nil, fmt.Errorf("component_call_policy does not accept modifiers or trailing syntax")
+			}
+			if len(args) != 1 {
+				return nil, fmt.Errorf("component_call_policy requires one policy")
+			}
+			value := trimQuote(args[0])
+			if value == "" {
+				return nil, fmt.Errorf("component_call_policy cannot be empty")
+			}
+			if ret.ComponentCallPolicy != "" && ret.ComponentCallPolicy != value {
+				return nil, fmt.Errorf("conflicting component_call_policy declarations")
+			}
+			if err := (&spec.Settings{ComponentCallPolicy: value}).ValidateComponentCallPolicy(); err != nil {
+				return nil, err
+			}
+			ret.ComponentCallPolicy = value
 		case strings.EqualFold(name, "independent_child_transactions"):
 			if len(args) != 1 {
 				return nil, fmt.Errorf("independent_child_transactions requires one boolean")
@@ -488,7 +506,10 @@ func parseComponentSettings(blocks []directiveBlock) (ret *componentSettings, er
 			compose.MCPTool = new(bool)
 		}
 	}
-	if ret.ResponseCompression == nil && !ret.IndependentChildTransactions && ret.Static == nil && len(ret.MCPFolders) == 0 && ret.Documentation.IsZero() && ret.Generation.IsZero() && ret.DefaultConnector == "" && ret.SequenceStrategy == "" && ret.Report == nil && ret.Cache == nil &&
+	if err := (&spec.Settings{ComponentCallPolicy: ret.ComponentCallPolicy, IndependentChildTransactions: ret.IndependentChildTransactions}).ValidateComponentCallPolicy(); err != nil {
+		return nil, err
+	}
+	if ret.ResponseCompression == nil && !ret.IndependentChildTransactions && ret.ComponentCallPolicy == "" && ret.Static == nil && len(ret.MCPFolders) == 0 && ret.Documentation.IsZero() && ret.Generation.IsZero() && ret.DefaultConnector == "" && ret.SequenceStrategy == "" && ret.Report == nil && ret.Cache == nil &&
 		ret.InputType == "" && ret.OutputType == "" &&
 		ret.MCP == nil && ret.JSONMarshalType == "" &&
 		ret.JSONUnmarshalType == "" && ret.XMLUnmarshalType == "" &&

@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"github.com/viant/datly/internal/drainowner"
 	"sync"
 
 	dexec "github.com/viant/datly/exec"
@@ -27,7 +28,10 @@ var (
 	ErrBindingFlush            = errors.New("cannot flush a binding component while its ancestor is open")
 )
 
+type drainOwner = drainowner.State
+
 type Data struct {
+	*drainOwner
 	mu                      sync.Mutex
 	executionMu             sync.Mutex
 	db                      *sql.DB
@@ -66,7 +70,7 @@ type Data struct {
 
 func NewData(db *sql.DB, opts ...Option) *Data {
 	options := collectOptions(opts...)
-	return &Data{
+	data := &Data{
 		db:               db,
 		tx:               options.Tx,
 		externalTx:       options.Tx != nil,
@@ -77,6 +81,21 @@ func NewData(db *sql.DB, opts ...Option) *Data {
 		deleteServices:   map[string]*delete.Service{},
 		open:             true,
 	}
+	data.drainOwner = drainowner.NewState(data, data.beginInvocation, drainowner.NativeOperations{
+		drainowner.LocalPreparation: func(ctx context.Context, permit *drainowner.DrainPermit, cause error) error {
+			return data.prepareNative(ctx, permit, drainowner.LocalPreparation)
+		},
+		drainowner.AllPreparation: func(ctx context.Context, permit *drainowner.DrainPermit, cause error) error {
+			return data.prepareNative(ctx, permit, drainowner.AllPreparation)
+		},
+		drainowner.Completion: func(ctx context.Context, permit *drainowner.DrainPermit, cause error) error {
+			return data.completeNative(ctx, cause, permit, drainowner.Completion)
+		},
+		drainowner.Abort: func(ctx context.Context, permit *drainowner.DrainPermit, cause error) error {
+			return data.completeNative(ctx, cause, permit, drainowner.Abort)
+		},
+	})
+	return data
 }
 
 // InvocationTransaction exposes the currently active database transaction to
@@ -108,6 +127,9 @@ func (d *Data) sequence(ctx context.Context, run func(*sequencer.Service) error)
 		return err
 	}
 	owner := d.owner()
+	if err := owner.precheckProtectedMutation(); err != nil {
+		return err
+	}
 	owner.executionMu.Lock()
 	defer owner.executionMu.Unlock()
 	owner.mu.Lock()
@@ -120,9 +142,14 @@ func (d *Data) sequence(ctx context.Context, run func(*sequencer.Service) error)
 		return run(owner.sequencer)
 	}
 	owner.mu.Lock()
-	if owner.mutationAdmissionClosed {
+	if failure := drainowner.ProtectedOwnerFailure(owner); failure != nil {
 		owner.mu.Unlock()
-		return ErrMutationAdmissionClosed
+		return failure
+	}
+	if owner.mutationAdmissionClosed {
+		err := owner.failProtectedMutationLocked(ErrMutationAdmissionClosed)
+		owner.mu.Unlock()
+		return err
 	}
 	if owner.completed {
 		owner.mu.Unlock()
@@ -151,6 +178,13 @@ func (d *Data) sequence(ctx context.Context, run func(*sequencer.Service) error)
 // BeginInvocation switches Data from standalone auto-commit behavior to one
 // root-owned transaction completed by Complete after output finalization.
 func (d *Data) BeginInvocation() error {
+	if err := drainowner.CheckProtectedDrainInFlight(d.owner()); err != nil {
+		return err
+	}
+	return d.beginInvocation(nil)
+}
+
+func (d *Data) beginInvocation(permit *drainowner.Permit) error {
 	owner := d.owner()
 	owner.executionMu.Lock()
 	defer owner.executionMu.Unlock()
@@ -161,6 +195,16 @@ func (d *Data) BeginInvocation() error {
 	}
 	if owner.invocation {
 		return errors.New("DML data is already attached to an invocation")
+	}
+	if permit != nil {
+		if d != owner || !owner.open || owner.mutationAdmissionClosed {
+			return drainowner.ErrAttachment
+		}
+		if err := drainowner.BindAttachment(d, permit); err != nil {
+			return err
+		}
+	} else {
+		drainowner.CloseClaims(owner)
 	}
 	owner.invocation = true
 	// Pending supplied identities belong to the scope in which they were recorded.

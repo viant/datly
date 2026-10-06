@@ -13,7 +13,7 @@ func (s *dataScope) recordCompletion(units []*dataScope, err error) {
 	result := xhandler.Outcome{Error: err, Transactions: make([]xhandler.TransactionOutcome, 0, len(units))}
 	for index, unit := range units {
 		state := xhandler.TransactionOutcome{Unit: index, State: xhandler.TransactionUnknown}
-		if unit.err != nil {
+		if unit.err != nil && !unit.nativeCleanup {
 			// Failed ownership/startup cannot borrow a reused Data object's
 			// report from an earlier invocation.
 			state.Error = unit.err

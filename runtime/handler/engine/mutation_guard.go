@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/viant/bindly/locator"
+	"github.com/viant/datly/internal/drainowner"
 	"github.com/viant/structology"
 )
 
@@ -16,13 +17,15 @@ import (
 var ErrWriteEligibilityMutation = errors.New("managed mutation is forbidden during WriteEligible")
 
 type mutationGuard struct {
-	mu                 sync.Mutex
-	depth              int
-	completionClosed   bool
-	guardedExecution   bool
-	streamingQueryUsed bool
-	guardedFailure     error
-	violation          error
+	mu                  sync.Mutex
+	depth               int
+	completionClosed    bool
+	protectedCompletion bool
+	protectedIssuer     *drainowner.Invocation
+	guardedExecution    bool
+	streamingQueryUsed  bool
+	guardedFailure      error
+	violation           error
 }
 
 func (s *dataScope) mutationGuard() *mutationGuard {
@@ -40,9 +43,16 @@ func (g *mutationGuard) check(operation string) error {
 		return nil
 	}
 	g.mu.Lock()
-	defer g.mu.Unlock()
+	defer g.unlockAndPublishProtectedFailure()
 	if g.completionClosed {
-		return fmt.Errorf("invocation mutation admission is closed: %s", operation)
+		err := fmt.Errorf("invocation mutation admission is closed: %s", operation)
+		if g.protectedCompletion {
+			g.guardedFailure = errors.Join(g.guardedFailure, err)
+		}
+		return err
+	}
+	if g.guardedFailure != nil {
+		return g.guardedFailure
 	}
 	if g.depth == 0 {
 		return nil
@@ -84,12 +94,13 @@ func BeginWriteEligibility(ctx context.Context) (finish func() error, err error)
 }
 
 // RetainMutationAuthority captures an invocation's data scope for a managed
-// component invoker. Restoring it prevents a replacement call context from
+// component invoker. Buffered callers retain their exact journal ownership
+// throughout the call lifetime. Restoring it prevents a replacement call context from
 // dropping the owning guard and keeps reader dependencies in that invocation.
 func RetainMutationAuthority(ctx context.Context) func(context.Context) context.Context {
 	scope, _ := ctx.Value(dataScopeContextKey{}).(*dataScope)
 	return func(call context.Context) context.Context {
-		if scope == nil || !scope.mutationGuard().active() {
+		if scope == nil || (!scope.requireBufferedOwner && scope.protectedAdmissionFailure() == nil && !scope.bufferedLifetimeClosed() && !scope.mutationGuard().active()) {
 			return call
 		}
 		return withDataScope(call, scope)
@@ -100,6 +111,15 @@ func RetainMutationAuthority(ctx context.Context) func(context.Context) context.
 // unknown custom effects before child binding or data-unit creation.
 func CheckComponentMutation(ctx context.Context, canonicalReader bool) error {
 	scope, _ := ctx.Value(dataScopeContextKey{}).(*dataScope)
+	if failure := scope.protectedAdmissionFailure(); failure != nil {
+		return failure
+	}
+	if componentFromContext(ctx).relation == ComponentBufferedImperative && (scope == nil || !scope.requireBufferedOwner) {
+		return fmt.Errorf("buffered component invocation requires retained canonical caller ownership")
+	}
+	if scope != nil && scope.bufferedLifetimeClosed() {
+		return scope.rejectProtected(fmt.Errorf("buffered component invocation has completed"))
+	}
 	if canonicalReader {
 		guard := scope.mutationGuard()
 		if guard == nil {
@@ -168,9 +188,12 @@ func (g *mutationGuard) active() bool {
 	return g.depth != 0 || g.completionClosed || g.guardedExecution
 }
 
-func (g *mutationGuard) closeCompletion() {
+func (g *mutationGuard) closeCompletion(protected ...bool) {
 	g.mu.Lock()
 	g.completionClosed = true
+	if len(protected) == 1 && protected[0] {
+		g.protectedCompletion = true
+	}
 	g.mu.Unlock()
 }
 
@@ -180,9 +203,13 @@ func (g *mutationGuard) admitStreamingQuery() error {
 		return nil
 	}
 	g.mu.Lock()
-	defer g.mu.Unlock()
+	defer g.unlockAndPublishProtectedFailure()
 	if g.completionClosed {
-		return errors.New("invocation mutation admission is closed")
+		err := errors.New("invocation mutation admission is closed")
+		if g.protectedCompletion {
+			g.guardedFailure = errors.Join(g.guardedFailure, err)
+		}
+		return err
 	}
 	if g.guardedExecution {
 		if g.guardedFailure == nil {
@@ -195,7 +222,7 @@ func (g *mutationGuard) admitStreamingQuery() error {
 }
 func (g *mutationGuard) enableCapturedExecution() error {
 	g.mu.Lock()
-	defer g.mu.Unlock()
+	defer g.unlockAndPublishProtectedFailure()
 	g.guardedExecution = true
 	if g.streamingQueryUsed && g.guardedFailure == nil {
 		g.guardedFailure = errors.New("managed streaming SQL predates a captured writer invocation")
@@ -206,4 +233,26 @@ func (g *mutationGuard) capturedExecutionFailure() error {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	return g.guardedFailure
+}
+
+// Called with g.mu held; publish only after releasing the proxy lock.
+func (g *mutationGuard) unlockAndPublishProtectedFailure() {
+	issuer, failure := g.protectedIssuer, g.guardedFailure
+	g.mu.Unlock()
+	if issuer != nil && failure != nil {
+		drainowner.FailProtected(issuer, failure)
+	}
+}
+func (g *mutationGuard) bindProtectedIssuer(issuer *drainowner.Invocation) error {
+	if !drainowner.ActivitiesEnrolled(issuer) {
+		return nil
+	}
+	g.mu.Lock()
+	if g.protectedIssuer != nil && g.protectedIssuer != issuer {
+		g.mu.Unlock()
+		return errors.New("proxy guard already belongs to another invocation")
+	}
+	g.protectedIssuer = issuer
+	g.unlockAndPublishProtectedFailure()
+	return nil
 }

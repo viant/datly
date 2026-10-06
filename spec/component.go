@@ -32,6 +32,8 @@ type ImportSpec struct {
 }
 
 type Settings struct {
+	// ComponentCallPolicy selects canonical explicit child-call journal behavior.
+	ComponentCallPolicy string               `json:"componentCallPolicy,omitempty"`
 	ResponseCompression *ResponseCompression `json:"responseCompression,omitempty"`
 	// IndependentChildTransactions opts a source-less custom orchestrator into
 	// separately completed generated child units. Default composition is shared.
@@ -179,7 +181,7 @@ func (s *Settings) IsZero() bool {
 	if s == nil {
 		return true
 	}
-	return s.ResponseCompression == nil && !s.IndependentChildTransactions && len(s.MCPFolders) == 0 && s.IgnoreEmptyQueryParameters == nil &&
+	return s.ResponseCompression == nil && !s.IndependentChildTransactions && s.ComponentCallPolicy == "" && len(s.MCPFolders) == 0 && s.IgnoreEmptyQueryParameters == nil &&
 		s.DefaultConnector == "" && s.SequenceStrategy == "" && s.Report == nil && s.Cache == nil &&
 		(s.Generation == nil || s.Generation.IsZero()) && s.InputType == "" && s.OutputType == "" &&
 		s.JSONMarshalType == "" && s.JSONUnmarshalType == "" && s.XMLUnmarshalType == "" &&

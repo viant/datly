@@ -3,6 +3,7 @@ package dml
 import (
 	"context"
 	"errors"
+	"github.com/viant/datly/internal/drainowner"
 )
 
 // RegisterExecutionGuard is a Datly-internal optional lifecycle capability.
@@ -13,12 +14,18 @@ func (d *Data) RegisterExecutionGuard(check func(context.Context) error) error {
 		return errors.New("captured DML execution guard is required")
 	}
 	owner := d.owner()
+	if err := owner.precheckProtectedMutation(); err != nil {
+		return err
+	}
 	owner.executionMu.Lock()
 	defer owner.executionMu.Unlock()
 	owner.mu.Lock()
 	defer owner.mu.Unlock()
+	if failure := drainowner.ProtectedOwnerFailure(owner); failure != nil {
+		return failure
+	}
 	if owner.mutationAdmissionClosed {
-		return ErrMutationAdmissionClosed
+		return owner.failProtectedMutationLocked(ErrMutationAdmissionClosed)
 	}
 	if owner.completed {
 		return ErrInvocationCompleted
@@ -40,6 +47,9 @@ func (d *Data) RegisterExecutionGuard(check func(context.Context) error) error {
 // Native flush also checks under the same existing execution serialization.
 func (d *Data) ValidateExecutionGuards(ctx context.Context) error {
 	owner := d.owner()
+	if err := drainowner.CheckProtectedDrainInFlight(owner); err != nil {
+		return err
+	}
 	owner.executionMu.Lock()
 	defer owner.executionMu.Unlock()
 	return owner.validateExecutionGuardsLocked(ctx)
@@ -83,6 +93,9 @@ func (d *Data) CloseMutationAdmission() error {
 		return errors.New("DML mutation admission requires an owner")
 	}
 	owner := d.owner()
+	if err := drainowner.CheckProtectedDrainInFlight(owner); err != nil {
+		return err
+	}
 	owner.executionMu.Lock()
 	defer owner.executionMu.Unlock()
 	owner.mu.Lock()
@@ -91,6 +104,7 @@ func (d *Data) CloseMutationAdmission() error {
 		return errors.New("DML mutation admission requires an invocation owner")
 	}
 	owner.mutationAdmissionClosed = true
+	drainowner.Seal(owner)
 	return nil
 }
 
@@ -99,8 +113,11 @@ func (d *Data) checkMutationAdmissionLocked() error {
 	owner := d.owner()
 	owner.mu.Lock()
 	defer owner.mu.Unlock()
+	if failure := drainowner.ProtectedOwnerFailure(owner); failure != nil {
+		return failure
+	}
 	if owner.mutationAdmissionClosed {
-		return ErrMutationAdmissionClosed
+		return owner.failProtectedMutationLocked(ErrMutationAdmissionClosed)
 	}
 	return nil
 }
@@ -113,6 +130,9 @@ func (d *Data) EnableCapturedExecutionGuards() error {
 		return errors.New("captured DML guards require an owner")
 	}
 	owner := d.owner()
+	if err := owner.precheckProtectedMutation(); err != nil {
+		return err
+	}
 	owner.executionMu.Lock()
 	defer owner.executionMu.Unlock()
 	owner.mu.Lock()
@@ -122,7 +142,7 @@ func (d *Data) EnableCapturedExecutionGuards() error {
 
 func (d *Data) enableCapturedExecutionGuardsLocked() error {
 	if d.mutationAdmissionClosed {
-		return ErrMutationAdmissionClosed
+		return d.failProtectedMutationLocked(ErrMutationAdmissionClosed)
 	}
 	if d.completed {
 		return ErrInvocationCompleted
@@ -135,7 +155,7 @@ func (d *Data) enableCapturedExecutionGuardsLocked() error {
 		if d.failed == nil {
 			d.failed = ErrGuardedStreamingQuery
 		}
-		return ErrGuardedStreamingQuery
+		return d.failProtectedMutationLocked(ErrGuardedStreamingQuery)
 	}
 	if d.failed != nil {
 		return errors.Join(ErrInvocationFailed, d.failed)
@@ -149,15 +169,44 @@ func (d *Data) admitStreamingQueryLocked() error {
 	owner := d.owner()
 	owner.mu.Lock()
 	defer owner.mu.Unlock()
+	if failure := drainowner.ProtectedOwnerFailure(owner); failure != nil {
+		return failure
+	}
 	if owner.mutationAdmissionClosed {
-		return ErrMutationAdmissionClosed
+		return owner.failProtectedMutationLocked(ErrMutationAdmissionClosed)
 	}
 	if owner.guardsEnabled {
 		if owner.failed == nil {
 			owner.failed = ErrGuardedStreamingQuery
 		}
-		return ErrGuardedStreamingQuery
+		return owner.failProtectedMutationLocked(ErrGuardedStreamingQuery)
 	}
 	owner.streamingQueryUsed = true
+	return nil
+}
+
+// Caller holds owner.mu. Ordinary caught rejections remain non-sticky.
+func (d *Data) failProtectedMutationLocked(cause error) error {
+	if drainowner.FailProtectedOwner(d, cause) && d.failed == nil {
+		d.failed = cause
+	}
+	return cause
+}
+
+// This prompt check only rejects protected work. Serialized admission remains
+// authoritative; no mutex is retained while acquiring executionMu.
+func (d *Data) precheckProtectedMutation() error {
+	owner := d.owner()
+	owner.mu.Lock()
+	defer owner.mu.Unlock()
+	if !drainowner.OwnerActivitiesEnrolled(owner) {
+		return nil
+	}
+	if failure := drainowner.ProtectedOwnerFailure(owner); failure != nil {
+		return failure
+	}
+	if owner.mutationAdmissionClosed {
+		return owner.failProtectedMutationLocked(ErrMutationAdmissionClosed)
+	}
 	return nil
 }

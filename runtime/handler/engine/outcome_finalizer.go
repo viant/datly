@@ -47,7 +47,7 @@ func (s *dataScope) registerOutcome(ctx context.Context, route string, finalizer
 	root.mu.Lock()
 	defer root.mu.Unlock()
 	if root.completionStarted || root.finalized {
-		return nil, fmt.Errorf("invocation completion has already started")
+		return nil, root.rejectProtectedLocked(fmt.Errorf("invocation completion has already started"))
 	}
 	frame := &outcomeFrame{ctx: ctx, route: route, finalizer: finalizer}
 	root.finalizers = append(root.finalizers, frame)

@@ -28,6 +28,9 @@ func (r ContractResolver) Resolve() (*spec.Component, error) {
 	if component == nil {
 		component = &spec.Component{}
 	}
+	if err := component.Settings.ValidateComponentCallPolicy(); err != nil {
+		return nil, err
+	}
 	lookup := xshape.Lookup(nil)
 	if r.Types != nil {
 		lookup = r.Types.Descriptor
@@ -132,6 +135,9 @@ func (s *RouteSource) canonicalComponent() (*spec.Component, error) {
 		settings.WarmupTarget = &target
 	}
 	s.Tag.Settings.Apply(settings)
+	if err := settings.ValidateComponentCallPolicy(); err != nil {
+		return nil, err
+	}
 	if s.Tag.Report || s.Tag.ReportCompose != nil || s.Tag.ReportMCPTool != nil || s.Tag.ReportLinkedInputType != "" || s.Tag.ReportDimensions != "" || s.Tag.ReportMeasures != "" ||
 		s.Tag.ReportFilters != "" || s.Tag.ReportOrderBy != "" || s.Tag.ReportLimit != "" || s.Tag.ReportOffset != "" {
 		settings.Report = &spec.ReportSettings{
@@ -151,7 +157,7 @@ func (s *RouteSource) canonicalComponent() (*spec.Component, error) {
 			settings.Report.MCPTool = &enabled
 		}
 	}
-	if settings.ResponseCompression != nil || settings.IndependentChildTransactions || len(settings.MCPFolders) > 0 || settings.Mutation != "" || settings.SequenceStrategy != "" || settings.DefaultConnector != "" || settings.InputType != "" || settings.OutputType != "" || settings.Report != nil ||
+	if settings.ResponseCompression != nil || settings.IndependentChildTransactions || settings.ComponentCallPolicy != "" || len(settings.MCPFolders) > 0 || settings.Mutation != "" || settings.SequenceStrategy != "" || settings.DefaultConnector != "" || settings.InputType != "" || settings.OutputType != "" || settings.Report != nil ||
 		settings.Cache != nil || settings.CaseFormat != "" || settings.JSONMarshalType != "" ||
 		settings.JSONUnmarshalType != "" || settings.XMLUnmarshalType != "" || settings.Format != "" || settings.DateFormat != "" || settings.Output != nil || settings.IgnoreEmptyQueryParameters != nil || settings.WarmupTarget != nil {
 		component.Settings = settings

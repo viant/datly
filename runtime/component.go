@@ -43,6 +43,7 @@ type scopedComponentInvoker struct {
 	runtime   *Runtime
 	scope     dexec.ProviderScope
 	authority func(context.Context) context.Context
+	buffered  bool
 }
 
 func (i *scopedComponentInvoker) InvokeComponent(ctx context.Context, request dexec.ComponentRequest) (any, error) {
@@ -52,16 +53,24 @@ func (i *scopedComponentInvoker) InvokeComponent(ctx context.Context, request de
 	if i.authority != nil {
 		ctx = i.authority(ctx)
 	}
-	ctx = handlerengine.PrepareComponent(ctx, handlerengine.ComponentImperative, "")
+	relation := handlerengine.ComponentImperative
+	if i.buffered {
+		if request.IndependentChildTransactions {
+			return nil, fmt.Errorf("buffered component calls cannot use independent child transactions")
+		}
+		relation = handlerengine.ComponentBufferedImperative
+	}
+	ctx = handlerengine.PrepareComponent(ctx, relation, "")
 	return i.runtime.invokeComponent(ctx, request, i.scope)
 }
 
-func (r *Runtime) componentInvokerProvider(scope dexec.ProviderScope) locator.Provider {
+func (r *Runtime) componentInvokerProvider(scope dexec.ProviderScope, buffered bool) locator.Provider {
 	return handlerprovider.New(dexec.ComponentInvokerKey, func(ctx context.Context) (any, bool, error) {
 		return dexec.ComponentInvoker(&scopedComponentInvoker{
 			runtime:   r,
 			scope:     scope,
 			authority: handlerengine.RetainMutationAuthority(ctx),
+			buffered:  buffered,
 		}), true, nil
 	})
 }
@@ -127,6 +136,21 @@ func (r *Runtime) invokeComponent(ctx context.Context, request dexec.ComponentRe
 	}
 	if registered == nil || registered.Component == nil {
 		return nil, fmt.Errorf("registered component not found: %s", identity)
+	}
+	if err := registered.Component.Settings.ValidateComponentCallPolicy(); err != nil {
+		return nil, err
+	}
+	inheritedBuffered := handlerengine.IsBufferedComponent(ctx)
+	policy := ""
+	if registered.Component.Settings != nil {
+		policy = registered.Component.Settings.ComponentCallPolicy
+	}
+	if inheritedBuffered && policy == "imperative" {
+		return nil, fmt.Errorf("imperative component call policy conflicts with inherited buffered calls")
+	}
+	buffered := inheritedBuffered || policy == "buffered"
+	if buffered && (request.IndependentChildTransactions || registered.Component.Settings != nil && registered.Component.Settings.IndependentChildTransactions) {
+		return nil, fmt.Errorf("buffered component calls cannot use independent child transactions")
 	}
 	if !componentOwnsRoute(registered.Component, route) {
 		return nil, fmt.Errorf("component %s does not own route %s", identity, route.String())
@@ -247,6 +271,7 @@ func (r *Runtime) invokeComponent(ctx context.Context, request dexec.ComponentRe
 	return r.invoker.Execute(ctx, handlerengine.Request{
 		IndependentChildTransactions: request.IndependentChildTransactions || (registered.Component.Settings != nil && registered.Component.Settings.IndependentChildTransactions),
 		SequenceStrategy:             sequenceStrategy,
+		BufferedComponentCalls:       buffered,
 		Injector:                     r.injector,
 		Input:                        inputRoute,
 		OutputType:                   registered.OutputType,
@@ -262,7 +287,7 @@ func (r *Runtime) invokeComponent(ctx context.Context, request dexec.ComponentRe
 		Providers:                    registered.Providers,
 		Constants:                    r.canonicalConstants[identity],
 		Components:                   r.componentProvider(effectiveScope, registered.Component),
-		ComponentInvoker:             r.componentInvokerProvider(effectiveScope),
+		ComponentInvoker:             r.componentInvokerProvider(effectiveScope, buffered),
 		DataSource:                   dataSource,
 		Handler:                      handler,
 		Completion:                   request.Completion,
