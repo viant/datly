@@ -60,20 +60,21 @@ func (e *Execution) PrepareQuery(ctx context.Context, input any, binder xhandler
 	if err != nil {
 		return nil, err
 	}
-	return &dexec.PreparedQuery{SQL: query.SQL, Args: append([]any(nil), query.Args...), Projection: &projectionReader{db: connection.DB, tx: connection.Tx, dialect: connection.Dialect, component: session.Component, view: root.View, recorder: session.recorder, metricScope: session.metricScope, retry: readRetry{source: session.SQL, connector: root.Connector}}}, nil
+	return &dexec.PreparedQuery{SQL: query.SQL, Args: append([]any(nil), query.Args...), Projection: &projectionReader{db: connection.DB, tx: connection.Tx, dialect: connection.Dialect, component: session.Component, view: root.View, recorder: session.recorder, metricScope: session.metricScope, observations: session.observations, retry: readRetry{source: session.SQL, connector: root.Connector}}}, nil
 }
 
 // projectionReader is request-local. SQLX owns typed row mapping; source caches,
 // relations, dictionaries and hooks do not apply to a new wrapper projection.
 type projectionReader struct {
-	retry       readRetry
-	metricScope string
-	component   *spec.Component
-	view        *data.View
-	recorder    *observability.Recorder
-	db          *sql.DB
-	tx          *sql.Tx
-	dialect     *info.Dialect
+	retry        readRetry
+	metricScope  string
+	observations map[*data.View]observability.Resolution
+	component    *spec.Component
+	view         *data.View
+	recorder     *observability.Recorder
+	db           *sql.DB
+	tx           *sql.Tx
+	dialect      *info.Dialect
 }
 
 func (r *projectionReader) ReadProjection(ctx context.Context, request dexec.ProjectionRequest) (_ any, err error) {
@@ -86,7 +87,7 @@ func (r *projectionReader) ReadProjection(ctx context.Context, request dexec.Pro
 		return nil, err
 	}
 	rows := reflect.MakeSlice(reflect.SliceOf(reflect.PointerTo(request.RowType)), 0, 0)
-	session := &Session{Component: r.component, recorder: r.recorder, metricScope: r.metricScope}
+	session := &Session{Component: r.component, recorder: r.recorder, metricScope: r.metricScope, observations: r.observations}
 	if session.Component == nil {
 		session.Component = &spec.Component{}
 	}

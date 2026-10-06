@@ -31,6 +31,8 @@ type Output struct {
 // handler capabilities, and registration remain runtime concerns.
 type Session struct {
 	metricScope       string
+	observations      map[*data.View]observability.Resolution
+	observationErr    error
 	pendingScope      string
 	recorder          *observability.Recorder
 	metricsMu         sync.Mutex
@@ -56,6 +58,9 @@ type Session struct {
 func (s *Session) Init() error {
 	if s == nil {
 		return fmt.Errorf("reader session is required")
+	}
+	if s.observationErr != nil {
+		return s.observationErr
 	}
 	if s.Component == nil {
 		return fmt.Errorf("reader session component is required")

@@ -181,7 +181,11 @@ func TestProjectedJSONPlanAndHTTP(t *testing.T) {
 				if !omit && populated {
 					require.Contains(t, recorder.Body.String(), `"count":null`)
 				}
-				if omit && populated {
+				// A present zero pointer retains its value under the original
+				// Datly and standard JSON omission policy; only nil is empty.
+				if populated {
+					require.Contains(t, recorder.Body.String(), `"zero":0`)
+				} else if omit {
 					require.NotContains(t, recorder.Body.String(), `"zero"`)
 				}
 				// Published native metadata is immutable and safe for concurrent encoding/docs.

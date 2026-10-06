@@ -28,6 +28,7 @@ type Handler struct {
 	pathSemantics     string
 	serviceTimeHeader string
 	metrics           *MetricsConfig
+	metricPrefix      string
 	async             *asyncRoutes
 	allowedSubnet     []string
 	documents         *documentRoutes
@@ -71,6 +72,9 @@ func (h *Handler) ServeHTTP(writer stdhttp.ResponseWriter, req *stdhttp.Request)
 func (h *Handler) serveHTTP(writer stdhttp.ResponseWriter, req *stdhttp.Request) {
 	if !h.allowsRemote(req) {
 		writer.WriteHeader(stdhttp.StatusForbidden)
+		return
+	}
+	if h.serveMetricReporting(writer, req) {
 		return
 	}
 	if h.documents != nil && h.serveDocuments(writer, req) {

@@ -2,6 +2,7 @@ package registry
 
 import (
 	docs "github.com/viant/datly/documentation"
+	"github.com/viant/datly/internal/inputvisibility"
 	"github.com/viant/datly/spec"
 	xshape "github.com/viant/x/shape"
 	"reflect"
@@ -30,4 +31,14 @@ func (f InputField) Documentation() *docs.Snapshot { return f.documentation }
 func (f InputField) Origin() spec.RouteRef         { return f.origin }
 func (f InputField) StructField() (reflect.StructField, error) {
 	return xshape.Linked(f.owner).StructField(f.path)
+}
+
+// Internal reports public-metadata visibility using the field's retained owner.
+// It does not affect request binding or authorization.
+func (f InputField) Internal() (bool, error) {
+	field, err := f.StructField()
+	if err != nil {
+		return false, err
+	}
+	return inputvisibility.Internal(f.owner, field.Index), nil
 }

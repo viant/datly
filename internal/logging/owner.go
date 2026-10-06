@@ -3,6 +3,7 @@ package logging
 import (
 	"context"
 	xexec "github.com/viant/xdatly/exec"
+	"github.com/viant/xdatly/response"
 )
 
 // State is privately embedded by the public recorder. The unexported method
@@ -32,4 +33,13 @@ func LogHTTP(o owner, ctx context.Context, e *xexec.Context) {
 	if o != nil {
 		o.loggingSink().HTTP(ctx, e)
 	}
+}
+
+// LogRead emits through the existing compatibility sink when configured.
+func LogRead(o owner, traceID string, metric *response.Metric) bool {
+	if o == nil || o.loggingSink() == nil {
+		return false
+	}
+	o.loggingSink().Read(traceID, metric)
+	return true
 }

@@ -24,6 +24,8 @@ type Recorder struct {
 	operations  map[string]*gmetric.Operation
 	logger      xlogger.Logger
 	readingData ReadingData
+	policy      *compiledPolicy
+	policyErr   error
 }
 
 func NewRecorder(logger xlogger.Logger, options ...RecorderOption) *Recorder {
@@ -39,19 +41,42 @@ func (r *Recorder) operation(name string) *gmetric.Operation {
 	if o := r.operations[name]; o != nil {
 		return o
 	}
-	o := r.service.MultiOperationCounter("datly", name, "view performance", time.Millisecond, time.Minute, 2, viewMetricProvider{})
+	descriptor := OperationDescriptor{Name: name, Location: "datly", Description: "view performance", Provider: Native14}
+	if r.policy != nil {
+		if declared, exists := r.policy.operations[name]; exists {
+			descriptor = declared
+		}
+	}
+	o := r.service.MultiOperationCounter(descriptor.Location, name, descriptor.Description, time.Millisecond, time.Minute, 2, viewMetricProvider{source: descriptor.Provider == Source11})
 	r.operations[name] = o
 	return o
 }
 func (r *Recorder) Begin(name string, start time.Time) counter.OnDone {
 	r.mu.Lock()
-	r.operation(name)
+	op := r.operation(name)
+	provider, _ := op.Provider.(viewMetricProvider)
+	var sourceDone counter.OnDone
+	if provider.source {
+		sourceDone = op.Begin(start)
+	}
 	r.mu.Unlock()
+	var completed bool
+	var completedCount int64
 	return func(end time.Time, values ...interface{}) int64 {
 		r.mu.Lock()
 		defer r.mu.Unlock()
-		o := r.operation(name)
-		return o.Begin(start)(end, values...)
+		if sourceDone != nil {
+			// Source gmetric starts total/recent Count before SQL. Retain that exact
+			// owner/window completion through cancellation and overlapping generations.
+			if completed {
+				return completedCount
+			}
+			completed = true
+			completedCount = sourceDone(end, values...)
+			return completedCount
+		}
+		// Native default preserves its existing deferred Begin behavior.
+		return r.operation(name).Begin(start)(end, values...)
 	}
 }
 func (r *Recorder) Cache(name string, s *response.CacheStats) {
@@ -86,7 +111,7 @@ func (r *Recorder) Values(name string) map[string]int64 {
 	if r.operations[name] == nil {
 		return result
 	}
-	for _, key := range (viewMetricProvider{}).Keys() {
+	for _, key := range r.operations[name].Provider.Keys() {
 		result[key] = r.service.LookupOperationCumulativeMetric(name, key)
 	}
 	return result
@@ -118,6 +143,11 @@ func (r *Recorder) Created(name, kind string, entries int) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	op := r.operation(name)
+	if r.policy != nil {
+		if descriptor, exists := r.policy.operations[name]; exists && descriptor.Provider == Source11 {
+			return
+		}
+	}
 	op.IncrementValueBy(cacheCreatedMetric, int64(entries))
 	key := cacheLazyCreatedMetric
 	if kind == "warmup" {

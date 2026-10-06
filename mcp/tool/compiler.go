@@ -11,7 +11,6 @@ import (
 
 	bindstate "github.com/viant/bindly/state"
 	"github.com/viant/datly/exec"
-	"github.com/viant/datly/internal/inputvisibility"
 	mcpinput "github.com/viant/datly/mcp/input"
 	"github.com/viant/datly/runtime/output"
 	"github.com/viant/datly/runtime/registry"
@@ -51,7 +50,7 @@ func WithStrictArguments(enabled bool) CompilerOption {
 
 func NewCompiler(options ...CompilerOption) *Compiler {
 	result := &Compiler{
-		fields:  make(map[string]fieldCompiler, 7),
+		fields: make(map[string]fieldCompiler, 7),
 	}
 	for _, option := range options {
 		option(result)
@@ -91,11 +90,11 @@ func (c *Compiler) Compile(input Input) (*Plan, error) {
 		if compileField == nil {
 			continue
 		}
-		selectionField, err := inputField.StructField()
+		internal, err := inputField.Internal()
 		if err != nil {
 			return nil, fmt.Errorf("compile MCP tool %q: %w", name, err)
 		}
-		if inputvisibility.Internal(input.Contract.Type(), selectionField.Index) {
+		if internal {
 			continue
 		}
 		if inputField.Anonymous() {

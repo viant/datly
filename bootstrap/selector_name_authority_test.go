@@ -25,6 +25,15 @@ func TestInferredColumnsDoNotAuthorizeSelectorAliases(t *testing.T) {
 		view := artifact.Reader.Root.View
 		require.Equal(t, !authored, view.Spec.Columns[0].NameInferred)
 		p := dsql.SelectorProjection{SQL: view.Spec.Source.SQL, View: view}
+		// Compiled public output names are explicit selector authority, even
+		// when the SQL column metadata was inferred from a Go field.
+		_, err = p.Columns([]string{"bid"})
+		require.NoError(t, err)
+		// Without that separately compiled public-name authority, inferred
+		// column metadata alone must still not introduce a SQL alias.
+		sourceOnly := *view
+		sourceOnly.SelectorFields = nil
+		p.View = &sourceOnly
 		_, err = p.Columns([]string{"bid"})
 		if authored {
 			require.NoError(t, err)

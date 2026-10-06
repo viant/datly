@@ -21,7 +21,7 @@ const (
 	cacheWarmupCreatedMetric = "cache:warmup_created"
 )
 
-type viewMetricProvider struct{}
+type viewMetricProvider struct{ source bool }
 
 var viewMetricKeys = []string{
 	successMetric,
@@ -41,6 +41,9 @@ var viewMetricKeys = []string{
 }
 
 func (p viewMetricProvider) Keys() []string {
+	if p.source {
+		return viewMetricKeys[:11]
+	}
 	return viewMetricKeys
 }
 
@@ -79,10 +82,19 @@ func (p viewMetricProvider) Map(value interface{}) int {
 	case cacheErrorMetric:
 		return 10
 	case cacheCreatedMetric:
+		if p.source {
+			return -1
+		}
 		return 11
 	case cacheLazyCreatedMetric:
+		if p.source {
+			return -1
+		}
 		return 12
 	case cacheWarmupCreatedMetric:
+		if p.source {
+			return -1
+		}
 		return 13
 	default:
 		return -1

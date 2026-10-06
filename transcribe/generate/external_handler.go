@@ -2,6 +2,7 @@ package generate
 
 import (
 	"fmt"
+	"github.com/viant/datly/spec"
 	"github.com/viant/datly/transcribe/gobuild"
 	"go/token"
 )
@@ -9,10 +10,13 @@ import (
 // ExternalHandler links an application-validated factory without copying its
 // implementation or generating replacement contracts.
 type ExternalHandler struct {
-	// GeneratedContracts is the SQL-free canonical POST branch; the field planner owns local Input/Output.
+	// GeneratedContracts is the canonical source factory branch; the field planner owns local Input/Output.
 	GeneratedContracts bool
-	Package            string
-	Name               string
+	// InputShape is compiler-owned authoring metadata. It only owns generated fields;
+	// it never belongs to Component.RootView/Views or executable route metadata.
+	InputShape *spec.View
+	Package    string
+	Name       string
 	// Build validates source-authored factories and staged registrations without
 	// requiring their contracts to be linked into the transcription executable.
 	Build *gobuild.Context
@@ -24,6 +28,7 @@ func (h *ExternalHandler) Clone() *ExternalHandler {
 	}
 	result := *h
 	result.Build = h.Build.Clone()
+	result.InputShape = h.InputShape.Clone()
 	return &result
 }
 

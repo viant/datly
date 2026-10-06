@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/viant/xdatly/response"
 	"io"
 	"strconv"
+	"strings"
 	"sync"
 
 	xexec "github.com/viant/xdatly/exec"
@@ -110,4 +112,22 @@ type auditIdentity struct {
 	Username string `json:"username,omitempty"`
 	Email    string `json:"email,omitempty"`
 	Scope    string `json:"scope,omitempty"`
+}
+
+// Read preserves the original unconditional completion within this configured
+// profile. It contains no SQL, arguments or private failure details.
+func (s *Sink) Read(traceID string, metric *response.Metric) {
+	if s == nil || metric == nil {
+		return
+	}
+	if traceID == "" {
+		traceID = "unknown"
+	}
+	status := "ok"
+	if metric.Error != "" {
+		status = "error"
+	}
+	// Prevent record injection through caller-configured diagnostics/correlation.
+	clean := func(value string) string { return strings.NewReplacer("\r", " ", "\n", " ").Replace(value) }
+	s.diagnostic(fmt.Sprintf("[INFO] datly view read reqTraceId=%s view=%s rows=%d elapsed=%s status=%s", clean(traceID), clean(metric.View), metric.Rows, clean(metric.Elapsed), status))
 }

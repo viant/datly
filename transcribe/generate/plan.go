@@ -212,7 +212,11 @@ func (r *planResolver) resolveBase() (*Plan, error) {
 	if generation != nil {
 		inheritedViewDest = strings.TrimSpace(generation.ViewFile)
 	}
-	materializeViewDestinations(component.RootView, inheritedViewDest, map[*spec.View]bool{})
+	shapeRoot := component.RootView
+	if shapeRoot == nil && r.input.ExternalHandler != nil {
+		shapeRoot = r.input.ExternalHandler.InputShape
+	}
+	materializeViewDestinations(shapeRoot, inheritedViewDest, map[*spec.View]bool{})
 	for _, view := range component.Views {
 		materializeViewDestinations(view, inheritedViewDest, map[*spec.View]bool{})
 	}
@@ -220,8 +224,8 @@ func (r *planResolver) resolveBase() (*Plan, error) {
 	if !strings.HasSuffix(rootViewType, "View") {
 		rootViewType += "View"
 	}
-	if component.RootView != nil && strings.TrimSpace(component.RootView.TypeName) != "" {
-		rootViewType = strings.TrimSpace(component.RootView.TypeName)
+	if shapeRoot != nil && strings.TrimSpace(shapeRoot.TypeName) != "" {
+		rootViewType = strings.TrimSpace(shapeRoot.TypeName)
 	}
 	var outputFields, inputFields []Field
 	var err error
@@ -310,6 +314,9 @@ func (r *planResolver) resolveBase() (*Plan, error) {
 		if v := strings.TrimSpace(component.RootView.Dest); v != "" {
 			plan.ViewDest = v
 		}
+	}
+	if shapeRoot != nil && component.RootView == nil && strings.TrimSpace(shapeRoot.Dest) != "" {
+		plan.ViewDest = strings.TrimSpace(shapeRoot.Dest)
 	}
 	return plan, nil
 }

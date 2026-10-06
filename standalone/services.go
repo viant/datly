@@ -52,6 +52,7 @@ func (s *source) services(ctx context.Context, logger *slog.Logger) (runtime.Obs
 	if s.config.Observation == nil {
 		return result, nil
 	}
+	result.Policy = s.config.Observation.Policy.Copy()
 	if s.config.Observation.LogSummaries {
 		result.Logger = logger
 	}

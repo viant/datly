@@ -190,3 +190,14 @@ func (b scopeBinder) Lookup(ctx context.Context, key xhandler.ValueKey) (any, bo
 
 var _ locator.ScopedLocator = (*viewLocator)(nil)
 var _ xhandler.Binder = scopeBinder{}
+
+func (p *viewProvider) ObservationTargets() []observability.ViewTarget {
+	if p == nil {
+		return nil
+	}
+	var result []observability.ViewTarget
+	for _, view := range p.views {
+		result = append(result, view.execution.ObservationTargets()...)
+	}
+	return result
+}
