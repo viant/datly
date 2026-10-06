@@ -105,3 +105,27 @@ func TestResolveInvocationSelectors_RejectsUnknownOverride(t *testing.T) {
 		t.Fatalf("expected unknown view error, got %v", err)
 	}
 }
+
+func TestPublicHolderResolutionDoesNotMutateInputsAndRejectsAmbiguity(t *testing.T) {
+	type input struct{ Fields []string }
+	component := &spec.Component{Name: "Public"}
+	root := &data.View{Spec: spec.View{Name: "root", Selector: &spec.Selector{AllowFields: true}}, SelectorFieldsBound: true, SelectorFields: []data.SelectorField{{GoName: "Children", PublicName: "child-items", Holder: true}}}
+	plan, err := NewPlan(PlanConfig{RootView: root, ViewIndex: NewViewIndex(component, root), SelectorBindings: []SelectorBindingPlan{{View: root, Property: spec.SelectorPropertyFields, FieldIndex: []int{0}}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	original := &input{Fields: []string{"child-items"}}
+	session := &Session{Component: component, Artifact: plan}
+	resolved, err := resolveInvocationSelectors(context.Background(), session, reflect.ValueOf(original), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resolved[root].Fields[0] != "Children" || original.Fields[0] != "child-items" {
+		t.Fatal("holder resolution mutated input or failed")
+	}
+	root.SelectorFields = append(root.SelectorFields, data.SelectorField{GoName: "OtherChildren", PublicName: "child-items", Holder: true})
+	_, err = resolveInvocationSelectors(context.Background(), session, reflect.ValueOf(original), nil)
+	if err == nil || !strings.Contains(err.Error(), "ambiguous") {
+		t.Fatalf("ambiguous alias accepted: %v", err)
+	}
+}

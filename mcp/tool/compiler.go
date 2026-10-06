@@ -38,15 +38,25 @@ type Input struct {
 type fieldCompiler func(registry.InputField, reflect.StructField) (Argument, bool, error)
 
 type Compiler struct {
-	binding *mcpinput.Compiler
-	fields  map[string]fieldCompiler
+	binding         *mcpinput.Compiler
+	fields          map[string]fieldCompiler
+	strictArguments bool
 }
 
-func NewCompiler() *Compiler {
+type CompilerOption func(*Compiler)
+
+func WithStrictArguments(enabled bool) CompilerOption {
+	return func(c *Compiler) { c.strictArguments = enabled }
+}
+
+func NewCompiler(options ...CompilerOption) *Compiler {
 	result := &Compiler{
-		binding: mcpinput.NewCompiler(),
 		fields:  make(map[string]fieldCompiler, 7),
 	}
+	for _, option := range options {
+		option(result)
+	}
+	result.binding = mcpinput.NewCompiler(mcpinput.WithStrictArguments(result.strictArguments))
 	for _, kind := range []string{"query", "path", "cookie", "form", "body"} {
 		result.fields[kind] = result.compileExternal
 	}
@@ -130,6 +140,9 @@ func (c *Compiler) Compile(input Input) (*Plan, error) {
 	sort.SliceStable(arguments, func(i, j int) bool { return arguments[i].publicName < arguments[j].publicName })
 	bindingArguments := make([]mcpinput.Argument, len(arguments))
 	inputSchema := schema.ToolInputSchema{Type: "object", Properties: map[string]map[string]interface{}{}}
+	if c.strictArguments {
+		inputSchema.AdditionalProperties = map[string]interface{}{"additionalProperties": false}
+	}
 	for index, argument := range arguments {
 		owner := argument.documentation
 		if owner == nil {

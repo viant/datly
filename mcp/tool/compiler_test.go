@@ -119,7 +119,7 @@ func TestCompilerUsesMCPNamesAliasesAndExclusionsWithoutChangingBindingSources(t
 		{Path: "Debug", Location: bindstate.Location{Kind: "query", In: "debug"}},
 		{Path: "ForwardedHost", Location: bindstate.Location{Kind: "header", In: "X-Forwarded-Host"}},
 	})
-	plan, err := NewCompiler().Compile(Input{
+	plan, err := NewCompiler(WithStrictArguments(true)).Compile(Input{
 		Component: spec.Key{Kind: spec.KindComponent, Name: "Diagnostic"},
 		Exposure:  &spec.MCPExposure{Kind: spec.MCPExposureTool, Name: "diagnostic.run"}, Contract: contract,
 	})

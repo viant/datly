@@ -182,7 +182,7 @@ func (s *source) buildIndexed(snapshot *bootstrapindex.Snapshot, materializer bo
 	}
 	sort.Slice(built.Preload, func(i, j int) bool { return built.Preload[i].String() < built.Preload[j].String() })
 	if s.config.MCP != nil {
-		built.MCP = mcp.Config{Authorization: s.config.MCP.Authorization, Folders: s.config.MCP.Folders}
+		built.MCP = mcp.Config{Authorization: s.config.MCP.Authorization, Folders: s.config.MCP.Folders, StrictArguments: s.config.MCP.StrictArguments}
 	}
 	if s.logger != nil {
 		components, routes, mcpTools := indexedBootstrapCounts(snapshot)
@@ -344,7 +344,7 @@ func (s *source) compileEager(ctx context.Context, types *typecatalog.Catalog) (
 		built.RuntimeOptions = append(built.RuntimeOptions, druntime.WithApplicationProviders(s.providers...))
 	}
 	if s.config.MCP != nil {
-		built.MCP = mcp.Config{Authorization: s.config.MCP.Authorization, Folders: s.config.MCP.Folders}
+		built.MCP = mcp.Config{Authorization: s.config.MCP.Authorization, Folders: s.config.MCP.Folders, StrictArguments: s.config.MCP.StrictArguments}
 	}
 	built.HTTP.StaticContent = append([]*spec.StaticContent(nil), s.http.StaticContent...)
 	components := &sourceComponent{source: s}

@@ -19,6 +19,9 @@ import (
 )
 
 type Config struct {
+	// StrictArguments rejects undeclared tool arguments. The default ignores
+	// extra names without granting them input, binding or authorization authority.
+	StrictArguments   bool
 	Folders           []mcpresource.Folder
 	Components        []*registry.RegisteredComponent
 	Invoker           exec.ComponentInvoker

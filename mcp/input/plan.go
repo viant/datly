@@ -23,16 +23,26 @@ type Argument struct {
 
 // Plan is an immutable argument-to-provider projection.
 type Plan struct {
-	arguments []Argument
-	aliases   map[string]string
+	arguments       []Argument
+	aliases         map[string]string
+	strictArguments bool
 }
 
 // Compiler owns the supported canonical source-kind registry.
 type Compiler struct {
-	registry map[string]bool
+	registry        map[string]bool
+	strictArguments bool
 }
 
-func NewCompiler() *Compiler {
+type CompilerOption func(*Compiler)
+
+// WithStrictArguments opts into rejecting undeclared tool argument names.
+// Known argument conversion, aliases and required inputs retain their checks.
+func WithStrictArguments(enabled bool) CompilerOption {
+	return func(c *Compiler) { c.strictArguments = enabled }
+}
+
+func NewCompiler(options ...CompilerOption) *Compiler {
 	result := &Compiler{registry: make(map[string]bool, 6)}
 	for _, kind := range []string{
 		requestprovider.QueryKind, requestprovider.PathKind, requestprovider.HeaderKind,
@@ -41,6 +51,9 @@ func NewCompiler() *Compiler {
 		result.registry[kind] = true
 	}
 	result.registry[requestprovider.BodyKind] = true
+	for _, option := range options {
+		option(result)
+	}
 	return result
 }
 
@@ -48,7 +61,7 @@ func (c *Compiler) Compile(arguments []Argument) (*Plan, error) {
 	if c == nil {
 		return nil, fmt.Errorf("MCP input compiler is required")
 	}
-	result := &Plan{arguments: make([]Argument, len(arguments))}
+	result := &Plan{arguments: make([]Argument, len(arguments)), strictArguments: c.strictArguments}
 	publicNames := make(map[string]bool, len(arguments))
 	sources := make(map[string]bool, len(arguments))
 	for index, argument := range arguments {
@@ -144,7 +157,10 @@ func (p *Plan) NormalizeArguments(arguments map[string]interface{}) (map[string]
 		if mapped := p.aliases[name]; mapped != "" {
 			canonical = mapped
 		} else if !known[name] {
-			return nil, fmt.Errorf("unknown MCP argument %q", name)
+			if p.strictArguments {
+				return nil, fmt.Errorf("unknown MCP argument %q", name)
+			}
+			continue
 		}
 		if _, exists := result[canonical]; exists {
 			return nil, fmt.Errorf("conflicting MCP argument %q", canonical)

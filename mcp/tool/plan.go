@@ -139,6 +139,9 @@ func cloneTool(source schema.Tool) schema.Tool {
 		result.InputSchema.Properties[name] = cloneSchemaMap(property)
 	}
 	result.InputSchema.Required = append([]string(nil), source.InputSchema.Required...)
+	if vocabulary, ok := source.InputSchema.AdditionalProperties.(map[string]interface{}); ok {
+		result.InputSchema.AdditionalProperties = cloneSchemaMap(vocabulary)
+	}
 	if source.OutputSchema != nil {
 		output := *source.OutputSchema
 		output.Properties = make(map[string]map[string]interface{}, len(source.OutputSchema.Properties))

@@ -19,6 +19,9 @@ import (
 )
 
 func validateSeedAdmission(request dexec.ComponentRequest, component *RegisteredComponent) error {
+	if component != nil && component.Component != nil && component.Component.Settings != nil && (component.Component.Settings.IndependentChildTransactions || strings.TrimSpace(component.Component.Settings.Mutation) != "") {
+		return fmt.Errorf("extra input cannot use mutation or independent child transactions")
+	}
 	if request.Input != nil || request.Replay != nil {
 		return fmt.Errorf("extra reader input cannot combine with Input or Replay")
 	}
@@ -114,6 +117,9 @@ func (r *Runtime) prepareReaderSeed(ctx context.Context, component *RegisteredCo
 	detached, err := (xshape.Runtime{}).CloneValue(value, selection)
 	if err != nil {
 		return nil, nil, fmt.Errorf("clone extra reader input: %w", err)
+	}
+	if err := rejectSeedCapabilities(reflect.ValueOf(detached), map[seedReference]bool{}); err != nil {
+		return nil, nil, err
 	}
 	return detached, paths, nil
 }

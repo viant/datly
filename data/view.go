@@ -10,13 +10,23 @@ import (
 // Columns and Relations are reader projections (SQL null fallbacks and paired
 // field links), while all other structural metadata is owned by spec.View.
 // Execution state, collectors, partitioners and native caches live in reader.
+type SelectorField struct {
+	GoName     string
+	PublicName string
+	Column     string
+	Holder     bool
+	Index      []int
+}
+
 type View struct {
-	Spec       spec.View       `json:"spec"`
-	Connector  string          `json:"connector,omitempty"`
-	Columns    []*Column       `json:"columns,omitempty"`
-	Cache      *Cache          `json:"cache,omitempty"`
-	Relations  []*Relation     `json:"relations,omitempty"`
-	CaseFormat text.CaseFormat `json:"-"`
+	SelectorFieldsBound bool            `json:"-"`
+	SelectorFields      []SelectorField `json:"-"`
+	Spec                spec.View       `json:"spec"`
+	Connector           string          `json:"connector,omitempty"`
+	Columns             []*Column       `json:"columns,omitempty"`
+	Cache               *Cache          `json:"cache,omitempty"`
+	Relations           []*Relation     `json:"relations,omitempty"`
+	CaseFormat          text.CaseFormat `json:"-"`
 }
 
 // NullsAllowed resolves the absent authored setting to the reader default.

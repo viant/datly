@@ -136,7 +136,7 @@ func TestCompileAndScopeFailClosed(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			plan, err := NewCompiler().Compile(test.arguments)
+			plan, err := NewCompiler(WithStrictArguments(true)).Compile(test.arguments)
 			if err == nil && test.values != nil {
 				_, err = plan.Scope(Arguments(test.values))
 			}
@@ -334,6 +334,41 @@ func TestNativePrimitivePathArrayProjectionIsLossless(t *testing.T) {
 	for _, typ := range []reflect.Type{reflect.TypeFor[[]byte](), reflect.TypeFor[[]struct{ ID int }](), reflect.TypeFor[string](), reflect.TypeFor[[]*int]()} {
 		if primitivePathSlice(typ) {
 			t.Fatalf("unsupported path collection%v", typ)
+		}
+	}
+}
+
+func TestExtraArgumentsAreLenientByDefaultAndStrictOnlyWhenConfigured(t *testing.T) {
+	argument := Argument{PublicName: "id", Aliases: []string{"legacyId"}, Source: bindstate.Location{Kind: "query", In: "id"}, SourceType: reflect.TypeOf(int(0))}
+	logical := map[string]interface{}{"legacyId": float64(9), "semanticSelection": map[string]interface{}{"entity": "records"}, "Authorization": "untrusted-extra"}
+	for _, strict := range []bool{false, true} {
+		plan, err := NewCompiler(WithStrictArguments(strict)).Compile([]Argument{argument})
+		if err != nil {
+			t.Fatal(err)
+		}
+		normalized, err := plan.NormalizeArguments(logical)
+		if strict {
+			if err == nil || !strings.Contains(err.Error(), "unknown MCP argument") {
+				t.Fatalf("strict error = %v", err)
+			}
+			continue
+		}
+		if err != nil || len(normalized) != 1 || normalized["id"] != float64(9) {
+			t.Fatalf("lenient args=%v error=%v", normalized, err)
+		}
+		scope, err := plan.Scope(Arguments(logical))
+		if err != nil {
+			t.Fatal(err)
+		}
+		assertValue(t, scope.Query(), reflect.TypeOf(int(0)), "id", "9")
+		if len(logical) != 3 || logical["legacyId"] != float64(9) {
+			t.Fatal("caller argument map changed")
+		}
+		if _, err = plan.NormalizeArguments(map[string]interface{}{"id": 1, "legacyId": 2}); err == nil {
+			t.Fatal("lenient mode accepted conflicting aliases")
+		}
+		if _, err = plan.Scope(Arguments{"id": "not-an-integer", "ignored": true}); err == nil {
+			t.Fatal("lenient mode accepted an invalid known value")
 		}
 	}
 }

@@ -1,6 +1,7 @@
 package output
 
 import (
+	"encoding/json"
 	"fmt"
 	"reflect"
 	"strings"
@@ -120,4 +121,34 @@ func schemaFieldPath(parent, name string) string {
 		return name
 	}
 	return parent + "." + name
+}
+
+// SelectorFieldNames uses the compiled output encoder's naming and visibility.
+type SelectorFieldName struct {
+	GoName     string
+	PublicName string
+	Index      []int
+}
+
+func (p *Plan) SelectorFieldNames(t reflect.Type, path string) ([]SelectorFieldName, error) {
+	for t != nil && (t.Kind() == reflect.Pointer || t.Kind() == reflect.Slice || t.Kind() == reflect.Array) {
+		t = t.Elem()
+	}
+	if t == nil || t.Kind() != reflect.Struct || p.custom != nil || selectorOpaqueJSON(t) {
+		return nil, nil
+	}
+	fields, err := p.jsonSchemaFields(t, path, false, map[reflect.Type]bool{})
+	if err != nil {
+		return nil, err
+	}
+	result := make([]SelectorFieldName, 0, len(fields))
+	for _, field := range fields {
+		result = append(result, SelectorFieldName{GoName: field.field.Name, PublicName: field.name, Index: append([]int(nil), field.field.Index...)})
+	}
+	return result, nil
+}
+
+func selectorOpaqueJSON(t reflect.Type) bool {
+	iface := reflect.TypeFor[json.Marshaler]()
+	return t.Implements(iface) || reflect.PointerTo(t).Implements(iface)
 }

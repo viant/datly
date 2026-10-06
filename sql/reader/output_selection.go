@@ -102,6 +102,20 @@ func (s *outputSelection) view(plan *ViewPlan, path []string) error {
 // canonical aliases back to SQLX field identities, not JSON names or inferred
 // Go aliases. This also keeps codec destinations on their model field indexes.
 func outputSelectionColumn(view *data.View, name string) (string, error) {
+	var selected *data.SelectorField
+	for i := range view.SelectorFields {
+		field := &view.SelectorFields[i]
+		if field.Holder || !(dsql.ProjectionNames{field.PublicName, field.GoName, field.Column}).Matches(name) {
+			continue
+		}
+		if selected != nil && selected.GoName != field.GoName {
+			return "", invalidSelectorField(name, "ambiguous public field")
+		}
+		selected = field
+	}
+	if selected != nil {
+		return selected.Column, nil
+	}
 	source := ""
 	for _, mapping := range view.Spec.Columns {
 		if mapping == nil || mapping.NameInferred || mapping.Source == "" || !(dsql.ProjectionNames{mapping.Name}).Matches(name) {

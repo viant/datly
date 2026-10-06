@@ -10,6 +10,7 @@ import (
 	"github.com/viant/datly/spec"
 	dsql "github.com/viant/datly/sql"
 	xhandler "github.com/viant/xdatly/handler"
+	xresponse "github.com/viant/xdatly/response"
 	xstate "github.com/viant/xdatly/state"
 )
 
@@ -47,6 +48,31 @@ func resolveInvocationSelectors(ctx context.Context, session *Session, input ref
 	}
 	if len(result) == 0 {
 		return nil, nil
+	}
+	for view, selector := range result {
+		selector.Fields = append([]string(nil), selector.Fields...)
+		selector.Columns = append([]string(nil), selector.Columns...)
+		for _, names := range [][]string{selector.Fields, selector.Columns} {
+			for i, name := range names {
+				var resolved *data.SelectorField
+				for at := range view.SelectorFields {
+					field := &view.SelectorFields[at]
+					if !(dsql.ProjectionNames{field.PublicName, field.GoName, field.Column}).Matches(name) {
+						continue
+					}
+					if resolved != nil && resolved.GoName != field.GoName {
+						return nil, invalidSelectorField(name, "ambiguous public field")
+					}
+					resolved = field
+				}
+				if resolved != nil && resolved.Holder {
+					names[i] = resolved.GoName
+				}
+			}
+		}
+		if (len(selector.Fields) > 0 || len(selector.Columns) > 0) && view.Spec.Selector != nil && !view.Spec.Selector.AllowFields {
+			return nil, invalidSelectorField(strings.Join(selector.Fields, ","), "projection is not allowed")
+		}
 	}
 	return result, nil
 }
@@ -110,7 +136,7 @@ func applySelectorBinding(selector *xstate.Selector, binding SelectorBindingPlan
 			// Original field selectors validate every supplied name. An empty
 			// string is a valid list item but cannot name a projected column.
 			if strings.TrimSpace(fields[i]) == "" {
-				return &dsql.UnknownProjectionColumnError{Column: fields[i], RequestedColumn: fields[i]}
+				return invalidSelectorFieldCause(fields[i], "empty field name", &dsql.UnknownProjectionColumnError{Column: fields[i], RequestedColumn: fields[i]})
 			}
 		}
 		selector.Fields = fields
@@ -128,4 +154,15 @@ func applySelectorBinding(selector *xstate.Selector, binding SelectorBindingPlan
 		return fmt.Errorf("unsupported query selector property %q", binding.Property)
 	}
 	return nil
+}
+
+func invalidSelectorField(name, reason string) error {
+	return invalidSelectorFieldCause(name, reason, nil)
+}
+func invalidSelectorFieldCause(name, reason string, cause error) error {
+	message := fmt.Sprintf("Fields %q: %s", name, reason)
+	if cause == nil {
+		cause = fmt.Errorf("%s", message)
+	}
+	return &xresponse.Error{Code: 400, Payload: xresponse.Status{Status: "error", Message: message}, Cause: cause}
 }
