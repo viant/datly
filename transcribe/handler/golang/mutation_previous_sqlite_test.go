@@ -79,7 +79,7 @@ func TestPreviousRead(t *testing.T){
   views,err:=viewprovider.New(viewprovider.Config{Dependencies:dependencies,Input:inputProjection,SQL:&dsql.SQLComponent{DB:h.DB}});if err!=nil{t.Fatal(err)}
   injector,err:=seed.ForScope(views);if err!=nil{t.Fatal(err)}
   input:=&Input{};var projection handler.ReadProjection
-  err=injector.Bind(ctx,input,bindly.WithPlan(boundPlan),bindly.WithBindingObserver(func(_ context.Context,event bindly.BindingEvent)error{
+  err=injector.Bind(ctx,input,bindly.WithSource(input),bindly.WithPlan(boundPlan),bindly.WithBindingObserver(func(_ context.Context,event bindly.BindingEvent)error{
    if event.Target!=input||event.Path!="CurrentEvents"{t.Fatalf("unexpected binding %+v",event)}
    projection,_=event.Metadata.(handler.ReadProjection);return nil
   }));if err!=nil{t.Fatal(err)}

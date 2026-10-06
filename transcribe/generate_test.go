@@ -372,7 +372,7 @@ SELECT id FROM users`,
 		}
 	}
 	if independent == nil || independent.Destination != "authorization.go" || independent.Ownership != gen.ViewGenerated || len(independent.Fields) != 2 ||
-		independent.Fields[0].Name != "Authorized" || independent.Fields[0].Type != "*bool" || !strings.Contains(independent.Fields[0].Tag, `internal:"true"`) ||
+		independent.Fields[0].Name != "Authorized" || independent.Fields[0].Type != "bool" || !independent.Fields[0].ExplicitType || !strings.Contains(independent.Fields[0].Tag, `internal:"true"`) ||
 		strings.Contains(independent.Fields[0].Tag, `groupable:`) || generated.Result.Plan.Input.Fields[0].Type != "*AuthorizationRow" ||
 		!strings.Contains(generated.Result.Plan.Input.Fields[0].Tag, `view:"Authorization,type=AuthorizationRow,dest=authorization.go,uri=queries/authorization.sql`) ||
 		!strings.Contains(generated.Result.Plan.Input.Fields[0].Tag, `sql:"uri=`) {

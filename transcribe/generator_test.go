@@ -194,7 +194,15 @@ func TestGeneratorPreservesDQLAuthority(t *testing.T) {
 	}
 	root := t.TempDir()
 	testharness.WriteGeneratedGoMod(t, root)
-	_, err := (Generator{Operation: "post"}).Generate(ctx, GenerationRequest{Destination: root, Source: &Source{Name: "Orders", Text: genpatch.DQL, Connector: "main", ColumnRefiner: column.New(column.Connections{"main": db.DB})}})
+	// The authored PATCH transport may select insert-only POST semantics.
+	insertOnly, err := (Generator{Operation: "post"}).Generate(ctx, GenerationRequest{Destination: root, Source: &Source{Name: "Orders", Text: genpatch.DQL, Connector: "main", ColumnRefiner: column.New(column.Connections{"main": db.DB})}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if insertOnly.Result.Plan.Settings.Mutation != "post" || len(insertOnly.Result.Plan.Routes) != 1 || insertOnly.Result.Plan.Routes[0].Method != "PATCH" {
+		t.Fatalf("authored transport or insert-only policy lost: %+v", insertOnly.Result.Plan)
+	}
+	_, err = (Generator{Operation: "put"}).Generate(ctx, GenerationRequest{Destination: t.TempDir(), Source: &Source{Name: "Orders", Text: genpatch.DQL, Connector: "main", ColumnRefiner: column.New(column.Connections{"main": db.DB})}})
 	if err == nil || !strings.Contains(err.Error(), "conflicts with authored route") {
 		t.Fatalf("route conflict=%v", err)
 	}

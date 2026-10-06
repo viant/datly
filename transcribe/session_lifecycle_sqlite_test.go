@@ -162,7 +162,8 @@ func TestPolicies(t *testing.T){for _,tc:=range []struct{name,body,stored string
  if tc.retry {if receipt.events[0].InvocationID!=receipt.events[2].InvocationID||receipt.counts[0]!=1||receipt.counts[2]!=1{t.Fatal("retry reused state or identity")}}
  if tc.caller {if receipt.outcomes[0].Transactions[0].State!=h.TransactionCallerPending{t.Fatal(receipt.outcomes)};if err=dataSource.Tx.Rollback();err!=nil{t.Fatal(err)}}
  if tc.failure {if receipt.outcomes[0].Transactions[0].State!=h.TransactionRolledBack{t.Fatal(receipt.outcomes)}}
- if tc.name=="identity noop" {if len(receipt.outcomes[0].Transactions)!=1 || receipt.outcomes[0].Transactions[0].State!=h.TransactionNone {t.Fatalf("noop transaction evidence: %+v",receipt.outcomes[0])};for _,msg:=range receipt.messages{if msg=="after queue"{t.Fatal("noop dispatched AfterQueue")}}}
+ // Current reads participate in the native invocation transaction even when the row queues no DML.
+ if tc.name=="identity noop" {if len(receipt.outcomes[0].Transactions)!=1 || receipt.outcomes[0].Transactions[0].State!=h.TransactionCommitted || receipt.outcomes[0].Transactions[0].Error!=nil {t.Fatalf("noop transaction evidence: %+v",receipt.outcomes[0])};for _,msg:=range receipt.messages{if msg=="after queue"{t.Fatal("noop dispatched AfterQueue")}}}
  var stored string;if err=db.QueryRow("SELECT name FROM records WHERE id='one'").Scan(&stored);err!=nil||stored!=tc.stored{t.Fatal(stored,err)}
  var count int;if err=db.QueryRow("SELECT COUNT(*) FROM records").Scan(&count);err!=nil||count!=1{t.Fatal(count,err)}
  var tables int;if err=db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'").Scan(&tables);err!=nil||tables!=1{t.Fatal("unexpected product/allocator table",tables,err)}
