@@ -443,10 +443,11 @@ func sourceHandlerTagsMatch(existing reflect.StructTag, authored string, embedde
 }
 
 // generatedPostFactory is deliberately narrower than source-backed handler
-// registration: canonical POST declarations own both local generated contracts.
+// registration: canonical post execution owns both local generated contracts,
+// independently of POST or PATCH transport.
 func generatedPostFactory(header *dql.HandlerHeader, prepared *dql.PreparedSource) ([3]string, bool) {
 	var names [3]string
-	if header == nil || !header.Declarative || !strings.EqualFold(header.Method, "POST") || prepared == nil || prepared.TypeContext == nil || prepared.TypeContext.PackagePath == "" {
+	if header == nil || !header.Declarative || (!strings.EqualFold(header.Method, "POST") && !strings.EqualFold(header.Method, "PATCH")) || prepared == nil || prepared.TypeContext == nil || prepared.TypeContext.PackagePath == "" {
 		return names, false
 	}
 	destination := prepared.TypeContext.PackagePath

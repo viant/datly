@@ -35,7 +35,7 @@ func (r *planResolver) linkedResources(plan *ResourcePlan) (*ResourcePlan, error
 	if err != nil {
 		return nil, err
 	}
-	destination, err := authority.Package(r.input.TargetPackage, "")
+	destination, err := authority.Resolve(r.input.TargetPackage, "")
 	if err != nil {
 		return nil, err
 	}

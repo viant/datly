@@ -13,6 +13,7 @@ import (
 	gen "github.com/viant/datly/transcribe/generate"
 	"github.com/viant/datly/typecatalog"
 	loaderast "github.com/viant/x/loader/ast"
+	xmodule "github.com/viant/x/module"
 	smodel "github.com/viant/x/syntetic/model"
 )
 
@@ -85,11 +86,24 @@ func (c *Compiler) generateCompiledAt(ctx context.Context, rootDir, packageDir s
 }
 
 func (c *Compiler) generateInputAt(ctx context.Context, rootDir, packageDir string, compiled *Result, input gen.Input) (*GeneratedPackage, error) {
+	var err error
+	rootDir, err = filepath.Abs(rootDir)
+	if err != nil {
+		return nil, err
+	}
 	if h := input.ExternalHandler; h != nil && h.Build != nil {
 		input.ExternalHandler = h.Clone()
 		input.ExternalHandler.Build = h.Build.WithContext(ctx)
 	}
 	pkgDir := filepath.Join(rootDir, packageDir)
+	module, err := xmodule.LocateLocal(rootDir)
+	if err != nil {
+		return nil, err
+	}
+	modulePackageDir, err := filepath.Rel(module.Dir, pkgDir)
+	if err != nil {
+		return nil, err
+	}
 	result, err := gen.New(input).Generate(pkgDir)
 	if err != nil {
 		return nil, err
@@ -103,7 +117,11 @@ func (c *Compiler) generateInputAt(ctx context.Context, rootDir, packageDir stri
 		if e != nil {
 			return nil, e
 		}
-		shapePackage, e := loaderast.LoadPackageFS(ctx, os.DirFS(rootDir), filepath.ToSlash(dest.Directory))
+		shapeDirectory, e := filepath.Rel(module.Dir, filepath.Join(rootDir, dest.Directory))
+		if e != nil {
+			return nil, e
+		}
+		shapePackage, e := loaderast.LoadPackageFS(ctx, os.DirFS(module.Dir), filepath.ToSlash(shapeDirectory))
 		if e != nil {
 			return nil, e
 		}
@@ -111,7 +129,7 @@ func (c *Compiler) generateInputAt(ctx context.Context, rootDir, packageDir stri
 			return nil, e
 		}
 	}
-	pkg, err := loaderast.LoadPackageFS(ctx, result.Plan.PackageFS(rootDir, filepath.ToSlash(packageDir)), filepath.ToSlash(packageDir))
+	pkg, err := loaderast.LoadPackageFS(ctx, result.Plan.PackageFS(module.Dir, filepath.ToSlash(modulePackageDir)), filepath.ToSlash(modulePackageDir))
 	if err != nil {
 		return nil, err
 	}
@@ -140,9 +158,24 @@ func generationInput(rootDir, packageDir string, compiled *Result) (gen.Input, s
 	if compiled.Component.TypeContext != nil {
 		authored = compiled.Component.TypeContext.PackagePath
 	}
-	destination, err := authority.Package(authored, packageDir)
+	destination, err := authority.Resolve(authored, packageDir)
 	if err != nil {
 		return gen.Input{}, "", err
+	}
+	var retainedName string
+	if strings.TrimSpace(authored) != "" && (compiled.ExternalHandler == nil || compiled.ExternalHandler.Build == nil) {
+		retainedName, err = existingPrimaryPackageName(filepath.Join(rootDir, destination.Directory))
+		if err != nil {
+			return gen.Input{}, "", err
+		}
+	}
+	if retainedName != "" {
+		destination.Name = retainedName
+	} else {
+		destination, err = authority.Package(authored, packageDir)
+		if err != nil {
+			return gen.Input{}, "", err
+		}
 	}
 	packageDir = destination.Directory
 	targetPackage := destination.ImportPath
@@ -176,15 +209,6 @@ func generationInput(rootDir, packageDir string, compiled *Result) (gen.Input, s
 	}
 	if strings.TrimSpace(authored) != "" {
 		input.PackageName = destination.Name
-		if input.ExternalHandler == nil || input.ExternalHandler.Build == nil {
-			name, err := existingPrimaryPackageName(filepath.Join(rootDir, packageDir))
-			if err != nil {
-				return gen.Input{}, "", err
-			}
-			if name != "" {
-				input.PackageName = name
-			}
-		}
 	}
 	if compiled.TypeResolver != nil {
 		input.TypeResolver = compiled.TypeResolver

@@ -2,6 +2,7 @@ package generate
 
 import (
 	"fmt"
+	"go/token"
 	"path/filepath"
 	"strings"
 
@@ -209,7 +210,7 @@ func (d *shapeDestinations) prepareShape(role, name, file, fallbackPackage strin
 				}
 			}
 			if d.authority != nil {
-				target, err := d.authority.Package(pkg, "")
+				target, err := d.destinationPackage(pkg, "")
 				if err != nil {
 					return "", "", fmt.Errorf("%s destination: %w", role, err)
 				}
@@ -231,7 +232,7 @@ func (d *shapeDestinations) prepareShape(role, name, file, fallbackPackage strin
 		}
 		if dir := filepath.Dir(file); dir != "." {
 			if d.authority != nil {
-				target, err := d.authority.Package(filepath.ToSlash(dir), "")
+				target, err := d.destinationPackage(filepath.ToSlash(dir), "")
 				if err != nil {
 					return "", "", err
 				}
@@ -287,7 +288,7 @@ func (d *shapeDestinations) linked(role, expression, file, key string) error {
 	if d.authority != nil && file != "" {
 		dir := filepath.Dir(file)
 		if dir != "." {
-			destination, err := d.authority.Package(filepath.ToSlash(dir), "")
+			destination, err := d.destinationPackage(filepath.ToSlash(dir), "")
 			if err != nil {
 				return err
 			}
@@ -317,4 +318,18 @@ func (d *shapeDestinations) contracts(p *Plan) {
 			ensureImport(p, alias, contract.Package)
 		}
 	}
+}
+
+// The primary name has already been selected by canonical transcription.
+// Split destinations retain their existing strict default-name admission.
+func (d *shapeDestinations) destinationPackage(authored, fallback string) (typecatalog.Destination, error) {
+	destination, err := d.authority.Resolve(authored, fallback)
+	if err != nil {
+		return typecatalog.Destination{}, err
+	}
+	if destination.ImportPath == d.input.TargetPackage && token.IsIdentifier(d.input.PackageName) && !token.Lookup(d.input.PackageName).IsKeyword() && d.input.PackageName != "_" {
+		destination.Name = d.input.PackageName
+		return destination, nil
+	}
+	return d.authority.Package(authored, fallback)
 }
