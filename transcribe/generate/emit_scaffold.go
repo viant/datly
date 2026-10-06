@@ -33,21 +33,17 @@ func EmitScaffold(dir string, plan *Plan) ([]EmittedFile, error) {
 	if err = packages.validate(); err != nil {
 		return nil, err
 	}
-	var result []EmittedFile
-	for i, p := range packages.plans {
-		files, user, removals, err := scaffoldArtifacts(packages.dirs[i], p)
-		if err != nil {
-			return nil, err
-		}
-		persistence := &scaffoldPersistence{dir: packages.dirs[i], owner: p.ComponentName, files: files, userFiles: user, removals: removals, plan: p}
-		target, err := persistence.target()
-		if err != nil {
-			return nil, err
-		}
-		if err = persistence.commitLocked(target); err != nil {
-			return nil, err
-		}
-		result = append(result, persistence.files...)
+	forests, readRoots, result, err := prepareScaffoldForests(packages.templates)
+	if err != nil {
+		return nil, err
+	}
+	defer cleanupScaffoldForests(forests)
+	packages.forests, packages.readRoots = forests, readRoots
+	if err = packages.validateProjected(); err != nil {
+		return nil, err
+	}
+	if err = publishScaffoldForests(forests); err != nil {
+		return nil, err
 	}
 	return result, nil
 }

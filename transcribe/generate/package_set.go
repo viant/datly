@@ -16,10 +16,14 @@ import (
 // packageSet preflights all authored destinations and the import graph before
 // handing each package to the existing transactional persistence owner.
 type packageSet struct {
-	plans    []*Plan
-	dirs     []string
-	files    [][]EmittedFile
-	removals []map[string]bool
+	plans     []*Plan
+	dirs      []string
+	files     [][]EmittedFile
+	removals  []map[string]bool
+	templates []*scaffoldPersistence
+	previews  []*scaffoldPersistence
+	readRoots []string
+	forests   []*scaffoldForest
 }
 
 func (p *Plan) packages(dir string) (*packageSet, error) {
@@ -93,16 +97,20 @@ func (s *packageSet) lockTargets() (func(), error) {
 
 func (s *packageSet) validate() error {
 	s.removals = make([]map[string]bool, len(s.plans))
+	s.templates = make([]*scaffoldPersistence, len(s.plans))
+	s.previews = make([]*scaffoldPersistence, len(s.plans))
 	for i, p := range s.plans {
 		files, user, removals, err := scaffoldArtifacts(s.dirs[i], p)
 		if err != nil {
 			return err
 		}
 		persistence := &scaffoldPersistence{dir: s.dirs[i], owner: p.ComponentName, files: files, userFiles: user, removals: removals, plan: p}
+		s.templates[i] = persistence.detached()
 		preview, err := persistence.preview()
 		if err != nil {
 			return err
 		}
+		s.previews[i] = preview
 		s.files[i] = preview.files
 		s.removals[i] = preview.renames
 		for _, file := range preview.userFiles {
@@ -151,7 +159,11 @@ func (s *packageSet) validateSourceHandler(index int) error {
 
 func (s *packageSet) sources(index int) (map[string]string, error) {
 	sources := map[string]string{}
-	entries, err := os.ReadDir(s.dirs[index])
+	readRoot := s.dirs[index]
+	if len(s.readRoots) > index {
+		readRoot = s.readRoots[index]
+	}
+	entries, err := os.ReadDir(readRoot)
 	if err != nil && !os.IsNotExist(err) {
 		return nil, err
 	}
@@ -159,11 +171,14 @@ func (s *packageSet) sources(index int) (map[string]string, error) {
 		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") || strings.HasSuffix(entry.Name(), "_test.go") {
 			continue
 		}
-		content, err := os.ReadFile(filepath.Join(s.dirs[index], entry.Name()))
+		content, err := os.ReadFile(filepath.Join(readRoot, entry.Name()))
 		if err != nil {
 			return nil, err
 		}
 		sources[entry.Name()] = string(content)
+	}
+	if len(s.readRoots) > index {
+		return sources, nil
 	}
 	for _, group := range s.files {
 		for _, file := range group {
@@ -231,56 +246,78 @@ func (s *packageSet) validateImports() error {
 	}
 	// SourceParser owns Go imports. Include existing project packages so a shape
 	// cannot introduce a cycle through an authored intermediary.
-	err = filepath.WalkDir(root, func(file string, entry fs.DirEntry, walkErr error) error {
-		if walkErr != nil {
-			return walkErr
-		}
-		if !entry.IsDir() {
-			return nil
-		}
-		if file != root && (strings.HasPrefix(entry.Name(), ".") || entry.Name() == "vendor") {
-			return filepath.SkipDir
-		}
-		if file != root {
-			if _, err := os.Stat(filepath.Join(file, "go.mod")); err == nil {
+	walk := func(readRoot, nominalRoot string, physical bool) error {
+		return filepath.WalkDir(readRoot, func(file string, entry fs.DirEntry, walkErr error) error {
+			if walkErr != nil {
+				return walkErr
+			}
+			if physical {
+				for _, forest := range s.forests {
+					if filepath.Clean(file) == forest.target {
+						return filepath.SkipDir
+					}
+				}
+			}
+			if !entry.IsDir() {
+				return nil
+			}
+			if file != readRoot && (strings.HasPrefix(entry.Name(), ".") || entry.Name() == "vendor") {
 				return filepath.SkipDir
 			}
-		}
-		if _, ok := proposed[filepath.Clean(file)]; ok {
-			return nil
-		}
-		files, err := os.ReadDir(file)
-		if err != nil {
-			return err
-		}
-		hasGoSource := false
-		for _, item := range files {
-			if !item.IsDir() && strings.HasSuffix(item.Name(), ".go") && !strings.HasSuffix(item.Name(), "_test.go") {
-				hasGoSource = true
-				break
+			if file != readRoot {
+				if _, err := os.Stat(filepath.Join(file, "go.mod")); err == nil {
+					return filepath.SkipDir
+				}
 			}
-		}
-		if !hasGoSource {
-			return nil
-		}
-		importPath, err := xmodule.ImportPathLocal(module.Dir, module.Path, file)
-		if err != nil {
-			return err
-		}
-		for _, item := range files {
-			if item.IsDir() || !strings.HasSuffix(item.Name(), ".go") || strings.HasSuffix(item.Name(), "_test.go") {
-				continue
-			}
-			content, err := os.ReadFile(filepath.Join(file, item.Name()))
+			relative, err := filepath.Rel(readRoot, file)
 			if err != nil {
 				return err
 			}
-			if err = s.imports(graph, importPath, string(content)); err != nil {
+			nominal := filepath.Join(nominalRoot, relative)
+			if _, ok := proposed[filepath.Clean(nominal)]; ok {
+				return nil
+			}
+			files, err := os.ReadDir(file)
+			if err != nil {
 				return err
 			}
+			hasGoSource := false
+			for _, item := range files {
+				if !item.IsDir() && strings.HasSuffix(item.Name(), ".go") && !strings.HasSuffix(item.Name(), "_test.go") {
+					hasGoSource = true
+					break
+				}
+			}
+			if !hasGoSource {
+				return nil
+			}
+			importPath, err := xmodule.ImportPathLocal(module.Dir, module.Path, nominal)
+			if err != nil {
+				return err
+			}
+			for _, item := range files {
+				if item.IsDir() || !strings.HasSuffix(item.Name(), ".go") || strings.HasSuffix(item.Name(), "_test.go") {
+					continue
+				}
+				content, err := os.ReadFile(filepath.Join(file, item.Name()))
+				if err != nil {
+					return err
+				}
+				if err = s.imports(graph, importPath, string(content)); err != nil {
+					return err
+				}
+			}
+			return nil
+		})
+	}
+	err = walk(root, root, true)
+	if err == nil {
+		for _, forest := range s.forests {
+			if err = walk(forest.stage, forest.target, false); err != nil {
+				break
+			}
 		}
-		return nil
-	})
+	}
 	if err != nil {
 		return err
 	}
@@ -360,4 +397,27 @@ func (p Packages) Validate() error {
 		all.files = append(all.files, group.files...)
 	}
 	return all.validate()
+}
+
+func (s *packageSet) validateProjected() error {
+	for i, p := range s.plans {
+		if p.ExternalHandler != nil && p.ExternalHandler.Build != nil {
+			persistence := s.templates[i].detached()
+			target, err := persistence.target()
+			if err != nil {
+				return err
+			}
+			if err = persistence.validateHandlerStage(target, s.readRoots[i]); err != nil {
+				return err
+			}
+		} else if p.ProjectRoot != "" {
+			if err := s.validatePackage(i); err != nil {
+				return err
+			}
+		}
+	}
+	if len(s.plans) == 1 && s.plans[0].ExternalHandler != nil && s.plans[0].ExternalHandler.Build != nil {
+		return nil
+	}
+	return s.validateImports()
 }

@@ -40,6 +40,12 @@ func generatedOwner(content []byte) string {
 // historical ownership or fingerprints. Linked contracts and create-once hooks
 // are outside this generated artifact set.
 func (p *scaffoldPersistence) prepareCurrent(target string) error {
+	return p.prepareCurrentAt(target, target)
+}
+
+// prepareCurrentAt keeps destination ownership nominal while inspecting the
+// current projected tree. The ordinary wrapper uses the destination itself.
+func (p *scaffoldPersistence) prepareCurrentAt(target, readRoot string) error {
 	p.renames = map[string]bool{}
 	desired, err := p.desiredFiles(target)
 	if err != nil {
@@ -49,7 +55,7 @@ func (p *scaffoldPersistence) prepareCurrent(target string) error {
 	for _, name := range desired {
 		keep[name] = true
 	}
-	entries, err := os.ReadDir(target)
+	entries, err := os.ReadDir(readRoot)
 	if err != nil && !os.IsNotExist(err) {
 		return err
 	}
@@ -58,7 +64,7 @@ func (p *scaffoldPersistence) prepareCurrent(target string) error {
 		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") {
 			continue
 		}
-		content, err := os.ReadFile(filepath.Join(target, entry.Name()))
+		content, err := os.ReadFile(filepath.Join(readRoot, entry.Name()))
 		if err != nil {
 			return err
 		}
@@ -72,14 +78,14 @@ func (p *scaffoldPersistence) prepareCurrent(target string) error {
 		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") || strings.HasSuffix(entry.Name(), "_test.go") {
 			continue
 		}
-		data, err := os.ReadFile(filepath.Join(target, entry.Name()))
+		data, err := os.ReadFile(filepath.Join(readRoot, entry.Name()))
 		if err != nil {
 			return err
 		}
 		if !strings.Contains(string(data), "//go:embed") {
 			continue
 		}
-		assets, err := packageasset.SourceEmbedFiles(target, data)
+		assets, err := packageasset.SourceEmbedFiles(readRoot, data)
 		// Replaced generated source is disposable, even if it no longer parses.
 		if err != nil {
 			if generatedOwner(data) == p.owner {
@@ -104,7 +110,7 @@ func (p *scaffoldPersistence) prepareCurrent(target string) error {
 		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") || strings.HasSuffix(entry.Name(), "_test.go") {
 			continue
 		}
-		content, err := os.ReadFile(filepath.Join(target, entry.Name()))
+		content, err := os.ReadFile(filepath.Join(readRoot, entry.Name()))
 		if err != nil {
 			return err
 		}
@@ -130,7 +136,7 @@ func (p *scaffoldPersistence) prepareCurrent(target string) error {
 		}
 		// Legacy artifact removal is explicit in the current plan. Protect authored
 		// Go files rather than treating their conventional filename as provenance.
-		content, err := os.ReadFile(filepath.Join(target, relative))
+		content, err := os.ReadFile(filepath.Join(readRoot, relative))
 		if os.IsNotExist(err) {
 			continue
 		}
@@ -141,7 +147,7 @@ func (p *scaffoldPersistence) prepareCurrent(target string) error {
 			p.renames[relative] = true
 		}
 	}
-	return p.preserveEntityMethods(target, target)
+	return p.preserveEntityMethods(target, readRoot)
 }
 
 func (p *scaffoldPersistence) linkedDestination(name string) bool {

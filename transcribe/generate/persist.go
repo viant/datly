@@ -23,6 +23,17 @@ type scaffoldPersistence struct {
 	renames   map[string]bool
 }
 
+// detached preserves pristine rendered artifacts separately from the preview's
+// destructive authored-method merge. Plan identity is retained, not rerendered.
+func (p *scaffoldPersistence) detached() *scaffoldPersistence {
+	copy := *p
+	copy.files = append([]EmittedFile(nil), p.files...)
+	copy.userFiles = append([]EmittedFile(nil), p.userFiles...)
+	copy.removals = append([]string(nil), p.removals...)
+	copy.renames = nil
+	return &copy
+}
+
 type scaffoldCommitLock struct {
 	mutex sync.Mutex
 	users int
@@ -448,4 +459,216 @@ func managedRelativePath(path string) (string, error) {
 		return "", fmt.Errorf("generated path %q escapes package directory", path)
 	}
 	return path, nil
+}
+
+// scaffoldForest keeps original disk conflict evidence separate from projected
+// mutations. A published forest is never included in cleanup.
+type scaffoldForest struct {
+	target    string
+	stage     string
+	original  scaffoldSnapshot
+	stats     scaffoldStats
+	published bool
+}
+
+func withinScaffoldTree(root, path string) bool {
+	rel, err := filepath.Rel(root, path)
+	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
+func prepareScaffoldForests(templates []*scaffoldPersistence) (forests []*scaffoldForest, readRoots []string, result []EmittedFile, err error) {
+	targets := make([]string, len(templates))
+	for i, p := range templates {
+		targets[i], err = p.target()
+		if err != nil {
+			return
+		}
+	}
+	// First authored member determines forest publication order, independent of
+	// whether that member is its ancestor or descendant.
+	for _, target := range targets {
+		root := target
+		for _, other := range targets {
+			if withinScaffoldTree(other, root) {
+				root = other
+			}
+		}
+		found := false
+		for _, forest := range forests {
+			if forest.target == root {
+				found = true
+				break
+			}
+		}
+		if !found {
+			forests = append(forests, &scaffoldForest{target: root})
+		}
+	}
+	defer func() {
+		if err != nil {
+			cleanupScaffoldForests(forests)
+		}
+	}()
+	for _, forest := range forests {
+		parent := filepath.Dir(forest.target)
+		for {
+			inside := false
+			for _, target := range targets {
+				if withinScaffoldTree(target, parent) {
+					inside = true
+					break
+				}
+			}
+			info, statErr := os.Stat(parent)
+			if !inside && statErr == nil && info.IsDir() {
+				break
+			}
+			if statErr != nil && !os.IsNotExist(statErr) {
+				err = statErr
+				return
+			}
+			next := filepath.Dir(parent)
+			if next == parent {
+				err = fmt.Errorf("no existing stage parent outside authored targets for %s", forest.target)
+				return
+			}
+			parent = next
+		}
+		forest.stage, err = os.MkdirTemp(parent, "."+filepath.Base(forest.target)+"-stage-")
+		if err != nil {
+			return
+		}
+		forest.original, forest.stats, err = (&scaffoldPersistence{}).copyExisting(forest.target, forest.stage)
+		if err != nil {
+			return
+		}
+	}
+	readRoots = make([]string, len(templates))
+	for i, template := range templates {
+		var forest *scaffoldForest
+		for _, f := range forests {
+			if withinScaffoldTree(f.target, targets[i]) {
+				forest = f
+				break
+			}
+		}
+		relative, relErr := filepath.Rel(forest.target, targets[i])
+		if relErr != nil {
+			err = relErr
+			return
+		}
+		projected := filepath.Join(forest.stage, relative)
+		readRoots[i] = projected
+		p := template.detached()
+		if err = p.prepareCurrentAt(targets[i], projected); err != nil {
+			return
+		}
+		if err = p.validateUserFiles(targets[i], projected); err != nil {
+			return
+		}
+		// Each ordinary commit replaces its target with a fresh MkdirTemp root.
+		// Reproduce that root mode, retaining descendant modes from the projection.
+		modeInfo, modeErr := os.Stat(forest.stage)
+		if modeErr != nil {
+			err = modeErr
+			return
+		}
+		if err = os.MkdirAll(projected, 0755); err != nil {
+			return
+		}
+		if err = os.Chmod(projected, modeInfo.Mode().Perm()); err != nil {
+			return
+		}
+		for name := range p.renames {
+			if err = os.Remove(filepath.Join(projected, name)); err != nil && !os.IsNotExist(err) {
+				return
+			}
+		}
+		if err = p.writeFiles(targets[i], projected); err != nil {
+			return
+		}
+		if err = p.writeUserFiles(targets[i], projected); err != nil {
+			return
+		}
+		if err = os.Remove(filepath.Join(projected, legacyManifestName)); err != nil && !os.IsNotExist(err) {
+			return
+		}
+		err = nil
+		result = append(result, p.files...)
+	}
+	return
+}
+
+func cleanupScaffoldForests(forests []*scaffoldForest) {
+	for _, forest := range forests {
+		if !forest.published && forest.stage != "" {
+			_ = os.RemoveAll(forest.stage)
+		}
+	}
+}
+
+func publishScaffoldForests(forests []*scaffoldForest) error {
+	defer cleanupScaffoldForests(forests)
+	var created []scaffoldCreatedParent
+	defer func() { cleanupScaffoldParents(created) }()
+	for _, forest := range forests {
+		parent := filepath.Dir(forest.target)
+		var missing []string
+		for path := parent; ; path = filepath.Dir(path) {
+			info, err := os.Stat(path)
+			if err == nil {
+				if !info.IsDir() {
+					return fmt.Errorf("scaffold publication parent %s is not a directory", path)
+				}
+				break
+			}
+			if !os.IsNotExist(err) {
+				return err
+			}
+			missing = append(missing, path)
+			if filepath.Dir(path) == path {
+				return err
+			}
+		}
+		for i := len(missing) - 1; i >= 0; i-- {
+			if err := os.Mkdir(missing[i], 0755); err != nil {
+				if !os.IsExist(err) {
+					return err
+				}
+			} else {
+				info, statErr := os.Lstat(missing[i])
+				if statErr != nil {
+					return statErr
+				}
+				if !info.IsDir() {
+					return fmt.Errorf("created scaffold publication parent was replaced: %s", missing[i])
+				}
+				created = append(created, scaffoldCreatedParent{path: missing[i], identity: info})
+			}
+		}
+		if err := (&scaffoldPersistence{}).swap(forest.target, forest.stage, forest.original, forest.stats); err != nil {
+			return err
+		}
+		forest.published = true
+	}
+	return nil
+}
+
+// Retain the created directory identity: another actor's replacement is never
+// cleanup-owned, even when it uses the same path or is an empty directory.
+type scaffoldCreatedParent struct {
+	path     string
+	identity os.FileInfo
+}
+
+func cleanupScaffoldParents(created []scaffoldCreatedParent) {
+	for i := len(created) - 1; i >= 0; i-- {
+		parent := created[i]
+		info, err := os.Lstat(parent.path)
+		if err != nil || !info.IsDir() || !os.SameFile(parent.identity, info) {
+			continue
+		}
+		// Remove succeeds only for an empty directory; never recursively clean it.
+		_ = os.Remove(parent.path)
+	}
 }
