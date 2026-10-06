@@ -4,11 +4,8 @@ package auth
 
 import (
 	"context"
-	"crypto/rand"
 	"crypto/rsa"
-	"crypto/x509"
 	"encoding/json"
-	"encoding/pem"
 	"errors"
 	"fmt"
 	"reflect"
@@ -34,7 +31,7 @@ type Config struct {
 	// RetainFailedCredential enables deliberate legacy error-response parity.
 	// The credential is private to VerificationFailure and never formatted.
 	RetainFailedCredential bool
-	// InternalWarmupJWT enables a server-owned RSA credential for cache warmup only.
+	// InternalWarmupJWT enables the embedded RSA credential for cache warmup only.
 	InternalWarmupJWT bool
 	// InternalWarmupClaims adds trusted application claims to the warmup-only JWT.
 	InternalWarmupClaims map[string]any
@@ -107,15 +104,11 @@ func New(ctx context.Context, config *Config) (*Service, error) {
 			}
 			result.warmupClaimsJSON = claimsJSON
 		}
-		key, err := rsa.GenerateKey(rand.Reader, 2048)
+		key, public, err := internalWarmupKey()
 		if err != nil {
-			return nil, fmt.Errorf("generate internal warmup RSA key: %w", err)
+			return nil, err
 		}
-		encoded, err := x509.MarshalPKIXPublicKey(&key.PublicKey)
-		if err != nil {
-			return nil, fmt.Errorf("encode internal warmup RSA key: %w", err)
-		}
-		internal := verifier.New(&verifier.Config{RSA: []*scy.Resource{{URL: "datly-internal-warmup", Data: pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: encoded})}}})
+		internal := verifier.New(&verifier.Config{RSA: []*scy.Resource{{URL: "datly-internal-warmup", Data: public}}})
 		if err := internal.Init(ctx); err != nil {
 			return nil, fmt.Errorf("initialize internal warmup JWT verifier: %w", err)
 		}

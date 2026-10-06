@@ -211,7 +211,8 @@ with a bounded timeout; client disconnection does not define success or abandon
 completion accounting. Use the `Completed` callback for the actual result/error.
 
 For a standalone service with `Warmup` administration and `JWTValidator` configured,
-Datly generates a private, process-local RSA key pair at startup. After the
+Datly loads the encrypted RSA key pair embedded from original Datly's mock JWT
+resources once per process. After the
 administrator and component API-key checks, it supplies a short-lived internal
 JWT to the reader's declared JWT header bindings. The `JwtClaim` codec verifies
 that key only during the server-owned warmup preparation and fill phases. Ordinary
