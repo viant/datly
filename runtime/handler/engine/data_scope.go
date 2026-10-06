@@ -720,7 +720,7 @@ func (s *dataScope) providers() []locator.Provider {
 			if err != nil || data == nil {
 				return nil, false, err
 			}
-			return dmlCapability{service: data, guard: s.mutationGuard()}, true, nil
+			return newQueueAwareDMLCapability(data, s.mutationGuard()), true, nil
 		}),
 		handlerprovider.New(xhandler.SequencerKey, func(ctx context.Context) (any, bool, error) {
 			data, err := s.resolve(ctx)

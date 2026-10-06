@@ -61,11 +61,12 @@ func (d *Data) validateExecutionGuardsLocked(ctx context.Context) error {
 	checks := append([]func(context.Context) error(nil), owner.executionGuards...)
 	failed := owner.failed
 	enabled := owner.guardsEnabled
+	operations := flattenData(owner)
 	owner.mu.Unlock()
 	if enabled && failed != nil {
 		return errors.Join(ErrInvocationFailed, failed)
 	}
-	if len(checks) == 0 {
+	if len(checks) == 0 && !hasQueuePayloadEvidence(operations) {
 		return nil
 	}
 	if failed != nil {
@@ -76,6 +77,13 @@ func (d *Data) validateExecutionGuardsLocked(ctx context.Context) error {
 		for _, check := range checks {
 			err = completeOperation("captured DML execution guard", func() error { return check(ctx) })
 			if err != nil {
+				break
+			}
+		}
+	}
+	if err == nil {
+		for _, operation := range operations {
+			if err = operation.validatePayload(); err != nil {
 				break
 			}
 		}

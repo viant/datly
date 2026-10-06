@@ -19,6 +19,7 @@ type View struct {
 	NestedNullPolicy         string
 	InsertValidationPresence bool
 	WriterIdentityPolicy     string
+	QueueContract            string
 	WriterActionPolicy       string
 	OnDeleteNotFound         string
 	MutationPredicateGroup   *int
@@ -89,6 +90,11 @@ func ParseView(value string) (*View, error) {
 			if err != nil {
 				return fmt.Errorf("insertValidationPresence must be true or false")
 			}
+		case "queuecontract":
+			if result.QueueContract != "" || value != "source-row" {
+				return fmt.Errorf("queueContract requires one source-row value; source-slice authoring is not yet available")
+			}
+			result.QueueContract = value
 		case "writeractionpolicy":
 			if result.WriterActionPolicy != "" || value != "insert-delete" {
 				return fmt.Errorf("writerActionPolicy requires one insert-delete value")

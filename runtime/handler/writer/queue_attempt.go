@@ -39,7 +39,7 @@ func (p *Program) queue(ctx context.Context, binder xhandler.Binder) error {
 				return err
 			}
 		}
-		return nil
+		return p.validateQueuedContractState(ctx, binder)
 	}
 	physical := make(map[*Action]bool, len(p.actions.Rows))
 	for _, action := range p.actions.Rows {
@@ -71,6 +71,9 @@ func (p *Program) queue(ctx context.Context, binder xhandler.Binder) error {
 			return p.queuePhysical(ctx, binder, dml, action, frame, queued)
 		})
 		if err != nil {
+			return err
+		}
+		if err = p.validateQueuedContractState(ctx, binder); err != nil {
 			return err
 		}
 	}

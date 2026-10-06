@@ -99,6 +99,7 @@ type Record struct {
 	NestedNullPolicy         string
 	InsertValidationPresence bool
 	WriterIdentityPolicy     string
+	QueueContract            string
 	WriterActionPolicy       string
 	OnDeleteNotFound         string
 	MutationPredicateGroup   *int
@@ -321,6 +322,7 @@ func hasWritableRole(record *Record) bool {
 // Program is invocation-owned universal mutation state. The same type is used
 // for every writer component; only Metadata and values differ.
 type Program struct {
+	queueSlots               []queueSlotSeal
 	guardMu                  sync.Mutex
 	guardIssued              bool
 	guardBinder              xhandler.Binder
@@ -752,14 +754,14 @@ func (h *Handler) Execute(ctx context.Context, invocation rhandler.Invocation) (
 	scope := rhandler.PhaseScopeFromContext(ctx)
 	// Keep policy capture before execution-begin observation when invoked without
 	// the engine's ordinary CaptureInput snapshot. Policy-free behavior is unchanged.
-	if h != nil && h.metadata != nil && hasWriterActionPolicy(h.metadata.Root) && invocation.Snapshot == nil {
+	if h != nil && h.metadata != nil && hasRetainedWriterGuards(h.metadata.Root) && invocation.Snapshot == nil {
 		program, captureErr := h.program(invocation.Input)
 		if captureErr != nil {
 			return nil, captureErr
 		}
 		invocation.Snapshot = program
 	}
-	if h != nil && h.metadata != nil && hasWriterActionPolicy(h.metadata.Root) {
+	if h != nil && h.metadata != nil && hasRetainedWriterGuards(h.metadata.Root) {
 		program, guardErr := h.capturedProgram(invocation)
 		if guardErr != nil {
 			return nil, guardErr
@@ -813,10 +815,13 @@ func (h *Handler) Execute(ctx context.Context, invocation rhandler.Invocation) (
 	// Buffered DML is completed by the engine after this boundary. An execution
 	// end observer must not change the validated rows which the queue retains.
 	if err == nil {
-		if program, ok := invocation.Snapshot.(*Program); ok && program.metadata != nil && hasWriterActionPolicy(program.metadata.Root) {
+		if program, ok := invocation.Snapshot.(*Program); ok && program.metadata != nil && hasRetainedWriterGuards(program.metadata.Root) {
 			err = program.validateActionPolicyFacts()
 			if err == nil {
 				err = program.validateActionPolicyActions()
+				if err == nil {
+					err = program.validateQueueSlots()
+				}
 			}
 			if err != nil {
 				program.failed = true
@@ -909,7 +914,7 @@ func (p *Program) admitCapturedExecution(invocation rhandler.Invocation) error {
 	return nil
 }
 func (h *Handler) CapturedExecutionGuard(invocation rhandler.Invocation) (func(context.Context) error, error) {
-	if h == nil || h.metadata == nil || !hasWriterActionPolicy(h.metadata.Root) {
+	if h == nil || h.metadata == nil || !hasRetainedWriterGuards(h.metadata.Root) {
 		return nil, nil
 	}
 	program, err := h.capturedProgram(invocation)
@@ -939,11 +944,14 @@ func (h *Handler) CapturedExecutionGuard(invocation rhandler.Invocation) (func(c
 		if err := program.validateActionPolicyFacts(); err != nil {
 			return err
 		}
-		return program.validateActionPolicyActions()
+		if err := program.validateActionPolicyActions(); err != nil {
+			return err
+		}
+		return program.validateQueueSlots()
 	}, nil
 }
 func (h *Handler) CapturedExecutionGuardRegistered(invocation rhandler.Invocation) error {
-	if h == nil || h.metadata == nil || !hasWriterActionPolicy(h.metadata.Root) {
+	if h == nil || h.metadata == nil || !hasRetainedWriterGuards(h.metadata.Root) {
 		return nil
 	}
 	program, err := h.capturedProgram(invocation)
@@ -1012,7 +1020,7 @@ func (h *Handler) FinalizeOutcome(ctx context.Context, invocation rhandler.Invoc
 		}
 		return nil
 	}
-	guarded := program.metadata != nil && hasWriterActionPolicy(program.metadata.Root)
+	guarded := program.metadata != nil && hasRetainedWriterGuards(program.metadata.Root)
 	if guarded {
 		program.guardMu.Lock()
 		alreadyFinalized := program.finalized
@@ -1340,6 +1348,9 @@ func (p *Program) prepare(ctx context.Context, binder xhandler.Binder) error {
 	if err = p.validateAuxiliaryTopology(); err != nil {
 		return err
 	}
+	if err = p.preflightQueueContracts(ctx, binder); err != nil {
+		return err
+	}
 	if len(p.actions.Rows) > 0 {
 		starter, lookupErr := lookup[xhandler.TransactionStarter](ctx, binder, xhandler.TransactionStarterKey)
 		if lookupErr != nil {
@@ -1462,7 +1473,11 @@ func (p *Program) queuePhysical(ctx context.Context, binder xhandler.Binder, dml
 	}
 	switch action.Kind {
 	case xhandler.WriteInsert:
-		err = dml.Insert(table, value)
+		if frame.Record.QueueContract != "" {
+			err = p.admitSourceRow(dml, action, frame)
+		} else {
+			err = dml.Insert(table, value)
+		}
 	case xhandler.WriteUpdate, xhandler.WriteDelete:
 		if criteria != nil {
 			native, ok := dml.(rhandler.CriteriaDML)
@@ -1487,7 +1502,11 @@ func (p *Program) queuePhysical(ctx context.Context, binder xhandler.Binder, dml
 		} else if action.Kind == xhandler.WriteUpdate {
 			err = dml.Update(table, value)
 		} else {
-			err = dml.Delete(table, value)
+			if frame.Record.QueueContract != "" {
+				err = p.admitSourceRow(dml, action, frame)
+			} else {
+				err = dml.Delete(table, value)
+			}
 		}
 	default:
 		err = fmt.Errorf("unsupported writer action %q", action.Kind)
@@ -1501,7 +1520,7 @@ func (p *Program) queuePhysical(ctx context.Context, binder xhandler.Binder, dml
 	if err = p.callEntityHook(ctx, "AfterQueue", frame); err != nil {
 		return err
 	}
-	return nil
+	return p.validateQueuedContractState(ctx, binder)
 }
 
 func (p *Program) componentHook() bool {
@@ -2485,7 +2504,7 @@ func Compile(component *spec.Component, inputType, outputType reflect.Type, oper
 		Auxiliary:    auxiliaryRoot,
 		CurrentField: metadata.CurrentField, Table: metadata.Table, Keys: metadata.Keys, Fields: metadata.Fields,
 		Sequence: metadata.Sequence, DeleteMarker: metadata.DeleteMarker, ConcurrencyToken: metadata.ConcurrencyToken,
-		Invariants: metadata.Invariants, WriterActionPolicy: component.RootView.WriterActionPolicy, WriterIdentityPolicy: component.RootView.WriterIdentityPolicy, InsertValidationPresence: component.RootView.InsertValidationPresence, RootNullPolicy: component.RootView.RootNullPolicy, NestedNullPolicy: component.RootView.NestedNullPolicy, OnDeleteNotFound: component.RootView.OnDeleteNotFound, MutationPredicateGroup: component.RootView.MutationPredicateGroup, HookType: metadata.HookType,
+		Invariants: metadata.Invariants, WriterActionPolicy: component.RootView.WriterActionPolicy, QueueContract: component.RootView.QueueContract, WriterIdentityPolicy: component.RootView.WriterIdentityPolicy, InsertValidationPresence: component.RootView.InsertValidationPresence, RootNullPolicy: component.RootView.RootNullPolicy, NestedNullPolicy: component.RootView.NestedNullPolicy, OnDeleteNotFound: component.RootView.OnDeleteNotFound, MutationPredicateGroup: component.RootView.MutationPredicateGroup, HookType: metadata.HookType,
 	}
 	if root.Name == "" {
 		root.Name = metadata.EntityType.Name()
@@ -2541,6 +2560,9 @@ func Compile(component *spec.Component, inputType, outputType reflect.Type, oper
 		}
 	}
 	metadata.Root = root
+	if err := validateQueueContracts(root, operation); err != nil {
+		return nil, err
+	}
 	if err := validateWriterActionPolicy(root, operation); err != nil {
 		return nil, err
 	}
@@ -2698,6 +2720,7 @@ func compileRecord(component *spec.Component, inputType reflect.Type, name, path
 	if view != nil {
 		record.Auxiliary = record.Auxiliary || view.Auxiliary
 		record.WriterActionPolicy = view.WriterActionPolicy
+		record.QueueContract = view.QueueContract
 		record.WriterIdentityPolicy = view.WriterIdentityPolicy
 		if view.RootNullPolicy != "" {
 			record.RootNullPolicy = view.RootNullPolicy

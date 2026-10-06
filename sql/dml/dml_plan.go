@@ -5,9 +5,10 @@ import "reflect"
 const defaultInsertBatchSize = 100
 
 type executionStep struct {
-	kind       dataOperationKind
-	table      string
-	operations []*dataOperation
+	appendBarrier bool
+	kind          dataOperationKind
+	table         string
+	operations    []*dataOperation
 }
 
 func buildExecutionPlan(operations []*dataOperation) []executionStep {
@@ -22,15 +23,19 @@ func buildExecutionPlan(operations []*dataOperation) []executionStep {
 			continue
 		}
 		result = append(result, executionStep{
-			kind:       operation.kind,
-			table:      operation.table,
-			operations: []*dataOperation{operation},
+			appendBarrier: operation.appendBarrier,
+			kind:          operation.kind,
+			table:         operation.table,
+			operations:    []*dataOperation{operation},
 		})
 	}
 	return result
 }
 
 func canExtendInsertStep(step executionStep, operation *dataOperation) bool {
+	if operation.appendBarrier || step.appendBarrier {
+		return false
+	}
 	if step.kind != dataOpInsert || operation.kind != dataOpInsert {
 		return false
 	}
