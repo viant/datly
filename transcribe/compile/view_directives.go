@@ -64,7 +64,7 @@ func parseViewDirective(item *query.Item) (viewDirective, bool, error) {
 	}
 	name := normalizeViewDirectiveName(sqlparser.Stringify(call.X))
 	switch name {
-	case spec.ViewControlNestedNullPolicy, spec.ViewControlRootNullPolicy, spec.ViewControlInsertValidationPresence, spec.ViewControlWriterIdentity, spec.ViewControlWriterActionPolicy, spec.ViewControlOnDeleteNotFound, spec.ViewControlMutationPredicate, spec.ViewControlOrderBy, spec.ViewControlSetLimit, spec.ViewControlUseConnector,
+	case spec.ViewControlNestedNullPolicy, spec.ViewControlRootNullPolicy, spec.ViewControlInsertValidationPresence, spec.ViewControlWriterIdentity, spec.ViewControlWriterActionPolicy, spec.ViewControlQueueContract, spec.ViewControlOnDeleteNotFound, spec.ViewControlMutationPredicate, spec.ViewControlOrderBy, spec.ViewControlSetLimit, spec.ViewControlUseConnector,
 		spec.ViewControlUseCache, spec.ViewControlCacheWarmup,
 		spec.ViewControlAllowNulls, spec.ViewControlGroupable, spec.ViewControlGrouping,
 		spec.ViewControlAllowedOrder, spec.ViewControlCardinality, spec.ViewControlSelfRef,
@@ -78,7 +78,7 @@ func parseViewDirective(item *query.Item) (viewDirective, bool, error) {
 	default:
 		return viewDirective{}, false, nil
 	}
-	if (name == spec.ViewControlNestedNullPolicy || name == spec.ViewControlRootNullPolicy || name == spec.ViewControlInsertValidationPresence || name == spec.ViewControlWriterIdentity || name == spec.ViewControlWriterActionPolicy || name == spec.ViewControlMutationPredicate || name == spec.ViewControlOnDeleteNotFound) && item.Alias != "" {
+	if (name == spec.ViewControlNestedNullPolicy || name == spec.ViewControlRootNullPolicy || name == spec.ViewControlInsertValidationPresence || name == spec.ViewControlWriterIdentity || name == spec.ViewControlWriterActionPolicy || name == spec.ViewControlQueueContract || name == spec.ViewControlMutationPredicate || name == spec.ViewControlOnDeleteNotFound) && item.Alias != "" {
 		return viewDirective{}, true, &Error{Code: CodeViewDirective, Cause: fmt.Errorf("%s must be a standalone annotation without an alias", name)}
 	}
 	minimum, maximum := 2, 2
@@ -169,7 +169,7 @@ func parseViewDirective(item *query.Item) (viewDirective, bool, error) {
 func containsViewDirective(source node.Node) bool {
 	return containsSQLCall(source, func(name string) bool {
 		switch name {
-		case spec.ViewControlNestedNullPolicy, spec.ViewControlRootNullPolicy, spec.ViewControlInsertValidationPresence, spec.ViewControlWriterIdentity, spec.ViewControlWriterActionPolicy, spec.ViewControlOnDeleteNotFound, spec.ViewControlMutationPredicate, spec.ViewControlOrderBy, spec.ViewControlSetLimit, spec.ViewControlUseConnector,
+		case spec.ViewControlNestedNullPolicy, spec.ViewControlRootNullPolicy, spec.ViewControlInsertValidationPresence, spec.ViewControlWriterIdentity, spec.ViewControlWriterActionPolicy, spec.ViewControlQueueContract, spec.ViewControlOnDeleteNotFound, spec.ViewControlMutationPredicate, spec.ViewControlOrderBy, spec.ViewControlSetLimit, spec.ViewControlUseConnector,
 			spec.ViewControlUseCache, spec.ViewControlCacheWarmup,
 			spec.ViewControlAllowNulls, spec.ViewControlGroupable, spec.ViewControlGrouping,
 			spec.ViewControlAllowedOrder, spec.ViewControlCardinality, spec.ViewControlSelfRef,
@@ -357,6 +357,11 @@ func applyViewDirectives(root *spec.View, directives []viewDirective) error {
 			target.RootNullPolicy = directive.value
 		case spec.ViewControlInsertValidationPresence:
 			target.InsertValidationPresence, _ = strconv.ParseBool(directive.value)
+		case spec.ViewControlQueueContract:
+			if directive.value != "source-row" || target.Auxiliary {
+				return &Error{Code: CodeViewDirective, Cause: fmt.Errorf("queue_contract requires source-row on a physical role; source-slice authoring is not yet available")}
+			}
+			target.QueueContract = directive.value
 		case spec.ViewControlWriterActionPolicy:
 			if directive.value != "insert-delete" || target.Auxiliary {
 				return &Error{Code: CodeViewDirective, Cause: fmt.Errorf("writer_action_policy requires insert-delete on a physical role")}

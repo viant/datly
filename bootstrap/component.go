@@ -347,6 +347,12 @@ func (r *packageComponentResolver) applyInput(resolved *resolvedContractField) e
 		}
 		r.component.RootView.InsertValidationPresence = true
 	}
+	if param != nil && param.IsMutationInput() && resolved.metadata.View != nil && resolved.metadata.View.QueueContract != "" {
+		if r.component.RootView == nil {
+			return fmt.Errorf("queue contract body requires a root view")
+		}
+		r.component.RootView.QueueContract = resolved.metadata.View.QueueContract
+	}
 	if param != nil && param.IsMutationInput() && resolved.metadata.View != nil && resolved.metadata.View.WriterActionPolicy != "" {
 		if r.component.RootView == nil {
 			return fmt.Errorf("writer action body requires a root view")
@@ -695,6 +701,7 @@ func (r *packageComponentResolver) view(field xshape.Field, name string, metadat
 		view.RowLockOrder = strings.TrimSpace(metadata.View.RowLockOrder)
 		view.WriterIdentityPolicy = metadata.View.WriterIdentityPolicy
 		view.WriterActionPolicy = metadata.View.WriterActionPolicy
+		view.QueueContract = metadata.View.QueueContract
 		view.RootNullPolicy = metadata.View.RootNullPolicy
 		view.NestedNullPolicy = metadata.View.NestedNullPolicy
 		view.InsertValidationPresence = metadata.View.InsertValidationPresence

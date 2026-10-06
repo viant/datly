@@ -95,6 +95,11 @@ func Lower(value *plan.Plan, config Config) (*Asset, error) {
 	if err := lowered.prepare(); err != nil {
 		return nil, err
 	}
+	for _, record := range lowered.records {
+		if record.plan.Write.QueueContract != "" {
+			return nil, fmt.Errorf("queue_contract is unavailable in legacy direct Go lowering; use the native writer path")
+		}
+	}
 	entities, err := lowered.entitySupport()
 	if err != nil {
 		return nil, err

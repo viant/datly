@@ -69,6 +69,21 @@ func (input *Input) validateLifecycleTarget(mutation, pendingDiscovery bool) err
 				return fmt.Errorf("root_null_policy requires a generated writable root and initial-validation")
 			}
 		}
+		if view.QueueContract != "" {
+			if view.QueueContract != "source-row" || !mutation || !mutationViews[view] || view.Auxiliary || (policy != "" && policy != "post" && policy != "patch") || view.MutationPredicateGroup != nil {
+				return fmt.Errorf("queue_contract requires a generated POST/PATCH physical source-row role; source-slice authoring is not yet available")
+			}
+			for _, route := range input.Component.Routes {
+				if route != nil && !strings.EqualFold(route.Method, "POST") && !strings.EqualFold(route.Method, "PATCH") {
+					return fmt.Errorf("queue_contract requires POST/PATCH routes")
+				}
+			}
+			for _, column := range view.Columns {
+				if column != nil && column.ConcurrencyToken {
+					return fmt.Errorf("queue_contract does not support matched writes")
+				}
+			}
+		}
 		if view.WriterActionPolicy != "" {
 			if view.WriterActionPolicy != "insert-delete" {
 				return fmt.Errorf("writer_action_policy must be insert-delete")

@@ -5,8 +5,10 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 
+	rhandler "github.com/viant/datly/runtime/handler"
 	"github.com/viant/sqlx/metadata/info"
 	"github.com/viant/sqlx/option"
 	xhandler "github.com/viant/xdatly/handler"
@@ -52,6 +54,11 @@ func (d *Data) executeInsertStep(ctx context.Context, db *sql.DB, tx *sql.Tx, st
 	}
 	options := buildExecutionOptions(tx, db, 0)
 	for i, operation := range step.operations {
+		if operation.queueContract == rhandler.SourceRow {
+			options = buildExecutionOptions(tx, db, 1)
+		} else if operation.queueContract == rhandler.SourceSlice && supportsInsertBatching(dialect) {
+			options = buildExecutionOptions(tx, db, boundedInsertBatchSize(reflect.ValueOf(operation.data).Len()))
+		}
 		if i > 0 {
 			metric.restart()
 		}

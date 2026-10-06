@@ -223,6 +223,17 @@ func (d *Data) flushLocked(ctx context.Context, tableName string, target *Data) 
 		}
 	}()
 	for _, step := range buildExecutionPlan(matched) {
+		if hasQueuePayloadEvidence(step.operations) {
+			if err := owner.validateExecutionGuardsLocked(ctx); err != nil {
+				return err
+			}
+		}
+		for _, operation := range step.operations {
+			if err := operation.validatePayload(); err != nil {
+				owner.markFailed(err)
+				return err
+			}
+		}
 		if err := owner.executePlanStep(ctx, db, tx, step); err != nil {
 			owner.markFailed(err)
 			return err

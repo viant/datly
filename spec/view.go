@@ -29,6 +29,7 @@ type View struct {
 	NestedNullPolicy         string         `json:"nestedNullPolicy,omitempty"`
 	InsertValidationPresence bool           `json:"insertValidationPresence,omitempty"`
 	WriterIdentityPolicy     string         `json:"writerIdentityPolicy,omitempty"`
+	QueueContract            string         `json:"queueContract,omitempty"`
 	WriterActionPolicy       string         `json:"writerActionPolicy,omitempty"`
 	OnDeleteNotFound         string         `json:"onDeleteNotFound,omitempty"`
 	MutationPredicateGroup   *int           `json:"mutationPredicateGroup,omitempty"`

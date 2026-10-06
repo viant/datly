@@ -117,6 +117,7 @@ type CurrentField struct {
 
 // WritePolicy makes every root DML decision explicit for target lowering.
 type WritePolicy struct {
+	QueueContract    string
 	ActionPolicy     string
 	DeleteMarker     FieldRef
 	ConcurrencyToken FieldRef

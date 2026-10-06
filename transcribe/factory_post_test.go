@@ -90,6 +90,12 @@ func TestGeneratedPostFactoryFirstGenerationAndStableRegeneration(t *testing.T) 
 }
 
 func TestGeneratedPostFactoryFailuresDoNotPublish(t *testing.T) {
+	for _, method := range []string{"POST", "PATCH"} {
+		t.Run(method, func(t *testing.T) { assertGeneratedFactoryFailuresDoNotPublish(t, method) })
+	}
+}
+
+func assertGeneratedFactoryFailuresDoNotPublish(t *testing.T, method string) {
 	for _, tc := range []struct{ name, old, replacement, message string }{
 		{"function variable", "func NewArchive() handler.Contract[ArchiveInput, ArchiveOutput] { return &Handler{} }", "var NewArchive = func() handler.Contract[ArchiveInput, ArchiveOutput] { return &Handler{} }", "declared function"},
 		{"argument", "func NewArchive()", "func NewArchive(unused int)", "handler source build"},
@@ -97,7 +103,7 @@ func TestGeneratedPostFactoryFailuresDoNotPublish(t *testing.T) {
 		{"wrong input", "func NewArchive() handler.Contract[ArchiveInput, ArchiveOutput] { return &Handler{} }", "func NewArchive() handler.Contract[ArchiveRequest, ArchiveOutput] { return nil }", "handler source build"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			root, source := generatedPostFactoryFixture(t)
+			root, source := generatedFactoryTransportFixture(t, method)
 			file := filepath.Join(root, "archive/business.go")
 			code, err := os.ReadFile(file)
 			require.NoError(t, err)
@@ -113,7 +119,7 @@ func TestGeneratedPostFactoryFailuresDoNotPublish(t *testing.T) {
 	}
 	for _, operation := range []string{"get", "put", "patch", "handler"} {
 		t.Run(operation, func(t *testing.T) {
-			root, source := generatedPostFactoryFixture(t)
+			root, source := generatedFactoryTransportFixture(t, method)
 			compiled, err := (&Discovery{BaseDir: root, GoBuild: source.GoBuild}).CompileSource(context.Background(), source)
 			require.NoError(t, err)
 			before := sourceHandlerSnapshot(t, root)
@@ -123,7 +129,7 @@ func TestGeneratedPostFactoryFailuresDoNotPublish(t *testing.T) {
 		})
 	}
 	t.Run("parent SQL", func(t *testing.T) {
-		root, source := generatedPostFactoryFixture(t)
+		root, source := generatedFactoryTransportFixture(t, method)
 		source.Text += "\nSELECT 1"
 		before := sourceHandlerSnapshot(t, root)
 		_, err := (&Discovery{BaseDir: root, GoBuild: source.GoBuild}).CompileSource(context.Background(), source)

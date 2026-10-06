@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/viant/datly/internal/drainowner"
+	rhandler "github.com/viant/datly/runtime/handler"
 	"github.com/viant/sqlx"
 	xhandler "github.com/viant/xdatly/handler"
 )
@@ -19,17 +20,20 @@ const (
 )
 
 type dataOperation struct {
-	id       uint64
-	frame    *Data
-	kind     dataOperationKind
-	table    string
-	data     any
-	dml      string
-	args     []any
-	match    *xhandler.Match
-	criteria *sqlx.Criteria
-	executed bool
-	reserved bool
+	queueContract   rhandler.QueueContract
+	appendBarrier   bool
+	payloadEvidence *queuePayloadEvidence
+	id              uint64
+	frame           *Data
+	kind            dataOperationKind
+	table           string
+	data            any
+	dml             string
+	args            []any
+	match           *xhandler.Match
+	criteria        *sqlx.Criteria
+	executed        bool
+	reserved        bool
 }
 
 func (d *Data) Insert(tableName string, data any) error {

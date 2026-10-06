@@ -134,6 +134,7 @@ func (b *inputGeneration) appendCurrent(view *spec.View, currentName, predicate 
 	current.EntityHooks = ""
 	current.WriterIdentityPolicy = ""
 	current.WriterActionPolicy = ""
+	current.QueueContract = ""
 	current.RootNullPolicy = ""
 	current.NestedNullPolicy = ""
 	current.InsertValidationPresence = false

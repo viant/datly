@@ -2,6 +2,7 @@ package transcribe
 
 import (
 	"context"
+	"fmt"
 	"go/parser"
 	"go/token"
 	"os"
@@ -208,7 +209,7 @@ func TestGeneratorExistingPrimaryPackageRejectsBeforeWriting(t *testing.T) {
 		source.Text = strings.Replace(source.Text, primaryPackageDirectory, "api/not-a-package", 1)
 		dir := filepath.Join(root, "api/not-a-package")
 		require.NoError(t, os.MkdirAll(dir, 0700))
-		require.NoError(t, os.WriteFile(filepath.Join(dir, "existing.go"), []byte("package campaign\n"), 0600))
+		// An invalid basename still requires production declaration authority.
 		before := primaryPackageSnapshot(t, root)
 		_, err := (Generator{Operation: "get"}).Generate(context.Background(), GenerationRequest{Source: source, Destination: root})
 		require.ErrorContains(t, err, "invalid Go package name")
@@ -249,4 +250,61 @@ func TestExistingPrimaryPackageClauseOnly(t *testing.T) {
 	require.Equal(t, "campaign", name)
 	_, err = existingPrimaryPackageName(filepath.Join(root, "authored.go"))
 	require.Error(t, err)
+}
+
+func TestGeneratorHyphenatedPrimaryPackage(t *testing.T) {
+	for _, qualified := range []bool{false, true} {
+		for _, nestedRoot := range []bool{false, true} {
+			t.Run(fmt.Sprintf("qualified_%v_nested_%v", qualified, nestedRoot), func(t *testing.T) {
+				root, source := primaryPackageFixture(t)
+				project := root
+				prefix := ""
+				if nestedRoot {
+					project = filepath.Join(root, "src")
+					prefix = "src/"
+					require.NoError(t, os.MkdirAll(project, 0700))
+				}
+				relative := "private/find-by-ids"
+				imported := primaryPackageModule + "/" + prefix + relative
+				authored := relative
+				if qualified {
+					authored = imported
+				}
+				source.Text = strings.Replace(source.Text, primaryPackageModule+"/"+primaryPackageDirectory, authored, 1)
+				dir := filepath.Join(project, relative)
+				require.NoError(t, os.MkdirAll(dir, 0700))
+				hook := "package private\n\nfunc ExistingValue() int { return 1 }\n"
+				require.NoError(t, os.WriteFile(filepath.Join(dir, "lookup.go"), []byte(hook), 0600))
+				g := Generator{Operation: "get"}
+				got, err := g.Generate(context.Background(), GenerationRequest{Source: source, Destination: project})
+				require.NoError(t, err)
+				require.Equal(t, "private", got.Result.Plan.GoPackage)
+				require.Equal(t, imported, got.Package.PkgPath)
+				before := primaryPackageSnapshot(t, root)
+				cwd, err := os.Getwd()
+				require.NoError(t, err)
+				relativeProject, err := filepath.Rel(cwd, project)
+				require.NoError(t, err)
+				_, err = g.Generate(context.Background(), GenerationRequest{Source: source, Destination: relativeProject})
+				require.NoError(t, err)
+				require.Equal(t, before, primaryPackageSnapshot(t, root))
+				bytes, err := os.ReadFile(filepath.Join(dir, "lookup.go"))
+				require.NoError(t, err)
+				require.Equal(t, hook, string(bytes))
+				entries, err := os.ReadDir(dir)
+				require.NoError(t, err)
+				for _, entry := range entries {
+					if strings.HasSuffix(entry.Name(), ".go") {
+						f, e := parser.ParseFile(token.NewFileSet(), filepath.Join(dir, entry.Name()), nil, parser.PackageClauseOnly)
+						require.NoError(t, e)
+						require.Equal(t, "private", f.Name.Name)
+					}
+				}
+				cmd := exec.Command("go", "build", "-mod=readonly", "./"+prefix+relative)
+				cmd.Dir = root
+				out, err := cmd.CombinedOutput()
+				require.NoError(t, err, "%s", out)
+			})
+		}
+	}
 }

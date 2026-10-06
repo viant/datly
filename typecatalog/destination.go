@@ -40,7 +40,23 @@ func NewDestinationAuthority(root string) (*DestinationAuthority, error) {
 	return &DestinationAuthority{root: absolute, moduleDir: dir, modulePath: module.Path}, nil
 }
 
+// Package resolves a confined destination using its default basename identity.
 func (a *DestinationAuthority) Package(authored, fallback string) (Destination, error) {
+	destination, err := a.Resolve(authored, fallback)
+	if err != nil {
+		return Destination{}, err
+	}
+	name := destination.Name
+	if !token.IsIdentifier(name) || token.Lookup(name).IsKeyword() || name == "_" {
+		return Destination{}, fmt.Errorf("generation package %q has invalid Go package name %q", strings.TrimSpace(authored), name)
+	}
+	return destination, nil
+}
+
+// Resolve confines a destination without selecting a Go declaration name.
+// Name is only the default basename; callers must validate it or retain a
+// validated existing declaration before using it for Go emission.
+func (a *DestinationAuthority) Resolve(authored, fallback string) (Destination, error) {
 	value := strings.TrimSpace(authored)
 	var directory string
 	if value == "" {
@@ -101,8 +117,5 @@ func (a *DestinationAuthority) Package(authored, fallback string) (Destination, 
 		return Destination{}, err
 	}
 	name := path.Base(imported)
-	if !token.IsIdentifier(name) || token.Lookup(name).IsKeyword() || name == "_" {
-		return Destination{}, fmt.Errorf("generation package %q has invalid Go package name %q", value, name)
-	}
 	return Destination{Directory: directory, ImportPath: imported, Name: name}, nil
 }
