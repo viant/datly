@@ -346,12 +346,12 @@ func applyViewDirectives(root *spec.View, directives []viewDirective) error {
 		}
 		switch directive.name {
 		case spec.ViewControlNestedNullPolicy:
-			if target == root || target.Auxiliary || target.Cardinality == spec.CardinalityOne || directive.value != "initial-validation" {
+			if target == root || target.Cardinality == spec.CardinalityOne || !((directive.value == "initial-validation" && !target.Auxiliary) || (directive.value == "skip-auxiliary" && (target.Auxiliary || auxiliarySourcePending(target)))) {
 				return &Error{Code: CodeViewDirective, Cause: fmt.Errorf("nested_null_policy requires a writable collection relation and initial-validation")}
 			}
 			target.NestedNullPolicy = directive.value
 		case spec.ViewControlRootNullPolicy:
-			if target != root || target.Auxiliary || directive.value != "initial-validation" {
+			if target != root || !((directive.value == "initial-validation" && !target.Auxiliary) || (directive.value == "skip-auxiliary" && (target.Auxiliary || auxiliarySourcePending(target)) && target.Cardinality != spec.CardinalityOne)) {
 				return &Error{Code: CodeViewDirective, Cause: fmt.Errorf("root_null_policy requires a writable root and initial-validation")}
 			}
 			target.RootNullPolicy = directive.value
@@ -696,4 +696,15 @@ func normalizeViewDirectiveValue(value string) string {
 		}
 	}
 	return strings.Trim(value, "`\"")
+}
+
+// An embedded or named SQL source has no physical mutation authority until the
+// existing discovery stage resolves it. Retain the explicit policy here; the
+// generation lifecycle validator must still prove exact auxiliary collection
+// authority after resolution. Known writable sources never take this path.
+func auxiliarySourcePending(view *spec.View) bool {
+	if view == nil || view.Source == nil || strings.TrimSpace(view.Source.Table) != "" {
+		return false
+	}
+	return len(view.Source.Embeds) > 0 || strings.TrimSpace(view.Source.URI) != ""
 }

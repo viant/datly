@@ -73,12 +73,12 @@ func ParseView(value string) (*View, error) {
 		case "dest":
 			result.Dest = value
 		case "nestednullpolicy":
-			if result.NestedNullPolicy != "" || value != "initial-validation" {
+			if result.NestedNullPolicy != "" || (value != "initial-validation" && value != "skip-auxiliary") {
 				return fmt.Errorf("nestedNullPolicy requires one initial-validation value")
 			}
 			result.NestedNullPolicy = value
 		case "rootnullpolicy":
-			if result.RootNullPolicy != "" || value != "initial-validation" {
+			if result.RootNullPolicy != "" || (value != "initial-validation" && value != "skip-auxiliary") {
 				return fmt.Errorf("rootNullPolicy requires one initial-validation value")
 			}
 			result.RootNullPolicy = value

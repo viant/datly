@@ -11,6 +11,10 @@ import (
 // Intermediate shape planning may precede mutation lowering; emitting an
 // unsupported target must never silently retain an inert lifecycle declaration.
 func (input *Input) ValidateLifecycleTarget(mutation bool) error {
+	return input.validateLifecycleTarget(mutation, false)
+}
+
+func (input *Input) validateLifecycleTarget(mutation, pendingDiscovery bool) error {
 	if input == nil || input.Component == nil {
 		return nil
 	}
@@ -34,6 +38,20 @@ func (input *Input) ValidateLifecycleTarget(mutation bool) error {
 			predicateSupported = false
 		}
 	}
+	mutationViews := map[*spec.View]bool{}
+	var markMutationViews func(*spec.View)
+	markMutationViews = func(view *spec.View) {
+		if view == nil || mutationViews[view] {
+			return
+		}
+		mutationViews[view] = true
+		for _, rel := range view.Relations {
+			if rel != nil && rel.Kind != spec.RelationKindDerived {
+				markMutationViews(rel.View)
+			}
+		}
+	}
+	markMutationViews(input.Component.RootView)
 	visited := map[*spec.View]bool{}
 	var check func(*spec.View) error
 	check = func(view *spec.View) error {
@@ -42,12 +60,12 @@ func (input *Input) ValidateLifecycleTarget(mutation bool) error {
 		}
 		visited[view] = true
 		if view.NestedNullPolicy != "" {
-			if view == input.Component.RootView || view.Auxiliary || !supported || view.Cardinality == spec.CardinalityOne || view.NestedNullPolicy != "initial-validation" {
+			if view == input.Component.RootView || !supported || view.Cardinality == spec.CardinalityOne || view.NestedNullPolicy == "skip-auxiliary" && !mutationViews[view] || !((view.NestedNullPolicy == "initial-validation" && !view.Auxiliary) || (view.NestedNullPolicy == "skip-auxiliary" && (view.Auxiliary || pendingDiscovery && pendingAuxiliarySource(view)))) {
 				return fmt.Errorf("nested_null_policy requires a generated writable collection relation and initial-validation")
 			}
 		}
 		if view.RootNullPolicy != "" {
-			if view != input.Component.RootView || view.Auxiliary || !supported || view.Cardinality == spec.CardinalityOne || view.RootNullPolicy != "initial-validation" {
+			if view != input.Component.RootView || !supported || view.Cardinality == spec.CardinalityOne || !((view.RootNullPolicy == "initial-validation" && !view.Auxiliary) || (view.RootNullPolicy == "skip-auxiliary" && (view.Auxiliary || pendingDiscovery && pendingAuxiliarySource(view)))) {
 				return fmt.Errorf("root_null_policy requires a generated writable root and initial-validation")
 			}
 		}
@@ -161,4 +179,10 @@ func HasWritableDeleteMarker(root *spec.View) bool {
 		return false
 	}
 	return has(root)
+}
+
+// Discovery needs an input type before expanding named SQL. This permits only
+// provisional shape materialization, never artifact emission or dispatch.
+func pendingAuxiliarySource(view *spec.View) bool {
+	return view != nil && view.Source != nil && strings.TrimSpace(view.Source.Table) == "" && (len(view.Source.Embeds) > 0 || strings.TrimSpace(view.Source.URI) != "")
 }

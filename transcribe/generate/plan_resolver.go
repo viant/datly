@@ -24,7 +24,7 @@ func (r *planResolver) resolve() (*Plan, error) {
 	r.input.Component = r.input.Component.Clone()
 	// Writer shapes may be planned before lowering; reader plans cannot dispatch
 	// mutation lifecycles even when a declared Go type already exists.
-	if err := r.input.ValidateLifecycleTarget(true); err != nil {
+	if err := r.input.validateLifecycleTarget(true, !r.requireConcreteHelpers); err != nil {
 		return nil, err
 	}
 	if r.input.Component.Static != nil {

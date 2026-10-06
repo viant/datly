@@ -17,10 +17,10 @@ func (v View) Value() (string, error) {
 	if v.MutationPredicateGroup != nil && *v.MutationPredicateGroup < 0 {
 		return "", fmt.Errorf("mutationPredicate must be a non-negative group")
 	}
-	if v.NestedNullPolicy != "" && v.NestedNullPolicy != "initial-validation" {
+	if v.NestedNullPolicy != "" && v.NestedNullPolicy != "initial-validation" && v.NestedNullPolicy != "skip-auxiliary" {
 		return "", fmt.Errorf("nestedNullPolicy must be initial-validation")
 	}
-	if v.RootNullPolicy != "" && v.RootNullPolicy != "initial-validation" {
+	if v.RootNullPolicy != "" && v.RootNullPolicy != "initial-validation" && v.RootNullPolicy != "skip-auxiliary" {
 		return "", fmt.Errorf("rootNullPolicy must be initial-validation")
 	}
 	if v.OnDeleteNotFound != "" && v.OnDeleteNotFound != "error" && v.OnDeleteNotFound != "ignore" {

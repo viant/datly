@@ -536,19 +536,22 @@ type Hooks struct{}
 type Stage uint8
 
 type Frame struct {
-	Entity, Previous    reflect.Value
-	ExpectedToken       reflect.Value
-	Fields              *presence
-	ExcludedWrite       bool
-	SkippedDelete       bool
-	NoopMissingIdentity bool
-	Action              xhandler.WriteAction
-	Record              *Record
-	Location            string
-	Parent              *Frame
-	Original            xhandler.OriginalPresence
-	Hook                reflect.Value
-	ScopedAllocated     map[string]bool
+	framedEntity                 reflect.Value
+	holderPosition               int
+	holderIndexed, holderTracked bool
+	Entity, Previous             reflect.Value
+	ExpectedToken                reflect.Value
+	Fields                       *presence
+	ExcludedWrite                bool
+	SkippedDelete                bool
+	NoopMissingIdentity          bool
+	Action                       xhandler.WriteAction
+	Record                       *Record
+	Location                     string
+	Parent                       *Frame
+	Original                     xhandler.OriginalPresence
+	Hook                         reflect.Value
+	ScopedAllocated              map[string]bool
 }
 
 type Action struct {
@@ -870,7 +873,7 @@ func (p *Program) captureOriginalAt(record *Record, rows reflect.Value, parent *
 	for i := 0; i < rows.Len(); i++ {
 		entity := rows.Index(i)
 		if entity.IsNil() {
-			if p.deferRootNull(record, i, indexed) || p.deferNestedNull(record, p.rowLocation(record, parent, i, indexed), indexed) {
+			if p.skipAuxiliaryNull(record, indexed) || p.deferRootNull(record, i, indexed) || p.deferNestedNull(record, p.rowLocation(record, parent, i, indexed), indexed) {
 				continue
 			}
 			return fmt.Errorf("writer row %d is nil", i)
@@ -1014,6 +1017,11 @@ func (p *Program) prepare(ctx context.Context, binder xhandler.Binder) error {
 		// deletion rows derived from the assembled Previous graph. Rebuild frames
 		// once after Init so those new rows participate in validation, ordering and
 		// DML without invoking Init twice for the original topology.
+		// Validate surviving first-pass identities before the rebuild can recapture them.
+		// Init-cleared auxiliary subtrees remain eligible for bounded pruning.
+		if err = p.discardInitializedAuxiliaryNullFrames(); err != nil {
+			return err
+		}
 		p.frames = &MutationFrames{}
 		if err = p.buildRecordFrames(ctx, binder, p.metadata.Root, entities, nil); err != nil {
 			return err
@@ -1022,6 +1030,12 @@ func (p *Program) prepare(ctx context.Context, binder xhandler.Binder) error {
 			return err
 		}
 		for _, frame := range p.frames.Rows {
+			if p.skippedAuxiliaryAncestor(frame) != nil {
+				continue
+			}
+			if err = p.validateAuxiliaryFrameIdentity(frame); err != nil {
+				return err
+			}
 			if err = p.applyInvariants(frame); err != nil {
 				return err
 			}
@@ -1033,6 +1047,9 @@ func (p *Program) prepare(ctx context.Context, binder xhandler.Binder) error {
 					return err
 				}
 			}
+		}
+		if err = p.discardInitializedAuxiliaryNullFrames(); err != nil {
+			return err
 		}
 		if err = p.orderFramesByReferences(); err != nil {
 			return err
@@ -1108,6 +1125,9 @@ func (p *Program) prepare(ctx context.Context, binder xhandler.Binder) error {
 	}); err != nil {
 		return err
 	}
+	if err = p.validateAuxiliaryTopology(); err != nil {
+		return err
+	}
 	if len(p.actions.Rows) > 0 {
 		starter, lookupErr := lookup[xhandler.TransactionStarter](ctx, binder, xhandler.TransactionStarterKey)
 		if lookupErr != nil {
@@ -1144,6 +1164,9 @@ func (p *Program) prepare(ctx context.Context, binder xhandler.Binder) error {
 			return err
 		}
 	}
+	if err = p.validateAuxiliaryTopology(); err != nil {
+		return err
+	}
 	if err = p.reconcileLinks(true); err != nil {
 		return err
 	}
@@ -1160,6 +1183,9 @@ func (p *Program) prepare(ctx context.Context, binder xhandler.Binder) error {
 		return err
 	}
 
+	if err = p.validateAuxiliaryTopology(); err != nil {
+		return err
+	}
 	output := reflect.ValueOf(p.output).Elem()
 	output.Field(p.metadata.OutputField).Set(entities)
 	if status := output.FieldByName("Status"); status.IsValid() && status.CanSet() && status.Kind() == reflect.String && status.String() == "" {
@@ -1174,6 +1200,12 @@ func (p *Program) prepare(ctx context.Context, binder xhandler.Binder) error {
 }
 
 func (p *Program) queuePhysical(ctx context.Context, binder xhandler.Binder, dml xhandler.DML, action *Action, frame *Frame, queued *bool) error {
+	if err := p.validateAuxiliaryFrameIdentity(frame); err != nil {
+		return err
+	}
+	if invalid := p.skippedAuxiliaryAncestor(frame); invalid != nil {
+		return fmt.Errorf("writer row at %s is nil", invalid.Location)
+	}
 	var err error
 	value := action.Entity.Interface()
 	table := frame.Record.Table
@@ -1534,6 +1566,15 @@ func (p *Program) validateFrames(ctx context.Context, validator xhandler.Validat
 }
 
 func (p *Program) callEntityHook(ctx context.Context, name string, frame *Frame) error {
+	if err := p.validateAuxiliaryFrameIdentity(frame); err != nil {
+		return err
+	}
+	if invalid := p.skippedAuxiliaryAncestor(frame); invalid != nil {
+		if name == "Init" {
+			return nil
+		}
+		return fmt.Errorf("writer row at %s is nil", invalid.Location)
+	}
 	// Init can invalidate a later collection slot after frames were built.
 	// Never pass that null to an entity hook or dereference its frame. Only the
 	// approved root policy can retain it until initial structural validation.
@@ -1556,7 +1597,18 @@ func (p *Program) callEntityHook(ctx context.Context, name string, frame *Frame)
 	}
 	state := p.entityHookState(methodType.In(2), frame)
 	results := method.Call([]reflect.Value{reflect.ValueOf(ctx), frame.Entity, state})
-	return methodError(name, results)
+	if err := methodError(name, results); err != nil {
+		return err
+	}
+	if err := p.validateAuxiliaryFrameIdentity(frame); err != nil {
+		return err
+	}
+	if name != "Init" {
+		if invalid := p.skippedAuxiliaryAncestor(frame); invalid != nil {
+			return fmt.Errorf("writer row at %s is nil", invalid.Location)
+		}
+	}
+	return nil
 }
 
 func (p *Program) entityHookState(stateType reflect.Type, frame *Frame) reflect.Value {
@@ -1822,7 +1874,7 @@ func (p *Program) buildEntityFrame(ctx context.Context, binder xhandler.Binder, 
 	{
 		i := position
 		if entity.IsNil() {
-			if (parent == nil && p.deferRootNull(record, i, indexed)) || p.deferNestedNull(record, p.rowLocation(record, parent, i, indexed), indexed) {
+			if p.skipAuxiliaryNull(record, indexed) || (parent == nil && p.deferRootNull(record, i, indexed)) || p.deferNestedNull(record, p.rowLocation(record, parent, i, indexed), indexed) {
 				return nil
 			}
 			return fmt.Errorf("writer row %d is nil", i)
@@ -1894,7 +1946,7 @@ func (p *Program) buildEntityFrame(ctx context.Context, binder xhandler.Binder, 
 			action = xhandler.WriteDelete
 		}
 		original := p.captureEntityOriginal(record, entity)
-		frame := &Frame{Entity: entity, Previous: previous, ExpectedToken: original.token, Fields: fields, SkippedDelete: skipDelete, NoopMissingIdentity: noopMissing, Action: action, Record: record, Location: p.rowLocation(record, parent, position, indexed), Parent: parent, Original: original, Hook: p.hooksByRecord[record]}
+		frame := &Frame{framedEntity: reflect.ValueOf(entity.Interface()), holderPosition: position, holderIndexed: indexed, holderTracked: true, Entity: entity, Previous: previous, ExpectedToken: original.token, Fields: fields, SkippedDelete: skipDelete, NoopMissingIdentity: noopMissing, Action: action, Record: record, Location: p.rowLocation(record, parent, position, indexed), Parent: parent, Original: original, Hook: p.hooksByRecord[record]}
 		p.frames.Rows = append(p.frames.Rows, frame)
 		for _, relation := range record.Relations {
 			children := entity.Elem().FieldByIndex(relation.Field)
