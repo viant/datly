@@ -125,6 +125,31 @@ for example `orders.WINDOW_START`.
 key equality. The `items` view remains many. The generator must not infer that every joined
 table is writable. Foreign-key constraints still belong to the database.
 
+### Preserve null slots in auxiliary collections
+
+Null collection entries are rejected by default. When an auxiliary request
+collection must preserve supplied null positions, opt in on that exact view:
+
+```sql
+SELECT records.*, children.*,
+       root_null_policy(records, 'skip-auxiliary'),
+       nested_null_policy(children, 'skip-auxiliary')
+FROM (SELECT r.* FROM (RECORDS) r) records
+LEFT JOIN (SELECT c.* FROM (CHILDREN) c) children
+       ON children.RECORD_ID = records.ID
+```
+
+Use `root_null_policy` for the auxiliary root collection and
+`nested_null_policy` for an auxiliary child collection. Each collection needs
+its own declaration; the policy does not propagate to descendants. Writable
+collections and single-record relations cannot use `skip-auxiliary`.
+
+Capture retains null positions and sparse presence for output and retry replay.
+Null slots create no entity lifecycle frame, identity, sequence allocation or DML.
+Supplied collection presence still participates in the parent's reconciliation
+and deletion policy; `[null]` is not treated as an omitted collection. Writable
+descendants retain their normal validation and allocation rules.
+
 ## CLI generation and generated code
 
 Start each writer DQL with an explicit destination package declaration. The reader
