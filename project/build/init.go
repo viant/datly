@@ -305,7 +305,7 @@ const mainTemplate = `package main
 import (
 	"context"
 	_ "%s/%s"
-	"github.com/viant/datly/cmd/command"
+	"github.com/viant/datly/cmd/developer"
 	"os"
 	"os/signal"
 	"syscall"
@@ -314,7 +314,7 @@ import (
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	os.Exit((command.Service{}).Run(ctx, os.Args[1:], os.Stdout, os.Stderr))
+	os.Exit((developer.Service{}).Run(ctx, os.Args[1:], os.Stdout, os.Stderr))
 }
 `
 

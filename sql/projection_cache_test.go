@@ -127,3 +127,18 @@ GROUP BY 1,2`}).Fields()
 	require.False(t, hit)
 	require.Equal(t, "grouped_dimension_mismatch", reason)
 }
+
+func TestCacheProjectionUsesGroupedCompilerWrapper(t *testing.T) {
+	inner := `SELECT f.advertiser_id,f.account_id,SUM(f.amount) AS amount FROM facts f WHERE f.account_id=? GROUP BY f.advertiser_id,f.account_id`
+	wrapped, err := (CacheProjection{SQL: "SELECT f.* FROM (" + inner + ") f"}).Fields()
+	require.NoError(t, err)
+	direct, err := (CacheProjection{SQL: inner}).Fields()
+	require.NoError(t, err)
+	require.Equal(t, direct, wrapped)
+	coarse, err := (CacheProjection{SQL: `SELECT f.advertiser_id,SUM(f.amount) AS amount FROM facts f GROUP BY f.advertiser_id`}).Fields()
+	require.NoError(t, err)
+	_, hit, reason, err := (cache.Projection{Stored: wrapped}).Indexes(coarse)
+	require.NoError(t, err)
+	require.False(t, hit)
+	require.Equal(t, "grouped_dimension_mismatch", reason)
+}

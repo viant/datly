@@ -1,4 +1,4 @@
-package main
+package developer
 
 import (
 	"bytes"
@@ -69,7 +69,7 @@ func TestValidateSchemaRequiresOptIn(t *testing.T) {
 		var output, diagnostic bytes.Buffer
 		args := append([]string{"validate"}, options...)
 		args = append(args, "example.com/app")
-		if status := run(context.Background(), args, &output, &diagnostic); status != 2 || diagnostic.Len() == 0 {
+		if status := Run(context.Background(), args, &output, &diagnostic); status != 2 || diagnostic.Len() == 0 {
 			t.Fatalf("args=%v status=%d output=%s diagnostic=%s", args, status, &output, &diagnostic)
 		}
 	}
@@ -109,7 +109,7 @@ func TestValidateSchemaCLIReadOnlySQLite(t *testing.T) {
 				t.Fatal(err)
 			}
 			var output, diagnostics bytes.Buffer
-			status := run(ctx, []string{"validate", "-schema", "-connector", "main", "-driver", tc.driver, "-dsn", tc.dsn, "-dir", base, "-format", "json", "example.com/app/records"}, &output, &diagnostics)
+			status := Run(ctx, []string{"validate", "-schema", "-connector", "main", "-driver", tc.driver, "-dsn", tc.dsn, "-dir", base, "-format", "json", "example.com/app/records"}, &output, &diagnostics)
 			var report transcribe.ValidationReport
 			if err := json.Unmarshal(output.Bytes(), &report); err != nil || status != tc.status || report.Valid != (tc.status == 0) {
 				t.Fatalf("status=%d report=%s diagnostic=%s error=%v", status, &output, &diagnostics, err)
@@ -122,7 +122,7 @@ func TestValidateSchemaCLIReadOnlySQLite(t *testing.T) {
 			}
 			if status == 0 {
 				output.Reset()
-				status = run(ctx, []string{"validate", "-schema", "-connector", "main", "-driver", tc.driver, "-dsn", tc.dsn, "-dir", base, "example.com/app/records"}, &output, &diagnostics)
+				status = Run(ctx, []string{"validate", "-schema", "-connector", "main", "-driver", tc.driver, "-dsn", tc.dsn, "-dir", base, "example.com/app/records"}, &output, &diagnostics)
 				if status != 0 || !strings.Contains(output.String(), "Schema-aware authoring validation passed: true") || !strings.Contains(output.String(), "Inspected:") {
 					t.Fatalf("text status=%d output=%s", status, &output)
 				}
