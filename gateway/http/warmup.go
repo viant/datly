@@ -5,10 +5,12 @@ import (
 	stdhttp "net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	dexec "github.com/viant/datly/exec"
 	druntime "github.com/viant/datly/runtime"
 	"github.com/viant/datly/spec"
+	xexec "github.com/viant/xdatly/exec"
 )
 
 func writeWarmupNotFound(writer stdhttp.ResponseWriter) {
@@ -37,6 +39,9 @@ type WarmupResult struct {
 	Target string `json:"target"`
 	Groups int    `json:"groups"`
 	Status string `json:"status"`
+	// TraceID and Elapsed describe the operation without changing the HTTP payload.
+	TraceID string        `json:"-"`
+	Elapsed time.Duration `json:"-"`
 }
 
 func newWarmupRoutes(rt *druntime.Runtime, c Config) (*warmupRoutes, error) {
@@ -140,10 +145,15 @@ func (h *Handler) serveWarmup(writer stdhttp.ResponseWriter, req *stdhttp.Reques
 		return true
 	}
 	defer finish()
+	// Accepted work owns its lifetime and mutable execution state. Do not retain
+	// the caller's context, credentials, or cancellation through request tracing.
+	execution := xexec.New(xexec.WithMethod(req.Method), xexec.WithURI(path), xexec.WithTraceResource("datly", h.version))
+	ctx = xexec.WithContext(ctx, execution)
 	snapshot := w.snapshot(ctx, req, endpoint)
-	result, status, err := endpoint.execute(ctx, w.policy, snapshot)
+	result, status, err := endpoint.execute(ctx, w.policy, snapshot, h.logger)
+	result.Elapsed = time.Since(execution.StartTime)
 	if err != nil && h.logger != nil {
-		h.logger.Error("HTTP cache warmup failed", err)
+		h.logger.Error("HTTP cache warmup failed", "reqTraceId", result.TraceID, "target", result.Target, "error", err)
 	}
 	if w.policy.Completed != nil {
 		w.policy.Completed(result, err)

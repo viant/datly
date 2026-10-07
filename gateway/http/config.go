@@ -114,6 +114,9 @@ type WarmupConfig struct {
 	// AdminHeaders are the extra request headers available to Authorize. API-key
 	// and canonical JWT headers are copied automatically; bodies are never retained.
 	AdminHeaders []string
+	// Started observes authorized operations before credential creation and
+	// preparation. Like Completed, it must support concurrent requests.
+	Started func(WarmupResult)
 	// Completed receives preparation failures and every dispatched operation outcome,
 	// even after client cancellation. Callbacks must support concurrent requests.
 	Completed func(WarmupResult, error)

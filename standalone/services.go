@@ -30,8 +30,10 @@ func (s *source) services(ctx context.Context, logger *slog.Logger) (runtime.Obs
 				return err
 			}
 			return admin.Authorize(request)
+		}, Started: func(result gateway.WarmupResult) {
+			logger.Info("datly cache warmup started", "reqTraceId", result.TraceID, "target", result.Target)
 		}, Completed: func(result gateway.WarmupResult, err error) {
-			logger.Info("datly cache warmup completed", "target", result.Target, "status", result.Status, "groups", result.Groups, "failed", err != nil)
+			logger.Info("datly cache warmup completed", "reqTraceId", result.TraceID, "target", result.Target, "status", result.Status, "groups", result.Groups, "elapsed", result.Elapsed.String(), "failed", err != nil)
 		}}
 		if s.warmupAuth != nil {
 			s.http.Warmup.InternalCredential = s.warmupAuth.WarmupCredential

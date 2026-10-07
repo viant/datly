@@ -8,6 +8,8 @@ import (
 	"net/url"
 
 	"github.com/viant/bindly/provider/values"
+	xexec "github.com/viant/xdatly/exec"
+	xlogger "github.com/viant/xdatly/logger"
 )
 
 // snapshot retains only declared authentication header values and routing/peer
@@ -30,8 +32,11 @@ func (w *warmupRoutes) snapshot(ctx context.Context, req *stdhttp.Request, endpo
 	return request.WithContext(ctx)
 }
 
-func (e *warmupRoute) execute(ctx context.Context, policy WarmupConfig, req *stdhttp.Request) (WarmupResult, int, error) {
+func (e *warmupRoute) execute(ctx context.Context, policy WarmupConfig, req *stdhttp.Request, logger xlogger.Logger) (WarmupResult, int, error) {
 	result := WarmupResult{Target: e.target.Route.String(), Status: "rejected"}
+	if execution := xexec.GetContext(ctx); execution != nil {
+		result.TraceID = execution.TraceID
+	}
 	if e.apiKeyHeader != "" && !(APIKey{Value: e.apiKeyValue}).matchesValue(req.Header.Get(e.apiKeyHeader)) {
 		return result, 403, fmt.Errorf("component API key denied")
 	}
@@ -43,6 +48,16 @@ func (e *warmupRoute) execute(ctx context.Context, policy WarmupConfig, req *std
 	}
 	if err := policy.Authorize(ctx, req, e.target); err != nil {
 		return result, warmupErrorStatus(ctx, 403), err
+	}
+	if err := ctx.Err(); err != nil {
+		return result, warmupErrorStatus(ctx, 500), err
+	}
+	if policy.Started != nil {
+		started := result
+		started.Status = "started"
+		policy.Started(started)
+	} else if logger != nil {
+		logger.Info("datly cache warmup started", "reqTraceId", result.TraceID, "target", result.Target)
 	}
 	if policy.InternalCredential != nil && len(e.credentials) > 0 {
 		credential, err := policy.InternalCredential(ctx)
