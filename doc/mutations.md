@@ -31,7 +31,8 @@ generate a combined reader/writer component in one struct.
 
 ## Choose the writer product
 
-Select the write operation in the CLI and declare its matching HTTP route in DQL:
+Select the write operation in the CLI and declare the HTTP route in DQL.
+The usual combinations are:
 
 | CLI operation | Route method | Intent |
 | --- | --- | --- |
@@ -40,7 +41,10 @@ Select the write operation in the CLI and declare its matching HTTP route in DQL
 | `put` | `PUT` | Apply the generated update policy for the writable graph. |
 
 Generation emits Go and creates the request/output contracts and state reads
-needed by the operation. The route method alone does not generate that code.
+needed by the operation. The route method alone does not generate that code. Native `post` generation
+also supports an authored `PATCH` route when the application requires insert-only
+behavior under that transport. It retains POST mutation semantics: an existing
+identity does not turn the request into an update.
 For a sparse update, Datly matches the authorized previous database rows using
 complete identities; the application authors the graph and lifecycle behavior.
 
@@ -205,6 +209,27 @@ Exact file/type names come from the plan and authored naming settings. Edit the
 create-once hook file rather than modifying private generated capture, matching
 or DML code. Build and link the emitted package before publishing a runtime
 generation. The generation step itself does not execute the business mutation.
+
+### Contract and code ownership
+
+The authoring flow is **DQL SQL graph + schema metadata → selected native
+operation → generated Go contracts and mutation program → authored lifecycle
+behavior**. The outer projection and relations describe the body records;
+parameter declarations describe where the request and dependencies come from.
+Schema discovery supplies column types, nullability, keys and references. A
+body struct hand-written independently of that graph is not the input to this
+standard generation workflow. An explicitly linked reusable Go type keeps its
+own type authority; DQL still declares how the component uses it.
+
+Keep the graph, casts, field policies, lifecycle names and destinations in DQL.
+Change those declarations or the schema and re-transcribe to change generated
+contracts. Keep business rules in the named lifecycle's authored Go methods.
+The generator owns presence capture, Current reads, matching, validation calls,
+allocation, link reconciliation and buffered DML. Hooks consume their typed
+state and scoped services rather than recreating those phases. Existing imported
+lifecycles remain authored code; local placeholders are created only for an
+explicit `lifecycle_type` declaration. See [hook contracts](hooks.md) and
+[shape ownership](shaping-contract.md).
 
 ## Walkthrough: transcribe, then add application logic
 
@@ -416,6 +441,41 @@ sequenceDiagram
     Writer-->>Request: Output or completion error
     Note over Writer,Lifecycle: A failed phase stops later write phases. Failure finalization still applies
 ```
+
+The generated policy runs these phases in order after input initialization:
+
+| Phase | Generated responsibility and application seam |
+| --- | --- |
+| Prepare | Resolve the invocation-scoped hook, validation and mutation capabilities. |
+| SyncPresence | Synchronize working markers, match resolved identities against captured Previous data, and freeze the mutation frames. Original client presence remains detached. |
+| Invariants | Backfill declared groups from known Previous fields without marking those values client-supplied. |
+| Init | Run the declared entity lifecycle's initialization. |
+| Validate | Check captured concurrency tokens and initial framework constraints, then run business validation. The optional root `ValidateInput` contract has its own aggregate-violation policy described below. |
+| Sequence | Start or join the required transaction and allocate pending identities through the selected native strategy. |
+| AfterSequence | Run declared callbacks that need allocated identifiers. |
+| Diff and Reconcile | Derive changes, repair declared parent links and perform final framework validation of produced values before queuing. |
+| Queue | Verify the graph and validated payload, then append DML in dependency order. |
+| AfterQueue | Run the declared callbacks and verify queued values; queued work is still pending completion. |
+| Complete and Finalize | The invocation owner drains or aborts work, resolves transaction evidence, then calls outcome-aware finalization. |
+
+Transaction admission depends on the selected handler path. The generated
+mutation adapter starts the required transaction after initial validation and
+before allocation. The runtime writer handler can additionally request a
+pre-binding transaction when its graph contains a writable record. A child can
+also join an already-started parent unit. Do not assume that every generated
+policy begins a transaction before binding. No-op and auxiliary-only work retain
+their own eligibility; do not infer transaction or DML activity from the HTTP verb.
+
+Sparse existing rows use supplied working fields for mutation and validation;
+new rows receive complete validation. A supplied zero, false or null remains
+supplied. Initialization and allocation do not rewrite the immutable Original
+snapshot or turn an insert into an update. Auxiliary rows can supply read data
+and carry writable descendants, but their own physical table receives no
+sequence allocation or DML. Row mutation callbacks must target eligible
+writable entities; a leaf auxiliary component's input hooks are a separate seam.
+See [structural validation and queue observation](session-lifecycle.md) for
+null slots, identity-only no-ops and per-item eligibility, and
+[mutation recovery](mutation-recovery.md) for admitted replay after completion.
 
 Any failing phase stops later write phases. The invocation owner resolves failure
 and transaction completion before outcome-aware finalization. A failed early
@@ -932,6 +992,32 @@ Data combines buffered DML, sequencing and flush capabilities. A locally owned
 transaction is completed by its owner. Flushing into a supplied transaction does
 not transfer commit ownership. Caller-pending, failure and unknown completion
 must not be reported as confirmed commits.
+
+### Composition shares the completion owner
+
+A component invoked through the scoped component invoker participates in the
+parent's Data scope. Work for the same known database unit uses its buffered
+DML and transaction owner; separate database units retain separate completion
+evidence. A nested component seal is not a root flush or a commit. The root
+completes participating units and then delivers their registered outcome
+callbacks. A successful child return or `AfterQueue` callback therefore cannot
+establish that its writes committed.
+
+Queue appends work; Flush executes buffered statements. On failure, native
+completion discards pending work and rolls back locally owned transactions,
+including statements already flushed within that transaction. On success, the
+owner flushes and completes its owned transaction. With a supplied transaction,
+completion remains caller-pending: the caller still owns commit or rollback.
+Multiple database units do not imply a distributed atomic transaction; inspect
+the full Outcome for partial or uncertain completion. Publish commit-dependent
+messages only when the applicable outcome confirms commit.
+
+Application lifecycle methods normally leave draining to the invocation owner.
+If custom orchestration explicitly uses Flush, it still does not gain commit
+ownership, and a successful Flush alone is not commit evidence. A root flush or
+commit failure suppresses the provisional successful output. The original
+operation error and truthful completion evidence remain available to failure
+finalization; finalization cannot undo a confirmed commit.
 
 Async execution persists a job and replays through the same component/binding
 owners. It does not create a second writer engine or authorize serialized claims.
