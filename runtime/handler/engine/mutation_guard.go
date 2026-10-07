@@ -44,6 +44,11 @@ func (g *mutationGuard) check(operation string) error {
 	}
 	g.mu.Lock()
 	defer g.unlockAndPublishProtectedFailure()
+	if drainowner.BindingGroupOpen(g.protectedIssuer) {
+		err := fmt.Errorf("%w: %s", drainowner.ErrBindingGroup, operation)
+		g.guardedFailure = errors.Join(g.guardedFailure, err)
+		return err
+	}
 	if g.completionClosed {
 		err := fmt.Errorf("invocation mutation admission is closed: %s", operation)
 		if g.protectedCompletion {
@@ -111,6 +116,23 @@ func RetainMutationAuthority(ctx context.Context) func(context.Context) context.
 // unknown custom effects before child binding or data-unit creation.
 func CheckComponentMutation(ctx context.Context, canonicalReader bool) error {
 	scope, _ := ctx.Value(dataScopeContextKey{}).(*dataScope)
+	if drainowner.BindingGroupContext(ctx) {
+		if !canonicalReader || scope == nil {
+			return drainowner.ErrBindingGroup
+		}
+		root := scope
+		if root.root != nil {
+			root = root.root
+		}
+		root.mu.Lock()
+		issuer := root.nativeInvocation
+		failure := root.guardedFailure
+		root.mu.Unlock()
+		if failure != nil {
+			return failure
+		}
+		return drainowner.BindingGroupAdmission(ctx, issuer)
+	}
 	if failure := scope.protectedAdmissionFailure(); failure != nil {
 		return failure
 	}
@@ -185,7 +207,7 @@ func (g *mutationGuard) active() bool {
 	}
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	return g.depth != 0 || g.completionClosed || g.guardedExecution
+	return g.depth != 0 || g.completionClosed || g.guardedExecution || drainowner.BindingGroupOpen(g.protectedIssuer)
 }
 
 func (g *mutationGuard) closeCompletion(protected ...bool) {
@@ -204,6 +226,11 @@ func (g *mutationGuard) admitStreamingQuery() error {
 	}
 	g.mu.Lock()
 	defer g.unlockAndPublishProtectedFailure()
+	if drainowner.BindingGroupOpen(g.protectedIssuer) {
+		err := fmt.Errorf("%w: streaming SQL", drainowner.ErrBindingGroup)
+		g.guardedFailure = errors.Join(g.guardedFailure, err)
+		return err
+	}
 	if g.completionClosed {
 		err := errors.New("invocation mutation admission is closed")
 		if g.protectedCompletion {

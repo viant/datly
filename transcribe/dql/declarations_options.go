@@ -10,6 +10,7 @@ import (
 )
 
 type declarationOptions struct {
+	resolutionGroup                                        *spec.ResolutionGroupSpec
 	bodyNullPolicy                                         string
 	queryListCSV                                           bool
 	declarationSQL                                         string
@@ -55,6 +56,27 @@ func (p *declarationOptionParser) parse() (declarationOptions, error) {
 		name, args := cursor.option()
 		key := strings.ToLower(strings.TrimSpace(name))
 		switch key {
+		case "withresolutiongroup":
+			if err := p.single(cursor, key, args, 2, -1); err != nil {
+				return declarationOptions{}, err
+			}
+			if p.result.resolutionGroup == nil {
+				p.result.resolutionGroup = &spec.ResolutionGroupSpec{}
+			}
+			p.result.resolutionGroup.Name = strings.TrimSpace(trimQuote(args[0]))
+			for _, arg := range args[1:] {
+				p.result.resolutionGroup.After = append(p.result.resolutionGroup.After, strings.TrimSpace(trimQuote(arg)))
+			}
+		case "dependson":
+			if err := p.single(cursor, key, args, 1, -1); err != nil {
+				return declarationOptions{}, err
+			}
+			if p.result.resolutionGroup == nil {
+				p.result.resolutionGroup = &spec.ResolutionGroupSpec{}
+			}
+			for _, arg := range args {
+				p.result.resolutionGroup.DependsOn = append(p.result.resolutionGroup.DependsOn, strings.TrimSpace(trimQuote(arg)))
+			}
 		case "withbodynullpolicy":
 			if err := p.single(cursor, key, args, 1, 1); err != nil {
 				return declarationOptions{}, err

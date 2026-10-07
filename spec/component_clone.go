@@ -131,6 +131,12 @@ func (p *Parameter) Clone() *Parameter {
 		return nil
 	}
 	result := *p
+	if p.ResolutionGroup != nil {
+		group := *p.ResolutionGroup
+		group.After = append([]string(nil), group.After...)
+		group.DependsOn = append([]string(nil), group.DependsOn...)
+		result.ResolutionGroup = &group
+	}
 	for _, limit := range []**int{&result.MinAllowedRecords, &result.MaxAllowedRecords, &result.ExpectedReturned} {
 		if *limit != nil {
 			value := **limit

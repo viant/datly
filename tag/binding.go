@@ -57,7 +57,16 @@ func (i *BindingIndex) Fields() []BindingField {
 	if i == nil || len(i.fields) == 0 {
 		return nil
 	}
-	return append([]BindingField(nil), i.fields...)
+	result := append([]BindingField(nil), i.fields...)
+	for index := range result {
+		if group := result[index].Binding.ResolutionGroup; group != nil {
+			copy := *group
+			copy.After = append([]string(nil), group.After...)
+			copy.DependsOn = append([]string(nil), group.DependsOn...)
+			result[index].Binding.ResolutionGroup = &copy
+		}
+	}
+	return result
 }
 
 // Resolve matches a canonical parameter to a Go input field. Structural names

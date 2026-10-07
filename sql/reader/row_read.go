@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"github.com/viant/datly/internal/drainowner"
 	"github.com/viant/datly/internal/txread"
 	"github.com/viant/datly/sql/reader/collector"
 
@@ -50,7 +51,14 @@ func (r rowRead) query(ctx context.Context, q rowQuery) (err error) {
 			panic(panicked)
 		}
 	}()
+	grouped, groupErr := drainowner.BindingGroupReadAdmission(ctx)
+	if groupErr != nil {
+		return groupErr
+	}
 	options := r.options
+	if grouped {
+		options = append(append([]sqlxread.Option(nil), options...), sqlxread.WithCleanupErrorProvenance(), sqlxread.WithRetry(sqlxread.RetryPolicy{}))
+	}
 	if r.readCache != nil {
 		observed := &observedReadCache{Cache: r.readCache, attempted: &cacheAttempted}
 		var wrapped cache.Cache = observed
@@ -76,7 +84,7 @@ func (r rowRead) query(ctx context.Context, q rowQuery) (err error) {
 		}
 	}
 	policy := r.retry
-	if policy.Recoverable != nil {
+	if !grouped && policy.Recoverable != nil {
 		original := policy.Recoverable
 		policy.Recoverable = func(err error) bool {
 			// SQLX invokes recovery before it closes and clears the statement.

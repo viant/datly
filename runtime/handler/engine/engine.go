@@ -113,6 +113,9 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 	if request.ResolvedInput != nil && (request.BoundInput != nil || request.Replay != nil) {
 		return nil, fmt.Errorf("resolved reader input cannot combine with BoundInput or replay")
 	}
+	if err := validateGroupedInputRequest(request); err != nil {
+		return nil, err
+	}
 	input, bound, err := invocationInput(inputType, request.BoundInput)
 	if err != nil {
 		return nil, err
@@ -187,7 +190,7 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 		}
 	}()
 	if data != nil {
-		activity, err = data.admitActivity()
+		activity, err = data.admitActivity(ctx)
 		if err != nil && !(errors.Is(err, drainowner.ErrDormantActivityClosed) && !request.BufferedComponentCalls) {
 			return nil, err
 		}
@@ -200,7 +203,7 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 	runtimeProviders = append(runtimeProviders, data.frameworkValidatorProvider())
 	if data != nil {
 		if request.BufferedComponentCalls {
-			if err := data.enrollBufferedScope(); err != nil {
+			if err := data.enrollBufferedScope(ctx); err != nil {
 				return nil, err
 			}
 		}
@@ -479,7 +482,7 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 			}
 		}
 		if !bound || bindPlan != nil {
-			options := []bindly.BindOption{bindly.WithPlan(bindPlan), bindly.WithSource(input)}
+			options := []bindly.BindOption{bindly.WithPlan(bindPlan), bindly.WithSource(input), bindly.WithResolutionGroupController(resolutionGroupController{scope: data, request: request})}
 			if request.Replay != nil {
 				options = append(options, bindly.WithReplay(*request.Replay))
 			}
@@ -596,7 +599,7 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 		// Its conditional child calls still need an owner before lookup starts.
 		if data == nil {
 			data, ownsData = neutralDataScope(), true
-			activity, err = data.admitActivity()
+			activity, err = data.admitActivity(ctx)
 			if err != nil {
 				return finish(result, err)
 			}

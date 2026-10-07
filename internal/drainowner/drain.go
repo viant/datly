@@ -59,7 +59,7 @@ func attachmentDrainLocked(s *State) error {
 		ledger := &s.claimed.activities
 		ledger.mu.Lock()
 		if ledger.enrolled {
-			ledger.failure = errors.Join(ledger.failure, ErrDrainOverlap)
+			appendFailureLocked(ledger, ErrDrainOverlap, nil, "", true, 0)
 		}
 		ledger.mu.Unlock()
 	}
@@ -77,7 +77,7 @@ func publicDrainLocked(s *State) error {
 	ledger.mu.Lock()
 	defer ledger.mu.Unlock()
 	if ledger.enrolled {
-		ledger.failure = errors.Join(ledger.failure, ErrDrain)
+		appendFailureLocked(ledger, ErrDrain, nil, "", true, 0)
 		return ErrDrain
 	}
 	return nil
@@ -114,7 +114,7 @@ func BeginPublicDrain(receiver any) (*DrainRecord, error) {
 	ledger.mu.Lock()
 	defer ledger.mu.Unlock()
 	if ledger.enrolled {
-		ledger.failure = errors.Join(ledger.failure, ErrDrain)
+		appendFailureLocked(ledger, ErrDrain, nil, "", true, 0)
 		return nil, ErrDrain
 	}
 	return addDrainLocked(s, s.claimed), nil
@@ -288,6 +288,6 @@ func CheckProtectedDrainInFlight(receiver any) error {
 	if !ledger.enrolled {
 		return nil
 	}
-	ledger.failure = errors.Join(ledger.failure, ErrDrain)
+	appendFailureLocked(ledger, ErrDrain, nil, "", true, 0)
 	return ErrDrain
 }

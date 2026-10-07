@@ -94,6 +94,10 @@ func BuildBindingSpecs(component *spec.Component, inputType reflect.Type, codecs
 }
 
 func bindingSpecFromParam(field reflect.StructField, param *spec.Parameter, tagged bindly.BindingSpec, hasTag bool, codec ParamCodec) (bindly.BindingSpec, bool, error) {
+	group, groupErr := compileResolutionGroup(param, tagged, hasTag)
+	if groupErr != nil {
+		return bindly.BindingSpec{}, false, groupErr
+	}
 	kind := strings.ToLower(strings.TrimSpace(param.Source.Kind))
 	var defaultValue any
 	if param.Value != nil {
@@ -103,6 +107,7 @@ func bindingSpecFromParam(field reflect.StructField, param *spec.Parameter, tagg
 		if !hasTag {
 			return bindly.BindingSpec{}, false, nil
 		}
+		tagged.ResolutionGroup = group
 		tagged.BodyNullPolicy = param.BodyNullPolicy
 		tagged.Name = param.Name
 		tagged.Required = cloneBool(param.Required)
@@ -136,6 +141,7 @@ func bindingSpecFromParam(field reflect.StructField, param *spec.Parameter, tagg
 		bindingName = field.Name
 	}
 	return bindly.BindingSpec{
+		ResolutionGroup:   group,
 		BodyNullPolicy:    param.BodyNullPolicy,
 		Path:              field.Name,
 		SourceType:        codec.SourceType,

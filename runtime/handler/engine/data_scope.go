@@ -361,14 +361,18 @@ func (s *dataScope) nativeIssuerLocked() *drainowner.Invocation {
 	}
 	return s.nativeInvocation
 }
-func (s *dataScope) admitActivity() (drainowner.Activity, error) {
+func (s *dataScope) admitActivity(contexts ...context.Context) (drainowner.Activity, error) {
 	root := s
 	if s.root != nil {
 		root = s.root
 	}
 	root.mu.Lock()
 	defer root.mu.Unlock()
-	return drainowner.AdmitActivity(root.nativeIssuerLocked())
+	issuer := root.nativeIssuerLocked()
+	if len(contexts) != 0 && drainowner.BindingGroupContext(contexts[0]) {
+		return drainowner.AdmitBindingGroupActivity(contexts[0], issuer)
+	}
+	return drainowner.AdmitActivity(issuer)
 }
 func (s *dataScope) finishActivity(token drainowner.Activity, cause error) error {
 	root := s
@@ -380,7 +384,7 @@ func (s *dataScope) finishActivity(token drainowner.Activity, cause error) error
 	root.mu.Unlock()
 	return drainowner.FinishActivity(issuer, token, cause)
 }
-func (s *dataScope) enrollBufferedScope() error {
+func (s *dataScope) enrollBufferedScope(contexts ...context.Context) error {
 	root := s
 	if s.root != nil {
 		root = s.root
@@ -388,6 +392,13 @@ func (s *dataScope) enrollBufferedScope() error {
 	root.mu.Lock()
 	defer root.mu.Unlock()
 	issuer := root.nativeIssuerLocked()
+	if len(contexts) != 0 && drainowner.BindingGroupContext(contexts[0]) {
+		if err := drainowner.BindingGroupAdmission(contexts[0], issuer); err != nil {
+			return err
+		}
+		s.requireBufferedOwner = true
+		return nil
+	}
 	enrollErr := drainowner.EnrollActivities(issuer)
 	if bindErr := root.writeEligibility.bindProtectedIssuer(issuer); bindErr != nil {
 		enrollErr = errors.Join(enrollErr, bindErr)
