@@ -1454,7 +1454,7 @@ func (p *Program) queuePhysical(ctx context.Context, binder xhandler.Binder, dml
 		if !frame.ExpectedToken.IsValid() || !persisted.IsValid() || persisted.Kind() != reflect.Struct {
 			return &xhandler.Conflict{Entity: frame.Record.Path, Field: token.Name, Reason: "persisted concurrency token is unavailable"}
 		}
-		previousToken := persisted.FieldByName(token.Name)
+		previousToken := previousField(persisted, frame.Record, token)
 		if !previousToken.IsValid() {
 			return &xhandler.Conflict{Entity: frame.Record.Path, Field: token.Name, Reason: "persisted concurrency token is unavailable"}
 		}
@@ -2324,7 +2324,7 @@ func (p *Program) applyInvariants(frame *Frame) error {
 				continue
 			}
 			destination := current.FieldByIndex(field.Index)
-			source := previous.FieldByName(field.Name)
+			source := previousField(previous, frame.Record, &field)
 			if !source.IsValid() || !destination.CanSet() || !source.Type().AssignableTo(destination.Type()) {
 				return fmt.Errorf("invariant %s field %s cannot be backfilled", name, field.Name)
 			}
@@ -2344,11 +2344,21 @@ func (p *Program) checkConcurrency(frame *Frame) error {
 		return &xhandler.Conflict{Entity: frame.Record.Path, Field: field.Name, Reason: "expected token is missing"}
 	}
 	expected := frame.ExpectedToken.Interface()
-	actual := frame.Previous.Elem().FieldByName(field.Name)
+	actual := previousField(frame.Previous.Elem(), frame.Record, field)
 	if !actual.IsValid() || !concurrencyTokenEqual(expected, actual.Interface()) {
 		return &xhandler.Conflict{Entity: frame.Record.Path, Field: field.Name, Reason: "expected token differs from Previous"}
 	}
 	return nil
+}
+
+// previousField reuses the compiled entity index for canonical Previous rows
+// produced by indexCurrent. Other layouts and manually assembled fields keep
+// the name lookup; an entity index cannot be applied to a projection type.
+func previousField(previous reflect.Value, record *Record, field *Field) reflect.Value {
+	if previous.Type() == record.EntityType && len(field.Index) != 0 {
+		return previous.FieldByIndex(field.Index)
+	}
+	return previous.FieldByName(field.Name)
 }
 
 func concurrencyTokenEqual(expected, actual any) bool {
