@@ -6,6 +6,7 @@ import (
 	"go/token"
 	"path/filepath"
 	"reflect"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -17,6 +18,7 @@ import (
 )
 
 type viewPlanner struct {
+	borrowed       map[*spec.View]ViewPlan
 	plan           *Plan
 	velty          bool
 	names          map[*spec.View]string
@@ -37,10 +39,39 @@ func (r *planResolver) resolveViews() (map[string]int, error) {
 		return indexes, nil
 	}
 	planner := &viewPlanner{
-		plan: plan, velty: r.input.VeltyHandler != nil, names: map[*spec.View]string{}, owners: map[string]*spec.View{},
+		borrowed: map[*spec.View]ViewPlan{},
+		plan:     plan, velty: r.input.VeltyHandler != nil, names: map[*spec.View]string{}, owners: map[string]*spec.View{},
 		parents: map[*spec.View]string{}, dests: map[*spec.View]string{}, visiting: map[*spec.View]bool{},
 		outputs:        map[*spec.Relation]*spec.Parameter{},
 		reuseLeafTypes: len(r.input.SetMarkerViews) == 0,
+	}
+	borrowedPaths := make([]string, 0, len(r.input.Views))
+	for identity, reference := range r.input.Views {
+		if reference != nil && reference.Borrowed != nil {
+			borrowedPaths = append(borrowedPaths, identity)
+		}
+	}
+	var canonical map[string]*spec.View
+	if len(borrowedPaths) > 0 {
+		var err error
+		canonical, err = r.canonicalViewIndex()
+		if err != nil {
+			return nil, err
+		}
+	}
+	sort.Strings(borrowedPaths)
+	for _, identity := range borrowedPaths {
+		ref := r.input.Views[identity]
+		if ref == nil || ref.Borrowed == nil {
+			continue
+		}
+		linked, err := r.resolveLinkedView(canonical[identity], ref, identity)
+		if err != nil {
+			return nil, err
+		}
+		planner.borrowed[canonical[identity]] = linked
+		indexes[identity] = len(plan.Views)
+		plan.Views = append(plan.Views, linked)
 	}
 	for _, param := range preferDefinedParams(component.Parameters) {
 		if !param.IsDerivedOutput() {
@@ -80,6 +111,9 @@ func (r *planResolver) resolveViews() (map[string]int, error) {
 					return nil, err
 				}
 			}
+		} else if linked, ok := planner.borrowed[root]; ok {
+			plan.RootViewType = linked.Type
+			planner.names[root] = linked.Name
 		} else {
 			rootDest, err := generatedViewDestination(root, plan.ViewDest)
 			if err != nil {
@@ -378,6 +412,13 @@ func (p *viewPlanner) assign(view *spec.View, typeName, destination string) erro
 	}
 	if !token.IsIdentifier(typeName) || !ast.IsExported(typeName) {
 		return fmt.Errorf("generated view %q type %q must be an exported Go identifier", view.Name, typeName)
+	}
+	if linked, ok := p.borrowed[view]; ok {
+		if linked.Name != typeName {
+			return fmt.Errorf("borrow_sql_row generated slot name does not match admitted row")
+		}
+		p.names[view] = linked.Name
+		return nil
 	}
 	if owner := p.owners[typeName]; owner != nil && owner != view {
 		// Explicit names can share one generated leaf contract. Keep inferred

@@ -25,6 +25,28 @@ func parseComponentSettings(blocks []directiveBlock) (ret *componentSettings, er
 			return nil, fmt.Errorf("invalid setting: expected a directive call")
 		}
 		switch {
+		case strings.EqualFold(name, "borrow_sql_row"):
+			if len(args) != 6 || tail != "" {
+				return nil, fmt.Errorf("borrow_sql_row requires exactly six quoted literals without modifiers")
+			}
+			values := make([]string, 6)
+			for i, arg := range args {
+				value, quoted := parseQuotedLiteral(arg)
+				if !quoted || strings.TrimSpace(value) != value || value == "" {
+					return nil, fmt.Errorf("borrow_sql_row argument %d requires a nonempty quoted literal", i+1)
+				}
+				values[i] = value
+			}
+			row := spec.BorrowedSQLRow{BodyPath: values[0], Package: values[1], Type: values[2], OwnerURI: values[3], OwnerName: values[4], OwnerBodyPath: values[5], SourceStart: block.start, SourceEnd: block.end}
+			if err := row.Validate(); err != nil {
+				return nil, err
+			}
+			for _, prior := range ret.Generation.BorrowedSQLRows {
+				if prior.BodyPath == row.BodyPath {
+					return nil, fmt.Errorf("borrow_sql_row body path %q is declared more than once", row.BodyPath)
+				}
+			}
+			ret.Generation.BorrowedSQLRows = append(ret.Generation.BorrowedSQLRows, row)
 		case strings.EqualFold(name, "handler_factory"):
 			if ret.HandlerFactory != "" || len(args) < 1 || len(args) > 2 || tail != "" {
 				return nil, fmt.Errorf("handler_factory requires a quoted factory and optional component name, once, without modifiers")

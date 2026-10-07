@@ -62,7 +62,7 @@ func (c *PackageCompilation) Transcribe(ctx context.Context, rootDir string) (*G
 		return nil, err
 	}
 	handlers := newHandlerGeneration(compiled, &input, options)
-	handlers.directory = filepath.Join(rootDir, packageDir)
+	handlers.directory = filepath.Join(input.ProjectRoot, packageDir)
 	if err = handlers.prepare(); err != nil {
 		return nil, handlers.diagnostic(err)
 	}
@@ -178,9 +178,10 @@ func (a *packageAuthority) compile(ctx context.Context) (*Result, error) {
 		result.Contracts.Output = contracts.reference(a.route.OutputType, a.output)
 	}
 	if result.Contracts.Output != nil && a.root != nil {
-		result.Views = gen.ViewReferences{
-			gen.RootViewPath: {DescriptorKey: a.root.Key()},
+		if result.Views == nil {
+			result.Views = gen.ViewReferences{}
 		}
+		result.Views[gen.RootViewPath] = &gen.ViewReference{DescriptorKey: a.root.Key()}
 	}
 	compiledViews := newPackageViewResolver(result.Component, nil)
 	for _, linked := range a.inputViews {
@@ -190,6 +191,9 @@ func (a *packageAuthority) compile(ctx context.Context) (*Result, error) {
 		}
 		if result.Views == nil {
 			result.Views = gen.ViewReferences{}
+		}
+		if prior := result.Views[linked.identity]; prior != nil && prior.Borrowed != nil {
+			continue
 		}
 		result.Views[linked.identity] = &gen.ViewReference{DescriptorKey: linked.descriptor.Key()}
 	}

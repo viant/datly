@@ -14,6 +14,7 @@ import (
 const legacyManifestName = ".datly-gen.json"
 
 type scaffoldPersistence struct {
+	borrowed  []*BorrowedRowAuthority
 	dir       string
 	owner     string
 	files     []EmittedFile
@@ -394,6 +395,14 @@ func (p *scaffoldPersistence) swap(target, stage string, original scaffoldSnapsh
 		if len(original) != 0 {
 			return fmt.Errorf("generated package changed during staging: target was removed")
 		}
+		for _, authority := range p.borrowed {
+			if err = authority.ValidateProtectedFiles(func(path string) string { return path }); err != nil {
+				return err
+			}
+			if err = authority.validatePreparedFiles(func(path string) string { return borrowedIdentityPath(path, target, stage) }); err != nil {
+				return err
+			}
+		}
 		return os.Rename(stage, target)
 	} else if err != nil {
 		return err
@@ -419,6 +428,20 @@ func (p *scaffoldPersistence) swap(target, stage string, original scaffoldSnapsh
 			return fmt.Errorf("%w; restore package: %v", err, restoreErr)
 		}
 		return err
+	}
+	for _, authority := range p.borrowed {
+		if err = authority.ValidateProtectedFiles(func(path string) string { return borrowedIdentityPath(path, target, backup) }); err != nil {
+			if restoreErr := os.Rename(backup, target); restoreErr != nil {
+				return fmt.Errorf("%w; restore package: %v", err, restoreErr)
+			}
+			return err
+		}
+		if err = authority.validatePreparedFiles(func(path string) string { return borrowedIdentityPath(path, target, stage) }); err != nil {
+			if restoreErr := os.Rename(backup, target); restoreErr != nil {
+				return fmt.Errorf("%w; restore package: %v", err, restoreErr)
+			}
+			return err
+		}
 	}
 	if err = os.Rename(stage, target); err != nil {
 		if restoreErr := os.Rename(backup, target); restoreErr != nil {
@@ -464,6 +487,7 @@ func managedRelativePath(path string) (string, error) {
 // scaffoldForest keeps original disk conflict evidence separate from projected
 // mutations. A published forest is never included in cleanup.
 type scaffoldForest struct {
+	borrowed  []*BorrowedRowAuthority
 	target    string
 	stage     string
 	original  scaffoldSnapshot
@@ -612,6 +636,12 @@ func publishScaffoldForests(forests []*scaffoldForest) error {
 	var created []scaffoldCreatedParent
 	defer func() { cleanupScaffoldParents(created) }()
 	for _, forest := range forests {
+		for _, authority := range forest.borrowed {
+			if err := authority.ValidateProtectedFiles(func(path string) string { return path }); err != nil {
+				return err
+			}
+		}
+
 		parent := filepath.Dir(forest.target)
 		var missing []string
 		for path := parent; ; path = filepath.Dir(path) {
@@ -646,7 +676,7 @@ func publishScaffoldForests(forests []*scaffoldForest) error {
 				created = append(created, scaffoldCreatedParent{path: missing[i], identity: info})
 			}
 		}
-		if err := (&scaffoldPersistence{}).swap(forest.target, forest.stage, forest.original, forest.stats); err != nil {
+		if err := (&scaffoldPersistence{borrowed: forest.borrowed}).swap(forest.target, forest.stage, forest.original, forest.stats); err != nil {
 			return err
 		}
 		forest.published = true

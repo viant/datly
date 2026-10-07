@@ -24,24 +24,26 @@ var ErrNilSource = errors.New("transcribe: nil source")
 // generation, and persistence stages. Runtime artifacts are intentionally not
 // part of this model.
 type Result struct {
-	Source                *Source
-	Component             *spec.Component
-	PreparedSQL           string
-	Statements            statement.Statements
-	SourceMap             *SourceMap
-	TypeContext           *typecatalog.ResolutionContext
-	TypeResolver          *typecatalog.Resolver
-	TypeAuthority         typecatalog.Authority
-	Declarations          gen.Declarations
-	Contracts             gen.ContractReferences
-	Views                 gen.ViewReferences
-	ViewBindings          gen.ViewBindings
-	GeneratedTypes        []gen.GeneratedTypeReference
-	GoHandler             *gen.GoHandlerAsset
-	ExternalHandler       *gen.ExternalHandler
-	VeltyHandler          *gen.VeltyHandlerAsset
-	ContractTypeOverrides ContractTypeOverrides
-	Diagnostics           []*Diagnostic
+	Source                  *Source
+	Component               *spec.Component
+	PreparedSQL             string
+	Statements              statement.Statements
+	SourceMap               *SourceMap
+	TypeContext             *typecatalog.ResolutionContext
+	TypeResolver            *typecatalog.Resolver
+	TypeAuthority           typecatalog.Authority
+	Declarations            gen.Declarations
+	Contracts               gen.ContractReferences
+	Views                   gen.ViewReferences
+	ViewBindings            gen.ViewBindings
+	GeneratedTypes          []gen.GeneratedTypeReference
+	GoHandler               *gen.GoHandlerAsset
+	ExternalHandler         *gen.ExternalHandler
+	VeltyHandler            *gen.VeltyHandlerAsset
+	ContractTypeOverrides   ContractTypeOverrides
+	AuthoredBorrowedSQLRows []spec.BorrowedSQLRow
+	borrowedConsumedFiles   []gen.BorrowedAuthorityFile
+	Diagnostics             []*Diagnostic
 }
 
 // ContractTypeOverrides records only type names explicitly authored by DQL.
@@ -55,7 +57,7 @@ type ContractTypeOverrides struct {
 // Compiler is the single authored-source orchestration entrypoint. Its body is
 // intentionally narrow while the original preprocess and plan stages are
 // ported behind this stable boundary.
-type Compiler struct{}
+type Compiler struct{ comparisonOnly bool }
 
 func NewCompiler() *Compiler {
 	return &Compiler{}
@@ -137,6 +139,25 @@ func (c *Compiler) Compile(ctx context.Context, source *Source) (*Result, error)
 	}
 	authoredViews := component.Views
 	contractTypeOverrides := authoredContractTypeOverrides(component)
+	authoredBorrowedRows := authoredBorrowedSQLRows(component)
+	var borrowedConsumed []gen.BorrowedAuthorityFile
+	if len(authoredBorrowedRows) > 0 && !c.comparisonOnly && source.ColumnRefiner != nil {
+		borrowedConsumed, err = sealBorrowedSourcePackage(source.BaseDir())
+		if err != nil {
+			return nil, err
+		}
+		if err = validateBorrowedSourceText(source, borrowedConsumed); err != nil {
+			return nil, err
+		}
+		captured, err := capturedBorrowedResources(source, borrowedConsumed)
+		if err != nil {
+			return nil, err
+		}
+		sourceCopy := *source
+		sourceCopy.Resources = captured
+		source = &sourceCopy
+	}
+
 	loader := &componentLoader{packageComponent: source.PackageComponent, authoredComponent: component}
 	component, err = loader.Load()
 	if err != nil {
@@ -281,21 +302,27 @@ func (c *Compiler) Compile(ctx context.Context, source *Source) (*Result, error)
 		}
 		return nil, &CompileError{Cause: err, Diagnostics: []*Diagnostic{diagnostic}}
 	}
-	return &Result{
-		Source:                source,
-		Component:             component,
-		PreparedSQL:           prepared.SQL,
-		Statements:            prepared.Statements,
-		SourceMap:             sourceMap,
-		TypeContext:           compiledTypeContext,
-		TypeResolver:          typeResolver,
-		TypeAuthority:         typecatalog.TranscribeAuthority,
-		Declarations:          declarations.generation,
-		ViewBindings:          gen.ViewBindings(viewBindings),
-		GoHandler:             goHandler,
-		VeltyHandler:          veltyHandler,
-		ContractTypeOverrides: contractTypeOverrides,
-	}, nil
+	result := &Result{
+		Source:                  source,
+		Component:               component,
+		PreparedSQL:             prepared.SQL,
+		Statements:              prepared.Statements,
+		SourceMap:               sourceMap,
+		TypeContext:             compiledTypeContext,
+		TypeResolver:            typeResolver,
+		TypeAuthority:           typecatalog.TranscribeAuthority,
+		Declarations:            declarations.generation,
+		ViewBindings:            gen.ViewBindings(viewBindings),
+		GoHandler:               goHandler,
+		VeltyHandler:            veltyHandler,
+		ContractTypeOverrides:   contractTypeOverrides,
+		AuthoredBorrowedSQLRows: authoredBorrowedRows,
+		borrowedConsumedFiles:   borrowedConsumed,
+	}
+	if err := c.admitBorrowedSQLRows(ctx, result); err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 
 func authoredContractTypeOverrides(component *spec.Component) ContractTypeOverrides {

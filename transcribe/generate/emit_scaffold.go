@@ -42,6 +42,10 @@ func EmitScaffold(dir string, plan *Plan) ([]EmittedFile, error) {
 	if err = packages.validateProjected(); err != nil {
 		return nil, err
 	}
+	if err = packages.validateBorrowedRows(); err != nil {
+		return nil, err
+	}
+	packages.protectBorrowedRows()
 	if err = publishScaffoldForests(forests); err != nil {
 		return nil, err
 	}
@@ -104,6 +108,11 @@ func scaffoldArtifacts(dir string, plan *Plan) ([]EmittedFile, []EmittedFile, []
 	}
 	sort.Strings(orderedViewDestinations)
 	files := make([]EmittedFile, 0, len(orderedViewDestinations)+len(plan.GeneratedTypes)+5)
+	receipts, err := borrowedReceiptFiles(dir, plan)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	files = append(files, receipts...)
 	// preformatted lists artifacts rendered through SourceParser.FormatFile,
 	// which already yields gofmt output; the final formatting pass skips them.
 	preformatted := map[string]bool{}

@@ -10,8 +10,19 @@ import (
 // ValidateLifecycleTarget checks dispatch ownership before artifact generation.
 // Intermediate shape planning may precede mutation lowering; emitting an
 // unsupported target must never silently retain an inert lifecycle declaration.
+// Successful validation records the caller-supplied native mutation target
+// selection on this Input. False selections and all failures clear it. This is
+// trusted in-process target context, not independent borrowed-path authority.
 func (input *Input) ValidateLifecycleTarget(mutation bool) error {
-	return input.validateLifecycleTarget(mutation, false)
+	if input == nil {
+		return nil
+	}
+	input.nativeMutationTargetSelected = false
+	if err := input.validateLifecycleTarget(mutation, false); err != nil {
+		return err
+	}
+	input.nativeMutationTargetSelected = mutation
+	return nil
 }
 
 func (input *Input) validateLifecycleTarget(mutation, pendingDiscovery bool) error {

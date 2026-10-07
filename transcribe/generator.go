@@ -200,7 +200,7 @@ func (g Generator) generate(ctx context.Context, root, dir string, compiled *Res
 		options.Handler.Hooks.Scaffold = true
 	}
 	handlers := newHandlerGeneration(&copy, &input, options)
-	handlers.directory = filepath.Join(root, dir)
+	handlers.directory = filepath.Join(input.ProjectRoot, dir)
 	contractPlan, err := gen.New(input).Plan()
 	if err != nil {
 		return nil, err

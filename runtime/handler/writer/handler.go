@@ -1955,6 +1955,7 @@ func (p *Program) indexCurrent(record *Record, rows reflect.Value) error {
 	var loaded fieldSet
 	if p.queueObserver() != nil {
 		loaded = fieldSet{}
+		delete(p.previousFields, record)
 	}
 	if rows.Len() > 0 {
 		sourceType := dereference(rows.Type().Elem())
@@ -1962,19 +1963,14 @@ func (p *Program) indexCurrent(record *Record, rows reflect.Value) error {
 			source, sourceOK := sourceType.FieldByName(field.Name)
 			destination, destinationOK := record.EntityType.FieldByName(field.Name)
 			if sourceOK && destinationOK && (source.Type.AssignableTo(destination.Type) ||
-				destination.Type.Kind() == reflect.Pointer && source.Type.AssignableTo(destination.Type.Elem())) {
+				destination.Type.Kind() == reflect.Pointer && source.Type.AssignableTo(destination.Type.Elem()) ||
+				source.Type.Kind() == reflect.Pointer && source.Type.Elem().AssignableTo(destination.Type)) {
 				copies = append(copies, fieldCopy{source: source.Index, destination: destination.Index})
 				if loaded != nil {
 					loaded[field.Name] = true
 				}
 			}
 		}
-	}
-	if loaded != nil {
-		if p.previousFields == nil {
-			p.previousFields = map[*Record]fieldSet{}
-		}
-		p.previousFields[record] = loaded
 	}
 	for i := 0; i < rows.Len(); i++ {
 		row := rows.Index(i)
@@ -1997,6 +1993,13 @@ func (p *Program) indexCurrent(record *Record, rows reflect.Value) error {
 		}
 		p.database.Rows[identity] = previous
 		p.database.ByRecord[record] = append(p.database.ByRecord[record], previous)
+	}
+	// Loaded evidence is published only after every selected conversion succeeds.
+	if loaded != nil {
+		if p.previousFields == nil {
+			p.previousFields = map[*Record]fieldSet{}
+		}
+		p.previousFields[record] = loaded
 	}
 	return nil
 }

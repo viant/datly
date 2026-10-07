@@ -89,6 +89,7 @@ func (s *GenerationSettings) Clone() *GenerationSettings {
 		return nil
 	}
 	result := *s
+	result.BorrowedSQLRows = append([]BorrowedSQLRow(nil), s.BorrowedSQLRows...)
 	if s.SupportFiles != nil {
 		result.SupportFiles = map[string]string{}
 		for role, file := range s.SupportFiles {

@@ -3,6 +3,7 @@ package generate
 import (
 	"fmt"
 	"reflect"
+	"sort"
 	"strings"
 
 	"github.com/viant/datly/spec"
@@ -42,8 +43,19 @@ func (r *planResolver) resolve() (*Plan, error) {
 		return plan, err
 	}
 	r.plan = plan
+	borrowedPaths := make([]string, 0, len(r.input.Views))
+	for identity := range r.input.Views {
+		borrowedPaths = append(borrowedPaths, identity)
+	}
+	sort.Strings(borrowedPaths)
+	for _, identity := range borrowedPaths {
+		reference := r.input.Views[identity]
+		if reference != nil && reference.Borrowed != nil {
+			r.plan.BorrowedRows = append(r.plan.BorrowedRows, reference.Borrowed.Clone())
+		}
+	}
 	if r.input.Component.Settings == nil || r.input.Component.Settings.Mutation == "" {
-		r.plan.lifecycleTargetError = r.input.ValidateLifecycleTarget(false)
+		r.plan.lifecycleTargetError = r.input.validateLifecycleTarget(false, false)
 	}
 	if err = r.validateHelperFieldNames(); err != nil {
 		return nil, err
@@ -235,6 +247,18 @@ func (r *planResolver) validateViewReferences() error {
 		}
 		if component == nil {
 			return fmt.Errorf("linked view %q requires canonical component metadata", path)
+		}
+		if ref := r.input.Views[path]; ref != nil && ref.Borrowed != nil {
+			canonical, err := r.canonicalViewIndex()
+			if err != nil {
+				return err
+			}
+			view := canonical[path]
+			proof := ref.Borrowed
+			if view == nil || len(proof.BorrowerGraph) == 0 || proof.BorrowerGraph[len(proof.BorrowerGraph)-1] != path || proof.Expected.Package != r.input.TargetPackage || ref.DescriptorKey != proof.Expected.Package+"."+proof.Expected.Name {
+				return fmt.Errorf("borrow_sql_row reference does not identify its admitted canonical body slot")
+			}
+			continue
 		}
 		matched := false
 		for _, view := range component.Views {

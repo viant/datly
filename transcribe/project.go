@@ -91,6 +91,17 @@ func (g *ProjectGeneration) Generate(ctx context.Context, rootDir string) (*Gene
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+	if strings.TrimSpace(rootDir) == "" {
+		return nil, fmt.Errorf("project directory is required")
+	}
+	rootDir, err := filepath.Abs(rootDir)
+	if err != nil {
+		return nil, err
+	}
+	rootDir, err = filepath.EvalSymlinks(rootDir)
+	if err != nil {
+		return nil, err
+	}
 	store, err := newProjectMetadataStore(rootDir)
 	if err != nil {
 		return nil, err
@@ -183,6 +194,7 @@ func (g *ProjectGeneration) prepareAtRoots(rootDir string, existing *ProjectMani
 		if err != nil {
 			return nil, fmt.Errorf("plan component %q: %w", identity, err)
 		}
+		componentRoot = input.ProjectRoot
 		plan, err := gen.New(input).Plan()
 		if err != nil {
 			return nil, fmt.Errorf("plan component %q: %w", identity, err)
