@@ -12,6 +12,27 @@ The scaffold contains `cmd/datly`, `internal/dependencylink`, `dql`, `generated`
 `hooks`, `resources`, and `datly.yaml`. DQL must be transcribed before building;
 the build command does not silently regenerate source.
 
+Initialized application mains use the shared `cmd/developer.Service` dispatcher.
+The same linked executable supports `transcribe`, `validate`, `link sync`,
+`init/build`, and `run/start`; authoring resolves the project's native linked
+predicate/component types without an overlay CLI or manual type registration.
+The stock executable delegates to the same command implementation, including
+the existing read-only schema discovery rules.
+
+For an existing custom main, preserve its runtime injections:
+
+```go
+runtimeCommands := command.Service{/* existing providers, holders, auth and logging */}
+status := (developer.Service{Runtime: runtimeCommands}).Run(ctx, args, stdout, stderr)
+```
+
+Imports are `github.com/viant/datly/cmd/command` and
+`github.com/viant/datly/cmd/developer`. Source linking/exposure policy remains in
+the project's existing link package and configuration. Discover/synchronize it
+using the native link mechanism, rebuild the custom binary, then invoke its
+operation-based `transcribe get|patch|post|put` command. Merely adding a predicate
+import to another process does not link that type into the authoring executable.
+
 ## User-owned default imports
 
 `internal/dependencylink` is application-owned selection policy. The application adds

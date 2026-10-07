@@ -6,6 +6,7 @@ import (
 	"github.com/viant/datly/internal/drainowner"
 	"github.com/viant/datly/observability/otel"
 	xexec "github.com/viant/xdatly/exec"
+	xhandler "github.com/viant/xdatly/handler"
 	"reflect"
 	"strings"
 	"time"
@@ -23,6 +24,7 @@ import (
 type componentStackKey struct{}
 
 func (r *Runtime) componentProvider(scope dexec.ProviderScope, parent *spec.Component) locator.Provider {
+	scope = componentDependencyScope(scope)
 	return drainowner.SealBindingGroupProvider(handlerprovider.Named(string(spec.KindComponent), func(ctx context.Context, _ reflect.Type, name string) (any, bool, error) {
 		ctx = handlerengine.PrepareComponent(ctx, handlerengine.ComponentBinding, componentBindingOrder(parent, name))
 		ref, err := spec.ParseRouteRef(name)
@@ -66,6 +68,7 @@ func (i *scopedComponentInvoker) InvokeComponent(ctx context.Context, request de
 }
 
 func (r *Runtime) componentInvokerProvider(scope dexec.ProviderScope, buffered bool) locator.Provider {
+	scope = componentDependencyScope(scope)
 	return handlerprovider.New(dexec.ComponentInvokerKey, func(ctx context.Context) (any, bool, error) {
 		return dexec.ComponentInvoker(&scopedComponentInvoker{
 			runtime:   r,
@@ -74,6 +77,29 @@ func (r *Runtime) componentInvokerProvider(scope dexec.ProviderScope, buffered b
 			buffered:  buffered,
 		}), true, nil
 	})
+}
+
+type componentScope struct{ providers []locator.Provider }
+
+func (s componentScope) Providers() []locator.Provider {
+	return append([]locator.Provider(nil), s.providers...)
+}
+
+// Runtime selector capabilities target one exact reader invocation. Headers,
+// credential providers and ordinary query inputs remain inherited; deeper
+// components bind their own declared selectors. Explicit child Providers can
+// install selectors for their own target without leaking to its dependencies.
+func componentDependencyScope(scope dexec.ProviderScope) dexec.ProviderScope {
+	if scope == nil {
+		return nil
+	}
+	var providers []locator.Provider
+	for _, provider := range scope.Providers() {
+		if provider != nil && provider.Kind() != string(xhandler.SelectorsKey) {
+			providers = append(providers, provider)
+		}
+	}
+	return componentScope{providers: providers}
 }
 
 // InvokeComponent executes one exact component target without route lookup.
