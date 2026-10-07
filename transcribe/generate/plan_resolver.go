@@ -261,6 +261,20 @@ func (r *planResolver) validateViewReferences() error {
 			continue
 		}
 		matched := false
+		if component.RootView != nil {
+			for _, relation := range component.RootView.Relations {
+				if relation == nil || relation.View == nil || relation.Kind != spec.RelationKindDerived {
+					continue
+				}
+				identity, err := relation.View.Identity()
+				if err != nil {
+					return err
+				}
+				if identity == path {
+					matched = true
+				}
+			}
+		}
 		for _, view := range component.Views {
 			identity, err := view.Identity()
 			if err != nil {
@@ -279,7 +293,26 @@ func (r *planResolver) validateViewReferences() error {
 		return nil
 	}
 	if r.input.Contracts.Output == nil {
-		return fmt.Errorf("linked root view requires a linked output contract")
+		// A generated response envelope can hold an explicitly selected existing
+		// Go row contract. The declaration must resolve to this exact authority.
+		matched := false
+		for _, param := range spec.EffectiveParameters(component.Parameters) {
+			if param == nil || !strings.EqualFold(param.Source.Kind, "output") || !strings.EqualFold(param.Source.Name, "view") || r.types == nil {
+				continue
+			}
+			expression := strings.TrimSpace(param.OutputTypeExpr)
+			if expression == "" {
+				expression = strings.TrimSpace(param.TypeExpr)
+			}
+			descriptor, err := r.types.Descriptor(expression)
+			if err != nil {
+				return err
+			}
+			matched = descriptor != nil && descriptor.Key() == r.input.Views[RootViewPath].DescriptorKey
+		}
+		if !matched {
+			return fmt.Errorf("linked root view requires a linked output contract or an explicitly typed output/view declaration")
+		}
 	}
 	if component == nil || component.RootView == nil {
 		return fmt.Errorf("linked root view requires canonical root view metadata")

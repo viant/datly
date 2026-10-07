@@ -53,6 +53,18 @@ func (r *planResolver) prepareResources() (*ResourcePlan, error) {
 	if r.input.PackageName != "" {
 		result.Symbol = upperCamel(r.input.Component.Name)
 	}
+	retained, err := r.linkedResources(result)
+	if err != nil {
+		return nil, err
+	}
+	var retainedFiles []EmittedFile
+	if retained != nil {
+		retainedFiles = retained.Files
+		result.Files = nil
+		if r.plan.Input.Ownership == ContractGenerated || r.plan.Output.Ownership == ContractGenerated {
+			result.sourceText = ""
+		}
+	}
 	files := map[string]string{}
 	if !r.plan.Documentation.IsZero() {
 		packaged, err := (docs.Loader{Resources: r.input.Resources}).Package(context.Background(), docs.PackageRequest{Source: r.plan.Documentation, Namespace: result.Namespace})
@@ -210,12 +222,24 @@ func (r *planResolver) prepareResources() (*ResourcePlan, error) {
 			}
 		}
 	}
+	// Linked local rows keep their existing SQL URIs and assets while a changed
+	// input or response envelope is regenerated. Current authored assets win.
+	if retained != nil {
+		for _, file := range retainedFiles {
+			if _, generated := files[file.Path]; !generated {
+				files[file.Path] = file.Content
+			}
+		}
+		if len(files) != len(retainedFiles) {
+			result.sourceText = ""
+		}
+	}
 	for path, content := range files {
 		result.Files = append(result.Files, EmittedFile{Path: path, Content: content})
 	}
 	sort.Slice(result.Files, func(i, j int) bool { return result.Files[i].Path < result.Files[j].Path })
 	if len(result.Files) == 0 {
-		return r.linkedResources(result)
+		return nil, nil
 	}
 	return result, nil
 }

@@ -82,6 +82,18 @@ func (r *planResolver) resolveViews() (map[string]int, error) {
 			return nil, fmt.Errorf("output relation %s requires a derived view without row links", param.Name)
 		}
 		planner.outputs[relation] = param
+		identity, err := relation.View.Identity()
+		if err != nil {
+			return nil, err
+		}
+		if reference := r.input.Views[identity]; reference != nil {
+			linked, err := r.resolveLinkedView(relation.View, reference, identity)
+			if err != nil {
+				return nil, err
+			}
+			planner.names[relation.View] = linked.Name
+			plan.Views = append(plan.Views, linked)
+		}
 	}
 	root := component.RootView
 	if root == nil && r.input.ExternalHandler != nil {
@@ -101,6 +113,9 @@ func (r *planResolver) resolveViews() (map[string]int, error) {
 			plan.Views = append(plan.Views, linked)
 			for _, relation := range root.Relations {
 				if _, output := planner.outputs[relation]; !output {
+					continue
+				}
+				if planner.names[relation.View] != "" {
 					continue
 				}
 				destination, err := generatedViewDestination(relation.View, plan.ViewDest)
@@ -247,7 +262,7 @@ func (r *planResolver) resolveLinkedView(view *spec.View, reference *ViewReferen
 	}
 	typeName := linkedNamedTypeExpression(r.plan, r.input.TargetPackage, descriptor)
 	return ViewPlan{
-		Identity: identity, Name: descriptor.Name, Type: typeName, Ownership: ViewLinked, DescriptorKey: key,
+		Package: descriptor.PkgPath, Identity: identity, Name: descriptor.Name, Type: typeName, Ownership: ViewLinked, DescriptorKey: key,
 	}, nil
 }
 

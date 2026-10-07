@@ -13,23 +13,29 @@ import (
 // Linked contracts keep their existing SQL URIs and embedded filesystem. A
 // Go-only reload does not disable resource generation or recreate those files.
 func (r *planResolver) linkedResources(plan *ResourcePlan) (*ResourcePlan, error) {
-	if !r.input.SQLResources || r.input.ProjectRoot == "" ||
-		r.plan.Input.Ownership != ContractLinked || r.plan.Output.Ownership != ContractLinked {
+	if !r.input.SQLResources || r.input.ProjectRoot == "" {
 		return nil, nil
 	}
+	localAuthority := false
 	for _, contract := range []ContractPlan{r.plan.Input, r.plan.Output} {
+		if contract.Ownership != ContractLinked {
+			continue
+		}
 		descriptor, err := r.types.Descriptor(contract.DescriptorKey)
 		if err != nil {
 			return nil, err
 		}
-		if descriptor == nil || descriptor.PkgPath != r.input.TargetPackage {
-			return nil, nil
+		if descriptor != nil && descriptor.PkgPath == r.input.TargetPackage {
+			localAuthority = true
 		}
 	}
 	for _, view := range r.plan.Views {
-		if view.Ownership != ViewLinked {
-			return nil, nil
+		if view.Ownership == ViewLinked && view.Package == r.input.TargetPackage {
+			localAuthority = true
 		}
+	}
+	if !localAuthority {
+		return nil, nil
 	}
 	authority, err := typecatalog.NewDestinationAuthority(r.input.ProjectRoot)
 	if err != nil {

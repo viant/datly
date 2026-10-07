@@ -80,6 +80,21 @@ contracts remain application-owned. Changes to DQL fields can require updates to
 application code that uses them. No `.datly-gen.json`, ownership flag or replacement
 tracking sidecar is required.
 
+A qualified, typed output holder explicitly selects an existing Go row graph:
+
+```sql
+#import('rows', 'example.com/app/records')
+#set($_ = $Data<[]*rows.Record>(output/view))
+#set($_ = $Meta<*rows.Meta>(output/derived) /* SELECT COUNT(1) AS count FROM records */)
+```
+
+The response envelope and inputs can still be generated. The selected row types,
+their nested relations, fields, tags and methods remain Go-owned. Transcription
+retains their local SQL resource assets without requiring database discovery;
+this proves Go shape authority, not current database schema compatibility. An
+unqualified output row name continues to declare a generated shape. Select each
+existing derived row explicitly too when it shares a source file with linked rows.
+
 Validate the generated shape **and the actual compiled vendor SQL**, then execute
 it through the native reader/writer with realistic fixtures. A manually invented
 aliased SQL query is not evidence of how the outer DQL configuration is lowered.
