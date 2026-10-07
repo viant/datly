@@ -1075,6 +1075,10 @@ github.com/stretchr/testify v1.11.1/go.mod h1:wZwfW3scLgRK+23gO65QZefKpKQRnfz6sD
 github.com/tarm/serial v0.0.0-20180830185346-98f6abe2eb07/go.mod h1:kDXzergiv9cbyO7IOYJZWg1U88JhDg3PB6klq9Hg2pA=
 github.com/viant/aerospike v0.4.5-0.20260927175034-4ea380729969 h1:boCJv+zO6SrkiSgNp10yVICf8erOTNx8swGpH/XTHF4=
 github.com/viant/aerospike v0.4.5-0.20260927175034-4ea380729969/go.mod h1:mJUBFrJXuuX5JI7TTzlBAv8nipmLl5kHU0DylI0xaP0=
+github.com/viant/aerospike v0.4.5-0.20261007183011-f946a4f498f9 h1:St3sTvCMpolqhvqIUJJC/Mw5ZckklBH4HQ9qKlfom+4=
+github.com/viant/aerospike v0.4.5-0.20261007183011-f946a4f498f9/go.mod h1:mJUBFrJXuuX5JI7TTzlBAv8nipmLl5kHU0DylI0xaP0=
+github.com/viant/aerospike v0.4.5-0.20261007184411-d6034bfdfed1 h1:CmpBdddw2mgrOV64BiQXXiQlPx1SeRZmgy7HRa2SF/A=
+github.com/viant/aerospike v0.4.5-0.20261007184411-d6034bfdfed1/go.mod h1:mJUBFrJXuuX5JI7TTzlBAv8nipmLl5kHU0DylI0xaP0=
 github.com/viant/afs v1.30.1-0.20260914155934-90e95d483861 h1:GAqu0cnUFqBOjwMhh++IHp17Wz2PUnhJP7g956uxKlU=
 github.com/viant/afs v1.30.1-0.20260914155934-90e95d483861/go.mod h1:rScbFd9LJPGTM8HOI8Kjwee0AZ+MZMupAvFpPg+Qdj4=
 github.com/viant/afsc v1.18.0 h1:9GxdDyMlhNhFc+Sdciclymn8/gV+PI8VPER/zEZUdno=
