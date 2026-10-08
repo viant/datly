@@ -748,6 +748,83 @@ The struct name is application-defined, not a required framework suffix.
 optional capabilities on the same invocation-scoped object. Commit-dependent
 side effects belong in outcome-aware finalization.
 
+The root lifecycle may declare a separate optional preparation boundary:
+
+```go
+func (hooks *RecordLifecycle) AfterValidateInput(ctx context.Context, input *Input, output *Output) error {
+    // Use a declared native reader and prune existing working child rows.
+    return nil
+}
+```
+
+This exact canonical Input/Output signature is root-only and runs on the same
+invocation-local lifecycle after all initial schema and business validation
+succeeds, before action planning or allocation. It also runs for successful empty
+inputs. Initial violations, operational errors, cancellation and panics suppress
+it. Aggregate `ValidateInput` and row `Validate` remain mutually exclusive.
+
+This boundary permits only ordered pruning of existing child occurrences. Roots,
+retained identity, values, markers, parent ownership, authorized Current,
+Previous, Original and input scope remain fixed. Initialized source counts and
+other payload facts stay unchanged. An existing Output body alias may expose the
+same pruning; replacing the output body or changing independent body values is
+rejected. Independent response metadata remains available. Native compilation
+currently supplies direct relation holders; richer embedded holder metadata and
+ambiguous duplicate associations fail closed for this boundary.
+
+The callback uses the existing managed read-only guard: declared native readers
+remain available, while mutation children, allocation, DML and completion are
+forbidden. Discarded capability errors remain failures. The writer verifies graph
+and evidence even when the callback fails or panics. Illegal changes retire the
+captured attempt and cannot request automatic recovery. Successful native recovery
+continues with a fresh capture and lifecycle, once per preparation attempt.
+
+Surviving native frames keep Original suppliedness, Previous, presence overlays
+and lifecycle state. The writer refreshes positions, prunes removed frames,
+reconciles links and reruns native initial checks without replaying Init or
+application business checks. Existing final validation remains active.
+
+The root lifecycle may also declare an optional whole-input queue boundary:
+
+```go
+func (hooks *OrderLifecycle) AfterQueueInput(ctx context.Context, input *Input, output *Output) error {
+    // Synchronously invoke declared buffered components or prepare a
+    // source-required pre-completion effect. Do not change queued body state.
+    return nil
+}
+```
+
+`AfterQueueInput` receives the canonical generated Input and Output on the same
+invocation-local lifecycle object. Descendant declarations, variadic methods,
+foreign lookalike types and incompatible results are rejected during native hook
+compilation and runtime metadata compilation. A pure auxiliary component without
+a mutation graph does not expose this boundary. Authored optional methods survive
+normal create-once lifecycle regeneration; the generator does not add this method
+to hooks that have not declared it.
+
+The universal writer invokes it once per execution attempt after every native
+queue action, per-row `AfterQueue` and queued-state guard has succeeded. It also
+runs for successful empty and no-action graphs. Earlier validation, allocation,
+queue, callback, cancellation or panic failures suppress it. It precedes output
+publication, admission closure, preparation, drain, commit and outcome finalization.
+An error or panic from this callback fails the owning invocation; ignoring its
+error cannot authorize a retained journal to complete successfully.
+
+The callback may update independent response metadata and synchronously invoke
+existing scoped components under the caller's buffered policy. It must preserve
+queued values, identity, presence, parent associations, action membership and
+Current/Previous/Original evidence, including through Output aliases. Native
+guards verify these facts again after it returns and through owner completion.
+Child preparation is not commit, and this callback does not introduce a separate
+transaction or promise rollback of an external effect. Outcome `Finalize` remains
+the place for commit-dependent publication.
+
+After this callback has been entered, native transaction retry, scoped-sequence
+replay and mutation recovery are disabled for that attempt. Re-executing its
+captured Program is rejected. This prevents automatic duplication of a
+pre-completion external effect; a new explicit request is a separate attempt.
+Components without this method retain their existing lifecycle and replay policy.
+
 An authored root hook can have this shape, with application Order/Input types:
 
 ```go
@@ -1221,3 +1298,21 @@ change the default lifecycle or error policy.
 See [root structural validation and queue observation](session-lifecycle.md) for
 the opt-in root null policy and per-item queue-attempt observer, including
 identity-only update evidence and transaction completion boundaries.
+
+### Conditional root updates with direct children
+
+A physical INSERT/UPDATE root lifecycle can implement the existing
+`WriteEligible(ctx, row, state, action) (bool, error)` callback. Returning false
+suppresses that root's physical write and per-row `AfterQueue`, while preserving
+its request/response record and native validation. The callback is observational:
+it cannot mutate the body, presence, Previous, output or associations, or invoke
+managed mutation capabilities.
+
+A root with linked direct writable leaf children may suppress only a matched
+existing UPDATE. Child actions remain queued independently. Every parent field
+used by a child relation must have loaded Previous evidence and an unchanged
+persisted value. Missing evidence or an attempted excluded INSERT fails, even
+when the request's child collections are empty. Root deletion, child eligibility
+hooks and deeper writable structures remain unsupported. Existing leaf-only
+eligibility behavior is unchanged. This does not provide late graph rewriting,
+identity replacement or an alternative allocation policy.
