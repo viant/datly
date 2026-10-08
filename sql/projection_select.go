@@ -190,6 +190,13 @@ func (s selectProjectionSource) render(sqlText string, parts []string) string {
 }
 
 func normalizeSelectProjection(sqlText string) string {
+	if !mayNormalizeProjection(sqlText) {
+		return sqlText
+	}
+	return normalizeParsedSelectProjection(sqlText)
+}
+
+func normalizeParsedSelectProjection(sqlText string) string {
 	selectStmt, err := sqlparser.ParseQuery(sqlText)
 	if err != nil || selectStmt == nil || len(selectStmt.List) == 0 {
 		return sqlText
@@ -216,6 +223,55 @@ func normalizeSelectProjection(sqlText string) string {
 		return sqlText
 	}
 	return source.render(sqlText, filtered)
+}
+
+// This conservative gate only rules out SQL with no normalization candidates.
+// Comments and delimited names intentionally fall through to the existing AST
+// owner; this is not a replacement SQL grammar.
+func mayNormalizeProjection(sqlText string) bool {
+	if !strings.Contains(sqlText, "(") {
+		return false
+	}
+	if strings.Contains(sqlText, "/*") || strings.Contains(sqlText, "--") || strings.ContainsAny(sqlText, "#`\"") {
+		return true
+	}
+	for start := 0; start < len(sqlText); {
+		at := strings.IndexByte(sqlText[start:], '(')
+		if at < 0 {
+			break
+		}
+		at += start
+		end := at
+		for end > 0 && sqlText[end-1] <= ' ' {
+			end--
+		}
+		if end > 0 && sqlText[end-1] >= 128 {
+			return true // Leave non-ASCII spelling/whitespace to the SQL parser.
+		}
+		begin := end
+		for begin > 0 && ((sqlText[begin-1] >= 'A' && sqlText[begin-1] <= 'Z') || (sqlText[begin-1] >= 'a' && sqlText[begin-1] <= 'z') || sqlText[begin-1] == '_') {
+			begin--
+		}
+		if normalizationCallName(sqlText[begin:end]) {
+			return true
+		}
+		start = at + 1
+	}
+	return false
+}
+
+func normalizationCallName(candidate string) bool {
+	for _, name := range []string{"tag", "required", "cast"} {
+		if strings.EqualFold(candidate, name) {
+			return true
+		}
+	}
+	for name := range removableSelectCalls {
+		if strings.EqualFold(candidate, name) {
+			return true
+		}
+	}
+	return false
 }
 
 func splitSelectionKind(part string) (string, string) {
