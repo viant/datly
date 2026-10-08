@@ -231,6 +231,12 @@ lifecycles remain authored code; local placeholders are created only for an
 explicit `lifecycle_type` declaration. See [hook contracts](hooks.md) and
 [shape ownership](shaping-contract.md).
 
+The generation operation selects the mutation policy. An explicitly authored
+`$route('/records','PATCH','PUT')` can use `transcribe patch` when both transports
+share the upsert policy. Both retain allocation and sparse presence; a parameter
+bound to `http_request/method` supplies the actual transport method to lifecycle
+code. This does not change `transcribe put`, which selects update-only policy.
+
 ## Walkthrough: transcribe, then add application logic
 
 ### 1. Save the graph

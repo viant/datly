@@ -10,10 +10,14 @@ import (
 )
 
 func TestCompileViewDependenciesBuildsTypedIndependentPlan(t *testing.T) {
-	type row struct{ ID int }
+	type row struct {
+		ID     int
+		Secret string
+	}
 	type input struct{ Rows []*row }
 	component := &spec.Component{
-		Name: "ReadRows",
+		Name:     "ReadRows",
+		Settings: &spec.Settings{Output: &spec.OutputSettings{Exclude: []string{"Data.Secret"}}},
 		Parameters: []*spec.Parameter{
 			{Name: "Rows", Source: spec.BindSource{Kind: "view", Name: "Rows"}},
 			{Name: "Summary", Source: spec.BindSource{Kind: "output", Name: "summary"}},
@@ -44,6 +48,12 @@ func TestCompileViewDependenciesBuildsTypedIndependentPlan(t *testing.T) {
 	}
 	if len(component.Parameters) != 2 {
 		t.Fatal("canonical component was mutated")
+	}
+	if actual[0].Component.Settings.Output != nil {
+		t.Fatal("public response presentation leaked into an internal view")
+	}
+	if !reflect.DeepEqual(component.Settings.Output.Exclude, []string{"Data.Secret"}) {
+		t.Fatal("internal view compilation changed public response redaction")
 	}
 }
 

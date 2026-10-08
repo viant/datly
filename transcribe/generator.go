@@ -226,6 +226,11 @@ func validateWriterRoute(operation, method string, root *spec.View) error {
 	if operation == "post" && strings.EqualFold(method, "PATCH") {
 		return nil
 	}
+	// Explicit PUT transport may share the selected PATCH upsert policy. The
+	// route does not turn that policy into native PUT's update-only operation.
+	if operation == "patch" && strings.EqualFold(method, "PUT") {
+		return nil
+	}
 	if strings.EqualFold(method, "DELETE") && (operation == "patch" || operation == "put") && gen.HasWritableDeleteMarker(root) {
 		return nil
 	}
