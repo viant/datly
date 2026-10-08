@@ -10,6 +10,7 @@ import (
 	"github.com/viant/datly/spec"
 	"github.com/viant/datly/typecatalog"
 	"github.com/viant/sqlparser"
+	sqlxio "github.com/viant/sqlx/io"
 )
 
 const (
@@ -66,6 +67,9 @@ func compileMetadata(component *spec.Component, contract *registry.RouteInputCon
 	for _, projected := range projection {
 		column := projected.Column
 		shapeTag := reflect.StructTag(column.Tag)
+		if mapping := sqlxio.ParseTag(shapeTag); mapping != nil && mapping.Transient {
+			continue
+		}
 		jsonName := strings.Split(shapeTag.Get("json"), ",")[0]
 		if shapeTag.Get("internal") == "true" || jsonName == "-" || shapeTag.Get("setMarker") == "true" {
 			continue

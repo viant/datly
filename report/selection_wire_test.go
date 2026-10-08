@@ -73,3 +73,24 @@ func TestCubeSelectionNamesNormalizeSQLAndLinkedFieldIdentities(t *testing.T) {
 		})
 	}
 }
+
+func TestCubeSelectionsExcludeTransientOutputFields(t *testing.T) {
+	source := reportSource(t, &spec.ReportSettings{Enabled: true})
+	source.Component.RootView.Relations = nil
+	source.Component.RootView.Columns = []*spec.Column{
+		{Name: "AccountId", Source: "account_id", Groupable: boolPointer(true)},
+		{Name: "FlightId", Source: "flight_id", Groupable: boolPointer(false)},
+		{Name: "DaysRemaining", Tag: `sqlx:"-" json:"daysRemaining,omitempty"`, Groupable: boolPointer(false)},
+	}
+	project, err := NewProjectCompiler(ProjectConfig{Types: typecatalog.NewCatalog()}).Compile([]Source{source})
+	if err != nil {
+		t.Fatal(err)
+	}
+	measures, _ := project.Derived()[0].InputType.FieldByName("Measures")
+	if _, found := measures.Type.FieldByName("DaysRemaining"); found {
+		t.Fatal("transient finalizer field advertised as SQL measure")
+	}
+	if _, found := measures.Type.FieldByName("FlightId"); !found {
+		t.Fatal("selectable flight aggregate excluded")
+	}
+}
