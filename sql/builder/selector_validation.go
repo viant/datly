@@ -74,10 +74,10 @@ func (b *Builder) prepareCriteria(options *builderOptions) error {
 			projection = source[selectAt+6 : fromAt]
 		}
 	}
-	parsed, err := sqlparser.ParseQuery("SELECT " + projection + " FROM criteria_source")
+	projectionList, err := dsql.ParseProjectionList(projection)
 	aggregates := map[string]bool{}
-	if err == nil && parsed != nil {
-		for _, item := range parsed.List {
+	if err == nil {
+		for _, item := range projectionList {
 			if item == nil {
 				continue
 			}
