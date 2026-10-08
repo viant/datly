@@ -65,6 +65,12 @@ Go callers. Internal dependencies and context inputs remain source-owned. Cube
 projection, ordering and pagination control the root view; other-view selectors
 and source criteria can still be forwarded.
 
+Selection JSON names come from normalized Go field identities: SQL
+`campaign_id` and linked `CampaignId` both expose `campaignId`. Reader JSON tags
+do not rename cube selections; `json:"-"` still excludes them. An input field
+tagged `mcp:"-"` remains in the facade's HTTP contract and retains its source
+defaults and binding, but is omitted recursively from MCP input discovery.
+
 Dynamic DQL uses the same facade metadata and handler with runtime-derived
 shapes. Its synthetic type namespace belongs to the source component scope and
 version under `/_datly_cube`, keeping it separate from generated Go contracts.
