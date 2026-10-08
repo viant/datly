@@ -82,10 +82,8 @@ func compileMetadata(component *spec.Component, contract *registry.RouteInputCon
 			name: selectionName, publicName: strings.TrimSpace(column.Name), sqlName: sqlName,
 			fieldName: typecatalog.ExportedFieldName(column.Name), description: strings.TrimSpace(column.Source),
 		}
+		// Cube selections keep their own lower-camel wire names.
 		item.wireName = lowerCamel(item.publicName)
-		if jsonName != "" {
-			item.wireName = jsonName
-		}
 		if item.fieldName == "" {
 			return nil, fmt.Errorf("report column %q has no exported field identity", column.Name)
 		}

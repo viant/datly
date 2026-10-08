@@ -20,6 +20,10 @@ func TestCubeEmitsLinkedFacade(t *testing.T) {
 	root := t.TempDir()
 	testharness.WriteGeneratedGoMod(t, root)
 	component := cubeFixture()
+	component.RootView.Columns[0].Tag = `json:"AccountID"`
+	component.RootView.Columns[1].Tag = `json:"reader_amount"`
+	component.RootView.Columns = append(component.RootView.Columns, &spec.Column{Name: "Hidden", Source: "hidden", Type: spec.TypeRef{Name: "int"}, Groupable: component.RootView.Groupable, Tag: `json:"-"`})
+	component.RootView.Source.SQL = "SELECT account_id, hidden, SUM(amount) AS amount FROM spend GROUP BY account_id, hidden"
 	generated, err := New(Input{Component: component, TargetPackage: "example.com/generated/reporting"}).Generate(filepath.Join(root, "reporting"))
 	if err != nil {
 		t.Fatal(err)
@@ -91,6 +95,16 @@ func resolve(t *testing.T,holder,input,output reflect.Type)*spec.Component {
 }
 func TestLinkedCubeRegistrationMCPAndDependency(t *testing.T) {
  ctx:=context.Background()
+ dimensions,_:=reflect.TypeFor[SpendCubeInput]().FieldByName("Dimensions")
+ account,_:=dimensions.Type.FieldByName("AccountID")
+ if strings.Split(account.Tag.Get("json"),",")[0]!="accountID"{t.Fatalf("reader serialization leaked into cube discovery: %s",account.Tag)}
+ if _,found:=dimensions.Type.FieldByName("Hidden");found{t.Fatal("json:- selection exposed")}
+ measures,_:=reflect.TypeFor[SpendCubeInput]().FieldByName("Measures")
+ amount,_:=measures.Type.FieldByName("Amount")
+ if strings.Split(amount.Tag.Get("json"),",")[0]!="amount"{t.Fatalf("reader measure serialization leaked into cube: %s",amount.Tag)}
+ var bound SpendCubeInput
+ if err:=json.Unmarshal([]byte("{\"dimensions\":{\"accountID\":true},\"measures\":{\"amount\":true}}"),&bound);err!=nil{t.Fatal(err)}
+ if !bound.Dimensions.AccountID||!bound.Measures.Amount{t.Fatal("lower-camel linked selections did not bind")}
  base:=resolve(t,reflect.TypeFor[Component](),reflect.TypeFor[SpendInput](),reflect.TypeFor[SpendOutput]())
  cube:=resolve(t,reflect.TypeFor[SpendCubeComponent](),reflect.TypeFor[SpendCubeInput](),reflect.TypeFor[SpendCubeOutput]())
  if !base.Settings.Report.LinkedFacade{t.Fatal("source did not suppress dynamic duplicate")}
@@ -124,6 +138,7 @@ func TestLinkedCubeRegistrationMCPAndDependency(t *testing.T) {
  tool,ok:=service.Registry().ToolRegistry.Get("SpendCube");if !ok{t.Fatal("linked MCP cube missing")}
  toolPlan,_:=service.Catalog().Tool("SpendCube")
  wire,_:=json.Marshal(toolPlan.Metadata().InputSchema)
+ if !strings.Contains(string(wire),"\"accountID\":")||!strings.Contains(string(wire),"\"amount\":")||strings.Contains(string(wire),"\"AccountID\":")||strings.Contains(string(wire),"\"reader_amount\":")||strings.Contains(string(wire),"\"Hidden\":"){t.Fatalf("MCP cube discovery changed selection names or exposed a hidden column: %s",wire)}
  if strings.Contains(string(wire),"\"Has\"")||strings.Contains(string(wire),"\"has\""){t.Fatalf("presence marker exposed: %s",wire)}
  result,protocolErr:=tool.Handler(ctx,&schema.CallToolRequest{Params:schema.CallToolRequestParams{Name:"SpendCube",Arguments:map[string]any{"dimensions":map[string]any{"accountID":true},"filters":map[string]any{"accountID":0}}}})
  if protocolErr!=nil||result==nil||result.IsError!=nil&&*result.IsError{t.Fatalf("MCP: %+v %v",result,protocolErr)}
