@@ -12,6 +12,16 @@ import (
 
 func scalarColumnFieldTag(column *spec.Column, source string, includeVelty bool) string {
 	parsed := tags.NewTags(strings.TrimSpace(column.Tag))
+	if origin := column.DocumentationOrigin; origin != nil {
+		table := origin.Table
+		if table == "" {
+			table = "-"
+		}
+		parsed.Set("docTable", table)
+		if origin.Column != "" {
+			parsed.Set("docColumn", origin.Column)
+		}
+	}
 	if column.Output != "" && column.Output != source {
 		parsed.Set("sqlOutput", column.Output)
 	}

@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"github.com/viant/datly/spec"
 	"github.com/viant/datly/tag"
-	"github.com/viant/sqlparser"
 	sqlxio "github.com/viant/sqlx/io"
 	"reflect"
 	"strings"
@@ -18,7 +17,6 @@ func (s *Snapshot) ForComponent(component *spec.Component, output reflect.Type) 
 	}
 	result := *s
 	result.views = map[string]*spec.View{}
-	result.lineage = map[string]*sqlparser.ColumnLineage{}
 	if component.RootView == nil {
 		return &result, nil
 	}
@@ -53,22 +51,20 @@ func (s *Snapshot) addView(path string, view *spec.View, active map[*spec.View]b
 	}
 	for _, column := range view.Columns {
 		if column != nil {
-			copy.Columns = append(copy.Columns, &spec.Column{Name: column.Name, Source: column.Source, Tag: column.Tag})
+			copy.Columns = append(copy.Columns, column.Clone())
 		}
 	}
 	s.views[path] = copy
-	if view.Source != nil && view.Source.SQL != "" {
-		if parsed, err := sqlparser.ParseQuery(view.Source.SQL); err == nil {
-			lineage := (sqlparser.Lineage{Query: parsed}).Compile()
-			s.lineage[path] = lineage
-			if copy.Source == nil {
-				copy.Source = &spec.ViewSource{}
-			}
-			if copy.Source.Table == "" {
-				copy.Source.Table = lineage.RootTable()
-			}
+	if view.DocumentationTable != "" {
+		if copy.Source == nil {
+			copy.Source = &spec.ViewSource{}
+		}
+		copy.Source.Table = view.DocumentationTable
+		if copy.Source.Table == "-" {
+			copy.Source.Table = ""
 		}
 	}
+
 	for _, relation := range view.Relations {
 		if relation != nil {
 			s.addView(path+"."+relation.Holder, relation.View, active)
@@ -105,7 +101,7 @@ func (s *Snapshot) StructField(path string, field reflect.StructField) Annotatio
 					f.Table = view.Source.Table
 				}
 				for _, c := range view.Columns {
-					if strings.EqualFold(c.Name, field.Name) {
+					if strings.EqualFold(c.Name, field.Name) || strings.EqualFold(c.Source, f.Column) {
 						if f.Authored.Description == "" {
 							f.Authored.Description = reflect.StructTag(c.Tag).Get("desc")
 						}
@@ -118,15 +114,27 @@ func (s *Snapshot) StructField(path string, field reflect.StructField) Annotatio
 						break
 					}
 				}
-				if origins, ok := s.lineage[prefix]; ok {
-					f.Table = ""
-					if origin, ok := origins.Lookup(f.Column); ok {
-						f.Table = origin.Table
-						f.Column = origin.Column
+				for _, c := range view.Columns {
+					if c.DocumentationOrigin != nil && (strings.EqualFold(c.Name, field.Name) || strings.EqualFold(c.Source, f.Column)) {
+						f.Table = c.DocumentationOrigin.Table
+						if c.DocumentationOrigin.Column != "" {
+							f.Column = c.DocumentationOrigin.Column
+						}
+						break
 					}
 				}
+
 				break
 			}
+		}
+	}
+	if table, ok := field.Tag.Lookup("docTable"); ok {
+		f.Table = table
+		if table == "-" {
+			f.Table = ""
+		}
+		if column := field.Tag.Get("docColumn"); column != "" {
+			f.Column = column
 		}
 	}
 	return s.Field(f)

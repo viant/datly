@@ -12,6 +12,7 @@ import (
 const ViewName = "view"
 
 type View struct {
+	DocumentationTable       string
 	Name                     string
 	TypeName                 string
 	Dest                     string
@@ -56,7 +57,7 @@ func ParseView(value string) (*View, error) {
 	entityHooksSeen := false
 	err := values.MatchRawPairs(func(key, value string) error {
 		key = strings.ToLower(strings.TrimSpace(key))
-		if key != "table" {
+		if key != "table" && key != "doctable" {
 			if decoded, err := strconv.Unquote(value); err == nil {
 				value = decoded
 			}
@@ -148,6 +149,8 @@ func ParseView(value string) (*View, error) {
 			result.URI = value
 		case "connector":
 			result.Connector = value
+		case "doctable":
+			result.DocumentationTable = value
 		case "table":
 			result.Table = value
 		case "cache":

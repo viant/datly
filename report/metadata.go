@@ -120,6 +120,9 @@ func reportOutputIdentifier(value string) (string, error) {
 	if value == "" {
 		return "", fmt.Errorf("identifier is empty")
 	}
+	if simpleReportIdentifier(value) {
+		return value, nil
+	}
 	parts, err := sqlparser.TableIdentifierParts(value)
 	if err != nil {
 		return "", err
@@ -208,6 +211,9 @@ func reportIdentifierName(value string) string {
 	if value == "" {
 		return ""
 	}
+	if simpleReportIdentifier(value) {
+		return value
+	}
 	parts, err := sqlparser.TableIdentifierParts(value)
 	if err == nil && len(parts) > 0 {
 		return parts[len(parts)-1]
@@ -222,4 +228,23 @@ func appendUnique(values []string, value string) []string {
 		}
 	}
 	return append(values, value)
+}
+
+// simpleReportIdentifier recognizes only unquoted ASCII names. Qualified,
+// quoted and Unicode identifiers retain the native decoder's exact semantics.
+func simpleReportIdentifier(value string) bool {
+	if value == "" {
+		return false
+	}
+	for i := 0; i < len(value); i++ {
+		ch := value[i]
+		if ch >= 'a' && ch <= 'z' || ch >= 'A' && ch <= 'Z' || ch == '_' {
+			continue
+		}
+		if i > 0 && (ch >= '0' && ch <= '9' || ch == '$') {
+			continue
+		}
+		return false
+	}
+	return true
 }

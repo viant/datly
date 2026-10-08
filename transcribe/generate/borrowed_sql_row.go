@@ -131,11 +131,14 @@ func BorrowedLeafContractFor(component *spec.Component, view *spec.View, package
 	}
 	metadata := view.Clone()
 	// Graph names and resource spelling identify the two independent occurrences;
-	// their origins are retained separately. Every nonidentity view fact survives.
+	// their origins are retained separately. Execution and serialization facts
+	// survive; documentation provenance may differ between query occurrences.
 	metadata.Key = spec.Key{}
 	metadata.Name, metadata.Namespace, metadata.TypeName, metadata.Dest = "", "", "", ""
 	metadata.Auxiliary, metadata.QueueContract = false, ""
 	metadata.Columns = nil
+	// Dictionary provenance is presentation metadata, not SQL row authority.
+	metadata.DocumentationTable = ""
 	metadata.Source = &spec.ViewSource{Table: table, Controls: view.Source.Controls.Clone(), Bindings: view.Source.Bindings.Clone()}
 	if metadata.Source.Bindings == nil {
 		metadata.Source.Bindings = &spec.ViewBindings{}
@@ -143,7 +146,10 @@ func BorrowedLeafContractFor(component *spec.Component, view *spec.View, package
 	metadata.Source.Bindings.Connector = connector
 	result := BorrowedLeafContract{WriterOmitEmpty: copy.Settings.Generation != nil && copy.Settings.Generation.WriterOmitEmpty, Metadata: metadata, Package: packagePath, Name: name, Connector: connector, Catalog: catalog, Schema: schema, Table: table, Fields: fields, MarkerFields: markers}
 	for _, column := range view.Columns {
-		result.Columns = append(result.Columns, column.Clone())
+		cloned := column.Clone()
+		cloned.DocumentationOrigin = nil
+		cloned.Tag = withoutStructTags(cloned.Tag, "docTable", "docColumn")
+		result.Columns = append(result.Columns, cloned)
 	}
 	return result, nil
 }
@@ -206,6 +212,7 @@ func canonicalBorrowedFields(fields []Field, imports []spec.ImportSpec, packageP
 			return nil, err
 		}
 		result[i].Type = typ
+		result[i].Tag = withoutStructTags(result[i].Tag, "docTable", "docColumn")
 	}
 	return result, nil
 }
@@ -329,7 +336,7 @@ func validateBorrowedStruct(ts *ast.TypeSpec, imports map[string]string, pkg str
 				return err
 			}
 		}
-		actual = append(actual, Field{Name: field.Names[0].Name, Type: typ, Tag: tag})
+		actual = append(actual, Field{Name: field.Names[0].Name, Type: typ, Tag: withoutStructTags(tag, "docTable", "docColumn")})
 	}
 	if len(actual) != len(want) {
 		return fmt.Errorf("borrow_sql_row declaration %s has stale field membership", ts.Name)

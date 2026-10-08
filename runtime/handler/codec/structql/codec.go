@@ -52,6 +52,7 @@ func (Factory) New(config *xcodec.Config, options ...xcodec.Option) (xcodec.Inst
 	if strings.HasPrefix(sql, "?") || strings.HasPrefix(sql, "!") {
 		sql = strings.TrimSpace(sql[1:])
 	}
+	// Parse once, then share the validated AST with the StructQL compiler.
 	parsed, err := sqlparser.ParseQuery(sql)
 	if err != nil {
 		return nil, fmt.Errorf("parse StructQL query: %w", err)
@@ -59,7 +60,7 @@ func (Factory) New(config *xcodec.Config, options ...xcodec.Option) (xcodec.Inst
 	if parsed == nil || parsed.From.X == nil || len(parsed.List) == 0 {
 		return nil, fmt.Errorf("StructQL requires a SELECT query with a source")
 	}
-	compiled, err := query.NewQuery(sql, config.SourceType, config.DestinationType)
+	compiled, err := query.NewQueryFromSelect(sql, parsed, config.SourceType, config.DestinationType)
 	if err != nil {
 		return nil, fmt.Errorf("compile StructQL codec: %w", err)
 	}

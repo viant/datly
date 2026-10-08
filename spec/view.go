@@ -6,9 +6,10 @@ import (
 )
 
 type View struct {
-	Key       Key    `json:"key"`
-	Name      string `json:"name,omitempty"`
-	Namespace string `json:"namespace,omitempty"`
+	DocumentationTable string `json:"documentationTable,omitempty"`
+	Key                Key    `json:"key"`
+	Name               string `json:"name,omitempty"`
+	Namespace          string `json:"namespace,omitempty"`
 	// Auxiliary is generation-only mutation intent. Reads and business data
 	// remain part of the canonical view graph; runtime data.View does not own it.
 	Auxiliary bool `json:"auxiliary,omitempty"`
