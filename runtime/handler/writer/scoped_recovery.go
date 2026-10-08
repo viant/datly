@@ -26,6 +26,9 @@ func hasScopedSequences(record *Record) bool {
 }
 func (h *Handler) ScopedMutationRetryLimit() int { return 9 } // Initial attempt plus at most nine replays.
 func (h *Handler) RecoverScopedMutation(ctx context.Context, invocation rhandler.Invocation, report exec.MutationReport, outcome xhandler.Outcome) (bool, error) {
+	if program, _ := invocation.Snapshot.(*Program); program != nil && (program.afterQueueInputWasStarted() || program.afterValidateInputWasViolated()) {
+		return false, nil
+	}
 	if h == nil || !h.scopedSequences || report.Nested || len(outcome.Transactions) != 1 || outcome.Transactions[0].State != xhandler.TransactionRolledBack {
 		return false, nil
 	}

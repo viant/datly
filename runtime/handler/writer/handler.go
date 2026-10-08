@@ -322,36 +322,40 @@ func hasWritableRole(record *Record) bool {
 // Program is invocation-owned universal mutation state. The same type is used
 // for every writer component; only Metadata and values differ.
 type Program struct {
-	queueSlots               []queueSlotSeal
-	guardMu                  sync.Mutex
-	guardIssued              bool
-	guardBinder              xhandler.Binder
-	executionAttempted       bool
-	executionFailure         error
-	executionGuardRegistered bool
-	executionGuardReady      bool
-	actionPolicyFacts        map[frameIdentity]*actionPolicyFacts
-	scopedService            any
-	metadata                 *Metadata
-	input                    any
-	output                   any
-	original                 *OriginalInput
-	database                 *DatabaseSnapshot
-	frames                   *MutationFrames
-	actions                  *MutationActions
-	validation               *FrameworkValidation
-	hooks                    *Hooks
-	hook                     reflect.Value
-	hooksByRecord            map[*Record]reflect.Value
-	stage                    Stage
-	failed                   bool
-	finalized                bool
-	componentHookAttempted   bool
-	structuralError          error
-	queueItems               []*Action
-	queueObserverPanic       bool
-	queueInvocationID        uint64
-	previousFields           map[*Record]fieldSet
+	queueSlots                  []queueSlotSeal
+	afterValidateInputStarted   bool
+	afterValidateInputViolation error
+	afterQueueInputStarted      bool
+	afterQueueInputSnapshot     string
+	guardMu                     sync.Mutex
+	guardIssued                 bool
+	guardBinder                 xhandler.Binder
+	executionAttempted          bool
+	executionFailure            error
+	executionGuardRegistered    bool
+	executionGuardReady         bool
+	actionPolicyFacts           map[frameIdentity]*actionPolicyFacts
+	scopedService               any
+	metadata                    *Metadata
+	input                       any
+	output                      any
+	original                    *OriginalInput
+	database                    *DatabaseSnapshot
+	frames                      *MutationFrames
+	actions                     *MutationActions
+	validation                  *FrameworkValidation
+	hooks                       *Hooks
+	hook                        reflect.Value
+	hooksByRecord               map[*Record]reflect.Value
+	stage                       Stage
+	failed                      bool
+	finalized                   bool
+	componentHookAttempted      bool
+	structuralError             error
+	queueItems                  []*Action
+	queueObserverPanic          bool
+	queueInvocationID           uint64
+	previousFields              map[*Record]fieldSet
 	// graph caches insert lookups for the current frame topology.
 	graph *graphIndex
 	// typeFields caches the exported field set per Previous type.
@@ -608,6 +612,14 @@ func (p *Program) allocate(ctx context.Context, sequencer xhandler.Sequencer, re
 			return err
 		}
 	}
+	// A transient child allocation performs an INSERT before rolling it back.
+	// Supply newly allocated parent keys before that INSERT: disabling FK
+	// checks in the allocator does not relax NOT NULL child columns.
+	if len(record.Relations) > 0 {
+		if err := p.reconcileLinks(false); err != nil {
+			return err
+		}
+	}
 	for _, relation := range record.Relations {
 		if err := p.allocate(ctx, sequencer, relation.Child, roots); err != nil {
 			return err
@@ -821,6 +833,9 @@ func (h *Handler) Execute(ctx context.Context, invocation rhandler.Invocation) (
 				err = program.validateActionPolicyActions()
 				if err == nil {
 					err = program.validateQueueSlots()
+					if err == nil {
+						err = program.validateAfterQueueInputState()
+					}
 				}
 			}
 			if err != nil {
@@ -947,7 +962,10 @@ func (h *Handler) CapturedExecutionGuard(invocation rhandler.Invocation) (func(c
 		if err := program.validateActionPolicyActions(); err != nil {
 			return err
 		}
-		return program.validateQueueSlots()
+		if err := program.validateQueueSlots(); err != nil {
+			return err
+		}
+		return program.validateAfterQueueInputState()
 	}, nil
 }
 func (h *Handler) CapturedExecutionGuardRegistered(invocation rhandler.Invocation) error {
@@ -1147,6 +1165,12 @@ func (p *Program) prepareHooks(record *Record) {
 }
 
 func (p *Program) prepare(ctx context.Context, binder xhandler.Binder) error {
+	if p.afterValidateInputStarted {
+		return fmt.Errorf("AfterValidateInput execution already attempted; fresh capture required")
+	}
+	if p.afterQueueInputWasStarted() {
+		return fmt.Errorf("AfterQueueInput execution already attempted; fresh capture required")
+	}
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -1318,33 +1342,39 @@ func (p *Program) prepare(ctx context.Context, binder xhandler.Binder) error {
 			if err = p.callEntityHook(ctx, "Validate", frame); err != nil {
 				return err
 			}
-			if frame.Record.Auxiliary || frame.SkippedDelete || frame.NoopMissingIdentity {
-				continue
-			}
-			if frame.Action == xhandler.WriteUpdate && !hasMutableFields(frame) {
-				if p.queueObserver() != nil && frame.Previous.IsValid() {
-					p.queueItems = append(p.queueItems, &Action{Kind: frame.Action, Entity: frame.Entity, frame: frame})
-				}
-				continue
-			}
-			action := &Action{Kind: frame.Action, Entity: frame.Entity, frame: frame}
-			if frame.Action == xhandler.WriteDelete {
-				p.actions.Rows = append([]*Action{action}, p.actions.Rows...)
-				if p.queueObserver() != nil {
-					p.queueItems = append([]*Action{action}, p.queueItems...)
-				}
-			} else {
-				p.actions.Rows = append(p.actions.Rows, action)
-				if p.queueObserver() != nil {
-					p.queueItems = append(p.queueItems, action)
-				}
-			}
 		}
 
 		return nil
 	}); err != nil {
 		return err
 	}
+	if err = p.callAfterValidateInput(ctx, binder, validator); err != nil {
+		return err
+	}
+	for _, frame := range p.frames.Rows {
+		if frame.Record.Auxiliary || frame.SkippedDelete || frame.NoopMissingIdentity {
+			continue
+		}
+		if frame.Action == xhandler.WriteUpdate && !hasMutableFields(frame) {
+			if p.queueObserver() != nil && frame.Previous.IsValid() {
+				p.queueItems = append(p.queueItems, &Action{Kind: frame.Action, Entity: frame.Entity, frame: frame})
+			}
+			continue
+		}
+		action := &Action{Kind: frame.Action, Entity: frame.Entity, frame: frame}
+		if frame.Action == xhandler.WriteDelete {
+			p.actions.Rows = append([]*Action{action}, p.actions.Rows...)
+			if p.queueObserver() != nil {
+				p.queueItems = append([]*Action{action}, p.queueItems...)
+			}
+		} else {
+			p.actions.Rows = append(p.actions.Rows, action)
+			if p.queueObserver() != nil {
+				p.queueItems = append(p.queueItems, action)
+			}
+		}
+	}
+
 	if err = p.validateAuxiliaryTopology(); err != nil {
 		return err
 	}
@@ -1417,6 +1447,9 @@ func (p *Program) prepare(ctx context.Context, binder xhandler.Binder) error {
 		return err
 	}
 	if err = p.validateActionPolicyFacts(); err != nil {
+		return err
+	}
+	if err = p.callAfterQueueInput(ctx, binder); err != nil {
 		return err
 	}
 	output := reflect.ValueOf(p.output).Elem()
@@ -1953,7 +1986,7 @@ func (p *Program) indexCurrent(record *Record, rows reflect.Value) error {
 	type fieldCopy struct{ source, destination []int }
 	copies := make([]fieldCopy, 0, len(record.Fields))
 	var loaded fieldSet
-	if p.queueObserver() != nil {
+	if p.queueObserver() != nil || (p.metadata != nil && p.metadata.Root != nil && p.metadata.Root.writeEligibility) {
 		loaded = fieldSet{}
 		delete(p.previousFields, record)
 	}
@@ -2605,6 +2638,12 @@ func Compile(component *spec.Component, inputType, outputType reflect.Type, oper
 		metadata.Predicates = predicates
 	}
 	if err := validateRootNullPolicy(root, inputType.Field(metadata.InputField).Type); err != nil {
+		return nil, err
+	}
+	if err := validateAfterValidateInputHooks(root, inputType, outputType); err != nil {
+		return nil, err
+	}
+	if err := validateAfterQueueInputHooks(root, inputType, outputType); err != nil {
 		return nil, err
 	}
 	if err := validateAggregateHooks(root, inputType, outputType); err != nil {

@@ -103,6 +103,22 @@ func (c EntityHookCompiler) Compile(request EntityHookRequest) (spec.TypeRef, er
 			return spec.TypeRef{}, fmt.Errorf("ObservePhase requires a physical root and canonical context.Context, handler.PhaseEvent signature")
 		}
 	}
+	for _, method := range methods {
+		if method.Name != "AfterQueueInput" && method.Name != "AfterValidateInput" {
+			continue
+		}
+		if request.Component || parent != "github.com/viant/xdatly/handler.NoParent" || request.Input == "" {
+			return spec.TypeRef{}, fmt.Errorf("%s requires a writer root with canonical input", method.Name)
+		}
+		input, resolveErr := (xshape.Resolver{}).Canonical(request.Input)
+		if resolveErr != nil {
+			return spec.TypeRef{}, resolveErr
+		}
+		expected := []string{"context.Context", "*" + input, "*" + output}
+		if method.Variadic || !reflect.DeepEqual(method.Parameters, expected) || !reflect.DeepEqual(method.Results, []string{"error"}) {
+			return spec.TypeRef{}, fmt.Errorf("entity hook %s.%s has incompatible canonical Input/Output signature", resolved.Identity, method.Name)
+		}
+	}
 	aggregate := false
 	for _, method := range methods {
 		if method.Name != "ValidateInput" {
