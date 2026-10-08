@@ -89,6 +89,13 @@ func (r *planResolver) resolve() (*Plan, error) {
 		return nil, err
 	}
 	r.resolveUniversalOutputs()
+	// Generated envelopes also travel through encoding/json on typed errors.
+	// Reuse the authored case policy already applied to generated view fields.
+	if r.plan.Output.Ownership == ContractGenerated {
+		if err = applyInferredJSONTags(r.plan, r.plan.Output.Fields); err != nil {
+			return nil, err
+		}
+	}
 	if err = r.bindIndependentViewFields(r.plan.Input.Fields); err != nil {
 		return nil, err
 	}
