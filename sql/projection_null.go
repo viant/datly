@@ -172,6 +172,12 @@ func starOutputColumn(column *data.Column) (string, error) {
 }
 
 func applyNullProjection(sqlText string, view *data.View) (string, error) {
+	return applyNullProjectionInspected(sqlText, view, nil)
+}
+
+// An inspected statement belongs to this invocation and this exact SQL text.
+// Rewritten SQL and projection-only fallback ASTs must be parsed independently.
+func applyNullProjectionInspected(sqlText string, view *data.View, selectStmt *query.Select) (string, error) {
 	if view == nil || len(view.Columns) == 0 || view.NullsAllowed() {
 		return sqlText, nil
 	}
@@ -185,7 +191,10 @@ func applyNullProjection(sqlText string, view *data.View) (string, error) {
 	if !needsFallback {
 		return sqlText, nil
 	}
-	selectStmt, err := sqlparser.ParseQuery(sqlText)
+	var err error
+	if selectStmt == nil {
+		selectStmt, err = sqlparser.ParseQuery(sqlText)
+	}
 	if err != nil || selectStmt == nil || len(selectStmt.List) == 0 {
 		return sqlText, nil
 	}

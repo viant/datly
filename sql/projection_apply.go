@@ -100,20 +100,34 @@ func (p SelectorProjection) prepare(selected []string) (*Projection, error) {
 		return p.prepareOuterDependentProjection(sqlText, columns, chosen)
 	}
 
-	projected, err := applyFilteredSelectorProjection(sqlText, selected, p.View != nil && p.View.IsGroupable())
+	var inspected *query.Select
+	projected, err := applyFilteredSelectorProjectionInspected(sqlText, selected, p.View != nil && p.View.IsGroupable(), &inspected)
 	if err != nil {
 		return nil, err
 	}
-	source, err := applyNullProjection(projected, p.View)
+	if projected != sqlText {
+		inspected = nil
+	}
+	source, err := applyNullProjectionInspected(projected, p.View, inspected)
 	return &Projection{Source: source}, err
 }
 
 func applyFilteredSelectorProjection(sqlText string, selected []string, groupable bool) (string, error) {
+	return applyFilteredSelectorProjectionInspected(sqlText, selected, groupable, nil)
+}
+
+func applyFilteredSelectorProjectionInspected(sqlText string, selected []string, groupable bool, inspected **query.Select) (string, error) {
+	if inspected != nil {
+		*inspected = nil
+	}
 	source, ok := newSelectProjectionSource(sqlText)
 	if !ok {
 		return "", fmt.Errorf("source projection is unresolved")
 	}
 	selectStmt, err := sqlparser.ParseQuery(sqlText)
+	if err == nil && selectStmt != nil && len(selectStmt.List) == len(source.parts) && inspected != nil {
+		*inspected = selectStmt
+	}
 	if err != nil || selectStmt == nil || len(selectStmt.List) != len(source.parts) {
 		// An explicit projection is independently parseable while criteria/macro
 		// tokens in the suffix are still awaiting the builder's binding phase.
