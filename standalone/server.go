@@ -128,6 +128,12 @@ func New(ctx context.Context, options Options) (_ *Server, err error) {
 			return nil, authErr
 		}
 		providers = append(providers, handlerprovider.Static(xauth.ProviderKind, service))
+	} else if options.Config.JWTValidator != nil {
+		service, authErr := authprovider.NewVerifier(ctx, options.Config.JWTValidator)
+		if authErr != nil {
+			return nil, authErr
+		}
+		providers = append(providers, handlerprovider.Static(xauth.ProviderKind, service))
 	}
 	if options.LinkedArtifact != nil {
 		artifact := *options.LinkedArtifact
