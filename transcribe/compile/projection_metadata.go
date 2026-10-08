@@ -3,7 +3,9 @@ package compile
 import (
 	"context"
 	"fmt"
+	dtag "github.com/viant/datly/tag"
 	"io/fs"
+	"reflect"
 	"strings"
 
 	"github.com/viant/datly/data"
@@ -100,6 +102,20 @@ func (p authoredOutputProjection) resolve(column *spec.Column) (AuthoredOutputCo
 func BackfillReportMetadata(component *spec.Component, resources ...fs.FS) error {
 	if component == nil || component.Settings == nil || component.Settings.Report == nil || !component.Settings.Report.Enabled || component.RootView == nil || len(component.RootView.Columns) == 0 {
 		return nil
+	}
+	for _, column := range component.RootView.Columns {
+		if column == nil {
+			continue
+		}
+		tag := reflect.StructTag(strings.ReplaceAll(column.Tag, `\"`, `"`))
+		if _, exists := tag.Lookup("groupable"); exists {
+			metadata, err := dtag.ParseField(reflect.StructField{Name: column.Name, Tag: tag})
+			if err != nil {
+				return err
+			}
+			value := metadata.Groupable
+			column.Groupable = &value
+		}
 	}
 	complete := true
 	for _, column := range component.RootView.Columns {

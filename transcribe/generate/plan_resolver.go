@@ -152,6 +152,9 @@ func (r *planResolver) resolve() (*Plan, error) {
 	if err = r.resolveClientInput(); err != nil {
 		return nil, err
 	}
+	if err = r.resolveCubes(); err != nil {
+		return nil, fmt.Errorf("generate cube facade: %w", err)
+	}
 	if err = r.plan.validateGeneratedNames(); err != nil {
 		return nil, err
 	}

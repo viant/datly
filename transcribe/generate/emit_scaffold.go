@@ -113,6 +113,13 @@ func scaffoldArtifacts(dir string, plan *Plan) ([]EmittedFile, []EmittedFile, []
 		return nil, nil, nil, err
 	}
 	files = append(files, receipts...)
+	if len(plan.Cubes) > 0 && !plan.ShapesOnly {
+		content, err := plan.cubeFileText()
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		files = append(files, EmittedFile{Path: filepath.Join(dir, plan.CubeDestination), Content: content})
+	}
 	// preformatted lists artifacts rendered through SourceParser.FormatFile,
 	// which already yields gofmt output; the final formatting pass skips them.
 	preformatted := map[string]bool{}

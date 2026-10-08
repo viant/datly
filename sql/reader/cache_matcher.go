@@ -68,7 +68,14 @@ func (m rootCacheMatcher) apply(ctx context.Context, connection dsql.Connection)
 	}
 	selector.Fields = append([]string(nil), settings.FieldNames...)
 	selector.Columns = nil
-	identity, err := builder.NewBuilder().CacheSQL(ctx,
+	// This isolated key-render context grants no row authorization bypass. An
+	// opt-in predicate validates its sealed scope and retained values. Ordinary
+	// input preparation, actual/fallback SQL and other predicates stay filtered.
+	identityCtx := ctx
+	if len(values) > 0 {
+		identityCtx = dexec.WithCacheIdentity(ctx, name, values)
+	}
+	identity, err := builder.NewBuilder().CacheSQL(identityCtx,
 		builder.WithBuilderComponent(m.session.Component), builder.WithBuilderView(view), builder.WithBuilderCriteriaCompiler(root.Criteria),
 		builder.WithBuilderSelector(selector), builder.WithBuilderProjection(viewProjection(view, selector)),
 		builder.WithBuilderInput(input.Elem()), builder.WithBuilderParameterResolver(prepared.Parameters),

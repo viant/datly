@@ -111,13 +111,20 @@ func (d *reportDeriver) routeIdentity(route *spec.Route) string {
 }
 
 func (d *reportDeriver) reportPackage(component *spec.Component) string {
-	if component != nil && component.TypeContext != nil && strings.TrimSpace(component.TypeContext.DefaultPackage) != "" {
-		return strings.TrimSpace(component.TypeContext.DefaultPackage)
-	}
 	if component == nil {
 		return ""
 	}
-	return strings.TrimSpace(component.Key.Scope)
+	// Keep ephemeral descriptors distinct from persisted Go cube contracts.
+	// The owning component scope (including a dynamic version when supplied)
+	// prevents sibling reports from sharing one synthetic type namespace.
+	scope := strings.TrimSpace(component.Key.Scope)
+	if scope == "" && component.TypeContext != nil {
+		scope = strings.TrimSpace(component.TypeContext.DefaultPackage)
+	}
+	if scope == "" {
+		return ""
+	}
+	return strings.TrimRight(scope, "/") + "/_datly_cube"
 }
 
 func cloneParams(source []*spec.Parameter) []*spec.Parameter {

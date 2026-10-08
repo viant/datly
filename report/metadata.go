@@ -2,6 +2,7 @@ package report
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 
 	"github.com/viant/datly/bootstrap"
@@ -32,6 +33,7 @@ type metadata struct {
 type field struct {
 	name        string
 	publicName  string
+	wireName    string
 	sqlName     string
 	fieldName   string
 	description string
@@ -40,6 +42,7 @@ type field struct {
 type filterField struct {
 	field
 	contract registry.InputField
+	tag      string
 }
 
 func compileMetadata(component *spec.Component, contract *registry.RouteInputContract) (*metadata, error) {
@@ -62,6 +65,11 @@ func compileMetadata(component *spec.Component, contract *registry.RouteInputCon
 	fieldNames := map[string]string{}
 	for _, projected := range projection {
 		column := projected.Column
+		shapeTag := reflect.StructTag(column.Tag)
+		jsonName := strings.Split(shapeTag.Get("json"), ",")[0]
+		if shapeTag.Get("internal") == "true" || jsonName == "-" || shapeTag.Get("setMarker") == "true" {
+			continue
+		}
 		selectionName, err := reportOutputIdentifier(projected.Selector)
 		if err != nil {
 			return nil, fmt.Errorf("report column %q selector: %w", column.Name, err)
@@ -73,6 +81,10 @@ func compileMetadata(component *spec.Component, contract *registry.RouteInputCon
 		item := field{
 			name: selectionName, publicName: strings.TrimSpace(column.Name), sqlName: sqlName,
 			fieldName: typecatalog.ExportedFieldName(column.Name), description: strings.TrimSpace(column.Source),
+		}
+		item.wireName = lowerCamel(item.publicName)
+		if jsonName != "" {
+			item.wireName = jsonName
 		}
 		if item.fieldName == "" {
 			return nil, fmt.Errorf("report column %q has no exported field identity", column.Name)
@@ -92,10 +104,29 @@ func compileMetadata(component *spec.Component, contract *registry.RouteInputCon
 	}
 	for _, inputField := range contract.Fields() {
 		binding := inputField.Binding()
-		param, ok := binding.Extension.(*spec.Parameter)
-		if !ok || param == nil || len(param.Predicates) == 0 || param.QuerySelector != nil || !param.Source.RequestValue() {
+		param, _ := binding.Extension.(*spec.Parameter)
+		nativeField, err := inputField.StructField()
+		if err != nil {
+			return nil, err
+		}
+		if param == nil {
+			name := binding.Name
+			if name == "" {
+				name = nativeField.Name
+			}
+			param = &spec.Parameter{Name: name, Source: spec.BindSource{Kind: binding.Location.Kind, Name: binding.Location.In}, Description: nativeField.Tag.Get("desc")}
+		}
+		if cubeOwnedSelector(component, param) || !param.Source.RequestValue() {
 			continue
 		}
+		internal, err := inputField.Internal()
+		if err != nil {
+			return nil, err
+		}
+		if internal {
+			continue
+		}
+
 		name := strings.TrimSpace(param.Name)
 		fieldName := typecatalog.ExportedFieldName(name)
 		if name == "" || fieldName == "" {
@@ -108,7 +139,7 @@ func compileMetadata(component *spec.Component, contract *registry.RouteInputCon
 		}
 		result.filters = append(result.filters, filterField{
 			field:    field{name: name, fieldName: fieldName, description: param.Description},
-			contract: inputField,
+			contract: inputField, tag: string(nativeField.Tag),
 		})
 	}
 	result.compileRelationHolders(component.RootView)
@@ -135,20 +166,35 @@ func reportOutputIdentifier(value string) (string, error) {
 
 func (m *metadata) compileRelationHolders(view *spec.View) {
 	for _, relation := range view.Relations {
-		if relation == nil || strings.TrimSpace(relation.Holder) == "" {
+		if relation == nil || strings.TrimSpace(relation.Holder) == "" || len(relation.On) == 0 {
 			continue
 		}
+		var keys []string
+		complete := true
 		for _, link := range relation.On {
 			if link == nil {
-				continue
+				complete = false
+				break
 			}
+			matched := ""
 			for _, dimension := range m.dimensions {
 				column := findColumn(view.Columns, dimension.publicName)
-				if column == nil || !columnMatchesLink(column, link) {
-					continue
+				if column != nil && columnMatchesLink(column, link) {
+					matched = dimension.name
+					break
 				}
-				m.holders[dimension.name] = appendUnique(m.holders[dimension.name], relation.Holder)
 			}
+			if matched == "" {
+				complete = false
+				break
+			}
+			keys = appendUnique(keys, matched)
+		}
+		if !complete {
+			continue
+		}
+		for _, key := range keys {
+			m.holders[key] = appendUnique(m.holders[key], relation.Holder)
 		}
 	}
 }
@@ -247,4 +293,25 @@ func simpleReportIdentifier(value string) bool {
 		return false
 	}
 	return true
+}
+
+// The facade owns root projection/order/pagination. Criteria and selectors for
+// other views still belong to the original input contract and are proxied.
+func cubeOwnedSelector(component *spec.Component, param *spec.Parameter) bool {
+	if param == nil || param.QuerySelector == nil || param.QuerySelector.Property == spec.SelectorPropertyCriteria {
+		return false
+	}
+	target := strings.TrimSpace(param.QuerySelector.View)
+	if target == "" {
+		return true
+	}
+	if component == nil || component.RootView == nil {
+		return false
+	}
+	for _, name := range []string{component.RootView.Name, component.RootView.Namespace, component.RootView.Key.Name, component.Name, component.Key.Name} {
+		if name != "" && strings.EqualFold(name, target) {
+			return true
+		}
+	}
+	return false
 }

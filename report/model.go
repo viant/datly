@@ -22,6 +22,7 @@ type Source struct {
 // Derived is one ordinary cube component ready for normal artifact compilation
 // and runtime registration.
 type Derived struct {
+	Definition Definition
 	Component  *spec.Component
 	InputType  reflect.Type
 	OutputType reflect.Type
@@ -75,10 +76,11 @@ type selection struct {
 }
 
 type filter struct {
-	name       string
-	location   state.Location
-	sourceType reflect.Type
-	index      []int
+	presenceIndex []int
+	name          string
+	location      state.Location
+	sourceType    reflect.Type
+	index         []int
 }
 
 func (p *Plan) Target() exec.ComponentTarget {

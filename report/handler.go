@@ -162,11 +162,19 @@ func (p *Plan) providers(input reflect.Value, selectors xstate.Selectors) ([]loc
 			values = map[string]typedValue{}
 			byKind[item.location.Kind] = values
 		}
+		marker, marked := fieldValue(input, item.presenceIndex)
+		marked = marked && len(item.presenceIndex) > 0 && marker.Kind() == reflect.Bool
+		if marked && !marker.Bool() {
+			continue
+		}
 		value, present, err := filterSourceValue(input, item.index, item.sourceType)
 		if err != nil {
 			return nil, fmt.Errorf("report filter %s: %w", item.name, err)
 		}
 		if !present {
+			if marked && marker.Bool() {
+				values[item.location.In] = typedValue{typeOf: item.sourceType, value: nil, owns: true, found: true}
+			}
 			continue
 		}
 		values[item.location.In] = typedValue{typeOf: item.sourceType, value: value.Interface(), owns: true, found: true}

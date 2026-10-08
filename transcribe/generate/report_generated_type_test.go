@@ -1,10 +1,13 @@
-package report
+package generate_test
 
 import (
 	"context"
+	"github.com/viant/datly/report"
+	handlercompiler "github.com/viant/datly/runtime/handler/compiler"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -16,7 +19,7 @@ import (
 )
 
 func TestGeneratedReportInputEmitsAsNamedTranscribedType(t *testing.T) {
-	project, catalog := generatedProject(t, &spec.ReportSettings{Enabled: true})
+	project, catalog := generatedReportProject(t, &spec.ReportSettings{Enabled: true})
 	derived := project.Derived()[0]
 	resolver, err := typecatalog.NewResolver(catalog, typecatalog.PackageAuthority, &typecatalog.ResolutionContext{
 		PackagePath: derived.Type.PkgPath, DefaultPackage: derived.Type.PkgPath,
@@ -74,4 +77,20 @@ func TestGeneratedReportInputEmitsAsNamedTranscribedType(t *testing.T) {
 	if !found {
 		t.Fatalf("loaded package has no named SpendCubeInput: %+v", loaded.Types)
 	}
+}
+
+func generatedReportProject(t *testing.T, settings *spec.ReportSettings) (*report.Project, *typecatalog.Catalog) {
+	t.Helper()
+	groupable := true
+	component := &spec.Component{Key: spec.Key{Kind: spec.KindComponent, Scope: "example.com/acme/reporting", Name: "Spend"}, Name: "Spend", Settings: &spec.Settings{Report: settings}, Routes: []*spec.Route{{Method: "GET", Path: "/spend"}}, Parameters: []*spec.Parameter{{Name: "AccountIDs", Source: spec.BindSource{Kind: "query", Name: "accountID"}, Predicates: []*spec.Predicate{{Name: "in", Args: []string{"spend", "account_id"}}}}}, RootView: &spec.View{Name: "spend", Groupable: &groupable, Source: &spec.ViewSource{SQL: "SELECT account_id,total_spend FROM spend"}, Columns: []*spec.Column{{Name: "AccountID", Source: "account_id", Groupable: &groupable}, {Name: "TotalSpend", Source: "total_spend"}}}}
+	input, err := handlercompiler.New(handlercompiler.Input{Component: component, InputType: reflect.TypeFor[struct{ AccountIDs []int }]()}).Compile()
+	if err != nil {
+		t.Fatal(err)
+	}
+	types := typecatalog.NewCatalog()
+	project, err := report.NewProjectCompiler(report.ProjectConfig{Types: types}).Compile([]report.Source{{Component: component, Input: input.Input, OutputType: reflect.TypeFor[struct{}]()}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return project, types
 }

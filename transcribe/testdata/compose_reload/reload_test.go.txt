@@ -45,16 +45,14 @@ func (f *composeFixture) compile(ctx context.Context, types *typecatalog.Catalog
 	if err != nil {
 		return nil, err
 	}
-	if len(routes) != 1 {
-		return nil, fmt.Errorf("emitted base holders=%d, want 1", len(routes))
-	}
-	if err = routes[0].ValidateContractTypes(reflect.TypeOf(SpendInput{}), reflect.TypeOf(SpendOutput{})); err != nil {
-		return nil, err
-	}
-	component, err := routes[0].Resolve(reflect.TypeOf(SpendInput{}), reflect.TypeOf(SpendOutput{}))
-	if err != nil {
-		return nil, err
-	}
+    if len(routes)!=2 {return nil,fmt.Errorf("emitted holders=%d, want source plus linked cube",len(routes))}
+    var baseRoute,cubeRoute *bootstrap.RouteSource
+    for _,route:=range routes {if route.Tag.Name=="Spend"{baseRoute=route};if route.Tag.Name=="SpendCube"{cubeRoute=route}}
+    if baseRoute==nil||cubeRoute==nil{return nil,fmt.Errorf("source or cube holder is missing")}
+    if err=baseRoute.ValidateContractTypes(reflect.TypeOf(SpendInput{}),reflect.TypeOf(SpendOutput{}));err!=nil{return nil,err}
+    component,err:=baseRoute.Resolve(reflect.TypeOf(SpendInput{}),reflect.TypeOf(SpendOutput{}));if err!=nil{return nil,err}
+    cube,err:=cubeRoute.Resolve(reflect.TypeOf(SpendCubeInput{}),reflect.TypeOf(SpendCubeOutput{}));if err!=nil{return nil,err}
+    cubeHandler,err:=NewSpendCube();if err!=nil{return nil,err}
 	if component.Settings.Report == nil || component.Settings.Report.Compose == nil {
 		return nil, fmt.Errorf("emitted cube/compose metadata missing")
 	}
@@ -73,7 +71,7 @@ func (f *composeFixture) compile(ctx context.Context, types *typecatalog.Catalog
 	if err != nil {
 		return nil, err
 	}
-	compilation, err := report.NewProjectCompiler(report.ProjectConfig{Types: types}).CompileArtifacts([]bootstrap.ArtifactInput{{Component: component, Resources: assets.Store, InputType: reflect.TypeOf(SpendInput{}), OutputType: reflect.TypeOf(SpendOutput{})}})
+	compilation, err := report.NewProjectCompiler(report.ProjectConfig{Types: types}).CompileArtifacts([]bootstrap.ArtifactInput{{Component: component, Resources: assets.Store, InputType: reflect.TypeOf(SpendInput{}), OutputType: reflect.TypeOf(SpendOutput{})},{Component:cube,Resources:assets.Store,InputType:reflect.TypeOf(SpendCubeInput{}),OutputType:reflect.TypeOf(SpendCubeOutput{}),Handler:cubeHandler,HandlerOwnedOutput:true}})
 	if err != nil {
 		return nil, fmt.Errorf("derive report from emitted holder (canonical columns=%d, generated output=%v): %w", len(component.RootView.Columns), reflect.TypeOf(SpendOutput{}), err)
 	}
@@ -90,7 +88,7 @@ func (f *composeFixture) compile(ctx context.Context, types *typecatalog.Catalog
 		return nil, fmt.Errorf("report-derived endpoints=%v want=%v", got, want)
 	}
 	registered, err := compilation.RuntimeComponents(ctx, report.RuntimeConfigureFunc(func(_ context.Context, a *report.ComponentArtifact) (report.RuntimeCapabilities, error) {
-		if a.IsReport() {
+		if a.IsReport() || a.HasLinkedHandler() {
 			return report.RuntimeCapabilities{}, nil
 		}
 		reader, err := a.ReaderCompilation().NewExecution(bootstrap.ReaderRuntimeConfig{SQL: &dsql.SQLComponent{DB: f.db.DB}})

@@ -48,6 +48,30 @@ country and region, selecting both dimensions includes the lookup; selecting onl
 country leaves it out. A composite lookup must not add an unselected dimension
 and silently split the aggregate into smaller groups.
 
+## Generated cube components
+
+Transcribing a cube-enabled reader emits a named cube input, output alias and
+component holder alongside the source. The cube registers as an ordinary POST
+component at the source route plus `/cube`. Other components can depend on that
+route, and MCP exposes the named input contract. The generated factory delegates
+to `report.NewLinkedFacade`; source execution still owns SQL, codecs, validation
+and authorization.
+
+The facade maps dimension and measure selections to source fields and forwards
+public source inputs through `filters`, whether or not they declare predicates.
+Filter values have a hidden `Has` marker so explicit `false`, zero and empty
+strings remain distinct from omission. Generated setters update that marker for
+Go callers. Internal dependencies and context inputs remain source-owned. Cube
+projection, ordering and pagination control the root view; other-view selectors
+and source criteria can still be forwarded.
+
+Dynamic DQL uses the same facade metadata and handler with runtime-derived
+shapes. Its synthetic type namespace belongs to the source component scope and
+version under `/_datly_cube`, keeping it separate from generated Go contracts.
+Linked source metadata records its companion to prevent duplicate dynamic cube
+registration; discovery validates that the companion exists in the same package.
+Re-authoring DQL clears this generated marker and derives its own cube.
+
 ## Report ordering permission
 
 Native cubes can order selected dimensions and measures even when the source
