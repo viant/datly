@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"reflect"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -280,8 +281,14 @@ func immutableValues(values []reflect.Value) (string, error) {
 			}
 		case reflect.Struct:
 			for i := 0; i < v.NumField(); i++ {
+				// A nested component output can carry its invocation logger.
+				// Its mutable runtime internals are not writer contract data.
+				// Keep ordinary function-bearing data fail-closed below.
+				if slices.Contains(strings.Split(v.Type().Field(i).Tag.Get("parameter"), ","), "kind=logger") {
+					continue
+				}
 				if err := walk(v.Field(i)); err != nil {
-					return err
+					return fmt.Errorf("%s.%s: %w", v.Type(), v.Type().Field(i).Name, err)
 				}
 			}
 		case reflect.Array:
