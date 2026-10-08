@@ -26,6 +26,8 @@ func TestCubeEmitsLinkedFacade(t *testing.T) {
 	component.RootView.Source.SQL = "SELECT account_id, hidden, SUM(amount) AS amount FROM spend GROUP BY account_id, hidden"
 	periodDefault, optional, cacheable := "month", false, true
 	component.Parameters = append(component.Parameters, &spec.Parameter{Name: "Period", TypeExpr: "string", Source: spec.BindSource{Kind: "form", Name: "period"}, Required: &optional, Value: &periodDefault, Cacheable: &cacheable, Tag: `mcp:"-"`})
+	component.RootView.Columns = append(component.RootView.Columns, &spec.Column{Name: "DaysRemaining", Source: "days_remaining", Type: spec.TypeRef{Name: "int", Pointer: true}, Groupable: &optional, Tag: `sqlx:"-" json:"daysRemaining,omitempty"`})
+	component.RootView.Source.SQL = "SELECT account_id, hidden, SUM(amount) AS amount, '' AS days_remaining FROM spend GROUP BY account_id, hidden"
 	generated, err := New(Input{Component: component, TargetPackage: "example.com/generated/reporting"}).Generate(filepath.Join(root, "reporting"))
 	if err != nil {
 		t.Fatal(err)
@@ -142,6 +144,8 @@ func TestLinkedCubeRegistrationMCPAndDependency(t *testing.T) {
  if _,found:=dimensions.Type.FieldByName("Hidden");found{t.Fatal("json:- selection exposed")}
  measures,_:=reflect.TypeFor[SpendCubeInput]().FieldByName("Measures")
  amount,_:=measures.Type.FieldByName("Amount")
+ if _,found:=measures.Type.FieldByName("DaysRemaining");found{t.Fatal("transient computed reader output advertised as cube measure")}
+ if _,found:=reflect.TypeFor[SpendRow]().FieldByName("DaysRemaining");!found{t.Fatal("transient computed field removed from regular reader output")}
  if strings.Split(amount.Tag.Get("json"),",")[0]!="amount"{t.Fatalf("reader measure serialization leaked into cube: %s",amount.Tag)}
  var bound SpendCubeInput
  if err:=json.Unmarshal([]byte("{\"dimensions\":{\"accountID\":true},\"measures\":{\"amount\":true}}"),&bound);err!=nil{t.Fatal(err)}
