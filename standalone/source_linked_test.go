@@ -161,3 +161,25 @@ func TestStandaloneLinkedOnlyConcurrentDistinctComponents(t *testing.T) {
 	wg.Wait()
 	require.Equal(t, 2, strings.Count(diagnostics.text(), "datly bootstrap linked materialize"))
 }
+
+func TestStandaloneLinkedRecursiveRootWithoutSources(t *testing.T) {
+	ctx := context.Background()
+	fixtureData := fixture.New(t)
+	fixtureData.WriteConfig(t, func(c map[string]any) {
+		c["GoBootstrap"] = map[string]any{"Packages": []string{"github.com/viant/datly/standalone/testdata/linkeddefault/..."}, "LinkedOnly": true}
+	})
+	cfg, err := (config.Loader{}).Load(ctx, fixtureData.Config)
+	require.NoError(t, err)
+	cfg.BaseDir = filepath.Join(t.TempDir(), "no-source-files")
+	_ = linkeddefault.LinkedType
+	server, err := New(ctx, Options{Config: cfg})
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, server.Shutdown(context.Background())) })
+	require.NoError(t, server.Reload(ctx, 1))
+	response := httptest.NewRecorder()
+	request := httptest.NewRequest("POST", "/linked-default", strings.NewReader(`{}`))
+	request.Header.Set("Content-Type", "application/json")
+	server.ServeHTTP(response, request)
+	require.Equal(t, 200, response.Code, response.Body.String())
+	require.Contains(t, response.Body.String(), `"ready":true`)
+}
