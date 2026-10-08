@@ -103,19 +103,18 @@ func filterSourceValue(root reflect.Value, index []int, sourceType reflect.Type)
 	if !present {
 		return reflect.Value{}, false, nil
 	}
-	if value.Type() == sourceType {
-		if nilable(value.Kind()) && value.IsNil() {
-			return reflect.Value{}, false, nil
+	if value.Type() != sourceType {
+		if value.Kind() != reflect.Pointer || value.Type().Elem() != sourceType {
+			return reflect.Value{}, false, fmt.Errorf("field type %s cannot provide source type %s", value.Type(), sourceType)
 		}
-		return value, true, nil
+		value = value.Elem()
 	}
-	if value.Kind() == reflect.Pointer && value.Type().Elem() == sourceType {
-		if value.IsNil() {
-			return reflect.Value{}, false, nil
-		}
-		return value.Elem(), true, nil
+	// Presence pointers and interface-backed converters can wrap a null value.
+	resolved := indirect(value)
+	if !resolved.IsValid() || nilable(resolved.Kind()) && resolved.IsNil() {
+		return reflect.Value{}, false, nil
 	}
-	return reflect.Value{}, false, fmt.Errorf("field type %s cannot provide source type %s", value.Type(), sourceType)
+	return value, true, nil
 }
 
 func nilable(kind reflect.Kind) bool {
