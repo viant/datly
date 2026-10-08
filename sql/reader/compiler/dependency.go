@@ -109,6 +109,14 @@ func componentWithRootView(source *spec.Component, view *spec.View) *spec.Compon
 	result := *source
 	result.RootView = view
 	result.Views = nil
+	// Independent views bind internal rows, not the component's public response.
+	// Keep connector/input settings but do not compile envelope redaction or
+	// presentation against a different row type. Never mutate the parent policy.
+	if source.Settings != nil {
+		settings := *source.Settings
+		settings.Output = nil
+		result.Settings = &settings
+	}
 	result.Parameters = make([]*spec.Parameter, 0, len(source.Parameters))
 	for _, param := range source.Parameters {
 		if param == nil || strings.EqualFold(strings.TrimSpace(param.Source.Kind), "output") {
