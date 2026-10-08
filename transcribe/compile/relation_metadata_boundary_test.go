@@ -1,23 +1,14 @@
-package compiler
+package compile
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/viant/datly/spec"
 )
 
-func TestLinkedRelationSQLValidationDeferred(t *testing.T) {
-	type item struct {
-		OrderID int    `sqlx:"ORDER_ID"`
-		Name    string `sqlx:"NAME"`
-	}
-	type order struct {
-		ID    int    `sqlx:"ID"`
-		Name  string `sqlx:"NAME"`
-		Items []*item
-	}
-	type output struct{ Data []*order }
+func TestRequiredRelationProjectionBoundary(t *testing.T) {
 	for _, tc := range []struct {
 		name, parent, child string
 		fail                bool
@@ -38,11 +29,15 @@ func TestLinkedRelationSQLValidationDeferred(t *testing.T) {
 			root := &spec.View{Name: "Orders", Namespace: "orders", Source: &spec.ViewSource{SQL: tc.parent}}
 			root.Relations = []*spec.Relation{{Name: "Items", Holder: "Items", Cardinality: spec.CardinalityMany, View: &spec.View{Name: "Items", Namespace: "items", Source: &spec.ViewSource{SQL: tc.child}}, On: []*spec.RelationLink{{ParentNamespace: "orders", ParentColumn: "ID", ChildNamespace: "items", ChildColumn: "ORDER_ID"}}}}
 			before := root.Clone()
-			_, err := Compile(Input{Component: &spec.Component{Name: "Orders", RootView: root}, InputType: reflect.TypeFor[struct{}](), OutputType: reflect.TypeFor[output](), DirectViewField: "Data"})
+			err := BackfillRelationMetadata(&spec.Component{Name: "Orders", RootView: root.Clone()})
 			if !reflect.DeepEqual(root, before) {
 				t.Fatal("compiled input changed")
 			}
-			if err != nil {
+			if tc.fail {
+				if err == nil || !strings.Contains(err.Error(), "required relation output") {
+					t.Fatalf("missing output accepted: %v", err)
+				}
+			} else if err != nil {
 				t.Fatal(err)
 			}
 		})

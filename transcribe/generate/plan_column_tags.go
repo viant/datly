@@ -12,6 +12,12 @@ import (
 
 func scalarColumnFieldTag(column *spec.Column, source string, includeVelty bool) string {
 	parsed := tags.NewTags(strings.TrimSpace(column.Tag))
+	if column.Output != "" && column.Output != source {
+		parsed.Set("sqlOutput", column.Output)
+	}
+	if column.Selector != "" && column.Selector != column.Output {
+		parsed.Set("selectorAlias", column.Selector)
+	}
 	if column.DeleteMarker {
 		parsed.Set(sqlio.TagSqlx, "-")
 		parsed.Set("writer", "delete")

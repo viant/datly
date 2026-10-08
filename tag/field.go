@@ -13,6 +13,7 @@ const (
 	SQLName         = "sql"
 	RelationName    = "on"
 	SourceName      = "source"
+	SQLOutputName   = "sqlOutput"
 	SelectorAlias   = "selectorAlias"
 	GroupableName   = "groupable"
 	DescriptionName = "desc"
@@ -38,6 +39,7 @@ type Field struct {
 	Predicates     []*spec.Predicate
 	QuerySelector  *QuerySelector
 	FormatSelector bool
+	SQLOutput      string
 	Source         string
 	SelectorAlias  string
 	Description    string
@@ -51,6 +53,7 @@ type Field struct {
 func ParseField(field reflect.StructField) (*Field, error) {
 	result := &Field{
 		Source:        strings.TrimSpace(field.Tag.Get(SourceName)),
+		SQLOutput:     strings.TrimSpace(field.Tag.Get(SQLOutputName)),
 		SelectorAlias: strings.TrimSpace(field.Tag.Get(SelectorAlias)),
 		Description:   strings.TrimSpace(field.Tag.Get(DescriptionName)),
 		Example:       strings.TrimSpace(field.Tag.Get(ExampleName)),

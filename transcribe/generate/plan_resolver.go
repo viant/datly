@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/viant/datly/spec"
+	authoring "github.com/viant/datly/transcribe/compile"
 	"github.com/viant/x"
 )
 
@@ -23,6 +24,12 @@ type planResolver struct {
 
 func (r *planResolver) resolve() (*Plan, error) {
 	r.input.Component = r.input.Component.Clone()
+	if err := authoring.BackfillRelationMetadata(r.input.Component, r.input.Resources); err != nil {
+		return nil, err
+	}
+	if err := authoring.BackfillReportMetadata(r.input.Component, r.input.Resources); err != nil {
+		return nil, err
+	}
 	// Writer shapes may be planned before lowering; reader plans cannot dispatch
 	// mutation lifecycles even when a declared Go type already exists.
 	if err := r.input.validateLifecycleTarget(true, !r.requireConcreteHelpers); err != nil {

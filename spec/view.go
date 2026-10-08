@@ -124,8 +124,12 @@ type Relation struct {
 }
 
 // RelationLink preserves one AST-proven parent/child equality. Go field
-// indexes are resolved later by the reader compiler and never enter spec.
+// names and result labels survive generation; field indexes remain runtime-owned.
 type RelationLink struct {
+	ParentField     string `json:"parentField,omitempty"`
+	ChildField      string `json:"childField,omitempty"`
+	ParentOutput    string `json:"parentOutput,omitempty"`
+	ChildOutput     string `json:"childOutput,omitempty"`
 	ParentNamespace string `json:"parentNamespace,omitempty"`
 	ParentColumn    string `json:"parentColumn,omitempty"`
 	ChildNamespace  string `json:"childNamespace,omitempty"`

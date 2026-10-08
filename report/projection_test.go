@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/viant/datly/report/cubecompose"
 	"github.com/viant/datly/spec"
+	authoring "github.com/viant/datly/transcribe/compile"
 	"github.com/viant/datly/typecatalog"
 )
 
@@ -34,11 +35,12 @@ func TestCubeDeclaredOutputMetadata(t *testing.T) {
 			source.Component.RootView.Columns[0].Source = tc.source
 			source.Component.RootView.Columns[0].NameInferred = tc.inferred
 			source.Component.RootView.Columns[1].NameInferred = true
-			project, err := NewProjectCompiler(ProjectConfig{Types: typecatalog.NewCatalog()}).Compile([]Source{source})
+			// SQL proofs are authoring work; linked report loading trusts the persisted metadata.
 			if tc.reject != "" {
-				require.ErrorContains(t, err, tc.reject)
+				require.ErrorContains(t, authoring.BackfillReportMetadata(source.Component), tc.reject)
 				return
 			}
+			project, err := NewProjectCompiler(ProjectConfig{Types: typecatalog.NewCatalog()}).Compile([]Source{source})
 			require.NoError(t, err)
 			derived := project.Derived()
 			expectedSelection := tc.source

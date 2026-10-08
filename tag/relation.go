@@ -19,6 +19,7 @@ type RelationPart struct {
 	Field     string
 	Namespace string
 	Column    string
+	Output    string // Optional result label, after | in an on part.
 	Include   *bool
 }
 
@@ -77,6 +78,13 @@ func parseRelationPart(value string) (RelationPart, error) {
 		result.Column = strings.TrimSpace(column)
 	} else {
 		result.Column = value
+	}
+	if column, output, ok := strings.Cut(result.Column, "|"); ok {
+		if strings.TrimSpace(output) == "" || strings.ContainsAny(output, "|:") {
+			return RelationPart{}, fmt.Errorf("invalid relation output label")
+		}
+		result.Column = strings.TrimSpace(column)
+		result.Output = strings.TrimSpace(output)
 	}
 	if result.Column == "" {
 		return RelationPart{}, fmt.Errorf("column is required")

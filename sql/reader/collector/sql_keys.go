@@ -7,7 +7,7 @@ func (r *Collector) SQLKeyColumns() map[string]bool {
 	add := func(links Links) {
 		for _, link := range links {
 			if link != nil && link.XField == nil {
-				result[link.Column] = true
+				result[link.OutputColumn()] = true
 			}
 		}
 	}

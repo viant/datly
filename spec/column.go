@@ -5,7 +5,10 @@ import "strings"
 // Column is canonical compile-time metadata for one scalar view projection.
 // Runtime field handles and database services are resolved by later owners.
 type Column struct {
-	Name             string `json:"name"`
+	Name string `json:"name"`
+	// Output and Selector retain authoring-time SQL projection identities.
+	Output           string `json:"output,omitempty"`
+	Selector         string `json:"selector,omitempty"`
 	DeleteMarker     bool   `json:"deleteMarker,omitempty"`
 	ConcurrencyToken bool   `json:"concurrencyToken,omitempty"`
 	// NameInferred records Go-row discovery; it is not user alias authority.

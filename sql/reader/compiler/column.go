@@ -52,6 +52,7 @@ func columnsFromType(rowType reflect.Type) ([]*data.Column, error) {
 		column := &data.Column{
 			Name:      field.Name,
 			Column:    columnName,
+			Output:    metadata.SQLOutput,
 			Groupable: metadata.Groupable,
 			Tag:       string(field.Tag),
 		}
@@ -85,6 +86,9 @@ func reconcileColumns(typed, canonical []*data.Column) []*data.Column {
 				column.NullFallback = metadata.NullFallback
 			}
 			column.Nullable = true
+		}
+		if column.Output == "" {
+			column.Output = metadata.Output
 		}
 		if column.Expression == "" {
 			column.Expression = metadata.Expression

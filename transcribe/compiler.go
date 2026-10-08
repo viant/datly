@@ -12,6 +12,7 @@ import (
 	readerpredicate "github.com/viant/datly/runtime/predicate/velty"
 	"github.com/viant/datly/spec"
 	"github.com/viant/datly/transcribe/column"
+	authoring "github.com/viant/datly/transcribe/compile"
 	"github.com/viant/datly/transcribe/dql"
 	"github.com/viant/datly/transcribe/dql/statement"
 	gen "github.com/viant/datly/transcribe/generate"
@@ -278,6 +279,12 @@ func (c *Compiler) Compile(ctx context.Context, source *Source) (*Result, error)
 		return nil, err
 	}
 	if _, err := bootstrap.NormalizeCodecReferences(component, compiledTypeContext); err != nil {
+		return nil, err
+	}
+	if err := authoring.BackfillRelationMetadata(component, source.Resources); err != nil {
+		return nil, err
+	}
+	if err := authoring.BackfillReportMetadata(component, source.Resources); err != nil {
 		return nil, err
 	}
 	enrichDescription(ctx, component, source.Docs)

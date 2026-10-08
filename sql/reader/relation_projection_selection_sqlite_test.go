@@ -59,7 +59,7 @@ func TestNamedRelationAliasesAndDeferredPredicatesSQLite(t *testing.T) {
 				policy := &spec.Selector{AllowFields: true}
 				childSQL := `SELECT c.ParentKey AS parent_id,c.name FROM (` + inner + `) c ` + marker
 				child := &spec.View{Name: "children", Namespace: "c", Selector: policy, Source: &spec.ViewSource{SQL: childSQL}}
-				root := &spec.View{Name: "parents", Selector: policy, Source: &spec.ViewSource{SQL: `SELECT id,name FROM parents $WHERE_CRITERIA`}, Relations: []*spec.Relation{{Name: "Children", Holder: "Children", Cardinality: spec.CardinalityMany, View: child, On: []*spec.RelationLink{{ParentColumn: "id", ChildNamespace: "c", ChildColumn: "parent_id"}}}}}
+				root := &spec.View{Name: "parents", Selector: policy, Source: &spec.ViewSource{SQL: `SELECT id,name FROM parents $WHERE_CRITERIA`}, Relations: []*spec.Relation{{Name: "Children", Holder: "Children", Cardinality: spec.CardinalityMany, View: child, On: []*spec.RelationLink{{ParentColumn: "id", ChildNamespace: "c", ChildColumn: "ParentKey", ChildOutput: "parent_id", ChildField: "ParentID"}}}}}
 				component := &spec.Component{RootView: root}
 				typ := reflect.TypeFor[[]*sourceGuardRow]()
 				plan, err := compiler.Compile(compiler.Input{Component: component, InputType: reflect.TypeFor[struct{}](), OutputType: typ, DirectViewType: typ})

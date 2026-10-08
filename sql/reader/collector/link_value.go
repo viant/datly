@@ -16,9 +16,9 @@ func (r *Collector) linkKeyAt(row any, link *Link, position int) (any, error) {
 	if link.XField != nil {
 		return sqlxio.NormalizeKey(link.XField.Interface(xunsafe.AsPointer(row))), nil
 	}
-	value, ok := r.sqlKeyAt(link.Column, position)
+	value, ok := r.sqlKeyAt(link.OutputColumn(), position)
 	if !ok {
-		return nil, fmt.Errorf("relation column %s has no value at row %d", link.Column, position)
+		return nil, fmt.Errorf("relation column %s has no value at row %d", link.OutputColumn(), position)
 	}
 	return value, nil
 }

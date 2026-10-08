@@ -666,8 +666,8 @@ func (p *viewPlanner) relationField(relation *spec.Relation) (Field, error) {
 			continue
 		}
 		links = append(links, &tag.RelationLink{
-			Parent: tag.RelationPart{Field: typecatalog.FieldName(link.ParentColumn), Namespace: link.ParentNamespace, Column: link.ParentColumn},
-			Child:  tag.RelationPart{Field: typecatalog.FieldName(link.ChildColumn), Namespace: link.ChildNamespace, Column: link.ChildColumn},
+			Parent: tag.RelationPart{Field: link.ParentField, Namespace: link.ParentNamespace, Column: link.ParentColumn, Output: relationOutputTag(link.ParentColumn, link.ParentOutput)},
+			Child:  tag.RelationPart{Field: link.ChildField, Namespace: link.ChildNamespace, Column: link.ChildColumn, Output: relationOutputTag(link.ChildColumn, link.ChildOutput)},
 		})
 	}
 	onValue, err := tag.RelationValue(links)
@@ -790,4 +790,11 @@ func appendStructTag(fieldTag, name, value string) string {
 func replaceStructTag(fieldTag, name, value string) string {
 	filtered := withoutStructTags(fieldTag, name)
 	return appendStructTag(filtered, name, value)
+}
+
+func relationOutputTag(column, output string) string {
+	if column == output {
+		return ""
+	}
+	return output
 }

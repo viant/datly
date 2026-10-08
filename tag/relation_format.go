@@ -33,6 +33,9 @@ func relationPartValue(part RelationPart, allowInclude bool) (string, error) {
 	if namespace := strings.TrimSpace(part.Namespace); namespace != "" {
 		column = namespace + "." + column
 	}
+	if output := strings.TrimSpace(part.Output); output != "" {
+		column += "|" + output
+	}
 	value := column
 	if field := strings.TrimSpace(part.Field); field != "" {
 		value = field + ":" + value
