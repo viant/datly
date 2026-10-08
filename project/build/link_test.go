@@ -85,7 +85,10 @@ func TestSyncLinksAddsOnlyMissingBlankImports(t *testing.T) {
 		if err != nil || !strings.Contains(string(support), "func init()") {
 			t.Fatalf("%s link support=%s err=%v", name, support, err)
 		}
-		if name == "delta" && !strings.Contains(string(support), "reflect.TypeFor[Component]()") {
+		if (name == "predicate" || name == "codec") && !strings.Contains(string(support), "var _anchorLinked = reflect.TypeFor[Linked]()") {
+			t.Fatalf("%s must use the common anchor convention: %s", name, support)
+		}
+		if name == "delta" && !strings.Contains(string(support), "var _anchorComponent = reflect.TypeFor[Component]()") {
 			t.Fatalf("unanchored component did not get type reachability: %s", support)
 		}
 	}

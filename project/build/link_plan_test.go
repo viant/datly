@@ -164,7 +164,7 @@ func TestSyncLinksFailureDoesNotPublish(t *testing.T) {
 		{"excluded link file", map[string]string{"pkg/links/link.go": "//go:build optional\n\npackage links\n", "pkg/links/active.go": "package links\n"}},
 		{"invalid selected source", map[string]string{"broken/broken.go": "package broken\nfunc broken("}},
 		{"unowned support", map[string]string{"reader/datly_link_sync.go": "package reader\n"}},
-		{"helper collision", map[string]string{"reader/collision.go": "package reader\nvar _datlyReachableComponent = 1\n"}},
+		{"helper collision", map[string]string{"reader/collision.go": "package reader\nvar _anchorComponent = 1\n"}},
 		{"import cycle", map[string]string{"reader/cycle.go": "package reader\nimport _ \"example.com/linkapp/pkg/links\"\n"}},
 		{"invalid zero-addition package", map[string]string{"pkg/links/link.go": "package links\nimport _ \"example.com/linkapp/reader\"\nvar Broken = missing\n"}},
 	} {
