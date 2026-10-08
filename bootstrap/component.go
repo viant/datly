@@ -348,6 +348,12 @@ func (r *packageComponentResolver) applyInput(resolved *resolvedContractField) e
 		}
 		r.component.RootView.InsertValidationPresence = true
 	}
+	if param != nil && param.IsMutationInput() && resolved.metadata.View != nil && resolved.metadata.View.Reconciliation != nil {
+		if r.component.RootView == nil {
+			return fmt.Errorf("finiteReconciliation requires a mutation root")
+		}
+		r.component.RootView.Reconciliation = resolved.metadata.View.Reconciliation.Clone()
+	}
 	if param != nil && param.IsMutationInput() && resolved.metadata.View != nil && resolved.metadata.View.QueueContract != "" {
 		if r.component.RootView == nil {
 			return fmt.Errorf("queue contract body requires a root view")
@@ -707,6 +713,7 @@ func (r *packageComponentResolver) view(field xshape.Field, name string, metadat
 		view.WriterIdentityPolicy = metadata.View.WriterIdentityPolicy
 		view.WriterActionPolicy = metadata.View.WriterActionPolicy
 		view.QueueContract = metadata.View.QueueContract
+		view.Reconciliation = metadata.View.Reconciliation.Clone()
 		view.RootNullPolicy = metadata.View.RootNullPolicy
 		view.NestedNullPolicy = metadata.View.NestedNullPolicy
 		view.InsertValidationPresence = metadata.View.InsertValidationPresence

@@ -23,6 +23,9 @@ import (
 // These are real native journals/transactions. The first unit's synchronous
 // commit observer makes an ignored public drain attempt against the second.
 // Only the genuine retained engine handle can then clean up denied completion.
+// Caller-owned variants are unbuffered captured-guard controls because buffered
+// cross-owner caller transactions are explicitly unsupported; their buffered
+// rejection counterparts are TestOrderedJournalRejectsCallerOwnedCombinations.
 func TestNativeAdmission49TwoUnitCleanup(t *testing.T) {
 	for _, viaEngine := range []bool{false, true} {
 		for _, caller := range []bool{false, true} {
@@ -85,6 +88,11 @@ func TestNativeAdmission49TwoUnitCleanup(t *testing.T) {
 				secondSource := dml.Source{DB: secondDB, Tx: callerTx}
 				queue := func(ctx context.Context, in rh.Invocation) (any, error) {
 					root = mainScope(ctx)
+					if caller {
+						if e := root.registerExecutionGuard(ctx, func(context.Context) error { return nil }); e != nil {
+							return nil, e
+						}
+					}
 					cap, found, e := in.Binder.Lookup(ctx, xh.DataKey)
 					if e != nil || !found {
 						return nil, fmt.Errorf("root data found=%v: %w", found, e)
@@ -92,7 +100,11 @@ func TestNativeAdmission49TwoUnitCleanup(t *testing.T) {
 					if e = cap.(xh.Data).Execute("INSERT INTO records VALUES(1)"); e != nil {
 						return nil, e
 					}
-					_, e = New().Execute(PrepareComponent(ctx, ComponentBufferedImperative, ""), Request{Input: testRouteInput(t, reflect.TypeFor[struct{}]()), DataSource: secondSource, Handler: rh.HandlerFunc(func(childContext context.Context, child rh.Invocation) (any, error) {
+					relation := ComponentBufferedImperative
+					if caller {
+						relation = ComponentBinding
+					}
+					_, e = New().Execute(PrepareComponent(ctx, relation, ""), Request{Input: testRouteInput(t, reflect.TypeFor[struct{}]()), DataSource: secondSource, Handler: rh.HandlerFunc(func(childContext context.Context, child rh.Invocation) (any, error) {
 						value, ok, err := child.Binder.Lookup(childContext, xh.DataKey)
 						if err != nil || !ok {
 							return nil, fmt.Errorf("child data found=%v: %w", ok, err)
@@ -104,7 +116,7 @@ func TestNativeAdmission49TwoUnitCleanup(t *testing.T) {
 				}
 				var err error
 				if viaEngine {
-					result, e := New().Execute(ctx, Request{Input: testRouteInput(t, reflect.TypeFor[struct{}]()), BufferedComponentCalls: true, DataSource: firstSource, Handler: rh.HandlerFunc(queue)})
+					result, e := New().Execute(ctx, Request{Input: testRouteInput(t, reflect.TypeFor[struct{}]()), BufferedComponentCalls: !caller, DataSource: firstSource, Handler: rh.HandlerFunc(queue)})
 					err = e
 					if result != nil {
 						t.Errorf("completion failure published success=%v", result)
@@ -113,8 +125,14 @@ func TestNativeAdmission49TwoUnitCleanup(t *testing.T) {
 					// Existing native dataScope API exercises the same genuine attachment,
 					// unit preflight and completion path without a synthesized activity.
 					root, _ = invocationDataScope(ctx, firstSource)
-					if e := root.enrollBufferedScope(); e != nil {
-						t.Fatal(e)
+					var enrollErr error
+					if caller {
+						enrollErr = root.registerExecutionGuard(ctx, func(context.Context) error { return nil })
+					} else {
+						enrollErr = root.enrollBufferedScope()
+					}
+					if enrollErr != nil {
+						t.Fatal(enrollErr)
 					}
 					data, e := root.resolve(ctx)
 					if e != nil {

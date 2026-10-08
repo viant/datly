@@ -39,6 +39,7 @@ func (c *compiler) mutationMarkers(record *plan.RecordPlan, view *spec.View, ope
 		}
 		record.Write.QueueContract = view.QueueContract
 	}
+	record.Write.Reconciliation = view.Reconciliation.Clone()
 	return compileWriterActionPolicy(record, view, operation)
 }
 

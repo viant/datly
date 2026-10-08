@@ -25,7 +25,7 @@ func hasQueueContract(record *Record) bool {
 }
 
 func hasRetainedWriterGuards(record *Record) bool {
-	return hasWriterActionPolicy(record) || hasQueueContract(record) || hasAfterQueueInput(record) || hasAfterValidateInput(record)
+	return hasWriterActionPolicy(record) || hasQueueContract(record) || hasAfterQueueInput(record) || hasAfterValidateInput(record) || hasReconciliation(record)
 }
 
 func validateQueueContracts(record *Record, operation string) error {
@@ -221,7 +221,7 @@ func (p *Program) validateQueueSlots() error {
 // Called after native queue hooks/observers, outside journal locks. Execution's
 // own guard path calls its private locked helper, never this public method.
 func (p *Program) validateQueuedContractState(ctx context.Context, binder xhandler.Binder) error {
-	if !hasQueueContract(p.metadata.Root) && !hasAfterQueueInput(p.metadata.Root) {
+	if !hasQueueContract(p.metadata.Root) && !hasAfterQueueInput(p.metadata.Root) && !hasReconciliation(p.metadata.Root) {
 		return nil
 	}
 	if err := p.validateQueueSlots(); err != nil {

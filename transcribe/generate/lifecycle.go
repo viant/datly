@@ -204,6 +204,19 @@ func (input *Input) validateLifecycleTarget(mutation, pendingDiscovery bool) err
 		}
 		return nil
 	}
+	if input.Component.RootView != nil && input.Component.RootView.Reconciliation != nil {
+		if !mutation {
+			return fmt.Errorf("finite_reconciliation requires native mutation generation")
+		}
+		// Wildcard and inferred relation columns are incomplete during shape
+		// discovery. Final emission and mutation lowering validate the complete
+		// graph; an absent provisional field is not an unknown final field.
+		if !pendingDiscovery {
+			if err := spec.ValidateReconciliationView(input.Component.RootView, policy); err != nil {
+				return err
+			}
+		}
+	}
 	if err := check(input.Component.RootView); err != nil {
 		return err
 	}

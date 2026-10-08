@@ -5,6 +5,7 @@ const (
 	ViewControlNestedNullPolicy         = "nested_null_policy"
 	ViewControlInsertValidationPresence = "insert_validation_presence"
 	ViewControlWriterIdentity           = "writer_identity"
+	ViewControlFiniteReconciliation     = "finite_reconciliation"
 	ViewControlQueueContract            = "queue_contract"
 	ViewControlWriterActionPolicy       = "writer_action_policy"
 	ViewControlOnDeleteNotFound         = "delete_not_found"

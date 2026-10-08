@@ -29,10 +29,13 @@ type State struct {
 	drains          map[*DrainRecord]struct{}
 	operations      NativeOperations
 	pending         *DrainPermit
+	journalNative   *NativeJournal
+	historicalDrain bool
 }
 type identity struct {
 	marker     byte
 	activities activityLedger
+	journal    journal
 }
 type Invocation struct{ identity *identity }
 

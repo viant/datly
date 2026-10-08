@@ -43,6 +43,7 @@ type DrainPermit struct {
 	operation Operation
 	consumed  bool
 	denied    error
+	run       *journalRun
 }
 type DrainRecord struct {
 	self     *DrainRecord
@@ -171,10 +172,17 @@ func (h Handle) Call(ctx context.Context, receiver any, invocation *Invocation, 
 		s.mu.Unlock()
 		return ErrDrainPermit
 	}
-	permit := &DrainPermit{state: s, identity: h.identity, operation: operation}
+	run, runErr := h.identity.journal.permitRun(s, operation)
+	if runErr != nil {
+		FailProtected(invocation, runErr)
+		s.mu.Unlock()
+		return runErr
+	}
+	permit := &DrainPermit{state: s, identity: h.identity, operation: operation, run: run}
 	s.pending = permit
 	native := s.operations[operation]
 	s.mu.Unlock()
+	returned := false
 	defer func() {
 		s.mu.Lock()
 		if s.pending == permit {
@@ -193,11 +201,25 @@ func (h Handle) Call(ctx context.Context, receiver any, invocation *Invocation, 
 		} else if IsAdmissionDenied(err) {
 			err = &returnedFailure{cause: err}
 		}
+		if returned && err == nil && consumed {
+			err = finishJournalRun(permit, true)
+		}
+		if permit.run != nil {
+			if !returned {
+				failJournalRun(permit, ErrJournal)
+				FailProtected(invocation, ErrJournal)
+			} else if err != nil {
+				failJournalRun(permit, err)
+				FailProtected(invocation, err)
+			}
+		}
 		if err == nil && !consumed {
 			err = ErrDrainPermit
 		}
 	}()
-	return native(ctx, permit, cause)
+	err = native(ctx, permit, cause)
+	returned = true
+	return err
 }
 
 // ConsumeDrain is called after executionMu, before native side effects. No

@@ -1,6 +1,8 @@
 package tag
 
 import (
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strconv"
@@ -68,6 +70,16 @@ func (v View) Value() (string, error) {
 		if err := appendPair(item.name, item.value); err != nil {
 			return "", err
 		}
+	}
+	if v.Reconciliation != nil {
+		raw, err := json.Marshal(v.Reconciliation)
+		if err != nil {
+			return "", err
+		}
+		if _, err = spec.ParseReconciliation(string(raw)); err != nil {
+			return "", err
+		}
+		values = append(values, "finiteReconciliation="+base64.RawURLEncoding.EncodeToString(raw))
 	}
 	if v.Limit != nil {
 		values = append(values, "limit="+strconv.Itoa(*v.Limit))
