@@ -6,6 +6,38 @@ import (
 	"testing"
 )
 
+func TestSelectorProjectionColumnsParseBranches(t *testing.T) {
+	for _, tc := range []struct {
+		name, source string
+		hasParts     bool
+		want         []string
+		reject       string
+	}{
+		{name: "extracted identifiers", source: "SELECT id, name FROM users", hasParts: true, want: []string{"id", "name"}},
+		{name: "extracted expression", source: "SELECT COALESCE(name, 'unknown') AS display_name FROM users", hasParts: true, want: []string{"display_name"}},
+		{name: "full parser fallback without FROM", source: "SELECT 1 AS value", want: []string{"value"}},
+		{name: "full parser fallback rejects non SQL", source: "not a select", reject: "unresolved"},
+		{name: "duplicate outputs still rejected", source: "SELECT id AS same, name AS same FROM users", hasParts: true, reject: "duplicate output column"},
+		{name: "structure still validated", source: "SELECT id FROM (users", hasParts: true, reject: "unresolved"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, ok := newSelectProjectionSource(tc.source)
+			require.Equal(t, tc.hasParts, ok)
+			columns, _, err := (SelectorProjection{SQL: tc.source}).columns()
+			if tc.reject != "" {
+				require.ErrorContains(t, err, tc.reject)
+				return
+			}
+			require.NoError(t, err)
+			var names []string
+			for _, column := range columns {
+				names = append(names, column.OrderExpression())
+			}
+			require.Equal(t, tc.want, names)
+		})
+	}
+}
+
 func TestSelectorSourceProjection(t *testing.T) {
 	for _, tc := range []struct {
 		name, source string
