@@ -2,6 +2,7 @@ package tool
 
 import (
 	"context"
+	"github.com/viant/datly/exec"
 
 	"github.com/viant/datly/mcp/invocation"
 	"github.com/viant/jsonrpc"
@@ -9,12 +10,24 @@ import (
 )
 
 type Handler struct {
-	plan    *Plan
-	invoker *invocation.Invoker
+	plan           *Plan
+	invoker        *invocation.Invoker
+	binding        *exec.ComponentBinding
+	requireBinding bool
 }
 
 func NewHandler(plan *Plan, invoker *invocation.Invoker) *Handler {
 	return &Handler{plan: plan, invoker: invoker}
+}
+
+// BindComponent freezes the identity of this generation's compiled tool.
+// A required but unavailable binding denies calls without inventing provenance.
+func (h *Handler) BindComponent(binding *exec.ComponentBinding, required bool) {
+	h.requireBinding = required
+	if binding != nil {
+		copy := *binding
+		h.binding = &copy
+	}
 }
 
 func (h *Handler) Handle(ctx context.Context, request *schema.CallToolRequest) (*schema.CallToolResult, *jsonrpc.Error) {
@@ -28,6 +41,11 @@ func (h *Handler) Handle(ctx context.Context, request *schema.CallToolRequest) (
 			name = request.Params.Name
 		}
 		return nil, schema.NewUnknownTool(name)
+	}
+	expected, err := expectedComponentBinding(request)
+	if err != nil || h.requireBinding && (expected == nil || h.binding == nil) ||
+		expected != nil && (h.binding == nil || exec.ValidateComponentBinding(*expected, *h.binding) != nil) {
+		return nil, jsonrpc.NewInvalidParamsError(exec.ErrComponentBinding.Error(), nil)
 	}
 	scope, err := h.plan.Scope(request.Params.Arguments)
 	if err != nil {

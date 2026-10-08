@@ -37,6 +37,8 @@ type Config struct {
 }
 
 type TransportConfig struct {
+	// MaxRequestBodyBytes is a trusted host HTTP bound; zero keeps the MCP default.
+	MaxRequestBodyBytes int64
 	// Zero selects safe listener defaults; negative explicitly disables a deadline.
 	ReadHeaderTimeout time.Duration
 	IdleTimeout       time.Duration

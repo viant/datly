@@ -34,6 +34,15 @@ import (
 )
 
 type Options struct {
+	// LinkedArtifact is trusted immutable executable provenance, supplied by the
+	// deployment build. It is independent of Config.Version and reload counters.
+	LinkedArtifact *dexec.LinkedArtifact
+	// RequireComponentBinding denies native MCP calls without an exact observed
+	// binding, including deployments whose artifact provenance is still absent.
+	RequireComponentBinding bool
+	// ToolMetadata supplies optional host metadata without replacing native
+	// contracts or the reserved exact component binding entry.
+	ToolMetadata func(context.Context, dexec.ComponentTarget) (map[string]interface{}, error)
 	// InvocationDiffer is the trusted host comparator bound to component contracts
 	// and lifecycle hooks. Nil preserves the missing-capability behavior.
 	InvocationDiffer xdiffer.Differ
@@ -120,7 +129,15 @@ func New(ctx context.Context, options Options) (_ *Server, err error) {
 		}
 		providers = append(providers, handlerprovider.Static(xauth.ProviderKind, service))
 	}
-	s := &Server{source: &source{Workspace: options.Workspace, config: options.Config, resources: options.Resources, holders: append([]any(nil), options.Holders...), invocationLogger: options.InvocationLogger, invocationDiffer: options.InvocationDiffer, providers: providers, requireLinked: options.RequireLinked || options.Holders != nil}, done: make(chan struct{}), ready: make(chan struct{}), mcpResourceAuthorizer: options.MCPResourceAuthorizer}
+	if options.LinkedArtifact != nil {
+		artifact := *options.LinkedArtifact
+		if err := artifact.Validate(); err != nil {
+			return nil, err
+		}
+		options.LinkedArtifact = &artifact
+	}
+	s := &Server{source: &source{Workspace: options.Workspace, config: options.Config, resources: options.Resources, holders: append([]any(nil), options.Holders...), invocationLogger: options.InvocationLogger, invocationDiffer: options.InvocationDiffer, providers: providers, requireLinked: options.RequireLinked || options.Holders != nil,
+		linkedArtifact: options.LinkedArtifact, requireComponentBinding: options.RequireComponentBinding, toolMetadata: options.ToolMetadata}, done: make(chan struct{}), ready: make(chan struct{}), mcpResourceAuthorizer: options.MCPResourceAuthorizer}
 	s.source.codecFactories, err = normalizeCodecs(options.Codecs)
 	if err != nil {
 		return nil, err

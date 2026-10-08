@@ -1,5 +1,11 @@
 package mcp
 
+import "github.com/viant/datly/mcp/tool"
+
+// ComponentBindingMetaKey carries the observed tools/list identity and the
+// expected tools/call params._meta identity for native bound execution.
+const ComponentBindingMetaKey = tool.ComponentBindingMetaKey
+
 // ToolSourceMetaKey is the MCP tool metadata entry identifying the exact
 // published Datly component that backs a tool. Hosts supply this entry from
 // their authoritative publication catalog; ordinary Datly components do not

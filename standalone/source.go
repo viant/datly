@@ -17,6 +17,7 @@ import (
 	"github.com/viant/datly/bootstrap/connector"
 	bootstrapindex "github.com/viant/datly/bootstrap/index"
 	packageresources "github.com/viant/datly/bootstrap/resources"
+	"github.com/viant/datly/exec"
 	gateway "github.com/viant/datly/gateway/http"
 	"github.com/viant/datly/mcp"
 	"github.com/viant/datly/report"
@@ -34,22 +35,25 @@ import (
 )
 
 type source struct {
-	invocationDiffer xdiffer.Differ
-	invocationLogger xlogger.Logger
-	Workspace        *xmodule.Workspace
-	resources        *resource.Store
-	caches           aerospike.Pool
-	config           *config.Config
-	connections      *connector.Set
-	codecs           xcodec.Factory
-	warmupAuth       *auth.Service
-	codecFactories   map[string]xcodec.Factory
-	registry         *x.Registry
-	http             gateway.Config
-	holders          []any
-	providers        []locator.Provider
-	requireLinked    bool
-	logger           *slog.Logger
+	linkedArtifact          *exec.LinkedArtifact
+	requireComponentBinding bool
+	toolMetadata            func(context.Context, exec.ComponentTarget) (map[string]interface{}, error)
+	invocationDiffer        xdiffer.Differ
+	invocationLogger        xlogger.Logger
+	Workspace               *xmodule.Workspace
+	resources               *resource.Store
+	caches                  aerospike.Pool
+	config                  *config.Config
+	connections             *connector.Set
+	codecs                  xcodec.Factory
+	warmupAuth              *auth.Service
+	codecFactories          map[string]xcodec.Factory
+	registry                *x.Registry
+	http                    gateway.Config
+	holders                 []any
+	providers               []locator.Provider
+	requireLinked           bool
+	logger                  *slog.Logger
 }
 
 func (s *source) compile(ctx context.Context, types *typecatalog.Catalog) (*application.Build, error) {
@@ -185,6 +189,7 @@ func (s *source) buildIndexed(snapshot *bootstrapindex.Snapshot, materializer bo
 	if s.config.MCP != nil {
 		built.MCP = mcp.Config{Authorization: s.config.MCP.Authorization, Folders: s.config.MCP.Folders, StrictArguments: s.config.MCP.StrictArguments}
 	}
+	built.MCP.LinkedArtifact, built.MCP.RequireComponentBinding, built.MCP.ToolMetadata = s.linkedArtifact, s.requireComponentBinding, s.toolMetadata
 	if s.logger != nil {
 		components, routes, mcpTools := indexedBootstrapCounts(snapshot)
 		s.logger.Info("datly bootstrap indexed done", "components", components, "routes", routes, "mcp", mcpTools, "preload", len(built.Preload), "elapsed", time.Since(started).String())
@@ -347,6 +352,7 @@ func (s *source) compileEager(ctx context.Context, types *typecatalog.Catalog) (
 	if s.config.MCP != nil {
 		built.MCP = mcp.Config{Authorization: s.config.MCP.Authorization, Folders: s.config.MCP.Folders, StrictArguments: s.config.MCP.StrictArguments}
 	}
+	built.MCP.LinkedArtifact, built.MCP.RequireComponentBinding, built.MCP.ToolMetadata = s.linkedArtifact, s.requireComponentBinding, s.toolMetadata
 	built.HTTP.StaticContent = append([]*spec.StaticContent(nil), s.http.StaticContent...)
 	components := &sourceComponent{source: s}
 	type reflectedComponent struct {

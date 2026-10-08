@@ -72,6 +72,9 @@ func serverOptions(config Config) []upstream.Option {
 		result = append(result, upstream.WithLoggerName(config.LoggerName))
 	}
 	transport := config.Transport
+	if transport.MaxRequestBodyBytes != 0 {
+		result = append(result, upstream.WithMaxRequestBodyBytes(transport.MaxRequestBodyBytes))
+	}
 	if transport.CORS != nil {
 		result = append(result, upstream.WithCORS(transport.CORS))
 	}
