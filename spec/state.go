@@ -61,14 +61,21 @@ func (s *WireSchema) Clone() *WireSchema {
 	return &result
 }
 
+type ResolutionGroupSpec struct {
+	Name      string   `json:"name,omitempty"`
+	After     []string `json:"after,omitempty"`
+	DependsOn []string `json:"dependsOn,omitempty"`
+}
+
 type Parameter struct {
-	Name           string          `json:"name,omitempty"`
-	Declaration    DeclarationKind `json:"declaration,omitempty"`
-	Source         BindSource      `json:"source,omitempty"`
-	BodyNullPolicy string          `json:"bodyNullPolicy,omitempty"`
-	QueryListCSV   bool            `json:"queryListCSV,omitempty"`
-	TypeExpr       string          `json:"typeExpr,omitempty"`
-	OutputTypeExpr string          `json:"outputTypeExpr,omitempty"`
+	ResolutionGroup *ResolutionGroupSpec `json:"resolutionGroup,omitempty"`
+	Name            string               `json:"name,omitempty"`
+	Declaration     DeclarationKind      `json:"declaration,omitempty"`
+	Source          BindSource           `json:"source,omitempty"`
+	BodyNullPolicy  string               `json:"bodyNullPolicy,omitempty"`
+	QueryListCSV    bool                 `json:"queryListCSV,omitempty"`
+	TypeExpr        string               `json:"typeExpr,omitempty"`
+	OutputTypeExpr  string               `json:"outputTypeExpr,omitempty"`
 	// DeclarationSQL preserves the `/* ... */` SQL/comment body attached to a
 	// declaration as an authored input to later transcribe stages.
 	DeclarationSQL    string                 `json:"declarationSQL,omitempty"`

@@ -36,7 +36,7 @@ func (d *Data) ComponentData(relation, order string) xhandler.Data {
 		d = d.parent
 	}
 	child := &Data{
-		root: owner, parent: d, relation: relation, order: order, open: true,
+		root: owner, parent: d, relation: relation, order: order, open: true, journalFrame: d.journalFrame,
 		db: owner.db, externalTx: owner.externalTx, onCommit: owner.onCommit,
 		insertServices: owner.insertServices, updateServices: owner.updateServices,
 		deleteServices: owner.deleteServices,
@@ -54,6 +54,9 @@ func (d *Data) SealComponent() {
 	owner := d.owner()
 	owner.mu.Lock()
 	d.open = false
+	if d.parent != nil && d.journalFrame != d.parent.journalFrame {
+		drainowner.SealFrame(d.journalFrame)
+	}
 	if d == owner {
 		drainowner.Seal(owner)
 	}

@@ -48,7 +48,9 @@ func validateWriteEligibilityHooks(metadata *Metadata, outputType reflect.Type) 
 		}
 		for _, relation := range record.Relations {
 			if root.writeEligibility && !relation.Child.Auxiliary {
-				return fmt.Errorf("WriteEligible does not support writable descendants")
+				if record != root || relation.Child == root || len(relation.Child.Relations) != 0 || len(relation.Links) == 0 {
+					return fmt.Errorf("WriteEligible supports only linked direct writable leaf children")
+				}
 			}
 			if err := visit(relation.Child); err != nil {
 				return err
@@ -134,7 +136,37 @@ func (p *Program) decideWriteEligibility(ctx context.Context) (err error) {
 		if err = ctx.Err(); err != nil {
 			return err
 		}
+		if !result[0].Bool() {
+			if err := p.validateExcludedRootProducer(frame); err != nil {
+				return err
+			}
+		}
 		frame.ExcludedWrite = !result[0].Bool()
+	}
+	return nil
+}
+
+// An excluded parent may keep child writes only when its persisted relation
+// producers already exist unchanged. Checking metadata also covers empty slices.
+func (p *Program) validateExcludedRootProducer(frame *Frame) error {
+	for _, relation := range frame.Record.Relations {
+		if relation.Child.Auxiliary {
+			continue
+		}
+		if frame.Action != h.WriteUpdate || !frame.Previous.IsValid() || frame.Previous.Kind() != reflect.Pointer || frame.Previous.IsNil() {
+			return errors.New("WriteEligible cannot suppress an INSERT root with writable children")
+		}
+		for _, link := range relation.Links {
+			field := &link.Parent
+			if !p.previousFields[frame.Record].Has(field.Name) {
+				return fmt.Errorf("WriteEligible requires loaded Previous for child producer %s", field.Name)
+			}
+			prior := previousField(frame.Previous.Elem(), frame.Record, field)
+			current := frame.Entity.Elem().FieldByIndex(field.Index)
+			if !prior.IsValid() || !concurrencyTokenEqual(current.Interface(), prior.Interface()) {
+				return fmt.Errorf("WriteEligible cannot suppress changed child producer %s", field.Name)
+			}
+		}
 	}
 	return nil
 }

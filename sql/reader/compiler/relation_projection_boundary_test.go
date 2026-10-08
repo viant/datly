@@ -2,13 +2,12 @@ package compiler
 
 import (
 	"reflect"
-	"strings"
 	"testing"
 
 	"github.com/viant/datly/spec"
 )
 
-func TestRequiredRelationProjectionBoundary(t *testing.T) {
+func TestLinkedRelationSQLValidationDeferred(t *testing.T) {
 	type item struct {
 		OrderID int    `sqlx:"ORDER_ID"`
 		Name    string `sqlx:"NAME"`
@@ -43,11 +42,7 @@ func TestRequiredRelationProjectionBoundary(t *testing.T) {
 			if !reflect.DeepEqual(root, before) {
 				t.Fatal("compiled input changed")
 			}
-			if tc.fail {
-				if err == nil || !strings.Contains(err.Error(), "required relation output") {
-					t.Fatalf("missing output accepted: %v", err)
-				}
-			} else if err != nil {
+			if err != nil {
 				t.Fatal(err)
 			}
 		})

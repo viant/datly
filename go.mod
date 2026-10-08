@@ -9,18 +9,18 @@ require (
 	github.com/lestrrat-go/jwx v1.2.29
 	github.com/mattn/go-sqlite3 v1.14.16
 	github.com/stretchr/testify v1.11.1
-	github.com/viant/aerospike v0.4.5-0.20260927175034-4ea380729969
+	github.com/viant/aerospike v0.4.5-0.20261008043351-154a50202766
 	github.com/viant/assertly v0.9.1-0.20220620174148-bab013f93a60
 	github.com/viant/gmetric v0.3.2
 	github.com/viant/govalidator v0.3.4-0.20260913213120-027a9dd54d73
-	github.com/viant/mcp v0.24.1-0.20261006175714-91a771f529b9
-	github.com/viant/mcp-protocol v0.19.1-0.20261005144737-c504db7a02bb
+	github.com/viant/mcp v0.24.1-0.20261008165059-494f36529f6e
+	github.com/viant/mcp-protocol v0.19.1-0.20261008164814-4025ecf6ddd4
 	github.com/viant/parsly v0.3.3
-	github.com/viant/sqlparser v0.13.1-0.20261005175605-18369aade19d
-	github.com/viant/sqlx v0.26.1-0.20261005180002-cf279facc496
+	github.com/viant/sqlparser v0.13.1-0.20261008165000-6fb4cdcd96a5
+	github.com/viant/sqlx v0.26.1-0.20261007205057-0330f64d8fd3
 	github.com/viant/structology v0.10.1-0.20261005184011-cdaab8ea7dab
-	github.com/viant/structql v0.5.4
-	github.com/viant/tagly v0.4.1-0.20261003132159-8165180970e1
+	github.com/viant/structql v0.5.5-0.20261008164328-d0b837beaa3a
+	github.com/viant/tagly v0.4.1-0.20261007173811-969600917520
 	github.com/viant/velty v0.4.1-0.20260915052314-fca47c0595f8
 	github.com/viant/x v0.5.1-0.20260915043005-1bc42b9eef47
 	github.com/viant/xdatly v1.0.1-0.20261005144549-60dd64a21442
@@ -124,7 +124,7 @@ require (
 	github.com/go-viper/mapstructure/v2 v2.2.1 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/viant/afs v1.30.1-0.20260914155934-90e95d483861
-	github.com/viant/bindly v0.4.1-0.20261005213521-e5944f61e2a9
+	github.com/viant/bindly v0.4.1-0.20261006234956-d0b4e58bac4e
 	github.com/viant/godiff v0.4.3-0.20260914060527-9f2005ca82e8
 	github.com/viant/jsonrpc v0.25.0
 	github.com/viant/scy v0.35.1-0.20260914041206-699e6c909726

@@ -25,9 +25,11 @@ func TestMutationHookScaffoldCreateOnceSQLite(t *testing.T) {
 	for _, tc := range []struct {
 		name, destination, filename string
 		existing                    bool
+		batch                       bool
 	}{
 		{name: "fresh default destination", filename: "lifecycle.go"},
 		{name: "enable on existing package", destination: "entity_lifecycle.go", filename: "entity_lifecycle.go", existing: true},
+		{name: "existing optional batch boundary", destination: "batch_lifecycle.go", filename: "batch_lifecycle.go", existing: true, batch: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx := context.Background()
@@ -112,6 +114,9 @@ SELECT ID, NAME FROM EVENTS`}
 				t.Fatal(err)
 			}
 			custom := text.String() + "\nvar scaffoldEvents []string\n// application customization remains owned by the author\n"
+			if tc.batch {
+				custom += "\nfunc (hooks *" + hookRef.BaseName + ") AfterQueueInput(ctx context.Context,input *EventsInput,output *EventsOutput)error{if hooks.Input!=input || hooks.QueueCount!=2{panic(\"batch did not follow all native row callbacks\")};scaffoldEvents=append(scaffoldEvents,\"AfterQueueInput\");return nil}\n"
+			}
 			if err = os.WriteFile(path, []byte(custom), 0644); err != nil {
 				t.Fatal(err)
 			}
@@ -128,6 +133,10 @@ SELECT ID, NAME FROM EVENTS`}
 			consumer = strings.Replace(consumer, "package events", "package generated", 1)
 			consumer = strings.Replace(consumer, "var count int", `counts:=map[string]int{};for _,phase:=range scaffoldEvents{counts[phase]++};for _,phase:=range []string{"Init","Validate","AfterSequence","AfterQueue"}{if counts[phase]!=2{t.Fatalf("scaffold phase %s calls=%d",phase,counts[phase])}};if counts["Finalize"]!=1{t.Fatalf("finalizer calls=%d",counts["Finalize"])}
 	var count int`, 1)
+			if tc.batch {
+				consumer = strings.Replace(consumer, "var count int", `if counts["AfterQueueInput"]!=1 {t.Fatalf("batch hook calls=%d",counts["AfterQueueInput"])}
+	var count int`, 1)
+			}
 			if err = os.WriteFile(filepath.Join(root, "generated", "scaffold_runtime_test.go"), []byte(consumer), 0644); err != nil {
 				t.Fatal(err)
 			}

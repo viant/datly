@@ -13,6 +13,7 @@ const (
 	SQLName         = "sql"
 	RelationName    = "on"
 	SourceName      = "source"
+	SQLOutputName   = "sqlOutput"
 	SelectorAlias   = "selectorAlias"
 	GroupableName   = "groupable"
 	DescriptionName = "desc"
@@ -27,33 +28,43 @@ type SQL struct {
 // Field is the parsed Datly metadata for one Go field. Generic binding and
 // SQLX metadata remain represented by their owning packages.
 type Field struct {
-	QueryListCSV   bool
-	Component      *Component
-	View           *View
-	Self           *SelfReference
-	Codec          *Codec
-	SQL            *SQL
-	Binding        *bindly.BindingSpec
-	Relation       []*RelationLink
-	Predicates     []*spec.Predicate
-	QuerySelector  *QuerySelector
-	FormatSelector bool
-	Source         string
-	SelectorAlias  string
-	Description    string
-	Example        string
-	Groupable      bool
-	MCP            *bool
-	PathMCP        *bool
-	Invariant      string
+	DocumentationOrigin *spec.ColumnOrigin
+	QueryListCSV        bool
+	Component           *Component
+	View                *View
+	Self                *SelfReference
+	Codec               *Codec
+	SQL                 *SQL
+	Binding             *bindly.BindingSpec
+	Relation            []*RelationLink
+	Predicates          []*spec.Predicate
+	QuerySelector       *QuerySelector
+	FormatSelector      bool
+	SQLOutput           string
+	Source              string
+	SelectorAlias       string
+	Description         string
+	Example             string
+	Groupable           bool
+	MCP                 *bool
+	PathMCP             *bool
+	Invariant           string
 }
 
 func ParseField(field reflect.StructField) (*Field, error) {
 	result := &Field{
 		Source:        strings.TrimSpace(field.Tag.Get(SourceName)),
+		SQLOutput:     strings.TrimSpace(field.Tag.Get(SQLOutputName)),
 		SelectorAlias: strings.TrimSpace(field.Tag.Get(SelectorAlias)),
 		Description:   strings.TrimSpace(field.Tag.Get(DescriptionName)),
 		Example:       strings.TrimSpace(field.Tag.Get(ExampleName)),
+	}
+	if table, ok := field.Tag.Lookup("docTable"); ok {
+		result.DocumentationOrigin = &spec.ColumnOrigin{}
+		if table != "-" {
+			result.DocumentationOrigin.Table = table
+			result.DocumentationOrigin.Column = field.Tag.Get("docColumn")
+		}
 	}
 	if value, ok := field.Tag.Lookup("queryList"); ok {
 		if value != "csv" {

@@ -15,6 +15,7 @@ func applyFieldViewTag(view *data.View, options *dtag.View) {
 	if options.Name != "" {
 		view.Spec.Name = options.Name
 	}
+	view.Spec.DocumentationTable = options.DocumentationTable
 	view.Connector = options.Connector
 	view.Spec.BatchSize = options.Batch
 	view.Spec.BatchConcurrency = options.BatchConcurrency

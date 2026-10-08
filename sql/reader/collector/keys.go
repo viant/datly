@@ -19,7 +19,7 @@ type relationIndexKey struct {
 }
 
 func relationIndexIdentity(link *Link) relationIndexKey {
-	key := relationIndexKey{namespace: link.Namespace, column: link.Column, source: KeySourceColumn}
+	key := relationIndexKey{namespace: link.Namespace, column: link.OutputColumn(), source: KeySourceColumn}
 	if link.XField != nil {
 		key.source = link.KeySource
 		if key.source == "" {

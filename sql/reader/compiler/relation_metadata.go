@@ -182,8 +182,11 @@ func resolveRelationFields(links data.Links, rowType reflect.Type) error {
 		if link == nil {
 			continue
 		}
+		if link.Field != "" {
+			continue
+		}
 		for _, column := range columns {
-			if column != nil && (strings.EqualFold(column.Column, link.Column) || strings.EqualFold(column.Name, link.Column)) {
+			if column != nil && (strings.EqualFold(column.Column, link.OutputColumn()) || strings.EqualFold(column.Name, link.OutputColumn())) {
 				link.Field = column.Name
 				break
 			}
@@ -255,8 +258,8 @@ func (d *viewDeriver) relationFromField(parent *data.View, parentType reflect.Ty
 		Of: &data.RelationRef{View: child, On: make(data.Links, 0, len(links)), MatchStrategy: parseFieldMatchStrategy(viewMatch(metadata.View))},
 	}
 	for _, link := range links {
-		relation.On = append(relation.On, &data.Link{Namespace: link.parentNamespace, Column: link.parentColumn, Field: link.parentField})
-		relation.Of.On = append(relation.Of.On, &data.Link{Namespace: link.childNamespace, Column: link.childColumn, Field: link.childField})
+		relation.On = append(relation.On, &data.Link{Namespace: link.parentNamespace, Column: link.parentColumn, Output: link.parentOutput, Field: link.parentField})
+		relation.Of.On = append(relation.Of.On, &data.Link{Namespace: link.childNamespace, Column: link.childColumn, Output: link.childOutput, Field: link.childField})
 	}
 	return relation, nil
 }

@@ -6,6 +6,7 @@ import (
 	"go/token"
 	"path/filepath"
 	"reflect"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -17,6 +18,7 @@ import (
 )
 
 type viewPlanner struct {
+	borrowed       map[*spec.View]ViewPlan
 	plan           *Plan
 	velty          bool
 	names          map[*spec.View]string
@@ -37,10 +39,39 @@ func (r *planResolver) resolveViews() (map[string]int, error) {
 		return indexes, nil
 	}
 	planner := &viewPlanner{
-		plan: plan, velty: r.input.VeltyHandler != nil, names: map[*spec.View]string{}, owners: map[string]*spec.View{},
+		borrowed: map[*spec.View]ViewPlan{},
+		plan:     plan, velty: r.input.VeltyHandler != nil, names: map[*spec.View]string{}, owners: map[string]*spec.View{},
 		parents: map[*spec.View]string{}, dests: map[*spec.View]string{}, visiting: map[*spec.View]bool{},
 		outputs:        map[*spec.Relation]*spec.Parameter{},
 		reuseLeafTypes: len(r.input.SetMarkerViews) == 0,
+	}
+	borrowedPaths := make([]string, 0, len(r.input.Views))
+	for identity, reference := range r.input.Views {
+		if reference != nil && reference.Borrowed != nil {
+			borrowedPaths = append(borrowedPaths, identity)
+		}
+	}
+	var canonical map[string]*spec.View
+	if len(borrowedPaths) > 0 {
+		var err error
+		canonical, err = r.canonicalViewIndex()
+		if err != nil {
+			return nil, err
+		}
+	}
+	sort.Strings(borrowedPaths)
+	for _, identity := range borrowedPaths {
+		ref := r.input.Views[identity]
+		if ref == nil || ref.Borrowed == nil {
+			continue
+		}
+		linked, err := r.resolveLinkedView(canonical[identity], ref, identity)
+		if err != nil {
+			return nil, err
+		}
+		planner.borrowed[canonical[identity]] = linked
+		indexes[identity] = len(plan.Views)
+		plan.Views = append(plan.Views, linked)
 	}
 	for _, param := range preferDefinedParams(component.Parameters) {
 		if !param.IsDerivedOutput() {
@@ -51,6 +82,18 @@ func (r *planResolver) resolveViews() (map[string]int, error) {
 			return nil, fmt.Errorf("output relation %s requires a derived view without row links", param.Name)
 		}
 		planner.outputs[relation] = param
+		identity, err := relation.View.Identity()
+		if err != nil {
+			return nil, err
+		}
+		if reference := r.input.Views[identity]; reference != nil {
+			linked, err := r.resolveLinkedView(relation.View, reference, identity)
+			if err != nil {
+				return nil, err
+			}
+			planner.names[relation.View] = linked.Name
+			plan.Views = append(plan.Views, linked)
+		}
 	}
 	root := component.RootView
 	if root == nil && r.input.ExternalHandler != nil {
@@ -72,6 +115,9 @@ func (r *planResolver) resolveViews() (map[string]int, error) {
 				if _, output := planner.outputs[relation]; !output {
 					continue
 				}
+				if planner.names[relation.View] != "" {
+					continue
+				}
 				destination, err := generatedViewDestination(relation.View, plan.ViewDest)
 				if err != nil {
 					return nil, err
@@ -80,6 +126,9 @@ func (r *planResolver) resolveViews() (map[string]int, error) {
 					return nil, err
 				}
 			}
+		} else if linked, ok := planner.borrowed[root]; ok {
+			plan.RootViewType = linked.Type
+			planner.names[root] = linked.Name
 		} else {
 			rootDest, err := generatedViewDestination(root, plan.ViewDest)
 			if err != nil {
@@ -213,7 +262,7 @@ func (r *planResolver) resolveLinkedView(view *spec.View, reference *ViewReferen
 	}
 	typeName := linkedNamedTypeExpression(r.plan, r.input.TargetPackage, descriptor)
 	return ViewPlan{
-		Identity: identity, Name: descriptor.Name, Type: typeName, Ownership: ViewLinked, DescriptorKey: key,
+		Package: descriptor.PkgPath, Identity: identity, Name: descriptor.Name, Type: typeName, Ownership: ViewLinked, DescriptorKey: key,
 	}, nil
 }
 
@@ -378,6 +427,13 @@ func (p *viewPlanner) assign(view *spec.View, typeName, destination string) erro
 	}
 	if !token.IsIdentifier(typeName) || !ast.IsExported(typeName) {
 		return fmt.Errorf("generated view %q type %q must be an exported Go identifier", view.Name, typeName)
+	}
+	if linked, ok := p.borrowed[view]; ok {
+		if linked.Name != typeName {
+			return fmt.Errorf("borrow_sql_row generated slot name does not match admitted row")
+		}
+		p.names[view] = linked.Name
+		return nil
 	}
 	if owner := p.owners[typeName]; owner != nil && owner != view {
 		// Explicit names can share one generated leaf contract. Keep inferred
@@ -610,8 +666,8 @@ func (p *viewPlanner) relationField(relation *spec.Relation) (Field, error) {
 			continue
 		}
 		links = append(links, &tag.RelationLink{
-			Parent: tag.RelationPart{Field: typecatalog.FieldName(link.ParentColumn), Namespace: link.ParentNamespace, Column: link.ParentColumn},
-			Child:  tag.RelationPart{Field: typecatalog.FieldName(link.ChildColumn), Namespace: link.ChildNamespace, Column: link.ChildColumn},
+			Parent: tag.RelationPart{Field: link.ParentField, Namespace: link.ParentNamespace, Column: link.ParentColumn, Output: relationOutputTag(link.ParentColumn, link.ParentOutput)},
+			Child:  tag.RelationPart{Field: link.ChildField, Namespace: link.ChildNamespace, Column: link.ChildColumn, Output: relationOutputTag(link.ChildColumn, link.ChildOutput)},
 		})
 	}
 	onValue, err := tag.RelationValue(links)
@@ -655,7 +711,7 @@ func appendViewTagsWithMatch(fieldTag string, view *spec.View, match string) (st
 		return fieldTag, nil
 	}
 	fieldTag = withoutStructTags(fieldTag, tag.ViewName, tag.SQLName)
-	metadata := tag.View{Name: view.CanonicalName(), TypeName: view.TypeName, Dest: view.Dest, EntityHooks: view.EntityHooks, WriterIdentityPolicy: view.WriterIdentityPolicy, WriterActionPolicy: view.WriterActionPolicy, QueueContract: view.QueueContract, InsertValidationPresence: view.InsertValidationPresence, RootNullPolicy: view.RootNullPolicy, NestedNullPolicy: view.NestedNullPolicy, RowLock: view.RowLock, RowLockOrder: view.RowLockOrder, OnDeleteNotFound: view.OnDeleteNotFound, MutationPredicateGroup: view.MutationPredicateGroup, Batch: view.BatchSize,
+	metadata := tag.View{DocumentationTable: view.DocumentationTable, Name: view.CanonicalName(), TypeName: view.TypeName, Dest: view.Dest, EntityHooks: view.EntityHooks, WriterIdentityPolicy: view.WriterIdentityPolicy, WriterActionPolicy: view.WriterActionPolicy, QueueContract: view.QueueContract, Reconciliation: view.Reconciliation.Clone(), InsertValidationPresence: view.InsertValidationPresence, RootNullPolicy: view.RootNullPolicy, NestedNullPolicy: view.NestedNullPolicy, RowLock: view.RowLock, RowLockOrder: view.RowLockOrder, OnDeleteNotFound: view.OnDeleteNotFound, MutationPredicateGroup: view.MutationPredicateGroup, Batch: view.BatchSize,
 		BatchConcurrency: view.BatchConcurrency,
 		Auxiliary:        view.Auxiliary,
 		Match:            match,
@@ -734,4 +790,11 @@ func appendStructTag(fieldTag, name, value string) string {
 func replaceStructTag(fieldTag, name, value string) string {
 	filtered := withoutStructTags(fieldTag, name)
 	return appendStructTag(filtered, name, value)
+}
+
+func relationOutputTag(column, output string) string {
+	if column == output {
+		return ""
+	}
+	return output
 }

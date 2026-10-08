@@ -175,6 +175,16 @@ func applyNullProjection(sqlText string, view *data.View) (string, error) {
 	if view == nil || len(view.Columns) == 0 || view.NullsAllowed() {
 		return sqlText, nil
 	}
+	needsFallback := false
+	for _, column := range view.Columns {
+		if column != nil && column.Nullable && strings.TrimSpace(column.NullFallback) != "" {
+			needsFallback = true
+			break
+		}
+	}
+	if !needsFallback {
+		return sqlText, nil
+	}
 	selectStmt, err := sqlparser.ParseQuery(sqlText)
 	if err != nil || selectStmt == nil || len(selectStmt.List) == 0 {
 		return sqlText, nil

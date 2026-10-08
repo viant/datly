@@ -58,7 +58,17 @@ func (c *Config) ResolveConstants() (*Config, error) {
 		return &result
 	}
 	for i := range result.Connectors {
-		paths = append(paths, &result.Connectors[i].DSN)
+		if c.Connectors[i].Secret != nil {
+			// DSN has two owners: instance constants here, then Scy secret
+			// fields when the connector opens. Explicit constants win; unknown
+			// references remain for Scy without reading credentials here.
+			result.Connectors[i].DSN, err = c.Const.ExpandKnown(c.Connectors[i].DSN)
+			if err != nil {
+				return nil, fmt.Errorf("configured connector DSN: %w", err)
+			}
+		} else {
+			paths = append(paths, &result.Connectors[i].DSN)
+		}
 		result.Connectors[i].Secret = cloneSecret(c.Connectors[i].Secret)
 	}
 	result.StaticContent = make([]*spec.StaticContent, len(c.StaticContent))

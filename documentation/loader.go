@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/viant/bindly/resource"
 	"github.com/viant/datly/spec"
-	"github.com/viant/sqlparser"
 	xdocs "github.com/viant/xdatly/docs"
 	"gopkg.in/yaml.v3"
 	"io"
@@ -19,7 +18,6 @@ type Loader struct{ Resources *resource.Store }
 
 // Snapshot is immutable after Load. Annotation lookups never fetch resources.
 type Snapshot struct {
-	lineage                            map[string]*sqlparser.ColumnLineage
 	schemas                            map[string]string
 	schemaResources                    []string
 	responses                          map[string]string

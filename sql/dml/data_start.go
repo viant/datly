@@ -26,6 +26,11 @@ func (d *Data) Start(ctx context.Context) error {
 	}
 	owner.executionMu.Lock()
 	defer owner.executionMu.Unlock()
+	release, admissionErr := drainowner.AdmitBindingGroupTransactionStart(owner)
+	if admissionErr != nil {
+		return admissionErr
+	}
+	defer release()
 	owner.mu.Lock()
 	var err error
 	protectedFailure := drainowner.ProtectedOwnerFailure(owner)

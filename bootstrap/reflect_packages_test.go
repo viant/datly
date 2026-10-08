@@ -2,9 +2,11 @@ package bootstrap
 
 import (
 	"reflect"
+	"slices"
 	"testing"
 
 	"github.com/viant/datly/typecatalog"
+	"github.com/viant/xdatly"
 )
 
 type ReflectedPackageInput struct {
@@ -80,4 +82,94 @@ func TestReflectSelectedPackagesExcludesAndOrdersLinkedPackages(t *testing.T) {
 			t.Fatalf("selected packages = %v", reflected.Packages)
 		}
 	}
+}
+
+func TestReflectedPackageMatch(t *testing.T) {
+	for _, test := range []struct {
+		name        string
+		pattern     string
+		packagePath string
+		want        bool
+	}{
+		{"recursive root", "example.com/foo/...", "example.com/foo", true},
+		{"recursive child", "example.com/foo/...", "example.com/foo/bar", true},
+		{"recursive nested child", "example.com/foo/...", "example.com/foo/bar/baz", true},
+		{"recursive sibling", "example.com/foo/...", "example.com/foobar", false},
+		{"recursive sibling child", "example.com/foo/...", "example.com/foobar/baz", false},
+		{"recursive parent", "example.com/foo/...", "example.com", false},
+		{"trimmed recursive root", " example.com/foo/... ", "example.com/foo", true},
+		{"all packages", "...", "example.com/foo", true},
+		{"legacy prefix", "example.com/foo...", "example.com/foobar", true},
+		{"exact", "example.com/foo", "example.com/foo", true},
+		{"exact excludes children", "example.com/foo", "example.com/foo/bar", false},
+		{"star", "example.com/*", "example.com/foo", true},
+		{"star excludes nested children", "example.com/*", "example.com/foo/bar", false},
+		{"question mark", "example.com/fo?", "example.com/foo", true},
+		{"character class", "example.com/fo[op]", "example.com/foo", true},
+		{"invalid wildcard", "example.com/[", "example.com/foo", false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if got := reflectedPackageMatch(test.pattern, test.packagePath); got != test.want {
+				t.Fatalf("reflectedPackageMatch(%q, %q) = %v, want %v", test.pattern, test.packagePath, got, test.want)
+			}
+		})
+	}
+}
+
+func TestReflectedPackagePathsRecursiveIncludesLinkedRootAndChildren(t *testing.T) {
+	const root = "github.com/viant/datly/bootstrap"
+	selected := reflectedPackagePaths([]string{root + "/..."}, nil)
+	for _, packagePath := range []string{root, root + "/connector"} {
+		if !slices.Contains(selected, packagePath) {
+			t.Fatalf("recursive include omitted linked package %q: %v", packagePath, selected)
+		}
+	}
+}
+
+func TestReflectedPackagePathsRecursiveExcludesRootAndChildren(t *testing.T) {
+	selected := reflectedPackagePaths([]string{
+		"example.com/foo", "example.com/foo/bar", "example.com/foobar", "example.com/foobar/baz",
+	}, []string{"example.com/foo/..."})
+	want := []string{"example.com/foobar", "example.com/foobar/baz"}
+	if !slices.Equal(selected, want) {
+		t.Fatalf("recursive exclusion selected %v, want %v", selected, want)
+	}
+}
+
+func TestReflectRecursiveDoesNotDiscoverUnlinkedPackages(t *testing.T) {
+	selected, err := ReflectSelectedPackages([]string{"example.invalid/unlinked/..."}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(selected.Packages) != 0 || len(selected.Components) != 0 {
+		t.Fatalf("unlinked package supplied runtime metadata: %+v", selected)
+	}
+}
+
+// The component is genuinely retained in the executable's runtime type table.
+// Recursive discovery must find it without package source or manual registration.
+type ReflectedRootComponent struct {
+	Route xdatly.Component[ReflectedPackageInput, ReflectedPackageOutput] `component:"rootReader,path=/linked-root-reader,method=GET,internal=true"`
+}
+
+var reflectedRootComponentLink = reflect.TypeFor[ReflectedRootComponent]()
+
+func TestReflectRecursiveSelectionIncludesLinkedRootComponent(t *testing.T) {
+	const root = "github.com/viant/datly/bootstrap"
+	if reflectedRootComponentLink.PkgPath() != root {
+		t.Fatal("fixture is not linked in the root package")
+	}
+	selected, err := ReflectSelectedPackages([]string{root + "/..."}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, component := range selected.Components {
+		if component.PackagePath == root && component.HolderType == "ReflectedRootComponent" && component.FieldName == "Route" {
+			if component.LinkedInputType != reflect.TypeFor[ReflectedPackageInput]() || component.LinkedOutputType != reflect.TypeFor[ReflectedPackageOutput]() {
+				t.Fatal("discovery lost linked input/output authority")
+			}
+			return
+		}
+	}
+	t.Fatal("recursive selection omitted the component linked into the root package")
 }

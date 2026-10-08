@@ -66,7 +66,7 @@ func (c *Compiler) Transcribe(ctx context.Context, request Request) (*GeneratedP
 		return c.generateInputAt(ctx, request.Destination, packageDir, compiled, input)
 	}
 	handlers := newHandlerGeneration(compiled, &input, options)
-	handlers.directory = filepath.Join(request.Destination, packageDir)
+	handlers.directory = filepath.Join(input.ProjectRoot, packageDir)
 	if err = handlers.prepare(); err != nil {
 		return nil, handlers.diagnostic(err)
 	}
@@ -88,6 +88,12 @@ func (c *Compiler) generateCompiledAt(ctx context.Context, rootDir, packageDir s
 func (c *Compiler) generateInputAt(ctx context.Context, rootDir, packageDir string, compiled *Result, input gen.Input) (*GeneratedPackage, error) {
 	var err error
 	rootDir, err = filepath.Abs(rootDir)
+	if err != nil {
+		return nil, err
+	}
+	// Destination authority and Go module discovery resolve project aliases.
+	// Keep staging, publication and borrowed closure paths on that same root.
+	rootDir, err = filepath.EvalSymlinks(rootDir)
 	if err != nil {
 		return nil, err
 	}
@@ -149,6 +155,17 @@ func generationInput(rootDir, packageDir string, compiled *Result) (gen.Input, s
 	}
 	if compiled.Source.Types == nil {
 		return gen.Input{}, "", fmt.Errorf("compiled transcribe result requires type catalog")
+	}
+	if strings.TrimSpace(rootDir) == "" {
+		return gen.Input{}, "", fmt.Errorf("generation project root is required")
+	}
+	rootDir, err := filepath.Abs(rootDir)
+	if err != nil {
+		return gen.Input{}, "", err
+	}
+	rootDir, err = filepath.EvalSymlinks(rootDir)
+	if err != nil {
+		return gen.Input{}, "", err
 	}
 	authority, err := typecatalog.NewDestinationAuthority(rootDir)
 	if err != nil {

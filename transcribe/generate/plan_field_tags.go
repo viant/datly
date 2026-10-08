@@ -45,6 +45,11 @@ func fieldTag(param *spec.Parameter, tagName string, metadata []structTagValue) 
 			parts = append(parts, key+"="+encode(value))
 		}
 	}
+	if param.ResolutionGroup != nil {
+		appendValue("resolutionGroup", param.ResolutionGroup.Name)
+		appendValue("resolutionAfter", strings.Join(param.ResolutionGroup.After, "|"))
+		appendValue("dependsOn", strings.Join(param.ResolutionGroup.DependsOn, "|"))
+	}
 	appendValue("bodyNullPolicy", param.BodyNullPolicy)
 	appendValue("when", param.When)
 	appendValue("scope", param.Scope)

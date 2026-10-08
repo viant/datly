@@ -82,6 +82,11 @@ func (s *dataScope) beginProtectedCompletion(ctx context.Context) ([]*dataScope,
 				failure = errors.Join(failure, closeErr)
 			}
 		}
+		if root.bufferedScopeEnrolled && root.nativeInvocation != nil {
+			ordered, err := root.nativeInvocation.FreezeJournal()
+			root.orderedCompletion = ordered
+			failure = errors.Join(failure, err)
+		}
 		root.protectedCompletionUnits = units
 		root.protectedCompletionErr = failure
 	})
@@ -92,7 +97,11 @@ func (s *dataScope) beginProtectedCompletion(ctx context.Context) ([]*dataScope,
 // This sequencing seam is not sealed native drain authorization; the native
 // permit implementation is a separate, still-required foundation.
 func (s *dataScope) prepareProtectedFinalization(ctx context.Context) error {
-	units, err := s.beginProtectedCompletion(ctx)
+	root := s
+	if root.root != nil {
+		root = root.root
+	}
+	units, err := root.beginProtectedCompletion(ctx)
 	if err != nil {
 		return err
 	}
@@ -101,6 +110,9 @@ func (s *dataScope) prepareProtectedFinalization(ctx context.Context) error {
 	}
 	if err = validateUnitExecutionGuards(ctx, units); err != nil {
 		return err
+	}
+	if root.orderedCompletion {
+		return root.prepareOrderedJournal(ctx, units, drainowner.LocalPreparation)
 	}
 	for _, unit := range units {
 		if preparer, ok := unit.data.(invocationFinalizationPreparer); ok {

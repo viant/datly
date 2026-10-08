@@ -10,6 +10,8 @@ import (
 )
 
 type parsedLink struct {
+	parentOutput    string
+	childOutput     string
 	parentField     string
 	parentNamespace string
 	parentColumn    string
@@ -36,6 +38,7 @@ func parseLinkOn(links []*dtag.RelationLink, parentType, childType reflect.Type)
 			return nil, err
 		}
 		result = append(result, parsedLink{
+			parentOutput: link.Parent.Output, childOutput: link.Child.Output,
 			parentField: parentField, parentNamespace: link.Parent.Namespace, parentColumn: parentColumn,
 			childField: childField, childNamespace: link.Child.Namespace, childColumn: childColumn,
 		})

@@ -15,16 +15,23 @@ var ErrDormantActivityClosed = errors.New("ordinary invocation activity admissio
 var ErrActivityUnfinished = errors.New("invocation activity has not finished")
 
 type activityLedger struct {
-	mu       sync.Mutex
-	active   map[*activityCell]struct{}
-	enrolled bool
-	closed   bool
-	failure  error
-	drains   map[*DrainRecord]struct{}
+	mu                sync.Mutex
+	active            map[*activityCell]struct{}
+	enrolled          bool
+	closed            bool
+	failure           error
+	entries           []bindingFailure
+	group             *bindingGroupCell
+	observation       uint64
+	transactionStarts uint
+	drains            map[*DrainRecord]struct{}
 }
 type activityCell struct {
-	identity *identity
-	finished bool
+	identity    *identity
+	finished    bool
+	group       *bindingGroupCell
+	member      string
+	observation uint64
 }
 
 // Activity copies share one private cell and therefore one retirement. This
@@ -49,6 +56,10 @@ func AdmitActivity(invocation *Invocation) (Activity, error) {
 			return Activity{}, ErrDormantActivityClosed
 		}
 		return Activity{}, ErrActivityClosed
+	}
+	if ledger.group != nil && ledger.group.open {
+		appendFailureLocked(ledger, ErrBindingGroup, nil, "", true, 0)
+		return Activity{}, ErrBindingGroup
 	}
 	if ledger.enrolled && ledger.failure != nil {
 		return Activity{}, ledger.failure
@@ -77,9 +88,12 @@ func FinishActivity(invocation *Invocation, activity Activity, cause error) erro
 		return ErrActivity
 	}
 	if ledger.enrolled && cause != nil {
-		ledger.failure = errors.Join(ledger.failure, cause)
+		appendFailureLocked(ledger, cause, activity.cell.group, activity.cell.member, terminalBindingFailure(cause), activity.cell.observation)
 	}
 	activity.cell.finished = true
+	if activity.cell.group != nil {
+		activity.cell.group.tickets[activity.cell.member].finished = true
+	}
 	delete(ledger.active, activity.cell)
 	return nil
 }
@@ -96,7 +110,7 @@ func EnrollActivities(invocation *Invocation) error {
 	ledger.enrolled = true
 	if len(ledger.drains) != 0 {
 		err := ErrDrainOverlap
-		ledger.failure = errors.Join(ledger.failure, err)
+		appendFailureLocked(ledger, err, nil, "", true, 0)
 		return err
 	}
 	return ledger.failure
@@ -128,7 +142,7 @@ func CloseActivities(invocation *Invocation) error {
 		return nil
 	}
 	if len(ledger.active) != 0 {
-		ledger.failure = errors.Join(ledger.failure, fmt.Errorf("%w: %d", ErrActivityUnfinished, len(ledger.active)))
+		appendFailureLocked(ledger, fmt.Errorf("%w: %d", ErrActivityUnfinished, len(ledger.active)), nil, "", true, 0)
 	}
 	return ledger.failure
 }
@@ -160,7 +174,7 @@ func FailProtected(invocation *Invocation, cause error) bool {
 	if !ledger.enrolled {
 		return false
 	}
-	ledger.failure = errors.Join(ledger.failure, cause)
+	appendFailureLocked(ledger, cause, nil, "", true, 0)
 	return true
 }
 func ProtectedFailure(invocation *Invocation) error {

@@ -161,3 +161,33 @@ func fieldPathType(root reflect.Type, path string) (reflect.Type, error) {
 	}
 	return current, nil
 }
+
+// Describe resolves wire source types without executing codec factories.
+func (c ParamCodecCompiler) Describe() (map[string]ParamCodec, error) {
+	if c.Component == nil || c.InputType == nil || c.InputType.Kind() != reflect.Struct {
+		return nil, nil
+	}
+	fields, err := newContractFields(c.InputType)
+	if err != nil {
+		return nil, err
+	}
+	result := map[string]ParamCodec{}
+	for _, param := range spec.EffectiveParameters(c.Component.Parameters) {
+		if param == nil || param.Codec == nil {
+			continue
+		}
+		resolved, ok, err := fields.resolve(param)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			return nil, fmt.Errorf("codec param field not found: %s", param.Name)
+		}
+		sourceType, err := c.sourceType(fields, param, resolved.field.Type)
+		if err != nil {
+			return nil, err
+		}
+		result[resolved.field.Name] = ParamCodec{SourceType: sourceType}
+	}
+	return result, nil
+}

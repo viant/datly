@@ -7,7 +7,10 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/viant/datly/bootstrap/connector"
+	"github.com/viant/datly/constant"
 	"github.com/viant/datly/standalone/config"
+	"github.com/viant/scy"
 )
 
 func TestInstanceConstantFilePaths(t *testing.T) {
@@ -90,5 +93,75 @@ func TestInstanceCLIFileSelectionOverridesConfig(t *testing.T) {
 	}
 	if cfg.ConstURL != "e2e.yaml" {
 		t.Fatal("authored file selection overwritten")
+	}
+}
+
+func TestInstanceConstantsPreserveConnectorSecretReferences(t *testing.T) {
+	root := t.TempDir()
+	for name, body := range map[string]string{
+		"instance.yaml":    "Host: mysql.example\nDatabase: catalog\nSecretFile: absent-secret.json\n",
+		"connections.json": `{"Connectors":[{"Name":"main","Driver":"mysql","DSN":"${Username}:${Password}@tcp(${Host})/${Database}","Secret":{"URL":"${SecretFile}"}}]}`,
+		"config.json":      `{"ConstURL":"instance.yaml","DependencyURL":"connections.json","BaseDir":"."}`,
+	} {
+		if err := os.WriteFile(filepath.Join(root, name), []byte(body), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	authored, err := (config.Loader{}).Load(context.Background(), filepath.Join(root, "config.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resolved, err := authored.ResolveConstants()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := resolved.Connectors[0].DSN; got != "${Username}:${Password}@tcp(mysql.example)/catalog" {
+		t.Fatalf("DSN ownership lost: %q", got)
+	}
+	if got := authored.Connectors[0].DSN; got != "${Username}:${Password}@tcp(${Host})/${Database}" {
+		t.Fatalf("authored DSN mutated: %q", got)
+	}
+	if got := resolved.Connectors[0].Secret.URL; got != "absent-secret.json" {
+		t.Fatalf("secret path constant not expanded: %q", got)
+	}
+	// Merely loading configuration must not read credentials. Missing instance
+	// constants remain errors for fields without a configured secret owner.
+	authored.Connectors[0].Secret = nil
+	if _, err = authored.ResolveConstants(); err == nil {
+		t.Fatal("unowned unknown reference accepted")
+	}
+}
+
+func TestConnectorSecretInstanceConstantPrecedence(t *testing.T) {
+	for _, tc := range []struct {
+		name                string
+		values              map[string]string
+		intermediate, final string
+	}{
+		{"deferred", map[string]string{}, "${Username}:${Password}", "secret-user:secret-password"},
+		{"mixed", map[string]string{"username": "configured-user"}, "configured-user:${Password}", "configured-user:secret-password"},
+		{"explicit constants", map[string]string{"Username": "configured-user", "Password": "configured-password"}, "configured-user:configured-password", "configured-user:configured-password"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			constants, err := constant.New(tc.values)
+			if err != nil {
+				t.Fatal(err)
+			}
+			cfg := &config.Config{Const: constants, Connectors: []connector.Config{{Name: "db", Driver: "mysql", DSN: "${Username}:${Password}", Secret: &scy.Resource{URL: "not-read.json"}}}}
+			resolved, err := cfg.ResolveConstants()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := resolved.Connectors[0].DSN; got != tc.intermediate {
+				t.Fatalf("constant precedence: %q", got)
+			}
+			secret := scy.NewSecret([]byte(`{"Username":"secret-user","Password":"secret-password"}`), &scy.Resource{})
+			if got := secret.Expand(resolved.Connectors[0].DSN); got != tc.final {
+				t.Fatalf("secret precedence: %q", got)
+			}
+			if cfg.Connectors[0].DSN != "${Username}:${Password}" {
+				t.Fatal("authored DSN mutated")
+			}
+		})
 	}
 }

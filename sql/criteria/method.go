@@ -4,41 +4,46 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/viant/parsly"
 	"github.com/viant/sqlparser"
 	"github.com/viant/sqlparser/expr"
 )
 
-// Validate canonicalizes an authored function name through the SQL parser.
-// Only one function identity is accepted; argument or statement text cannot
-// become part of the configured SQL emitted for a client method call.
+// Validate accepts one qualified SQL identifier, not an expression or statement.
+// Identifier decoding validates quoting without constructing a predicate AST.
 func (m *Method) Validate() error {
 	if m == nil {
 		return fmt.Errorf("criteria method is required")
 	}
-	cursor := parsly.NewCursor("criteria method", []byte("criteria_value = "+strings.TrimSpace(m.Name)+"() "), 0)
-	qualified := &expr.Qualify{}
-	if err := sqlparser.ParseQualify(cursor, qualified); err != nil {
+	name := strings.TrimSpace(m.Name)
+	if !methodIdentifierSpelling(name) {
+		return fmt.Errorf("invalid criteria method name %q", name)
+	}
+	if _, err := sqlparser.TableIdentifierParts(name); err != nil {
 		return fmt.Errorf("invalid criteria method name: %w", err)
 	}
-	if strings.TrimSpace(string(cursor.Input[cursor.Pos:])) != "" {
-		return fmt.Errorf("invalid criteria method name %q", m.Name)
-	}
-	binary, ok := qualified.X.(*expr.Binary)
-	if !ok || binary.Op != "=" {
-		return fmt.Errorf("invalid criteria method name %q", m.Name)
-	}
-	call, ok := binary.Y.(*expr.Call)
-	if !ok || len(call.Args) != 0 {
-		return fmt.Errorf("invalid criteria method name %q", m.Name)
-	}
-	switch call.X.(type) {
-	case *expr.Ident, *expr.Selector:
-	default:
-		return fmt.Errorf("invalid criteria method identity")
-	}
-	m.Name = sqlparser.Stringify(call.X)
+	m.Name = name
 	return nil
+}
+
+// Keep configured names in the same spelling grammar consumed by criteria
+// calls. Backtick-delimited identities may contain spaces; bare names may not.
+func methodIdentifierSpelling(name string) bool {
+	quoted := false
+	for i := 0; i < len(name); i++ {
+		ch := name[i]
+		if ch == '`' {
+			if quoted && i+1 < len(name) && name[i+1] == '`' {
+				i++
+				continue
+			}
+			quoted = !quoted
+			continue
+		}
+		if !quoted && (ch <= 32 || ch >= 127 || ch == '\'' || ch == '"' || ch == '[' || ch == ']') {
+			return false
+		}
+	}
+	return !quoted
 }
 
 func (c *compilation) method(call *expr.Call) (string, error) {

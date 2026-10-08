@@ -58,6 +58,7 @@ type Data struct {
 	markers                 []componentMarker
 	bindings                []*Data
 	nextOp                  uint64
+	journalFrame            *drainowner.Frame
 	mutationResults         []dexec.MutationResult
 
 	insertServices     map[string]*insert.Service
@@ -93,6 +94,31 @@ func NewData(db *sql.DB, opts ...Option) *Data {
 		},
 		drainowner.Abort: func(ctx context.Context, permit *drainowner.DrainPermit, cause error) error {
 			return data.completeNative(ctx, cause, permit, drainowner.Abort)
+		},
+	})
+	drainowner.RegisterJournal(data, drainowner.NativeJournal{External: data.externalTx,
+		Bind: func(component any, frame *drainowner.Frame) error {
+			child, ok := component.(*Data)
+			if !ok || child.owner() != data {
+				return drainowner.ErrJournal
+			}
+			data.mu.Lock()
+			defer data.mu.Unlock()
+			if data.mutationAdmissionClosed || !child.open {
+				return drainowner.ErrJournal
+			}
+			child.journalFrame = frame
+			return nil
+		},
+		Snapshot: func() []drainowner.JournalRecord {
+			data.mu.Lock()
+			defer data.mu.Unlock()
+			ops := flattenData(data)
+			result := make([]drainowner.JournalRecord, len(ops))
+			for i, op := range ops {
+				result[i] = drainowner.JournalRecord{Record: op, Frame: op.journalFrame, ID: op.id}
+			}
+			return result
 		},
 	})
 	return data

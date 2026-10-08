@@ -60,10 +60,17 @@ holding a transaction. Root hooks must account for repeated external effects;
 commit-dependent actions still belong after confirmed completion. Leaf auxiliary
 component hooks and child hooks cannot declare this root policy.
 
-Writers with writable descendants start their managed transaction before input
-binding; read-only leaf auxiliary components do not. Scoped allocation's separate
-native replay policy also recognizes confirmed rolled-back driver contention
-during binding/allocation, without pretending that any DML executed.
+Transaction admission follows the selected handler path. The generated mutation
+adapter starts a required transaction after initial validation and before
+sequencing. The runtime writer handler requests a pre-binding transaction when
+its graph contains a writable record; a read-only leaf auxiliary graph does
+not request one. A composed child can join an existing parent unit. These paths
+must not be treated as a guarantee that every generated writer starts a
+transaction before binding. See [the mutation lifecycle](mutations.md#understand-the-complete-lifecycle).
+
+Scoped allocation's separate native replay policy also recognizes confirmed
+rolled-back driver contention during binding/allocation, without pretending
+that any DML executed.
 
 ### Single-operation decisions
 

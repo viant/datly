@@ -5,6 +5,7 @@ import (
 	"github.com/viant/bindly/resource"
 	docs "github.com/viant/datly/documentation"
 	"github.com/viant/datly/spec"
+	authoring "github.com/viant/datly/transcribe/compile"
 	xdocs "github.com/viant/xdatly/docs"
 	"reflect"
 	"testing"
@@ -33,6 +34,10 @@ func TestDictionaryDoesNotAttributeWildcardDuplicateToTable(t *testing.T) {
 		{"SELECT o.id AS id FROM users u JOIN orders o ON o.user_id=u.id", "Order ID"},
 	} {
 		component := &spec.Component{Parameters: []*spec.Parameter{{Name: "Rows", Source: spec.BindSource{Kind: "output", Name: "view"}}}, RootView: &spec.View{Name: "rows", Source: &spec.ViewSource{SQL: test.sql}, Columns: []*spec.Column{{Name: "ID", Source: "id"}}}}
+		if err := authoring.BackfillDocumentationMetadata(component); err != nil {
+			t.Fatal(err)
+		}
+		component.RootView.Source.SQL = "opaque vendor SQL; linked loading must not inspect it"
 		scoped, err := snapshot.ForComponent(component, reflect.TypeFor[lineageOutput]())
 		if err != nil {
 			t.Fatal(err)

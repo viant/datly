@@ -3,6 +3,7 @@ package transcribe
 import (
 	"fmt"
 	"reflect"
+	"sort"
 	"strings"
 
 	"github.com/viant/datly/spec"
@@ -62,6 +63,9 @@ func (g *handlerGeneration) prepare() error {
 	}
 	semantic, err := g.compilePlan()
 	if err != nil {
+		return err
+	}
+	if _, _, err = g.borrowedAncestorPresence(); err != nil {
 		return err
 	}
 	g.input.SetMarkerViews = g.setMarkerViews(semantic)
@@ -257,13 +261,17 @@ func (g *handlerGeneration) setMarkerViews(plan *handlerplan.Plan) map[string]bo
 	if plan == nil || plan.Root == nil {
 		return nil
 	}
+	ancestors, _, err := g.borrowedAncestorPresence()
+	if err != nil {
+		ancestors = nil
+	} // prepare and withGeneratedPresence return this validation error.
 	result := map[string]bool{}
 	var visit func(*handlerplan.RecordPlan)
 	visit = func(record *handlerplan.RecordPlan) {
 		if record == nil {
 			return
 		}
-		if !record.Auxiliary || hasWritableDescendant(record) {
+		if !record.Auxiliary || hasWritableDescendant(record) || g.options.Handler.Target == HandlerGo && g.options.Handler.Go.Execution == GoExecutionMutation && ancestors[record.Identity] {
 			if identity := strings.TrimSpace(record.Identity); identity != "" {
 				result[identity] = true
 			}
@@ -300,6 +308,10 @@ func (g *handlerGeneration) withGeneratedPresence(semantic *handlerplan.Plan, ge
 	if generated == nil {
 		return nil, fmt.Errorf("generated entity presence plan is required")
 	}
+	ancestors, edges, err := g.borrowedAncestorPresence()
+	if err != nil {
+		return nil, err
+	}
 	refined := semantic.Clone()
 	fieldsByIdentity := map[string][]string{}
 	viewsByIdentity := map[string]*gen.ViewPlan{}
@@ -315,7 +327,7 @@ func (g *handlerGeneration) withGeneratedPresence(semantic *handlerplan.Plan, ge
 		if record == nil {
 			return fmt.Errorf("generated entity presence plan contains a nil record")
 		}
-		if record.Auxiliary && !hasWritableDescendant(record) {
+		if record.Auxiliary && !hasWritableDescendant(record) && !ancestors[record.Identity] {
 			for _, relation := range record.Relations {
 				if relation == nil || relation.Child == nil {
 					return fmt.Errorf("generated PATCH presence plan contains an incomplete relation")
@@ -365,7 +377,7 @@ func (g *handlerGeneration) withGeneratedPresence(semantic *handlerplan.Plan, ge
 						planned.Relation = true
 						planned.Writable = true
 						if relation.Child != nil && relation.Child.Auxiliary {
-							planned.Writable = false
+							planned.Writable = edges[borrowedPresenceEdge{record.Identity, name, relation.Child.Identity}]
 						}
 					}
 				}
@@ -533,4 +545,69 @@ func (g *handlerGeneration) recordBase(source string, cardinality spec.Cardinali
 		return "", fmt.Errorf("record type %q must resolve to a direct named type", source)
 	}
 	return reference.QualifiedName(), nil
+}
+
+// borrowedPresenceEdge deliberately includes the exact generated holder. A
+// second alias to the same canonical child never inherits relation eligibility.
+type borrowedPresenceEdge struct{ parent, holder, child string }
+
+// borrowedAncestorPresence consumes only an already admitted borrowed reference
+// and validates its complete current canonical body path. It does not mutate
+// canonical ownership, runtime fields, or linked leaf presence metadata.
+func (g *handlerGeneration) borrowedAncestorPresence() (map[string]bool, map[borrowedPresenceEdge]bool, error) {
+	ancestors := map[string]bool{}
+	edges := map[borrowedPresenceEdge]bool{}
+	if g == nil || g.options.Handler.Target != HandlerGo || g.options.Handler.Go.Execution != GoExecutionMutation || g.compiled == nil || g.input == nil {
+		return ancestors, edges, nil
+	}
+	identities := make([]string, 0, len(g.input.Views))
+	for identity := range g.input.Views {
+		identities = append(identities, identity)
+	}
+	sort.Strings(identities)
+	for _, identity := range identities {
+		ref := g.input.Views[identity]
+		if ref == nil || ref.Borrowed == nil {
+			continue
+		}
+		proof := ref.Borrowed
+		_, graph, err := resolveBorrowedBodySlot(g.compiled.Component, proof.Declaration.BodyPath)
+		if err != nil {
+			return nil, nil, err
+		}
+		if !reflect.DeepEqual(graph, proof.BorrowerGraph) || len(graph) == 0 || graph[len(graph)-1] != identity || proof.Expected.Package != g.input.TargetPackage || ref.DescriptorKey != proof.Expected.Package+"."+proof.Expected.Name {
+			return nil, nil, fmt.Errorf("borrowed ancestor presence does not match its admitted canonical body path")
+		}
+		parts := strings.Split(proof.Declaration.BodyPath, "/")
+		view := g.compiled.Component.RootView
+		pathEdges := make([]borrowedPresenceEdge, 0, len(parts)-1)
+		excluded := view.SelfReference != nil
+		for i, holder := range parts[1:] {
+			for _, relation := range view.Relations {
+				name := relation.Holder
+				if name == "" {
+					name = relation.Name
+				}
+				if typecatalog.FieldName(name) != holder {
+					continue
+				}
+				excluded = excluded || relation.Kind == spec.RelationKindDerived || relation.View.SelfReference != nil
+				pathEdges = append(pathEdges, borrowedPresenceEdge{graph[i], holder, graph[i+1]})
+				view = relation.View
+				break
+			}
+		}
+		// Preserve ordinary derived/self branch ownership; neither is an
+		// admitted body-holder edge in this bounded ancestor exception.
+		if excluded {
+			continue
+		}
+		for _, id := range graph[:len(graph)-1] {
+			ancestors[id] = true
+		}
+		for _, edge := range pathEdges {
+			edges[edge] = true
+		}
+	}
+	return ancestors, edges, nil
 }

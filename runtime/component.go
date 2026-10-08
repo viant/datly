@@ -3,8 +3,10 @@ package runtime
 import (
 	"context"
 	"fmt"
+	"github.com/viant/datly/internal/drainowner"
 	"github.com/viant/datly/observability/otel"
 	xexec "github.com/viant/xdatly/exec"
+	xhandler "github.com/viant/xdatly/handler"
 	"reflect"
 	"strings"
 	"time"
@@ -22,7 +24,8 @@ import (
 type componentStackKey struct{}
 
 func (r *Runtime) componentProvider(scope dexec.ProviderScope, parent *spec.Component) locator.Provider {
-	return handlerprovider.Named(string(spec.KindComponent), func(ctx context.Context, _ reflect.Type, name string) (any, bool, error) {
+	scope = componentDependencyScope(scope)
+	return drainowner.SealBindingGroupProvider(handlerprovider.Named(string(spec.KindComponent), func(ctx context.Context, _ reflect.Type, name string) (any, bool, error) {
 		ctx = handlerengine.PrepareComponent(ctx, handlerengine.ComponentBinding, componentBindingOrder(parent, name))
 		ref, err := spec.ParseRouteRef(name)
 		if err != nil {
@@ -36,7 +39,7 @@ func (r *Runtime) componentProvider(scope dexec.ProviderScope, parent *spec.Comp
 			Target: dexec.ComponentTarget{Component: component.Key, Route: ref},
 		}, scope)
 		return value, err == nil, err
-	})
+	}))
 }
 
 type scopedComponentInvoker struct {
@@ -65,6 +68,7 @@ func (i *scopedComponentInvoker) InvokeComponent(ctx context.Context, request de
 }
 
 func (r *Runtime) componentInvokerProvider(scope dexec.ProviderScope, buffered bool) locator.Provider {
+	scope = componentDependencyScope(scope)
 	return handlerprovider.New(dexec.ComponentInvokerKey, func(ctx context.Context) (any, bool, error) {
 		return dexec.ComponentInvoker(&scopedComponentInvoker{
 			runtime:   r,
@@ -73,6 +77,29 @@ func (r *Runtime) componentInvokerProvider(scope dexec.ProviderScope, buffered b
 			buffered:  buffered,
 		}), true, nil
 	})
+}
+
+type componentScope struct{ providers []locator.Provider }
+
+func (s componentScope) Providers() []locator.Provider {
+	return append([]locator.Provider(nil), s.providers...)
+}
+
+// Runtime selector capabilities target one exact reader invocation. Headers,
+// credential providers and ordinary query inputs remain inherited; deeper
+// components bind their own declared selectors. Explicit child Providers can
+// install selectors for their own target without leaking to its dependencies.
+func componentDependencyScope(scope dexec.ProviderScope) dexec.ProviderScope {
+	if scope == nil {
+		return nil
+	}
+	var providers []locator.Provider
+	for _, provider := range scope.Providers() {
+		if provider != nil && provider.Kind() != string(xhandler.SelectorsKey) {
+			providers = append(providers, provider)
+		}
+	}
+	return componentScope{providers: providers}
 }
 
 // InvokeComponent executes one exact component target without route lookup.
@@ -154,6 +181,23 @@ func (r *Runtime) invokeComponent(ctx context.Context, request dexec.ComponentRe
 	}
 	if !componentOwnsRoute(registered.Component, route) {
 		return nil, fmt.Errorf("component %s does not own route %s", identity, route.String())
+	}
+	if drainowner.BindingGroupContext(ctx) {
+		if request.Input != nil || request.ExtraInput != nil || request.Replay != nil || len(request.Providers) != 0 || request.Warmup != nil || request.PrepareQuery || request.DryRun || request.IndependentChildTransactions {
+			return nil, drainowner.ErrBindingGroup
+		}
+		groupedRoute, ok := registered.Input.ForRoute(route)
+		if !ok {
+			return nil, drainowner.ErrBindingGroup
+		}
+		var inputs []drainowner.BindingGroupInput
+		for _, field := range groupedRoute.Fields() {
+			binding := field.Binding()
+			inputs = append(inputs, drainowner.BindingGroupInput{Kind: binding.Location.Kind, In: binding.Location.In, Type: field.DestinationType(), Adapted: binding.Transformer != nil || (binding.SourceType != nil && binding.SourceType != field.DestinationType())})
+		}
+		if err := drainowner.ValidateBindingGroupTarget(ctx, route.String(), registered.Handler == nil && registered.Reader != nil, inputs...); err != nil {
+			return nil, err
+		}
 	}
 	if err := handlerengine.CheckComponentMutation(ctx, registered.Handler == nil && registered.Reader != nil); err != nil {
 		return nil, err

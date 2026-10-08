@@ -19,7 +19,9 @@ type CacheProjection struct {
 }
 
 func (p CacheProjection) Fields() ([]cache.ProjectionField, error) {
-	statement, err := sqlparser.ParseQuery(p.SQL)
+	// Native reader identities may wrap a grouped source with a transparent star.
+	text, _ := unwrapGroupedProjectionWrapper(p.SQL, nil)
+	statement, err := sqlparser.ParseQuery(text)
 	if err != nil {
 		return nil, err
 	}

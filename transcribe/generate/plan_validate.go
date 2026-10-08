@@ -5,6 +5,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"path/filepath"
+	"reflect"
 	"strings"
 )
 
@@ -76,6 +77,28 @@ func (plan *Plan) validateGeneratedNames() error {
 	for _, generated := range plan.GeneratedTypes {
 		if err := reserve(generated.Name, "generated type "+generated.Name+" at "+generated.Destination); err != nil {
 			return err
+		}
+	}
+	for _, cube := range plan.Cubes {
+		names := []string{cube.Name + "Output", cube.Name + "Component", "New" + cube.Name, cube.Name + "DatlyType", cube.Name + "Datly", cube.Name + "Handler"}
+		if cube.GenerateInput {
+			names = append(names, cube.InputName)
+			for i := 0; i < cube.InputType.NumField(); i++ {
+				field := cube.InputType.Field(i)
+				if field.Type.Kind() != reflect.Struct {
+					continue
+				}
+				section := cube.Name + field.Name
+				names = append(names, section)
+				if _, ok := field.Type.FieldByName("Has"); ok {
+					names = append(names, section+"Has")
+				}
+			}
+		}
+		for _, name := range names {
+			if err := reserve(name, "cube "+cube.Name); err != nil {
+				return err
+			}
 		}
 	}
 	for _, name := range plan.referencedPlaceholderTypes() {
@@ -238,6 +261,11 @@ func (plan *Plan) validateGeneratedDestinations() error {
 			if err := reserve(plan.Generation.File("client_input_setters", "client_input_setters.go"), "client input setters", false); err != nil {
 				return err
 			}
+		}
+	}
+	if len(plan.Cubes) > 0 {
+		if err := reserve(plan.CubeDestination, "cube facades", false); err != nil {
+			return err
 		}
 	}
 	generatedViews := 0

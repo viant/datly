@@ -109,12 +109,22 @@ func (d *shapeDestinations) prepare() error {
 			dest = inherited
 		}
 		originalDest := dest
-		if ref := d.input.Views[role]; ref != nil {
+		reference := d.input.Views[role]
+		if identity, identityErr := v.Identity(); identityErr == nil && d.input.Views[identity] != nil && d.input.Views[identity].Borrowed != nil {
+			reference = d.input.Views[identity]
+		}
+		if ref := reference; ref != nil {
+			if ref.Borrowed != nil {
+				if v.Dest != "" {
+					return fmt.Errorf("borrow_sql_row cannot declare a destination")
+				}
+				dest = ""
+			}
 			if err = d.linked("view "+role, v.TypeName, dest, ref.DescriptorKey); err != nil {
 				return err
 			}
 		}
-		if d.input.Views[role] == nil {
+		if reference == nil {
 			v.TypeName, dest, err = d.prepareShape(role, v.TypeName, dest, inheritedPackage)
 			if err != nil {
 				return err

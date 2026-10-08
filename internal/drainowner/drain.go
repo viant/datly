@@ -43,6 +43,7 @@ type DrainPermit struct {
 	operation Operation
 	consumed  bool
 	denied    error
+	run       *journalRun
 }
 type DrainRecord struct {
 	self     *DrainRecord
@@ -59,7 +60,7 @@ func attachmentDrainLocked(s *State) error {
 		ledger := &s.claimed.activities
 		ledger.mu.Lock()
 		if ledger.enrolled {
-			ledger.failure = errors.Join(ledger.failure, ErrDrainOverlap)
+			appendFailureLocked(ledger, ErrDrainOverlap, nil, "", true, 0)
 		}
 		ledger.mu.Unlock()
 	}
@@ -77,7 +78,7 @@ func publicDrainLocked(s *State) error {
 	ledger.mu.Lock()
 	defer ledger.mu.Unlock()
 	if ledger.enrolled {
-		ledger.failure = errors.Join(ledger.failure, ErrDrain)
+		appendFailureLocked(ledger, ErrDrain, nil, "", true, 0)
 		return ErrDrain
 	}
 	return nil
@@ -114,7 +115,7 @@ func BeginPublicDrain(receiver any) (*DrainRecord, error) {
 	ledger.mu.Lock()
 	defer ledger.mu.Unlock()
 	if ledger.enrolled {
-		ledger.failure = errors.Join(ledger.failure, ErrDrain)
+		appendFailureLocked(ledger, ErrDrain, nil, "", true, 0)
 		return nil, ErrDrain
 	}
 	return addDrainLocked(s, s.claimed), nil
@@ -171,10 +172,17 @@ func (h Handle) Call(ctx context.Context, receiver any, invocation *Invocation, 
 		s.mu.Unlock()
 		return ErrDrainPermit
 	}
-	permit := &DrainPermit{state: s, identity: h.identity, operation: operation}
+	run, runErr := h.identity.journal.permitRun(s, operation)
+	if runErr != nil {
+		FailProtected(invocation, runErr)
+		s.mu.Unlock()
+		return runErr
+	}
+	permit := &DrainPermit{state: s, identity: h.identity, operation: operation, run: run}
 	s.pending = permit
 	native := s.operations[operation]
 	s.mu.Unlock()
+	returned := false
 	defer func() {
 		s.mu.Lock()
 		if s.pending == permit {
@@ -193,11 +201,25 @@ func (h Handle) Call(ctx context.Context, receiver any, invocation *Invocation, 
 		} else if IsAdmissionDenied(err) {
 			err = &returnedFailure{cause: err}
 		}
+		if returned && err == nil && consumed {
+			err = finishJournalRun(permit, true)
+		}
+		if permit.run != nil {
+			if !returned {
+				failJournalRun(permit, ErrJournal)
+				FailProtected(invocation, ErrJournal)
+			} else if err != nil {
+				failJournalRun(permit, err)
+				FailProtected(invocation, err)
+			}
+		}
 		if err == nil && !consumed {
 			err = ErrDrainPermit
 		}
 	}()
-	return native(ctx, permit, cause)
+	err = native(ctx, permit, cause)
+	returned = true
+	return err
 }
 
 // ConsumeDrain is called after executionMu, before native side effects. No
@@ -288,6 +310,6 @@ func CheckProtectedDrainInFlight(receiver any) error {
 	if !ledger.enrolled {
 		return nil
 	}
-	ledger.failure = errors.Join(ledger.failure, ErrDrain)
+	appendFailureLocked(ledger, ErrDrain, nil, "", true, 0)
 	return ErrDrain
 }

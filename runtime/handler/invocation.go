@@ -4,6 +4,7 @@ import (
 	"context"
 	"reflect"
 
+	"github.com/viant/datly/spec"
 	xhandler "github.com/viant/xdatly/handler"
 	xresponse "github.com/viant/xdatly/response"
 )
@@ -58,3 +59,7 @@ type HandlerFunc func(ctx context.Context, invocation Invocation) (any, error)
 func (f HandlerFunc) Execute(ctx context.Context, invocation Invocation) (any, error) {
 	return f(ctx, invocation)
 }
+
+// ContractMetadata augments a linked handler's reflected contract with exact
+// binding and wire-schema metadata emitted by its authoring compiler.
+type ContractMetadata interface{ ContractParameters() []*spec.Parameter }

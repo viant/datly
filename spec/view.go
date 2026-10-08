@@ -6,9 +6,10 @@ import (
 )
 
 type View struct {
-	Key       Key    `json:"key"`
-	Name      string `json:"name,omitempty"`
-	Namespace string `json:"namespace,omitempty"`
+	DocumentationTable string `json:"documentationTable,omitempty"`
+	Key                Key    `json:"key"`
+	Name               string `json:"name,omitempty"`
+	Namespace          string `json:"namespace,omitempty"`
 	// Auxiliary is generation-only mutation intent. Reads and business data
 	// remain part of the canonical view graph; runtime data.View does not own it.
 	Auxiliary bool `json:"auxiliary,omitempty"`
@@ -25,28 +26,29 @@ type View struct {
 	TypeName string `json:"typeName,omitempty"`
 	Dest     string `json:"dest,omitempty"`
 	// EntityHooks is generation-only metadata for the authored entity hook reference.
-	RootNullPolicy           string         `json:"rootNullPolicy,omitempty"`
-	NestedNullPolicy         string         `json:"nestedNullPolicy,omitempty"`
-	InsertValidationPresence bool           `json:"insertValidationPresence,omitempty"`
-	WriterIdentityPolicy     string         `json:"writerIdentityPolicy,omitempty"`
-	QueueContract            string         `json:"queueContract,omitempty"`
-	WriterActionPolicy       string         `json:"writerActionPolicy,omitempty"`
-	OnDeleteNotFound         string         `json:"onDeleteNotFound,omitempty"`
-	MutationPredicateGroup   *int           `json:"mutationPredicateGroup,omitempty"`
-	EntityHooks              string         `json:"entityHooks,omitempty"`
-	Cardinality              Cardinality    `json:"cardinality,omitempty"`
-	AllowNulls               *bool          `json:"allowNulls,omitempty"`
-	Groupable                *bool          `json:"groupable,omitempty"`
-	Columns                  []*Column      `json:"columns,omitempty"`
-	Source                   *ViewSource    `json:"source,omitempty"`
-	Selector                 *Selector      `json:"selector,omitempty"`
-	Partitioning             *Partitioning  `json:"partitioning,omitempty"`
-	SelfReference            *SelfReference `json:"selfReference,omitempty"`
-	BatchSize                int            `json:"batchSize,omitempty"`
-	BatchConcurrency         int            `json:"batchConcurrency,omitempty"`
-	PublishParent            bool           `json:"publishParent,omitempty"`
-	RelationalConcurrency    int            `json:"relationalConcurrency,omitempty"`
-	Relations                []*Relation    `json:"relations,omitempty"`
+	RootNullPolicy           string          `json:"rootNullPolicy,omitempty"`
+	NestedNullPolicy         string          `json:"nestedNullPolicy,omitempty"`
+	InsertValidationPresence bool            `json:"insertValidationPresence,omitempty"`
+	WriterIdentityPolicy     string          `json:"writerIdentityPolicy,omitempty"`
+	Reconciliation           *Reconciliation `json:"reconciliation,omitempty"`
+	QueueContract            string          `json:"queueContract,omitempty"`
+	WriterActionPolicy       string          `json:"writerActionPolicy,omitempty"`
+	OnDeleteNotFound         string          `json:"onDeleteNotFound,omitempty"`
+	MutationPredicateGroup   *int            `json:"mutationPredicateGroup,omitempty"`
+	EntityHooks              string          `json:"entityHooks,omitempty"`
+	Cardinality              Cardinality     `json:"cardinality,omitempty"`
+	AllowNulls               *bool           `json:"allowNulls,omitempty"`
+	Groupable                *bool           `json:"groupable,omitempty"`
+	Columns                  []*Column       `json:"columns,omitempty"`
+	Source                   *ViewSource     `json:"source,omitempty"`
+	Selector                 *Selector       `json:"selector,omitempty"`
+	Partitioning             *Partitioning   `json:"partitioning,omitempty"`
+	SelfReference            *SelfReference  `json:"selfReference,omitempty"`
+	BatchSize                int             `json:"batchSize,omitempty"`
+	BatchConcurrency         int             `json:"batchConcurrency,omitempty"`
+	PublishParent            bool            `json:"publishParent,omitempty"`
+	RelationalConcurrency    int             `json:"relationalConcurrency,omitempty"`
+	Relations                []*Relation     `json:"relations,omitempty"`
 }
 
 func (v *View) CanonicalName() string {
@@ -124,8 +126,12 @@ type Relation struct {
 }
 
 // RelationLink preserves one AST-proven parent/child equality. Go field
-// indexes are resolved later by the reader compiler and never enter spec.
+// names and result labels survive generation; field indexes remain runtime-owned.
 type RelationLink struct {
+	ParentField     string `json:"parentField,omitempty"`
+	ChildField      string `json:"childField,omitempty"`
+	ParentOutput    string `json:"parentOutput,omitempty"`
+	ChildOutput     string `json:"childOutput,omitempty"`
 	ParentNamespace string `json:"parentNamespace,omitempty"`
 	ParentColumn    string `json:"parentColumn,omitempty"`
 	ChildNamespace  string `json:"childNamespace,omitempty"`

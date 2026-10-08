@@ -35,6 +35,13 @@ type Config struct {
 	// MCP tools. The compiler merges it into schema.Tool.Meta without allowing
 	// a host to replace the tool name or input/output contract.
 	ToolMetadata func(context.Context, exec.ComponentTarget) (map[string]interface{}, error)
+	// LinkedArtifact is authoritative immutable deployment provenance. Every
+	// exposed component gets its actual key and compiled route schema fingerprint.
+	LinkedArtifact *exec.LinkedArtifact
+	// RequireComponentBinding denies calls lacking the exact observed binding,
+	// including when artifact provenance is unavailable. Artifact-backed tools
+	// always require a binding regardless of this flag.
+	RequireComponentBinding bool
 	// Catalog callbacks authorize metadata independently of execution. They are
 	// evaluated for the request's pinned generation, never from skill frontmatter.
 	AuthorizeCatalogTool     func(context.Context, exec.ComponentTarget, string) error
@@ -86,6 +93,13 @@ func New(config Config) (*Service, error) {
 func (config Config) Compile(ctx context.Context) (*Service, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf("MCP staging context is required")
+	}
+	if config.LinkedArtifact != nil {
+		artifact := *config.LinkedArtifact
+		if err := artifact.Validate(); err != nil {
+			return nil, err
+		}
+		config.LinkedArtifact = &artifact
 	}
 	return (&serviceCompiler{config: config}).Compile(ctx)
 }

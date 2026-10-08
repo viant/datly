@@ -216,13 +216,7 @@ func reflectedPackagePaths(includes, excludes []string) []string {
 		_ = xunsafe.PackageTypes("")
 		for _, packagePath := range xunsafe.PackageNames() {
 			for _, include := range patterns {
-				matched := false
-				if strings.HasSuffix(include, "...") {
-					matched = strings.HasPrefix(packagePath, strings.TrimSuffix(include, "..."))
-				} else if value, err := path.Match(include, packagePath); err == nil {
-					matched = value
-				}
-				if matched {
+				if reflectedPackageMatch(include, packagePath) {
 					seen[packagePath] = true
 					break
 				}
@@ -248,6 +242,10 @@ func reflectedPackagePaths(includes, excludes []string) []string {
 
 func reflectedPackageMatch(pattern, packagePath string) bool {
 	pattern = strings.TrimSpace(pattern)
+	if strings.HasSuffix(pattern, "/...") {
+		root := strings.TrimSuffix(pattern, "/...")
+		return packagePath == root || strings.HasPrefix(packagePath, root+"/")
+	}
 	if strings.HasSuffix(pattern, "...") {
 		return strings.HasPrefix(packagePath, strings.TrimSuffix(pattern, "..."))
 	}

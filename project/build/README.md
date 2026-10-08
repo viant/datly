@@ -12,6 +12,27 @@ The scaffold contains `cmd/datly`, `internal/dependencylink`, `dql`, `generated`
 `hooks`, `resources`, and `datly.yaml`. DQL must be transcribed before building;
 the build command does not silently regenerate source.
 
+Initialized application mains use the shared `cmd/developer.Service` dispatcher.
+The same linked executable supports `transcribe`, `validate`, `link sync`,
+`init/build`, and `run/start`; authoring resolves the project's native linked
+predicate/component types without an overlay CLI or manual type registration.
+The stock executable delegates to the same command implementation, including
+the existing read-only schema discovery rules.
+
+For an existing custom main, preserve its runtime injections:
+
+```go
+runtimeCommands := command.Service{/* existing providers, holders, auth and logging */}
+status := (developer.Service{Runtime: runtimeCommands}).Run(ctx, args, stdout, stderr)
+```
+
+Imports are `github.com/viant/datly/cmd/command` and
+`github.com/viant/datly/cmd/developer`. Source linking/exposure policy remains in
+the project's existing link package and configuration. Discover/synchronize it
+using the native link mechanism, rebuild the custom binary, then invoke its
+operation-based `transcribe get|patch|post|put` command. Merely adding a predicate
+import to another process does not link that type into the authoring executable.
+
 ## User-owned default imports
 
 `internal/dependencylink` is application-owned selection policy. The application adds
@@ -62,6 +83,16 @@ helpers without executing application code. Discovery/validation failures leave
 the working tree unchanged; module and workspace metadata are protected from
 implicit Go updates. Update dependencies separately if Go reports missing sums
 or an outdated module graph.
+
+Retention uses a named package-level value for every discovered type category:
+component holders, lifecycle hooks, predicates and codecs. The convention is
+`var _anchorTypeName = reflect.TypeFor[TypeName]()`. Generated component files place these declarations directly below `init()`, at package scope. New link-support files place their anchors below their generated `init()`; additive link sync preserves existing declarations. No explicit `init` assignment
+or registration call is required for the anchor. Independently generated
+component files qualify shared lifecycle anchor names with the holder name to
+avoid duplicate declarations. Existing named anchors remain recognized regardless
+of their spelling; link sync does not rename authored declarations. Public
+component instance variables support explicit wiring and are not sufficient
+retention anchors by themselves.
 Configured Go flags and automatic or explicit vendor selection remain intact.
 
 Publication checks for concurrent destination edits and atomically replaces each

@@ -95,4 +95,24 @@ func New(ctx context.Context, config Config) (*Service, error) {
 	return result, nil
 }
 
+// NewVerifier binds signature/expiry verification without adding credential
+// issuance, password authentication, or a default authenticator. Reader hosts
+// require this narrow Auth capability even when they have no login endpoints.
+func NewVerifier(ctx context.Context, config *verifier.Config) (*Service, error) {
+	if ctx == nil || config == nil {
+		return nil, errors.New("JWT verifier configuration and context required")
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	copy := *config
+	service := verifier.New(&copy)
+	if err := service.Init(ctx); err != nil {
+		return nil, fmt.Errorf("initialize JWT verifier: %w", err)
+	}
+	result := &Service{verifier: service, authenticators: map[xauth.Vendor]xauth.Authenticator{}}
+	result.authenticators[xauth.VendorJWT] = &jwtAuthenticator{verifier: service}
+	return result, nil
+}
+
 var _ xauth.Auth = (*Service)(nil)

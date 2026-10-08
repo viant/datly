@@ -184,7 +184,7 @@ func (c composeClient) schemas(t *testing.T) {
             var cube businessSchema
             if err := json.Unmarshal(data, &cube); err != nil { t.Fatal(err) }
             dimensions, measures := cube.Properties["dimensions"], cube.Properties["measures"]
-            if len(dimensions.Properties) != 1 || dimensions.Properties["accountId"].Type != "boolean" || len(measures.Properties) != 1 || measures.Properties["totalSpend"].Type != "boolean" { t.Fatalf("public cube schema changed: %s", data) }
+            if len(dimensions.Properties) != 1 || dimensions.Properties[cubeWireName(dimensionOutput)].Type != "boolean" || len(measures.Properties) != 1 || measures.Properties[cubeWireName(measureOutput)].Type != "boolean" { t.Fatalf("public cube schema changed: %s", data) }
         }
 		if tool.Name != "SpendCubeCompose" {
 			continue
@@ -285,7 +285,7 @@ func (c composeClient) listTools() (*schema.ListToolsResult, error) {
 // Public cube field names remain stable while their selectors use SQL outputs.
 func (c composeClient) cube(t *testing.T, revision int) {
  t.Helper()
- args := map[string]any{"dimensions": map[string]any{"accountId": true}, "measures": map[string]any{"totalSpend": true}, "filters": map[string]any{"tenant": "acme", "channel": "web"}, "orderBy": []string{dimensionOutput}}
+ args := map[string]any{"dimensions": map[string]any{cubeWireName(dimensionOutput): true}, "measures": map[string]any{cubeWireName(measureOutput): true}, "filters": map[string]any{"tenant": "acme", "channel": "web"}, "orderBy": []string{dimensionOutput}}
  data, failed, err := c.callEndpoint("SpendCube", "/spend/cube", args)
  if err != nil || failed { t.Fatalf("cube rows: %s failed=%v err=%v", data, failed, err) }
  var result struct { Data []struct { AccountId int; TotalSpend float64 } }
@@ -293,7 +293,20 @@ func (c composeClient) cube(t *testing.T, revision int) {
  expected := 150.0
  if revision == 2 { expected = 160 }
  if len(result.Data) != 2 || result.Data[0].AccountId != 1 || result.Data[0].TotalSpend != expected || result.Data[1].AccountId != 2 || result.Data[1].TotalSpend != 70 { t.Fatalf("cube revision %d: %s", revision, data) }
- args["orderBy"] = []string{rejectedDimension}
+ // Public/Go field mappings are valid selector names. Compose SQL itself
+ // still requires exposed SQL names, covered by the negative compose cases.
+ for _, field := range []string{"accountId", "AccountId"} {
+  args["orderBy"] = []string{field + " DESC"}
+  data, failed, err = c.callEndpoint("SpendCube", "/spend/cube", args)
+  if err != nil || failed { t.Fatalf("cube public order %s: %s failed=%v err=%v", field, data, failed, err) }
+  ordered := result
+  ordered.Data = nil
+  if err := json.Unmarshal(data, &ordered); err != nil { t.Fatal(err) }
+  if len(ordered.Data) != 2 || !reflect.DeepEqual(ordered.Data[0], result.Data[1]) || !reflect.DeepEqual(ordered.Data[1], result.Data[0]) { t.Fatalf("cube public descending order %s differs: %s", field, data) }
+ }
+ args["orderBy"] = []string{"unexposed_account"}
  data, failed, err = c.callEndpoint("SpendCube", "/spend/cube", args)
- if err != nil || !failed { t.Fatalf("cube inferred order accepted: %s failed=%v err=%v", data, failed, err) }
+ if err != nil || !failed { t.Fatalf("cube unexposed order accepted: %s failed=%v err=%v", data, failed, err) }
 }
+
+func cubeWireName(name string) string { if name=="" { return "" }; return strings.ToLower(name[:1])+name[1:] }

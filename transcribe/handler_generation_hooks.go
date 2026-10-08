@@ -96,7 +96,7 @@ func (c *entityHookCompilation) apply(record *plan.RecordPlan, parent string) er
 		if record.Entity == nil {
 			return fmt.Errorf("entity hook view %s has no entity metadata", record.Identity)
 		}
-		request := compiler.EntityHookRequest{Hook: view.EntityHooks, Entity: entity, Parent: parent, WriteEligibilityAllowed: writeEligibilityAllowed(record, parent == "")}
+		request := compiler.EntityHookRequest{Hook: view.EntityHooks, Entity: entity, Parent: parent, ReconciliationAllowed: parent == "" && view.Reconciliation != nil, WriteEligibilityAllowed: writeEligibilityAllowed(record, parent == "")}
 		if c.generated.Output.Type != "" {
 			request.Output, err = c.generated.CanonicalType(c.generation.input.TargetPackage, c.generated.Output.Type)
 			if err != nil {

@@ -29,10 +29,13 @@ type State struct {
 	drains          map[*DrainRecord]struct{}
 	operations      NativeOperations
 	pending         *DrainPermit
+	journalNative   *NativeJournal
+	historicalDrain bool
 }
 type identity struct {
 	marker     byte
 	activities activityLedger
+	journal    journal
 }
 type Invocation struct{ identity *identity }
 
@@ -179,7 +182,7 @@ func (h Handle) Attach(receiver any, invocation *Invocation) (err error) {
 		ledger := &h.identity.activities
 		ledger.mu.Lock()
 		if ledger.enrolled {
-			ledger.failure = errors.Join(ledger.failure, ErrDrainOverlap)
+			appendFailureLocked(ledger, ErrDrainOverlap, nil, "", true, 0)
 		}
 		ledger.mu.Unlock()
 		s.mu.Unlock()

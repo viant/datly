@@ -25,6 +25,7 @@ type dataOperation struct {
 	payloadEvidence *queuePayloadEvidence
 	id              uint64
 	frame           *Data
+	journalFrame    *drainowner.Frame
 	kind            dataOperationKind
 	table           string
 	data            any
@@ -95,6 +96,11 @@ func (d *Data) append(operation dataOperation) error {
 	owner.nextOp++
 	operation.id = owner.nextOp
 	operation.frame = d
+	operation.journalFrame = d.journalFrame
+	if err := drainowner.AppendJournal(owner, d.journalFrame, &operation); err != nil {
+		owner.nextOp--
+		return owner.failProtectedMutationLocked(err)
+	}
 	d.queue = append(d.queue, &operation)
 	return nil
 }

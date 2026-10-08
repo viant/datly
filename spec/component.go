@@ -72,6 +72,7 @@ type OutputSettings struct {
 // GenerationSettings contains transcription controls that are consumed while
 // producing a Go package and are not part of runtime component behavior.
 type GenerationSettings struct {
+	BorrowedSQLRows     []BorrowedSQLRow  `json:"borrowedSQLRows,omitempty"`
 	ClientInputType     string            `json:"clientInputType,omitempty"`
 	WriterOmitEmpty     bool              `json:"writerOmitEmpty,omitempty"`
 	FilePrefix          string            `json:"filePrefix,omitempty"`
@@ -92,13 +93,15 @@ type GenerationSettings struct {
 }
 
 func (s GenerationSettings) IsZero() bool {
-	return s.ClientInputType == "" && !s.WriterOmitEmpty && s.FilePrefix == "" && s.Template == "" && s.DescriptionResource == "" && s.ViewFile == "" &&
+	return len(s.BorrowedSQLRows) == 0 && s.ClientInputType == "" && !s.WriterOmitEmpty && s.FilePrefix == "" && s.Template == "" && s.DescriptionResource == "" && s.ViewFile == "" &&
 		s.InputFile == "" && s.OutputFile == "" && s.RouterFile == "" &&
 		s.HandlerFile == "" && s.LifecycleFile == "" && s.MutationFile == "" &&
 		s.ResourcesFile == "" && s.LinksFile == "" && s.TemplateFile == "" && len(s.SupportFiles) == 0 && len(s.SQLFiles) == 0
 }
 
 type ReportSettings struct {
+	// LinkedFacade means transcription emitted a concrete cube component.
+	LinkedFacade    bool                 `json:"linkedFacade,omitempty"`
 	Compose         *CubeComposeSettings `json:"compose,omitempty"`
 	Enabled         bool                 `json:"enabled,omitempty"`
 	MCPTool         *bool                `json:"mcpTool,omitempty"`

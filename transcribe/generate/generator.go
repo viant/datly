@@ -28,6 +28,10 @@ type DeclarationProjection struct {
 type Declarations map[string]Declaration
 
 type Input struct {
+	// Records the explicit trusted in-process Go/universal mutation selection.
+	// Settings, handler assets and marker maps cannot establish this context.
+	nativeMutationTargetSelected bool
+
 	Resources       *resource.Store
 	Component       *spec.Component
 	Declarations    Declarations
@@ -66,6 +70,7 @@ const RootViewPath = "root"
 // ViewReference identifies a package-owned canonical view type.
 type ViewReference struct {
 	DescriptorKey string
+	Borrowed      *BorrowedRowAuthority
 }
 
 type ViewReferences map[string]*ViewReference
@@ -158,6 +163,7 @@ func cloneViewReferences(source ViewReferences) ViewReferences {
 			continue
 		}
 		copy := *reference
+		copy.Borrowed = reference.Borrowed.Clone()
 		result[path] = &copy
 	}
 	return result
@@ -193,7 +199,7 @@ func (g *Generator) Generate(dir string) (*Result, error) {
 		return nil, g.initErr
 	}
 	mutation := g.input.MutationHandler != nil || g.input.Component != nil && g.input.Component.Settings != nil && g.input.Component.Settings.Mutation != ""
-	if err := g.input.ValidateLifecycleTarget(mutation); err != nil {
+	if err := g.input.validateLifecycleTarget(mutation, false); err != nil {
 		return nil, err
 	}
 	plan, err := g.Plan()

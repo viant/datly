@@ -23,6 +23,8 @@ type dataScopeContextKey struct{}
 
 type dataScope struct {
 	nativeInvocation         *drainowner.Invocation
+	journalFrame             *drainowner.Frame
+	orderedCompletion        bool
 	nativeHandle             drainowner.Handle
 	nativeCleanup            bool
 	writeEligibility         mutationGuard
@@ -326,7 +328,11 @@ func invocationDataScope(ctx context.Context, source dexec.DataSource) (*dataSco
 			root = root.root
 		}
 		component := componentFromContext(ctx)
-		return &dataScope{source: source, root: root, parent: inherited, relation: component.relation, order: component.order}, false
+		child := &dataScope{source: source, root: root, parent: inherited, relation: component.relation, order: component.order}
+		root.mu.Lock()
+		child.ensureJournalFrameLocked(root)
+		root.mu.Unlock()
+		return child, false
 	}
 	created := newDataScope(source)
 	if created != nil {
@@ -361,14 +367,18 @@ func (s *dataScope) nativeIssuerLocked() *drainowner.Invocation {
 	}
 	return s.nativeInvocation
 }
-func (s *dataScope) admitActivity() (drainowner.Activity, error) {
+func (s *dataScope) admitActivity(contexts ...context.Context) (drainowner.Activity, error) {
 	root := s
 	if s.root != nil {
 		root = s.root
 	}
 	root.mu.Lock()
 	defer root.mu.Unlock()
-	return drainowner.AdmitActivity(root.nativeIssuerLocked())
+	issuer := root.nativeIssuerLocked()
+	if len(contexts) != 0 && drainowner.BindingGroupContext(contexts[0]) {
+		return drainowner.AdmitBindingGroupActivity(contexts[0], issuer)
+	}
+	return drainowner.AdmitActivity(issuer)
 }
 func (s *dataScope) finishActivity(token drainowner.Activity, cause error) error {
 	root := s
@@ -380,7 +390,7 @@ func (s *dataScope) finishActivity(token drainowner.Activity, cause error) error
 	root.mu.Unlock()
 	return drainowner.FinishActivity(issuer, token, cause)
 }
-func (s *dataScope) enrollBufferedScope() error {
+func (s *dataScope) enrollBufferedScope(contexts ...context.Context) error {
 	root := s
 	if s.root != nil {
 		root = s.root
@@ -388,6 +398,13 @@ func (s *dataScope) enrollBufferedScope() error {
 	root.mu.Lock()
 	defer root.mu.Unlock()
 	issuer := root.nativeIssuerLocked()
+	if len(contexts) != 0 && drainowner.BindingGroupContext(contexts[0]) {
+		if err := drainowner.BindingGroupAdmission(contexts[0], issuer); err != nil {
+			return err
+		}
+		s.requireBufferedOwner = true
+		return nil
+	}
 	enrollErr := drainowner.EnrollActivities(issuer)
 	if bindErr := root.writeEligibility.bindProtectedIssuer(issuer); bindErr != nil {
 		enrollErr = errors.Join(enrollErr, bindErr)
@@ -397,7 +414,11 @@ func (s *dataScope) enrollBufferedScope() error {
 	}
 	s.requireBufferedOwner = true
 	root.bufferedScopeEnrolled = true
-	return nil
+	if err := issuer.EnableJournal(); err != nil {
+		root.guardedFailure = errors.Join(root.guardedFailure, err)
+		return err
+	}
+	return root.orderedAdmissionLocked()
 }
 
 func withDataScope(ctx context.Context, scope *dataScope) context.Context {
@@ -460,13 +481,26 @@ func (s *dataScope) resolve(ctx context.Context) (xhandler.Data, error) {
 		root.mu.Unlock()
 		return nil, err
 	}
-	if root.nativeInvocation == nil {
-		root.nativeInvocation = drainowner.NewInvocation()
+	s.ensureJournalFrameLocked(root)
+	if err := root.orderedAdmissionLocked(); err != nil {
+		root.mu.Unlock()
+		return nil, err
 	}
 	root.resolving.Add(1)
 	root.mu.Unlock()
 	defer root.resolving.Done()
 	s.once.Do(func() {
+		defer func() {
+			if s.err == nil && s.data != nil {
+				unit := s.unit
+				if unit == nil {
+					unit = s
+				}
+				if unit.nativeCleanup {
+					s.err = unit.nativeHandle.BindFrame(unit.data, s.data, root.nativeInvocation, s.journalFrame)
+				}
+			}
+		}()
 		if s.parent != nil {
 			parentData, err := s.parent.resolve(ctx)
 			if err != nil {
@@ -565,6 +599,10 @@ func (s *dataScope) resolve(ctx context.Context) (xhandler.Data, error) {
 		return nil, s.err
 	}
 	root.mu.Lock()
+	if err := root.orderedAdmissionLocked(); err != nil {
+		root.mu.Unlock()
+		return nil, err
+	}
 	guarded, failure := root.guardedExecution, root.guardedFailure
 	root.mu.Unlock()
 	if failure != nil {
@@ -687,7 +725,7 @@ func (s *dataScope) databaseUnit(ctx context.Context, source dexec.DataSource, k
 		}
 		return unit, nil
 	}
-	unit := &dataScope{source: source, root: s, sequenceStrategy: strategy}
+	unit := &dataScope{source: source, root: s, sequenceStrategy: strategy, journalFrame: s.journalFrame}
 	unit.unit = unit
 	s.bySource[key] = unit
 	s.units = append(s.units, unit)
@@ -696,7 +734,11 @@ func (s *dataScope) databaseUnit(ctx context.Context, source dexec.DataSource, k
 }
 
 func (s *dataScope) seal() {
-	if s == nil || s.data == nil {
+	if s == nil {
+		return
+	}
+	drainowner.SealFrame(s.journalFrame)
+	if s.data == nil {
 		return
 	}
 	if sealer, ok := s.data.(componentDataSealer); ok {
@@ -816,7 +858,11 @@ func (s *dataScope) complete(ctx context.Context, handlerErr error) (completionE
 			}
 		}
 	}
-	defer func() { root.recordCompletion(units, completionErr) }()
+	reportingUnits := units
+	defer func() { root.recordCompletion(reportingUnits, completionErr) }()
+	if root.orderedCompletion {
+		units = root.transactionCompletionOrder(units)
+	}
 	if handlerErr != nil {
 		for index := len(units) - 1; index >= 0; index-- {
 			handlerErr = units[index].completeUnit(ctx, handlerErr)
@@ -829,13 +875,24 @@ func (s *dataScope) complete(ctx context.Context, handlerErr error) (completionE
 		}
 		return handlerErr
 	}
-	for _, unit := range units {
-		if handlerErr = unit.prepareUnit(ctx); handlerErr != nil {
-			for index := len(units) - 1; index >= 0; index-- {
-				handlerErr = units[index].completeUnit(ctx, handlerErr)
+	if root.orderedCompletion {
+		handlerErr = root.prepareOrderedJournal(ctx, units, drainowner.AllPreparation)
+	} else {
+		for _, unit := range units {
+			if handlerErr = unit.prepareUnit(ctx); handlerErr != nil {
+				break
 			}
-			return handlerErr
 		}
+	}
+	if handlerErr != nil {
+		units = root.transactionCompletionOrder(units)
+		for index := len(units) - 1; index >= 0; index-- {
+			handlerErr = units[index].completeUnit(ctx, handlerErr)
+		}
+		return handlerErr
+	}
+	if root.orderedCompletion {
+		units = root.transactionCompletionOrder(units)
 	}
 	if handlerErr = validateUnitExecutionGuards(ctx, units); handlerErr != nil {
 		for index := len(units) - 1; index >= 0; index-- {
@@ -994,8 +1051,12 @@ func (s *dataScope) prepare(ctx context.Context) error {
 		root = root.root
 	}
 	root.mu.Lock()
+	buffered := root.bufferedScopeEnrolled
 	units := append([]*dataScope{root}, root.units...)
 	root.mu.Unlock()
+	if buffered {
+		return root.prepareProtectedFinalization(ctx)
+	}
 	for _, unit := range units {
 		if unit.err != nil {
 			return unit.err
@@ -1087,5 +1148,16 @@ func (s *dataScope) attachNativeOwner(issuer *drainowner.Invocation) (err error)
 			err = dexec.NewPanicError("native data attachment", value)
 		}
 	}()
-	return s.nativeHandle.Attach(s.data, issuer)
+	root := s
+	if root.root != nil {
+		root = root.root
+	}
+	root.mu.Lock()
+	s.ensureJournalFrameLocked(root)
+	root.mu.Unlock()
+	err = s.nativeHandle.Attach(s.data, issuer)
+	if err == nil {
+		err = s.nativeHandle.BindFrame(s.data, s.data, issuer, s.journalFrame)
+	}
+	return err
 }

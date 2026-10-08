@@ -59,6 +59,9 @@ func (d *reportDeriver) compile(sources []Source) (*Project, error) {
 
 func (d *reportDeriver) derive(source Source) ([]*Derived, []*x.Type, error) {
 	component := source.Component
+	if component.Settings != nil && component.Settings.Report != nil && component.Settings.Report.LinkedFacade && (component.Settings.Report.Compose == nil || !component.Settings.Report.Compose.Enabled) {
+		return nil, nil, nil
+	}
 	eligible := source.eligibleRoutes()
 	if len(eligible) == 0 {
 		return nil, nil, nil
@@ -73,8 +76,10 @@ func (d *reportDeriver) derive(source Source) ([]*Derived, []*x.Type, error) {
 		if err != nil {
 			return nil, nil, err
 		}
-		if err = d.reserve(identity); err != nil {
-			return nil, nil, err
+		if !component.Settings.Report.LinkedFacade {
+			if err = d.reserve(identity); err != nil {
+				return nil, nil, err
+			}
 		}
 		contract, ok := source.Input.ForRoute(spec.RouteRef{Method: route.Method, Path: route.Path})
 		if !ok {
@@ -102,15 +107,28 @@ func (d *reportDeriver) derive(source Source) ([]*Derived, []*x.Type, error) {
 			orderIndex: input.orderIndex, limitIndex: input.limitIndex, offsetIndex: input.offsetIndex,
 			holderByName: cloneHolders(metadata.holders),
 		}
-		derived := &Derived{
-			Component: d.derivedComponent(component, route, identity, metadata, input),
-			InputType: input.typeOf, OutputType: source.OutputType, Plan: plan, Handler: NewHandler(plan), Type: input.descriptor,
+		definition, err := plan.Definition()
+		if err != nil {
+			return nil, nil, err
 		}
-		result = append(result, derived)
-		if metadata.settings.LinkedInputType == "" {
+		definition.Parameters = cloneParams(input.params)
+		plan, err = definition.Compile(input.typeOf, source.OutputType)
+		if err != nil {
+			return nil, nil, err
+		}
+		derived := &Derived{
+			Component:  d.derivedComponent(component, route, identity, metadata, input),
+			Definition: definition, InputType: input.typeOf, OutputType: source.OutputType, Plan: plan, Handler: NewHandler(plan), Type: input.descriptor,
+		}
+		if !component.Settings.Report.LinkedFacade {
+			result = append(result, derived)
+		}
+		if !component.Settings.Report.LinkedFacade && metadata.settings.LinkedInputType == "" {
 			descriptors = append(descriptors, input.descriptor)
 		}
-		d.commit(identity)
+		if !component.Settings.Report.LinkedFacade {
+			d.commit(identity)
+		}
 		composed, descriptor, composeErr := d.deriveCompose(source, route, identity, metadata, plan)
 		if composeErr != nil {
 			return nil, nil, composeErr

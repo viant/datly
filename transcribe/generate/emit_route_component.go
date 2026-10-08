@@ -1,7 +1,6 @@
 package generate
 
 import (
-	"crypto/sha256"
 	"fmt"
 	"go/token"
 	"strconv"
@@ -64,6 +63,22 @@ func componentFileText(packageName string, plan *Plan) (string, error) {
 	}
 	b.WriteString(")\n\n")
 	b.WriteString("func init() {}\n\n")
+	b.WriteString("var _anchor")
+	b.WriteString(plan.HolderName())
+	b.WriteString(" = " + reflectAlias + ".TypeFor[")
+	b.WriteString(plan.HolderName())
+	b.WriteString("]()\n")
+	for _, anchor := range anchors {
+		b.WriteString("var _anchor")
+		b.WriteString(anchor.symbol)
+		b.WriteString(" = " + reflectAlias + ".TypeFor[")
+		b.WriteString(anchor.expression)
+		b.WriteString("]()\n")
+	}
+	for _, anchor := range localLifecycleAnchors(plan) {
+		b.WriteString("\nvar " + anchor.symbol + " = " + reflectAlias + ".TypeFor[" + anchor.expression + "]()\n")
+	}
+	b.WriteString("\n")
 	b.WriteString("// Component is the generated component scaffold for ")
 	b.WriteString(plan.ComponentName)
 	b.WriteString(".\n")
@@ -96,31 +111,18 @@ func componentFileText(packageName string, plan *Plan) (string, error) {
 	b.WriteString("DatlyType() " + reflectAlias + ".Type { return " + reflectAlias + ".TypeOf((*")
 	b.WriteString(plan.HolderName())
 	b.WriteString(")(nil)).Elem() }\n")
-	b.WriteString("\n// The package-level value keeps this real component type reachable for runtime discovery.\n")
+	b.WriteString("\n// The public value supports explicit component wiring.\n")
 	b.WriteString("var ")
 	b.WriteString(strings.TrimSuffix(plan.HolderName(), "Component"))
 	b.WriteString("Datly = new(")
 	b.WriteString(plan.HolderName())
 	b.WriteString(")\n")
-	b.WriteString("var _datlyReachable")
-	b.WriteString(plan.HolderName())
-	b.WriteString(" = " + reflectAlias + ".TypeFor[")
-	b.WriteString(plan.HolderName())
-	b.WriteString("]()\n")
 	for _, anchor := range anchors {
 		b.WriteString("\nfunc ")
 		b.WriteString(anchor.symbol)
 		b.WriteString("DatlyType() " + reflectAlias + ".Type { return " + reflectAlias + ".TypeOf((*")
 		b.WriteString(anchor.expression)
 		b.WriteString(")(nil)).Elem() }\n")
-		b.WriteString("var _datlyReachable")
-		b.WriteString(anchor.symbol)
-		b.WriteString(" = " + reflectAlias + ".TypeFor[")
-		b.WriteString(anchor.expression)
-		b.WriteString("]()\n")
-	}
-	for _, anchor := range localLifecycleAnchors(plan) {
-		b.WriteString("\nvar " + anchor.symbol + " = " + reflectAlias + ".TypeFor[" + anchor.expression + "]()\n")
 	}
 	if plan.Handler != "" && (plan.MutationHandler != nil || plan.ContractHandler != nil || plan.ExternalHandler != nil) {
 		name := availableImportAlias(imports, "name")
@@ -197,8 +199,7 @@ func localLifecycleAnchors(plan *Plan) []lifecycleAnchor {
 			continue
 		}
 		seen[name] = true
-		digest := sha256.Sum256([]byte(name))
-		symbol := "_datlyLifecycle_" + plan.HolderName() + "_" + fmt.Sprintf("%x", digest)
+		symbol := "_anchor" + name + "_" + plan.HolderName()
 		result = append(result, lifecycleAnchor{expression: name, symbol: symbol})
 	}
 	return result
@@ -245,6 +246,7 @@ func (p *Plan) componentTag(route RoutePlan) dtag.Component {
 	if p.Report != nil {
 		result.ReportCompose = p.Report.Compose.Clone()
 		result.Report = p.Report.Enabled
+		result.ReportLinkedFacade = p.Report.LinkedFacade
 		if p.Report.MCPTool != nil {
 			enabled := *p.Report.MCPTool
 			result.ReportMCPTool = &enabled

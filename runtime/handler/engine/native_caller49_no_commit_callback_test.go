@@ -15,6 +15,9 @@ import (
 
 // Caller-owned transactions have no native OnCommit callback. This is a real
 // pending/usable/rollback control, not a synthesized caller callback probe.
+// The two-owner variant is now an unbuffered control; its former buffered
+// compatibility is deliberately excluded and covered by the rejection
+// counterpart TestOrderedJournalRejectsCallerOwnedCombinations.
 func TestNativeCaller49PendingNeverInvokesOwnedCommitObserver(t *testing.T) {
 	for _, only := range []bool{true, false} {
 		t.Run(fmt.Sprintf("only=%t", only), func(t *testing.T) {
@@ -49,7 +52,7 @@ func TestNativeCaller49PendingNeverInvokesOwnedCommitObserver(t *testing.T) {
 				source = observerSource
 			}
 			var root, observer *dataScope
-			result, e := New().Execute(ctx, Request{Input: testRouteInput(t, reflect.TypeFor[struct{}]()), BufferedComponentCalls: true, DataSource: source, Handler: rh.HandlerFunc(func(ctx context.Context, in rh.Invocation) (any, error) {
+			result, e := New().Execute(ctx, Request{Input: testRouteInput(t, reflect.TypeFor[struct{}]()), BufferedComponentCalls: only, DataSource: source, Handler: rh.HandlerFunc(func(ctx context.Context, in rh.Invocation) (any, error) {
 				v, ok, e := in.Binder.Lookup(ctx, xh.DataKey)
 				if e != nil || !ok {
 					return nil, e
@@ -62,7 +65,7 @@ func TestNativeCaller49PendingNeverInvokesOwnedCommitObserver(t *testing.T) {
 					observer = root
 					return "success", nil
 				}
-				_, e = New().Execute(PrepareComponent(ctx, ComponentBufferedImperative, ""), Request{Input: testRouteInput(t, reflect.TypeFor[struct{}]()), DataSource: observerSource, Handler: rh.HandlerFunc(func(ctx context.Context, in rh.Invocation) (any, error) {
+				_, e = New().Execute(PrepareComponent(ctx, ComponentBinding, ""), Request{Input: testRouteInput(t, reflect.TypeFor[struct{}]()), DataSource: observerSource, Handler: rh.HandlerFunc(func(ctx context.Context, in rh.Invocation) (any, error) {
 					v, ok, e := in.Binder.Lookup(ctx, xh.DataKey)
 					if e != nil || !ok {
 						return nil, e

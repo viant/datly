@@ -250,25 +250,36 @@ func (c *linkCandidate) inspect(path string) error {
 					if actual.Tok != token.VAR {
 						continue
 					}
-					ast.Inspect(value, func(node ast.Node) bool {
-						call, ok := node.(*ast.CallExpr)
-						if !ok {
-							return true
+					// Only a direct value retained by a named package variable is
+					// evidence of linkage; discarded or nested calls are insufficient.
+					if len(value.Names) != len(value.Values) {
+						continue
+					}
+					for i, name := range value.Names {
+						if name.Name == "_" {
+							continue
+						}
+						expression := ast.Unparen(value.Values[i])
+						call, ok := expression.(*ast.CallExpr)
+						if !ok || len(call.Args) != 0 {
+							continue
 						}
 						generic, ok := call.Fun.(*ast.IndexExpr)
-						if ok {
-							selector, ok := generic.X.(*ast.SelectorExpr)
-							if ok && selector.Sel.Name == "TypeFor" {
-								qualifier, ok := selector.X.(*ast.Ident)
-								if ok && imports[qualifier.Name] == "reflect" {
-									if holder, ok := generic.Index.(*ast.Ident); ok {
-										c.reachable[holder.Name] = true
-									}
-								}
-							}
+						if !ok {
+							continue
 						}
-						return true
-					})
+						selector, ok := generic.X.(*ast.SelectorExpr)
+						if !ok || selector.Sel.Name != "TypeFor" {
+							continue
+						}
+						qualifier, ok := selector.X.(*ast.Ident)
+						if !ok || imports[qualifier.Name] != "reflect" {
+							continue
+						}
+						if holder, ok := generic.Index.(*ast.Ident); ok {
+							c.reachable[holder.Name] = true
+						}
+					}
 				case *ast.TypeSpec:
 					if actual.Tok != token.TYPE {
 						continue
@@ -501,11 +512,11 @@ func (c *linkCandidate) planSupport(plan *linkPlan) error {
 		content = updated
 	}
 	var appended strings.Builder
-	for _, holder := range missing {
-		fmt.Fprintf(&appended, "\nvar _datlyReachable%s = %s.TypeFor[%s]()\n", holder, alias, holder)
-	}
 	if !c.hasInit {
 		appended.WriteString("\nfunc init() {}\n")
+	}
+	for _, holder := range missing {
+		fmt.Fprintf(&appended, "\nvar _anchor%s = %s.TypeFor[%s]()\n", holder, alias, holder)
 	}
 	content = append(content, appended.String()...)
 	if _, err := parser.ParseFile(token.NewFileSet(), path, content, 0); err != nil {

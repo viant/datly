@@ -176,8 +176,8 @@ func fromSpecView(source *spec.View, converted map[*spec.View]*View) *View {
 			if link == nil {
 				continue
 			}
-			item.On = append(item.On, NewLink(link.ParentNamespace, link.ParentColumn, ""))
-			item.Of.On = append(item.Of.On, NewLink(link.ChildNamespace, link.ChildColumn, ""))
+			item.On = append(item.On, &Link{Namespace: link.ParentNamespace, Column: link.ParentColumn, Field: link.ParentField, Output: link.ParentOutput})
+			item.Of.On = append(item.Of.On, &Link{Namespace: link.ChildNamespace, Column: link.ChildColumn, Field: link.ChildField, Output: link.ChildOutput})
 		}
 		ret.Relations = append(ret.Relations, item)
 	}
@@ -201,7 +201,7 @@ func columnsFromSpec(source []*spec.Column) []*Column {
 			continue
 		}
 		column := &Column{
-			Name: item.Name, Column: item.Source, Expression: item.Expression,
+			Name: item.Name, Column: item.Source, Output: item.Output, Expression: item.Expression,
 			Groupable: boolValue(item.Groupable), DataType: item.DatabaseType, Tag: item.Tag,
 		}
 		column.ConfigureNullability(item.Nullable && !item.Required, item.Type.Name)

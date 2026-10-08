@@ -32,6 +32,10 @@ func Compile(root *data.View, rowTypes map[*data.View]reflect.Type) (*Graph, err
 		rowTypes: rowTypes,
 		views:    map[*data.View]*View{},
 	}
+	// Avoid a cache allocation for the common single-edge graph.
+	if len(rowTypes) > 2 || (root != nil && len(root.Relations) > 1) {
+		compiler.keyFields = make(map[keyFieldIdentity]compiledKeyField)
+	}
 	compiledRoot, err := compiler.compileView(root)
 	if err != nil {
 		return nil, err
@@ -43,9 +47,19 @@ func Compile(root *data.View, rowTypes map[*data.View]reflect.Type) (*Graph, err
 	return graph, nil
 }
 
+type keyFieldIdentity struct {
+	rowType reflect.Type
+	name    string
+}
+type compiledKeyField struct {
+	field  *xunsafe.Field
+	source KeySource
+}
+
 type graphCompiler struct {
-	rowTypes map[*data.View]reflect.Type
-	views    map[*data.View]*View
+	keyFields map[keyFieldIdentity]compiledKeyField
+	rowTypes  map[*data.View]reflect.Type
+	views     map[*data.View]*View
 }
 
 func (c *graphCompiler) compileView(metadata *data.View) (*View, error) {
@@ -101,12 +115,12 @@ func (c *graphCompiler) compileRelation(metadata *data.Relation, parentType refl
 			RelationRef: metadata.Of,
 			View:        child,
 		}
-		compiled.Of.On, err = compileLinks(metadata.Of.On, c.rowTypes[metadata.Of.View])
+		compiled.Of.On, err = c.compileLinks(metadata.Of.On, c.rowTypes[metadata.Of.View])
 		if err != nil {
 			return nil, fmt.Errorf("relation %s child keys: %w", metadata.Name, err)
 		}
 	}
-	compiled.On, err = compileLinks(metadata.On, parentType)
+	compiled.On, err = c.compileLinks(metadata.On, parentType)
 	if err != nil {
 		return nil, fmt.Errorf("relation %s parent keys: %w", metadata.Name, err)
 	}
@@ -123,12 +137,16 @@ func (c *graphCompiler) compileRelation(metadata *data.Relation, parentType refl
 }
 
 func compileLinks(metadata data.Links, rowType reflect.Type) (Links, error) {
+	return (&graphCompiler{}).compileLinks(metadata, rowType)
+}
+
+func (c *graphCompiler) compileLinks(metadata data.Links, rowType reflect.Type) (Links, error) {
 	result := make(Links, 0, len(metadata))
 	for _, link := range metadata {
 		if link == nil {
 			continue
 		}
-		field, source, err := compileLinkField(rowType, link.Field)
+		field, source, err := c.linkField(rowType, link.Field)
 		if err != nil {
 			return nil, err
 		}
@@ -164,5 +182,25 @@ func compileLinkField(rowType reflect.Type, name string) (*xunsafe.Field, KeySou
 	if field.PkgPath != "" {
 		return nil, "", fmt.Errorf("relation key field %s.%s must be exported", rowType, name)
 	}
-	return xunsafe.FieldByName(rowType, name), source, nil
+	return xunsafe.NewField(field), source, nil
+}
+
+// linkField reuses immutable native accessors only within this compilation.
+// Key provenance (typed, hidden SQL, or hook) is part of the cached result.
+func (c *graphCompiler) linkField(rowType reflect.Type, name string) (*xunsafe.Field, KeySource, error) {
+	if c.keyFields == nil {
+		return compileLinkField(rowType, name)
+	}
+	for rowType != nil && rowType.Kind() == reflect.Pointer {
+		rowType = rowType.Elem()
+	}
+	key := keyFieldIdentity{rowType: rowType, name: name}
+	if cached, ok := c.keyFields[key]; ok {
+		return cached.field, cached.source, nil
+	}
+	field, source, err := compileLinkField(rowType, name)
+	if err == nil {
+		c.keyFields[key] = compiledKeyField{field: field, source: source}
+	}
+	return field, source, err
 }

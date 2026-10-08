@@ -10,6 +10,7 @@ import (
 // selector validation.
 type Column struct {
 	Name         string      `json:"name"`
+	Output       string      `json:"output,omitempty"`
 	Column       string      `json:"column,omitempty"`
 	Expression   string      `json:"expression,omitempty"`
 	Groupable    bool        `json:"groupable,omitempty"`

@@ -44,6 +44,7 @@ type Component struct {
 	Internal              bool
 	WarmupTarget          string
 	Report                bool
+	ReportLinkedFacade    bool
 	ReportCompose         *spec.CubeComposeSettings
 	ReportMCPTool         *bool
 	ReportLinkedInputType string
@@ -101,6 +102,9 @@ func (c Component) value() string {
 	}
 	if c.ReportMCPTool != nil {
 		appendNonEmpty(builder, "reportMCPTool", strconv.FormatBool(*c.ReportMCPTool))
+	}
+	if c.ReportLinkedFacade {
+		appendNonEmpty(builder, "reportLinkedFacade", "true")
 	}
 	appendNonEmpty(builder, "reportLinkedInputType", c.ReportLinkedInputType)
 	appendNonEmpty(builder, "reportDimensions", c.ReportDimensions)
@@ -295,6 +299,12 @@ func ParseComponentValue(value string) (Component, error) {
 					result.ReportCompose.TimeoutMs = parsed
 				}
 			}
+		case "reportlinkedfacade":
+			parsed, err := strconv.ParseBool(value)
+			if err != nil {
+				return fmt.Errorf("reportLinkedFacade must be boolean")
+			}
+			result.ReportLinkedFacade = parsed
 		case "reportlinkedinputtype":
 			result.ReportLinkedInputType = value
 		case "reportdimensions":

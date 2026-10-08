@@ -15,7 +15,7 @@ func (h *Handler) SupportsTransactionRetry() bool { return h != nil && h.transac
 
 func (h *Handler) RetryTransaction(ctx context.Context, invocation rhandler.Invocation, _ any, outcome rhandler.MutationOutcome) (bool, error) {
 	program, _ := invocation.Snapshot.(*Program)
-	if !h.SupportsTransactionRetry() || program == nil || !program.hook.IsValid() {
+	if !h.SupportsTransactionRetry() || program == nil || !program.hook.IsValid() || (program.afterQueueInputWasStarted() || program.afterValidateInputWasViolated()) || program.reconciliation != nil {
 		return false, nil
 	}
 	method := program.hook.Method(h.transactionRetryMethod)
@@ -28,7 +28,7 @@ func (h *Handler) RetryTransaction(ctx context.Context, invocation rhandler.Invo
 
 func (h *Handler) RecoverMutation(ctx context.Context, invocation rhandler.Invocation, _ any, outcome rhandler.MutationOutcome) (rhandler.Recovery, error) {
 	program, _ := invocation.Snapshot.(*Program)
-	if h == nil || !h.recoverySupported || program == nil || !program.hook.IsValid() {
+	if h == nil || !h.recoverySupported || program == nil || !program.hook.IsValid() || (program.afterQueueInputWasStarted() || program.afterValidateInputWasViolated()) || program.reconciliation != nil {
 		return rhandler.RecoveryNone, nil
 	}
 	method := program.hook.Method(h.recoveryMethod)

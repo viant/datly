@@ -27,6 +27,10 @@ func (e ParentKeyExpander) Expand(call ParentKeyCall) (string, []any, error) {
 			return "", nil, fmt.Errorf("invalid $View.%s column: %w", call.Method, err)
 		}
 	}
+	return e.expandValidated(call)
+}
+
+func (e ParentKeyExpander) expandValidated(call ParentKeyCall) (string, []any, error) {
 	if e.Exclude {
 		return "", nil, nil
 	}

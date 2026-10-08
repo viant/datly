@@ -16,6 +16,11 @@ func (l *settingsLoader) Load() *spec.Settings {
 		return l.authored.Clone()
 	}
 	result := l.base.Clone()
+	// A linked companion is generated publication metadata. Re-authoring DQL
+	// must derive its own cube, even when package settings came from a build.
+	if result.Report != nil {
+		result.Report.LinkedFacade = false
+	}
 	if l.authored == nil {
 		return result
 	}

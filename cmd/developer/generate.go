@@ -1,4 +1,4 @@
-package main
+package developer
 
 import (
 	"context"
@@ -12,7 +12,9 @@ import (
 	"github.com/viant/datly/transcribe/column"
 )
 
-func generationCommand(ctx context.Context, args []string, stdout, stderr io.Writer, handlers ...*transcribe.HandlerBinding) int {
+// Transcribe executes the same operation-based generation path used by the stock CLI.
+// Custom-linked callers retain native Go type authority; no predicate registration is required.
+func Transcribe(ctx context.Context, args []string, stdout, stderr io.Writer, handlers ...*transcribe.HandlerBinding) int {
 	name := args[0]
 	operationValue := ""
 	arguments := args[1:]

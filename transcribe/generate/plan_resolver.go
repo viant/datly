@@ -3,9 +3,11 @@ package generate
 import (
 	"fmt"
 	"reflect"
+	"sort"
 	"strings"
 
 	"github.com/viant/datly/spec"
+	authoring "github.com/viant/datly/transcribe/compile"
 	"github.com/viant/x"
 )
 
@@ -22,6 +24,15 @@ type planResolver struct {
 
 func (r *planResolver) resolve() (*Plan, error) {
 	r.input.Component = r.input.Component.Clone()
+	if err := authoring.BackfillRelationMetadata(r.input.Component, r.input.Resources); err != nil {
+		return nil, err
+	}
+	if err := authoring.BackfillReportMetadata(r.input.Component, r.input.Resources); err != nil {
+		return nil, err
+	}
+	if err := authoring.BackfillDocumentationMetadata(r.input.Component, r.input.Resources); err != nil {
+		return nil, err
+	}
 	// Writer shapes may be planned before lowering; reader plans cannot dispatch
 	// mutation lifecycles even when a declared Go type already exists.
 	if err := r.input.validateLifecycleTarget(true, !r.requireConcreteHelpers); err != nil {
@@ -42,8 +53,19 @@ func (r *planResolver) resolve() (*Plan, error) {
 		return plan, err
 	}
 	r.plan = plan
+	borrowedPaths := make([]string, 0, len(r.input.Views))
+	for identity := range r.input.Views {
+		borrowedPaths = append(borrowedPaths, identity)
+	}
+	sort.Strings(borrowedPaths)
+	for _, identity := range borrowedPaths {
+		reference := r.input.Views[identity]
+		if reference != nil && reference.Borrowed != nil {
+			r.plan.BorrowedRows = append(r.plan.BorrowedRows, reference.Borrowed.Clone())
+		}
+	}
 	if r.input.Component.Settings == nil || r.input.Component.Settings.Mutation == "" {
-		r.plan.lifecycleTargetError = r.input.ValidateLifecycleTarget(false)
+		r.plan.lifecycleTargetError = r.input.validateLifecycleTarget(false, false)
 	}
 	if err = r.validateHelperFieldNames(); err != nil {
 		return nil, err
@@ -129,6 +151,9 @@ func (r *planResolver) resolve() (*Plan, error) {
 	}
 	if err = r.resolveClientInput(); err != nil {
 		return nil, err
+	}
+	if err = r.resolveCubes(); err != nil {
+		return nil, fmt.Errorf("generate cube facade: %w", err)
 	}
 	if err = r.plan.validateGeneratedNames(); err != nil {
 		return nil, err
@@ -236,7 +261,33 @@ func (r *planResolver) validateViewReferences() error {
 		if component == nil {
 			return fmt.Errorf("linked view %q requires canonical component metadata", path)
 		}
+		if ref := r.input.Views[path]; ref != nil && ref.Borrowed != nil {
+			canonical, err := r.canonicalViewIndex()
+			if err != nil {
+				return err
+			}
+			view := canonical[path]
+			proof := ref.Borrowed
+			if view == nil || len(proof.BorrowerGraph) == 0 || proof.BorrowerGraph[len(proof.BorrowerGraph)-1] != path || proof.Expected.Package != r.input.TargetPackage || ref.DescriptorKey != proof.Expected.Package+"."+proof.Expected.Name {
+				return fmt.Errorf("borrow_sql_row reference does not identify its admitted canonical body slot")
+			}
+			continue
+		}
 		matched := false
+		if component.RootView != nil {
+			for _, relation := range component.RootView.Relations {
+				if relation == nil || relation.View == nil || relation.Kind != spec.RelationKindDerived {
+					continue
+				}
+				identity, err := relation.View.Identity()
+				if err != nil {
+					return err
+				}
+				if identity == path {
+					matched = true
+				}
+			}
+		}
 		for _, view := range component.Views {
 			identity, err := view.Identity()
 			if err != nil {
@@ -255,7 +306,26 @@ func (r *planResolver) validateViewReferences() error {
 		return nil
 	}
 	if r.input.Contracts.Output == nil {
-		return fmt.Errorf("linked root view requires a linked output contract")
+		// A generated response envelope can hold an explicitly selected existing
+		// Go row contract. The declaration must resolve to this exact authority.
+		matched := false
+		for _, param := range spec.EffectiveParameters(component.Parameters) {
+			if param == nil || !strings.EqualFold(param.Source.Kind, "output") || !strings.EqualFold(param.Source.Name, "view") || r.types == nil {
+				continue
+			}
+			expression := strings.TrimSpace(param.OutputTypeExpr)
+			if expression == "" {
+				expression = strings.TrimSpace(param.TypeExpr)
+			}
+			descriptor, err := r.types.Descriptor(expression)
+			if err != nil {
+				return err
+			}
+			matched = descriptor != nil && descriptor.Key() == r.input.Views[RootViewPath].DescriptorKey
+		}
+		if !matched {
+			return fmt.Errorf("linked root view requires a linked output contract or an explicitly typed output/view declaration")
+		}
 	}
 	if component == nil || component.RootView == nil {
 		return fmt.Errorf("linked root view requires canonical root view metadata")

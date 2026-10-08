@@ -94,6 +94,7 @@ func entityMarker(entityType reflect.Type) *structology.Marker {
 
 // Record is one writable role in a component graph.
 type Record struct {
+	reconciliation           *reconciliationMetadata
 	writeEligibility         bool
 	RootNullPolicy           string
 	NestedNullPolicy         string
@@ -322,36 +323,43 @@ func hasWritableRole(record *Record) bool {
 // Program is invocation-owned universal mutation state. The same type is used
 // for every writer component; only Metadata and values differ.
 type Program struct {
-	queueSlots               []queueSlotSeal
-	guardMu                  sync.Mutex
-	guardIssued              bool
-	guardBinder              xhandler.Binder
-	executionAttempted       bool
-	executionFailure         error
-	executionGuardRegistered bool
-	executionGuardReady      bool
-	actionPolicyFacts        map[frameIdentity]*actionPolicyFacts
-	scopedService            any
-	metadata                 *Metadata
-	input                    any
-	output                   any
-	original                 *OriginalInput
-	database                 *DatabaseSnapshot
-	frames                   *MutationFrames
-	actions                  *MutationActions
-	validation               *FrameworkValidation
-	hooks                    *Hooks
-	hook                     reflect.Value
-	hooksByRecord            map[*Record]reflect.Value
-	stage                    Stage
-	failed                   bool
-	finalized                bool
-	componentHookAttempted   bool
-	structuralError          error
-	queueItems               []*Action
-	queueObserverPanic       bool
-	queueInvocationID        uint64
-	previousFields           map[*Record]fieldSet
+	reconciliation              *reconciliationAttempt
+	reconciliationFrames        []*Frame
+	reconciliationSeal          string
+	queueSlots                  []queueSlotSeal
+	afterValidateInputStarted   bool
+	afterValidateInputViolation error
+	afterQueueInputStarted      bool
+	afterQueueInputSnapshot     string
+	guardMu                     sync.Mutex
+	guardIssued                 bool
+	guardBinder                 xhandler.Binder
+	executionAttempted          bool
+	executionFailure            error
+	executionGuardRegistered    bool
+	executionGuardReady         bool
+	actionPolicyFacts           map[frameIdentity]*actionPolicyFacts
+	scopedService               any
+	metadata                    *Metadata
+	input                       any
+	output                      any
+	original                    *OriginalInput
+	database                    *DatabaseSnapshot
+	frames                      *MutationFrames
+	actions                     *MutationActions
+	validation                  *FrameworkValidation
+	hooks                       *Hooks
+	hook                        reflect.Value
+	hooksByRecord               map[*Record]reflect.Value
+	stage                       Stage
+	failed                      bool
+	finalized                   bool
+	componentHookAttempted      bool
+	structuralError             error
+	queueItems                  []*Action
+	queueObserverPanic          bool
+	queueInvocationID           uint64
+	previousFields              map[*Record]fieldSet
 	// graph caches insert lookups for the current frame topology.
 	graph *graphIndex
 	// typeFields caches the exported field set per Previous type.
@@ -608,6 +616,14 @@ func (p *Program) allocate(ctx context.Context, sequencer xhandler.Sequencer, re
 			return err
 		}
 	}
+	// A transient child allocation performs an INSERT before rolling it back.
+	// Supply newly allocated parent keys before that INSERT: disabling FK
+	// checks in the allocator does not relax NOT NULL child columns.
+	if len(record.Relations) > 0 {
+		if err := p.reconcileLinks(false); err != nil {
+			return err
+		}
+	}
 	for _, relation := range record.Relations {
 		if err := p.allocate(ctx, sequencer, relation.Child, roots); err != nil {
 			return err
@@ -821,6 +837,9 @@ func (h *Handler) Execute(ctx context.Context, invocation rhandler.Invocation) (
 				err = program.validateActionPolicyActions()
 				if err == nil {
 					err = program.validateQueueSlots()
+					if err == nil {
+						err = program.validateAfterQueueInputState()
+					}
 				}
 			}
 			if err != nil {
@@ -947,7 +966,10 @@ func (h *Handler) CapturedExecutionGuard(invocation rhandler.Invocation) (func(c
 		if err := program.validateActionPolicyActions(); err != nil {
 			return err
 		}
-		return program.validateQueueSlots()
+		if err := program.validateQueueSlots(); err != nil {
+			return err
+		}
+		return errors.Join(program.validateAfterQueueInputState(), program.validateReconciliationSeal())
 	}, nil
 }
 func (h *Handler) CapturedExecutionGuardRegistered(invocation rhandler.Invocation) error {
@@ -1118,6 +1140,12 @@ func (p *Program) captureEntityOriginal(record *Record, entity reflect.Value) or
 		return existing
 	}
 	captured := originalPresence{presence: snapshotPresence(record, entity.Elem()), available: presenceAvailable(entity.Elem())}
+	if hasReconciliation(p.metadata.Root) {
+		captured.identityValues = map[string]reflect.Value{}
+		for _, key := range record.Keys {
+			captured.identityValues[key.Name] = cloneTokenValue(entity.Elem().FieldByIndex(key.Index))
+		}
+	}
 	for _, plan := range record.ScopedSequences {
 		value := entity.Elem().FieldByIndex(plan.Field.Index)
 		if plan.AllocateNull && value.Kind() == reflect.Pointer && value.IsNil() {
@@ -1147,6 +1175,12 @@ func (p *Program) prepareHooks(record *Record) {
 }
 
 func (p *Program) prepare(ctx context.Context, binder xhandler.Binder) error {
+	if p.afterValidateInputStarted {
+		return fmt.Errorf("AfterValidateInput execution already attempted; fresh capture required")
+	}
+	if p.afterQueueInputWasStarted() {
+		return fmt.Errorf("AfterQueueInput execution already attempted; fresh capture required")
+	}
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -1318,33 +1352,39 @@ func (p *Program) prepare(ctx context.Context, binder xhandler.Binder) error {
 			if err = p.callEntityHook(ctx, "Validate", frame); err != nil {
 				return err
 			}
-			if frame.Record.Auxiliary || frame.SkippedDelete || frame.NoopMissingIdentity {
-				continue
-			}
-			if frame.Action == xhandler.WriteUpdate && !hasMutableFields(frame) {
-				if p.queueObserver() != nil && frame.Previous.IsValid() {
-					p.queueItems = append(p.queueItems, &Action{Kind: frame.Action, Entity: frame.Entity, frame: frame})
-				}
-				continue
-			}
-			action := &Action{Kind: frame.Action, Entity: frame.Entity, frame: frame}
-			if frame.Action == xhandler.WriteDelete {
-				p.actions.Rows = append([]*Action{action}, p.actions.Rows...)
-				if p.queueObserver() != nil {
-					p.queueItems = append([]*Action{action}, p.queueItems...)
-				}
-			} else {
-				p.actions.Rows = append(p.actions.Rows, action)
-				if p.queueObserver() != nil {
-					p.queueItems = append(p.queueItems, action)
-				}
-			}
 		}
 
 		return nil
 	}); err != nil {
 		return err
 	}
+	if err = p.callAfterValidateInput(ctx, binder, validator); err != nil {
+		return err
+	}
+	for _, frame := range p.frames.Rows {
+		if frame.Record.Auxiliary || frame.SkippedDelete || frame.NoopMissingIdentity {
+			continue
+		}
+		if frame.Action == xhandler.WriteUpdate && !hasMutableFields(frame) {
+			if p.queueObserver() != nil && frame.Previous.IsValid() {
+				p.queueItems = append(p.queueItems, &Action{Kind: frame.Action, Entity: frame.Entity, frame: frame})
+			}
+			continue
+		}
+		action := &Action{Kind: frame.Action, Entity: frame.Entity, frame: frame}
+		if frame.Action == xhandler.WriteDelete {
+			p.actions.Rows = append([]*Action{action}, p.actions.Rows...)
+			if p.queueObserver() != nil {
+				p.queueItems = append([]*Action{action}, p.queueItems...)
+			}
+		} else {
+			p.actions.Rows = append(p.actions.Rows, action)
+			if p.queueObserver() != nil {
+				p.queueItems = append(p.queueItems, action)
+			}
+		}
+	}
+
 	if err = p.validateAuxiliaryTopology(); err != nil {
 		return err
 	}
@@ -1359,6 +1399,9 @@ func (p *Program) prepare(ctx context.Context, binder xhandler.Binder) error {
 		if err = starter.Start(ctx); err != nil {
 			return err
 		}
+	}
+	if err = p.captureReconciliationAllocation(ctx); err != nil {
+		return err
 	}
 	if hasAction(p.actions.Rows, xhandler.WriteInsert) {
 		if err = phases.Run(ctx, xhandler.PhaseAllocation, func() error {
@@ -1382,9 +1425,25 @@ func (p *Program) prepare(ctx context.Context, binder xhandler.Binder) error {
 		}
 
 	}
+	var sequenceSnapshot string
+	if hasReconciliation(p.metadata.Root) {
+		sequenceSnapshot, err = p.reconciliationState()
+		if err != nil {
+			return err
+		}
+	}
 	for _, frame := range p.frames.Rows {
 		if err = p.callEntityHook(ctx, "AfterSequence", frame); err != nil {
 			return err
+		}
+	}
+	if hasReconciliation(p.metadata.Root) {
+		after, e := p.reconciliationState()
+		if e != nil {
+			return e
+		}
+		if after != sequenceSnapshot {
+			return fmt.Errorf("AfterSequence changed finite_reconciliation allocated graph or evidence")
 		}
 	}
 	if err = p.validateAuxiliaryTopology(); err != nil {
@@ -1393,13 +1452,29 @@ func (p *Program) prepare(ctx context.Context, binder xhandler.Binder) error {
 	if err = p.reconcileLinks(true); err != nil {
 		return err
 	}
+	if err = p.reconcileInput(ctx); err != nil {
+		return err
+	}
 	if err = p.evaluateWriteEligibility(ctx); err != nil {
 		return err
+	}
+	if hasReconciliation(p.metadata.Root) {
+		if err = ctx.Err(); err != nil {
+			return err
+		}
 	}
 	if err = p.validateFrames(ctx, validator, true); err != nil {
 		return err
 	}
+	if hasReconciliation(p.metadata.Root) {
+		if err = ctx.Err(); err != nil {
+			return err
+		}
+	}
 	p.filterIneligibleActions()
+	if err = p.sealReconciliation(); err != nil {
+		return err
+	}
 	p.freezeActionPolicyParticipants()
 	p.guardMu.Lock()
 	p.executionGuardReady = true
@@ -1417,6 +1492,9 @@ func (p *Program) prepare(ctx context.Context, binder xhandler.Binder) error {
 		return err
 	}
 	if err = p.validateActionPolicyFacts(); err != nil {
+		return err
+	}
+	if err = p.callAfterQueueInput(ctx, binder); err != nil {
 		return err
 	}
 	output := reflect.ValueOf(p.output).Elem()
@@ -1454,7 +1532,7 @@ func (p *Program) queuePhysical(ctx context.Context, binder xhandler.Binder, dml
 		if !frame.ExpectedToken.IsValid() || !persisted.IsValid() || persisted.Kind() != reflect.Struct {
 			return &xhandler.Conflict{Entity: frame.Record.Path, Field: token.Name, Reason: "persisted concurrency token is unavailable"}
 		}
-		previousToken := persisted.FieldByName(token.Name)
+		previousToken := previousField(persisted, frame.Record, token)
 		if !previousToken.IsValid() {
 			return &xhandler.Conflict{Entity: frame.Record.Path, Field: token.Name, Reason: "persisted concurrency token is unavailable"}
 		}
@@ -1619,6 +1697,9 @@ func (p *Program) validationOptions(frame *Frame, transactionStarted bool) xhand
 	}
 
 	options := xhandler.ValidationOptions{Action: frame.Action, Location: frame.Location, Shallow: true, CheckUnique: &unique, CheckRef: &refs}
+	if transactionStarted && frame.Action == xhandler.WriteDelete && hasReconciliation(p.metadata.Root) {
+		options.Action = xhandler.WriteUpdate
+	}
 	if frame.Action == xhandler.WriteInsert && frame.Record.InsertValidationPresence && !transactionStarted {
 		options.HonorPresence = true
 		options.Fields = frame.Fields
@@ -1785,13 +1866,13 @@ func (p *Program) validateFrames(ctx context.Context, validator xhandler.Validat
 	groups := map[*Record][]*Frame{}
 	var order []*Record
 	for _, frame := range p.frames.Rows {
-		if frame == nil || frame.Record == nil || frame.Record.Auxiliary || frame.Action == xhandler.WriteDelete {
+		if frame == nil || frame.Record == nil || frame.Record.Auxiliary || frame.Action == xhandler.WriteDelete && !(transactionStarted && hasReconciliation(p.metadata.Root)) {
 			continue
 		}
 		// An identity-only update writes nothing, so there is nothing for the
 		// framework validator to check; entity Validate hooks still run for it.
 		// Eligibility roots retain full validation before any exclusion decision.
-		if !frame.Record.writeEligibility && frame.Action == xhandler.WriteUpdate && !hasMutableFields(frame) {
+		if !hasReconciliation(p.metadata.Root) && !frame.Record.writeEligibility && frame.Action == xhandler.WriteUpdate && !hasMutableFields(frame) {
 			continue
 		}
 		if _, ok := groups[frame.Record]; !ok {
@@ -1953,8 +2034,9 @@ func (p *Program) indexCurrent(record *Record, rows reflect.Value) error {
 	type fieldCopy struct{ source, destination []int }
 	copies := make([]fieldCopy, 0, len(record.Fields))
 	var loaded fieldSet
-	if p.queueObserver() != nil {
+	if p.queueObserver() != nil || (p.metadata != nil && p.metadata.Root != nil && (p.metadata.Root.writeEligibility || hasReconciliation(p.metadata.Root))) {
 		loaded = fieldSet{}
+		delete(p.previousFields, record)
 	}
 	if rows.Len() > 0 {
 		sourceType := dereference(rows.Type().Elem())
@@ -1962,19 +2044,14 @@ func (p *Program) indexCurrent(record *Record, rows reflect.Value) error {
 			source, sourceOK := sourceType.FieldByName(field.Name)
 			destination, destinationOK := record.EntityType.FieldByName(field.Name)
 			if sourceOK && destinationOK && (source.Type.AssignableTo(destination.Type) ||
-				destination.Type.Kind() == reflect.Pointer && source.Type.AssignableTo(destination.Type.Elem())) {
+				destination.Type.Kind() == reflect.Pointer && source.Type.AssignableTo(destination.Type.Elem()) ||
+				source.Type.Kind() == reflect.Pointer && source.Type.Elem().AssignableTo(destination.Type)) {
 				copies = append(copies, fieldCopy{source: source.Index, destination: destination.Index})
 				if loaded != nil {
 					loaded[field.Name] = true
 				}
 			}
 		}
-	}
-	if loaded != nil {
-		if p.previousFields == nil {
-			p.previousFields = map[*Record]fieldSet{}
-		}
-		p.previousFields[record] = loaded
 	}
 	for i := 0; i < rows.Len(); i++ {
 		row := rows.Index(i)
@@ -1997,6 +2074,13 @@ func (p *Program) indexCurrent(record *Record, rows reflect.Value) error {
 		}
 		p.database.Rows[identity] = previous
 		p.database.ByRecord[record] = append(p.database.ByRecord[record], previous)
+	}
+	// Loaded evidence is published only after every selected conversion succeeds.
+	if loaded != nil {
+		if p.previousFields == nil {
+			p.previousFields = map[*Record]fieldSet{}
+		}
+		p.previousFields[record] = loaded
 	}
 	return nil
 }
@@ -2321,7 +2405,7 @@ func (p *Program) applyInvariants(frame *Frame) error {
 				continue
 			}
 			destination := current.FieldByIndex(field.Index)
-			source := previous.FieldByName(field.Name)
+			source := previousField(previous, frame.Record, &field)
 			if !source.IsValid() || !destination.CanSet() || !source.Type().AssignableTo(destination.Type()) {
 				return fmt.Errorf("invariant %s field %s cannot be backfilled", name, field.Name)
 			}
@@ -2341,11 +2425,21 @@ func (p *Program) checkConcurrency(frame *Frame) error {
 		return &xhandler.Conflict{Entity: frame.Record.Path, Field: field.Name, Reason: "expected token is missing"}
 	}
 	expected := frame.ExpectedToken.Interface()
-	actual := frame.Previous.Elem().FieldByName(field.Name)
+	actual := previousField(frame.Previous.Elem(), frame.Record, field)
 	if !actual.IsValid() || !concurrencyTokenEqual(expected, actual.Interface()) {
 		return &xhandler.Conflict{Entity: frame.Record.Path, Field: field.Name, Reason: "expected token differs from Previous"}
 	}
 	return nil
+}
+
+// previousField reuses the compiled entity index for canonical Previous rows
+// produced by indexCurrent. Other layouts and manually assembled fields keep
+// the name lookup; an entity index cannot be applied to a projection type.
+func previousField(previous reflect.Value, record *Record, field *Field) reflect.Value {
+	if previous.Type() == record.EntityType && len(field.Index) != 0 {
+		return previous.FieldByIndex(field.Index)
+	}
+	return previous.FieldByName(field.Name)
 }
 
 func concurrencyTokenEqual(expected, actual any) bool {
@@ -2594,10 +2688,19 @@ func Compile(component *spec.Component, inputType, outputType reflect.Type, oper
 	if err := validateRootNullPolicy(root, inputType.Field(metadata.InputField).Type); err != nil {
 		return nil, err
 	}
+	if err := validateAfterValidateInputHooks(root, inputType, outputType); err != nil {
+		return nil, err
+	}
+	if err := validateAfterQueueInputHooks(root, inputType, outputType); err != nil {
+		return nil, err
+	}
 	if err := validateAggregateHooks(root, inputType, outputType); err != nil {
 		return nil, err
 	}
 	if err := validateWriteEligibilityHooks(metadata, outputType); err != nil {
+		return nil, err
+	}
+	if err := validateReconciliation(metadata, inputType, outputType); err != nil {
 		return nil, err
 	}
 	return metadata, nil
@@ -2933,7 +3036,8 @@ type fieldSet map[string]bool
 func (s fieldSet) Has(name string) bool { return s[name] }
 
 type originalPresence struct {
-	scopedNull map[string]bool
+	identityValues map[string]reflect.Value
+	scopedNull     map[string]bool
 	*presence
 	available bool
 	token     reflect.Value

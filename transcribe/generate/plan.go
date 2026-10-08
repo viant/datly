@@ -11,6 +11,9 @@ import (
 )
 
 type Plan struct {
+	Cubes           []CubePlan
+	CubeDestination string
+	BorrowedRows    []*BorrowedRowAuthority
 	// Retain exact resolved local descriptor identity after Go alias normalization.
 	knownLocalTypes map[string]string
 	// Canonical descriptor proof retained when a reference moves to its owner.

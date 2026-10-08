@@ -138,11 +138,12 @@ func (s *RouteSource) canonicalComponent() (*spec.Component, error) {
 	if err := settings.ValidateComponentCallPolicy(); err != nil {
 		return nil, err
 	}
-	if s.Tag.Report || s.Tag.ReportCompose != nil || s.Tag.ReportMCPTool != nil || s.Tag.ReportLinkedInputType != "" || s.Tag.ReportDimensions != "" || s.Tag.ReportMeasures != "" ||
+	if s.Tag.Report || s.Tag.ReportLinkedFacade || s.Tag.ReportCompose != nil || s.Tag.ReportMCPTool != nil || s.Tag.ReportLinkedInputType != "" || s.Tag.ReportDimensions != "" || s.Tag.ReportMeasures != "" ||
 		s.Tag.ReportFilters != "" || s.Tag.ReportOrderBy != "" || s.Tag.ReportLimit != "" || s.Tag.ReportOffset != "" {
 		settings.Report = &spec.ReportSettings{
 			Compose:         s.Tag.ReportCompose.Clone(),
 			Enabled:         s.Tag.Report,
+			LinkedFacade:    s.Tag.ReportLinkedFacade,
 			LinkedInputType: s.Tag.ReportLinkedInputType,
 		}
 		if s.Tag.ReportDimensions != "" || s.Tag.ReportMeasures != "" || s.Tag.ReportFilters != "" ||
@@ -346,6 +347,12 @@ func (r *packageComponentResolver) applyInput(resolved *resolvedContractField) e
 			return fmt.Errorf("insert validation body requires a root view")
 		}
 		r.component.RootView.InsertValidationPresence = true
+	}
+	if param != nil && param.IsMutationInput() && resolved.metadata.View != nil && resolved.metadata.View.Reconciliation != nil {
+		if r.component.RootView == nil {
+			return fmt.Errorf("finiteReconciliation requires a mutation root")
+		}
+		r.component.RootView.Reconciliation = resolved.metadata.View.Reconciliation.Clone()
 	}
 	if param != nil && param.IsMutationInput() && resolved.metadata.View != nil && resolved.metadata.View.QueueContract != "" {
 		if r.component.RootView == nil {
@@ -581,6 +588,10 @@ func (r *packageComponentResolver) param(role contractRole, field xshape.Field, 
 		Activation: activationFromBinding(binding.URI), ResourceRef: resourceFromBinding(binding.URI, binding.ResourceRef), Async: binding.Async,
 		ErrorStatusCode: binding.ErrorCode, ErrorMessage: binding.ErrorMessage,
 	}
+	if binding.ResolutionGroup != nil {
+		group := binding.ResolutionGroup
+		param.ResolutionGroup = &spec.ResolutionGroupSpec{Name: group.Name, After: append([]string(nil), group.After...), DependsOn: append([]string(nil), group.DependsOn...)}
+	}
 	// Output-owned capability bindings retain their server source rather than
 	// becoming body slots. The SDK logger remains an ordinary typed capability.
 	if role == outputContract && strings.EqualFold(binding.Location.Kind, "logger") {
@@ -702,6 +713,7 @@ func (r *packageComponentResolver) view(field xshape.Field, name string, metadat
 		view.WriterIdentityPolicy = metadata.View.WriterIdentityPolicy
 		view.WriterActionPolicy = metadata.View.WriterActionPolicy
 		view.QueueContract = metadata.View.QueueContract
+		view.Reconciliation = metadata.View.Reconciliation.Clone()
 		view.RootNullPolicy = metadata.View.RootNullPolicy
 		view.NestedNullPolicy = metadata.View.NestedNullPolicy
 		view.InsertValidationPresence = metadata.View.InsertValidationPresence
@@ -709,6 +721,7 @@ func (r *packageComponentResolver) view(field xshape.Field, name string, metadat
 		view.MutationPredicateGroup = metadata.View.MutationPredicateGroup
 		view.Source.URI = strings.TrimSpace(metadata.View.URI)
 		view.Source.Table = strings.TrimSpace(metadata.View.Table)
+		view.DocumentationTable = metadata.View.DocumentationTable
 		view.Partitioning = metadata.View.Partitioning.Clone()
 		view.Selector = metadata.View.Selector.Clone()
 		view.BatchSize = metadata.View.Batch

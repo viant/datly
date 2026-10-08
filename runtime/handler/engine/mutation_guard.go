@@ -17,15 +17,17 @@ import (
 var ErrWriteEligibilityMutation = errors.New("managed mutation is forbidden during WriteEligible")
 
 type mutationGuard struct {
-	mu                  sync.Mutex
-	depth               int
-	completionClosed    bool
-	protectedCompletion bool
-	protectedIssuer     *drainowner.Invocation
-	guardedExecution    bool
-	streamingQueryUsed  bool
-	guardedFailure      error
-	violation           error
+	mu                       sync.Mutex
+	depth                    int
+	reconciliationDepth      int
+	reconciliationReplayVeto bool
+	completionClosed         bool
+	protectedCompletion      bool
+	protectedIssuer          *drainowner.Invocation
+	guardedExecution         bool
+	streamingQueryUsed       bool
+	guardedFailure           error
+	violation                error
 }
 
 func (s *dataScope) mutationGuard() *mutationGuard {
@@ -44,6 +46,11 @@ func (g *mutationGuard) check(operation string) error {
 	}
 	g.mu.Lock()
 	defer g.unlockAndPublishProtectedFailure()
+	if drainowner.BindingGroupOpen(g.protectedIssuer) {
+		err := fmt.Errorf("%w: %s", drainowner.ErrBindingGroup, operation)
+		g.guardedFailure = errors.Join(g.guardedFailure, err)
+		return err
+	}
 	if g.completionClosed {
 		err := fmt.Errorf("invocation mutation admission is closed: %s", operation)
 		if g.protectedCompletion {
@@ -111,6 +118,23 @@ func RetainMutationAuthority(ctx context.Context) func(context.Context) context.
 // unknown custom effects before child binding or data-unit creation.
 func CheckComponentMutation(ctx context.Context, canonicalReader bool) error {
 	scope, _ := ctx.Value(dataScopeContextKey{}).(*dataScope)
+	if drainowner.BindingGroupContext(ctx) {
+		if !canonicalReader || scope == nil {
+			return drainowner.ErrBindingGroup
+		}
+		root := scope
+		if root.root != nil {
+			root = root.root
+		}
+		root.mu.Lock()
+		issuer := root.nativeInvocation
+		failure := root.guardedFailure
+		root.mu.Unlock()
+		if failure != nil {
+			return failure
+		}
+		return drainowner.BindingGroupAdmission(ctx, issuer)
+	}
 	if failure := scope.protectedAdmissionFailure(); failure != nil {
 		return failure
 	}
@@ -122,6 +146,9 @@ func CheckComponentMutation(ctx context.Context, canonicalReader bool) error {
 	}
 	if canonicalReader {
 		guard := scope.mutationGuard()
+		if guard != nil && guard.reconciliationActive() {
+			return guard.check("component invocation")
+		}
 		if guard == nil {
 			return nil
 		}
@@ -185,7 +212,7 @@ func (g *mutationGuard) active() bool {
 	}
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	return g.depth != 0 || g.completionClosed || g.guardedExecution
+	return g.depth != 0 || g.completionClosed || g.guardedExecution || drainowner.BindingGroupOpen(g.protectedIssuer)
 }
 
 func (g *mutationGuard) closeCompletion(protected ...bool) {
@@ -204,6 +231,11 @@ func (g *mutationGuard) admitStreamingQuery() error {
 	}
 	g.mu.Lock()
 	defer g.unlockAndPublishProtectedFailure()
+	if drainowner.BindingGroupOpen(g.protectedIssuer) {
+		err := fmt.Errorf("%w: streaming SQL", drainowner.ErrBindingGroup)
+		g.guardedFailure = errors.Join(g.guardedFailure, err)
+		return err
+	}
 	if g.completionClosed {
 		err := errors.New("invocation mutation admission is closed")
 		if g.protectedCompletion {
@@ -216,6 +248,13 @@ func (g *mutationGuard) admitStreamingQuery() error {
 			g.guardedFailure = errors.New("managed streaming SQL is unsupported in a captured writer invocation")
 		}
 		return g.guardedFailure
+	}
+	if g.reconciliationDepth != 0 {
+		err := fmt.Errorf("%w: SQL query during ReconcileInput", ErrWriteEligibilityMutation)
+		if g.violation == nil {
+			g.violation = err
+		}
+		return err
 	}
 	g.streamingQueryUsed = true
 	return nil
@@ -255,4 +294,54 @@ func (g *mutationGuard) bindProtectedIssuer(issuer *drainowner.Invocation) error
 	g.protectedIssuer = issuer
 	g.unlockAndPublishProtectedFailure()
 	return nil
+}
+
+// BeginReconciliation reuses native guarded capabilities and additionally
+// denies reader invocations and SQL reads throughout the finite callback.
+func BeginReconciliation(ctx context.Context) (func() error, error) {
+	finish, err := BeginWriteEligibility(ctx)
+	if err != nil {
+		return nil, err
+	}
+	scope, _ := ctx.Value(dataScopeContextKey{}).(*dataScope)
+	guard := scope.mutationGuard()
+	guard.mu.Lock()
+	guard.reconciliationDepth++
+	guard.mu.Unlock()
+	var once sync.Once
+	var result error
+	return func() error {
+		once.Do(func() { guard.mu.Lock(); guard.reconciliationDepth--; guard.mu.Unlock(); result = finish() })
+		return result
+	}, nil
+}
+func (g *mutationGuard) reconciliationActive() bool {
+	if g == nil {
+		return false
+	}
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return g.reconciliationDepth != 0
+}
+
+// VetoReconciliationReplay applies to the complete owning invocation, including
+// a composing parent's recovery, from the first admitted allocation boundary.
+func VetoReconciliationReplay(ctx context.Context) error {
+	scope, _ := ctx.Value(dataScopeContextKey{}).(*dataScope)
+	guard := scope.mutationGuard()
+	if guard == nil {
+		return errors.New("finite_reconciliation requires an invocation-owned data scope")
+	}
+	guard.mu.Lock()
+	guard.reconciliationReplayVeto = true
+	guard.mu.Unlock()
+	return ctx.Err()
+}
+func (g *mutationGuard) reconciliationVetoedReplay() bool {
+	if g == nil {
+		return false
+	}
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return g.reconciliationReplayVeto
 }

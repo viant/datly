@@ -76,6 +76,10 @@ type artifactCompiler struct {
 
 func (c *artifactCompiler) compile() (*Artifact, error) {
 	input := c.input
+	if metadata, ok := input.Handler.(rhandler.ContractMetadata); ok {
+		input.Component = input.Component.Clone()
+		input.Component.Parameters = metadata.ContractParameters()
+	}
 	if input.Const != nil {
 		if _, err := input.Const.For(input.Component); err != nil {
 			return nil, err

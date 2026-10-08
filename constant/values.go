@@ -137,6 +137,20 @@ func (v *Values) Apply(component *spec.Component) *spec.Component {
 // Path expands only exact constant tokens in a trusted path/URL argument.
 // It is single-pass: dollar signs inside values never become further tokens.
 func (v *Values) Path(source string) (string, error) {
+	return v.expandPath(source, false)
+}
+
+// ExpandKnown expands instance constants while preserving unknown references
+// for a separate configured owner, such as a connector's secret expander.
+// Explicit instance values take precedence, including names such as Username
+// or Password. The downstream owner receives only references left unresolved.
+// Use Path for fields without a downstream owner so unknown constants fail.
+// Substitution remains single-pass and does not interpret inserted values.
+func (v *Values) ExpandKnown(source string) (string, error) {
+	return v.expandPath(source, true)
+}
+
+func (v *Values) expandPath(source string, deferUnknown bool) (string, error) {
 	if v == nil {
 		return source, nil
 	}
@@ -156,7 +170,7 @@ func (v *Values) Path(source string) (string, error) {
 		begin := i
 		for i < len(source) {
 			ch, size := utf8.DecodeRuneInString(source[i:])
-			if ch != '_' && !unicode.IsLetter(ch) && !(i > begin && unicode.IsDigit(ch)) {
+			if ch != '_' && !unicode.IsLetter(ch) && !(i > begin && unicode.IsDigit(ch)) && !(deferUnknown && braced && ch == '.') {
 				break
 			}
 			i += size
@@ -170,6 +184,10 @@ func (v *Values) Path(source string) (string, error) {
 		}
 		value, ok := v.Lookup(name)
 		if !ok {
+			if deferUnknown {
+				result.WriteString(source[start:i])
+				continue
+			}
 			return "", fmt.Errorf("unknown constant %q", name)
 		}
 		if strings.ContainsRune(value, 0) {

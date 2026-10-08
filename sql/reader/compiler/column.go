@@ -52,6 +52,7 @@ func columnsFromType(rowType reflect.Type) ([]*data.Column, error) {
 		column := &data.Column{
 			Name:      field.Name,
 			Column:    columnName,
+			Output:    metadata.SQLOutput,
 			Groupable: metadata.Groupable,
 			Tag:       string(field.Tag),
 		}
@@ -77,7 +78,9 @@ func reconcileColumns(typed, canonical []*data.Column) []*data.Column {
 		if metadata == nil {
 			continue
 		}
-		column.Groupable = column.Groupable || metadata.Groupable
+		if _, declared := reflect.StructTag(column.Tag).Lookup("groupable"); !declared {
+			column.Groupable = column.Groupable || metadata.Groupable
+		}
 		if metadata.Nullable {
 			// Typed nullable columns are pointer destinations. Canonical scalar
 			// fallbacks must not erase the NULL those destinations can represent.
@@ -85,6 +88,9 @@ func reconcileColumns(typed, canonical []*data.Column) []*data.Column {
 				column.NullFallback = metadata.NullFallback
 			}
 			column.Nullable = true
+		}
+		if column.Output == "" {
+			column.Output = metadata.Output
 		}
 		if column.Expression == "" {
 			column.Expression = metadata.Expression

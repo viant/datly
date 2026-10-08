@@ -336,6 +336,12 @@ func normalizeInputName(value string) string {
 }
 
 func cloneBindingSpec(binding bindly.BindingSpec) bindly.BindingSpec {
+	if binding.ResolutionGroup != nil {
+		group := *binding.ResolutionGroup
+		group.After = append([]string(nil), group.After...)
+		group.DependsOn = append([]string(nil), group.DependsOn...)
+		binding.ResolutionGroup = &group
+	}
 	binding.Required = cloneBool(binding.Required)
 	binding.Cacheable = cloneBool(binding.Cacheable)
 	for _, limit := range []**int{&binding.MinAllowedRecords, &binding.MaxAllowedRecords, &binding.ExpectedReturned} {
