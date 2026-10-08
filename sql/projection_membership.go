@@ -223,13 +223,12 @@ func (p SelectorProjection) columns() ([]ProjectionColumn, bool, error) {
 		return nil, false, &UnresolvedProjectionError{Cause: err}
 	}
 	parts, ok := newSelectProjectionSource(p.SQL)
-	source := p.SQL
-	if ok {
-		source = "SELECT " + strings.Join(parts.parts, ",") + " FROM projection_source"
-	}
-	parsed, err := sqlparser.ParseQuery(source)
+	var parsed *query.Select
+	var err error
 	if ok {
 		parsed, err = parts.parse()
+	} else {
+		parsed, err = sqlparser.ParseQuery(p.SQL)
 	}
 	if err != nil || parsed == nil || len(parsed.List) == 0 {
 		return nil, false, &UnresolvedProjectionError{Cause: err}
