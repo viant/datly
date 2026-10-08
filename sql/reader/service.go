@@ -251,6 +251,10 @@ func (s *Service) bindRelations(ctx context.Context, session *Session, input ref
 }
 
 func (s *Service) bindRelationsScheduled(scheduler *relationScheduler, session *Session, input reflect.Value, binder xhandler.Binder, selectors invocationSelectors, collector *rcollector.Collector) error {
+	return scheduler.Run(s.relationWork(session, input, binder, selectors, collector))
+}
+
+func (s *Service) relationWork(session *Session, input reflect.Value, binder xhandler.Binder, selectors invocationSelectors, collector *rcollector.Collector) []relationWork {
 	if collector == nil {
 		return nil
 	}
@@ -258,55 +262,52 @@ func (s *Service) bindRelationsScheduled(scheduler *relationScheduler, session *
 	work := make([]relationWork, 0, len(children))
 	for _, child := range children {
 		child := child
+		pending := false
 		work = append(work, relationWork{
-			run: func(ctx context.Context) error {
-				return s.bindRelationScheduled(ctx, scheduler, session, input, binder, selectors, child)
+			run: func(ctx context.Context) (err error) {
+				childView := child.View()
+				childPlan := session.Artifact.ViewPlanFor(childView)
+				if childPlan == nil {
+					return fmt.Errorf("reader view plan is not compiled for relation view %s", viewName(childView))
+				}
+				placeholders, compositeValues, columns := child.ParentPlaceholders()
+				if childView.Spec.Source != nil && (childView.Spec.Source.SQL != "" || childView.Spec.Source.Table != "") && !emptyRelationParents(columns, placeholders, compositeValues) {
+					pending = true
+					session.recorder.Pending(session.pendingScope, 1)
+					read := session.beginView(ctx, childView)
+					read.collector = child
+					defer read.finish(&err)
+					connection, err := viewConnection(ctx, session, childPlan)
+					if err != nil {
+						return err
+					}
+					reader := relationRead{
+						service: s, ctx: ctx, session: session, input: input, binder: binder,
+						selector: selectors, child: child, plan: childPlan, connection: connection, read: read,
+					}
+					if err := reader.Read(placeholders, compositeValues, columns); err != nil {
+						return err
+					}
+					read.done(child.Len(), nil)
+				}
+				child.BootstrapFromParentHolder()
+				child.Fetched()
+				return nil
+			},
+			children: func() []relationWork {
+				return s.relationWork(session, input, binder, selectors, child)
+			},
+			complete: func(context.Context) error { return child.RebindToParent() },
+			finish: func(error) {
+				defer child.Unlock()
+				if pending {
+					session.recorder.Pending(session.pendingScope, -1)
+				}
 			},
 			skip: child.Unlock,
 		})
 	}
-	return scheduler.Run(work)
-}
-
-func (s *Service) bindRelationScheduled(ctx context.Context, scheduler *relationScheduler, session *Session, input reflect.Value, binder xhandler.Binder, selectors invocationSelectors, child *rcollector.Collector) (err error) {
-	defer child.Unlock()
-	childView := child.View()
-	childPlan := session.Artifact.ViewPlanFor(childView)
-	if childPlan == nil {
-		return fmt.Errorf("reader view plan is not compiled for relation view %s", viewName(childView))
-	}
-	placeholders, compositeValues, columns := child.ParentPlaceholders()
-	if childView.Spec.Source == nil || (childView.Spec.Source.SQL == "" && childView.Spec.Source.Table == "") || emptyRelationParents(columns, placeholders, compositeValues) {
-		child.BootstrapFromParentHolder()
-		child.Fetched()
-		if err := s.bindRelationsScheduled(scheduler, session, input, binder, selectors, child); err != nil {
-			return err
-		}
-		return child.RebindToParent()
-	}
-	session.recorder.Pending(session.pendingScope, 1)
-	defer session.recorder.Pending(session.pendingScope, -1)
-	read := session.beginView(ctx, childView)
-	read.collector = child
-	defer read.finish(&err)
-	connection, err := viewConnection(ctx, session, childPlan)
-	if err != nil {
-		return err
-	}
-	reader := relationRead{
-		service: s, ctx: ctx, session: session, input: input, binder: binder,
-		selector: selectors, child: child, plan: childPlan, connection: connection, read: read,
-	}
-	if err := reader.Read(placeholders, compositeValues, columns); err != nil {
-		return err
-	}
-	read.done(child.Len(), nil)
-	child.BootstrapFromParentHolder()
-	child.Fetched()
-	if err := s.bindRelationsScheduled(scheduler, session, input, binder, selectors, child); err != nil {
-		return err
-	}
-	return child.RebindToParent()
+	return work
 }
 
 func (s *Service) relationConcurrency() int {

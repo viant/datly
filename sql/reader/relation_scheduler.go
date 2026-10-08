@@ -10,17 +10,22 @@ import (
 const defaultRelationFetchConcurrency = 4
 
 type relationWork struct {
-	run  func(context.Context) error
-	skip func()
+	run      func(context.Context) error
+	children func() []relationWork
+	complete func(context.Context) error
+	// finish releases started work after descendants finish (also on failure).
+	// skip releases work that never started; these callbacks are exclusive.
+	finish func(error)
+	skip   func()
 }
 
-// relationScheduler bounds all recursively spawned relation work for one
-// invocation. When no slot is immediately available, the caller executes the
-// relation inline; nested scheduling therefore cannot deadlock on the bound.
+// relationScheduler bounds runnable phases, not entire relation lifetimes.
+// Parents waiting for descendants consume no worker; only the coordinator
+// owns dependency counts and publishes their completion phases.
 type relationScheduler struct {
-	ctx    context.Context
-	cancel context.CancelFunc
-	slots  chan struct{}
+	ctx     context.Context
+	cancel  context.CancelFunc
+	workers int
 
 	mutex sync.Mutex
 	err   error
@@ -31,12 +36,7 @@ func newRelationScheduler(ctx context.Context, concurrency int) *relationSchedul
 		concurrency = defaultRelationFetchConcurrency
 	}
 	workCtx, cancel := context.WithCancel(ctx)
-	result := &relationScheduler{ctx: workCtx, cancel: cancel}
-	// The invocation caller is one worker. Slots bound additional goroutines.
-	if concurrency > 1 {
-		result.slots = make(chan struct{}, concurrency-1)
-	}
-	return result
+	return &relationScheduler{ctx: workCtx, cancel: cancel, workers: concurrency}
 }
 
 func (s *relationScheduler) Close() {
@@ -49,61 +49,116 @@ func (s *relationScheduler) Run(work []relationWork) error {
 	if s == nil {
 		return nil
 	}
-	var started sync.WaitGroup
-	for index := range work {
-		item := work[index]
-		if s.ctx.Err() != nil {
-			s.execute(item)
-			continue
-		}
-		if s.tryAcquire() {
-			started.Add(1)
-			go func() {
-				defer started.Done()
-				defer s.release()
-				s.execute(item)
-			}()
-			continue
-		}
-		s.execute(item)
+	if len(work) == 0 {
+		return s.Error()
 	}
-	started.Wait()
+	jobs := make(chan *relationTask)
+	results := make(chan relationResult, s.workers)
+	var workers sync.WaitGroup
+	for i := 0; i < s.workers; i++ {
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			for task := range jobs {
+				results <- s.execute(task)
+			}
+		}()
+	}
+	defer func() {
+		close(jobs)
+		workers.Wait()
+	}()
+	queue := make([]*relationTask, 0, len(work))
+	for _, item := range work {
+		queue = append(queue, &relationTask{work: item})
+	}
+	remaining := len(queue)
+	for remaining > 0 {
+		var next *relationTask
+		var ready chan *relationTask
+		if len(queue) > 0 {
+			next, ready = queue[0], jobs
+		}
+		select {
+		case ready <- next:
+			queue[0] = nil
+			queue = queue[1:]
+		case result := <-results:
+			task := result.task
+			if len(result.children) > 0 {
+				task.pending = len(result.children)
+				remaining += task.pending
+				for _, child := range result.children {
+					queue = append(queue, &relationTask{work: child, parent: task})
+				}
+				continue
+			}
+			remaining--
+			if parent := task.parent; parent != nil {
+				parent.pending--
+				if parent.pending == 0 {
+					queue = append(queue, parent)
+				}
+			}
+		}
+	}
 	return s.Error()
 }
 
-func (s *relationScheduler) execute(work relationWork) {
+type relationTask struct {
+	work     relationWork
+	parent   *relationTask
+	pending  int
+	prepared bool
+}
+
+type relationResult struct {
+	task     *relationTask
+	children []relationWork
+}
+
+func (s *relationScheduler) execute(task *relationTask) relationResult {
+	result := relationResult{task: task}
+	work := task.work
+	if !task.prepared {
+		if s.ctx.Err() != nil {
+			s.protect(func() error { work.releaseSkipped(); return nil })
+			return result
+		}
+		task.prepared = true
+		s.protect(func() error {
+			if work.run != nil {
+				if err := work.run(s.ctx); err != nil {
+					return err
+				}
+			}
+			if s.ctx.Err() == nil && work.children != nil {
+				result.children = work.children()
+			}
+			return nil
+		})
+		if len(result.children) > 0 {
+			return result
+		}
+	}
+	if s.ctx.Err() == nil && work.complete != nil {
+		s.protect(func() error { return work.complete(s.ctx) })
+	}
+	// Cleanup belongs to started work even when preparation/completion panics.
+	if work.finish != nil {
+		s.protect(func() error { work.finish(s.Error()); return nil })
+	}
+	return result
+}
+
+func (s *relationScheduler) protect(run func() error) {
 	defer func() {
 		if recovered := recover(); recovered != nil {
 			s.fail(exec.NewPanicError("relation worker", recovered))
 		}
 	}()
-	if s.ctx.Err() != nil {
-		work.releaseSkipped()
-		return
-	}
-	if work.run == nil {
-		return
-	}
-	if err := work.run(s.ctx); err != nil {
+	if err := run(); err != nil {
 		s.fail(err)
-	}
-}
-
-func (s *relationScheduler) tryAcquire() bool {
-	if s.slots == nil {
-		return false
-	}
-	select {
-	case s.slots <- struct{}{}:
-		return true
-	default:
-		return false
-	}
-}
-
-func (s *relationScheduler) release() {
-	if s.slots != nil {
-		<-s.slots
 	}
 }
 
