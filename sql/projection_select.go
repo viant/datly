@@ -31,35 +31,45 @@ func unwrapProjectionSQL(text string) string {
 }
 
 func unwrapGroupedProjectionWrapper(sqlText string, selected []string) (string, []string) {
+	text, selection, _, _ := parseGroupedProjectionSource(sqlText, selected)
+	return text, selection
+}
+
+// The statement is owned by this invocation. Projection consumers can reuse
+// the inspected outer or unwrapped inner AST without reparsing its SQL.
+func parseGroupedProjectionSource(sqlText string, selected []string) (string, []string, *query.Select, error) {
 	outer, err := sqlparser.ParseQuery(sqlText)
-	if err != nil || outer == nil || outer.Union != nil || len(outer.WithSelects) > 0 || len(outer.Joins) > 0 ||
+	if err != nil {
+		return sqlText, selected, nil, err
+	}
+	if outer == nil || outer.Union != nil || len(outer.WithSelects) > 0 || len(outer.Joins) > 0 ||
 		len(outer.GroupBy) > 0 || outer.Having != nil || len(outer.OrderBy) > 0 || outer.Qualify != nil ||
 		realOuterWindow(outer) {
-		return sqlText, selected
+		return sqlText, selected, outer, nil
 	}
 	if sqltext.HasTopLevelClause(sqlText, "where") {
-		return sqlText, selected
+		return sqlText, selected, outer, nil
 	}
 	alias := strings.TrimSpace(outer.From.Alias)
 	raw, ok := outer.From.X.(*expr.Raw)
 	if alias == "" || !ok {
-		return sqlText, selected
+		return sqlText, selected, outer, nil
 	}
 	innerSQL := unwrapProjectionSQL(raw.Raw)
 	inner, _ := raw.X.(*query.Select)
 	if inner == nil {
 		inner, err = sqlparser.ParseQuery(innerSQL)
 		if err != nil {
-			return sqlText, selected
+			return sqlText, selected, outer, nil
 		}
 	}
 	if inner == nil || !groupedWrapperInner(inner) {
-		return sqlText, selected
+		return sqlText, selected, outer, nil
 	}
 	outputByOuter := map[string]string{}
 	for _, item := range outer.List {
 		if item == nil || strings.TrimSpace(item.Alias) != "" {
-			return sqlText, selected
+			return sqlText, selected, outer, nil
 		}
 		// A canonical compiler wrapper can project an unqualified star.
 		// It is transparent over this single grouped derived source.
@@ -69,12 +79,12 @@ func unwrapGroupedProjectionWrapper(sqlText string, selected []string) (string, 
 		itemName := sqlparser.Stringify(item.Expr)
 		parts, err := sqlparser.TableIdentifierParts(itemName)
 		if err != nil || len(parts) != 2 || !strings.EqualFold(parts[0], alias) {
-			return sqlText, selected
+			return sqlText, selected, outer, nil
 		}
 		outputByOuter[canonicalProjectionName(itemName)] = parts[1]
 		outputByOuter[canonicalProjectionName(parts[1])] = parts[1]
 	}
-	return groupedWrapperInnerSQLWithControls(innerSQL, outer), normalizeGroupedWrapperSelection(selected, outputByOuter)
+	return groupedWrapperInnerSQLWithControls(innerSQL, outer), normalizeGroupedWrapperSelection(selected, outputByOuter), inner, nil
 }
 
 // GroupedProjectionCriteriaSource returns the same source scope grouped

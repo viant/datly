@@ -6,6 +6,7 @@ import (
 
 	"github.com/viant/datly/data"
 	"github.com/viant/sqlparser"
+	"github.com/viant/sqlparser/query"
 	"github.com/viant/sqlx/io/read/cache"
 )
 
@@ -20,11 +21,14 @@ type CacheProjection struct {
 
 func (p CacheProjection) Fields() ([]cache.ProjectionField, error) {
 	// Native reader identities may wrap a grouped source with a transparent star.
-	text, _ := unwrapGroupedProjectionWrapper(p.SQL, nil)
-	statement, err := sqlparser.ParseQuery(text)
+	_, _, statement, err := parseGroupedProjectionSource(p.SQL, nil)
 	if err != nil {
 		return nil, err
 	}
+	return p.fields(statement)
+}
+
+func (p CacheProjection) fields(statement *query.Select) ([]cache.ProjectionField, error) {
 	if statement == nil || len(statement.List) == 0 {
 		return nil, fmt.Errorf("cache projection requires an explicit select list")
 	}
