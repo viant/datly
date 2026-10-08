@@ -131,6 +131,21 @@ func validateParentKeyPrefix(prefix string) error {
 }
 
 func validateColumn(column string) error {
+	parts, err := sqlparser.TableIdentifierParts(column)
+	if err != nil {
+		return fmt.Errorf("%q is not a column reference: %w", column, err)
+	}
+	if !strings.ContainsAny(column, "'\"`[") {
+		if len(parts) == 1 {
+			switch strings.ToLower(parts[0]) {
+			case "true", "false", "null":
+				return fmt.Errorf("%q is not a column reference", column)
+			}
+		}
+		return nil
+	}
+	// Keep the SELECT parser's dialect-specific distinction between quoted
+	// identifiers and literals. Ordinary qualified names need no query AST.
 	parsed, err := sqlparser.ParseQuery("SELECT " + column + " FROM parent_key_source")
 	if err != nil || parsed == nil || len(parsed.List) != 1 || parsed.List[0] == nil {
 		if err == nil {
@@ -164,7 +179,9 @@ func ExpandParentKeyCalls(sql string, dialect *info.Dialect, scalarValues []any,
 	var builder strings.Builder
 	last := 0
 	for _, call := range calls {
-		fragment, callArgs, err := expander.Expand(call)
+		// ParentKeyCalls already validated this private call list. Public Expand
+		// still validates direct Go and Velty calls on every entry.
+		fragment, callArgs, err := expander.expandValidated(call)
 		if err != nil {
 			return "", nil, 0, err
 		}
