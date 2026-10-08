@@ -50,7 +50,7 @@ func TestLifecycleReachabilityPreservesExternalAndHooklessEmission(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(before, "_datlyLifecycle_") {
+	if strings.Contains(before, "_anchorSharedLifecycle_") {
 		t.Fatal("hookless emission changed")
 	}
 	plan.Imports = []spec.ImportSpec{{Alias: "foreign", Package: "example.com/reachability/hooks"}}
@@ -59,7 +59,7 @@ func TestLifecycleReachabilityPreservesExternalAndHooklessEmission(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(foreign, "var _datlyReachableForeignRules = reflect.TypeFor[foreign.Rules]()") || strings.Contains(foreign, "_datlyLifecycle_") {
+	if !strings.Contains(foreign, "var _anchorForeignRules = reflect.TypeFor[foreign.Rules]()") || strings.Contains(foreign, "_anchorSharedLifecycle_") {
 		t.Fatalf("foreign reachability changed: %s", foreign)
 	}
 	for _, expression := range []string{"unknown.Rules", "func()", "a.b.c", "[]Rules", "type"} {
