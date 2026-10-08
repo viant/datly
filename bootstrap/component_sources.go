@@ -47,7 +47,7 @@ func GroupPackageComponentSources(routes []*RouteSource, types *typecatalog.Reso
 		var inputDescriptor, outputDescriptor *x.Type
 		inputIdentity, outputIdentity := "", ""
 		if route.LinkedInputType != nil && route.LinkedOutputType != nil {
-			if err := route.ValidateContractTypes(route.LinkedInputType, route.LinkedOutputType); err != nil {
+			if err := route.validateContractTypes(route.LinkedInputType, route.LinkedOutputType, types); err != nil {
 				return nil, err
 			}
 			inputDescriptor = x.NewType(route.LinkedInputType)
