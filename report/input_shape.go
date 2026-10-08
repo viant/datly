@@ -158,5 +158,8 @@ func selectionWireName(item field) string {
 	if item.wireName != "" {
 		return item.wireName
 	}
-	return lowerCamel(item.publicName)
+	if item.fieldName != "" {
+		return lowerCamel(item.fieldName)
+	}
+	return lowerCamel(typecatalog.ExportedFieldName(item.publicName))
 }

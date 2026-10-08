@@ -24,6 +24,8 @@ func TestCubeEmitsLinkedFacade(t *testing.T) {
 	component.RootView.Columns[1].Tag = `json:"reader_amount"`
 	component.RootView.Columns = append(component.RootView.Columns, &spec.Column{Name: "Hidden", Source: "hidden", Type: spec.TypeRef{Name: "int"}, Groupable: component.RootView.Groupable, Tag: `json:"-"`})
 	component.RootView.Source.SQL = "SELECT account_id, hidden, SUM(amount) AS amount FROM spend GROUP BY account_id, hidden"
+	periodDefault, optional, cacheable := "month", false, true
+	component.Parameters = append(component.Parameters, &spec.Parameter{Name: "Period", TypeExpr: "string", Source: spec.BindSource{Kind: "form", Name: "period"}, Required: &optional, Value: &periodDefault, Cacheable: &cacheable, Tag: `mcp:"-"`})
 	generated, err := New(Input{Component: component, TargetPackage: "example.com/generated/reporting"}).Generate(filepath.Join(root, "reporting"))
 	if err != nil {
 		t.Fatal(err)
@@ -63,6 +65,45 @@ func TestCubeShapePlanningDoesNotMaterializeLinkedFacades(t *testing.T) {
 	}
 	if len(plan.Cubes) != 0 || plan.Report.LinkedFacade {
 		t.Fatal("dynamic shape planning acquired a static facade")
+	}
+}
+
+func TestFreshCubeGenerationNormalizesSnakeCaseSelections(t *testing.T) {
+	root := t.TempDir()
+	testharness.WriteGeneratedGoMod(t, root)
+	component := cubeFixture()
+	component.RootView.Columns[0].Name = "campaign_id"
+	component.RootView.Columns[0].Source = "campaign_id"
+	component.RootView.Columns[0].Tag = `json:"ReaderCampaign"`
+	component.RootView.Columns[1].Name = "total_spend"
+	component.RootView.Columns[1].Source = "total_spend"
+	component.RootView.Columns[1].Tag = `json:"ReaderTotal"`
+	component.Parameters[0].Predicates[0].Args[1] = "campaign_id"
+	component.RootView.Source.SQL = "SELECT campaign_id, SUM(amount) AS total_spend FROM spend GROUP BY campaign_id"
+	generated, err := New(Input{Component: component, TargetPackage: "example.com/generated/reporting"}).Generate(filepath.Join(root, "reporting"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := strings.ReplaceAll(`package CUBE_PACKAGE
+import("encoding/json";"reflect";"strings";"testing")
+func TestFreshNormalizedCubeDiscoveryAndBinding(t *testing.T){
+ for _,test:=range []struct{section,field,wire string}{{"Dimensions","CampaignId","campaignId"},{"Measures","TotalSpend","totalSpend"}}{
+  section,_:=reflect.TypeFor[SpendCubeInput]().FieldByName(test.section);field,ok:=section.Type.FieldByName(test.field)
+  if !ok||strings.Split(field.Tag.Get("json"),",")[0]!=test.wire{t.Fatalf("fresh cube discovery used SQL or reader names: %s",field.Tag)}
+ }
+ var input SpendCubeInput
+ if err:=json.Unmarshal([]byte("{\"dimensions\":{\"campaignId\":true},\"measures\":{\"totalSpend\":true}}"),&input);err!=nil{t.Fatal(err)}
+ if !input.Dimensions.CampaignId||!input.Measures.TotalSpend{t.Fatal("fresh normalized selections did not bind")}
+ if _,err:=NewSpendCube();err!=nil{t.Fatal(err)}
+}`, "CUBE_PACKAGE", generated.Plan.PackageName())
+	if err := os.WriteFile(filepath.Join(root, "reporting", "wire_runtime_test.go"), []byte(text), 0600); err != nil {
+		t.Fatal(err)
+	}
+	command := exec.Command("go", "test", "./...")
+	command.Dir = root
+	command.Env = append(os.Environ(), "GOWORK=off")
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("fresh cube contract failed: %v\n%s", err, output)
 	}
 }
 
@@ -111,8 +152,10 @@ func TestLinkedCubeRegistrationMCPAndDependency(t *testing.T) {
  snapshot,err:=index.BuildLinked([]string{base.Key.Scope},[]*spec.Component{base,cube});if err!=nil{t.Fatal(err)}
  if len(snapshot.Entries())!=2{t.Fatalf("duplicate cube entries: %d",len(snapshot.Entries()))}
  calls:=0
+ wantPeriod:="month"
  sourceHandler:=custom.NewFunc[SpendInput,SpendOutput](func(_ context.Context,input *SpendInput)(*SpendOutput,error){
   calls++;if input.AccountID!=0||input.Has==nil||!input.Has.AccountID{t.Fatalf("explicit zero lost presence: %+v",input)}
+  if input.Period!=wantPeriod{t.Fatalf("hidden period default or HTTP proxy changed: got %q want %q",input.Period,wantPeriod)}
   return &SpendOutput{},nil
  })
  cubeHandler,err:=NewSpendCube();if err!=nil{t.Fatal(err)}
@@ -138,11 +181,17 @@ func TestLinkedCubeRegistrationMCPAndDependency(t *testing.T) {
  tool,ok:=service.Registry().ToolRegistry.Get("SpendCube");if !ok{t.Fatal("linked MCP cube missing")}
  toolPlan,_:=service.Catalog().Tool("SpendCube")
  wire,_:=json.Marshal(toolPlan.Metadata().InputSchema)
+ if strings.Contains(string(wire),"\"period\":"){t.Fatalf("mcp:- nested cube filter entered discovery: %s",wire)}
  if !strings.Contains(string(wire),"\"accountID\":")||!strings.Contains(string(wire),"\"amount\":")||strings.Contains(string(wire),"\"AccountID\":")||strings.Contains(string(wire),"\"reader_amount\":")||strings.Contains(string(wire),"\"Hidden\":"){t.Fatalf("MCP cube discovery changed selection names or exposed a hidden column: %s",wire)}
  if strings.Contains(string(wire),"\"Has\"")||strings.Contains(string(wire),"\"has\""){t.Fatalf("presence marker exposed: %s",wire)}
  result,protocolErr:=tool.Handler(ctx,&schema.CallToolRequest{Params:schema.CallToolRequestParams{Name:"SpendCube",Arguments:map[string]any{"dimensions":map[string]any{"accountID":true},"filters":map[string]any{"accountID":0}}}})
  if protocolErr!=nil||result==nil||result.IsError!=nil&&*result.IsError{t.Fatalf("MCP: %+v %v",result,protocolErr)}
  if calls!=3{t.Fatalf("source call count %d",calls)}
+ wantPeriod="quarter"
+ req:=httptest.NewRequest("POST","/spend/cube",strings.NewReader("{\"dimensions\":{\"accountID\":true},\"filters\":{\"accountID\":0,\"period\":\"quarter\"}}"));req.Header.Set("Content-Type","application/json")
+ scope,err:=requestprovider.New(req);if err!=nil{t.Fatal(err)}
+ _,err=rt.ExecuteRoute(ctx,"POST","/spend/cube",scope);scope.Close();if err!=nil{t.Fatal(err)}
+ if calls!=4{t.Fatalf("HTTP hidden filter did not execute source: %d",calls)}
  var _ rhandler.TypedHandler=cubeHandler
 }
 `

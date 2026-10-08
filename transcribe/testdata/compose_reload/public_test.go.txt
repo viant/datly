@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/viant/datly/application"
+	"github.com/viant/datly/typecatalog"
 	"github.com/viant/jsonrpc"
 	"github.com/viant/mcp-protocol/schema"
 	"github.com/viant/mcp/client"
@@ -309,4 +310,4 @@ func (c composeClient) cube(t *testing.T, revision int) {
  if err != nil || !failed { t.Fatalf("cube unexposed order accepted: %s failed=%v err=%v", data, failed, err) }
 }
 
-func cubeWireName(name string) string { if name=="" { return "" }; return strings.ToLower(name[:1])+name[1:] }
+func cubeWireName(name string) string { name=typecatalog.ExportedFieldName(name); if name=="" { return "" }; return strings.ToLower(name[:1])+name[1:] }

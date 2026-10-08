@@ -43,3 +43,33 @@ func TestDynamicCubeSelectionNamesIgnoreReaderSerialization(t *testing.T) {
 		t.Fatalf("lower-camel selections did not bind: %v %v", fields, err)
 	}
 }
+
+func TestCubeSelectionNamesNormalizeSQLAndLinkedFieldIdentities(t *testing.T) {
+	for _, name := range []string{"campaign_id", "CampaignId"} {
+		t.Run(name, func(t *testing.T) {
+			source := reportSource(t, &spec.ReportSettings{Enabled: true})
+			source.Component.RootView.Relations = nil
+			source.Component.RootView.Columns = []*spec.Column{{Name: name, Source: "campaign_id", Groupable: boolPointer(true), Tag: `json:"ReaderCampaign"`}}
+			contract, _ := source.Input.ForRoute(spec.RouteRef{Method: "GET", Path: "/spend"})
+			metadata, err := compileMetadata(source.Component, contract)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if metadata.dimensions[0].sqlName != "campaign_id" || metadata.dimensions[0].wireName != "campaignId" {
+				t.Fatalf("SQL and cube identities mixed: %+v", metadata.dimensions[0])
+			}
+			project, err := NewProjectCompiler(ProjectConfig{Types: typecatalog.NewCatalog()}).Compile([]Source{source})
+			if err != nil {
+				t.Fatal(err)
+			}
+			cube := project.Derived()[0]
+			input := reflect.New(cube.InputType)
+			if err := json.Unmarshal([]byte(`{"dimensions":{"campaignId":true}}`), input.Interface()); err != nil {
+				t.Fatal(err)
+			}
+			if !input.Elem().FieldByName("Dimensions").FieldByName("CampaignId").Bool() {
+				t.Fatal("normalized selection did not bind")
+			}
+		})
+	}
+}

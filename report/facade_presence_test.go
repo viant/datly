@@ -12,17 +12,28 @@ import (
 )
 
 func TestFacadeProxiesOrdinaryInputsAndPredicatePresence(t *testing.T) {
+	type payload struct {
+		Enabled bool `json:"enabled"`
+	}
 	type inputHas struct {
 		Active   bool
 		Label    bool
 		Criteria bool
 		Internal bool
+		Header   bool
+		ID       bool
+		Tags     bool
+		Payload  bool
 	}
 	type input struct {
 		Criteria string
 		Active   bool
 		Label    string
-		Internal string    `internal:"true"`
+		Internal string `internal:"true"`
+		Header   string
+		ID       int
+		Tags     []string
+		Payload  payload
 		Has      *inputHas `setMarker:"true" json:"-"`
 	}
 	groupable := true
@@ -31,6 +42,10 @@ func TestFacadeProxiesOrdinaryInputsAndPredicatePresence(t *testing.T) {
 		{Name: "Criteria", Source: spec.BindSource{Kind: "query", Name: "criteria"}, QuerySelector: &spec.QuerySelectorBinding{View: "rows", Property: spec.SelectorPropertyCriteria}},
 		{Name: "Label", Source: spec.BindSource{Kind: "query", Name: "label"}},
 		{Name: "Internal", Source: spec.BindSource{Kind: "query", Name: "internal"}},
+		{Name: "Header", Source: spec.BindSource{Kind: "header", Name: "X-Label"}},
+		{Name: "ID", Source: spec.BindSource{Kind: "path", Name: "id"}},
+		{Name: "Tags", Source: spec.BindSource{Kind: "form", Name: "tags"}},
+		{Name: "Payload", Source: spec.BindSource{Kind: "body", Name: "payload"}},
 	}}
 	compiled, err := handlercompiler.New(handlercompiler.Input{Component: source, InputType: reflect.TypeFor[input]()}).Compile()
 	if err != nil {
@@ -60,11 +75,19 @@ func TestFacadeProxiesOrdinaryInputsAndPredicatePresence(t *testing.T) {
 	presence := reflect.New(marker.Type.Elem())
 	presence.Elem().FieldByName("Active").SetBool(true)
 	presence.Elem().FieldByName("Label").SetBool(true)
+	for _, name := range []string{"Header", "ID", "Tags", "Payload"} {
+		presence.Elem().FieldByName(name).SetBool(true)
+	}
 	section.FieldByName("Has").Set(presence)
 	active := false
 	section.FieldByName("Active").Set(reflect.ValueOf(&active))
 	label := ""
 	section.FieldByName("Label").Set(reflect.ValueOf(&label))
+	header, id, tags, body := "header-value", 0, []string{}, payload{Enabled: false}
+	section.FieldByName("Header").Set(reflect.ValueOf(&header))
+	section.FieldByName("ID").Set(reflect.ValueOf(&id))
+	section.FieldByName("Tags").Set(reflect.ValueOf(&tags))
+	section.FieldByName("Payload").Set(reflect.ValueOf(&body))
 	providers, err := cube.Plan.providers(value.Elem(), nil)
 	if err != nil {
 		t.Fatal(err)
@@ -80,5 +103,8 @@ func TestFacadeProxiesOrdinaryInputsAndPredicatePresence(t *testing.T) {
 	}
 	if out.Active || out.Has == nil || !out.Has.Active || !out.Has.Label || out.Has.Criteria {
 		t.Fatalf("source presence/value lost: %+v", out)
+	}
+	if out.Header != header || out.ID != id || out.Tags == nil || len(out.Tags) != 0 || out.Payload.Enabled || !out.Has.Header || !out.Has.ID || !out.Has.Tags || !out.Has.Payload {
+		t.Fatalf("original header/path/form/body contract mapping or presence lost: %+v", out)
 	}
 }

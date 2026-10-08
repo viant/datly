@@ -14,7 +14,7 @@ require (
 	github.com/viant/gmetric v0.3.2
 	github.com/viant/govalidator v0.3.4-0.20260913213120-027a9dd54d73
 	github.com/viant/mcp v0.24.1-0.20261008165059-494f36529f6e
-	github.com/viant/mcp-protocol v0.19.1-0.20261008164814-4025ecf6ddd4
+	github.com/viant/mcp-protocol v0.19.1-0.20261008202502-046707df5ed9
 	github.com/viant/parsly v0.3.3
 	github.com/viant/sqlparser v0.13.1-0.20261008165000-6fb4cdcd96a5
 	github.com/viant/sqlx v0.26.1-0.20261007205057-0330f64d8fd3
