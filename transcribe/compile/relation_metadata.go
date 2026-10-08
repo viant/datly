@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"reflect"
 	"strings"
 
 	"github.com/viant/datly/data"
@@ -188,27 +189,33 @@ func BackfillRelationMetadata(component *spec.Component, resources ...fs.FS) err
 				parent, child := current.On[linkIndex], current.Of.On[linkIndex]
 				linkIndex++
 				if link.ParentOutput == "" {
-					if err := resolveMetadataSQL(runtime, resources); err != nil {
+					ready, err := resolveMetadataSQL(runtime, resources)
+					if err != nil {
 						return err
 					}
-					if err := resolveProjectedLinks(runtime, data.Links{parent}, false); err != nil {
-						return err
+					if ready {
+						if err := resolveProjectedLinks(runtime, data.Links{parent}, false); err != nil {
+							return err
+						}
+						link.ParentOutput = parent.OutputColumn()
 					}
-					link.ParentOutput = parent.OutputColumn()
 				}
 				if link.ChildOutput == "" {
-					if err := resolveMetadataSQL(current.Of.View, resources); err != nil {
+					ready, err := resolveMetadataSQL(current.Of.View, resources)
+					if err != nil {
 						return err
 					}
-					if err := resolveProjectedLinks(current.Of.View, data.Links{child}, true); err != nil {
-						return err
+					if ready {
+						if err := resolveProjectedLinks(current.Of.View, data.Links{child}, true); err != nil {
+							return err
+						}
+						link.ChildNamespace, link.ChildColumn, link.ChildOutput = child.Namespace, child.Column, child.OutputColumn()
 					}
-					link.ChildNamespace, link.ChildColumn, link.ChildOutput = child.Namespace, child.Column, child.OutputColumn()
 				}
-				if link.ParentField == "" {
+				if link.ParentField == "" && link.ParentOutput != "" {
 					link.ParentField = relationFieldName(view, link.ParentOutput)
 				}
-				if link.ChildField == "" {
+				if link.ChildField == "" && link.ChildOutput != "" {
 					link.ChildField = relationFieldName(relation.View, link.ChildOutput)
 				}
 			}
@@ -238,17 +245,27 @@ func relationFieldName(view *spec.View, output string) string {
 	return typecatalog.FieldName(output)
 }
 
-func resolveMetadataSQL(view *data.View, resources []fs.FS) error {
+// resolveMetadataSQL distinguishes syntax-only planning from bound resource
+// validation. An unbound resource stays deferred and must not acquire a false
+// output proof; a missing file in a bound filesystem remains an error.
+func resolveMetadataSQL(view *data.View, resources []fs.FS) (bool, error) {
 	if view == nil {
-		return nil
+		return true, nil
 	}
 	view.Spec.Source = view.Spec.RuntimeSource()
 	source := view.Spec.Source
 	if source == nil || (len(source.Embeds) == 0 && (strings.TrimSpace(source.SQL) != "" || source.URI == "")) {
-		return nil
+		return true, nil
 	}
 	if len(resources) == 0 || resources[0] == nil {
-		return fmt.Errorf("relation/projection metadata for view %s requires SQL resources", view.Spec.Name)
+		return false, nil
 	}
-	return dsql.ResolveSource(view.Spec.Name, source, resources[0])
+	value := reflect.ValueOf(resources[0])
+	if value.Kind() == reflect.Pointer && value.IsNil() {
+		return false, nil
+	}
+	if err := dsql.ResolveSource(view.Spec.Name, source, resources[0]); err != nil {
+		return false, err
+	}
+	return true, nil
 }

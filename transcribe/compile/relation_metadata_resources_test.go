@@ -1,6 +1,7 @@
 package compile
 
 import (
+	"github.com/viant/bindly/resource"
 	"github.com/viant/datly/spec"
 	"testing"
 	"testing/fstest"
@@ -31,5 +32,31 @@ func TestBackfillLinkedMetadataFromResources(t *testing.T) {
 	}
 	if err := BackfillReportMetadata(component); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestBackfillDefersUnboundResourcesWithoutRecordingProof(t *testing.T) {
+	component := &spec.Component{Settings: &spec.Settings{Report: &spec.ReportSettings{Enabled: true}}, RootView: &spec.View{Name: "Parent", Source: &spec.ViewSource{URI: "parent.sql"}, Columns: []*spec.Column{{Name: "ID", Source: "id"}}, Relations: []*spec.Relation{{Name: "Child", View: &spec.View{Name: "Child", Source: &spec.ViewSource{URI: "child.sql"}, Columns: []*spec.Column{{Name: "Key", Source: "parent_key"}}}, On: []*spec.RelationLink{{ParentColumn: "id", ChildColumn: "parent_key"}}}}}}
+	var unbound *resource.Store
+	if err := BackfillRelationMetadata(component, unbound); err != nil {
+		t.Fatal(err)
+	}
+	if err := BackfillReportMetadata(component, unbound); err != nil {
+		t.Fatal(err)
+	}
+	link := component.RootView.Relations[0].On[0]
+	if link.ChildOutput != "" || link.ParentOutput != "" || component.RootView.Columns[0].Output != "" {
+		t.Fatal("unbound SQL received completed metadata")
+	}
+	missing := resource.New()
+	if err := BackfillRelationMetadata(component, missing); err == nil {
+		t.Fatal("bound missing resource accepted")
+	}
+	resources := fstest.MapFS{"parent.sql": {Data: []byte("SELECT id FROM parent")}, "child.sql": {Data: []byte("SELECT owner_id AS parent_key FROM child")}}
+	if err := BackfillRelationMetadata(component, resources); err != nil {
+		t.Fatal(err)
+	}
+	if link.ChildColumn != "owner_id" || link.ChildOutput != "parent_key" || link.ChildField != "Key" {
+		t.Fatalf("deferred metadata was not backfilled: %+v", link)
 	}
 }

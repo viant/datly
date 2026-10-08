@@ -112,8 +112,12 @@ func BackfillReportMetadata(component *spec.Component, resources ...fs.FS) error
 		return nil
 	}
 	view := data.FromView(nil, component.RootView)
-	if err := resolveMetadataSQL(view, resources); err != nil {
+	ready, err := resolveMetadataSQL(view, resources)
+	if err != nil {
 		return err
+	}
+	if !ready {
+		return nil
 	}
 	projected, err := (AuthoredViewProjection{View: &view.Spec}).Columns()
 	if err != nil {
