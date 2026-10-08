@@ -19,6 +19,7 @@ type EntityHookRequest struct {
 	// INSERT/UPDATE policy with no writable descendants. Omitted authority fails
 	// closed for WriteEligible and has no effect on hooks without that method.
 	WriteEligibilityAllowed bool
+	ReconciliationAllowed   bool
 }
 
 // EntityHookCompiler validates authored hook contracts before target lowering.
@@ -117,6 +118,23 @@ func (c EntityHookCompiler) Compile(request EntityHookRequest) (spec.TypeRef, er
 		expected := []string{"context.Context", "*" + input, "*" + output}
 		if method.Variadic || !reflect.DeepEqual(method.Parameters, expected) || !reflect.DeepEqual(method.Results, []string{"error"}) {
 			return spec.TypeRef{}, fmt.Errorf("entity hook %s.%s has incompatible canonical Input/Output signature", resolved.Identity, method.Name)
+		}
+	}
+	for _, method := range methods {
+		if method.Name != "ReconcileInput" {
+			continue
+		}
+		if !request.ReconciliationAllowed || request.Component || parent != "github.com/viant/xdatly/handler.NoParent" || request.Input == "" {
+			return spec.TypeRef{}, fmt.Errorf("ReconcileInput requires an opted-in physical writer root")
+		}
+		input, e := (xshape.Resolver{}).Canonical(request.Input)
+		if e != nil {
+			return spec.TypeRef{}, e
+		}
+		expected := []string{"context.Context", "*" + input, "*" + output, "github.com/viant/datly/runtime/handler/writer.ReconciliationContext"}
+		results := []string{"github.com/viant/datly/runtime/handler/writer.ReconciliationPlan", "error"}
+		if method.Variadic || !reflect.DeepEqual(method.Parameters, expected) || !reflect.DeepEqual(method.Results, results) {
+			return spec.TypeRef{}, fmt.Errorf("ReconcileInput requires canonical Input/Output, ReconciliationContext and (ReconciliationPlan,error)")
 		}
 	}
 	aggregate := false

@@ -20,6 +20,9 @@ func (d *Data) database() (*sql.DB, error) {
 
 func (d *Data) transaction(ctx context.Context) (result *sql.Tx, retErr error) {
 	owner := d.owner()
+	publication := drainowner.EstablishmentGate(owner)
+	var established any
+	defer func() { publication(established) }()
 	owner.mu.Lock()
 	defer func() {
 		managed := owner.invocation
@@ -50,6 +53,7 @@ func (d *Data) transaction(ctx context.Context) (result *sql.Tx, retErr error) {
 	if err != nil {
 		return nil, err
 	}
+	established = tx
 	owner.tx = tx
 	owner.txIsolation = isolation
 	return tx, nil
@@ -126,6 +130,29 @@ func (d *Data) prepareNative(ctx context.Context, permit *drainowner.DrainPermit
 		return errors.Join(ErrInvocationFailed, failed)
 	}
 	owner.mu.Unlock()
+	if permit != nil {
+		records, err := drainowner.RunRecords(owner, permit)
+		if err != nil {
+			return err
+		}
+		if records != nil {
+			if err := owner.validateExecutionGuardsLocked(ctx); err != nil {
+				return err
+			}
+			ops := make([]*dataOperation, len(records))
+			for i, r := range records {
+				op, ok := r.(*dataOperation)
+				if !ok || op.frame.owner() != owner {
+					return drainowner.ErrJournal
+				}
+				ops[i] = op
+			}
+			return owner.executePendingLocked(ctx, ops)
+		}
+		if drainowner.OrderedJournal(owner) {
+			return owner.validateExecutionGuardsLocked(ctx)
+		}
+	}
 	return owner.flushLocked(ctx, "", nil)
 }
 
@@ -181,8 +208,18 @@ func (d *Data) flushLocked(ctx context.Context, tableName string, target *Data) 
 		return err
 	}
 	matched := owner.operations(tableName, target)
+	return owner.executePendingLocked(ctx, matched)
+}
+
+// executePendingLocked is shared by local flushes and authenticated frozen runs.
+func (d *Data) executePendingLocked(ctx context.Context, matched []*dataOperation) error {
+	owner := d.owner()
 	if len(matched) == 0 {
 		return nil
+	}
+	if err := ctx.Err(); err != nil {
+		owner.markFailed(err)
+		return err
 	}
 	owner.mu.Lock()
 	for _, operation := range matched {
@@ -244,6 +281,7 @@ func (d *Data) flushLocked(ctx context.Context, tableName string, target *Data) 
 			operation.reserved = false
 		}
 		owner.mu.Unlock()
+		drainowner.NoteJournalDrain(owner)
 	}
 	if managedTx {
 		if err := tx.Commit(); err != nil {
@@ -300,7 +338,19 @@ func (d *Data) completeNative(ctx context.Context, cause error, permit *drainown
 		cause = errors.Join(cause, failed)
 	}
 	if cause == nil {
-		cause = completeOperation("DML completion flush", func() error { return owner.flushLocked(ctx, "", nil) })
+		cause = completeOperation("DML completion flush", func() error {
+			if drainowner.OrderedJournal(owner) {
+				owner.mu.Lock()
+				defer owner.mu.Unlock()
+				for _, op := range flattenData(owner) {
+					if !op.executed || op.reserved {
+						return drainowner.ErrJournal
+					}
+				}
+				return nil
+			}
+			return owner.flushLocked(ctx, "", nil)
+		})
 		if cause != nil {
 			localErr = errors.Join(localErr, cause)
 		}

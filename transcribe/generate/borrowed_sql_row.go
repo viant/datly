@@ -136,6 +136,7 @@ func BorrowedLeafContractFor(component *spec.Component, view *spec.View, package
 	metadata.Key = spec.Key{}
 	metadata.Name, metadata.Namespace, metadata.TypeName, metadata.Dest = "", "", "", ""
 	metadata.Auxiliary, metadata.QueueContract = false, ""
+	metadata.Reconciliation = nil
 	metadata.Columns = nil
 	// Dictionary provenance is presentation metadata, not SQL row authority.
 	metadata.DocumentationTable = ""

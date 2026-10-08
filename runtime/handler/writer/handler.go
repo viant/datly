@@ -94,6 +94,7 @@ func entityMarker(entityType reflect.Type) *structology.Marker {
 
 // Record is one writable role in a component graph.
 type Record struct {
+	reconciliation           *reconciliationMetadata
 	writeEligibility         bool
 	RootNullPolicy           string
 	NestedNullPolicy         string
@@ -322,6 +323,9 @@ func hasWritableRole(record *Record) bool {
 // Program is invocation-owned universal mutation state. The same type is used
 // for every writer component; only Metadata and values differ.
 type Program struct {
+	reconciliation              *reconciliationAttempt
+	reconciliationFrames        []*Frame
+	reconciliationSeal          string
 	queueSlots                  []queueSlotSeal
 	afterValidateInputStarted   bool
 	afterValidateInputViolation error
@@ -965,7 +969,7 @@ func (h *Handler) CapturedExecutionGuard(invocation rhandler.Invocation) (func(c
 		if err := program.validateQueueSlots(); err != nil {
 			return err
 		}
-		return program.validateAfterQueueInputState()
+		return errors.Join(program.validateAfterQueueInputState(), program.validateReconciliationSeal())
 	}, nil
 }
 func (h *Handler) CapturedExecutionGuardRegistered(invocation rhandler.Invocation) error {
@@ -1136,6 +1140,12 @@ func (p *Program) captureEntityOriginal(record *Record, entity reflect.Value) or
 		return existing
 	}
 	captured := originalPresence{presence: snapshotPresence(record, entity.Elem()), available: presenceAvailable(entity.Elem())}
+	if hasReconciliation(p.metadata.Root) {
+		captured.identityValues = map[string]reflect.Value{}
+		for _, key := range record.Keys {
+			captured.identityValues[key.Name] = cloneTokenValue(entity.Elem().FieldByIndex(key.Index))
+		}
+	}
 	for _, plan := range record.ScopedSequences {
 		value := entity.Elem().FieldByIndex(plan.Field.Index)
 		if plan.AllocateNull && value.Kind() == reflect.Pointer && value.IsNil() {
@@ -1390,6 +1400,9 @@ func (p *Program) prepare(ctx context.Context, binder xhandler.Binder) error {
 			return err
 		}
 	}
+	if err = p.captureReconciliationAllocation(ctx); err != nil {
+		return err
+	}
 	if hasAction(p.actions.Rows, xhandler.WriteInsert) {
 		if err = phases.Run(ctx, xhandler.PhaseAllocation, func() error {
 			sequencer, lookupErr := lookup[xhandler.Sequencer](ctx, binder, xhandler.SequencerKey)
@@ -1412,9 +1425,25 @@ func (p *Program) prepare(ctx context.Context, binder xhandler.Binder) error {
 		}
 
 	}
+	var sequenceSnapshot string
+	if hasReconciliation(p.metadata.Root) {
+		sequenceSnapshot, err = p.reconciliationState()
+		if err != nil {
+			return err
+		}
+	}
 	for _, frame := range p.frames.Rows {
 		if err = p.callEntityHook(ctx, "AfterSequence", frame); err != nil {
 			return err
+		}
+	}
+	if hasReconciliation(p.metadata.Root) {
+		after, e := p.reconciliationState()
+		if e != nil {
+			return e
+		}
+		if after != sequenceSnapshot {
+			return fmt.Errorf("AfterSequence changed finite_reconciliation allocated graph or evidence")
 		}
 	}
 	if err = p.validateAuxiliaryTopology(); err != nil {
@@ -1423,13 +1452,29 @@ func (p *Program) prepare(ctx context.Context, binder xhandler.Binder) error {
 	if err = p.reconcileLinks(true); err != nil {
 		return err
 	}
+	if err = p.reconcileInput(ctx); err != nil {
+		return err
+	}
 	if err = p.evaluateWriteEligibility(ctx); err != nil {
 		return err
+	}
+	if hasReconciliation(p.metadata.Root) {
+		if err = ctx.Err(); err != nil {
+			return err
+		}
 	}
 	if err = p.validateFrames(ctx, validator, true); err != nil {
 		return err
 	}
+	if hasReconciliation(p.metadata.Root) {
+		if err = ctx.Err(); err != nil {
+			return err
+		}
+	}
 	p.filterIneligibleActions()
+	if err = p.sealReconciliation(); err != nil {
+		return err
+	}
 	p.freezeActionPolicyParticipants()
 	p.guardMu.Lock()
 	p.executionGuardReady = true
@@ -1652,6 +1697,9 @@ func (p *Program) validationOptions(frame *Frame, transactionStarted bool) xhand
 	}
 
 	options := xhandler.ValidationOptions{Action: frame.Action, Location: frame.Location, Shallow: true, CheckUnique: &unique, CheckRef: &refs}
+	if transactionStarted && frame.Action == xhandler.WriteDelete && hasReconciliation(p.metadata.Root) {
+		options.Action = xhandler.WriteUpdate
+	}
 	if frame.Action == xhandler.WriteInsert && frame.Record.InsertValidationPresence && !transactionStarted {
 		options.HonorPresence = true
 		options.Fields = frame.Fields
@@ -1818,13 +1866,13 @@ func (p *Program) validateFrames(ctx context.Context, validator xhandler.Validat
 	groups := map[*Record][]*Frame{}
 	var order []*Record
 	for _, frame := range p.frames.Rows {
-		if frame == nil || frame.Record == nil || frame.Record.Auxiliary || frame.Action == xhandler.WriteDelete {
+		if frame == nil || frame.Record == nil || frame.Record.Auxiliary || frame.Action == xhandler.WriteDelete && !(transactionStarted && hasReconciliation(p.metadata.Root)) {
 			continue
 		}
 		// An identity-only update writes nothing, so there is nothing for the
 		// framework validator to check; entity Validate hooks still run for it.
 		// Eligibility roots retain full validation before any exclusion decision.
-		if !frame.Record.writeEligibility && frame.Action == xhandler.WriteUpdate && !hasMutableFields(frame) {
+		if !hasReconciliation(p.metadata.Root) && !frame.Record.writeEligibility && frame.Action == xhandler.WriteUpdate && !hasMutableFields(frame) {
 			continue
 		}
 		if _, ok := groups[frame.Record]; !ok {
@@ -1986,7 +2034,7 @@ func (p *Program) indexCurrent(record *Record, rows reflect.Value) error {
 	type fieldCopy struct{ source, destination []int }
 	copies := make([]fieldCopy, 0, len(record.Fields))
 	var loaded fieldSet
-	if p.queueObserver() != nil || (p.metadata != nil && p.metadata.Root != nil && p.metadata.Root.writeEligibility) {
+	if p.queueObserver() != nil || (p.metadata != nil && p.metadata.Root != nil && (p.metadata.Root.writeEligibility || hasReconciliation(p.metadata.Root))) {
 		loaded = fieldSet{}
 		delete(p.previousFields, record)
 	}
@@ -2652,6 +2700,9 @@ func Compile(component *spec.Component, inputType, outputType reflect.Type, oper
 	if err := validateWriteEligibilityHooks(metadata, outputType); err != nil {
 		return nil, err
 	}
+	if err := validateReconciliation(metadata, inputType, outputType); err != nil {
+		return nil, err
+	}
 	return metadata, nil
 }
 
@@ -2985,7 +3036,8 @@ type fieldSet map[string]bool
 func (s fieldSet) Has(name string) bool { return s[name] }
 
 type originalPresence struct {
-	scopedNull map[string]bool
+	identityValues map[string]reflect.Value
+	scopedNull     map[string]bool
 	*presence
 	available bool
 	token     reflect.Value

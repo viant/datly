@@ -1080,6 +1080,17 @@ completes participating units and then delivers their registered outcome
 callbacks. A successful child return or `AfterQueue` callback therefore cannot
 establish that its writes committed.
 
+Buffered composition across several native, locally owned database transactions
+preserves component call order when executing queued work, without flushing
+between child calls. Transactions complete in their creation order. This does
+not make several databases atomic: a later commit failure can follow an earlier
+successful commit. Mixed caller-owned transactions, custom database owners and
+previously drained work are rejected in this protected multi-owner path. Keep
+application batch work in its intended lifecycle phase; ordered execution does
+not move a per-record event to the end of a request. See the
+[buffered composition contract](../runtime/handler/engine/buffered_composition.md)
+for admission and failure boundaries.
+
 Queue appends work; Flush executes buffered statements. On failure, native
 completion discards pending work and rolls back locally owned transactions,
 including statements already flushed within that transaction. On success, the

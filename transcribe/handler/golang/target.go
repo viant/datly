@@ -96,6 +96,9 @@ func Lower(value *plan.Plan, config Config) (*Asset, error) {
 		return nil, err
 	}
 	for _, record := range lowered.records {
+		if record.plan.Write.Reconciliation != nil {
+			return nil, fmt.Errorf("finite_reconciliation requires the native writer path")
+		}
 		if record.plan.Write.QueueContract != "" {
 			return nil, fmt.Errorf("queue_contract is unavailable in legacy direct Go lowering; use the native writer path")
 		}

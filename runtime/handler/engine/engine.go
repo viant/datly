@@ -202,7 +202,7 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 	}
 	runtimeProviders = append(runtimeProviders, data.frameworkValidatorProvider())
 	if data != nil {
-		if request.BufferedComponentCalls {
+		if request.BufferedComponentCalls || data.relation == ComponentBufferedImperative {
 			if err := data.enrollBufferedScope(ctx); err != nil {
 				return nil, err
 			}

@@ -1,6 +1,7 @@
 package tag
 
 import (
+	"encoding/base64"
 	"fmt"
 	"strconv"
 	"strings"
@@ -20,6 +21,7 @@ type View struct {
 	NestedNullPolicy         string
 	InsertValidationPresence bool
 	WriterIdentityPolicy     string
+	Reconciliation           *spec.Reconciliation
 	QueueContract            string
 	WriterActionPolicy       string
 	OnDeleteNotFound         string
@@ -90,6 +92,18 @@ func ParseView(value string) (*View, error) {
 			result.InsertValidationPresence, err = strconv.ParseBool(value)
 			if err != nil {
 				return fmt.Errorf("insertValidationPresence must be true or false")
+			}
+		case "finitereconciliation":
+			if result.Reconciliation != nil {
+				return fmt.Errorf("finiteReconciliation is duplicated")
+			}
+			raw, err := base64.RawURLEncoding.DecodeString(value)
+			if err != nil {
+				return fmt.Errorf("finiteReconciliation encoding: %w", err)
+			}
+			result.Reconciliation, err = spec.ParseReconciliation(string(raw))
+			if err != nil {
+				return err
 			}
 		case "queuecontract":
 			if result.QueueContract != "" || value != "source-row" {

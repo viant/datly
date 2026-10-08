@@ -48,6 +48,9 @@ func recoverMutation(ctx context.Context, request Request, data *dataScope, invo
 			decision, recovered, failure = rhandler.RecoveryNone, false, dexec.NewPanicError("mutation recovery hook", value)
 		}
 	}()
+	if data.mutationGuard().reconciliationVetoedReplay() {
+		return rhandler.RecoveryNone, false, nil
+	}
 	recoverer, ok := request.Handler.(rhandler.MutationRecoverer)
 	if !ok || !recoverer.SupportsMutationRecovery() || len(data.units) != 0 || len(data.finalizers) != 1 || !data.finalizers[0].finished {
 		return rhandler.RecoveryNone, false, nil

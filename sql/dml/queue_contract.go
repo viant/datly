@@ -2,6 +2,7 @@ package dml
 
 import (
 	"fmt"
+	"github.com/viant/datly/internal/drainowner"
 	"reflect"
 
 	rhandler "github.com/viant/datly/runtime/handler"
@@ -93,6 +94,11 @@ func (d *Data) appendWithQueueContract(table string, data any, kind dataOperatio
 	}
 	owner.nextOp++
 	operation.id, operation.frame = owner.nextOp, d
+	operation.journalFrame = d.journalFrame
+	if err := drainowner.AppendJournal(owner, d.journalFrame, &operation); err != nil {
+		owner.nextOp--
+		return owner.failProtectedMutationLocked(err)
+	}
 	d.queue = append(d.queue, &operation)
 	return nil
 }

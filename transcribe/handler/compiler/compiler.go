@@ -70,6 +70,9 @@ func (c *compiler) compile(request Request) (*plan.Plan, error) {
 	if operation == plan.OperationPost && (strings.TrimSpace(request.Current) != "" || len(request.Currents) != 0) {
 		return nil, fmt.Errorf("current bindings are supported only for PATCH and PUT handler transcription")
 	}
+	if err := spec.ValidateReconciliationView(request.Component.RootView, string(operation)); err != nil {
+		return nil, err
+	}
 	if err := validateInternalRoot(request.Component, operation); err != nil {
 		return nil, err
 	}
