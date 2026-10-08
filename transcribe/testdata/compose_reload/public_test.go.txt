@@ -184,7 +184,7 @@ func (c composeClient) schemas(t *testing.T) {
             var cube businessSchema
             if err := json.Unmarshal(data, &cube); err != nil { t.Fatal(err) }
             dimensions, measures := cube.Properties["dimensions"], cube.Properties["measures"]
-            if len(dimensions.Properties) != 1 || dimensions.Properties["accountId"].Type != "boolean" || len(measures.Properties) != 1 || measures.Properties["totalSpend"].Type != "boolean" { t.Fatalf("public cube schema changed: %s", data) }
+            if len(dimensions.Properties) != 1 || dimensions.Properties[cubeWireName(dimensionOutput)].Type != "boolean" || len(measures.Properties) != 1 || measures.Properties[cubeWireName(measureOutput)].Type != "boolean" { t.Fatalf("public cube schema changed: %s", data) }
         }
 		if tool.Name != "SpendCubeCompose" {
 			continue
@@ -285,7 +285,7 @@ func (c composeClient) listTools() (*schema.ListToolsResult, error) {
 // Public cube field names remain stable while their selectors use SQL outputs.
 func (c composeClient) cube(t *testing.T, revision int) {
  t.Helper()
- args := map[string]any{"dimensions": map[string]any{"accountId": true}, "measures": map[string]any{"totalSpend": true}, "filters": map[string]any{"tenant": "acme", "channel": "web"}, "orderBy": []string{dimensionOutput}}
+ args := map[string]any{"dimensions": map[string]any{cubeWireName(dimensionOutput): true}, "measures": map[string]any{cubeWireName(measureOutput): true}, "filters": map[string]any{"tenant": "acme", "channel": "web"}, "orderBy": []string{dimensionOutput}}
  data, failed, err := c.callEndpoint("SpendCube", "/spend/cube", args)
  if err != nil || failed { t.Fatalf("cube rows: %s failed=%v err=%v", data, failed, err) }
  var result struct { Data []struct { AccountId int; TotalSpend float64 } }
@@ -308,3 +308,5 @@ func (c composeClient) cube(t *testing.T, revision int) {
  data, failed, err = c.callEndpoint("SpendCube", "/spend/cube", args)
  if err != nil || !failed { t.Fatalf("cube unexposed order accepted: %s failed=%v err=%v", data, failed, err) }
 }
+
+func cubeWireName(name string) string { if name=="" { return "" }; return strings.ToLower(name[:1])+name[1:] }

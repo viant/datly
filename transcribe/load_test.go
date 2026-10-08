@@ -349,6 +349,19 @@ SELECT id FROM users`,
 	}
 }
 
+func TestSettingsLoaderDropsGeneratedCubeCompanionMetadata(t *testing.T) {
+	base := &spec.Settings{Report: &spec.ReportSettings{Enabled: true, LinkedFacade: true}}
+	for _, authored := range []*spec.Settings{nil, {}, {Report: &spec.ReportSettings{Enabled: true}}} {
+		actual := (&settingsLoader{base: base, authored: authored}).Load()
+		if actual.Report == nil || !actual.Report.Enabled || actual.Report.LinkedFacade {
+			t.Fatalf("DQL inherited generated companion metadata: %+v", actual.Report)
+		}
+		if !base.Report.LinkedFacade {
+			t.Fatal("settings loader mutated the linked publication")
+		}
+	}
+}
+
 func TestSettingsLoaderOverlaysNestedSettingsWithoutAliasing(t *testing.T) {
 	base := &spec.Settings{
 		Generation: &spec.GenerationSettings{Template: "reader", ViewFile: "package.go", InputFile: "package_input.go", FilePrefix: "base_", SupportFiles: map[string]string{"frames": "base_frames.go", "entities": "base_entities.go"}},

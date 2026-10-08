@@ -100,6 +100,8 @@ func (s GenerationSettings) IsZero() bool {
 }
 
 type ReportSettings struct {
+	// LinkedFacade means transcription emitted a concrete cube component.
+	LinkedFacade    bool                 `json:"linkedFacade,omitempty"`
 	Compose         *CubeComposeSettings `json:"compose,omitempty"`
 	Enabled         bool                 `json:"enabled,omitempty"`
 	MCPTool         *bool                `json:"mcpTool,omitempty"`

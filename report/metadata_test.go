@@ -54,3 +54,12 @@ func TestMetadataCompileRelationHoldersMatchesQualifiedLinkColumns(t *testing.T)
 		t.Fatalf("holders = %+v, want %+v", meta.holders, expected)
 	}
 }
+
+func TestCubeDoesNotAddRelationWithUnselectableCompositeKey(t *testing.T) {
+	view := &spec.View{Columns: []*spec.Column{{Name: "Account", Source: "account_id"}, {Name: "Tenant", Source: "tenant_id"}}, Relations: []*spec.Relation{{Holder: "Details", On: []*spec.RelationLink{{ParentColumn: "account_id"}, {ParentColumn: "tenant_id"}}}}}
+	metadata := &metadata{dimensions: []field{{name: "account_id", publicName: "Account"}}, holders: map[string][]string{}}
+	metadata.compileRelationHolders(view)
+	if len(metadata.holders) != 0 {
+		t.Fatalf("partial composite key enabled relation: %v", metadata.holders)
+	}
+}

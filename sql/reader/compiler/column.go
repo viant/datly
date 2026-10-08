@@ -78,7 +78,9 @@ func reconcileColumns(typed, canonical []*data.Column) []*data.Column {
 		if metadata == nil {
 			continue
 		}
-		column.Groupable = column.Groupable || metadata.Groupable
+		if _, declared := reflect.StructTag(column.Tag).Lookup("groupable"); !declared {
+			column.Groupable = column.Groupable || metadata.Groupable
+		}
 		if metadata.Nullable {
 			// Typed nullable columns are pointer destinations. Canonical scalar
 			// fallbacks must not erase the NULL those destinations can represent.

@@ -416,7 +416,9 @@ func expandReportEntries(entries []*Entry) []*Entry {
 			if component.Settings.Report.MCPTool == nil || *component.Settings.Report.MCPTool {
 				cube.Routes[0].MCP = []*spec.MCPExposure{{Kind: spec.MCPExposureTool, Name: spec.DerivedMCPToolName(route, name, "Cube"), Description: component.Description}}
 			}
-			result = append(result, &Entry{Component: cube, Owner: component.Key, Sources: append([]Source(nil), entry.Sources...), Fingerprint: digestStrings(entry.Fingerprint, cube.Key.String())})
+			if !component.Settings.Report.LinkedFacade {
+				result = append(result, &Entry{Component: cube, Owner: component.Key, Sources: append([]Source(nil), entry.Sources...), Fingerprint: digestStrings(entry.Fingerprint, cube.Key.String())})
+			}
 			compose := component.Settings.Report.Compose
 			if compose == nil || !compose.Enabled {
 				continue

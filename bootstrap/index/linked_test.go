@@ -69,3 +69,22 @@ func TestBuildLinkedRetainsMetadataWarmupWithoutReflectedRoutes(t *testing.T) {
 		require.True(t, snapshot.Entries()[0].Warmup, component.Key.String())
 	}
 }
+
+func TestLinkedCubeRequiresItsOwnRegisteredCompanion(t *testing.T) {
+	source := &spec.Component{Key: spec.Key{Kind: spec.KindComponent, Scope: "example.com/reports", Name: "Spend"}, Settings: &spec.Settings{Report: &spec.ReportSettings{Enabled: true, LinkedFacade: true}}, Routes: []*spec.Route{{Method: "GET", Path: "/spend"}}}
+	if _, err := BuildLinked([]string{source.Key.Scope}, []*spec.Component{source}); err == nil {
+		t.Fatal("missing generated facade accepted")
+	}
+	cube := &spec.Component{Key: spec.Key{Kind: spec.KindComponent, Scope: source.Key.Scope, Name: "SpendCube"}, Routes: []*spec.Route{{Method: "POST", Path: "/spend/cube"}}}
+	snapshot, err := BuildLinked([]string{source.Key.Scope}, []*spec.Component{source, cube})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(snapshot.Entries()) != 2 {
+		t.Fatal("linked cube was dynamically duplicated")
+	}
+	cube.Key.Scope = "example.com/other"
+	if _, err := BuildLinked([]string{source.Key.Scope, cube.Key.Scope}, []*spec.Component{source, cube}); err == nil {
+		t.Fatal("cube from another package satisfied the companion")
+	}
+}

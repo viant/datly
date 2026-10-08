@@ -21,10 +21,24 @@ func (c *inputCompiler) filterType() (reflect.Type, error) {
 		if typeOf == nil {
 			return nil, fmt.Errorf("report filter %s has no source type", item.name)
 		}
-		fields = append(fields, xshape.RuntimeField{
-			Name: item.fieldName, Type: presenceType(typeOf), Tag: fieldTag(lowerCamel(item.name), item.description),
-		})
+		tag := string(fieldTag(lowerCamel(item.name), item.description))
+		if param, ok := item.contract.Binding().Extension.(*spec.Parameter); ok && param.MCP != nil && !*param.MCP {
+			tag += ` mcp:"-"`
+		}
+		if reflect.StructTag(item.tag).Get("mcp") == "-" && !strings.Contains(tag, `mcp:"-"`) {
+			tag += ` mcp:"-"`
+		}
+		fields = append(fields, xshape.RuntimeField{Name: item.fieldName, Type: presenceType(typeOf), Tag: reflect.StructTag(tag)})
 	}
+	markerFields := make([]xshape.RuntimeField, 0, len(fields))
+	for _, field := range fields {
+		markerFields = append(markerFields, xshape.RuntimeField{Name: field.Name, Type: reflect.TypeFor[bool]()})
+	}
+	marker, err := (xshape.Runtime{}).Struct(markerFields)
+	if err != nil {
+		return nil, err
+	}
+	fields = append(fields, xshape.RuntimeField{Name: "Has", Type: reflect.PointerTo(marker), Tag: `setMarker:"true" json:"-" sqlx:"-"`})
 	return (xshape.Runtime{}).Struct(fields)
 }
 
@@ -32,7 +46,7 @@ func sectionType(fields []field) (reflect.Type, error) {
 	result := make([]xshape.RuntimeField, 0, len(fields))
 	for _, item := range fields {
 		result = append(result, xshape.RuntimeField{
-			Name: item.fieldName, TypeExpr: "bool", Tag: fieldTag(lowerCamel(item.publicName), item.description),
+			Name: item.fieldName, TypeExpr: "bool", Tag: fieldTag(selectionWireName(item), item.description),
 		})
 	}
 	return (xshape.Runtime{}).Struct(result)
@@ -138,4 +152,11 @@ func (c *inputCompiler) resolutionContext() *typecatalog.ResolutionContext {
 		}
 	}
 	return typecatalog.NormalizeContext(result)
+}
+
+func selectionWireName(item field) string {
+	if item.wireName != "" {
+		return item.wireName
+	}
+	return lowerCamel(item.publicName)
 }

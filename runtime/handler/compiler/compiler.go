@@ -52,11 +52,27 @@ func (c *Compiler) CompileBindings() ([]bindly.BindingSpec, error) {
 	return BuildBindingSpecs(input.Component, input.InputType, codecs)
 }
 
-func (c *Compiler) Compile() (*Result, error) {
+func (c *Compiler) Compile() (*Result, error) { return c.compile(false) }
+
+// Describe compiles binding/schema metadata without constructing codecs. It is
+// an authoring surface: the returned contract must not be used for execution.
+func (c *Compiler) Describe() (*Result, error) { return c.compile(true) }
+
+func (c *Compiler) compile(describe bool) (*Result, error) {
 	if c == nil {
 		return nil, fmt.Errorf("handler input compiler is required")
 	}
-	bindings, err := c.CompileBindings()
+	var bindings []bindly.BindingSpec
+	var err error
+	if describe {
+		var codecs map[string]ParamCodec
+		codecs, err = (ParamCodecCompiler{Component: c.input.Component, InputType: c.input.InputType, LookupType: c.input.TypeLookup}).Describe()
+		if err == nil {
+			bindings, err = BuildBindingSpecs(c.input.Component, c.input.InputType, codecs)
+		}
+	} else {
+		bindings, err = c.CompileBindings()
+	}
 	if err != nil {
 		return nil, err
 	}
