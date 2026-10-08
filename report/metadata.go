@@ -10,6 +10,7 @@ import (
 	"github.com/viant/datly/spec"
 	"github.com/viant/datly/typecatalog"
 	"github.com/viant/sqlparser"
+	sqlxio "github.com/viant/sqlx/io"
 )
 
 const (
@@ -58,7 +59,17 @@ func compileMetadata(component *spec.Component, contract *registry.RouteInputCon
 	}
 	settings, inputLayout := normalizeSettings(authored)
 	result := &metadata{settings: settings, inputLayout: inputLayout, holders: map[string][]string{}}
-	projection, err := (bootstrap.ViewProjection{View: component.RootView}).Columns()
+	// Supplied column metadata may include computed output-only fields. Remove
+	// them before projection validation, without changing the reader contract.
+	projectionView := *component.RootView
+	projectionView.Columns = make([]*spec.Column, 0, len(component.RootView.Columns))
+	for _, column := range component.RootView.Columns {
+		if column != nil && sqlxio.ParseTag(reflect.StructTag(column.Tag)).Transient {
+			continue
+		}
+		projectionView.Columns = append(projectionView.Columns, column)
+	}
+	projection, err := (bootstrap.ViewProjection{View: &projectionView}).Columns()
 	if err != nil {
 		return nil, fmt.Errorf("cube source projection: %w", err)
 	}
