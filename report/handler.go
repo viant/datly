@@ -173,7 +173,8 @@ func (p *Plan) providers(input reflect.Value, selectors xstate.Selectors) ([]loc
 		}
 		if !present {
 			if marked && marker.Bool() {
-				values[item.location.In] = typedValue{typeOf: item.sourceType, value: nil, owns: true, found: true}
+				// Null is omitted, not a present value that activates a predicate.
+				values[item.location.In] = typedValue{typeOf: item.sourceType, owns: true}
 			}
 			continue
 		}

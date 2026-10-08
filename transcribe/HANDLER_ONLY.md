@@ -8,8 +8,12 @@ semantics.
 An explicitly selected `post` mutation may retain an authored `PATCH` route when
 that endpoint's contract is insert-only. It still inserts supplied IDs, rejects
 existing IDs, and rolls back failures; it does not acquire PATCH update behavior.
-Ordinary `patch` generation keeps its existing insert/update policy. Other writer
-method combinations retain validation, including explicit delete-marker rules.
+An explicitly selected `patch` mutation may retain an authored `PUT` route,
+including a shared `$route('/records','PATCH','PUT')`. Both routes retain the
+selected insert/update policy and allocation; `http_request/method` still binds
+the actual request method for application lifecycle behavior. Native `put`
+generation remains update-only. Other writer method combinations retain
+validation, including explicit delete-marker rules.
 
 ## Source-Authored Factory
 
