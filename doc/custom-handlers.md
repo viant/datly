@@ -51,9 +51,12 @@ Data's transaction; it is not client-bindable or installed by default.
 The first endpoint invocation owns transaction completion. Its first generic
 writer starts the transaction. Invoke child readers and writers through the
 scoped `exec.ComponentInvoker`; they share the database unit and buffered DML.
-An imperative child writer flushes its queued prefix into that same transaction
-before returning, so a later child reader sees the write. The endpoint's final
-error rolls the entire unit back, including already flushed child writes.
+By default, an imperative child writer flushes its queued prefix into that
+same transaction before returning, so a later child reader sees the write.
+With `component_call_policy('buffered')`, child calls retain their operations
+in the caller's journal; the owning root prepares and completes it. Do not
+flush between buffered calls. The endpoint's final error rolls back the shared
+unit, including any work already prepared in its transaction.
 
 Do not construct another `Runtime` with a fresh `*sql.Tx` inside a handler for
 the same database. Datly rejects that conflicting owner. For immediate SQL
@@ -136,6 +139,14 @@ Do not infer a schema by inspecting runtime bytes or executing the handler.
 | `Finalize(ctx) error` | Success-path output finalization after root completion; does not run again when the error-aware contract was selected. |
 | Mutation outcome finalization | Explicit result-aware `handler.Outcome` for confirmed commit versus pending/failed/unknown work. |
 | `FinalizeMCP` | Runs with the explicit MCP context according to the SDK interface after shared success finalization. |
+
+Custom contracts implementing runtime `handler.OutcomeFinalizer` retain that
+opt-in through `custom.New` and `custom.Factory`. Their callback replaces the
+ordinary output finalizers and runs once after owning-root completion, including
+for nested calls. It receives the result and resolved outcome for compensation
+or confirmed publication; early input failures may supply a nil result. A new
+callback failure after commit is a finalization error, not a database rollback.
+See [mutation finalizer selection](mutations.md#understand-finalizer-selection).
 
 A plain success hook is not proof that a caller-owned transaction committed.
 Use outcome evidence for commit-dependent messages. A post-commit finalizer

@@ -998,6 +998,18 @@ The different output `Finalize` signatures are alternatives on a Go type;
 | Output `FinalizeMCP(ctx, mcp.Context)` | Applicable MCP success hook in the ordinary output lifecycle |
 | Definition `FinalizeFailure` | Handles failure when a generated Program is unavailable; input/output may be nil |
 
+A typed custom contract can explicitly implement the existing runtime
+`handler.OutcomeFinalizer`. `custom.New` and `custom.Factory` preserve that
+opt-in; ordinary custom contracts keep their existing output lifecycle. The
+callback receives the invocation, typed result and resolved `handler.Outcome`
+once after the owning root completes. Nested callbacks wait for the caller's
+outcome, so compensation observes a later parent failure. Check
+`outcome.CommitConfirmed()` before publishing success. Handle a nil result on
+early input failure, and return only new callback errors rather than repeating
+`outcome.Error`. A callback failure after commit does not undo that commit.
+This opt-in replaces ordinary output finalizers for that handler; use the
+error-aware output contract when a precommit veto is required.
+
 ```mermaid
 sequenceDiagram
     participant Handler
