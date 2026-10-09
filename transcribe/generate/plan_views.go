@@ -18,17 +18,18 @@ import (
 )
 
 type viewPlanner struct {
-	borrowed       map[*spec.View]ViewPlan
-	plan           *Plan
-	velty          bool
-	names          map[*spec.View]string
-	owners         map[string]*spec.View
-	parents        map[*spec.View]string
-	dests          map[*spec.View]string
-	visiting       map[*spec.View]bool
-	ordered        []*spec.View
-	outputs        map[*spec.Relation]*spec.Parameter
-	reuseLeafTypes bool
+	factoryBodyViews map[string]bool
+	borrowed         map[*spec.View]ViewPlan
+	plan             *Plan
+	velty            bool
+	names            map[*spec.View]string
+	owners           map[string]*spec.View
+	parents          map[*spec.View]string
+	dests            map[*spec.View]string
+	visiting         map[*spec.View]bool
+	ordered          []*spec.View
+	outputs          map[*spec.Relation]*spec.Parameter
+	reuseLeafTypes   bool
 }
 
 func (r *planResolver) resolveViews() (map[string]int, error) {
@@ -39,8 +40,9 @@ func (r *planResolver) resolveViews() (map[string]int, error) {
 		return indexes, nil
 	}
 	planner := &viewPlanner{
-		borrowed: map[*spec.View]ViewPlan{},
-		plan:     plan, velty: r.input.VeltyHandler != nil, names: map[*spec.View]string{}, owners: map[string]*spec.View{},
+		factoryBodyViews: generatedFactoryBodyViews(r.input.ExternalHandler),
+		borrowed:         map[*spec.View]ViewPlan{},
+		plan:             plan, velty: r.input.VeltyHandler != nil, names: map[*spec.View]string{}, owners: map[string]*spec.View{},
 		parents: map[*spec.View]string{}, dests: map[*spec.View]string{}, visiting: map[*spec.View]bool{},
 		outputs:        map[*spec.Relation]*spec.Parameter{},
 		reuseLeafTypes: len(r.input.SetMarkerViews) == 0,
@@ -513,7 +515,11 @@ func generatedViewDestination(view *spec.View, inherited string) (string, error)
 }
 
 func (p *viewPlanner) fields(view *spec.View) ([]Field, error) {
-	fields, err := resolveScalarViewFields(p.plan, view, p.velty)
+	identity, err := view.Identity()
+	if err != nil {
+		return nil, err
+	}
+	fields, err := resolveScalarViewFieldsWithOmission(p.plan, view, p.velty, p.factoryBodyViews[identity])
 	if err != nil {
 		return nil, err
 	}
@@ -560,6 +566,37 @@ func (p *viewPlanner) fields(view *spec.View) ([]Field, error) {
 }
 
 func resolveScalarViewFields(plan *Plan, view *spec.View, includeVelty bool) ([]Field, error) {
+	return resolveScalarViewFieldsWithOmission(plan, view, includeVelty, false)
+}
+
+// Factory input shapes own body presentation, independently of persistence.
+// Current/read views outside this canonical graph retain their existing policy.
+func generatedFactoryBodyViews(handler *ExternalHandler) map[string]bool {
+	identities := map[string]bool{}
+	if handler == nil || !handler.GeneratedContracts || handler.InputShape == nil {
+		return identities
+	}
+	visited := map[*spec.View]bool{}
+	var visit func(*spec.View)
+	visit = func(view *spec.View) {
+		if view == nil || visited[view] {
+			return
+		}
+		visited[view] = true
+		if identity, err := view.Identity(); err == nil {
+			identities[identity] = true
+		}
+		for _, relation := range view.Relations {
+			if relation != nil {
+				visit(relation.View)
+			}
+		}
+	}
+	visit(handler.InputShape)
+	return identities
+}
+
+func resolveScalarViewFieldsWithOmission(plan *Plan, view *spec.View, includeVelty, factoryBody bool) ([]Field, error) {
 	if plan == nil || view == nil {
 		return nil, nil
 	}
@@ -605,7 +642,7 @@ func resolveScalarViewFields(plan *Plan, view *spec.View, includeVelty bool) ([]
 		fieldTag := scalarColumnFieldTag(column, source, includeVelty)
 		// SQL nullability supplies the original writer omission default; Go
 		// requiredness and CAST shape do not change the physical fact.
-		if column.Nullable && strings.TrimSpace(plan.Settings.Mutation) != "" && !hasStructTag(fieldTag, "json") && !strings.EqualFold(reflect.StructTag(fieldTag).Get("internal"), "true") {
+		if column.Nullable && (factoryBody || strings.TrimSpace(plan.Settings.Mutation) != "") && !hasStructTag(fieldTag, "json") && !strings.EqualFold(reflect.StructTag(fieldTag).Get("internal"), "true") {
 			fieldTag = appendStructTag(fieldTag, "json", ",omitempty")
 		}
 		if column.Groupable != nil && *column.Groupable && !hasStructTag(fieldTag, "groupable") {

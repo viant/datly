@@ -59,6 +59,11 @@ resolution belongs to the compiled plan and does not inspect runtime row values.
 - `format:"name=DisplayName"` controls public serialization naming. Global
   `case_format('lc')` then produces `displayName`; it does not change SQL columns.
 - A nonempty `json` name is an exact public-name override.
+- SQL-nullable scalars in native writer shapes and SQL-derived generated
+  handler-factory body graphs infer `omitempty`. Independent Current/read views
+  retain their own policy. Explicit JSON tags override this default; nonnullable
+  scalar zeroes and nonnil pointers holding zero remain present. Factory body
+  shaping does not enable automatic persistence.
 - Standalone outer `CAST(view.column AS GoType)` supplies Go type authority.
   A database SQL CAST inside the view keeps its SQL meaning.
 - `T`, `*T`, slices and maps retain their Go semantics. NULL differs from a
