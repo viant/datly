@@ -16,6 +16,7 @@ import (
 
 	dexec "github.com/viant/datly/exec"
 	"github.com/viant/datly/internal/dialectcontext"
+	"github.com/viant/datly/internal/drainowner"
 	rhandler "github.com/viant/datly/runtime/handler"
 	handlerengine "github.com/viant/datly/runtime/handler/engine"
 	predicate "github.com/viant/datly/runtime/predicate/velty"
@@ -339,6 +340,9 @@ type Program struct {
 	afterQueueInputSnapshot     string
 	guardMu                     sync.Mutex
 	guardIssued                 bool
+	guardBinding                *drainowner.GuardBinding
+	projectedRootActionsIssued  bool
+	projectedRootActionCount    int
 	guardBinder                 xhandler.Binder
 	executionAttempted          bool
 	executionFailure            error
@@ -825,7 +829,18 @@ func (h *Handler) Execute(ctx context.Context, invocation rhandler.Invocation) (
 			if guardErr = registrar.EnableCapturedExecutionGuards(); guardErr != nil {
 				return nil, guardErr
 			}
-			if guardErr = registrar.RegisterExecutionGuard(check); guardErr != nil {
+			binding, bindingErr := h.CapturedExecutionGuardBinding(invocation)
+			if bindingErr != nil {
+				return nil, bindingErr
+			}
+			if bound, ok := service.(interface {
+				RegisterBoundExecutionGuard(func(context.Context) error, *drainowner.GuardBinding) error
+			}); ok && binding != nil {
+				guardErr = bound.RegisterBoundExecutionGuard(check, binding)
+			} else {
+				guardErr = registrar.RegisterExecutionGuard(check)
+			}
+			if guardErr != nil {
 				return nil, guardErr
 			}
 			if guardErr = h.CapturedExecutionGuardRegistered(invocation); guardErr != nil {
@@ -961,13 +976,34 @@ func (h *Handler) CapturedExecutionGuard(invocation rhandler.Invocation) (func(c
 		return nil, fmt.Errorf("captured writer guard already issued or finalized; fresh capture required")
 	}
 	program.guardIssued, program.guardBinder = true, invocation.Binder
+	program.guardBinding = drainowner.NewGuardBinding()
 	program.guardMu.Unlock()
 	return func(ctx context.Context) error {
 		program.guardMu.Lock()
 		ready, failure := program.executionGuardReady, program.executionFailure
+		sourceAttempted, binding := program.phaseSelectionAttempted, program.guardBinding
 		program.guardMu.Unlock()
 		if failure != nil {
 			return failure
+		}
+		if sourceAttempted {
+			terminal, scopeErr := drainowner.GuardPurpose(ctx, binding)
+			if scopeErr == nil {
+				scopeErr = ctx.Err()
+			}
+			if scopeErr == nil {
+				scopeErr = program.validateFiniteRetainedActions()
+			}
+			if scopeErr == nil && terminal {
+				scopeErr = fmt.Errorf("source phase execution is incomplete; completion proof unavailable")
+			}
+			if scopeErr != nil {
+				if program.reconciliation != nil {
+					program.reconciliation.active = false
+				}
+				program.retainExecutionFailure(scopeErr)
+				return scopeErr
+			}
 		}
 		if !ready {
 			return nil
@@ -987,6 +1023,25 @@ func (h *Handler) CapturedExecutionGuard(invocation rhandler.Invocation) (func(c
 		return errors.Join(program.validateAfterQueueInputState(), program.validateReconciliationSeal())
 	}, nil
 }
+
+// CapturedExecutionGuardBinding is an optional Datly-native registration
+// association; ordinary external owners retain their existing guard fallback.
+func (h *Handler) CapturedExecutionGuardBinding(invocation rhandler.Invocation) (*drainowner.GuardBinding, error) {
+	program, err := h.capturedProgram(invocation)
+	if err != nil {
+		return nil, err
+	}
+	program.guardMu.Lock()
+	defer program.guardMu.Unlock()
+	if !program.guardIssued || program.executionAttempted || program.finalized || !program.sameGuardBinder(invocation) {
+		return nil, fmt.Errorf("captured writer binding has invalid issuance or binder ownership")
+	}
+	if program.finiteRootDecision == nil {
+		return nil, nil
+	}
+	return program.guardBinding, nil
+}
+
 func (h *Handler) CapturedExecutionGuardRegistered(invocation rhandler.Invocation) error {
 	if h == nil || h.metadata == nil || !hasRetainedWriterGuards(h.metadata.Root) {
 		return nil

@@ -559,7 +559,16 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 			if _, resolveErr := data.resolve(ctx); resolveErr != nil {
 				return finish(nil, resolveErr)
 			}
-			if guardErr = data.registerExecutionGuard(ctx, check); guardErr != nil {
+			var binding *drainowner.GuardBinding
+			if provider, ok := request.Handler.(interface {
+				CapturedExecutionGuardBinding(rhandler.Invocation) (*drainowner.GuardBinding, error)
+			}); ok {
+				binding, guardErr = provider.CapturedExecutionGuardBinding(invocation)
+				if guardErr != nil {
+					return finish(nil, guardErr)
+				}
+			}
+			if guardErr = data.registerExecutionGuard(ctx, check, binding); guardErr != nil {
 				return finish(nil, guardErr)
 			}
 			if guardErr = guarded.CapturedExecutionGuardRegistered(invocation); guardErr != nil {

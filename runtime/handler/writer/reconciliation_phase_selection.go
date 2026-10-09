@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"reflect"
 
+	"github.com/viant/datly/internal/drainowner"
 	"github.com/viant/datly/runtime/handler/engine"
 )
 
@@ -35,6 +36,12 @@ func (p *Program) selectFinitePhasePlan(ctx context.Context, compiled *finiteSou
 			p.retainExecutionFailure(err)
 		}
 	}()
+	p.guardMu.Lock()
+	issued, binding := p.guardIssued, p.guardBinding
+	p.guardMu.Unlock()
+	if issued && !drainowner.GuardRegistered(binding) {
+		return nil, fmt.Errorf("source phase execution requires bound native guard registration")
+	}
 	if attempted {
 		return nil, fmt.Errorf("source phase selection already attempted; fresh capture required")
 	}

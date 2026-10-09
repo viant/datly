@@ -45,6 +45,7 @@ func (p *Program) mintFiniteRootActions(plan *finitePhasePlan) (result []*Action
 		return nil, fmt.Errorf("projected root action mint already attempted or unavailable")
 	}
 	a.projectedActionsAttempted = true
+	p.projectedRootActionsIssued = true
 	if err = p.validateFiniteRootProjections(plan); err != nil {
 		return nil, err
 	}
@@ -68,6 +69,7 @@ func (p *Program) mintFiniteRootActions(plan *finitePhasePlan) (result []*Action
 		action.projected = &projectedRootAction{owner: p, attempt: a, plan: plan, action: action, frame: frame, position: i, entity: reflect.ValueOf(image.primary.Interface()), canonical: reflect.ValueOf(frame.Entity.Interface()), kind: image.action, projectionState: a.projectionState, planState: planState, slot: slot}
 		result = append(result, action)
 	}
+	p.projectedRootActionCount = len(result)
 	a.projectedActions = append([]*Action(nil), result...)
 	for _, action := range result {
 		a.projectedAuthorities = append(a.projectedAuthorities, action.projected)
@@ -124,6 +126,54 @@ func (p *Program) validateProjectedRootAction(action *Action) (err error) {
 	}
 	if state != token.projectionState || a.projectionState != token.projectionState {
 		return fmt.Errorf("projected root action payload changed")
+	}
+	return nil
+}
+
+// Retained guard validation does not require ordinary execution readiness.
+func (p *Program) validateFiniteRetainedActions() (err error) {
+	defer func() {
+		if value := recover(); value != nil {
+			if p.reconciliation != nil {
+				p.reconciliation.active = false
+			}
+			p.retainExecutionFailure(fmt.Errorf("retained source payload validation panicked"))
+			panic(value)
+		}
+		if err != nil {
+			if p.reconciliation != nil {
+				p.reconciliation.active = false
+			}
+			p.retainExecutionFailure(err)
+		}
+	}()
+	a := p.reconciliation
+	if a == nil || !a.active {
+		return fmt.Errorf("source phase attempt is unavailable or retired")
+	}
+	if !p.projectedRootActionsIssued {
+		return nil
+	}
+	if !a.projectedActionsAttempted || len(a.roots) != p.projectedRootActionCount || len(a.rootProjections) != p.projectedRootActionCount || len(a.projectedActions) != p.projectedRootActionCount || len(a.projectedAuthorities) != p.projectedRootActionCount {
+		return fmt.Errorf("projected root action registry changed")
+	}
+	if err := p.validateFiniteAllocatedRoots(a.selectionSealed); err != nil {
+		return err
+	}
+	state, err := finiteRootProjectionState(a.rootProjections)
+	if err != nil {
+		return err
+	}
+	if state != a.projectionState {
+		return fmt.Errorf("projected root payload evidence changed")
+	}
+	for i, action := range a.projectedActions {
+		if action == nil || action.projected == nil || action.projected.position != i || action.projected != a.projectedAuthorities[i] {
+			return fmt.Errorf("projected root action order changed")
+		}
+		if err := p.validateProjectedRootAction(action); err != nil {
+			return err
+		}
 	}
 	return nil
 }

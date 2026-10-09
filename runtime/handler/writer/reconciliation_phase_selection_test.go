@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/viant/datly/internal/drainowner"
 	"github.com/viant/datly/internal/testharness/sqlite"
 	rhandler "github.com/viant/datly/runtime/handler"
 	"github.com/viant/datly/runtime/handler/engine"
@@ -281,6 +282,9 @@ func (h *phaseSelectionEngineHandler) CapturedExecutionGuard(inv rhandler.Invoca
 	h.prepare(h.p)
 	h.handler = &Handler{metadata: h.p.metadata, inputType: reflect.TypeFor[phaseOccurrenceInput]()}
 	return h.handler.CapturedExecutionGuard(h.owned(inv))
+}
+func (h *phaseSelectionEngineHandler) CapturedExecutionGuardBinding(inv rhandler.Invocation) (*drainowner.GuardBinding, error) {
+	return h.handler.CapturedExecutionGuardBinding(h.owned(inv))
 }
 func (h *phaseSelectionEngineHandler) CapturedExecutionGuardRegistered(inv rhandler.Invocation) error {
 	return h.handler.CapturedExecutionGuardRegistered(h.owned(inv))

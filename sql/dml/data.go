@@ -40,7 +40,7 @@ type Data struct {
 	externalTx              bool
 	onCommit                func(context.Context)
 	queue                   []*dataOperation
-	executionGuards         []func(context.Context) error
+	executionGuards         []registeredExecutionGuard
 	mutationAdmissionClosed bool
 	guardsEnabled           bool
 	streamingQueryUsed      bool

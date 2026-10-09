@@ -960,7 +960,7 @@ func (s *dataScope) enrollExecutionOwner(unit *dataScope) error {
 	}
 	return nil
 }
-func (s *dataScope) registerExecutionGuard(ctx context.Context, check func(context.Context) error) error {
+func (s *dataScope) registerExecutionGuard(ctx context.Context, check func(context.Context) error, bindings ...*drainowner.GuardBinding) error {
 	root := s.root
 	if root == nil {
 		root = s
@@ -1023,7 +1023,16 @@ func (s *dataScope) registerExecutionGuard(ctx context.Context, check func(conte
 	if !ok {
 		return root.failGuardedExecution(fmt.Errorf("captured writer execution requires an enrolled invocation owner"))
 	}
-	if err := completionOperation("register captured writer execution guard", func() error { return owner.RegisterExecutionGuard(check) }); err != nil {
+	if err := completionOperation("register captured writer execution guard", func() error {
+		if len(bindings) > 0 && bindings[0] != nil {
+			if bound, ok := owner.(interface {
+				RegisterBoundExecutionGuard(func(context.Context) error, *drainowner.GuardBinding) error
+			}); ok {
+				return bound.RegisterBoundExecutionGuard(check, bindings[0])
+			}
+		}
+		return owner.RegisterExecutionGuard(check)
+	}); err != nil {
 		return root.failGuardedExecution(err)
 	}
 	return nil

@@ -114,6 +114,11 @@ func (d *Data) prepareNative(ctx context.Context, permit *drainowner.DrainPermit
 		return err
 	}
 	defer drainowner.EndDrain(record)
+	if operation == drainowner.AllPreparation {
+		if err := owner.validateExecutionGuardsLocked(ctx, true, true); err != nil {
+			return err
+		}
+	}
 	owner.mu.Lock()
 	// Admission precedes the caller-owned local-preparation early return.
 	if operation == drainowner.LocalPreparation && owner.externalTx {
@@ -375,6 +380,9 @@ func (d *Data) completeNative(ctx context.Context, cause error, permit *drainown
 	if cause == nil {
 		cause = completeOperation("DML completion flush", func() error {
 			if drainowner.OrderedJournal(owner) {
+				if err := owner.validateExecutionGuardsLocked(ctx, true); err != nil {
+					return err
+				}
 				owner.mu.Lock()
 				defer owner.mu.Unlock()
 				for _, op := range flattenData(owner) {

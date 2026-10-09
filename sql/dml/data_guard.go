@@ -9,7 +9,23 @@ import (
 // RegisterExecutionGuard is a Datly-internal optional lifecycle capability.
 // Component views retain checks on the journal owner, beyond child sealing.
 // The engine supplies captured-program checks, never request/output callbacks.
+type registeredExecutionGuard struct {
+	check   func(context.Context) error
+	binding *drainowner.GuardBinding
+	bound   bool
+}
+
 func (d *Data) RegisterExecutionGuard(check func(context.Context) error) error {
+	return d.registerExecutionGuard(check, drainowner.NewGuardBinding(), false)
+}
+
+// RegisterBoundExecutionGuard preserves ordinary registration timing and binds
+// purpose evidence to the exact callback registration on the native owner.
+func (d *Data) RegisterBoundExecutionGuard(check func(context.Context) error, binding *drainowner.GuardBinding) error {
+	return d.registerExecutionGuard(check, binding, true)
+}
+
+func (d *Data) registerExecutionGuard(check func(context.Context) error, binding *drainowner.GuardBinding, bound bool) error {
 	if d == nil || check == nil {
 		return errors.New("captured DML execution guard is required")
 	}
@@ -39,7 +55,10 @@ func (d *Data) RegisterExecutionGuard(check func(context.Context) error) error {
 	if err := owner.enableCapturedExecutionGuardsLocked(); err != nil {
 		return err
 	}
-	owner.executionGuards = append(owner.executionGuards, check)
+	if err := drainowner.BindExecutionGuard(owner, binding); err != nil {
+		return owner.failProtectedMutationLocked(err)
+	}
+	owner.executionGuards = append(owner.executionGuards, registeredExecutionGuard{check: check, binding: binding, bound: bound})
 	return nil
 }
 
@@ -60,14 +79,30 @@ func (d *Data) ValidateExecutionGuards(ctx context.Context) error {
 	return owner.validateExecutionGuardsLocked(ctx)
 }
 
-func (d *Data) validateExecutionGuardsLocked(ctx context.Context) error {
+func (d *Data) validateExecutionGuardsLocked(ctx context.Context, terminalBoundary ...bool) error {
 	owner := d.owner()
 	owner.mu.Lock()
-	checks := append([]func(context.Context) error(nil), owner.executionGuards...)
+	checks := append([]registeredExecutionGuard(nil), owner.executionGuards...)
+	terminal := owner.mutationAdmissionClosed || owner.completed
+	if len(terminalBoundary) != 0 {
+		terminal = terminal || terminalBoundary[0]
+	}
 	failed := owner.failed
 	enabled := owner.guardsEnabled
 	operations := flattenData(owner)
 	owner.mu.Unlock()
+	// An additional native terminal-boundary check must not add callback or
+	// payload checks to the ordinary preparation path.
+	if len(terminalBoundary) > 1 && terminalBoundary[1] {
+		selected := checks[:0]
+		for _, check := range checks {
+			if check.bound {
+				selected = append(selected, check)
+			}
+		}
+		checks = selected
+		operations = nil
+	}
 	if enabled && failed != nil {
 		return errors.Join(ErrInvocationFailed, failed)
 	}
@@ -80,7 +115,17 @@ func (d *Data) validateExecutionGuardsLocked(ctx context.Context) error {
 	err := ctx.Err()
 	if err == nil {
 		for _, check := range checks {
-			err = completeOperation("captured DML execution guard", func() error { return check(ctx) })
+			err = completeOperation("captured DML execution guard", func() error {
+				if !check.bound {
+					return check.check(ctx)
+				}
+				guardCtx, close, scopeErr := drainowner.WithGuardPurpose(ctx, owner, check.binding, terminal)
+				if scopeErr != nil {
+					return scopeErr
+				}
+				defer close()
+				return check.check(guardCtx)
+			})
 			if err != nil {
 				break
 			}
