@@ -112,6 +112,18 @@ func (c *discoveryInputCompiler) compile() (*column.TemplateInput, error) {
 			target.Set(reflect.ValueOf(converted))
 			continue
 		}
+		collectionType := target.Type()
+		for collectionType.Kind() == reflect.Pointer {
+			collectionType = collectionType.Elem()
+		}
+		if collectionType.Kind() == reflect.Slice || collectionType.Kind() == reflect.Array {
+			converted, convertErr := (conv.ValueConverter{}).Convert(*param.Value, target.Type())
+			if convertErr != nil {
+				return nil, fmt.Errorf("transcribe column: convert default for parameter %s: %w", param.Name, convertErr)
+			}
+			target.Set(reflect.ValueOf(converted))
+			continue
+		}
 		if err = toolbox.DefaultConverter.AssignConverted(target.Addr().Interface(), *param.Value); err != nil {
 			return nil, fmt.Errorf("transcribe column: convert default for parameter %s: %w", param.Name, err)
 		}
