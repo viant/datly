@@ -167,3 +167,20 @@ no-lookup behavior, error retention, cancellation, child success ordering and
 transcribed Go output discovery. Keep examples tied to
 `xdatly/handler/injector_finalizer.go` and
 `xdatly/handler/injector_finalizer.md`; do not infer additional signatures.
+
+### Reusing a generated writer input for preparation
+
+An explicitly selected custom handler can reuse a generated input with body
+reconciliation metadata when the component has no mutation operation or root
+view. The body remains handler data; its writer reconciliation policy is not
+attached to a nonexistent mutation root. Independent Current views, predicates,
+codecs and component dependencies still bind through the normal input plan.
+Every route must explicitly select a handler. Mixed mutation declarations retain
+the mutation-root checks.
+
+This does not suppress input `Init` or `Validate`. A preparation handler that
+requires binding alone must use an input without those methods and verify that
+constraint. Entity writer hooks and DML require an actual writer handler; reusing
+its input type does not execute them. `Replay.Only` is not a substitute for
+Current reads, since it prepares selected replay sources rather than the full
+dependency plan.
