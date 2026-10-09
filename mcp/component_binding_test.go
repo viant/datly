@@ -2,7 +2,6 @@ package mcp
 
 import (
 	"context"
-	"encoding/json"
 	"strings"
 	"testing"
 
@@ -21,7 +20,7 @@ func (i *boundInvoker) InvokeComponent(context.Context, exec.ComponentRequest) (
 	return map[string]interface{}{"query": "bound"}, nil
 }
 
-func TestComponentBindingNativeWireAndNoFallback(t *testing.T) {
+func TestOrdinaryComponentNativeWireAndLegacyPinRejection(t *testing.T) {
 	for _, version := range []string{schema.LegacyProtocolVersion, schema.LatestProtocolVersion} {
 		t.Run(version, func(t *testing.T) { componentBindingNativeWire(t, version) })
 	}
@@ -41,83 +40,40 @@ func componentBindingNativeWire(t *testing.T, version string) {
 	if err != nil || len(listing.Tools) != 1 {
 		t.Fatalf("list: %+v %v", listing, err)
 	}
-	raw, err := json.Marshal(listing.Tools[0].Meta[tool.ComponentBindingMetaKey])
-	if err != nil {
-		t.Fatal(err)
+	if _, exists := listing.Tools[0].Meta[tool.ComponentBindingMetaKey]; exists {
+		t.Fatal("component identity published on MCP wire")
 	}
-	var binding exec.ComponentBinding
-	if err := json.Unmarshal(raw, &binding); err != nil || binding.Validate() != nil {
-		t.Fatalf("binding=%s %v", raw, err)
-	}
-	if binding.ID != component.Component.Key.String() || binding.Revision != artifact.Revision {
-		t.Fatalf("wrong actual source %+v", binding)
-	}
-	// Caller mutation of the transferred declaration cannot change publication.
-	artifact.Revision = "changed-after-publication"
-	call := func(pin interface{}) error {
-		params := &schema.CallToolRequestParams{Name: "search.run", Arguments: map[string]interface{}{"query": "safe"}}
-		if pin != nil {
-			params.Meta.AdditionalProperties = map[string]interface{}{tool.ComponentBindingMetaKey: pin}
-		}
-		_, err := native.CallTool(ctx, params)
-		return err
-	}
-	if err := call(binding); err != nil {
+	params := &schema.CallToolRequestParams{Name: "search.run", Arguments: map[string]interface{}{"query": "safe"}}
+	if _, err := native.CallTool(ctx, params); err != nil {
 		t.Fatal(err)
 	}
 	if invoker.calls != 1 {
-		t.Fatalf("exact binding not invoked: %d", invoker.calls)
+		t.Fatalf("ordinary call not invoked: %d", invoker.calls)
 	}
-	for _, field := range []string{"missing", "revision", "id", "content", "schema", "kind", "malformed"} {
-		t.Run(field, func(t *testing.T) {
-			pin := binding
-			var expected interface{} = pin
-			switch field {
-			case "missing":
-				expected = nil
-			case "revision":
-				pin.Revision = "unavailable-historical-artifact"
-			case "id":
-				pin.ID = "other-component"
-			case "content":
-				pin.ContentFingerprint = strings.Repeat("b", 64)
-			case "schema":
-				pin.SchemaFingerprint = strings.Repeat("c", 64)
-			case "kind":
-				pin.Kind = "dynamic"
-			case "malformed":
-				expected = map[string]interface{}{"id": pin.ID}
-			}
-			if field != "missing" && field != "malformed" {
-				expected = pin
-			}
-			if err := call(expected); err == nil {
-				t.Fatal("mismatched binding dispatched")
-			}
-			if invoker.calls != 1 {
-				t.Fatalf("denied call reached native invoker: %d", invoker.calls)
-			}
-		})
+	for _, legacy := range []interface{}{nil, map[string]interface{}{"id": "old"}, "malformed"} {
+		params.Meta.AdditionalProperties = map[string]interface{}{tool.ComponentBindingMetaKey: legacy}
+		if _, err := native.CallTool(ctx, params); err == nil || !strings.Contains(err.Error(), "resource") {
+			t.Fatalf("legacy pinned intent not rejected clearly: %v", err)
+		}
+		if invoker.calls != 1 {
+			t.Fatal("legacy wire pin reached invoker")
+		}
 	}
 }
 
-func TestRequiredBindingWithUnknownArtifactAndMetadataSpoofFailsClosed(t *testing.T) {
+func TestLegacyRequiredBindingAndMetadataSpoofFailClearly(t *testing.T) {
 	component := serviceComponent(t, "Search", &spec.MCPExposure{Kind: spec.MCPExposureTool, Name: "search.run"})
 	invoker := &boundInvoker{}
 	service, err := New(Config{Components: []*registry.RegisteredComponent{component}, Invoker: invoker, RequireComponentBinding: true})
-	if err != nil {
-		t.Fatal(err)
+	if err == nil || service != nil || !strings.Contains(err.Error(), "resource") {
+		t.Fatal("legacy required-binding config accepted")
 	}
-	entry, _ := service.Registry().ToolRegistry.Get("search.run")
-	_, protocolErr := entry.Handler(context.Background(), &schema.CallToolRequest{Params: schema.CallToolRequestParams{Name: "search.run", Arguments: map[string]interface{}{"query": "safe"}}})
-	if protocolErr == nil || invoker.calls != 0 {
-		t.Fatal("unknown artifact executed")
-	}
+
 	_, err = New(Config{Components: []*registry.RegisteredComponent{component}, Invoker: invoker, LinkedArtifact: &exec.LinkedArtifact{Revision: "release-1", ContentFingerprint: strings.Repeat("a", 64)},
 		ToolMetadata: func(context.Context, exec.ComponentTarget) (map[string]interface{}, error) {
 			return map[string]interface{}{tool.ComponentBindingMetaKey: "forged"}, nil
 		}})
 	if err == nil {
-		t.Fatal("host generic metadata replaced native binding")
+		t.Fatal("legacy host metadata accepted on MCP wire")
 	}
 }

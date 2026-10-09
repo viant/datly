@@ -20,8 +20,8 @@ func NewHandler(plan *Plan, invoker *invocation.Invoker) *Handler {
 	return &Handler{plan: plan, invoker: invoker}
 }
 
-// BindComponent freezes the identity of this generation's compiled tool.
-// A required but unavailable binding denies calls without inventing provenance.
+// Deprecated: BindComponent is retained to reject legacy pinned MCP intent.
+// Use resource/datasource execution for server-local component bindings.
 func (h *Handler) BindComponent(binding *exec.ComponentBinding, required bool) {
 	h.requireBinding = required
 	if binding != nil {
@@ -42,10 +42,11 @@ func (h *Handler) Handle(ctx context.Context, request *schema.CallToolRequest) (
 		}
 		return nil, schema.NewUnknownTool(name)
 	}
-	expected, err := expectedComponentBinding(request)
-	if err != nil || h.requireBinding && (expected == nil || h.binding == nil) ||
-		expected != nil && (h.binding == nil || exec.ValidateComponentBinding(*expected, *h.binding) != nil) {
-		return nil, jsonrpc.NewInvalidParamsError(exec.ErrComponentBinding.Error(), nil)
+	if err := rejectLegacyComponentBinding(request); err != nil {
+		return nil, jsonrpc.NewInvalidParamsError(err.Error(), nil)
+	}
+	if h.requireBinding || h.binding != nil {
+		return nil, jsonrpc.NewInvalidParamsError("MCP component wire binding is unsupported; declare component identity on the resource or datasource", nil)
 	}
 	scope, err := h.plan.Scope(request.Params.Arguments)
 	if err != nil {

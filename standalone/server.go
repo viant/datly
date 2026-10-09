@@ -37,11 +37,11 @@ type Options struct {
 	// LinkedArtifact is trusted immutable executable provenance, supplied by the
 	// deployment build. It is independent of Config.Version and reload counters.
 	LinkedArtifact *dexec.LinkedArtifact
-	// RequireComponentBinding denies native MCP calls without an exact observed
-	// binding, including deployments whose artifact provenance is still absent.
+	// Deprecated: MCP calls do not require component wire metadata. Setting
+	// this option fails MCP construction; use server-owned resource resolution.
 	RequireComponentBinding bool
-	// ToolMetadata supplies optional host metadata without replacing native
-	// contracts or the reserved exact component binding entry.
+	// ToolMetadata supplies optional host annotations without replacing native
+	// contracts. The former component wire-binding annotation is unsupported.
 	ToolMetadata func(context.Context, dexec.ComponentTarget) (map[string]interface{}, error)
 	// InvocationDiffer is the trusted host comparator bound to component contracts
 	// and lifecycle hooks. Nil preserves the missing-capability behavior.

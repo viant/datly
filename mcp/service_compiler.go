@@ -250,19 +250,6 @@ func (c *serviceCompiler) publish(ctx context.Context, catalog *Catalog, policy 
 		plan, _ := catalog.Tool(name)
 		handler := tool.NewHandler(plan, componentInvoker)
 		metadata := plan.Metadata()
-		var binding *exec.ComponentBinding
-		if c.config.LinkedArtifact != nil {
-			actual, err := tool.LinkedComponentBinding(plan, *c.config.LinkedArtifact)
-			if err != nil {
-				return nil, fmt.Errorf("MCP tool %q component binding: %w", name, err)
-			}
-			binding = &actual
-			if metadata.Meta == nil {
-				metadata.Meta = map[string]interface{}{}
-			}
-			metadata.Meta[tool.ComponentBindingMetaKey] = actual
-		}
-		handler.BindComponent(binding, c.config.RequireComponentBinding || binding != nil)
 		if c.config.ToolMetadata != nil {
 			values, err := c.config.ToolMetadata(ctx, plan.Target())
 			if err != nil {
@@ -272,6 +259,9 @@ func (c *serviceCompiler) publish(ctx context.Context, catalog *Catalog, policy 
 				metadata.Meta = map[string]interface{}{}
 			}
 			for key, value := range values {
+				if key == tool.ComponentBindingMetaKey {
+					return nil, fmt.Errorf("MCP component wire metadata is unsupported; declare component identity on the resource or datasource")
+				}
 				if key == "" {
 					return nil, fmt.Errorf("MCP tool %q host metadata has an empty key", name)
 				}

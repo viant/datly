@@ -2,7 +2,6 @@ package standalone
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
@@ -17,7 +16,7 @@ import (
 	"github.com/viant/mcp-protocol/schema"
 )
 
-func TestStandaloneLinkedArtifactBindingLazyAndEager(t *testing.T) {
+func TestStandaloneLinkedArtifactOrdinaryMCPLazyAndEager(t *testing.T) {
 	for _, eager := range []bool{false, true} {
 		t.Run(fmt.Sprintf("eager=%v", eager), func(t *testing.T) {
 			ctx := context.Background()
@@ -40,21 +39,19 @@ func TestStandaloneLinkedArtifactBindingLazyAndEager(t *testing.T) {
 			native := (mcpclient.Config{Source: server.manager, ProtocolVersion: "2026-07-28"}).New(t)
 			listing, err := native.ListTools(ctx, nil)
 			require.NoError(t, err)
-			var pin exec.ComponentBinding
+			var found bool
 			for _, entry := range listing.Tools {
+				require.NotContains(t, entry.Meta, tool.ComponentBindingMetaKey)
 				if entry.Name == "NativeReportCube" {
-					raw, err := json.Marshal(entry.Meta[tool.ComponentBindingMetaKey])
-					require.NoError(t, err)
-					require.NoError(t, json.Unmarshal(raw, &pin))
+					found = true
 				}
 			}
-			require.NoError(t, pin.Validate())
-			require.Equal(t, "fixture-artifact-release", pin.Revision)
+			require.True(t, found)
 			args := map[string]interface{}{"dimensions": map[string]interface{}{"country": true}, "measures": map[string]interface{}{"amount": true}, "filters": map[string]interface{}{"permit": true}}
-			result, err := native.CallTool(ctx, &schema.CallToolRequestParams{Name: "NativeReportCube", Arguments: args, Meta: schema.RequestMetaObject{AdditionalProperties: map[string]interface{}{tool.ComponentBindingMetaKey: pin}}})
+			result, err := native.CallTool(ctx, &schema.CallToolRequestParams{Name: "NativeReportCube", Arguments: args})
 			require.NoError(t, err)
 			require.False(t, result.IsError != nil && *result.IsError)
-			_, err = native.CallTool(ctx, &schema.CallToolRequestParams{Name: "NativeReportCube", Arguments: args})
+			_, err = native.CallTool(ctx, &schema.CallToolRequestParams{Name: "NativeReportCube", Arguments: args, Meta: schema.RequestMetaObject{AdditionalProperties: map[string]interface{}{tool.ComponentBindingMetaKey: "legacy-pin"}}})
 			require.Error(t, err)
 		})
 	}
