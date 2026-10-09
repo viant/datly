@@ -147,6 +147,9 @@ func validateReconciliation(metadata *Metadata, inputType, outputType reflect.Ty
 	if err := rejectDescendantReconciliation(metadata.Component.RootView); err != nil {
 		return err
 	}
+	if declaration := metadata.Component.RootView.Reconciliation; declaration != nil && declaration.SourcePhases != nil && declaration.Mode != "source-phases" {
+		return fmt.Errorf("finite_reconciliation SourcePhases requires source-phases")
+	}
 	var visit func(*Record) error
 	seen := map[*Record]bool{}
 	visit = func(record *Record) error {
