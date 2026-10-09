@@ -2,6 +2,7 @@ package writer
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 
@@ -23,18 +24,50 @@ type finitePhaseAction struct {
 	basis      string
 }
 
-func (p *Program) classifyFinitePhasePlan(ctx context.Context, plan *finitePhasePlan) (*finitePhaseActionPlan, error) {
+func (p *Program) classifyFinitePhasePlan(ctx context.Context, plan *finitePhasePlan) (result *finitePhaseActionPlan, err error) {
 	a := p.reconciliation
+	postallocation := a != nil && (a.rootAllocated || a.allocationState != "" || p.rootAllocationAttempted)
+	if postallocation {
+		defer func() {
+			panicValue := recover()
+			if panicValue != nil {
+				err = errors.Join(err, fmt.Errorf("source phase classification panicked"))
+			}
+			if err != nil || panicValue != nil {
+				a.active = false
+				result = nil
+				p.retainExecutionFailure(err)
+			}
+			if panicValue != nil {
+				panic(panicValue)
+			}
+		}()
+	}
+
 	if a == nil || !a.active || plan == nil || plan.owner != a || plan.compiled == nil || plan.compiled.root != p.metadata.Root || p.finiteRootDecision == nil {
 		return nil, fmt.Errorf("source phase classification requires active sealed selection authority")
 	}
-	if err := p.validateFiniteRootDecision(reflect.ValueOf(p.input).Elem().Field(p.metadata.InputField)); err != nil {
+	if postallocation {
+		if !a.rootAllocated || a.selectionSealed != plan || a.allocationState == "" {
+			return nil, fmt.Errorf("source phase classification requires exact allocated selection")
+		}
+		state, e := p.finiteAllocationClassificationState()
+		if e != nil {
+			return nil, e
+		}
+		if state != a.allocationState {
+			return nil, fmt.Errorf("source phase classification changed allocation authority")
+		}
+		if e = p.validateFiniteAllocatedRoots(plan); e != nil {
+			return nil, e
+		}
+	} else if err := p.validateFiniteRootDecision(reflect.ValueOf(p.input).Elem().Field(p.metadata.InputField)); err != nil {
 		return nil, err
 	}
 	if err := p.validateFinitePhaseFrames(plan.compiled, reflect.ValueOf(p.input).Elem().Field(p.metadata.InputField)); err != nil {
 		return nil, err
 	}
-	result := &finitePhaseActionPlan{owner: a}
+	result = &finitePhaseActionPlan{owner: a}
 	readers := map[*Record]*finiteRootDecisionMetadata{}
 	updated := map[rowIdentity]bool{}
 	deleted := map[rowIdentity]bool{}
@@ -151,8 +184,27 @@ func (p *Program) classifyFinitePhaseOccurrence(phase *finiteSourcePhase, ticket
 				}
 				// Native root allocation must resolve a new parent before a linked key
 				// can classify an upsert. Do not treat lack of an early match as INSERT.
-				value := ticket.root.Entity.Elem().FieldByIndex(link.Parent.Index)
-				if p.finiteRootDecision.action == h.WriteInsert || !linkValueResolved(value) {
+				parent := ticket.root.Entity
+				if p.finiteRootDecision.action == h.WriteInsert {
+					a := p.reconciliation
+					if !a.rootAllocated {
+						return out, fmt.Errorf("source phase linked identity is pending native parent allocation")
+					}
+					canonical := false
+					for _, root := range a.roots {
+						if root.frame == ticket.root {
+							canonical = true
+							break
+						}
+					}
+					image := a.allocations[ticket.root]
+					if !canonical || image == nil || !image.allocated.IsValid() || image.allocated.Type() != parent.Type() || image.allocated.IsNil() {
+						return out, fmt.Errorf("source phase allocated parent image is unavailable")
+					}
+					parent = image.allocated
+				}
+				value := parent.Elem().FieldByIndex(link.Parent.Index)
+				if !linkValueResolved(value) {
 					return out, fmt.Errorf("source phase linked identity is pending native parent allocation")
 				}
 				if err := assignLinkedValue(keyRow.Elem().FieldByIndex(key.Index), cloneTokenValue(value)); err != nil {

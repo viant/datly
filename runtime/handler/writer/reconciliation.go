@@ -162,6 +162,7 @@ type reconciliationAttempt struct {
 	preparedOutput     string
 	rootAllocated      bool
 	allocatedRootKeys  []int64
+	allocationState    string
 	active             bool
 	roots              []reconciliationRootOccurrences
 	tickets            map[*reconciliationTicket]bool

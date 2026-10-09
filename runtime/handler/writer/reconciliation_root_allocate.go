@@ -38,6 +38,7 @@ func (p *Program) allocateFinitePhaseRoots(ctx context.Context, plan *finitePhas
 				a.active = false
 				a.rootAllocated = false
 				a.allocatedRootKeys = nil
+				a.allocationState = ""
 				for _, root := range a.roots {
 					if value := a.allocations[root.frame]; value != nil {
 						value.allocated = reflect.Value{}
@@ -115,6 +116,14 @@ func (p *Program) allocateFinitePhaseRoots(ctx context.Context, plan *finitePhas
 		a.allocations[root.frame].allocated = images[i]
 	}
 	a.allocatedRootKeys = keys
+	state, err = p.finiteAllocationClassificationState()
+	if err != nil {
+		return err
+	}
+	if err = ctx.Err(); err != nil {
+		return err
+	}
+	a.allocationState = state
 	a.rootAllocated = true
 	complete = true
 	before = ""
@@ -151,4 +160,16 @@ func (p *Program) validateFiniteAllocatedRoots(plan *finitePhasePlan) error {
 		return err
 	}
 	return p.validateFiniteRootAllocationFacts(rows, a.allocatedRootKeys)
+}
+
+// The allocation seal covers detached images as well as live state and Output.
+func (p *Program) finiteAllocationClassificationState() (string, error) {
+	if p.reconciliation == nil {
+		return "", fmt.Errorf("source allocation authority is unavailable")
+	}
+	state, err := p.reconciliationState()
+	if err != nil {
+		return "", err
+	}
+	return immutableValues([]reflect.Value{reflect.ValueOf(state), reflect.ValueOf(p.output), reflect.ValueOf(p.reconciliation.allocatedRootKeys)})
 }
