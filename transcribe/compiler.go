@@ -266,9 +266,6 @@ func (c *Compiler) Compile(ctx context.Context, source *Source) (*Result, error)
 	if err := authoring.BackfillReportMetadata(component, source.Resources); err != nil {
 		return nil, err
 	}
-	if err := authoring.BackfillDocumentationMetadata(component, source.Resources); err != nil {
-		return nil, err
-	}
 	enrichDescription(ctx, component, source.Docs)
 	goHandler, err := source.GoHandler.Clone()
 	if err != nil {

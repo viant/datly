@@ -16,7 +16,8 @@ func BenchmarkLinkedDocumentation(b *testing.B) {
 	if err != nil {
 		b.Fatal(err)
 	}
-	component := &spec.Component{Parameters: []*spec.Parameter{{Name: "Rows", Source: spec.BindSource{Kind: "output", Name: "view"}}}, RootView: &spec.View{Name: "rows", DocumentationTable: "users", Source: &spec.ViewSource{SQL: "SELECT u.id AS id FROM users u"}, Columns: []*spec.Column{{Name: "ID", Source: "id", DocumentationOrigin: &spec.ColumnOrigin{Table: "users", Column: "id"}}}}}
+	component := &spec.Component{Parameters: []*spec.Parameter{{Name: "Rows", Source: spec.BindSource{Kind: "output", Name: "view"}}}, RootView: &spec.View{Name: "rows", Source: &spec.ViewSource{SQL: "SELECT u.id AS id FROM users u"}, Columns: []*spec.Column{{Name: "ID", Source: "id"}}}}
+	component.RootView.CompileProjectionOrigins()
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

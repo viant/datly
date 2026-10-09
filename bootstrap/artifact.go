@@ -189,7 +189,12 @@ func (c *artifactCompiler) compile() (*Artifact, error) {
 	if err != nil {
 		return nil, err
 	}
-	docs, err = docs.ForComponent(component, input.OutputType)
+	docsComponent := component
+	if readerPlan != nil && readerPlan.Root != nil {
+		docsComponent = component.Clone()
+		docsComponent.RootView = documentationView(readerPlan.Root.View)
+	}
+	docs, err = docs.ForComponent(docsComponent, input.OutputType)
 	if err != nil {
 		return nil, err
 	}

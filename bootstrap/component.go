@@ -736,7 +736,6 @@ func (r *packageComponentResolver) view(field xshape.Field, name string, metadat
 		view.MutationPredicateGroup = metadata.View.MutationPredicateGroup
 		view.Source.URI = strings.TrimSpace(metadata.View.URI)
 		view.Source.Table = strings.TrimSpace(metadata.View.Table)
-		view.DocumentationTable = metadata.View.DocumentationTable
 		view.Partitioning = metadata.View.Partitioning.Clone()
 		view.Selector = metadata.View.Selector.Clone()
 		view.BatchSize = metadata.View.Batch
