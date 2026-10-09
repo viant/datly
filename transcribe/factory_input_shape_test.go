@@ -255,3 +255,100 @@ func TestFactoryInputShapeStagedSignatureFailureAtomic(t *testing.T) {
 	require.Equal(t, before, sourceHandlerSnapshot(t, root))
 	t.Log(err)
 }
+
+// SQL-derived factory bodies keep presentation defaults without acquiring DML.
+func TestFactoryInputShapeNullableJSONAndEvolution(t *testing.T) {
+	root, source := generatedPostFactoryFixture(t)
+	writeSourceHandlerFile(t, root, "archive/business.go", `package archive
+import("context";"github.com/viant/xdatly/handler")
+var observed *ArchiveInput
+type Handler struct{}
+func NewArchive() handler.Contract[ArchiveInput,ArchiveOutput]{return &Handler{}}
+func(*Handler) Exec(_ context.Context,_ handler.Session,in *ArchiveInput,out *ArchiveOutput)error{observed=in;out.Status="ok";out.Data=in.Data;return nil}
+`)
+	source.Text = fmt.Sprintf(`#package(%q)
+#import('archive',%q)
+#setting($_ = $handler_factory('archive.NewArchive','Archive'))
+#setting($_ = $route('/archive-nullable','PATCH'))
+#setting($_ = $connector('shape-discovery-only'))
+#setting($_ = $input_type('ArchiveInput'))
+#setting($_ = $output_type('ArchiveOutput'))
+#setting($_ = $case_format('lc'))
+#define($_ = $Data<[]*Record>(body/data).Optional())
+#define($_ = $Status<string>(output/status))
+#define($_ = $Data<[]*Record>(output/body).WithTag('json:"data"'))
+SELECT r.*, type(r,'Record'), CAST(r.ID AS int), CAST(r.LABEL AS *string),
+CAST(r.AMOUNT AS *int), CAST(r.ENABLED AS *bool), CAST(r.MANDATORY AS *string),
+CAST(r.OVERRIDE AS *string), tag(r.OVERRIDE,'json:"override,omitempty"')
+FROM records r`, handlerFixtureModule+"/archive", handlerFixtureModule+"/archive")
+	db, err := sql.Open("sqlite3", filepath.Join(t.TempDir(), "shape.db"))
+	require.NoError(t, err)
+	defer db.Close()
+	_, err = db.Exec("CREATE TABLE records(ID INTEGER NOT NULL,LABEL TEXT,AMOUNT INTEGER,ENABLED BOOLEAN,MANDATORY TEXT NOT NULL,OVERRIDE TEXT NOT NULL)")
+	require.NoError(t, err)
+	source.Connector = "shape-discovery-only"
+	source.ColumnRefiner = column.New(column.Connections{"shape-discovery-only": db})
+	original := source.Text
+	for evolution := 0; evolution < 2; evolution++ {
+		if evolution == 1 {
+			_, err = db.Exec("ALTER TABLE records ADD COLUMN PROBE TEXT NULL")
+			require.NoError(t, err)
+		}
+		var first map[string]string
+		for pass := 0; pass < 2; pass++ {
+			compiled, e := (&Discovery{BaseDir: root, GoBuild: source.GoBuild, ColumnRefiner: source.ColumnRefiner}).CompileSource(t.Context(), source)
+			require.NoError(t, e)
+			// Pinned sqlite3 v1.14.16 reports every result column nullable. This
+			// direct-table fixture normalizes only independently retained physical
+			// NOT NULL facts; it is not native SQLite nullability coverage.
+			seen := map[string]bool{}
+			for _, c := range compiled.ExternalHandler.InputShape.Columns {
+				name := strings.ToUpper(c.Source)
+				switch name {
+				case "ID", "MANDATORY", "OVERRIDE":
+					require.True(t, c.NotNull, name)
+					require.True(t, c.Nullable, "pinned SQLite driver observation: "+name)
+					c.Nullable = false
+					seen[name] = true
+				default:
+					require.False(t, c.NotNull, name)
+					require.True(t, c.Nullable, name)
+				}
+			}
+			require.Len(t, seen, 3)
+			require.Nil(t, compiled.Component.RootView)
+			require.Empty(t, compiled.Component.Settings.Mutation)
+			generated, e := (Generator{Operation: "post"}).Generate(t.Context(), GenerationRequest{Compiled: compiled, Destination: root})
+			require.NoError(t, e)
+			require.Empty(t, generated.Result.Plan.Settings.Mutation)
+			require.Nil(t, generated.Result.Plan.MutationHandler)
+			require.Equal(t, original, source.Text)
+			snapshot := sourceHandlerSnapshot(t, root)
+			if pass == 0 {
+				first = snapshot
+			} else {
+				require.Equal(t, first, snapshot)
+			}
+		}
+	}
+	writeSourceHandlerFile(t, root, "archive/runtime_test.go", factoryNullableJSONRuntime)
+	cmd := exec.CommandContext(t.Context(), "go", "test", "-mod=readonly", "-race", "-count=1", "-timeout=2m", "-v", "./archive")
+	cmd.Dir = root
+	output, err := cmd.CombinedOutput()
+	require.NoError(t, err, "%s", output)
+	t.Logf("native nullable body JSON/presence runtime:\n%s", output)
+}
+
+const factoryNullableJSONRuntime = `package archive
+import("context";"encoding/json";"net/http/httptest";"path/filepath";"os";"reflect";"strings";"testing";
+_ "github.com/mattn/go-sqlite3";"github.com/viant/datly/bootstrap/connector";"github.com/stretchr/testify/require";"github.com/viant/datly/standalone";"github.com/viant/datly/standalone/config";dexec "github.com/viant/datly/exec";"github.com/viant/datly/spec";requestprovider "github.com/viant/bindly/provider/request")
+func TestNativeFactoryNullableJSON(t *testing.T){
+ typ:=reflect.TypeFor[Record]();for _,name:=range []string{"Label","Amount","Enabled","Probe"}{f,ok:=typ.FieldByName(name);require.True(t,ok);require.Contains(t,f.Tag.Get("json"),"omitempty")}
+ for _,name:=range []string{"Id","Mandatory"}{f,ok:=typ.FieldByName(name);require.True(t,ok);require.NotContains(t,f.Tag.Get("json"),"omitempty")}
+ zero:=0;empty:="";flag:=false;r:=Record{Amount:&zero,Label:&empty,Enabled:&flag};raw,err:=json.Marshal(r);require.NoError(t,err);require.JSONEq(t,"{\"id\":0,\"label\":\"\",\"amount\":0,\"enabled\":false,\"mandatory\":null}",string(raw))
+ cwd,err:=os.Getwd();require.NoError(t,err);ctx:=context.Background();server,err:=standalone.New(ctx,standalone.Options{Config:&config.Config{Connectors:[]connector.Config{{Name:"shape-discovery-only",Driver:"sqlite3",DSN:":memory:"}},BaseDir:filepath.Dir(cwd),GoBootstrap:&config.Packages{Packages:[]string{"github.com/viant/datly/handlerfixture/archive"}},Endpoint:config.Endpoint{Address:"127.0.0.1:0"}},Holders:[]any{ArchiveDatly}});require.NoError(t,err);defer server.Shutdown(ctx);require.NoError(t,server.Reload(ctx,1))
+ for _,tc:=range []struct{body,want string;labelPresent bool}{{"{\"data\":[{\"id\":0}]}","{\"status\":\"ok\",\"data\":[{\"id\":0,\"mandatory\":null}]}",false},{"{\"data\":[{\"id\":0,\"label\":null}]}","{\"status\":\"ok\",\"data\":[{\"id\":0,\"mandatory\":null}]}",true},{"{\"data\":[{\"id\":0,\"label\":\"\",\"amount\":0,\"enabled\":false}]}","{\"status\":\"ok\",\"data\":[{\"id\":0,\"label\":\"\",\"amount\":0,\"enabled\":false,\"mandatory\":null}]}",true}}{
+ req:=httptest.NewRequest("PATCH","/archive-nullable",strings.NewReader(tc.body));req.Header.Set("Content-Type","application/json");rec:=httptest.NewRecorder();server.ServeHTTP(rec,req);if rec.Code!=200{diagnosticReq:=httptest.NewRequest("PATCH","/archive-nullable",strings.NewReader(tc.body));diagnosticReq.Header.Set("Content-Type","application/json");scope,e:=requestprovider.New(diagnosticReq);require.NoError(t,e);_,e=server.InvokeComponent(ctx,dexec.ComponentRequest{Target:dexec.ComponentTarget{Component:spec.Key{Kind:spec.KindComponent,Scope:"github.com/viant/datly/handlerfixture/archive",Name:"Archive"},Route:spec.RouteRef{Method:"PATCH",Path:"/archive-nullable"}},Providers:scope.Providers()});t.Logf("HTTP failure invocation cause: %v",e)};require.Equal(t,200,rec.Code,rec.Body.String());require.JSONEq(t,tc.want,rec.Body.String());require.Len(t,observed.Data,1);require.NotNil(t,observed.Data[0].Has);require.Equal(t,tc.labelPresent,observed.Data[0].Has.Label)
+ }
+}
+`
