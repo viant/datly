@@ -19,6 +19,7 @@ type phaseTestChild struct {
 	ID, ParentID int
 	Value        string
 	Pointer      *string
+	Has          *phaseTestHas `setMarker:"true"`
 }
 
 func finitePhaseFixture() (*Record, *spec.Reconciliation) {

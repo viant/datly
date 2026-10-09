@@ -12,9 +12,10 @@ import (
 // It is validated in full before allocation. Assignments stay unpublished until
 // the native execution cursor reaches the corresponding phase/group.
 type finitePhasePlan struct {
-	owner  *reconciliationAttempt
-	roots  [][]ReconciliationAssignment
-	phases []finitePhaseSelections
+	owner    *reconciliationAttempt
+	compiled *finiteSourcePhases
+	roots    [][]ReconciliationAssignment
+	phases   []finitePhaseSelections
 }
 type finitePhaseSelections struct {
 	phase   *finiteSourcePhase
@@ -43,7 +44,7 @@ func (p *Program) sealFinitePhasePlan(ctx context.Context, compiled *finiteSourc
 	if len(plan.Roots) != len(a.roots) {
 		return nil, fmt.Errorf("source phase plan requires every root in canonical order")
 	}
-	result := &finitePhasePlan{owner: a}
+	result := &finitePhasePlan{owner: a, compiled: compiled}
 	for i, root := range plan.Roots {
 		if root.Root != a.roots[i].ref || root.Roles != nil {
 			return nil, fmt.Errorf("source phase plan changed root order or supplied legacy role plans")
