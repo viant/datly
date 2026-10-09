@@ -339,6 +339,7 @@ type Program struct {
 	finiteCursorPublished       bool
 	finiteCursor                *finitePhaseCursor
 	finiteCursorNext            *finitePhaseTransition
+	finitePendingUpdate         *finitePendingUpdate
 	reconciliationFrames        []*Frame
 	reconciliationSeal          string
 	queueSlots                  []queueSlotSeal

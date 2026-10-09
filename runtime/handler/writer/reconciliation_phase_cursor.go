@@ -21,6 +21,7 @@ type finitePhaseCursor struct {
 	position                       int
 	checkpoint, evidence, schedule string
 	next                           *finitePhaseTransition
+	pendingUpdate                  *finitePendingUpdate
 }
 type finitePhaseSegment struct {
 	phase, root int // root=-1 is a single aggregate group, including empty groups.
@@ -229,6 +230,14 @@ func (p *Program) validateFiniteCursorCheckpoint() error {
 	}
 	if c.next != p.finiteCursorNext || c.next != nil && (c.next.cursor != c || c.next.position != c.position || c.next.predecessor != c.checkpoint) {
 		return fmt.Errorf("source cursor transition changed")
+	}
+	if c.pendingUpdate != p.finitePendingUpdate {
+		return fmt.Errorf("source pending Current projection registry changed")
+	}
+	if p.finitePendingUpdate != nil {
+		if err := p.validateFinitePendingUpdate(); err != nil {
+			return err
+		}
 	}
 	return nil
 }
