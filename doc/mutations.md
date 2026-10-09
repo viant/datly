@@ -998,6 +998,18 @@ The different output `Finalize` signatures are alternatives on a Go type;
 | Output `FinalizeMCP(ctx, mcp.Context)` | Applicable MCP success hook in the ordinary output lifecycle |
 | Definition `FinalizeFailure` | Handles failure when a generated Program is unavailable; input/output may be nil |
 
+A typed custom contract can explicitly implement the existing runtime
+`handler.OutcomeFinalizer`. `custom.New` and `custom.Factory` preserve that
+opt-in; ordinary custom contracts keep their existing output lifecycle. The
+callback receives the invocation, typed result and resolved `handler.Outcome`
+once after the owning root completes. Nested callbacks wait for the caller's
+outcome, so compensation observes a later parent failure. Check
+`outcome.CommitConfirmed()` before publishing success. Handle a nil result on
+early input failure, and return only new callback errors rather than repeating
+`outcome.Error`. A callback failure after commit does not undo that commit.
+This opt-in replaces ordinary output finalizers for that handler; use the
+error-aware output contract when a precommit veto is required.
+
 ```mermaid
 sequenceDiagram
     participant Handler
@@ -1333,3 +1345,29 @@ when the request's child collections are empty. Root deletion, child eligibility
 hooks and deeper writable structures remain unsupported. Existing leaf-only
 eligibility behavior is unchanged. This does not provide late graph rewriting,
 identity replacement or an alternative allocation policy.
+
+## Native source queue contracts
+
+Ordinary writers retain their existing queue behavior. A physical collection can
+opt into `queue_contract(rows, 'source-slice')` in its DQL projection. This policy
+supports POST and insert-only PATCH actions: a physical UPDATE or DELETE is
+rejected before writer-started transaction work and allocation. These action
+checks do not run for an empty graph, and do not prohibit a caller or prebinding
+service from already owning a transaction. It queues consecutive INSERTs for the
+same captured role and parent as one typed slice through native DML. Different
+parents and intervening actions retain separate queue boundaries, including when
+they target the same table. This policy does not change graph traversal or
+allocation order.
+
+The journal copies the slice backing storage and retains each row pointer.
+Mapped values, presence and captured holder identities are guarded through
+completion; `AfterQueue` cannot mutate them. Hooks run per row after the grouped
+admission. A hook failure stops further hooks/admissions and leaves rollback to
+the invocation's existing transaction owner. SourceSlice does not flush or commit
+between groups. Per-row `QueueAttemptObserver` is currently incompatible with
+this grouped policy and is rejected before work starts.
+
+`queue_contract(rows, 'source-row')` remains available for INSERT/DELETE actions.
+It queues shallow row images separately, preserving its existing pointer and
+presence semantics. Neither queue policy authorizes arbitrary actions, changes
+the allocator, or replaces a finite reconciliation plan.

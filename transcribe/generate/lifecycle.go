@@ -81,8 +81,11 @@ func (input *Input) validateLifecycleTarget(mutation, pendingDiscovery bool) err
 			}
 		}
 		if view.QueueContract != "" {
-			if view.QueueContract != "source-row" || !mutation || !mutationViews[view] || view.Auxiliary || (policy != "" && policy != "post" && policy != "patch") || view.MutationPredicateGroup != nil {
-				return fmt.Errorf("queue_contract requires a generated POST/PATCH physical source-row role; source-slice authoring is not yet available")
+			if view.QueueContract == "source-slice" && view.Cardinality == spec.CardinalityOne {
+				return fmt.Errorf("queue_contract source-slice requires a collection role")
+			}
+			if (view.QueueContract != "source-row" && view.QueueContract != "source-slice") || !mutation || !mutationViews[view] || view.Auxiliary || (policy != "" && policy != "post" && policy != "patch") || view.MutationPredicateGroup != nil {
+				return fmt.Errorf("queue_contract requires a generated POST/PATCH physical source-row or source-slice role")
 			}
 			for _, route := range input.Component.Routes {
 				if route != nil && !strings.EqualFold(route.Method, "POST") && !strings.EqualFold(route.Method, "PATCH") {

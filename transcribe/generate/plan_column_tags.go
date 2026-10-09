@@ -5,23 +5,14 @@ import (
 	"strings"
 
 	"github.com/viant/datly/spec"
+	"github.com/viant/datly/tag"
 	"github.com/viant/datly/typecatalog"
 	sqlio "github.com/viant/sqlx/io"
 	"github.com/viant/tagly/tags"
 )
 
 func scalarColumnFieldTag(column *spec.Column, source string, includeVelty bool) string {
-	parsed := tags.NewTags(strings.TrimSpace(column.Tag))
-	if origin := column.DocumentationOrigin; origin != nil {
-		table := origin.Table
-		if table == "" {
-			table = "-"
-		}
-		parsed.Set("docTable", table)
-		if origin.Column != "" {
-			parsed.Set("docColumn", origin.Column)
-		}
-	}
+	parsed := tags.NewTags(strings.TrimSpace(tag.CanonicalFieldTag(column.Tag)))
 	if column.Output != "" && column.Output != source {
 		parsed.Set("sqlOutput", column.Output)
 	}

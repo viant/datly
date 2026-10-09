@@ -24,6 +24,43 @@ func (r *planResolver) applySetMarkerViews() error {
 	if err != nil {
 		return err
 	}
+	// Auxiliary relations are still request-body fields for a generated custom
+	// contract. Admit their ordinary presence independently of writer intent.
+	if h := r.input.ExternalHandler; h != nil && h.GeneratedContracts && h.InputShape != nil {
+		visited := map[*spec.View]bool{}
+		var addShapeEdges func(*spec.View) error
+		addShapeEdges = func(view *spec.View) error {
+			if view == nil || visited[view] {
+				return nil
+			}
+			visited[view] = true
+			parent, err := view.Identity()
+			if err != nil {
+				return err
+			}
+			for _, relation := range view.Relations {
+				if relation == nil || relation.View == nil {
+					continue
+				}
+				child, err := relation.View.Identity()
+				if err != nil {
+					return err
+				}
+				holder := relation.Holder
+				if holder == "" {
+					holder = relation.Name
+				}
+				borrowedEdges[borrowedPresenceEdge{parent: parent, holder: typecatalog.FieldName(holder), child: child}] = true
+				if err := addShapeEdges(relation.View); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+		if err := addShapeEdges(h.InputShape); err != nil {
+			return err
+		}
+	}
 	planned := make(map[string]*ViewPlan, len(r.plan.Views))
 	linked := map[string]bool{}
 	var markLinked func(*spec.View) error
@@ -122,6 +159,11 @@ func (r *planResolver) canonicalViewIndex() (map[string]*spec.View, error) {
 			if err := add(view); err != nil {
 				return nil, err
 			}
+		}
+	}
+	if r.input.ExternalHandler != nil {
+		if err := add(r.input.ExternalHandler.InputShape); err != nil {
+			return nil, err
 		}
 	}
 	return result, nil

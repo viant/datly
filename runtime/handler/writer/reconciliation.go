@@ -47,7 +47,23 @@ type ReconciliationRootPlan struct {
 	Assignments []ReconciliationAssignment
 	Roles       []ReconciliationRolePlan
 }
-type ReconciliationPlan struct{ Roots []ReconciliationRootPlan }
+type ReconciliationPlan struct {
+	Roots  []ReconciliationRootPlan
+	Phases []ReconciliationPhasePlan
+}
+
+// Phase names resolve against compiled authoring authority. Hooks select
+// occurrences and scalar values; they cannot supply actions, tables or ordering.
+type ReconciliationPhasePlan struct {
+	Phase string
+	Roots []ReconciliationRootPhasePlan
+}
+type ReconciliationRootPhasePlan struct {
+	Root     OccurrenceRef
+	Selected []ReconciliationSelection
+	Deletes  []OccurrenceRef
+	Followup []ReconciliationAssignment
+}
 
 // ReconciliationObservation contains detached values for business selection.
 // Row, Previous and allocation values convey evidence, never naming authority.
@@ -76,7 +92,7 @@ type ReconciliationContext struct{ attempt *reconciliationAttempt }
 // Roots preserves initialized root order, holder occurrence order and bound
 // Current enumeration order. Every returned value is detached from writer state.
 func (c ReconciliationContext) Roots() ([]ReconciliationRoot, error) {
-	if c.attempt == nil || !c.attempt.active {
+	if c.attempt == nil || !c.attempt.active || c.attempt.observationsClosed {
 		return nil, fmt.Errorf("reconciliation context is retired")
 	}
 	result := make([]ReconciliationRoot, 0, len(c.attempt.roots))
@@ -133,10 +149,11 @@ type reconciliationRootOccurrences struct {
 	roles []reconciliationRoleOccurrences
 }
 type reconciliationAttempt struct {
-	active      bool
-	roots       []reconciliationRootOccurrences
-	tickets     map[*reconciliationTicket]bool
-	allocations map[*Frame]*reconciliationAllocation
+	observationsClosed bool
+	active             bool
+	roots              []reconciliationRootOccurrences
+	tickets            map[*reconciliationTicket]bool
+	allocations        map[*Frame]*reconciliationAllocation
 }
 
 func hasReconciliation(root *Record) bool { return root != nil && root.reconciliation != nil }
@@ -145,6 +162,9 @@ func validateReconciliation(metadata *Metadata, inputType, outputType reflect.Ty
 	root := metadata.Root
 	if err := rejectDescendantReconciliation(metadata.Component.RootView); err != nil {
 		return err
+	}
+	if declaration := metadata.Component.RootView.Reconciliation; declaration != nil && declaration.SourcePhases != nil && declaration.Mode != "source-phases" {
+		return fmt.Errorf("finite_reconciliation SourcePhases requires source-phases")
 	}
 	var visit func(*Record) error
 	seen := map[*Record]bool{}
@@ -192,6 +212,12 @@ func validateReconciliation(metadata *Metadata, inputType, outputType reflect.Ty
 	}
 	if root.WriterIdentityPolicy != "" || root.WriterActionPolicy != "" || root.ConcurrencyToken != nil || root.MutationPredicateGroup != nil || root.QueueContract != "" || root.OnDeleteNotFound != "" {
 		return fmt.Errorf("finite_reconciliation unsupported root policy combination")
+	}
+	if declaration.Mode == "source-phases" {
+		return fmt.Errorf("finite_reconciliation source-phases is unavailable until phase/allocation/payload authority is complete")
+	}
+	if declaration.RootAction != "" {
+		return fmt.Errorf("finite_reconciliation rootAction requires source-phases")
 	}
 	if declaration.Mode != "same-parent-root-first" {
 		return fmt.Errorf("finite_reconciliation requires same-parent-root-first")
@@ -299,7 +325,7 @@ func (p *Program) captureReconciliationAllocation(ctx context.Context) error {
 	return nil
 }
 func (a *reconciliationAttempt) mint(root *Frame, record *Record, frame *Frame, previous reflect.Value, current bool) OccurrenceRef {
-	ticket := &reconciliationTicket{a, root, record, frame, previous, current}
+	ticket := &reconciliationTicket{owner: a, root: root, record: record, frame: frame, previous: previous, current: current}
 	a.tickets[ticket] = true
 	return OccurrenceRef{ticket}
 }
@@ -484,7 +510,11 @@ func (p *Program) requireReconciliationCurrent(rel *Relation, root *Frame, previ
 	return nil
 }
 func (p *Program) reconciliationState() (string, error) {
-	base, e := p.afterQueueInputState()
+	return p.reconciliationStateForActions(p.actions.Rows)
+}
+
+func (p *Program) reconciliationStateForActions(actions []*Action) (string, error) {
+	base, e := p.afterQueueInputStateForActions(actions)
 	if e != nil {
 		return "", e
 	}
@@ -538,6 +568,9 @@ func (p *Program) reconciliationState() (string, error) {
 }
 
 func (p *Program) applyReconciliationPlan(ctx context.Context, plan ReconciliationPlan) error {
+	if plan.Phases != nil {
+		return fmt.Errorf("finite_reconciliation phase selections require source-phases")
+	}
 	attempt := p.reconciliation
 	if len(plan.Roots) != len(attempt.roots) {
 		return fmt.Errorf("finite_reconciliation requires every root occurrence in unchanged order")

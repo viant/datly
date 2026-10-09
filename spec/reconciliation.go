@@ -11,9 +11,11 @@ import (
 // Reconciliation declares one finite same-parent plan and a fixed role traversal.
 // Holder order is both the allocation graph order and the native traversal order.
 type Reconciliation struct {
-	Mode       string               `json:"mode"`
-	RootFields []string             `json:"rootFields,omitempty"`
-	Roles      []ReconciliationRole `json:"roles"`
+	SourcePhases *ReconciliationSourcePhases `json:"sourcePhases,omitempty"`
+	RootAction   string                      `json:"rootAction,omitempty"`
+	Mode         string                      `json:"mode"`
+	RootFields   []string                    `json:"rootFields,omitempty"`
+	Roles        []ReconciliationRole        `json:"roles"`
 }
 type ReconciliationRole struct {
 	Holder        string   `json:"holder"`
@@ -32,8 +34,17 @@ func ParseReconciliation(text string) (*Reconciliation, error) {
 	if err := decoder.Decode(&extra); err != io.EOF {
 		return nil, fmt.Errorf("finite_reconciliation requires one descriptor")
 	}
-	if result.Mode != "same-parent-root-first" || len(result.Roles) == 0 {
+	if result.Mode == "source-phases" {
+		if result.RootAction != "all-supplied-positive-keys" || len(result.Roles) == 0 {
+			return nil, fmt.Errorf("finite_reconciliation source-phases requires all-supplied-positive-keys and declared roles")
+		}
+	} else if result.Mode != "same-parent-root-first" || result.RootAction != "" || len(result.Roles) == 0 {
 		return nil, fmt.Errorf("finite_reconciliation requires same-parent-root-first and declared leaf roles")
+	}
+	if result.SourcePhases != nil {
+		if err := result.ValidateSourcePhases(); err != nil {
+			return nil, err
+		}
 	}
 	seen := map[string]bool{}
 	for _, role := range result.Roles {
@@ -49,6 +60,7 @@ func (r *Reconciliation) Clone() *Reconciliation {
 		return nil
 	}
 	out := *r
+	out.SourcePhases = r.SourcePhases.Clone()
 	out.RootFields = append([]string(nil), r.RootFields...)
 	out.Roles = append([]ReconciliationRole(nil), r.Roles...)
 	for i := range out.Roles {
@@ -88,6 +100,15 @@ func ValidateReconciliationView(root *View, operation string) error {
 	config := root.Reconciliation
 	if config == nil {
 		return nil
+	}
+	if config.SourcePhases != nil && config.Mode != "source-phases" {
+		return fmt.Errorf("finite_reconciliation SourcePhases requires source-phases")
+	}
+	if config.Mode == "source-phases" {
+		return fmt.Errorf("finite_reconciliation source-phases is unavailable until phase/allocation/payload authority is complete")
+	}
+	if config.RootAction != "" {
+		return fmt.Errorf("finite_reconciliation rootAction requires source-phases")
 	}
 	if config.Mode != "same-parent-root-first" || operation != "patch" || root.Auxiliary || root.SelfReference != nil || root.EntityHooks == "" || len(config.Roles) == 0 || len(config.Roles) != len(root.Relations) {
 		return fmt.Errorf("finite_reconciliation requires a physical PATCH root with lifecycle and declared direct leaves")

@@ -161,9 +161,8 @@ func (r *outputColumnCompiler) column(field xshape.Field, path string) (*spec.Co
 	}
 	groupable := metadata.Groupable
 	result := &spec.Column{
-		DocumentationOrigin: metadata.DocumentationOrigin,
-		Name:                name, NameInferred: nameInferred, Source: source, Output: metadata.SQLOutput, Type: typeRef, Nullable: nullable,
-		Groupable: &groupable, Tag: string(field.Tag), DatabaseType: strings.TrimSpace(sqlTag.DataType),
+		Name: name, NameInferred: nameInferred, Source: source, Output: metadata.SQLOutput, Type: typeRef, Nullable: nullable,
+		Groupable: &groupable, Tag: dtag.CanonicalFieldTag(string(field.Tag)), DatabaseType: strings.TrimSpace(sqlTag.DataType),
 		PrimaryKey: sqlTag.PrimaryKey, AutoIncrement: sqlTag.Autoincrement, Unique: sqlTag.IsUnique,
 	}
 	if metadata.Codec != nil {

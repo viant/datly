@@ -182,3 +182,10 @@ func TestRelationValueRoundTripsCompoundLinks(t *testing.T) {
 		t.Fatalf("ParseRelation() = %+v, %v\n%s", actual, err, value)
 	}
 }
+
+func TestObsoleteDocumentationTagsIgnored(t *testing.T) {
+	_, err := ParseView("rows,docTable=wrong,table=users")
+	if err != nil {
+		t.Fatal(err)
+	}
+}

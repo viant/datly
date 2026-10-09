@@ -71,7 +71,7 @@ func (s *dataScope) prepareOrderedJournal(ctx context.Context, units []*dataScop
 		if err := validateUnitExecutionGuards(ctx, units); err != nil {
 			return root.failOrderedJournal(err)
 		}
-		receiver := root.nativeInvocation.NextJournalOwner()
+		receiver := root.nativeInvocation.NextJournalOwnerFor(phase)
 		if receiver == nil {
 			return nil
 		}

@@ -331,6 +331,21 @@ func (r *packageComponentResolver) resolveParamType(role contractRole, field xsh
 	return nil
 }
 
+// handlerOwnsSourceLessBody distinguishes reusable handler data from a writer
+// root. Every route must explicitly own its handler; mixed writer contracts
+// retain the mutation-root checks.
+func (r *packageComponentResolver) handlerOwnsSourceLessBody() bool {
+	if r.component.RootView != nil || (r.component.Settings != nil && strings.TrimSpace(r.component.Settings.Mutation) != "") || len(r.component.Routes) == 0 {
+		return false
+	}
+	for _, route := range r.component.Routes {
+		if route == nil || strings.TrimSpace(route.Handler) == "" {
+			return false
+		}
+	}
+	return true
+}
+
 func (r *packageComponentResolver) applyInput(resolved *resolvedContractField) error {
 	param := resolved.param
 	if param != nil && param.IsMutationInput() && resolved.metadata.View != nil && resolved.metadata.View.NestedNullPolicy != "" {
@@ -348,7 +363,7 @@ func (r *packageComponentResolver) applyInput(resolved *resolvedContractField) e
 		}
 		r.component.RootView.InsertValidationPresence = true
 	}
-	if param != nil && param.IsMutationInput() && resolved.metadata.View != nil && resolved.metadata.View.Reconciliation != nil {
+	if param != nil && param.IsMutationInput() && resolved.metadata.View != nil && resolved.metadata.View.Reconciliation != nil && !r.handlerOwnsSourceLessBody() {
 		if r.component.RootView == nil {
 			return fmt.Errorf("finiteReconciliation requires a mutation root")
 		}
@@ -721,7 +736,6 @@ func (r *packageComponentResolver) view(field xshape.Field, name string, metadat
 		view.MutationPredicateGroup = metadata.View.MutationPredicateGroup
 		view.Source.URI = strings.TrimSpace(metadata.View.URI)
 		view.Source.Table = strings.TrimSpace(metadata.View.Table)
-		view.DocumentationTable = metadata.View.DocumentationTable
 		view.Partitioning = metadata.View.Partitioning.Clone()
 		view.Selector = metadata.View.Selector.Clone()
 		view.BatchSize = metadata.View.Batch

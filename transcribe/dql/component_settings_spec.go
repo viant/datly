@@ -1,6 +1,7 @@
 package dql
 
 import (
+	"slices"
 	"strings"
 
 	"github.com/viant/datly/spec"
@@ -11,6 +12,7 @@ func toSpecSettings(input *componentSettings) *spec.Settings {
 		return nil
 	}
 	ret := &spec.Settings{
+		ProtectedFlushTables:         slices.Clone(input.ProtectedFlushTables),
 		ResponseCompression:          input.ResponseCompression.Clone(),
 		SequenceStrategy:             input.SequenceStrategy,
 		MCPFolders:                   append([]spec.ResourceFolder(nil), input.MCPFolders...),

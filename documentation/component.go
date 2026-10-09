@@ -44,26 +44,21 @@ func (s *Snapshot) addView(path string, view *spec.View, active map[*spec.View]b
 	}
 	active[view] = true
 	defer delete(active, view)
-	// Retain only annotation identity; the source may be reused by its author.
-	copy := &spec.View{Columns: make([]*spec.Column, 0, len(view.Columns))}
-	if view.Source != nil {
-		copy.Source = &spec.ViewSource{Table: view.Source.Table}
-	}
+	value := *view
+	copy := &value
+	copy.Source = view.Source.Clone()
+	copy.Relations = nil
+	copy.Columns = make([]*spec.Column, 0, len(view.Columns))
 	for _, column := range view.Columns {
 		if column != nil {
 			copy.Columns = append(copy.Columns, column.Clone())
 		}
 	}
-	s.views[path] = copy
-	if view.DocumentationTable != "" {
-		if copy.Source == nil {
-			copy.Source = &spec.ViewSource{}
-		}
-		copy.Source.Table = view.DocumentationTable
-		if copy.Source.Table == "-" {
-			copy.Source.Table = ""
-		}
+	if copy.Source == nil {
+		copy.Source = &spec.ViewSource{}
 	}
+	copy.Source.Table = view.ProjectionTable()
+	s.views[path] = copy
 
 	for _, relation := range view.Relations {
 		if relation != nil {
@@ -75,7 +70,8 @@ func (s *Snapshot) addView(path string, view *spec.View, active map[*spec.View]b
 // StructField is called by existing schema projectors with their canonical field
 // and path. SQLX and Datly tag owners supply aliases and explicit annotations.
 func (s *Snapshot) StructField(path string, field reflect.StructField) Annotation {
-	column := sqlxio.ParseTag(field.Tag).Name()
+	mapping := sqlxio.ParseTag(field.Tag)
+	column := mapping.Name()
 	if column == "" {
 		column = field.Tag.Get("source")
 	}
@@ -100,27 +96,47 @@ func (s *Snapshot) StructField(path string, field reflect.StructField) Annotatio
 				if view.Source != nil {
 					f.Table = view.Source.Table
 				}
+				name := field.Name
+				if selector := field.Tag.Get("selectorAlias"); selector != "" {
+					name = selector
+				} else if _, projected, ok := strings.Cut(mapping.Column, "|"); ok {
+					projected, _, _ = strings.Cut(projected, "|")
+					name = strings.TrimSpace(projected)
+				}
+				var matched *spec.Column
 				for _, c := range view.Columns {
-					if strings.EqualFold(c.Name, field.Name) || strings.EqualFold(c.Source, f.Column) {
-						if f.Authored.Description == "" {
-							f.Authored.Description = reflect.StructTag(c.Tag).Get("desc")
-						}
-						if f.Authored.Example == "" {
-							f.Authored.Example = reflect.StructTag(c.Tag).Get("example")
-						}
-						if c.Source != "" {
-							f.Column = c.Source
-						}
+					if strings.EqualFold(c.Name, name) || strings.EqualFold(c.Name, field.Name) || (field.Tag.Get("sqlOutput") != "" && strings.EqualFold(c.Output, field.Tag.Get("sqlOutput"))) {
+						matched = c
 						break
 					}
 				}
-				for _, c := range view.Columns {
-					if c.DocumentationOrigin != nil && (strings.EqualFold(c.Name, field.Name) || strings.EqualFold(c.Source, f.Column)) {
-						f.Table = c.DocumentationOrigin.Table
-						if c.DocumentationOrigin.Column != "" {
-							f.Column = c.DocumentationOrigin.Column
+				if matched == nil {
+					// A physical-source fallback is safe only when it identifies one occurrence column.
+					for _, c := range view.Columns {
+						if strings.EqualFold(c.Source, f.Column) {
+							if matched != nil {
+								matched = nil
+								break
+							}
+							matched = c
 						}
-						break
+					}
+				}
+				if c := matched; c != nil {
+					if f.Authored.Description == "" {
+						f.Authored.Description = reflect.StructTag(c.Tag).Get("desc")
+					}
+					if f.Authored.Example == "" {
+						f.Authored.Example = reflect.StructTag(c.Tag).Get("example")
+					}
+					if c.Source != "" {
+						f.Column = c.Source
+					}
+					if table, column, known := view.ProjectionOrigin(c.Name); known {
+						f.Table = table
+						if column != "" {
+							f.Column = column
+						}
 					}
 				}
 
@@ -128,14 +144,13 @@ func (s *Snapshot) StructField(path string, field reflect.StructField) Annotatio
 			}
 		}
 	}
-	if table, ok := field.Tag.Lookup("docTable"); ok {
-		f.Table = table
-		if table == "-" {
-			f.Table = ""
+	// Explicit SQLX physical mappings are canonical and take precedence.
+	if mapping.Table != "" {
+		f.Table = mapping.Table
+		if mapping.Db != "" {
+			f.Table = mapping.Db + "." + f.Table
 		}
-		if column := field.Tag.Get("docColumn"); column != "" {
-			f.Column = column
-		}
+		f.Column = mapping.Name()
 	}
 	return s.Field(f)
 }

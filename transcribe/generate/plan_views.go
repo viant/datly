@@ -711,7 +711,7 @@ func appendViewTagsWithMatch(fieldTag string, view *spec.View, match string) (st
 		return fieldTag, nil
 	}
 	fieldTag = withoutStructTags(fieldTag, tag.ViewName, tag.SQLName)
-	metadata := tag.View{DocumentationTable: view.DocumentationTable, Name: view.CanonicalName(), TypeName: view.TypeName, Dest: view.Dest, EntityHooks: view.EntityHooks, WriterIdentityPolicy: view.WriterIdentityPolicy, WriterActionPolicy: view.WriterActionPolicy, QueueContract: view.QueueContract, Reconciliation: view.Reconciliation.Clone(), InsertValidationPresence: view.InsertValidationPresence, RootNullPolicy: view.RootNullPolicy, NestedNullPolicy: view.NestedNullPolicy, RowLock: view.RowLock, RowLockOrder: view.RowLockOrder, OnDeleteNotFound: view.OnDeleteNotFound, MutationPredicateGroup: view.MutationPredicateGroup, Batch: view.BatchSize,
+	metadata := tag.View{Name: view.CanonicalName(), TypeName: view.TypeName, Dest: view.Dest, EntityHooks: view.EntityHooks, WriterIdentityPolicy: view.WriterIdentityPolicy, WriterActionPolicy: view.WriterActionPolicy, QueueContract: view.QueueContract, Reconciliation: view.Reconciliation.Clone(), InsertValidationPresence: view.InsertValidationPresence, RootNullPolicy: view.RootNullPolicy, NestedNullPolicy: view.NestedNullPolicy, RowLock: view.RowLock, RowLockOrder: view.RowLockOrder, OnDeleteNotFound: view.OnDeleteNotFound, MutationPredicateGroup: view.MutationPredicateGroup, Batch: view.BatchSize,
 		BatchConcurrency: view.BatchConcurrency,
 		Auxiliary:        view.Auxiliary,
 		Match:            match,

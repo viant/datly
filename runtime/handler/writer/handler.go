@@ -425,6 +425,11 @@ func (p *Program) graphIndex() *graphIndex {
 	if p.graph != nil && len(p.graph.rows) == len(rows) && (len(rows) == 0 || &p.graph.rows[0] == &rows[0]) {
 		return p.graph
 	}
+	p.graph = newGraphIndex(rows)
+	return p.graph
+}
+
+func newGraphIndex(rows []*Frame) *graphIndex {
 	index := &graphIndex{rows: rows, positions: make(map[*Frame]int, len(rows)), byPointer: make(map[uintptr]*Frame, len(rows)), inserts: map[insertKey][]insertReference{}}
 	for position, frame := range rows {
 		if frame == nil {
@@ -450,7 +455,6 @@ func (p *Program) graphIndex() *graphIndex {
 			index.inserts[key] = append(index.inserts[key], insertReference{position: position, frame: frame, value: value})
 		}
 	}
-	p.graph = index
 	return index
 }
 
@@ -816,7 +820,8 @@ func (h *Handler) Execute(ctx context.Context, invocation rhandler.Invocation) (
 			if guardErr = registrar.EnableCapturedExecutionGuards(); guardErr != nil {
 				return nil, guardErr
 			}
-			if guardErr = registrar.RegisterExecutionGuard(check); guardErr != nil {
+			guardErr = registrar.RegisterExecutionGuard(check)
+			if guardErr != nil {
 				return nil, guardErr
 			}
 			if guardErr = h.CapturedExecutionGuardRegistered(invocation); guardErr != nil {
@@ -865,7 +870,7 @@ func (h *Handler) execute(ctx context.Context, invocation rhandler.Invocation) (
 	if err = program.prepare(ctx, invocation.Binder); err != nil {
 		return program.output, err
 	}
-	if handlerengine.IsImperativeComponent(ctx) && (program.queueObserver() == nil || len(program.actions.Rows) > 0) {
+	if handlerengine.IsImperativeComponent(ctx) && !program.explicitProtectedFlush() && (program.queueObserver() == nil || len(program.actions.Rows) > 0) {
 		flusher, lookupErr := lookup[xhandler.Flusher](ctx, invocation.Binder, xhandler.FlusherKey)
 		if lookupErr != nil {
 			return program.output, lookupErr
@@ -875,6 +880,12 @@ func (h *Handler) execute(ctx context.Context, invocation rhandler.Invocation) (
 		}
 	}
 	return program.output, nil
+}
+
+// Configured writers keep their authored explicit boundaries; declaration
+// alone never drains a table. Root completion owns the remaining journal.
+func (p *Program) explicitProtectedFlush() bool {
+	return p != nil && p.metadata != nil && p.metadata.Component != nil && p.metadata.Component.Settings != nil && len(p.metadata.Component.Settings.ProtectedFlushTables) != 0
 }
 
 func (h *Handler) CaptureInput(ctx context.Context, input any) (any, error) {
@@ -972,6 +983,7 @@ func (h *Handler) CapturedExecutionGuard(invocation rhandler.Invocation) (func(c
 		return errors.Join(program.validateAfterQueueInputState(), program.validateReconciliationSeal())
 	}, nil
 }
+
 func (h *Handler) CapturedExecutionGuardRegistered(invocation rhandler.Invocation) error {
 	if h == nil || h.metadata == nil || !hasRetainedWriterGuards(h.metadata.Root) {
 		return nil
@@ -1684,6 +1696,10 @@ func (p *Program) unresolvedParentLinks(frame *Frame) bool {
 }
 
 func (p *Program) validationOptions(frame *Frame, transactionStarted bool) xhandler.ValidationOptions {
+	return p.validationOptionsWithReferences(frame, transactionStarted, p.satisfiedGraphReferences(frame))
+}
+
+func (p *Program) validationOptionsWithReferences(frame *Frame, transactionStarted bool, graphReferences []xhandler.ValidationReference) xhandler.ValidationOptions {
 	unique, refs := true, true
 	if frame.NoopMissingIdentity {
 		// An unmatched no-op has no Previous evidence. Complete candidate
@@ -1709,7 +1725,6 @@ func (p *Program) validationOptions(frame *Frame, transactionStarted bool) xhand
 		options.PreviousFields = p.fieldsOf(frame.Previous.Elem().Type())
 		options.Fields = frame.Fields
 	}
-	graphReferences := p.satisfiedGraphReferences(frame)
 	if frame.Action == xhandler.WriteUpdate && len(graphReferences) > 0 {
 		// SQLX reference receipts are insert-only. For a sparse update whose new
 		// FK value is proven to match an earlier insert in this ordered graph,
@@ -1861,11 +1876,18 @@ func (p *Program) aggregateValidation() bool {
 }
 
 func (p *Program) validateFrames(ctx context.Context, validator xhandler.Validator, transactionStarted bool) error {
+	return p.validateFrameSubset(ctx, validator, transactionStarted, p.frames.Rows)
+}
+
+// validateFrameSubset retains the canonical graph for reference evidence while
+// validating only the supplied native frames. It neither changes frame topology
+// nor initializes, allocates or admits records.
+func (p *Program) validateFrameSubset(ctx context.Context, validator xhandler.Validator, transactionStarted bool, selected []*Frame) error {
 	collect := !transactionStarted && p.aggregateValidation()
 	aggregate := &xhandler.Validation{}
 	groups := map[*Record][]*Frame{}
 	var order []*Record
-	for _, frame := range p.frames.Rows {
+	for _, frame := range selected {
 		if frame == nil || frame.Record == nil || frame.Record.Auxiliary || frame.Action == xhandler.WriteDelete && !(transactionStarted && hasReconciliation(p.metadata.Root)) {
 			continue
 		}
@@ -2472,6 +2494,9 @@ func Compile(component *spec.Component, inputType, outputType reflect.Type, oper
 	operation = strings.ToLower(strings.TrimSpace(operation))
 	if operation != "patch" && operation != "post" && operation != "put" {
 		return nil, fmt.Errorf("generic writer requires patch, post, or put metadata, got %q", operation)
+	}
+	if err := component.Settings.ValidateProtectedFlushTables(); err != nil {
+		return nil, err
 	}
 	if err := spec.ValidateInternalMutationRoot(component, operation); err != nil {
 		return nil, err

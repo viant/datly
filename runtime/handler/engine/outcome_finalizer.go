@@ -33,8 +33,12 @@ func (e *FinalizationError) Error() string {
 }
 func (e *FinalizationError) Unwrap() error { return e.Err }
 
-func neutralDataScope() *dataScope {
-	scope := &dataScope{bySource: map[any]*dataScope{}}
+func neutralDataScope(contexts ...context.Context) *dataScope {
+	lifetime := context.Background()
+	if len(contexts) != 0 {
+		lifetime = contexts[0]
+	}
+	scope := &dataScope{bySource: map[any]*dataScope{}, invocationContext: lifetime}
 	scope.root, scope.unit = scope, scope
 	return scope
 }

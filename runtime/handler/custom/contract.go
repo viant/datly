@@ -20,6 +20,17 @@ type contractHandler[I any, O any] struct {
 	bindErr  error
 }
 
+// outcomeContractHandler retains the ordinary adapter surface while opting
+// only explicitly outcome-aware contracts into root-owned finalization.
+type outcomeContractHandler[I any, O any] struct {
+	*contractHandler[I, O]
+	finalizer rhandler.OutcomeFinalizer
+}
+
+func (h *outcomeContractHandler[I, O]) FinalizeOutcome(ctx context.Context, invocation rhandler.Invocation, result any, outcome xhandler.Outcome) error {
+	return h.finalizer.FinalizeOutcome(ctx, invocation, result, outcome)
+}
+
 // BindStatic compiles and binds explicitly tagged fields of a pointer contract
 // once, before the registered handler serves any invocation. Lazy lookups may
 // call it again; they must not rescan tags or rebind a shared handler.
@@ -85,7 +96,11 @@ func invocationBindingKind(kind string) bool {
 // New adapts the public binder-aware custom Go contract to the unified runtime
 // handler. The engine has already bound and initialized input before Execute.
 func New[I any, O any](contract xhandler.Contract[I, O]) rhandler.TypedHandler {
-	return &contractHandler[I, O]{contract: contract}
+	adapter := &contractHandler[I, O]{contract: contract}
+	if finalizer, ok := contract.(rhandler.OutcomeFinalizer); ok {
+		return &outcomeContractHandler[I, O]{contractHandler: adapter, finalizer: finalizer}
+	}
+	return adapter
 }
 
 // SupportsIndependentChildTransactions marks this source-less custom adapter;

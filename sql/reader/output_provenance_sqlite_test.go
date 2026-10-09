@@ -5,6 +5,8 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/viant/datly/bootstrap/cacheconfig"
 	"github.com/viant/datly/data"
 	"github.com/viant/datly/internal/testharness/sqlite"
@@ -15,12 +17,139 @@ import (
 	"github.com/viant/datly/sql/reader/readmeta"
 	"github.com/viant/sqlx/io/read/cache"
 	xreader "github.com/viant/xdatly/reader"
+	"github.com/viant/xdatly/response"
+	xstate "github.com/viant/xdatly/state"
 )
 
 type outputEvidenceRow struct {
 	ID   int     `sqlx:"id"`
 	Name *string `sqlx:"name"`
 }
+
+type templateSummaryInput struct {
+	Tenant  int
+	Minimum int
+}
+
+type templateSummaryTotals struct {
+	Count int `sqlx:"count"`
+	SumID int `sqlx:"sum_id"`
+	MaxID int `sqlx:"max_id"`
+}
+
+type templateSummaryOutput struct {
+	Rows   []outputEvidenceRow
+	Totals *templateSummaryTotals
+}
+
+type templateSummaryRelationsOutput struct {
+	Rows   []*sourceGuardRow
+	Totals *templateSummaryTotals
+}
+
+func TestTemplateWildcardSummaryOrdinalRetainsSelectedRelationLinkSQLite(t *testing.T) {
+	ctx := context.Background()
+	h := sqlite.New(t)
+	require.NoError(t, h.ExecStatements(ctx, "CREATE TABLE summary_parents(id INTEGER,tenant_id INTEGER,name TEXT)", "INSERT INTO summary_parents VALUES(1,7,'alpha'),(2,7,'gamma'),(3,7,'beta')", "CREATE TABLE children(id INTEGER,parent_id INTEGER,name TEXT,secret TEXT)", "INSERT INTO children VALUES(10,2,'child','hidden')"))
+	const source = `SELECT * FROM (#set($constant = 1) SELECT id,name FROM summary_parents WHERE tenant_id=$criteria.AppendBinding($Unsafe.Tenant)) rows`
+	component := &spec.Component{RootView: &spec.View{Name: "Rows", Namespace: "rows", Selector: &spec.Selector{AllowFields: true, AllowOrderBy: true, AllowLimit: true, Orderable: []spec.FieldPath{"name"}}, Source: &spec.ViewSource{SQL: source}, Relations: []*spec.Relation{
+		{Name: "totals", Holder: "Totals", Kind: spec.RelationKindDerived, Cardinality: spec.CardinalityOne, View: &spec.View{Name: "totals", Source: &spec.ViewSource{SQL: "SELECT COUNT(*) AS count,SUM(id) AS sum_id,MAX(id) AS max_id FROM ($View.NonWindowSQL) parent"}}},
+	}}}
+	inputType, outputType := reflect.TypeFor[templateSummaryInput](), reflect.TypeFor[templateSummaryRelationsOutput]()
+	plan, err := compiler.Compile(compiler.Input{Component: component, InputType: inputType, OutputType: outputType, DirectViewField: "Rows"})
+	require.NoError(t, err)
+	execution, err := reader.NewExecution(reader.Config{Component: component, InputType: inputType, OutputType: outputType, Plan: plan, SQL: &dsql.SQLComponent{DB: h.DB}})
+	require.NoError(t, err)
+	selector := xstate.Selector{Fields: []string{"name", "Children"}, OrderBy: "1 DESC", Limit: 1}
+	before := selector.Clone()
+	result, err := execution.ReadResult(ctx, &templateSummaryInput{Tenant: 7}, sourceGuardBinder{xstate.Selectors{&xstate.NamedSelector{Name: "Rows", Selector: selector}}}, nil)
+	require.NoError(t, err)
+	output := result.Data.(*templateSummaryRelationsOutput)
+	require.Len(t, output.Rows, 1)
+	require.Equal(t, 2, output.Rows[0].ID)
+	require.Equal(t, "gamma", output.Rows[0].Name)
+	require.Len(t, output.Rows[0].Children, 1)
+	require.Equal(t, 10, output.Rows[0].Children[0].ID)
+	require.Equal(t, &templateSummaryTotals{Count: 3, SumID: 6, MaxID: 3}, output.Totals)
+	evidence, err := result.Projection.Row(0)
+	require.NoError(t, err)
+	require.True(t, evidence.Fields().Has("ID"))
+	require.True(t, evidence.Fields().Has("Name"))
+	require.Equal(t, before, &selector)
+	require.Equal(t, source, component.RootView.Source.SQL)
+}
+
+func TestTemplateWildcardSummaryPreservesUnselectedColumnsSQLite(t *testing.T) {
+	ctx := context.Background()
+	h := sqlite.New(t)
+	require.NoError(t, h.ExecStatements(ctx,
+		"CREATE TABLE summary_records(id INTEGER,tenant_id INTEGER,name TEXT)",
+		"INSERT INTO summary_records VALUES(1,7,'alpha'),(2,7,'gamma'),(3,7,'beta'),(4,7,'omit'),(99,8,'outside')"))
+	const source = `SELECT * FROM (#set($constant = 1) SELECT id,name FROM summary_records WHERE tenant_id=$criteria.AppendBinding($Unsafe.Tenant) AND id>$criteria.AppendBinding($Unsafe.Minimum)) rows $WHERE_SELECTOR_CRITERIA`
+	for _, tc := range []struct {
+		name      string
+		fields    []string
+		order     string
+		offset    int
+		orderable []spec.FieldPath
+		want      []string
+		deny      string
+	}{
+		{name: "selected name sorted page", fields: []string{"name"}, order: "name DESC", offset: 1, want: []string{"beta"}},
+		{name: "selected name beyond last page", fields: []string{"name"}, order: "name DESC", offset: 99},
+		{name: "full projection ordinal order", order: "2 DESC", offset: 1, want: []string{"beta"}},
+		{name: "selected name ordinal order", fields: []string{"name"}, order: "1 DESC", offset: 1, orderable: []spec.FieldPath{"name"}, want: []string{"beta"}},
+		{name: "unknown order", order: "missing", deny: "not in source projection"},
+		{name: "disallowed order", order: "id", orderable: []spec.FieldPath{"name"}, deny: "not allowed"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			policy := &spec.Selector{AllowFields: true, AllowOrderBy: true, AllowLimit: true, AllowOffset: true, AllowCriteria: true, Filterable: []spec.FieldPath{"name"}, Orderable: tc.orderable}
+			component := &spec.Component{RootView: &spec.View{Name: "Rows", Namespace: "rows", Selector: policy, Source: &spec.ViewSource{SQL: source}, Relations: []*spec.Relation{
+				{Name: "totals", Holder: "Totals", Kind: spec.RelationKindDerived, Cardinality: spec.CardinalityOne, View: &spec.View{Name: "totals", Source: &spec.ViewSource{SQL: "SELECT COUNT(*) AS count,SUM(id) AS sum_id,MAX(id) AS max_id FROM ($View.NonWindowSQL) parent"}}},
+			}}}
+			inputType, outputType := reflect.TypeFor[templateSummaryInput](), reflect.TypeFor[templateSummaryOutput]()
+			plan, err := compiler.Compile(compiler.Input{Component: component, InputType: inputType, OutputType: outputType, DirectViewField: "Rows"})
+			require.NoError(t, err)
+			execution, err := reader.NewExecution(reader.Config{Component: component, InputType: inputType, OutputType: outputType, Plan: plan, SQL: &dsql.SQLComponent{DB: h.DB}})
+			require.NoError(t, err)
+			selector := xstate.Selector{Fields: tc.fields, OrderBy: tc.order, Limit: 1, Offset: tc.offset, Criteria: "name <> ?", Placeholders: []any{"omit"}}
+			result, err := execution.ReadResult(ctx, &templateSummaryInput{Tenant: 7, Minimum: 1}, sourceGuardBinder{xstate.Selectors{&xstate.NamedSelector{Name: "Rows", Selector: selector}}}, nil)
+			if tc.deny != "" {
+				require.ErrorContains(t, err, tc.deny)
+				var failure *response.Error
+				require.ErrorAs(t, err, &failure)
+				require.Equal(t, 400, failure.Code)
+				return
+			}
+			require.NoError(t, err)
+			output := result.Data.(*templateSummaryOutput)
+			require.Equal(t, &templateSummaryTotals{Count: 2, SumID: 5, MaxID: 3}, output.Totals)
+			var names []string
+			for i, row := range output.Rows {
+				require.NotNil(t, row.Name)
+				names = append(names, *row.Name)
+				evidence, err := result.Projection.Row(i)
+				require.NoError(t, err)
+				require.True(t, evidence.Fields().Has("Name"))
+				if len(tc.fields) != 0 {
+					require.False(t, evidence.Fields().Has("ID"))
+				}
+			}
+			require.Equal(t, tc.want, names)
+			slot, err := result.Projection.Output("Totals")
+			require.NoError(t, err)
+			evidence, err := slot.Row(0)
+			require.NoError(t, err)
+			for _, name := range []string{"Count", "SumID", "MaxID"} {
+				require.True(t, evidence.Fields().Has(name), name)
+			}
+			require.Equal(t, source, component.RootView.Source.SQL)
+			require.Equal(t, tc.fields, selector.Fields)
+			require.Equal(t, tc.offset, selector.Offset)
+		})
+	}
+}
+
 type outputEvidenceCount struct {
 	Count      int    `sqlx:"count"`
 	Unselected string `sqlx:"-"`

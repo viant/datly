@@ -13,7 +13,6 @@ import (
 const ViewName = "view"
 
 type View struct {
-	DocumentationTable       string
 	Name                     string
 	TypeName                 string
 	Dest                     string
@@ -106,8 +105,8 @@ func ParseView(value string) (*View, error) {
 				return err
 			}
 		case "queuecontract":
-			if result.QueueContract != "" || value != "source-row" {
-				return fmt.Errorf("queueContract requires one source-row value; source-slice authoring is not yet available")
+			if result.QueueContract != "" || (value != "source-row" && value != "source-slice") {
+				return fmt.Errorf("queueContract requires one source-row or source-slice value")
 			}
 			result.QueueContract = value
 		case "writeractionpolicy":
@@ -164,7 +163,7 @@ func ParseView(value string) (*View, error) {
 		case "connector":
 			result.Connector = value
 		case "doctable":
-			result.DocumentationTable = value
+			// Obsolete documentation tags carry no authority.
 		case "table":
 			result.Table = value
 		case "cache":

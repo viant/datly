@@ -11,16 +11,9 @@ import (
 // A param source names another input datapoint and is therefore a dependency,
 // not an alias owned by the derived destination field.
 func BindingAliases(field reflect.StructField, param *spec.Parameter) []string {
-	values := []string{field.Name}
-	if param != nil {
-		if param.QuerySelector != nil {
-			values = append(values, param.QuerySelector.View+"."+param.Name)
-		} else {
-			values = append(values, param.Name)
-		}
-		if !strings.EqualFold(strings.TrimSpace(param.Source.Kind), "param") {
-			values = append(values, param.Source.Name)
-		}
+	values := CanonicalBindingAliases(field, param)
+	if param != nil && !strings.EqualFold(strings.TrimSpace(param.Source.Kind), "param") {
+		values = append(values, param.Source.Name)
 	}
 	seen := map[string]bool{}
 	result := make([]string, 0, len(values))
@@ -33,4 +26,18 @@ func BindingAliases(field reflect.StructField, param *spec.Parameter) []string {
 		result = append(result, value)
 	}
 	return result
+}
+
+// CanonicalBindingAliases returns structural and logical names without flattening
+// provider-specific transport locations into the explicit alias namespace.
+func CanonicalBindingAliases(field reflect.StructField, param *spec.Parameter) []string {
+	values := []string{field.Name}
+	if param != nil {
+		if param.QuerySelector != nil {
+			values = append(values, param.QuerySelector.View+"."+param.Name)
+		} else {
+			values = append(values, param.Name)
+		}
+	}
+	return values
 }

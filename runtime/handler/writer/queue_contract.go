@@ -33,11 +33,11 @@ func validateQueueContracts(record *Record, operation string) error {
 		return nil
 	}
 	if record.QueueContract != "" {
-		if record.QueueContract != "source-row" {
-			return fmt.Errorf("queue_contract requires source-row; source-slice authoring is not yet available")
+		if record.QueueContract != "source-row" && record.QueueContract != "source-slice" {
+			return fmt.Errorf("queue_contract requires source-row or source-slice")
 		}
 		if record.Auxiliary || record.Table == "" || (operation != "post" && operation != "patch") || record.ConcurrencyToken != nil || record.MutationPredicateGroup != nil {
-			return fmt.Errorf("queue_contract source-row requires POST/PATCH physical role without matched/criteria options")
+			return fmt.Errorf("queue_contract requires POST/PATCH physical role without matched/criteria options")
 		}
 	}
 	for _, relation := range record.Relations {
@@ -67,6 +67,16 @@ func (p *Program) preflightQueueContracts(ctx context.Context, binder xhandler.B
 		if frame == nil {
 			return fmt.Errorf("queue contract action has no captured frame")
 		}
+		if frame.Record.QueueContract == "source-slice" {
+			if action.Kind != xhandler.WriteInsert || !frame.holderIndexed {
+				return fmt.Errorf("queue_contract source-slice requires INSERT in a collection holder")
+			}
+			// Per-row observer events cannot truthfully describe one grouped append.
+			// Admit this combination only once grouped observation is defined.
+			if p.queueObserver() != nil {
+				return fmt.Errorf("queue_contract source-slice does not support per-row queue observation")
+			}
+		}
 		if frame.Record.QueueContract != "" && action.Kind != xhandler.WriteInsert && action.Kind != xhandler.WriteDelete {
 			return fmt.Errorf("queue_contract source-row does not support %s", action.Kind)
 		}
@@ -75,6 +85,9 @@ func (p *Program) preflightQueueContracts(ctx context.Context, binder xhandler.B
 }
 
 func (p *Program) admitSourceRow(dml xhandler.DML, action *Action, frame *Frame) error {
+	if frame.Record.QueueContract != "source-row" {
+		return fmt.Errorf("queue_contract requires native grouped admission for %s", frame.Record.QueueContract)
+	}
 	native, ok := dml.(rhandler.QueueContractDML)
 	if !ok {
 		return fmt.Errorf("native queue_contract capability is unavailable")
@@ -236,4 +249,86 @@ func (p *Program) validateQueuedContractState(ctx context.Context, binder xhandl
 		return fmt.Errorf("queue contract requires retained execution guards")
 	}
 	return guarded.ValidateExecutionGuards(ctx)
+}
+
+// sourceSliceEnd preserves captured parent/role and action boundaries. It never
+// coalesces different parents or skips an intervening action, even for one table.
+func (p *Program) sourceSliceEnd(start int) int {
+	first := p.actionFrame(p.actions.Rows[start])
+	if first == nil || first.Record.QueueContract != "source-slice" || p.actions.Rows[start].Kind != xhandler.WriteInsert {
+		return start
+	}
+	end := start + 1
+	for end < len(p.actions.Rows) {
+		action := p.actions.Rows[end]
+		frame := p.actionFrame(action)
+		if frame == nil || action.Kind != xhandler.WriteInsert || frame.Record != first.Record || frame.Parent != first.Parent {
+			break
+		}
+		end++
+	}
+	return end
+}
+
+func (p *Program) queueSourceSlice(ctx context.Context, binder xhandler.Binder, dml xhandler.DML, actions []*Action) error {
+	native, ok := dml.(rhandler.QueueContractDML)
+	if !ok {
+		return fmt.Errorf("native queue_contract capability is unavailable")
+	}
+	if len(actions) == 0 || actions[0] == nil {
+		return fmt.Errorf("empty source-slice group")
+	}
+	first := p.actionFrame(actions[0])
+	if first == nil {
+		return fmt.Errorf("writer action has no authoritative frame")
+	}
+	rows := reflect.MakeSlice(reflect.SliceOf(first.Entity.Type()), len(actions), len(actions))
+	seals := make([]queueSlotSeal, 0, len(actions))
+	for i, action := range actions {
+		frame := p.actionFrame(action)
+		if frame == nil || frame.Record != first.Record || frame.Parent != first.Parent || action.Kind != xhandler.WriteInsert || !frame.holderIndexed {
+			return fmt.Errorf("invalid source-slice group")
+		}
+		if err := p.validateActionPolicyFacts(); err != nil {
+			return err
+		}
+		if err := p.validateAuxiliaryFrameIdentity(frame); err != nil {
+			return err
+		}
+		if p.skippedAuxiliaryAncestor(frame) != nil {
+			return fmt.Errorf("writer row at %s is nil", frame.Location)
+		}
+		if frame.Record.Sequence != nil && !linkValueResolved(frame.Entity.Elem().FieldByIndex(frame.Record.Sequence.Index)) {
+			return fmt.Errorf("queue_contract native allocation is unresolved for %s", frame.Location)
+		}
+		seal, err := p.captureQueueSlots(frame)
+		if err != nil {
+			return err
+		}
+		if err = seal.validate(reflect.ValueOf(p.input)); err != nil {
+			return err
+		}
+		seals = append(seals, seal)
+		rows.Index(i).Set(action.Entity)
+	}
+	// Enroll every holder before exposing the one native grouped operation.
+	p.guardMu.Lock()
+	p.queueSlots = append(p.queueSlots, seals...)
+	p.guardMu.Unlock()
+	if err := native.InsertWithQueueContract(first.Record.Table, rows.Interface(), rhandler.SourceSlice); err != nil {
+		return fmt.Errorf("%s %s: %w", xhandler.WriteInsert, first.Record.Table, err)
+	}
+	for _, action := range actions {
+		frame := p.actionFrame(action)
+		if frame == nil {
+			return fmt.Errorf("writer action has no authoritative frame")
+		}
+		if err := p.callEntityHook(ctx, "AfterQueue", frame); err != nil {
+			return err
+		}
+		if err := p.validateQueuedContractState(ctx, binder); err != nil {
+			return err
+		}
+	}
+	return nil
 }

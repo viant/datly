@@ -22,6 +22,7 @@ import (
 type dataScopeContextKey struct{}
 
 type dataScope struct {
+	invocationContext        context.Context
 	nativeInvocation         *drainowner.Invocation
 	journalFrame             *drainowner.Frame
 	orderedCompletion        bool
@@ -46,6 +47,7 @@ type dataScope struct {
 	order                    string
 	once                     sync.Once
 	data                     xhandler.Data
+	associationData          xhandler.Data // fully resolved view; protected by root.mu
 	err                      error
 	completionErr            error
 	completion               xhandler.Outcome
@@ -287,13 +289,17 @@ func (c sequencerCapability) Reserve(ctx context.Context, tableName string, dest
 // flusherCapability exposes explicit buffered-write execution without leaking
 // the concrete SQL implementation.
 type flusherCapability struct {
-	guard   *mutationGuard
-	service xhandler.Flusher
+	guard     *mutationGuard
+	service   xhandler.Flusher
+	authority *flushAuthority
 }
 
 func (c flusherCapability) Flush(ctx context.Context, tableName string) error {
 	if err := c.guard.check("Flush"); err != nil {
 		return err
+	}
+	if c.authority != nil && c.authority.scope.protectedLifetime() {
+		return c.authority.flush(ctx, tableName)
 	}
 	return c.service.Flush(ctx, tableName)
 }
@@ -306,11 +312,15 @@ type dataCapability struct {
 	flusherCapability
 }
 
-func newHandlerData(service xhandler.Data, guard *mutationGuard) dataCapability {
+func newHandlerData(service xhandler.Data, guard *mutationGuard, authority ...*flushAuthority) dataCapability {
+	var prefix *flushAuthority
+	if len(authority) != 0 {
+		prefix = authority[0]
+	}
 	return dataCapability{
 		dmlCapability:       dmlCapability{service: service, guard: guard},
 		sequencerCapability: sequencerCapability{service: service, guard: guard},
-		flusherCapability:   flusherCapability{service: service, guard: guard},
+		flusherCapability:   flusherCapability{service: service, guard: guard, authority: prefix},
 	}
 }
 
@@ -336,6 +346,7 @@ func invocationDataScope(ctx context.Context, source dexec.DataSource) (*dataSco
 	}
 	created := newDataScope(source)
 	if created != nil {
+		created.invocationContext = ctx
 		created.root = created
 		created.unit = created
 		created.bySource = map[any]*dataScope{}
@@ -378,7 +389,11 @@ func (s *dataScope) admitActivity(contexts ...context.Context) (drainowner.Activ
 	if len(contexts) != 0 && drainowner.BindingGroupContext(contexts[0]) {
 		return drainowner.AdmitBindingGroupActivity(contexts[0], issuer)
 	}
-	return drainowner.AdmitActivity(issuer)
+	s.ensureJournalFrameLocked(root)
+	if s.err != nil {
+		return drainowner.Activity{}, s.err
+	}
+	return drainowner.AdmitFrameActivity(issuer, s.journalFrame)
 }
 func (s *dataScope) finishActivity(token drainowner.Activity, cause error) error {
 	root := s
@@ -640,6 +655,9 @@ func (s *dataScope) resolve(ctx context.Context) (xhandler.Data, error) {
 			}
 		}
 	}
+	root.mu.Lock()
+	s.associationData = s.data
+	root.mu.Unlock()
 	return s.data, s.err
 }
 
@@ -746,7 +764,11 @@ func (s *dataScope) seal() {
 	}
 }
 
-func (s *dataScope) providers() []locator.Provider {
+func (s *dataScope) providers(authorities ...*flushAuthority) []locator.Provider {
+	var authority *flushAuthority
+	if len(authorities) != 0 {
+		authority = authorities[0]
+	}
 	providers := []locator.Provider{
 		s.transactionStarterProvider(),
 		s.mutationReporterProvider(),
@@ -755,7 +777,7 @@ func (s *dataScope) providers() []locator.Provider {
 			if err != nil || data == nil {
 				return nil, false, err
 			}
-			return newHandlerData(data, s.mutationGuard()), true, nil
+			return newHandlerData(data, s.mutationGuard(), authority), true, nil
 		}),
 		handlerprovider.New(xhandler.DMLKey, func(ctx context.Context) (any, bool, error) {
 			data, err := s.resolve(ctx)
@@ -780,7 +802,7 @@ func (s *dataScope) providers() []locator.Provider {
 			if err != nil || data == nil {
 				return nil, false, err
 			}
-			return flusherCapability{service: data, guard: s.mutationGuard()}, true, nil
+			return flusherCapability{service: data, guard: s.mutationGuard(), authority: authority}, true, nil
 		}),
 	}
 	if s.connectors != nil {
@@ -942,7 +964,7 @@ func (s *dataScope) enrollExecutionOwner(unit *dataScope) error {
 	}
 	return nil
 }
-func (s *dataScope) registerExecutionGuard(ctx context.Context, check func(context.Context) error) error {
+func (s *dataScope) registerExecutionGuard(ctx context.Context, check func(context.Context) error, bindings ...*drainowner.GuardBinding) error {
 	root := s.root
 	if root == nil {
 		root = s
@@ -1005,7 +1027,16 @@ func (s *dataScope) registerExecutionGuard(ctx context.Context, check func(conte
 	if !ok {
 		return root.failGuardedExecution(fmt.Errorf("captured writer execution requires an enrolled invocation owner"))
 	}
-	if err := completionOperation("register captured writer execution guard", func() error { return owner.RegisterExecutionGuard(check) }); err != nil {
+	if err := completionOperation("register captured writer execution guard", func() error {
+		if len(bindings) > 0 && bindings[0] != nil {
+			if bound, ok := owner.(interface {
+				RegisterBoundExecutionGuard(func(context.Context) error, *drainowner.GuardBinding) error
+			}); ok {
+				return bound.RegisterBoundExecutionGuard(check, bindings[0])
+			}
+		}
+		return owner.RegisterExecutionGuard(check)
+	}); err != nil {
 		return root.failGuardedExecution(err)
 	}
 	return nil

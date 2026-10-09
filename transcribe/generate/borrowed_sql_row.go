@@ -17,6 +17,7 @@ import (
 	"strings"
 
 	"github.com/viant/datly/spec"
+	dtag "github.com/viant/datly/tag"
 	"github.com/viant/x"
 )
 
@@ -138,8 +139,6 @@ func BorrowedLeafContractFor(component *spec.Component, view *spec.View, package
 	metadata.Auxiliary, metadata.QueueContract = false, ""
 	metadata.Reconciliation = nil
 	metadata.Columns = nil
-	// Dictionary provenance is presentation metadata, not SQL row authority.
-	metadata.DocumentationTable = ""
 	metadata.Source = &spec.ViewSource{Table: table, Controls: view.Source.Controls.Clone(), Bindings: view.Source.Bindings.Clone()}
 	if metadata.Source.Bindings == nil {
 		metadata.Source.Bindings = &spec.ViewBindings{}
@@ -148,8 +147,7 @@ func BorrowedLeafContractFor(component *spec.Component, view *spec.View, package
 	result := BorrowedLeafContract{WriterOmitEmpty: copy.Settings.Generation != nil && copy.Settings.Generation.WriterOmitEmpty, Metadata: metadata, Package: packagePath, Name: name, Connector: connector, Catalog: catalog, Schema: schema, Table: table, Fields: fields, MarkerFields: markers}
 	for _, column := range view.Columns {
 		cloned := column.Clone()
-		cloned.DocumentationOrigin = nil
-		cloned.Tag = withoutStructTags(cloned.Tag, "docTable", "docColumn")
+		cloned.Tag = dtag.CanonicalFieldTag(cloned.Tag)
 		result.Columns = append(result.Columns, cloned)
 	}
 	return result, nil
@@ -213,7 +211,7 @@ func canonicalBorrowedFields(fields []Field, imports []spec.ImportSpec, packageP
 			return nil, err
 		}
 		result[i].Type = typ
-		result[i].Tag = withoutStructTags(result[i].Tag, "docTable", "docColumn")
+		result[i].Tag = dtag.CanonicalFieldTag(result[i].Tag)
 	}
 	return result, nil
 }
@@ -337,13 +335,13 @@ func validateBorrowedStruct(ts *ast.TypeSpec, imports map[string]string, pkg str
 				return err
 			}
 		}
-		actual = append(actual, Field{Name: field.Names[0].Name, Type: typ, Tag: withoutStructTags(tag, "docTable", "docColumn")})
+		actual = append(actual, Field{Name: field.Names[0].Name, Type: typ, Tag: dtag.CanonicalFieldTag(tag)})
 	}
 	if len(actual) != len(want) {
 		return fmt.Errorf("borrow_sql_row declaration %s has stale field membership", ts.Name)
 	}
 	for i, f := range actual {
-		if f.Name != want[i].Name || f.Type != want[i].Type || f.Tag != want[i].Tag {
+		if f.Name != want[i].Name || f.Type != want[i].Type || f.Tag != dtag.CanonicalFieldTag(want[i].Tag) {
 			return fmt.Errorf("borrow_sql_row declaration %s field %d %s differs from fresh SQL contract", ts.Name, i, f.Name)
 		}
 	}

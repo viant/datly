@@ -101,6 +101,9 @@ func OpenBindingGroup(invocation *Invocation, members []BindingGroupMember) (Bin
 	}
 	ledger.mu.Lock()
 	defer ledger.mu.Unlock()
+	if ledger.prefix != nil || externalPrefixLatched(invocation) {
+		return BindingGroup{}, prefixDeniedLocked(ledger)
+	}
 	if !ledger.enrolled || ledger.closed || ledger.failure != nil || ledger.group != nil || len(members) == 0 {
 		return BindingGroup{}, ErrBindingGroup
 	}
@@ -136,6 +139,12 @@ func AdmitBindingGroupTransactionStart(receiver any) (func(), error) {
 	}
 	ledger := &state.claimed.activities
 	ledger.mu.Lock()
+	if ledger.prefix != nil {
+		err := prefixDeniedLocked(ledger)
+		ledger.mu.Unlock()
+		state.mu.Unlock()
+		return nil, err
+	}
 	if ledger.group != nil && ledger.group.open {
 		cause := fmt.Errorf("%w: transaction startup", ErrBindingGroup)
 		appendFailureLocked(ledger, cause, nil, "", true, 0)

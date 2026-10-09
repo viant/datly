@@ -243,18 +243,21 @@ func (g *mutationGuard) admitStreamingQuery() error {
 		}
 		return err
 	}
+	var reconciliationErr error
+	if g.reconciliationDepth != 0 {
+		reconciliationErr = fmt.Errorf("%w: SQL query during ReconcileInput", ErrWriteEligibilityMutation)
+		if g.violation == nil {
+			g.violation = reconciliationErr
+		}
+	}
 	if g.guardedExecution {
 		if g.guardedFailure == nil {
 			g.guardedFailure = errors.New("managed streaming SQL is unsupported in a captured writer invocation")
 		}
 		return g.guardedFailure
 	}
-	if g.reconciliationDepth != 0 {
-		err := fmt.Errorf("%w: SQL query during ReconcileInput", ErrWriteEligibilityMutation)
-		if g.violation == nil {
-			g.violation = err
-		}
-		return err
+	if reconciliationErr != nil {
+		return reconciliationErr
 	}
 	g.streamingQueryUsed = true
 	return nil

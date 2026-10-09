@@ -30,7 +30,17 @@ func (p *Program) queue(ctx context.Context, binder xhandler.Binder) error {
 		if err != nil {
 			return err
 		}
-		for _, action := range p.actions.Rows {
+		for position := 0; position < len(p.actions.Rows); {
+			end := p.sourceSliceEnd(position)
+			if end > position {
+				if err = p.queueSourceSlice(ctx, binder, dml, p.actions.Rows[position:end]); err != nil {
+					return err
+				}
+				position = end
+				continue
+			}
+			action := p.actions.Rows[position]
+			position++
 			frame := p.actionFrame(action)
 			if frame == nil {
 				return fmt.Errorf("writer action has no authoritative frame")

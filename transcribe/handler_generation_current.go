@@ -66,11 +66,27 @@ func (g *handlerGeneration) refineCurrentProjection(record *plan.RecordPlan, gen
 type currentFieldAuthorities []currentFieldAuthority
 
 func (fields currentFieldAuthorities) resolve(name string) (currentFieldAuthority, error) {
-	// Authored-name formatting belongs to typecatalog; structural enumeration
-	// and source type identity have already been resolved by native shape.
+	// Canonical Go identifiers are already resolved by native shape. Prefer
+	// their exact identity before considering authored-name compatibility.
 	var result *currentFieldAuthority
 	for i := range fields {
-		if typecatalog.FieldName(fields[i].name) != typecatalog.FieldName(name) {
+		if fields[i].name != name {
+			continue
+		}
+		if result != nil {
+			return currentFieldAuthority{}, fmt.Errorf("ambiguous canonical field %q", name)
+		}
+		result = &fields[i]
+	}
+	if result != nil {
+		return *result, nil
+	}
+	// Keep the existing acronym compatibility, while also matching the authored
+	// conversion against the unchanged canonical name. Formatting an already
+	// canonical single-letter prefix again can change its identity.
+	authored := typecatalog.FieldName(name)
+	for i := range fields {
+		if fields[i].name != authored && typecatalog.FieldName(fields[i].name) != authored {
 			continue
 		}
 		if result != nil {

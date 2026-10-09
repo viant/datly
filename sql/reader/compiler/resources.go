@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/viant/datly/data"
+	"github.com/viant/datly/spec"
 	dsql "github.com/viant/datly/sql"
 )
 
@@ -30,6 +31,17 @@ func resolveViewResources(root *data.View, resources fs.FS) error {
 				return err
 			}
 		}
+		columns := view.Spec.Columns
+		// Runtime linked child columns are complete here even when Spec.Columns is empty.
+		if len(columns) == 0 {
+			columns = make([]*spec.Column, 0, len(view.Columns))
+			for _, column := range view.Columns {
+				if column != nil {
+					columns = append(columns, &spec.Column{Name: column.Name, NameInferred: true, Source: column.Column, Output: column.Output, Tag: column.Tag})
+				}
+			}
+		}
+		view.Spec.CompileProjectionOrigins(columns...)
 		for _, relation := range view.Relations {
 			if relation == nil || relation.Of == nil {
 				continue

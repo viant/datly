@@ -120,7 +120,7 @@ func (d *Data) operations(tableName string, target *Data) []*dataOperation {
 			continue
 		}
 		pending = append(pending, operation)
-		if operation.frame == target && (tableName == "" || strings.EqualFold(operation.table, tableName)) {
+		if operation.frame == target && (tableName == "" || equalFlushTable(operation.table, tableName)) {
 			last = len(pending) - 1
 		}
 	}
@@ -128,6 +128,18 @@ func (d *Data) operations(tableName string, target *Data) []*dataOperation {
 		return nil
 	}
 	return append([]*dataOperation(nil), pending[:last+1]...)
+}
+
+// Native SQL sources retain identifier quoting for execution. A flush names the
+// same identifier without its enclosing SQL quotes; quoting does not widen it.
+func equalFlushTable(left, right string) bool {
+	unquote := func(value string) string {
+		if len(value) >= 2 && (value[0] == '`' && value[len(value)-1] == '`' || value[0] == '"' && value[len(value)-1] == '"') {
+			return value[1 : len(value)-1]
+		}
+		return value
+	}
+	return strings.EqualFold(unquote(left), unquote(right))
 }
 
 func pendingOperations(operations []*dataOperation) []*dataOperation {
@@ -141,6 +153,9 @@ func pendingOperations(operations []*dataOperation) []*dataOperation {
 }
 
 func (d *Data) appendableLocked() error {
+	if err := drainowner.CheckPrefixMutation(d); err != nil {
+		return err
+	}
 	if err := drainowner.ProtectedOwnerFailure(d); err != nil {
 		return err
 	}

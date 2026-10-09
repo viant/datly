@@ -499,13 +499,8 @@ func (c *Compiler) compileGeneratedPostFactory(ctx context.Context, source *Sour
 	if err := requireSelectedFactoryFunction(ctx, build, destination, names[0]); err != nil {
 		return nil, err
 	}
-	for _, parameter := range prepared.Directives.Params {
-		if parameter != nil && (parameter.DeclarationSQL != "" || strings.EqualFold(parameter.Source.Kind, "view")) {
-			return nil, fmt.Errorf("generated POST factory cannot contain SQL or reader views")
-		}
-	}
-	if prepared.Directives.Static != nil || len(prepared.Directives.Views) != 0 {
-		return nil, fmt.Errorf("generated POST factory cannot contain static content or independent views")
+	if prepared.Directives.Static != nil {
+		return nil, fmt.Errorf("generated POST factory cannot contain static content")
 	}
 	settings.InputType, settings.OutputType = names[1], names[2]
 	connector := header.Connector
@@ -518,8 +513,14 @@ func (c *Compiler) compileGeneratedPostFactory(ctx context.Context, source *Sour
 	settings.DefaultConnector = connector
 	d := prepared.Directives
 	component := &spec.Component{Key: spec.Key{Kind: spec.KindComponent, Scope: source.Scope, Name: header.Name}, Name: header.Name,
-		Description: header.Description, Documentation: d.Documentation.Clone(), TypeContext: prepared.TypeContext, Settings: settings, Parameters: d.Params,
+		Description: header.Description, Documentation: d.Documentation.Clone(), TypeContext: prepared.TypeContext, Settings: settings, Parameters: d.Params, Views: d.Views,
 		Routes: []*spec.Route{{Name: header.Name, Path: header.URI, Method: header.Method, Internal: d.Internal || d.MCPOnly, Handler: destination + "." + names[0], RequestBodyMode: d.Route.RequestBodyMode, APIKeyHeader: d.Route.APIKeyHeader, APIKeyValue: d.Route.APIKeyValue}}}
+	for index, view := range component.Views {
+		if view != nil {
+			component.Views[index] = view.Clone()
+			component.Views[index].Key.Scope = source.Scope
+		}
+	}
 	if d.MCP != nil {
 		component.Routes[0].MCP = []*spec.MCPExposure{d.MCP.Clone()}
 	}
@@ -549,22 +550,36 @@ func (c *Compiler) compileGeneratedPostFactory(ctx context.Context, source *Sour
 			return nil, err
 		}
 	}
-	inputShape, err := c.compileFactoryInputShape(ctx, &copy, prepared, component, connector, resolver, build)
-	if err != nil {
-		return nil, fmt.Errorf("generated POST factory cannot contain SQL except a validated auxiliary input shape: %w", err)
-	}
-	if inputShape != nil {
-		settings.DefaultConnector = ""
-	}
-	declarations, err := newDeclarationCompiler(component, nil).compile()
+	declarations, err := newDeclarationCompiler(component, component.Views).compile()
 	if err != nil {
 		return nil, err
+	}
+	component.Views, err = declarations.removeSkeletons(component.Views)
+	if err != nil {
+		return nil, err
+	}
+	loader := &componentLoader{}
+	component.Views, err = loader.mergeViews(component.Views, declarations.views)
+	if err != nil {
+		return nil, err
+	}
+	viewBindings, err := loader.normalizeIndependentViewParams(component, declarations.viewsByParam)
+	if err != nil {
+		return nil, err
+	}
+	inputShape, err := c.compileFactoryInputShape(ctx, &copy, prepared, component, connector, resolver, build, declarations.generation, gen.ViewBindings(viewBindings))
+	if err != nil {
+		return nil, fmt.Errorf("generated POST factory cannot contain SQL except a validated input graph: %w", err)
+	}
+	// Auxiliary shape-only composers retain their existing SQL-free runtime.
+	if inputShape != nil && inputShape.Auxiliary && len(component.Views) == 0 {
+		settings.DefaultConnector = ""
 	}
 	if _, err = bootstrap.NormalizeCodecReferences(component, typeContext); err != nil {
 		return nil, err
 	}
 	return &Result{Source: &copy, Component: component, TypeContext: typeContext, TypeResolver: resolver, TypeAuthority: typecatalog.TranscribeAuthority,
-		Declarations: declarations.generation, ExternalHandler: &gen.ExternalHandler{Package: destination, Name: names[0], Build: build.WithContext(nil), GeneratedContracts: true, InputShape: inputShape}}, nil
+		Declarations: declarations.generation, ViewBindings: gen.ViewBindings(viewBindings), ExternalHandler: &gen.ExternalHandler{Package: destination, Name: names[0], Build: build.WithContext(nil), GeneratedContracts: true, InputShape: inputShape}}, nil
 }
 
 // Go's selected source list is available before the generated contracts exist.

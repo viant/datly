@@ -34,8 +34,8 @@ func (c *compiler) mutationMarkers(record *plan.RecordPlan, view *spec.View, ope
 		}
 	}
 	if view.QueueContract != "" {
-		if view.QueueContract != "source-row" || record.Auxiliary || record.Table == "" || (operation != plan.OperationPost && operation != plan.OperationPatch) || record.Write.ConcurrencyToken.Field != "" || view.MutationPredicateGroup != nil {
-			return fmt.Errorf("queue_contract source-row requires a POST/PATCH physical role without matched/criteria options; source-slice authoring is not yet available")
+		if (view.QueueContract != "source-row" && view.QueueContract != "source-slice") || record.Auxiliary || record.Table == "" || (operation != plan.OperationPost && operation != plan.OperationPatch) || record.Write.ConcurrencyToken.Field != "" || view.MutationPredicateGroup != nil {
+			return fmt.Errorf("queue_contract requires a POST/PATCH physical source-row or source-slice role without matched/criteria options")
 		}
 		record.Write.QueueContract = view.QueueContract
 	}

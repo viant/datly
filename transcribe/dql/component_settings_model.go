@@ -6,6 +6,7 @@ import (
 )
 
 type componentSettings struct {
+	ProtectedFlushTables         []string
 	HandlerFactory               string
 	HandlerName                  string
 	ResponseCompression          *spec.ResponseCompression

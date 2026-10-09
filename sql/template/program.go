@@ -413,6 +413,23 @@ func variableDeclaration(fieldType reflect.Type) any {
 }
 
 func variableValue(value reflect.Value) any {
+	// Velty's scalar state setter uses xunsafe's built-in type assertions.
+	// Named scalars have the same storage layout, but their interface identity
+	// must be lowered at this boundary (including unused input variables).
+	switch value.Kind() {
+	case reflect.String:
+		return value.String()
+	case reflect.Int:
+		return int(value.Int())
+	case reflect.Int64:
+		return value.Int()
+	case reflect.Float64:
+		return value.Float()
+	case reflect.Float32:
+		return float32(value.Float())
+	case reflect.Bool:
+		return value.Bool()
+	}
 	if value.Kind() == reflect.Struct {
 		ptr := reflect.New(value.Type())
 		ptr.Elem().Set(value)
