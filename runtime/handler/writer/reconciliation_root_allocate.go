@@ -171,5 +171,9 @@ func (p *Program) finiteAllocationClassificationState() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return immutableValues([]reflect.Value{reflect.ValueOf(state), reflect.ValueOf(p.output), reflect.ValueOf(p.reconciliation.allocatedRootKeys)})
+	planState, err := finiteProjectionPlanState(p.reconciliation.selectionSealed)
+	if err != nil {
+		return "", err
+	}
+	return immutableValues([]reflect.Value{reflect.ValueOf(state), reflect.ValueOf(p.output), reflect.ValueOf(p.reconciliation.allocatedRootKeys), reflect.ValueOf(planState)})
 }

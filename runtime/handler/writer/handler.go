@@ -329,6 +329,7 @@ type Program struct {
 	phaseSelectionAttempted     bool
 	rootPreparationAttempted    bool
 	rootAllocationAttempted     bool
+	rootProjectionAttempted     bool
 	reconciliationFrames        []*Frame
 	reconciliationSeal          string
 	queueSlots                  []queueSlotSeal

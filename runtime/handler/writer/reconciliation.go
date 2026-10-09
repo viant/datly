@@ -163,6 +163,8 @@ type reconciliationAttempt struct {
 	rootAllocated      bool
 	allocatedRootKeys  []int64
 	allocationState    string
+	rootProjections    []finiteRootProjection
+	projectionState    string
 	active             bool
 	roots              []reconciliationRootOccurrences
 	tickets            map[*reconciliationTicket]bool
