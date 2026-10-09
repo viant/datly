@@ -28,6 +28,7 @@ type activityLedger struct {
 }
 type activityCell struct {
 	identity    *identity
+	frame       *Frame
 	finished    bool
 	group       *bindingGroupCell
 	member      string
@@ -45,6 +46,19 @@ func invocationLedger(invocation *Invocation) (*activityLedger, error) {
 	return &invocation.identity.activities, nil
 }
 func AdmitActivity(invocation *Invocation) (Activity, error) {
+	return admitActivity(invocation, nil)
+}
+
+// AdmitFrameActivity retains the exact logical caller for engine-owned effects.
+// The association grants no drain authority and cannot be replaced by a caller.
+func AdmitFrameActivity(invocation *Invocation, frame *Frame) (Activity, error) {
+	if frame == nil {
+		return Activity{}, ErrActivity
+	}
+	return admitActivity(invocation, frame)
+}
+
+func admitActivity(invocation *Invocation, frame *Frame) (Activity, error) {
 	ledger, err := invocationLedger(invocation)
 	if err != nil {
 		return Activity{}, err
@@ -57,6 +71,15 @@ func AdmitActivity(invocation *Invocation) (Activity, error) {
 		}
 		return Activity{}, ErrActivityClosed
 	}
+	if frame != nil {
+		journal := invocation.journal()
+		journal.mu.Lock()
+		valid := frame.journal == journal && frame.open && !journal.freezeStarted
+		journal.mu.Unlock()
+		if !valid {
+			return Activity{}, ErrActivity
+		}
+	}
 	if ledger.group != nil && ledger.group.open {
 		appendFailureLocked(ledger, ErrBindingGroup, nil, "", true, 0)
 		return Activity{}, ErrBindingGroup
@@ -67,7 +90,7 @@ func AdmitActivity(invocation *Invocation) (Activity, error) {
 	if ledger.active == nil {
 		ledger.active = map[*activityCell]struct{}{}
 	}
-	cell := &activityCell{identity: invocation.identity}
+	cell := &activityCell{identity: invocation.identity, frame: frame}
 	ledger.active[cell] = struct{}{}
 	return Activity{cell: cell}, nil
 }

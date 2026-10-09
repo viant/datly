@@ -378,7 +378,11 @@ func (s *dataScope) admitActivity(contexts ...context.Context) (drainowner.Activ
 	if len(contexts) != 0 && drainowner.BindingGroupContext(contexts[0]) {
 		return drainowner.AdmitBindingGroupActivity(contexts[0], issuer)
 	}
-	return drainowner.AdmitActivity(issuer)
+	s.ensureJournalFrameLocked(root)
+	if s.err != nil {
+		return drainowner.Activity{}, s.err
+	}
+	return drainowner.AdmitFrameActivity(issuer, s.journalFrame)
 }
 func (s *dataScope) finishActivity(token drainowner.Activity, cause error) error {
 	root := s
