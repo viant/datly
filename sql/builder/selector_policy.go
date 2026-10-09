@@ -62,6 +62,9 @@ func (b *Builder) resolveControls(options *builderOptions, excludePagination boo
 		source.sqlText = prepared.sql
 	}
 	resolver := selectorResolver{policy: policy, sqlText: paginationInspectionSource(source.sqlText), view: source.view, projection: source.projection, reportOrderFields: options.reportOrderFields}
+	if excludePagination && len(options.projection) == 0 && options.selector != nil {
+		resolver.ordinalReference = options.selector.Columns
+	}
 	return resolver.controls(options.controls, options.selector, excludePagination)
 }
 
@@ -93,6 +96,7 @@ func applyMatcherWindow(query *cache.ParmetrizedQuery, controls *spec.ViewContro
 
 type selectorResolver struct {
 	reportOrderFields []string
+	ordinalReference  []string
 	projection        []string
 	view              *data.View
 	policy            *spec.Selector
@@ -199,17 +203,41 @@ func (r selectorResolver) orderBy(source string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	ordinalColumns := ordered
+	ordinalPrepared := len(r.ordinalReference) == 0
 	result := make([]string, 0, len(items))
 	for _, item := range items {
 		name, positional, direction := item.name, item.positional, item.direction
 
 		if positional {
+			if !ordinalPrepared {
+				ordinalColumns, err = projection.Columns(r.ordinalReference)
+				if err != nil {
+					return "", invalidOrdering("%s", err)
+				}
+				ordinalPrepared = true
+			}
 			position, _ := strconv.Atoi(name)
-			if position < 1 || position > len(ordered) {
+			if position < 1 || position > len(ordinalColumns) {
 				return "", invalidOrdering("order by position %s is outside source projection", name)
 			}
-			if !r.orderPermitted(ordered[position-1]) {
+			if !r.orderPermitted(ordinalColumns[position-1]) {
 				return "", invalidOrdering("order by position %s is not allowed", name)
+			}
+			if len(r.ordinalReference) > 0 {
+				mapped := 0
+				for i, column := range projected {
+					if column.OutputName() == ordinalColumns[position-1].OutputName() {
+						if mapped != 0 {
+							return "", invalidOrdering("ambiguous order by position %s", name)
+						}
+						mapped = i + 1
+					}
+				}
+				if mapped == 0 {
+					return "", invalidOrdering("order by position %s is outside source projection", name)
+				}
+				name = strconv.Itoa(mapped)
 			}
 		} else {
 			mapped, aliased, err := r.orderAlias(name)
