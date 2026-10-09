@@ -124,12 +124,16 @@ func validatePrefixLocked(s *State, grant *prefixGrant, ledger *activityLedger) 
 	j := &s.claimed.journal
 	j.mu.Lock()
 	defer j.mu.Unlock()
-	if grant.frame == nil || grant.frame.journal != j || !grant.frame.open || j.freezeStarted || j.failure != nil || j.external[s] {
+	if grant.frame == nil || grant.frame.journal != j || !grant.frame.open || j.freezeStarted || j.failure != nil {
+		return prefixDeniedLocked(ledger)
+	}
+	externalRoot := j.external[s]
+	if externalRoot && (grant.frame != j.root || j.enabled || len(j.owners) != 1 || !j.owners[s] || !isolatedPrefixFrame(j.root, j.root)) {
 		return prefixDeniedLocked(ledger)
 	}
 	// Prefix accounting activates ordered ownership even without buffered policy.
 	for owner := range j.owners {
-		if j.external[owner] || j.drained[owner] {
+		if j.external[owner] && !(externalRoot && owner == s) || j.drained[owner] {
 			return prefixDeniedLocked(ledger)
 		}
 	}
@@ -158,7 +162,57 @@ func validatePrefixLocked(s *State, grant *prefixGrant, ledger *activityLedger) 
 			return prefixDeniedLocked(ledger)
 		}
 	}
+	if externalRoot {
+		j.prefixExternalOwner = s
+	}
 	return nil
+}
+
+// Caller holds journal.mu. Closed read frames are permitted; their queued
+// mutations and any live descendant would break the sole root boundary.
+func isolatedPrefixFrame(frame, root *Frame) bool {
+	if frame != root && frame.open {
+		return false
+	}
+	for _, item := range frame.timeline {
+		if item.entry != nil && item.entry.frame != root {
+			return false
+		}
+		if item.child != nil && !isolatedPrefixFrame(item.child, root) {
+			return false
+		}
+	}
+	for _, child := range frame.bindings {
+		if !isolatedPrefixFrame(child, root) {
+			return false
+		}
+	}
+	return true
+}
+
+// Caller holds ledger.mu; journal ownership comes only from native constructors.
+func externalPrefixLatched(invocation *Invocation) bool {
+	j := invocation.journal()
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	return j.prefixExternalOwner != nil
+}
+
+// ExternalPrefix verifies the exact permit; it exposes no application authority.
+func ExternalPrefix(receiver any, permit *DrainPermit) bool {
+	s, err := exactState(receiver)
+	if err != nil {
+		return false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if permit == nil || permit.state != s || s.pending != permit || !permit.consumed || permit.prefix == nil {
+		return false
+	}
+	j := &s.claimed.journal
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	return j.prefixExternalOwner == s && permit.prefix.frame == j.root && len(j.owners) == 1 && !j.enabled
 }
 
 // CheckPrefixMutation rejects mutation or callback reentry across every owner.

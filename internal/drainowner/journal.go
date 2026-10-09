@@ -36,23 +36,24 @@ type journalRun struct {
 	index   int
 }
 type journal struct {
-	mu              sync.Mutex
-	establish       sync.Mutex
-	root            *Frame
-	owners          map[*State]bool
-	external        map[*State]bool
-	drained         map[*State]bool
-	enabled         bool
-	frozen          bool
-	freezeStarted   bool
-	runs            []*journalRun
-	cursor          int
-	failure         error
-	txOrder         []*State
-	txIDs           map[*State]any
-	prefixReceipts  map[any]prefixReceipt
-	prefixExecuted  bool
-	prefixProtected bool
+	mu                  sync.Mutex
+	establish           sync.Mutex
+	root                *Frame
+	owners              map[*State]bool
+	external            map[*State]bool
+	drained             map[*State]bool
+	enabled             bool
+	frozen              bool
+	freezeStarted       bool
+	runs                []*journalRun
+	cursor              int
+	failure             error
+	txOrder             []*State
+	txIDs               map[*State]any
+	prefixReceipts      map[any]prefixReceipt
+	prefixExecuted      bool
+	prefixProtected     bool
+	prefixExternalOwner *State
 }
 
 // NativeJournal callbacks are bound once in the Data constructor. They do not
@@ -122,6 +123,9 @@ func (i *Invocation) ChildFrame(parent *Frame, relation, order string) (*Frame, 
 	j := i.journal()
 	j.mu.Lock()
 	defer j.mu.Unlock()
+	if j.prefixExternalOwner != nil {
+		return nil, prefixDeniedLocked(ledger)
+	}
 	if j.freezeStarted || parent == nil || parent.journal != j {
 		return nil, ErrJournal
 	}
@@ -164,6 +168,11 @@ func (h Handle) BindFrame(receiver, component any, i *Invocation, f *Frame) erro
 		j.mu.Unlock()
 		return ErrJournal
 	}
+	if j.prefixExternalOwner != nil && (s != j.prefixExternalOwner || f != j.root || component != receiver) {
+		j.mu.Unlock()
+		FailProtected(i, ErrOrderedComposition)
+		return ErrOrderedComposition
+	}
 	j.owners[s] = true
 	j.external[s] = native.External
 	j.drained[s] = j.drained[s] || drained
@@ -176,6 +185,9 @@ func (h Handle) BindFrame(receiver, component any, i *Invocation, f *Frame) erro
 	return native.Bind(component, f)
 }
 func (j *journal) admissionLocked() error {
+	if j.prefixExternalOwner != nil && (j.enabled || len(j.owners) != 1 || !j.owners[j.prefixExternalOwner]) {
+		return ErrOrderedComposition
+	}
 	if (!j.enabled && !j.prefixProtected) || len(j.owners) < 2 {
 		return nil
 	}
@@ -356,6 +368,11 @@ func (i *Invocation) FreezeJournal() (ordered bool, retErr error) {
 	return true, nil
 }
 func (i *Invocation) NextJournalOwner() any {
+	return i.NextJournalOwnerFor(AllPreparation)
+}
+
+// Local preparation cannot consume caller-owned work before finalization.
+func (i *Invocation) NextJournalOwnerFor(phase Operation) any {
 	j := i.journal()
 	if j == nil {
 		return nil
@@ -363,6 +380,9 @@ func (i *Invocation) NextJournalOwner() any {
 	j.mu.Lock()
 	defer j.mu.Unlock()
 	if j.cursor == len(j.runs) {
+		return nil
+	}
+	if phase == LocalPreparation && j.runs[j.cursor].owner == j.prefixExternalOwner {
 		return nil
 	}
 	return j.runs[j.cursor].owner.receiver
@@ -381,6 +401,9 @@ func (j *journal) permitRun(s *State, op Operation) (*journalRun, error) {
 	}
 	if !j.frozen {
 		return nil, ErrJournal
+	}
+	if op == LocalPreparation && j.external[s] {
+		return nil, nil
 	}
 	if op == Completion {
 		if j.cursor != len(j.runs) {

@@ -643,3 +643,57 @@ func TestProtectedPrefixRejectsMixedOwnershipWithoutBufferedPolicy(t *testing.T)
 		}
 	}
 }
+
+func TestProtectedPrefixCallerLocalPreparationRetainsSuffix(t *testing.T) {
+	trace := &orderedTrace{}
+	db := orderedDB(t, trace, "caller", "", false)
+	tx, err := db.BeginTx(t.Context(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback()
+	root, _ := invocationDataScope(t.Context(), dml.Source{DB: db, Tx: tx})
+	activity, err := root.admitActivity(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	data := orderedData(t, root)
+	if err = root.registerExecutionGuard(t.Context(), func(context.Context) error { return nil }); err != nil {
+		t.Fatal(err)
+	}
+	orderedInsert(t, data, 1, "prefix")
+	flusher := flusherCapability{service: data, guard: root.mutationGuard(), authority: newFlushAuthority(root, activity, []string{"records"})}
+	trace.active = true
+	if err = flusher.Flush(t.Context(), "records"); err != nil {
+		t.Fatal(err)
+	}
+	orderedInsert(t, data, 2, "suffix")
+	if err = root.finishActivity(activity, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err = root.prepareProtectedFinalization(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if got := physicalLabels(trace.copy()); !reflect.DeepEqual(got, []string{"c:prefix"}) {
+		t.Fatalf("local preparation consumed suffix: %v", got)
+	}
+	if root.nativeInvocation.NextJournalOwner() == nil {
+		t.Fatal("local preparation advanced cursor")
+	}
+	if err = root.complete(t.Context(), nil); err != nil {
+		t.Fatal(err)
+	}
+	if got := physicalLabels(trace.copy()); !reflect.DeepEqual(got, []string{"c:prefix", "c:suffix"}) {
+		t.Fatalf("final preparation lost/replayed suffix: %v", got)
+	}
+	var count int
+	if err = tx.QueryRow("SELECT COUNT(*) FROM records").Scan(&count); err != nil || count != 2 {
+		t.Fatalf("caller transaction closed: rows=%d error=%v", count, err)
+	}
+	if err = tx.Rollback(); err != nil {
+		t.Fatal(err)
+	}
+	if orderedCount(t, db, "records") != 0 {
+		t.Fatal("caller rollback did not own prefix and suffix")
+	}
+}

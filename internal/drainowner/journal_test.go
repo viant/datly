@@ -18,7 +18,7 @@ type journalOwner struct {
 	fail     bool
 }
 
-func newJournalOwner(t *testing.T, i *Invocation, frame *Frame) (*journalOwner, Handle) {
+func newJournalOwner(t *testing.T, i *Invocation, frame *Frame, external ...bool) (*journalOwner, Handle) {
 	t.Helper()
 	o := &journalOwner{frames: map[any]*Frame{}}
 	prepare := func(ctx context.Context, p *DrainPermit, _ error) error {
@@ -58,7 +58,7 @@ func newJournalOwner(t *testing.T, i *Invocation, frame *Frame) (*journalOwner, 
 		EndDrain(r)
 		return cause
 	}})
-	RegisterJournal(o, NativeJournal{Bind: func(component any, f *Frame) error {
+	RegisterJournal(o, NativeJournal{External: len(external) > 0 && external[0], Bind: func(component any, f *Frame) error {
 		if component != o {
 			return ErrJournal
 		}

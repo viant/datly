@@ -25,6 +25,10 @@ type protectedEngineProbe struct {
 	db                        *sql.DB
 	tx                        *sql.Tx
 	explicit, shortCaller     bool
+	lateSuffixFailure         bool
+	callerOwned               bool
+	finalized                 int
+	outcome                   xhandler.Outcome
 	batchCalls, commits       int
 	before, selected, sibling [3]int
 	callerCanceled            bool
@@ -73,9 +77,40 @@ func (hook *protectedEngineHooks) AfterQueueInput(ctx context.Context, _ *sqPlai
 	if err := hook.DML.Execute("INSERT INTO suffix(id) VALUES(1)"); err != nil {
 		return err
 	}
+	if p.lateSuffixFailure {
+		if err := hook.DML.Execute("INSERT INTO suffix(id) VALUES(1)"); err != nil {
+			return err
+		}
+	}
 	var err error
 	p.selected, err = protectedEngineCounts(ctx, p)
 	return err
+}
+
+func (*protectedEngineHooks) Finalize(ctx context.Context, _ *sqPlainInput, _ *sqPlainOutput, _ xhandler.Outcome) error {
+	p := ctx.Value(protectedEngineKey{}).(*protectedEngineProbe)
+	if !p.callerOwned {
+		return nil
+	}
+	p.finalized++
+	var counts [3]int
+	for i, table := range []string{"parents", "children", "suffix"} {
+		if err := p.tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM "+table).Scan(&counts[i]); err != nil {
+			return err
+		}
+	}
+	if counts != [3]int{1, 1, 1} {
+		return fmt.Errorf("caller outcome finalization lost suffix: %v", counts)
+	}
+	return nil
+}
+
+type protectedCallerSource struct{ source dml.Source }
+
+func (s protectedCallerSource) InvocationKey() any { return s.source.DB }
+
+func (s protectedCallerSource) Open(ctx context.Context) (xhandler.Data, error) {
+	return s.source.Open(ctx)
 }
 
 func protectedEngineCounts(ctx context.Context, p *protectedEngineProbe) ([3]int, error) {
@@ -367,5 +402,74 @@ func TestProtectedFlushNativeEngineGrantIsComponentLocal(t *testing.T) {
 	}
 	if p.commits != 0 {
 		t.Fatal("failed ungranted child committed")
+	}
+}
+
+// A protected explicit boundary prepares a caller-owned transaction without
+// assuming its commit/rollback ownership or replaying the frozen suffix.
+func TestProtectedFlushNativeEngineCallerTransaction(t *testing.T) {
+	for _, mode := range []string{"commit", "rollback", "suffix failure", "custom source"} {
+		t.Run(mode, func(t *testing.T) {
+			db := protectedEngineDatabase(t)
+			tx, err := db.DB.BeginTx(t.Context(), nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer tx.Rollback()
+			p := &protectedEngineProbe{db: db.DB, tx: tx, explicit: true, lateSuffixFailure: mode == "suffix failure", callerOwned: true}
+			ctx := context.WithValue(t.Context(), protectedEngineKey{}, p)
+			native, input := protectedEngineNative(t, true)
+			source := dml.Source{DB: db.DB, Tx: tx, OnCommit: func(context.Context) { p.commits++ }}
+			var sourceValue dexec.DataSource = source
+			if mode == "custom source" {
+				sourceValue = protectedCallerSource{source: source}
+			}
+			_, err = engine.New().Execute(ctx, engine.Request{
+				Input: protectedEngineRoute(t, reflect.TypeFor[sqPlainInput]()), BoundInput: input, Handler: native,
+				Completion:           func(outcome xhandler.Outcome) { p.outcome = outcome },
+				DataSource:           sourceValue,
+				ProtectedFlushTables: []string{"children", "unused"},
+			})
+			if mode == "suffix failure" {
+				if err == nil || !strings.Contains(err.Error(), "UNIQUE constraint failed: suffix.id") {
+					t.Fatalf("failure=%v", err)
+				}
+			} else if err != nil {
+				t.Fatal(err)
+			}
+			if p.outcome.State() != xhandler.TransactionCallerPending || p.outcome.CommitConfirmed() {
+				t.Fatalf("caller outcome=%+v", p.outcome)
+			}
+			if p.finalized != 1 {
+				t.Fatalf("outcome finalization calls=%d", p.finalized)
+			}
+			if p.commits != 0 || p.batchCalls != 1 || p.selected != [3]int{1, 1, 0} {
+				t.Fatalf("ownership or prefix changed: commits=%d calls=%d selected=%v", p.commits, p.batchCalls, p.selected)
+			}
+			var effects int
+			if err = tx.QueryRow("SELECT COUNT(*) FROM effects").Scan(&effects); err != nil || effects != 3 {
+				t.Fatalf("caller transaction closed or suffix lost/replayed: effects=%d error=%v", effects, err)
+			}
+			if mode == "commit" {
+				err = tx.Commit()
+			} else {
+				err = tx.Rollback()
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := 0
+			if mode == "commit" {
+				want = 1
+			}
+			for _, table := range []string{"parents", "children", "suffix"} {
+				if got := protectedEngineStored(t, db.DB, table); got != want {
+					t.Fatalf("caller outcome %s=%d want=%d", table, got, want)
+				}
+			}
+			if got := protectedEngineStored(t, db.DB, "effects"); got != 3*want {
+				t.Fatalf("caller trigger outcome=%d", got)
+			}
+		})
 	}
 }

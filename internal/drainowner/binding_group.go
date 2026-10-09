@@ -101,7 +101,7 @@ func OpenBindingGroup(invocation *Invocation, members []BindingGroupMember) (Bin
 	}
 	ledger.mu.Lock()
 	defer ledger.mu.Unlock()
-	if ledger.prefix != nil {
+	if ledger.prefix != nil || externalPrefixLatched(invocation) {
 		return BindingGroup{}, prefixDeniedLocked(ledger)
 	}
 	if !ledger.enrolled || ledger.closed || ledger.failure != nil || ledger.group != nil || len(members) == 0 {

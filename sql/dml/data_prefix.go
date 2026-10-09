@@ -28,7 +28,7 @@ func (d *Data) preparePrefix(ctx context.Context, permit *drainowner.DrainPermit
 	}
 	owner.mu.Lock()
 	switch {
-	case !owner.invocation || owner.externalTx:
+	case !owner.invocation || owner.externalTx && (target != owner || !drainowner.ExternalPrefix(owner, permit)):
 		err = drainowner.ErrOrderedComposition
 	case owner.mutationAdmissionClosed || owner.completed || !target.open || target.journalFrame != frame:
 		err = ErrComponentSealed

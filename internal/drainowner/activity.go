@@ -72,7 +72,7 @@ func admitActivity(invocation *Invocation, frame *Frame) (Activity, error) {
 		}
 		return Activity{}, ErrActivityClosed
 	}
-	if ledger.prefix != nil {
+	if ledger.prefix != nil || externalPrefixLatched(invocation) {
 		return Activity{}, prefixDeniedLocked(ledger)
 	}
 	if frame != nil {
