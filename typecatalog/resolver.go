@@ -178,7 +178,7 @@ func (r *Resolver) shapeResolver() xshape.Resolver {
 	for _, item := range r.context.Imports {
 		result.Imports[strings.TrimSpace(item.Alias)] = strings.TrimSpace(item.Package)
 	}
-	if name := strings.TrimSpace(r.context.PackageName); name != "" && result.Package != "" {
+	if name := strings.TrimSpace(r.context.PackageName); name != "" && result.Package != "" && result.Imports[name] == "" {
 		result.Imports[name] = result.Package
 	}
 	return result
