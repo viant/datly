@@ -87,6 +87,14 @@ func (r *fieldTypeResolver) hasLocalType(name string) bool {
 	if r.plan == nil || name == "" {
 		return false
 	}
+	// Generated contracts are local declaration authority even before their Go
+	// files exist. Linked or separately emitted contracts still require lookup.
+	for _, contract := range []ContractPlan{r.plan.Input, r.plan.Output} {
+		if contract.Ownership == ContractGenerated && strings.TrimSpace(contract.Type) == name &&
+			(contract.Package == "" || contract.Package == r.targetPackage) {
+			return true
+		}
+	}
 	if strings.TrimSpace(r.plan.RootViewType) == name {
 		return true
 	}
