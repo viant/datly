@@ -27,6 +27,12 @@ type ResourcePlan struct {
 	sourceText  string
 }
 
+// authoredSource identifies a linked filesystem declaration outside generated
+// ownership. Its bytes remain application-owned when envelopes are regenerated.
+func (r *ResourcePlan) authoredSource() bool {
+	return r != nil && r.sourceText != "" && generatedOwner([]byte(r.sourceText)) == ""
+}
+
 func (r *ResourcePlan) retained(file string) bool {
 	if r == nil || r.sourceText == "" {
 		return false
@@ -61,7 +67,7 @@ func (r *planResolver) prepareResources() (*ResourcePlan, error) {
 	if retained != nil {
 		retainedFiles = retained.Files
 		result.Files = nil
-		if r.plan.Input.Ownership == ContractGenerated || r.plan.Output.Ownership == ContractGenerated {
+		if (r.plan.Input.Ownership == ContractGenerated || r.plan.Output.Ownership == ContractGenerated) && !result.authoredSource() {
 			result.sourceText = ""
 		}
 	}
