@@ -9,7 +9,14 @@ import (
 // Internal compiled phase authority. Both public source-phases compilation
 // gates remain closed until native execution/allocation/payload proofs exist.
 type finiteSourcePhases struct {
+	root           *Record
+	roles          []finiteSourceRole
 	insert, update []finiteSourcePhase
+}
+type finiteSourceRole struct {
+	relation *Relation
+	holder   string
+	field    []int
 }
 type finiteSourcePhase struct {
 	name, scope, workflow, updateBasis string
@@ -41,6 +48,7 @@ func compileFiniteSourcePhases(root *Record, declaration *spec.Reconciliation) (
 		return nil, err
 	}
 	roles := map[string]*Relation{}
+	var canonicalRoles []finiteSourceRole
 	for _, relation := range root.Relations {
 		if relation == nil || relation.Child == nil || len(relation.Field) != 1 || relation.Field[0] < 0 || relation.Field[0] >= root.EntityType.NumField() {
 			return nil, fmt.Errorf("source phases require direct canonical leaf holders")
@@ -54,6 +62,7 @@ func compileFiniteSourcePhases(root *Record, declaration *spec.Reconciliation) (
 			return nil, fmt.Errorf("source phases require linked physical leaf collections with Current")
 		}
 		roles[field.Name] = relation
+		canonicalRoles = append(canonicalRoles, finiteSourceRole{relation: relation, holder: field.Name, field: append([]int(nil), relation.Field...)})
 	}
 	if len(roles) != len(declaration.Roles) {
 		return nil, fmt.Errorf("source phases must declare every canonical leaf role")
@@ -100,5 +109,5 @@ func compileFiniteSourcePhases(root *Record, declaration *spec.Reconciliation) (
 	if err != nil {
 		return nil, err
 	}
-	return &finiteSourcePhases{insert: insert, update: update}, nil
+	return &finiteSourcePhases{root: root, roles: canonicalRoles, insert: insert, update: update}, nil
 }

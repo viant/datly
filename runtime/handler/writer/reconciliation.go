@@ -23,6 +23,9 @@ type reconciliationTicket struct {
 	frame    *Frame
 	previous reflect.Value
 	current  bool
+	// Native bound-Current ordinal, retained independently of parent grouping.
+	// -1 denotes a working occurrence or an older finite-mode ticket.
+	currentOrdinal int
 }
 
 // ReconciliationAssignment changes only a declared scalar and optionally marks
@@ -309,7 +312,7 @@ func (p *Program) captureReconciliationAllocation(ctx context.Context) error {
 	return nil
 }
 func (a *reconciliationAttempt) mint(root *Frame, record *Record, frame *Frame, previous reflect.Value, current bool) OccurrenceRef {
-	ticket := &reconciliationTicket{a, root, record, frame, previous, current}
+	ticket := &reconciliationTicket{owner: a, root: root, record: record, frame: frame, previous: previous, current: current, currentOrdinal: -1}
 	a.tickets[ticket] = true
 	return OccurrenceRef{ticket}
 }
