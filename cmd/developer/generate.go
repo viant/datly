@@ -56,7 +56,7 @@ func Transcribe(ctx context.Context, args []string, stdout, stderr io.Writer, ha
 		return 2
 	}
 	if *operation == "handler" {
-		if *language != "go" || schema.enabled || schema.driver != "" || schema.dsn != "" {
+		if *language != "go" || schema.enabled || schema.driver != "" || schema.dsn != "" || schema.connectorsFile != "" {
 			fmt.Fprintln(stderr, "handler registration uses Go factories, not database column discovery or Velty")
 			return 2
 		}
