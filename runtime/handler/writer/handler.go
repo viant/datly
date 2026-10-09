@@ -2009,6 +2009,13 @@ func (p *Program) validateFrameSubset(ctx context.Context, validator xhandler.Va
 }
 
 func (p *Program) callEntityHook(ctx context.Context, name string, frame *Frame) error {
+	if name == "AfterQueue" && p.phaseSelectionAttempted {
+		return p.callFiniteAfterQueueHook(ctx, frame)
+	}
+	return p.callEntityHookNative(ctx, name, frame)
+}
+
+func (p *Program) callEntityHookNative(ctx context.Context, name string, frame *Frame) error {
 	if err := p.validateActionPolicyFacts(); err != nil {
 		return err
 	}
