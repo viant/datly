@@ -155,6 +155,9 @@ type reconciliationRootOccurrences struct {
 type reconciliationAttempt struct {
 	observationsClosed bool
 	selectionSealed    *finitePhasePlan
+	selectionState     string
+	selectionOutput    string
+	rootPrepared       bool
 	active             bool
 	roots              []reconciliationRootOccurrences
 	tickets            map[*reconciliationTicket]bool

@@ -327,6 +327,7 @@ type Program struct {
 	sourceSliceGroups           map[*Action]*sourceSliceGroup
 	reconciliation              *reconciliationAttempt
 	phaseSelectionAttempted     bool
+	rootPreparationAttempted    bool
 	reconciliationFrames        []*Frame
 	reconciliationSeal          string
 	queueSlots                  []queueSlotSeal

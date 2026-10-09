@@ -93,6 +93,15 @@ func (p *Program) selectFinitePhasePlan(ctx context.Context, compiled *finiteSou
 	if err = ctx.Err(); err != nil {
 		return nil, err
 	}
+	selectionState, err := p.reconciliationState()
+	if err != nil {
+		return nil, err
+	}
+	selectionOutput, err := immutableValues([]reflect.Value{reflect.ValueOf(p.output)})
+	if err != nil {
+		return nil, err
+	}
+	a.selectionState, a.selectionOutput = selectionState, selectionOutput
 	a.selectionSealed = sealed
 	complete = true
 	return sealed, nil
