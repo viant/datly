@@ -124,7 +124,7 @@ require (
 	github.com/go-viper/mapstructure/v2 v2.2.1 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/viant/afs v1.30.1-0.20260914155934-90e95d483861
-	github.com/viant/bindly v0.4.1-0.20261006234956-d0b4e58bac4e
+	github.com/viant/bindly v0.4.1-0.20261009060128-e3a43863d252
 	github.com/viant/godiff v0.4.3-0.20260914060527-9f2005ca82e8
 	github.com/viant/jsonrpc v0.25.0
 	github.com/viant/scy v0.35.1-0.20260914041206-699e6c909726

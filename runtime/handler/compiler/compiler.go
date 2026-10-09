@@ -124,7 +124,7 @@ func (c *Compiler) compileProjection(plan *bindly.Plan) (*bindly.Projection, err
 			continue
 		}
 		projected = append(projected, bindly.ProjectionField{
-			Path: field.field.Name, Names: tag.BindingAliases(field.field, param),
+			Path: field.field.Name, Names: tag.CanonicalBindingAliases(field.field, param),
 		})
 	}
 	projection, err := plan.Projection(projected...)

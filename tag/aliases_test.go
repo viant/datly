@@ -31,3 +31,13 @@ func TestBindingAliasesIncludesTransportSource(t *testing.T) {
 		t.Fatalf("aliases = %v", actual)
 	}
 }
+
+func TestCanonicalBindingAliasesPreservesQualifiedSelector(t *testing.T) {
+	type input struct{ Limit int }
+	field, _ := reflect.TypeOf(input{}).FieldByName("Limit")
+	param := &spec.Parameter{Name: "Limit", Source: spec.BindSource{Kind: "query", Name: "limit"}, QuerySelector: &spec.QuerySelectorBinding{View: "items"}}
+	actual := CanonicalBindingAliases(field, param)
+	if len(actual) != 2 || actual[0] != "Limit" || actual[1] != "items.Limit" {
+		t.Fatalf("aliases=%v", actual)
+	}
+}
