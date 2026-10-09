@@ -538,7 +538,11 @@ func (p *Program) requireReconciliationCurrent(rel *Relation, root *Frame, previ
 	return nil
 }
 func (p *Program) reconciliationState() (string, error) {
-	base, e := p.afterQueueInputState()
+	return p.reconciliationStateForActions(p.actions.Rows)
+}
+
+func (p *Program) reconciliationStateForActions(actions []*Action) (string, error) {
+	base, e := p.afterQueueInputStateForActions(actions)
 	if e != nil {
 		return "", e
 	}

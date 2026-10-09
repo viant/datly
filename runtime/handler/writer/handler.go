@@ -444,6 +444,11 @@ func (p *Program) graphIndex() *graphIndex {
 	if p.graph != nil && len(p.graph.rows) == len(rows) && (len(rows) == 0 || &p.graph.rows[0] == &rows[0]) {
 		return p.graph
 	}
+	p.graph = newGraphIndex(rows)
+	return p.graph
+}
+
+func newGraphIndex(rows []*Frame) *graphIndex {
 	index := &graphIndex{rows: rows, positions: make(map[*Frame]int, len(rows)), byPointer: make(map[uintptr]*Frame, len(rows)), inserts: map[insertKey][]insertReference{}}
 	for position, frame := range rows {
 		if frame == nil {
@@ -469,7 +474,6 @@ func (p *Program) graphIndex() *graphIndex {
 			index.inserts[key] = append(index.inserts[key], insertReference{position: position, frame: frame, value: value})
 		}
 	}
-	p.graph = index
 	return index
 }
 
@@ -1793,6 +1797,10 @@ func (p *Program) unresolvedParentLinks(frame *Frame) bool {
 }
 
 func (p *Program) validationOptions(frame *Frame, transactionStarted bool) xhandler.ValidationOptions {
+	return p.validationOptionsWithReferences(frame, transactionStarted, p.satisfiedGraphReferences(frame))
+}
+
+func (p *Program) validationOptionsWithReferences(frame *Frame, transactionStarted bool, graphReferences []xhandler.ValidationReference) xhandler.ValidationOptions {
 	unique, refs := true, true
 	if frame.NoopMissingIdentity {
 		// An unmatched no-op has no Previous evidence. Complete candidate
@@ -1818,7 +1826,6 @@ func (p *Program) validationOptions(frame *Frame, transactionStarted bool) xhand
 		options.PreviousFields = p.fieldsOf(frame.Previous.Elem().Type())
 		options.Fields = frame.Fields
 	}
-	graphReferences := p.satisfiedGraphReferences(frame)
 	if frame.Action == xhandler.WriteUpdate && len(graphReferences) > 0 {
 		// SQLX reference receipts are insert-only. For a sparse update whose new
 		// FK value is proven to match an earlier insert in this ordered graph,

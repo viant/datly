@@ -164,10 +164,14 @@ func (p *Program) validateFiniteAllocatedRoots(plan *finitePhasePlan) error {
 
 // The allocation seal covers detached images as well as live state and Output.
 func (p *Program) finiteAllocationClassificationState() (string, error) {
+	return p.finiteAllocationClassificationStateForActions(p.actions.Rows)
+}
+
+func (p *Program) finiteAllocationClassificationStateForActions(actions []*Action) (string, error) {
 	if p.reconciliation == nil {
 		return "", fmt.Errorf("source allocation authority is unavailable")
 	}
-	state, err := p.reconciliationState()
+	state, err := p.reconciliationStateForActions(actions)
 	if err != nil {
 		return "", err
 	}

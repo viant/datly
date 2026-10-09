@@ -3,6 +3,7 @@ package writer
 import (
 	"context"
 	"errors"
+	"github.com/viant/datly/internal/drainowner"
 	"github.com/viant/datly/internal/testharness/sqlite"
 	rh "github.com/viant/datly/runtime/handler"
 	"github.com/viant/datly/runtime/handler/engine"
@@ -13,7 +14,7 @@ import (
 )
 
 func TestFinitePendingCurrentUpdateActualEngine(t *testing.T) {
-	for _, mode := range []string{"success", "payload", "pointer", "markers", "candidate", "storage", "copy", "remove", "foreign", "cancel", "panic", "first-insert"} {
+	for _, mode := range []string{"success", "payload", "pointer", "markers", "candidate", "storage", "copy", "remove", "foreign", "cancel", "panic", "first-insert", "native-validation", "explicit-span", "validation-wrong-binder", "validation-foreign-scope"} {
 		t.Run(mode, func(t *testing.T) {
 			db := sqlite.New(t)
 			if e := db.ExecStatements(context.Background(), "CREATE TABLE items(id INTEGER PRIMARY KEY AUTOINCREMENT, Enabled INTEGER)", "INSERT INTO items(id,Enabled) VALUES(1,0),(2,0)"); e != nil {
@@ -125,6 +126,53 @@ func TestFinitePendingCurrentUpdateActualEngine(t *testing.T) {
 				if after, e = p.finiteAllocationClassificationState(); e != nil || after != before {
 					t.Fatal("projection advanced live Current or incoming", e)
 				}
+				if mode == "validation-wrong-binder" {
+					spy := &finiteCurrentValidationBinder{Binder: p.guardBinder}
+					p.guardBinder = spy
+					if e = p.validateFinitePendingCurrent(ctx, u); e == nil || spy.frameworkLookups != 0 || p.reconciliation.active || p.executionFailure == nil {
+						t.Fatal("foreign binder reached validator", e, spy.frameworkLookups)
+					}
+					return nil, nil
+				}
+				if mode == "validation-foreign-scope" {
+					spy := &finiteCurrentValidationBinder{Binder: p.guardBinder}
+					p.guardBinder = spy
+					withPhaseOccurrenceContext(t, func(foreign context.Context) { e = p.validateFinitePendingCurrent(foreign, u) })
+					if !errors.Is(e, drainowner.ErrGuardBinding) || spy.frameworkLookups != 0 || p.reconciliation.active || p.executionFailure == nil {
+						t.Fatal("foreign scope reached Current validation", e, spy.frameworkLookups)
+					}
+					verifyNativeRootAdmissionQueue(t, native, p, 2, false)
+					return nil, nil
+				}
+				if mode == "native-validation" {
+					if e = p.validateFinitePendingCurrent(ctx, u); e != nil {
+						t.Fatal("native Current validation", e)
+					}
+					return nil, abort
+				}
+				if mode == "explicit-span" {
+					immutable, e := p.finiteAllocationClassificationStateForActions(p.rootAdmissionSpan)
+					if e != nil {
+						t.Fatal(e)
+					}
+					p.actions.Rows = append(p.actions.Rows, &Action{Kind: h.WriteUpdate, Entity: u.payload, frame: u.occurrence.ticket.frame})
+					withSuffix, e := p.finiteAllocationClassificationStateForActions(p.rootAdmissionSpan)
+					if e != nil || withSuffix != immutable {
+						t.Fatal("explicit immutable span included journal suffix", e)
+					}
+					full, e := p.finiteAllocationClassificationState()
+					if e != nil || full == immutable {
+						t.Fatal("ordinary snapshot lost journal suffix", e)
+					}
+					current.Value = "unrelated change"
+					changed, e := p.finiteAllocationClassificationStateForActions(p.rootAdmissionSpan)
+					if e != nil || changed == immutable {
+						t.Fatal("explicit span lost canonical Current", e)
+					}
+					current.Value = ""
+					p.actions.Rows = p.actions.Rows[:len(p.rootAdmissionSpan)]
+					return nil, abort
+				}
 				checkctx := ctx
 				switch mode {
 				case "success":
@@ -172,7 +220,7 @@ func TestFinitePendingCurrentUpdateActualEngine(t *testing.T) {
 				// Even a swallowed error must fail the actual owner completion.
 				return nil, nil
 			}}})
-			if mode == "success" || mode == "first-insert" {
+			if mode == "success" || mode == "first-insert" || mode == "native-validation" || mode == "explicit-span" {
 				if !errors.Is(err, abort) {
 					t.Fatal(err)
 				}
