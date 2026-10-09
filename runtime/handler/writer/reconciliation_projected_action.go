@@ -151,6 +151,16 @@ func (p *Program) validateFiniteRetainedActions() (err error) {
 	if a == nil || !a.active {
 		return fmt.Errorf("source phase attempt is unavailable or retired")
 	}
+	if p.rootAdmissionPublished {
+		if p.actions != p.rootAdmissionContainer || len(p.rootAdmissionSpan) != p.projectedRootActionCount || len(p.actions.Rows) != len(p.rootAdmissionSpan) || len(p.queueItems) != 0 {
+			return fmt.Errorf("source root admission action span changed")
+		}
+		for i, action := range p.rootAdmissionSpan {
+			if p.actions.Rows[i] != action || i >= len(a.projectedActions) || a.projectedActions[i] != action {
+				return fmt.Errorf("source root admission action order changed")
+			}
+		}
+	}
 	if !p.projectedRootActionsIssued {
 		return nil
 	}

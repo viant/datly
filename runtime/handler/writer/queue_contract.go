@@ -270,7 +270,7 @@ func (p *Program) sourceSliceEnd(start int) int {
 	return end
 }
 
-func (p *Program) queueSourceSlice(ctx context.Context, binder xhandler.Binder, dml xhandler.DML, actions []*Action) error {
+func (p *Program) queueSourceSlice(ctx context.Context, binder xhandler.Binder, dml xhandler.DML, actions []*Action, appended ...*bool) error {
 	native, ok := dml.(rhandler.QueueContractDML)
 	if !ok {
 		return fmt.Errorf("native queue_contract capability is unavailable")
@@ -329,6 +329,9 @@ func (p *Program) queueSourceSlice(ctx context.Context, binder xhandler.Binder, 
 	}
 	if err := native.InsertWithQueueContract(first.Record.Table, rows.Interface(), rhandler.SourceSlice); err != nil {
 		return fmt.Errorf("%s %s: %w", xhandler.WriteInsert, first.Record.Table, err)
+	}
+	if len(appended) != 0 && appended[0] != nil {
+		*appended[0] = true
 	}
 	for _, action := range actions {
 		frame := p.actionFrame(action)

@@ -165,7 +165,7 @@ func (p *Program) copyFiniteProjectionMarkers(destination, future reflect.Value)
 }
 
 func finiteRootProjectionState(projections []finiteRootProjection) (string, error) {
-	var values []reflect.Value
+	values := []reflect.Value{reflect.ValueOf(len(projections))}
 	for _, projection := range projections {
 		values = append(values, reflect.ValueOf(reflect.ValueOf(projection.root.ticket).Pointer()), reflect.ValueOf(projection.action), projection.primary, projection.followup, reflect.ValueOf(projection.phase), reflect.ValueOf(projection.placement))
 	}

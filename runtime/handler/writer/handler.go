@@ -331,6 +331,10 @@ type Program struct {
 	rootPreparationAttempted    bool
 	rootAllocationAttempted     bool
 	rootProjectionAttempted     bool
+	rootAdmissionAttempted      bool
+	rootAdmissionPublished      bool
+	rootAdmissionSpan           []*Action
+	rootAdmissionContainer      *MutationActions
 	reconciliationFrames        []*Frame
 	reconciliationSeal          string
 	queueSlots                  []queueSlotSeal
@@ -987,6 +991,14 @@ func (h *Handler) CapturedExecutionGuard(invocation rhandler.Invocation) (func(c
 			return failure
 		}
 		if sourceAttempted {
+			if !program.sameGuardBinder(invocation) {
+				err := fmt.Errorf("source phase captured binder ownership changed")
+				if program.reconciliation != nil {
+					program.reconciliation.active = false
+				}
+				program.retainExecutionFailure(err)
+				return err
+			}
 			terminal, scopeErr := drainowner.GuardPurpose(ctx, binding)
 			if scopeErr == nil {
 				scopeErr = ctx.Err()
