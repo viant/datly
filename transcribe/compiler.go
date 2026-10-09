@@ -82,18 +82,24 @@ func (c *Compiler) Compile(ctx context.Context, source *Source) (*Result, error)
 		}
 		return c.compileHandler(source, header, body)
 	}
+	authoredText := source.Text
+	source, resourcePatches, err := prepareParameterizedEmbeds(ctx, source)
+	if err != nil {
+		return nil, err
+	}
 	readerName, err := dql.ParseReaderRouteName(source.Text)
 	if err != nil {
 		return nil, err
 	}
 	prepared := dql.PrepareSource(source.Text)
-	sourceMap := newSourceMap(len(source.Text), nil, prepared.TrimPrefix, source.Text)
+	authoredMap := newSourceMap(len(authoredText), resourcePatches, 0, authoredText)
+	sourceMap := newSourceMap(len(authoredText), resourcePatches, prepared.TrimPrefix, authoredText)
 	if len(prepared.Diagnostics) > 0 {
 		diagnostics := make([]*Diagnostic, 0, len(prepared.Diagnostics))
 		for _, item := range prepared.Diagnostics {
 			diagnostics = append(diagnostics, &Diagnostic{
 				Code: item.Code, Severity: SeverityError, Message: item.Message, Path: source.Path,
-				Span: Span{Start: positionAt(source.Text, item.Offset), End: positionAt(source.Text, item.End)},
+				Span: Span{Start: authoredMap.Position(item.Offset), End: authoredMap.Position(item.End)},
 			})
 		}
 		return nil, &CompileError{Cause: prepared.Err(), Diagnostics: diagnostics}
@@ -119,7 +125,7 @@ func (c *Compiler) Compile(ctx context.Context, source *Source) (*Result, error)
 		}
 		if item, ok := dql.DiagnosticForError(err); ok {
 			diagnostic.Code = item.Code
-			diagnostic.Span = Span{Start: positionAt(source.Text, item.Offset), End: positionAt(source.Text, item.End)}
+			diagnostic.Span = Span{Start: sourceMap.Position(item.Offset), End: sourceMap.Position(item.End)}
 		} else {
 			sourceMap.Remap([]*Diagnostic{diagnostic})
 		}

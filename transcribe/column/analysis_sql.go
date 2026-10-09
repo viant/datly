@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"strings"
 
+	sqlmacro "github.com/viant/datly/sql/macro"
 	"github.com/viant/parsly"
 	"github.com/viant/sqlparser"
 	"github.com/viant/sqlparser/expr"
@@ -18,6 +19,14 @@ import (
 // projectionAnalysisSQL produces an analysis-only copy. Predicate bodies never
 // supply column or table authority, and no template code is executed here.
 func projectionAnalysisSQL(SQL string, inputs ...*analysisInputs) (string, error) {
+	// Parent-key calls are relation predicates, not projection identity. Use
+	// the canonical macro parser only in this detached analysis copy.
+	var err error
+	SQL, _, err = sqlmacro.StripParentKeyCalls(SQL)
+	if err != nil {
+		return "", err
+	}
+
 	prefix := "__datly_analysis_predicate_"
 	for strings.Contains(SQL, prefix) {
 		prefix += "_"
