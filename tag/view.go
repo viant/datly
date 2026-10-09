@@ -106,8 +106,8 @@ func ParseView(value string) (*View, error) {
 				return err
 			}
 		case "queuecontract":
-			if result.QueueContract != "" || value != "source-row" {
-				return fmt.Errorf("queueContract requires one source-row value; source-slice authoring is not yet available")
+			if result.QueueContract != "" || (value != "source-row" && value != "source-slice") {
+				return fmt.Errorf("queueContract requires one source-row or source-slice value")
 			}
 			result.QueueContract = value
 		case "writeractionpolicy":

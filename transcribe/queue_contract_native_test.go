@@ -25,8 +25,13 @@ func TestQueueContractStockCLIAndSchemaEvolution(t *testing.T) {
 	if output, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("CLI build: %v\n%s", err, output)
 	}
-	for _, operation := range []string{"post", "patch"} {
-		t.Run(operation, func(t *testing.T) {
+	for _, tc := range []struct{ operation, contract string }{{"post", "source-row"}, {"patch", "source-row"}, {"post", "source-slice"}, {"patch", "source-slice"}} {
+		operation, contract := tc.operation, tc.contract
+		t.Run(operation+"/"+contract, func(t *testing.T) {
+			db := testharness.NewSQLiteHarness(t)
+			if err := db.ExecStatements(ctx, `CREATE TABLE records(id INTEGER PRIMARY KEY AUTOINCREMENT,title TEXT)`); err != nil {
+				t.Fatal(err)
+			}
 			root := t.TempDir()
 			(testharness.GeneratedModule{Path: "example.com/queuecontract"}).Write(t, root)
 			text := fmt.Sprintf(`#package('example.com/queuecontract/generated')
@@ -36,9 +41,9 @@ func TestQueueContractStockCLIAndSchemaEvolution(t *testing.T) {
 #setting($_ = $output_type('Output'))
 #setting($_ = $case_format('lc'))
 #define($_ = $Data<[]*Record>(output/body))
-SELECT r.*,type(r,'Record'),queue_contract(r,'source-row')
+SELECT r.*,type(r,'Record'),queue_contract(r,'%s')
 FROM (SELECT records.* FROM records) r
-`, strings.ToUpper(operation))
+`, strings.ToUpper(operation), contract)
 			writeSourceFile(t, root, "source/Records.dql", text)
 			run := func() {
 				t.Helper()
@@ -85,7 +90,7 @@ FROM (SELECT records.* FROM records) r
 			found := false
 			for p := range first {
 				data, _ := os.ReadFile(p)
-				if strings.Contains(string(data), "queueContract=source-row") {
+				if strings.Contains(string(data), "queueContract="+contract) {
 					found = true
 				}
 				if strings.Contains(filepath.Base(p), "current") && strings.Contains(string(data), "queueContract=") {
@@ -95,14 +100,8 @@ FROM (SELECT records.* FROM records) r
 			if !found {
 				t.Fatal("generated native queue contract missing")
 			}
-			if operation == "post" {
-				if err := db.ExecStatements(ctx, `ALTER TABLE records ADD COLUMN notes TEXT`); err != nil {
-					t.Fatal(err)
-				}
-			} else {
-				if err := db.ExecStatements(ctx, `ALTER TABLE records ADD COLUMN details TEXT`); err != nil {
-					t.Fatal(err)
-				}
+			if err := db.ExecStatements(ctx, "ALTER TABLE records ADD COLUMN notes TEXT"); err != nil {
+				t.Fatal(err)
 			}
 			run()
 			evolved := snapshot()
@@ -115,7 +114,11 @@ FROM (SELECT records.* FROM records) r
 			if !changed {
 				t.Fatal("fixture schema evolution did not regenerate body")
 			}
-			writeSourceFile(t, root, "generated/queue_contract_bootstrap_test.go", queueContractBootstrapRuntime)
+			runtime := strings.ReplaceAll(queueContractBootstrapRuntime, `"source-row"`, fmt.Sprintf("%q", contract))
+			if contract == "source-slice" {
+				runtime = strings.ReplaceAll(runtime, "queue_contract source-row does not support update", "queue_contract source-slice requires INSERT in a collection holder")
+			}
+			writeSourceFile(t, root, "generated/queue_contract_bootstrap_test.go", runtime)
 			command := testharness.SourceGoCommand(t, root, "test", "-mod=mod", "-race", "-count=1", "-v", "./generated", "-run", "TestGeneratedQueueContractBootstrap")
 			command.Dir = root
 			if output, err := command.CombinedOutput(); err != nil {
@@ -128,7 +131,7 @@ FROM (SELECT records.* FROM records) r
 	for _, tc := range []struct{ name, operation, expression string }{
 		{"read-only", "get", "queue_contract(r,'source-row')"},
 		{"update-role", "put", "queue_contract(r,'source-row')"},
-		{"slice-unavailable", "post", "queue_contract(r,'source-slice')"},
+		{"slice-update-role", "put", "queue_contract(r,'source-slice')"},
 		{"unknown", "post", "queue_contract(r,'unknown')"},
 		{"duplicate", "post", "queue_contract(r,'source-row'),queue_contract(r,'source-row')"},
 		{"aliased", "post", "queue_contract(r,'source-row') AS improper"},
@@ -218,7 +221,7 @@ func TestGeneratedQueueContractBootstrap(t *testing.T) {
    commits:=0;var outcome xhandler.Outcome
    out,executionErr:=engine.New().Execute(ctx,engine.Request{Input:binding,Handler:native,Scope:scope,Providers:providers,DataSource:dml.Source{DB:db,Tx:tx,OnCommit:func(context.Context){commits++}},Completion:func(o xhandler.Outcome){outcome=o}})
    want:=2
-   if strings.HasPrefix(mode,"unique"){if executionErr==nil||!strings.Contains(executionErr.Error(),"UNIQUE"){t.Fatal("real late SQL failure required",executionErr)};want=0;if tx!=nil{want=1}}
+   if strings.HasPrefix(mode,"unique"){if executionErr==nil||!strings.Contains(executionErr.Error(),"UNIQUE"){t.Fatal("real late SQL failure required",executionErr)};want=0;if tx!=nil && c.RootView.QueueContract!="source-slice"{want=1}}
    if mode=="update-rejection"{if executionErr==nil||!strings.Contains(executionErr.Error(),"queue_contract source-row does not support update"){t.Fatal("UPDATE must reject by queue action admission",executionErr)};want=1;var title string;if err=db.QueryRow("SELECT title FROM records WHERE id=10").Scan(&title);err!=nil||title!="existing"{t.Fatal("UPDATE altered original",title,err)};var seq int;if err=db.QueryRow("SELECT seq FROM sqlite_sequence WHERE name='records'").Scan(&seq);err!=nil||seq!=10{t.Fatal("UPDATE rejection advanced allocator",seq,err)};var infra int;if err=db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE name LIKE 'sqlx_sequence%'").Scan(&infra);err!=nil||infra!=0{t.Fatal("UPDATE rejection allocated",infra,err)}}
    if mode=="cancelled-context"{if ctx.Err()!=context.Canceled||!errors.Is(executionErr,context.Canceled){t.Fatal("true context cancellation missing",executionErr)};want=0}
    if strings.HasPrefix(mode,"success"){

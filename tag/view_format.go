@@ -28,8 +28,8 @@ func (v View) Value() (string, error) {
 	if v.OnDeleteNotFound != "" && v.OnDeleteNotFound != "error" && v.OnDeleteNotFound != "ignore" {
 		return "", fmt.Errorf("onDeleteNotFound must be error or ignore")
 	}
-	if v.QueueContract != "" && v.QueueContract != "source-row" {
-		return "", fmt.Errorf("queueContract requires source-row; source-slice authoring is not yet available")
+	if v.QueueContract != "" && v.QueueContract != "source-row" && v.QueueContract != "source-slice" {
+		return "", fmt.Errorf("queueContract requires source-row or source-slice")
 	}
 	if v.WriterActionPolicy != "" && v.WriterActionPolicy != "insert-delete" {
 		return "", fmt.Errorf("writerActionPolicy must be insert-delete")

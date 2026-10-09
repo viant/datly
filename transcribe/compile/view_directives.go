@@ -367,8 +367,8 @@ func applyViewDirectives(root *spec.View, directives []viewDirective) error {
 			}
 			target.Reconciliation = reconciliation
 		case spec.ViewControlQueueContract:
-			if directive.value != "source-row" || target.Auxiliary {
-				return &Error{Code: CodeViewDirective, Cause: fmt.Errorf("queue_contract requires source-row on a physical role; source-slice authoring is not yet available")}
+			if (directive.value != "source-row" && directive.value != "source-slice") || target.Auxiliary {
+				return &Error{Code: CodeViewDirective, Cause: fmt.Errorf("queue_contract requires source-row or source-slice on a physical role")}
 			}
 			target.QueueContract = directive.value
 		case spec.ViewControlWriterActionPolicy:
