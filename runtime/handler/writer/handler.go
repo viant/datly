@@ -335,6 +335,10 @@ type Program struct {
 	rootAdmissionPublished      bool
 	rootAdmissionSpan           []*Action
 	rootAdmissionContainer      *MutationActions
+	finiteCursorAttempted       bool
+	finiteCursorPublished       bool
+	finiteCursor                *finitePhaseCursor
+	finiteCursorNext            *finitePhaseTransition
 	reconciliationFrames        []*Frame
 	reconciliationSeal          string
 	queueSlots                  []queueSlotSeal

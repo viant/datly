@@ -151,6 +151,19 @@ func (p *Program) validateFiniteRetainedActions() (err error) {
 	if a == nil || !a.active {
 		return fmt.Errorf("source phase attempt is unavailable or retired")
 	}
+	if p.finiteCursorPublished {
+		if err := p.validateFiniteCursorCheckpoint(); err != nil {
+			return err
+		}
+	} else if a.rootAdmitted {
+		state, e := p.finiteAllocationClassificationState()
+		if e != nil {
+			return e
+		}
+		if a.rootAdmissionState == "" || state != a.rootAdmissionState {
+			return fmt.Errorf("source root admission predecessor changed")
+		}
+	}
 	if p.rootAdmissionPublished {
 		if p.actions != p.rootAdmissionContainer || len(p.rootAdmissionSpan) != p.projectedRootActionCount || len(p.actions.Rows) != len(p.rootAdmissionSpan) || len(p.queueItems) != 0 {
 			return fmt.Errorf("source root admission action span changed")

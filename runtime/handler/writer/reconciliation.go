@@ -163,6 +163,7 @@ type reconciliationAttempt struct {
 	rootAllocated             bool
 	rootAdmitted              bool
 	rootAppendPrefix          int
+	rootAdmissionState        string
 	allocatedRootKeys         []int64
 	allocationState           string
 	rootProjections           []finiteRootProjection

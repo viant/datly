@@ -134,6 +134,12 @@ func (p *Program) admitFinitePhaseRoots(ctx context.Context, plan *finitePhasePl
 		return err
 	}
 	a.rootAdmitted = true
+	// Retain the predecessor at the successful native boundary, rather than
+	// trusting whatever live values a later cursor initializer happens to see.
+	a.rootAdmissionState, err = p.finiteAllocationClassificationState()
+	if err != nil {
+		return err
+	}
 	complete = true
 	return nil
 }
