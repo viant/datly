@@ -47,6 +47,7 @@ type dataScope struct {
 	order                    string
 	once                     sync.Once
 	data                     xhandler.Data
+	associationData          xhandler.Data // fully resolved view; protected by root.mu
 	err                      error
 	completionErr            error
 	completion               xhandler.Outcome
@@ -654,6 +655,9 @@ func (s *dataScope) resolve(ctx context.Context) (xhandler.Data, error) {
 			}
 		}
 	}
+	root.mu.Lock()
+	s.associationData = s.data
+	root.mu.Unlock()
 	return s.data, s.err
 }
 

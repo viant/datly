@@ -110,3 +110,22 @@ func GuardRegistered(binding *GuardBinding) bool {
 	defer cell.mu.Unlock()
 	return cell.self == binding && cell.owner != nil
 }
+
+// ValidateGuardOwner checks registration identity without invoking a callback
+// or granting a mutation/drain capability.
+func ValidateGuardOwner(receiver any, binding *GuardBinding) error {
+	state, err := exactState(receiver)
+	if err != nil {
+		return err
+	}
+	if binding == nil || binding.cell == nil {
+		return ErrGuardBinding
+	}
+	cell := binding.cell
+	cell.mu.Lock()
+	defer cell.mu.Unlock()
+	if cell.self != binding || cell.owner != state {
+		return ErrGuardBinding
+	}
+	return nil
+}
