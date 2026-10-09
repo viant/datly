@@ -318,7 +318,7 @@ func (p *Program) queueSourceSlice(ctx context.Context, binder xhandler.Binder, 
 			return err
 		}
 		seals = append(seals, seal)
-		rows.Index(i).Set(frame.Entity)
+		rows.Index(i).Set(action.Entity)
 	}
 	// Enroll every holder before exposing the one native grouped operation.
 	p.guardMu.Lock()

@@ -153,22 +153,25 @@ type reconciliationRootOccurrences struct {
 	roles []reconciliationRoleOccurrences
 }
 type reconciliationAttempt struct {
-	observationsClosed bool
-	selectionSealed    *finitePhasePlan
-	selectionState     string
-	selectionOutput    string
-	rootPrepared       bool
-	preparedState      string
-	preparedOutput     string
-	rootAllocated      bool
-	allocatedRootKeys  []int64
-	allocationState    string
-	rootProjections    []finiteRootProjection
-	projectionState    string
-	active             bool
-	roots              []reconciliationRootOccurrences
-	tickets            map[*reconciliationTicket]bool
-	allocations        map[*Frame]*reconciliationAllocation
+	observationsClosed        bool
+	selectionSealed           *finitePhasePlan
+	selectionState            string
+	selectionOutput           string
+	rootPrepared              bool
+	preparedState             string
+	preparedOutput            string
+	rootAllocated             bool
+	allocatedRootKeys         []int64
+	allocationState           string
+	rootProjections           []finiteRootProjection
+	projectedActionsAttempted bool
+	projectedActions          []*Action
+	projectedAuthorities      []*projectedRootAction
+	projectionState           string
+	active                    bool
+	roots                     []reconciliationRootOccurrences
+	tickets                   map[*reconciliationTicket]bool
+	allocations               map[*Frame]*reconciliationAllocation
 }
 
 func hasReconciliation(root *Record) bool { return root != nil && root.reconciliation != nil }

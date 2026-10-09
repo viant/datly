@@ -20,6 +20,8 @@ type sourceSliceMember struct {
 	action           *Action
 	frame, parent    *Frame
 	entity           reflect.Value
+	payload          reflect.Value
+	projected        *projectedRootAction
 	tracked, indexed bool
 	position         int
 	slot             queueSlotSeal
@@ -51,7 +53,7 @@ func (p *Program) mintSourceSliceGroup(actions []*Action) error {
 			return err
 		}
 		// Copy the reflect.Value, not the mutable Action/Frame value location.
-		group.members = append(group.members, sourceSliceMember{action: action, frame: frame, parent: frame.Parent, entity: reflect.ValueOf(frame.Entity.Interface()), tracked: frame.holderTracked, indexed: frame.holderIndexed, position: frame.holderPosition, slot: slot})
+		group.members = append(group.members, sourceSliceMember{action: action, frame: frame, parent: frame.Parent, entity: reflect.ValueOf(frame.Entity.Interface()), tracked: frame.holderTracked, indexed: frame.holderIndexed, position: frame.holderPosition, slot: slot, payload: reflect.ValueOf(action.Entity.Interface()), projected: action.projected})
 		seen[action] = true
 	}
 	// Publish only after every member was captured successfully.
@@ -94,7 +96,7 @@ func (p *Program) validateSourceSliceGroup(group *sourceSliceGroup, actions []*A
 	for i, member := range group.members {
 		action := actions[i]
 		frame := p.actionFrame(action)
-		if action != member.action || action.sourceGroup != group || p.sourceSliceGroups[action] != group || action.Kind != xhandler.WriteInsert || frame != member.frame || frame.Record != group.record || frame.Parent != member.parent || frame.holderTracked != member.tracked || frame.holderIndexed != member.indexed || frame.holderPosition != member.position || frame.Entity.Type() != member.entity.Type() || frame.Entity.Pointer() != member.entity.Pointer() {
+		if action != member.action || action.sourceGroup != group || p.sourceSliceGroups[action] != group || action.Kind != xhandler.WriteInsert || frame != member.frame || frame.Record != group.record || frame.Parent != member.parent || frame.holderTracked != member.tracked || frame.holderIndexed != member.indexed || frame.holderPosition != member.position || frame.Entity.Type() != member.entity.Type() || frame.Entity.Pointer() != member.entity.Pointer() || action.projected != member.projected || action.Entity.Type() != member.payload.Type() || action.Entity.Pointer() != member.payload.Pointer() {
 			return fmt.Errorf("native source-slice member authority changed at %d", i)
 		}
 		if err := member.slot.validate(reflect.ValueOf(p.input)); err != nil {

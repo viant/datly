@@ -588,6 +588,7 @@ type Action struct {
 	frame *Frame
 	// Minted only by native finite-phase lowering; never supplied by hooks.
 	sourceGroup *sourceSliceGroup
+	projected   *projectedRootAction
 }
 
 func (p *Program) allocate(ctx context.Context, sequencer xhandler.Sequencer, record *Record, roots reflect.Value) error {
@@ -1643,11 +1644,24 @@ func identityOfFrame(frame *Frame) frameIdentity {
 // actionFrame retains the native action's authoritative role, never a
 // last-wins entity-pointer lookup. An uncaptured association fails closed.
 func (p *Program) actionFrame(action *Action) *Frame {
+	if action != nil && action.projected == nil && p.reconciliation != nil {
+		for _, owned := range p.reconciliation.projectedActions {
+			if owned == action {
+				_ = p.validateProjectedRootAction(action)
+				return nil
+			}
+		}
+	}
+	if action != nil && action.projected != nil {
+		if err := p.validateProjectedRootAction(action); err != nil {
+			return nil
+		}
+	}
 	if action == nil || action.frame == nil || !action.Entity.IsValid() || action.Entity.Kind() != reflect.Pointer || action.Entity.IsNil() {
 		return nil
 	}
 	frame := action.frame
-	if !frame.Entity.IsValid() || frame.Entity.Kind() != reflect.Pointer || frame.Entity.IsNil() || frame.Entity.Pointer() != action.Entity.Pointer() {
+	if !frame.Entity.IsValid() || frame.Entity.Kind() != reflect.Pointer || frame.Entity.IsNil() || (frame.Entity.Pointer() != action.Entity.Pointer() && action.projected == nil) {
 		return nil
 	}
 	for _, owned := range p.frames.Rows {
