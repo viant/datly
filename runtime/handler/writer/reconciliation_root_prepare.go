@@ -126,6 +126,15 @@ func (p *Program) prepareFinitePhaseRoots(ctx context.Context, plan *finitePhase
 	if err = check(); err != nil {
 		return err
 	}
+	preparedState, e := p.reconciliationState()
+	if e != nil {
+		return e
+	}
+	preparedOutput, e := immutableValues([]reflect.Value{reflect.ValueOf(p.output)})
+	if e != nil {
+		return e
+	}
+	a.preparedState, a.preparedOutput = preparedState, preparedOutput
 	a.rootPrepared = true
 	complete = true
 	before = ""
@@ -145,13 +154,21 @@ func (p *Program) callFiniteRootPreparationHook(ctx context.Context, name string
 // pointer/slot identities as well as values. In particular a permitted root
 // setter cannot change protected child/Current data through a shared pointee.
 func (p *Program) finiteRootPreparationState(plan *finitePhasePlan) (string, error) {
+	return p.finiteRootProtectedState(plan, false, false)
+}
+
+func (p *Program) finiteRootProtectedState(plan *finitePhasePlan, prepared, allocating bool) (string, error) {
 	a := p.reconciliation
-	if a == nil || !a.active || !a.observationsClosed || a.rootPrepared || plan == nil || a.selectionSealed != plan || plan.owner != a || plan.compiled == nil || plan.compiled.root != p.metadata.Root || len(plan.roots) != len(a.roots) || p.finiteRootDecision == nil {
+	if a == nil || !a.active || !a.observationsClosed || a.rootPrepared != prepared || a.rootAllocated || plan == nil || a.selectionSealed != plan || plan.owner != a || plan.compiled == nil || plan.compiled.root != p.metadata.Root || len(plan.roots) != len(a.roots) || p.finiteRootDecision == nil {
 		return "", fmt.Errorf("source root preparation requires active sealed selection authority")
 	}
 	input := reflect.ValueOf(p.input).Elem()
 	rows := input.Field(p.metadata.InputField)
-	if err := p.validateFiniteRootDecision(rows); err != nil {
+	if allocating {
+		if err := p.validateFiniteRootAllocationFacts(rows, nil); err != nil {
+			return "", err
+		}
+	} else if err := p.validateFiniteRootDecision(rows); err != nil {
 		return "", err
 	}
 	if err := p.validateFinitePhaseFrames(plan.compiled, rows); err != nil {
@@ -177,6 +194,14 @@ func (p *Program) finiteRootPreparationState(plan *finitePhasePlan) (string, err
 			}
 		}
 		if frame.Parent == nil {
+			if allocating {
+				row := frame.Entity.Elem()
+				for j := 0; j < row.NumField(); j++ {
+					if j != p.finiteRootDecision.metadata.key.Index[0] && row.Type().Field(j).PkgPath == "" {
+						values = append(values, row.Field(j))
+					}
+				}
+			}
 			if frame.Record != p.metadata.Root || frame.Action != p.finiteRootDecision.action {
 				return "", fmt.Errorf("source root preparation changed captured root action")
 			}

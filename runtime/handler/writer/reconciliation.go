@@ -158,6 +158,10 @@ type reconciliationAttempt struct {
 	selectionState     string
 	selectionOutput    string
 	rootPrepared       bool
+	preparedState      string
+	preparedOutput     string
+	rootAllocated      bool
+	allocatedRootKeys  []int64
 	active             bool
 	roots              []reconciliationRootOccurrences
 	tickets            map[*reconciliationTicket]bool
@@ -308,6 +312,13 @@ func (p *Program) captureReconciliationAllocation(ctx context.Context) error {
 				return fmt.Errorf("finite_reconciliation unexplained cross-role pointer association")
 			}
 			if prior.Parent != frame.Parent && prior.Parent != nil && frame.Parent != nil {
+				// Repeated source slots can name the same root storage before its
+				// ID resolves. Exact storage equality is not reparenting.
+				sameRoot := p.finiteRootDecision != nil && prior.Parent.Record == p.metadata.Root && frame.Parent.Record == p.metadata.Root && prior.Parent.Entity.IsValid() && frame.Parent.Entity.IsValid() && prior.Parent.Entity.Kind() == reflect.Pointer && frame.Parent.Entity.Kind() == reflect.Pointer && !prior.Parent.Entity.IsNil() && !frame.Parent.Entity.IsNil() && prior.Parent.Entity.Pointer() == frame.Parent.Entity.Pointer()
+				if sameRoot {
+					owners[frame.Entity.Pointer()] = frame
+					continue
+				}
 				relation := relationFor(frame.Parent.Record, frame.Record)
 				for _, link := range relation.Links {
 					left := prior.Parent.Entity.Elem().FieldByIndex(link.Parent.Index)

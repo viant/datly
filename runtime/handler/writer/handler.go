@@ -328,6 +328,7 @@ type Program struct {
 	reconciliation              *reconciliationAttempt
 	phaseSelectionAttempted     bool
 	rootPreparationAttempted    bool
+	rootAllocationAttempted     bool
 	reconciliationFrames        []*Frame
 	reconciliationSeal          string
 	queueSlots                  []queueSlotSeal

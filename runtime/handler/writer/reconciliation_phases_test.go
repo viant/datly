@@ -9,11 +9,11 @@ import (
 
 type phaseTestHas struct{ ID, Enabled bool }
 type phaseTestRoot struct {
-	ID       int
+	ID       int `sqlx:"id,primaryKey=true,autoincrement=true"`
 	Enabled  bool
-	Children []*phaseTestChild
-	Details  []*phaseTestChild
-	Has      *phaseTestHas
+	Children []*phaseTestChild `sqlx:"-"`
+	Details  []*phaseTestChild `sqlx:"-"`
+	Has      *phaseTestHas     `sqlx:"-"`
 }
 type phaseTestChild struct {
 	ID, ParentID int
