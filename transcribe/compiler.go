@@ -159,7 +159,7 @@ func (c *Compiler) Compile(ctx context.Context, source *Source) (*Result, error)
 		source = &sourceCopy
 	}
 
-	loader := &componentLoader{packageComponent: source.PackageComponent, authoredComponent: component}
+	loader := &componentLoader{packageComponent: source.PackageComponent, authoredComponent: component, dqlAuthored: strings.TrimSpace(source.Text) != ""}
 	component, err = loader.Load()
 	if err != nil {
 		return nil, err

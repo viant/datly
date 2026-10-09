@@ -17,6 +17,7 @@ type Frame struct {
 	parent   *Frame
 	open     bool
 	order    string
+	relation string
 	timeline []journalItem
 	bindings []*Frame
 }
@@ -35,28 +36,32 @@ type journalRun struct {
 	index   int
 }
 type journal struct {
-	mu            sync.Mutex
-	establish     sync.Mutex
-	root          *Frame
-	owners        map[*State]bool
-	external      map[*State]bool
-	drained       map[*State]bool
-	enabled       bool
-	frozen        bool
-	freezeStarted bool
-	runs          []*journalRun
-	cursor        int
-	failure       error
-	txOrder       []*State
-	txIDs         map[*State]any
+	mu              sync.Mutex
+	establish       sync.Mutex
+	root            *Frame
+	owners          map[*State]bool
+	external        map[*State]bool
+	drained         map[*State]bool
+	enabled         bool
+	frozen          bool
+	freezeStarted   bool
+	runs            []*journalRun
+	cursor          int
+	failure         error
+	txOrder         []*State
+	txIDs           map[*State]any
+	prefixReceipts  map[any]prefixReceipt
+	prefixExecuted  bool
+	prefixProtected bool
 }
 
 // NativeJournal callbacks are bound once in the Data constructor. They do not
 // grant handlers execution authority; frame association checks actual ownership.
 type JournalRecord struct {
-	Record any
-	Frame  *Frame
-	ID     uint64
+	Record   any
+	Frame    *Frame
+	ID       uint64
+	Executed bool
 }
 
 type NativeJournal struct {
@@ -105,6 +110,15 @@ func (i *Invocation) RootFrame() *Frame {
 }
 func (i *Invocation) ChildFrame(parent *Frame, relation, order string) (*Frame, error) {
 	i.RootFrame()
+	ledger, err := invocationLedger(i)
+	if err != nil {
+		return nil, err
+	}
+	ledger.mu.Lock()
+	defer ledger.mu.Unlock()
+	if ledger.prefix != nil {
+		return nil, prefixDeniedLocked(ledger)
+	}
 	j := i.journal()
 	j.mu.Lock()
 	defer j.mu.Unlock()
@@ -114,7 +128,7 @@ func (i *Invocation) ChildFrame(parent *Frame, relation, order string) (*Frame, 
 	for !parent.open && parent.parent != nil {
 		parent = parent.parent
 	}
-	f := &Frame{journal: j, parent: parent, open: true, order: order}
+	f := &Frame{journal: j, parent: parent, open: true, order: order, relation: relation}
 	if relation == "binding" {
 		parent.bindings = append(parent.bindings, f)
 		sort.SliceStable(parent.bindings, func(a, b int) bool { return parent.bindings[a].order < parent.bindings[b].order })
@@ -162,7 +176,7 @@ func (h Handle) BindFrame(receiver, component any, i *Invocation, f *Frame) erro
 	return native.Bind(component, f)
 }
 func (j *journal) admissionLocked() error {
-	if !j.enabled || len(j.owners) < 2 {
+	if (!j.enabled && !j.prefixProtected) || len(j.owners) < 2 {
 		return nil
 	}
 	for s := range j.owners {
@@ -249,7 +263,7 @@ func (i *Invocation) FreezeJournal() (ordered bool, retErr error) {
 		}
 	}()
 	j.mu.Lock()
-	if !j.enabled || len(j.owners) < 2 {
+	if (!j.enabled || len(j.owners) < 2) && !j.prefixExecuted {
 		j.mu.Unlock()
 		return false, nil
 	}
@@ -277,11 +291,16 @@ func (i *Invocation) FreezeJournal() (ordered bool, retErr error) {
 		owners = append(owners, s)
 	}
 	j.freezeStarted = true
+	receipts := make(map[any]prefixReceipt, len(j.prefixReceipts))
+	for record, receipt := range j.prefixReceipts {
+		receipts[record] = receipt
+	}
 	j.mu.Unlock()
 	if err != nil {
 		return true, err
 	}
 	seen := map[any]*journalEntry{}
+	executed := map[any]bool{}
 	for _, e := range entries {
 		if e == nil || seen[e.record] != nil {
 			return true, ErrJournal
@@ -304,15 +323,26 @@ func (i *Invocation) FreezeJournal() (ordered bool, retErr error) {
 				return true, ErrJournal
 			}
 			ids[r.ID] = true
+			receipt, attested := receipts[r.Record]
+			if r.Executed != attested || attested && (receipt.owner != s || receipt.frame != r.Frame || receipt.id != r.ID || !validPrefixReceipt(i, s, r, receipt)) {
+				return true, ErrJournal
+			}
+			if attested {
+				executed[r.Record] = true
+				delete(receipts, r.Record)
+			}
 			delete(seen, r.Record)
 		}
 	}
-	if len(seen) != 0 {
+	if len(seen) != 0 || len(receipts) != 0 {
 		return true, ErrJournal
 	}
 	j.mu.Lock()
 	defer j.mu.Unlock()
 	for _, e := range entries {
+		if executed[e.record] {
+			continue
+		}
 		if len(j.runs) == 0 || j.runs[len(j.runs)-1].owner != e.owner {
 			j.runs = append(j.runs, &journalRun{owner: e.owner, index: len(j.runs)})
 		}
@@ -489,7 +519,7 @@ func OrderedJournal(receiver any) bool {
 	j := &issuer.journal
 	j.mu.Lock()
 	defer j.mu.Unlock()
-	return j.freezeStarted && j.enabled && len(j.owners) > 1
+	return j.freezeStarted && (j.enabled && len(j.owners) > 1 || j.prefixExecuted)
 }
 
 func failJournalRun(p *DrainPermit, cause error) {
@@ -502,4 +532,33 @@ func failJournalRun(p *DrainPermit, cause error) {
 		j.failure = cause
 	}
 	j.mu.Unlock()
+}
+
+// HasPrefixExecution reports authenticated evidence, never execution authority.
+func (i *Invocation) HasPrefixExecution() bool {
+	if i == nil || i.identity == nil {
+		return false
+	}
+	j := i.journal()
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	return j.prefixExecuted
+}
+
+func validPrefixReceipt(i *Invocation, owner *State, record JournalRecord, receipt prefixReceipt) bool {
+	p := receipt.permit
+	if p == nil || !p.consumed || p.state != owner || p.identity != i.identity || p.operation != PrefixPreparation || p.prefix == nil {
+		return false
+	}
+	grant := p.prefix
+	if grant.owner != owner || !grant.bound || grant.lifetime == nil || grant.done == nil {
+		return false
+	}
+	select {
+	case <-grant.done:
+	default:
+		return false
+	}
+	selected, ok := grant.selected[record.Record]
+	return ok && selected.Record == record.Record && selected.Frame == record.Frame && selected.ID == record.ID && !selected.Executed
 }

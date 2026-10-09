@@ -1,5 +1,7 @@
 package spec
 
+import "slices"
+
 // Clone returns an isolated component metadata graph.
 func (c *Component) Clone() *Component {
 	if c == nil {
@@ -32,6 +34,7 @@ func (s *Settings) Clone() *Settings {
 		return nil
 	}
 	result := *s
+	result.ProtectedFlushTables = slices.Clone(s.ProtectedFlushTables)
 	result.MCPFolders = append([]ResourceFolder(nil), s.MCPFolders...)
 	for i := range result.MCPFolders {
 		result.MCPFolders[i] = result.MCPFolders[i].Clone()

@@ -1,14 +1,16 @@
 package transcribe
 
 import (
+	"slices"
 	"strings"
 
 	"github.com/viant/datly/spec"
 )
 
 type settingsLoader struct {
-	base     *spec.Settings
-	authored *spec.Settings
+	base        *spec.Settings
+	authored    *spec.Settings
+	dqlAuthored bool
 }
 
 func (l *settingsLoader) Load() *spec.Settings {
@@ -16,6 +18,11 @@ func (l *settingsLoader) Load() *spec.Settings {
 		return l.authored.Clone()
 	}
 	result := l.base.Clone()
+	// DQL is the current authority for this opt-in grant, including omission.
+	// Package-only loading has no DQL overlay and retains native authority.
+	if l.dqlAuthored {
+		result.ProtectedFlushTables = nil
+	}
 	// A linked companion is generated publication metadata. Re-authoring DQL
 	// must derive its own cube, even when package settings came from a build.
 	if result.Report != nil {
@@ -23,6 +30,11 @@ func (l *settingsLoader) Load() *spec.Settings {
 	}
 	if l.authored == nil {
 		return result
+	}
+	// Package and DQL settings describe this same component. Explicit DQL
+	// authority replaces the package allowlist; it never unions table grants.
+	if l.authored.ProtectedFlushTables != nil {
+		result.ProtectedFlushTables = slices.Clone(l.authored.ProtectedFlushTables)
 	}
 	if len(l.authored.MCPFolders) > 0 {
 		result.MCPFolders = append([]spec.ResourceFolder(nil), l.authored.MCPFolders...)

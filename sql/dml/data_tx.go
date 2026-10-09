@@ -212,7 +212,7 @@ func (d *Data) flushLocked(ctx context.Context, tableName string, target *Data) 
 }
 
 // executePendingLocked is shared by local flushes and authenticated frozen runs.
-func (d *Data) executePendingLocked(ctx context.Context, matched []*dataOperation) error {
+func (d *Data) executePendingLocked(ctx context.Context, matched []*dataOperation, prefix ...*drainowner.DrainPermit) error {
 	owner := d.owner()
 	if len(matched) == 0 {
 		return nil
@@ -241,7 +241,14 @@ func (d *Data) executePendingLocked(ctx context.Context, matched []*dataOperatio
 	if err != nil {
 		return err
 	}
-	tx, err := owner.transaction(ctx)
+	transactionContext := ctx
+	if len(prefix) != 0 {
+		transactionContext, err = drainowner.PrefixTransactionContext(owner, prefix[0])
+		if err != nil {
+			return err
+		}
+	}
+	tx, err := owner.transaction(transactionContext)
 	if err != nil {
 		return err
 	}
@@ -260,6 +267,20 @@ func (d *Data) executePendingLocked(ctx context.Context, matched []*dataOperatio
 		}
 	}()
 	for _, step := range buildExecutionPlan(matched) {
+		if len(prefix) != 0 {
+			lifetime, err := drainowner.PrefixTransactionContext(owner, prefix[0])
+			if err == nil {
+				err = lifetime.Err()
+			}
+			if err != nil {
+				owner.markFailed(err)
+				return err
+			}
+		}
+
+		if err := drainowner.ProtectedOwnerFailure(owner); err != nil {
+			return err
+		}
 		if hasQueuePayloadEvidence(step.operations) {
 			if err := owner.validateExecutionGuardsLocked(ctx); err != nil {
 				return err
@@ -281,7 +302,21 @@ func (d *Data) executePendingLocked(ctx context.Context, matched []*dataOperatio
 			operation.reserved = false
 		}
 		owner.mu.Unlock()
-		drainowner.NoteJournalDrain(owner)
+		if len(prefix) != 0 {
+			records := make([]drainowner.JournalRecord, len(step.operations))
+			for i, operation := range step.operations {
+				records[i] = drainowner.JournalRecord{Record: operation, Frame: operation.journalFrame, ID: operation.id, Executed: true}
+			}
+			if err := drainowner.RecordPrefixStep(owner, prefix[0], records); err != nil {
+				owner.markFailed(err)
+				return err
+			}
+		} else {
+			drainowner.NoteJournalDrain(owner)
+		}
+		if err := drainowner.ProtectedOwnerFailure(owner); err != nil {
+			return err
+		}
 	}
 	if managedTx {
 		if err := tx.Commit(); err != nil {

@@ -50,6 +50,11 @@ func (d *Data) ValidateExecutionGuards(ctx context.Context) error {
 	if err := drainowner.CheckProtectedDrainInFlight(owner); err != nil {
 		return err
 	}
+	effect, err := drainowner.BeginNativeEffect(owner)
+	if err != nil {
+		return err
+	}
+	defer drainowner.EndDrain(effect)
 	owner.executionMu.Lock()
 	defer owner.executionMu.Unlock()
 	return owner.validateExecutionGuardsLocked(ctx)
@@ -205,6 +210,9 @@ func (d *Data) failProtectedMutationLocked(cause error) error {
 // authoritative; no mutex is retained while acquiring executionMu.
 func (d *Data) precheckProtectedMutation() error {
 	owner := d.owner()
+	if err := drainowner.CheckPrefixMutation(owner); err != nil {
+		return err
+	}
 	owner.mu.Lock()
 	defer owner.mu.Unlock()
 	if !drainowner.OwnerActivitiesEnrolled(owner) {

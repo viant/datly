@@ -12,6 +12,7 @@ import (
 type componentLoader struct {
 	packageComponent  *spec.Component
 	authoredComponent *spec.Component
+	dqlAuthored       bool
 }
 
 func (l *componentLoader) Load() (*spec.Component, error) {
@@ -49,7 +50,7 @@ func (l *componentLoader) Load() (*spec.Component, error) {
 	packageScope := base.Key.Scope
 	l.mergeIdentity(base, authored)
 	base.Documentation = base.Documentation.Overlay(authored.Documentation)
-	base.Settings = (&settingsLoader{base: base.Settings, authored: authored.Settings}).Load()
+	base.Settings = (&settingsLoader{base: base.Settings, authored: authored.Settings, dqlAuthored: l.dqlAuthored}).Load()
 	base.TypeContext = l.mergeTypeContext(base.TypeContext, authored.TypeContext, packageScope)
 	if len(authored.Routes) > 0 {
 		routes, err := l.mergeRoutes(base.Routes, authored.Routes)

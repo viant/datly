@@ -22,6 +22,7 @@ import (
 type dataScopeContextKey struct{}
 
 type dataScope struct {
+	invocationContext        context.Context
 	nativeInvocation         *drainowner.Invocation
 	journalFrame             *drainowner.Frame
 	orderedCompletion        bool
@@ -287,13 +288,17 @@ func (c sequencerCapability) Reserve(ctx context.Context, tableName string, dest
 // flusherCapability exposes explicit buffered-write execution without leaking
 // the concrete SQL implementation.
 type flusherCapability struct {
-	guard   *mutationGuard
-	service xhandler.Flusher
+	guard     *mutationGuard
+	service   xhandler.Flusher
+	authority *flushAuthority
 }
 
 func (c flusherCapability) Flush(ctx context.Context, tableName string) error {
 	if err := c.guard.check("Flush"); err != nil {
 		return err
+	}
+	if c.authority != nil && c.authority.scope.protectedLifetime() {
+		return c.authority.flush(ctx, tableName)
 	}
 	return c.service.Flush(ctx, tableName)
 }
@@ -306,11 +311,15 @@ type dataCapability struct {
 	flusherCapability
 }
 
-func newHandlerData(service xhandler.Data, guard *mutationGuard) dataCapability {
+func newHandlerData(service xhandler.Data, guard *mutationGuard, authority ...*flushAuthority) dataCapability {
+	var prefix *flushAuthority
+	if len(authority) != 0 {
+		prefix = authority[0]
+	}
 	return dataCapability{
 		dmlCapability:       dmlCapability{service: service, guard: guard},
 		sequencerCapability: sequencerCapability{service: service, guard: guard},
-		flusherCapability:   flusherCapability{service: service, guard: guard},
+		flusherCapability:   flusherCapability{service: service, guard: guard, authority: prefix},
 	}
 }
 
@@ -336,6 +345,7 @@ func invocationDataScope(ctx context.Context, source dexec.DataSource) (*dataSco
 	}
 	created := newDataScope(source)
 	if created != nil {
+		created.invocationContext = ctx
 		created.root = created
 		created.unit = created
 		created.bySource = map[any]*dataScope{}
@@ -750,7 +760,11 @@ func (s *dataScope) seal() {
 	}
 }
 
-func (s *dataScope) providers() []locator.Provider {
+func (s *dataScope) providers(authorities ...*flushAuthority) []locator.Provider {
+	var authority *flushAuthority
+	if len(authorities) != 0 {
+		authority = authorities[0]
+	}
 	providers := []locator.Provider{
 		s.transactionStarterProvider(),
 		s.mutationReporterProvider(),
@@ -759,7 +773,7 @@ func (s *dataScope) providers() []locator.Provider {
 			if err != nil || data == nil {
 				return nil, false, err
 			}
-			return newHandlerData(data, s.mutationGuard()), true, nil
+			return newHandlerData(data, s.mutationGuard(), authority), true, nil
 		}),
 		handlerprovider.New(xhandler.DMLKey, func(ctx context.Context) (any, bool, error) {
 			data, err := s.resolve(ctx)
@@ -784,7 +798,7 @@ func (s *dataScope) providers() []locator.Provider {
 			if err != nil || data == nil {
 				return nil, false, err
 			}
-			return flusherCapability{service: data, guard: s.mutationGuard()}, true, nil
+			return flusherCapability{service: data, guard: s.mutationGuard(), authority: authority}, true, nil
 		}),
 	}
 	if s.connectors != nil {

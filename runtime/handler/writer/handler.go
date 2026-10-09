@@ -865,7 +865,7 @@ func (h *Handler) execute(ctx context.Context, invocation rhandler.Invocation) (
 	if err = program.prepare(ctx, invocation.Binder); err != nil {
 		return program.output, err
 	}
-	if handlerengine.IsImperativeComponent(ctx) && (program.queueObserver() == nil || len(program.actions.Rows) > 0) {
+	if handlerengine.IsImperativeComponent(ctx) && !program.explicitProtectedFlush() && (program.queueObserver() == nil || len(program.actions.Rows) > 0) {
 		flusher, lookupErr := lookup[xhandler.Flusher](ctx, invocation.Binder, xhandler.FlusherKey)
 		if lookupErr != nil {
 			return program.output, lookupErr
@@ -875,6 +875,12 @@ func (h *Handler) execute(ctx context.Context, invocation rhandler.Invocation) (
 		}
 	}
 	return program.output, nil
+}
+
+// Configured writers keep their authored explicit boundaries; declaration
+// alone never drains a table. Root completion owns the remaining journal.
+func (p *Program) explicitProtectedFlush() bool {
+	return p != nil && p.metadata != nil && p.metadata.Component != nil && p.metadata.Component.Settings != nil && len(p.metadata.Component.Settings.ProtectedFlushTables) != 0
 }
 
 func (h *Handler) CaptureInput(ctx context.Context, input any) (any, error) {
@@ -2472,6 +2478,9 @@ func Compile(component *spec.Component, inputType, outputType reflect.Type, oper
 	operation = strings.ToLower(strings.TrimSpace(operation))
 	if operation != "patch" && operation != "post" && operation != "put" {
 		return nil, fmt.Errorf("generic writer requires patch, post, or put metadata, got %q", operation)
+	}
+	if err := component.Settings.ValidateProtectedFlushTables(); err != nil {
+		return nil, err
 	}
 	if err := spec.ValidateInternalMutationRoot(component, operation); err != nil {
 		return nil, err

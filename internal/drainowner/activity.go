@@ -25,6 +25,7 @@ type activityLedger struct {
 	observation       uint64
 	transactionStarts uint
 	drains            map[*DrainRecord]struct{}
+	prefix            *prefixGrant
 }
 type activityCell struct {
 	identity    *identity
@@ -71,6 +72,9 @@ func admitActivity(invocation *Invocation, frame *Frame) (Activity, error) {
 		}
 		return Activity{}, ErrActivityClosed
 	}
+	if ledger.prefix != nil {
+		return Activity{}, prefixDeniedLocked(ledger)
+	}
 	if frame != nil {
 		journal := invocation.journal()
 		journal.mu.Lock()
@@ -109,6 +113,9 @@ func FinishActivity(invocation *Invocation, activity Activity, cause error) erro
 	}
 	if _, found := ledger.active[activity.cell]; !found {
 		return ErrActivity
+	}
+	if ledger.prefix != nil {
+		cause = errors.Join(cause, prefixDeniedLocked(ledger))
 	}
 	if ledger.enrolled && cause != nil {
 		appendFailureLocked(ledger, cause, activity.cell.group, activity.cell.member, terminalBindingFailure(cause), activity.cell.observation)
@@ -161,6 +168,9 @@ func CloseActivities(invocation *Invocation) error {
 	ledger.mu.Lock()
 	defer ledger.mu.Unlock()
 	ledger.closed = true
+	if ledger.prefix != nil {
+		prefixDeniedLocked(ledger)
+	}
 	if !ledger.enrolled {
 		return nil
 	}

@@ -3,6 +3,7 @@ package dml
 import (
 	"context"
 	"fmt"
+	"github.com/viant/datly/internal/drainowner"
 	"github.com/viant/datly/sql/validation"
 	xhandler "github.com/viant/xdatly/handler"
 )
@@ -29,6 +30,11 @@ type dataValidation struct {
 
 func (v dataValidation) Validate(ctx context.Context, value any, options ...any) (*xhandler.Validation, error) {
 	owner := v.data.owner()
+	effect, err := drainowner.BeginNativeEffect(owner)
+	if err != nil {
+		return nil, err
+	}
+	defer drainowner.EndDrain(effect)
 	owner.executionMu.Lock()
 	defer owner.executionMu.Unlock()
 	owner.mu.Lock()
@@ -44,6 +50,11 @@ func (v dataValidation) Validate(ctx context.Context, value any, options ...any)
 // the same component lifetime and serialized transaction access as Validate.
 func (v dataValidation) MatchReference(ctx context.Context, child, parent any, expected xhandler.ValidationReference) (*xhandler.ValidationReference, error) {
 	owner := v.data.owner()
+	effect, err := drainowner.BeginNativeEffect(owner)
+	if err != nil {
+		return nil, err
+	}
+	defer drainowner.EndDrain(effect)
 	owner.executionMu.Lock()
 	defer owner.executionMu.Unlock()
 	owner.mu.Lock()

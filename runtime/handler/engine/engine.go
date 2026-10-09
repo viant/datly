@@ -29,6 +29,8 @@ type Request struct {
 	phaseInvocationID uint64
 	// BufferedComponentCalls is dispatcher-owned canonical caller metadata.
 	BufferedComponentCalls bool
+	// ProtectedFlushTables is canonical component-local metadata, never inherited.
+	ProtectedFlushTables []string
 	// IndependentChildTransactions retains all invocation capabilities/context but
 	// prevents connector-only neutral ownership after strict source-less guards.
 	IndependentChildTransactions bool
@@ -80,6 +82,9 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 	defer func() { endPhases(failure) }()
 	if e == nil {
 		return nil, fmt.Errorf("handler engine is required")
+	}
+	if err := (&spec.Settings{ProtectedFlushTables: request.ProtectedFlushTables}).ValidateProtectedFlushTables(); err != nil {
+		return nil, err
 	}
 	if request.BufferedComponentCalls && request.IndependentChildTransactions {
 		return nil, fmt.Errorf("buffered component calls cannot use independent child transactions")
@@ -146,10 +151,10 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 	// Opted-in outputs need a neutral root even when their handler has no DB.
 	// Ordinary source-less handlers retain their existing child ownership.
 	if data == nil && (outcomeAware || request.Completion != nil || request.hasInjectorFinalizer() || request.BufferedComponentCalls) {
-		data, ownsData = neutralDataScope(), true
+		data, ownsData = neutralDataScope(ctx), true
 	}
 	if data == nil && request.Capabilities.Connector != nil && !request.IndependentChildTransactions {
-		data, ownsData = neutralDataScope(), true
+		data, ownsData = neutralDataScope(ctx), true
 	}
 	var activity drainowner.Activity
 	activityActive := false
@@ -211,7 +216,11 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 			data.connectors = request.Capabilities.Connector
 		}
 		if data.source != nil || data.parent != nil || data.connectors != nil {
-			runtimeProviders = append(runtimeProviders, data.providers()...)
+			var authority *flushAuthority
+			if activityActive && len(request.ProtectedFlushTables) != 0 && !drainowner.BindingGroupContext(ctx) {
+				authority = newFlushAuthority(data, activity, request.ProtectedFlushTables)
+			}
+			runtimeProviders = append(runtimeProviders, data.providers(authority)...)
 		}
 		ctx = withDataScope(ctx, data)
 		ctx = dexec.WithInvocationTransactionLookup(ctx, data.transactionForDatabase)
@@ -598,7 +607,7 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 		// Untyped engine adapters can discover the hook only from the result.
 		// Its conditional child calls still need an owner before lookup starts.
 		if data == nil {
-			data, ownsData = neutralDataScope(), true
+			data, ownsData = neutralDataScope(ctx), true
 			activity, err = data.admitActivity(ctx)
 			if err != nil {
 				return finish(result, err)

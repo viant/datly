@@ -167,6 +167,9 @@ func (r *Runtime) invokeComponent(ctx context.Context, request dexec.ComponentRe
 	if err := registered.Component.Settings.ValidateComponentCallPolicy(); err != nil {
 		return nil, err
 	}
+	if err := registered.Component.Settings.ValidateProtectedFlushTables(); err != nil {
+		return nil, err
+	}
 	inheritedBuffered := handlerengine.IsBufferedComponent(ctx)
 	policy := ""
 	if registered.Component.Settings != nil {
@@ -305,8 +308,10 @@ func (r *Runtime) invokeComponent(ctx context.Context, request dexec.ComponentRe
 		}
 	}
 	sequenceStrategy := ""
+	var protectedFlushTables []string
 	if registered.Component.Settings != nil {
 		sequenceStrategy = registered.Component.Settings.SequenceStrategy
+		protectedFlushTables = append([]string(nil), registered.Component.Settings.ProtectedFlushTables...)
 	}
 	outputPlan, err := r.outputCapabilityPlan(registered)
 	if err != nil {
@@ -316,6 +321,7 @@ func (r *Runtime) invokeComponent(ctx context.Context, request dexec.ComponentRe
 		IndependentChildTransactions: request.IndependentChildTransactions || (registered.Component.Settings != nil && registered.Component.Settings.IndependentChildTransactions),
 		SequenceStrategy:             sequenceStrategy,
 		BufferedComponentCalls:       buffered,
+		ProtectedFlushTables:         protectedFlushTables,
 		Injector:                     r.injector,
 		Input:                        inputRoute,
 		OutputType:                   registered.OutputType,

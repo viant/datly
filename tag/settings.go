@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -11,18 +12,19 @@ import (
 )
 
 const (
-	ResponseCompressionTag = "responseCompression"
-	SequenceStrategyTag    = "sequenceStrategy"
-	CaseFormatTag          = "caseFormat"
-	CacheTag               = "cache"
-	JSONMarshalTag         = "jsonMarshal"
-	JSONUnmarshalTag       = "jsonUnmarshal"
-	XMLUnmarshalTag        = "xmlUnmarshal"
-	FormatTag              = "format"
-	DateFormatTag          = "dateFormat"
-	OutputSettingsTag      = "output"
-	IgnoreEmptyQueryTag    = "ignoreEmptyQueryParameters"
-	MutationTag            = "mutation"
+	ResponseCompressionTag  = "responseCompression"
+	SequenceStrategyTag     = "sequenceStrategy"
+	CaseFormatTag           = "caseFormat"
+	CacheTag                = "cache"
+	JSONMarshalTag          = "jsonMarshal"
+	JSONUnmarshalTag        = "jsonUnmarshal"
+	XMLUnmarshalTag         = "xmlUnmarshal"
+	FormatTag               = "format"
+	DateFormatTag           = "dateFormat"
+	OutputSettingsTag       = "output"
+	IgnoreEmptyQueryTag     = "ignoreEmptyQueryParameters"
+	MutationTag             = "mutation"
+	ProtectedFlushTablesTag = "protectedFlushTables"
 )
 
 // Settings contains component settings that remain meaningful after package
@@ -30,6 +32,7 @@ const (
 // constants are deliberately excluded because transcription consumes or
 // materializes them before package bootstrap.
 type Settings struct {
+	ProtectedFlushTables         []string
 	ComponentCallPolicy          string
 	ResponseCompression          *spec.ResponseCompression
 	IndependentChildTransactions bool
@@ -53,6 +56,7 @@ func SettingsFromSpec(source *spec.Settings) Settings {
 	}
 	cloned := source.Clone()
 	return Settings{
+		ProtectedFlushTables:         cloned.ProtectedFlushTables,
 		ResponseCompression:          cloned.ResponseCompression,
 		IndependentChildTransactions: cloned.IndependentChildTransactions,
 		ComponentCallPolicy:          cloned.ComponentCallPolicy,
@@ -71,6 +75,7 @@ func (s Settings) Apply(target *spec.Settings) {
 	if target == nil {
 		return
 	}
+	target.ProtectedFlushTables = slices.Clone(s.ProtectedFlushTables)
 	target.IndependentChildTransactions = s.IndependentChildTransactions
 	target.ComponentCallPolicy = s.ComponentCallPolicy
 	target.ResponseCompression = s.ResponseCompression.Clone()
@@ -99,6 +104,9 @@ func (s Settings) Apply(target *spec.Settings) {
 }
 
 func (s Settings) StructTag() (string, error) {
+	if err := (&spec.Settings{ProtectedFlushTables: s.ProtectedFlushTables}).ValidateProtectedFlushTables(); err != nil {
+		return "", err
+	}
 	if err := (&spec.Settings{ComponentCallPolicy: s.ComponentCallPolicy, IndependentChildTransactions: s.IndependentChildTransactions}).ValidateComponentCallPolicy(); err != nil {
 		return "", err
 	}
@@ -118,6 +126,13 @@ func (s Settings) StructTag() (string, error) {
 		}
 	}
 	appendValue("componentCallPolicy", s.ComponentCallPolicy)
+	if s.ProtectedFlushTables != nil {
+		data, err := json.Marshal(s.ProtectedFlushTables)
+		if err != nil {
+			return "", err
+		}
+		appendValue(ProtectedFlushTablesTag, string(data))
+	}
 	if s.IndependentChildTransactions {
 		appendValue("independentChildTransactions", "true")
 	}
@@ -170,6 +185,17 @@ func ParseSettings(structTag reflect.StructTag) (Settings, error) {
 		CaseFormat:       structTag.Get(CaseFormatTag), JSONMarshalType: structTag.Get(JSONMarshalTag),
 		JSONUnmarshalType: structTag.Get(JSONUnmarshalTag), XMLUnmarshalType: structTag.Get(XMLUnmarshalTag),
 		Format: structTag.Get(FormatTag), DateFormat: structTag.Get(DateFormatTag),
+	}
+	if value, ok := structTag.Lookup(ProtectedFlushTablesTag); ok {
+		if err := json.Unmarshal([]byte(value), &result.ProtectedFlushTables); err != nil {
+			return Settings{}, fmt.Errorf("parse protected flush tables tag: %w", err)
+		}
+		if result.ProtectedFlushTables == nil {
+			return Settings{}, fmt.Errorf("protected_flush_tables tag requires a nonempty table array")
+		}
+		if err := (&spec.Settings{ProtectedFlushTables: result.ProtectedFlushTables}).ValidateProtectedFlushTables(); err != nil {
+			return Settings{}, err
+		}
 	}
 	if value, ok := structTag.Lookup("componentCallPolicy"); ok {
 		if value == "" {

@@ -32,6 +32,9 @@ type ImportSpec struct {
 }
 
 type Settings struct {
+	// ProtectedFlushTables authorizes explicit protected prefix flushes for this
+	// component's exact normalized tables. It is never inherited by child calls.
+	ProtectedFlushTables []string `json:"protectedFlushTables,omitempty"`
 	// ComponentCallPolicy selects canonical explicit child-call journal behavior.
 	ComponentCallPolicy string               `json:"componentCallPolicy,omitempty"`
 	ResponseCompression *ResponseCompression `json:"responseCompression,omitempty"`
@@ -184,7 +187,7 @@ func (s *Settings) IsZero() bool {
 	if s == nil {
 		return true
 	}
-	return s.ResponseCompression == nil && !s.IndependentChildTransactions && s.ComponentCallPolicy == "" && len(s.MCPFolders) == 0 && s.IgnoreEmptyQueryParameters == nil &&
+	return s.ProtectedFlushTables == nil && s.ResponseCompression == nil && !s.IndependentChildTransactions && s.ComponentCallPolicy == "" && len(s.MCPFolders) == 0 && s.IgnoreEmptyQueryParameters == nil &&
 		s.DefaultConnector == "" && s.SequenceStrategy == "" && s.Report == nil && s.Cache == nil &&
 		(s.Generation == nil || s.Generation.IsZero()) && s.InputType == "" && s.OutputType == "" &&
 		s.JSONMarshalType == "" && s.JSONUnmarshalType == "" && s.XMLUnmarshalType == "" &&

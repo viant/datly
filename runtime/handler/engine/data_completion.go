@@ -44,6 +44,10 @@ func (s *dataScope) beginProtectedCompletion(ctx context.Context) ([]*dataScope,
 			}
 		}
 		root.mu.Unlock()
+		// Cancel and join the native prefix after closing admission, outside locks.
+		if root.nativeInvocation != nil {
+			failure = appendCompletionFailure(failure, drainowner.JoinPrefixCompletion(root.nativeInvocation))
+		}
 		// No native callback, guard, or wait runs under root/ledger locks.
 		root.resolving.Wait()
 		root.registering.Wait()
@@ -82,7 +86,7 @@ func (s *dataScope) beginProtectedCompletion(ctx context.Context) ([]*dataScope,
 				failure = errors.Join(failure, closeErr)
 			}
 		}
-		if root.bufferedScopeEnrolled && root.nativeInvocation != nil {
+		if root.nativeInvocation != nil && (root.bufferedScopeEnrolled || root.nativeInvocation.HasPrefixExecution()) {
 			ordered, err := root.nativeInvocation.FreezeJournal()
 			root.orderedCompletion = ordered
 			failure = errors.Join(failure, err)

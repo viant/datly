@@ -145,6 +145,7 @@ matched case-insensitively; use the spelling below. Quote textual values.
 | `api_key` | 2+ | header, value; further arguments ignored |
 | `connector` | 1+ | last argument is default connector |
 | `sequence_strategy` | exactly 1 | quoted `transient` or `reservation`; singleton, no modifiers; omitted selects native dialect default |
+| `protected_flush_tables` | 1+ | quoted exact table identifiers; lowercase canonical metadata; singleton, no modifiers, duplicate targets fail |
 | `input_type`, `output_type` | 1+ | last argument is contract type |
 | `dest`, `input_dest`, `output_dest`, `router_dest` | 1+ | last argument is nonempty destination |
 | `file_prefix`, `handler_dest`, `lifecycle_dest`, `mutation_dest`, `resources_dest`, `links_dest` | exactly 1 | nonempty quoted value; no fluent tail; duplicate setting fails |
@@ -169,6 +170,33 @@ matched case-insensitively; use the spelling below. Quote textual values.
 | `DocGlobalURLs`, `DocURLs` | 1+ | all nonempty documentation resource references; no tail |
 | `DocURL`, `DocBaseURL` | exactly 1 | nonempty rule reference or base URL; no tail |
 | `static_resource`, `static_content` | exactly 2 | quoted namespace/root or content URL/root; one static declaration; no tail |
+
+An explicit protected prefix flush is authorized by the component that calls
+the existing focused `Flusher` capability:
+
+```sql
+#setting($_ = $protected_flush_tables('records','records/attributes'))
+```
+
+This is an exact component-local allowlist. DQL case-normalizes identifiers to
+lowercase; canonical spec and package-tag metadata must already be lowercase.
+Each identifier segment starts with an ASCII letter or underscore and contains
+only ASCII letters, digits, or underscores. Dot and slash separate nonempty
+qualifier segments. Patterns, whitespace, SQL quoting, expressions, duplicate
+normalized targets, repeated declarations, and modifiers fail transcription.
+Omitting the setting preserves ordinary flush behavior. A present empty list is
+invalid. The setting survives spec cloning, package generation, tag reload, and
+DQL reconstruction. Re-transcribing DQL without the directive revokes a previous
+generated allowlist; other package settings remain intact. Package-only native
+loading retains its explicitly registered allowlist. It does not request an
+automatic flush or change component
+call policy, transaction ownership, or identity allocation.
+
+The dispatcher owns the allowlist for the current registered component. Child
+components must declare their own authority; caller settings and transport
+values cannot supply it. Runtime admission additionally requires the authorized
+live invocation and serialized root or imperative frame. The setting alone
+does not authorize a binding or concurrent child to drain protected work.
 
 
 Generated scalar fields also carry the existing presentation settings
@@ -1206,3 +1234,9 @@ Standalone outer annotations `required(view.column)` and `optional(view.column)`
 `type(view, 'GoType', 'GoHolder')` accepts an optional third argument for a related view's Go field; its SQL alias and relation links remain unchanged. For example, SQL alias `u` can populate Go `Usage` and, with lower-camel casing, JSON `usage`. The holder must be a Go identifier; root output names remain defined by output parameters.
 
 Repeated explicit reader leaf type names may share a generated definition only when emitted fields, tags, order and destination match. Their SQL resources and relation bindings remain distinct. Different shapes, implicit collisions and mutation/presence views continue to fail.
+
+Configured native writers preserve explicit lifecycle flush boundaries and skip
+only their automatic imperative empty-table flush. The setting does not execute
+a flush by itself: unmatched and unselected queued records remain owned by root
+completion. A successful explicit flush retains root transaction ownership;
+caller-local SQL cancellation does not shorten that transaction lifetime.

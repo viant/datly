@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"database/sql/driver"
+	"github.com/viant/datly/internal/drainowner"
 )
 
 // QueryContext executes immediately through the invocation-owned transaction.
@@ -13,6 +14,11 @@ func (d *Data) QueryContext(ctx context.Context, query string, args ...any) (*sq
 	if err := owner.precheckProtectedMutation(); err != nil {
 		return nil, err
 	}
+	effect, err := drainowner.BeginNativeEffect(owner)
+	if err != nil {
+		return nil, err
+	}
+	defer drainowner.EndDrain(effect)
 	owner.executionMu.Lock()
 	defer owner.executionMu.Unlock()
 	if err := owner.admitStreamingQueryLocked(); err != nil {
@@ -32,6 +38,11 @@ func (d *Data) QueryRowContext(ctx context.Context, query string, args ...any) *
 	if err := owner.precheckProtectedMutation(); err != nil {
 		return errorRow(ctx, err)
 	}
+	effect, err := drainowner.BeginNativeEffect(owner)
+	if err != nil {
+		return errorRow(ctx, err)
+	}
+	defer drainowner.EndDrain(effect)
 	owner.executionMu.Lock()
 	if err := owner.admitStreamingQueryLocked(); err != nil {
 		owner.executionMu.Unlock()
@@ -54,6 +65,11 @@ func (d *Data) ExecContext(ctx context.Context, query string, args ...any) (sql.
 	if err := owner.precheckProtectedMutation(); err != nil {
 		return nil, err
 	}
+	effect, err := drainowner.BeginNativeEffect(owner)
+	if err != nil {
+		return nil, err
+	}
+	defer drainowner.EndDrain(effect)
 	owner.executionMu.Lock()
 	defer owner.executionMu.Unlock()
 	if err := owner.checkMutationAdmissionLocked(); err != nil {

@@ -45,6 +45,9 @@ func (Serializer) Export(component *spec.Component, authored string) SourceExpor
 		result.Limitations = append(result.Limitations, "relation/selector/partition metadata is not reconstructed")
 	}
 	if s := component.Settings; s != nil {
+		if err := s.ValidateProtectedFlushTables(); err != nil {
+			result.Limitations = append(result.Limitations, err.Error())
+		}
 		copy := s.Clone()
 		copy.DefaultConnector = ""
 		copy.SequenceStrategy = ""
@@ -66,6 +69,13 @@ func (Serializer) Export(component *spec.Component, authored string) SourceExpor
 	}
 	if component.Settings != nil && component.Settings.SequenceStrategy != "" {
 		fmt.Fprintf(&text, "#setting($_ = $sequence_strategy(%s))\n", strconv.Quote(component.Settings.SequenceStrategy))
+	}
+	if component.Settings != nil && component.Settings.ProtectedFlushTables != nil {
+		values := make([]string, len(component.Settings.ProtectedFlushTables))
+		for i, table := range component.Settings.ProtectedFlushTables {
+			values[i] = strconv.Quote(table)
+		}
+		fmt.Fprintf(&text, "#setting($_ = $protected_flush_tables(%s))\n", strings.Join(values, ", "))
 	}
 	text.WriteString(component.RootView.Source.SQL)
 	result.Source = text.String()

@@ -31,6 +31,7 @@ const (
 	Completion
 	Abort
 	PublicFlush
+	PrefixPreparation
 )
 
 // Native operations are captured by the Data constructor, never supplied by a
@@ -44,6 +45,7 @@ type DrainPermit struct {
 	consumed  bool
 	denied    error
 	run       *journalRun
+	prefix    *prefixGrant
 }
 type DrainRecord struct {
 	self     *DrainRecord
@@ -162,23 +164,31 @@ func EndDrain(record *DrainRecord) {
 // validates this exact pending pointer after taking executionMu. Each attempt
 // ends once even if the native implementation panics.
 func (h Handle) Call(ctx context.Context, receiver any, invocation *Invocation, operation Operation, cause error) (err error) {
+	return h.call(ctx, receiver, invocation, operation, cause, nil)
+}
+
+func (h Handle) call(ctx context.Context, receiver any, invocation *Invocation, operation Operation, cause error, prefix *prefixGrant) (err error) {
 	s, err := h.attachmentState(receiver, invocation)
 	if err != nil {
 		return err
 	}
 	s.mu.Lock()
 	abort := operation == Abort && cause != nil
-	if s.claimed != h.identity || !s.attached || (!abort && (s.retired || !s.attachmentReady)) || s.pending != nil || s.operations[operation] == nil || operation == PublicFlush || (operation == Abort && !abort) {
+	if s.claimed != h.identity || !s.attached || (!abort && (s.retired || !s.attachmentReady)) || s.pending != nil || s.operations[operation] == nil || operation == PublicFlush || (operation == Abort && !abort) || (operation == PrefixPreparation && prefix == nil) {
 		s.mu.Unlock()
 		return ErrDrainPermit
 	}
-	run, runErr := h.identity.journal.permitRun(s, operation)
+	var run *journalRun
+	var runErr error
+	if operation != PrefixPreparation {
+		run, runErr = h.identity.journal.permitRun(s, operation)
+	}
 	if runErr != nil {
 		FailProtected(invocation, runErr)
 		s.mu.Unlock()
 		return runErr
 	}
-	permit := &DrainPermit{state: s, identity: h.identity, operation: operation, run: run}
+	permit := &DrainPermit{state: s, identity: h.identity, operation: operation, run: run, prefix: prefix}
 	s.pending = permit
 	native := s.operations[operation]
 	s.mu.Unlock()
@@ -239,6 +249,13 @@ func ConsumeDrain(receiver any, permit *DrainPermit, operation Operation, cause 
 	ledger := &permit.identity.activities
 	ledger.mu.Lock()
 	defer ledger.mu.Unlock()
+	if operation == PrefixPreparation {
+		if err = validatePrefixLocked(s, permit.prefix, ledger); err != nil {
+			permit.denied = err
+			return nil, err
+		}
+		return addDrainLocked(s, permit.identity), nil
+	}
 	if ledger.enrolled && !abort {
 		switch {
 		case !ledger.closed:
@@ -295,6 +312,9 @@ func OwnerActivitiesEnrolled(receiver any) bool {
 // CheckProtectedDrainInFlight rejects callback reentry without waiting on the
 // native execution mutex. Retirement does not end the enclosing drain record.
 func CheckProtectedDrainInFlight(receiver any) error {
+	if err := CheckPrefixMutation(receiver); err != nil {
+		return err
+	}
 	s, err := exactState(receiver)
 	if err != nil {
 		return err

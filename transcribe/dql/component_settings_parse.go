@@ -25,6 +25,29 @@ func parseComponentSettings(blocks []directiveBlock) (ret *componentSettings, er
 			return nil, fmt.Errorf("invalid setting: expected a directive call")
 		}
 		switch {
+		case strings.EqualFold(name, "protected_flush_tables"):
+			if ret.ProtectedFlushTables != nil || len(args) == 0 || tail != "" {
+				return nil, fmt.Errorf("protected_flush_tables requires nonempty quoted table identifiers, once, without modifiers")
+			}
+			ret.ProtectedFlushTables = make([]string, len(args))
+			for i, arg := range args {
+				value, quoted := parseQuotedLiteral(arg)
+				if !quoted {
+					return nil, fmt.Errorf("protected_flush_tables argument %d requires a quoted table identifier", i+1)
+				}
+				// Only ASCII case changes are part of table normalization. Preserve
+				// non-ASCII bytes so canonical validation rejects lookalike names.
+				canonical := []byte(value)
+				for offset, ch := range canonical {
+					if ch >= 'A' && ch <= 'Z' {
+						canonical[offset] = ch + ('a' - 'A')
+					}
+				}
+				ret.ProtectedFlushTables[i] = string(canonical)
+			}
+			if err := (&spec.Settings{ProtectedFlushTables: ret.ProtectedFlushTables}).ValidateProtectedFlushTables(); err != nil {
+				return nil, err
+			}
 		case strings.EqualFold(name, "borrow_sql_row"):
 			if len(args) != 6 || tail != "" {
 				return nil, fmt.Errorf("borrow_sql_row requires exactly six quoted literals without modifiers")
@@ -531,7 +554,7 @@ func parseComponentSettings(blocks []directiveBlock) (ret *componentSettings, er
 	if err := (&spec.Settings{ComponentCallPolicy: ret.ComponentCallPolicy, IndependentChildTransactions: ret.IndependentChildTransactions}).ValidateComponentCallPolicy(); err != nil {
 		return nil, err
 	}
-	if ret.ResponseCompression == nil && !ret.IndependentChildTransactions && ret.ComponentCallPolicy == "" && ret.Static == nil && len(ret.MCPFolders) == 0 && ret.Documentation.IsZero() && ret.Generation.IsZero() && ret.DefaultConnector == "" && ret.SequenceStrategy == "" && ret.Report == nil && ret.Cache == nil &&
+	if ret.ProtectedFlushTables == nil && ret.ResponseCompression == nil && !ret.IndependentChildTransactions && ret.ComponentCallPolicy == "" && ret.Static == nil && len(ret.MCPFolders) == 0 && ret.Documentation.IsZero() && ret.Generation.IsZero() && ret.DefaultConnector == "" && ret.SequenceStrategy == "" && ret.Report == nil && ret.Cache == nil &&
 		ret.InputType == "" && ret.OutputType == "" &&
 		ret.MCP == nil && ret.JSONMarshalType == "" &&
 		ret.JSONUnmarshalType == "" && ret.XMLUnmarshalType == "" &&

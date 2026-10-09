@@ -83,6 +83,9 @@ func NewData(db *sql.DB, opts ...Option) *Data {
 		open:             true,
 	}
 	data.drainOwner = drainowner.NewState(data, data.beginInvocation, drainowner.NativeOperations{
+		drainowner.PrefixPreparation: func(ctx context.Context, permit *drainowner.DrainPermit, _ error) error {
+			return data.preparePrefix(ctx, permit)
+		},
 		drainowner.LocalPreparation: func(ctx context.Context, permit *drainowner.DrainPermit, cause error) error {
 			return data.prepareNative(ctx, permit, drainowner.LocalPreparation)
 		},
@@ -116,7 +119,7 @@ func NewData(db *sql.DB, opts ...Option) *Data {
 			ops := flattenData(data)
 			result := make([]drainowner.JournalRecord, len(ops))
 			for i, op := range ops {
-				result[i] = drainowner.JournalRecord{Record: op, Frame: op.journalFrame, ID: op.id}
+				result[i] = drainowner.JournalRecord{Record: op, Frame: op.journalFrame, ID: op.id, Executed: op.executed}
 			}
 			return result
 		},
@@ -156,6 +159,11 @@ func (d *Data) sequence(ctx context.Context, run func(*sequencer.Service) error)
 	if err := owner.precheckProtectedMutation(); err != nil {
 		return err
 	}
+	effect, err := drainowner.BeginNativeEffect(owner)
+	if err != nil {
+		return err
+	}
+	defer drainowner.EndDrain(effect)
 	owner.executionMu.Lock()
 	defer owner.executionMu.Unlock()
 	owner.mu.Lock()
@@ -197,6 +205,9 @@ func (d *Data) sequence(ctx context.Context, run func(*sequencer.Service) error)
 	err = run(owner.sequencer)
 	if err != nil {
 		owner.markFailed(err)
+	}
+	if err == nil {
+		err = drainowner.ProtectedOwnerFailure(owner)
 	}
 	return err
 }

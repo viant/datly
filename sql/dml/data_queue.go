@@ -141,6 +141,9 @@ func pendingOperations(operations []*dataOperation) []*dataOperation {
 }
 
 func (d *Data) appendableLocked() error {
+	if err := drainowner.CheckPrefixMutation(d); err != nil {
+		return err
+	}
 	if err := drainowner.ProtectedOwnerFailure(d); err != nil {
 		return err
 	}
