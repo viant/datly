@@ -1881,11 +1881,18 @@ func (p *Program) aggregateValidation() bool {
 }
 
 func (p *Program) validateFrames(ctx context.Context, validator xhandler.Validator, transactionStarted bool) error {
+	return p.validateFrameSubset(ctx, validator, transactionStarted, p.frames.Rows)
+}
+
+// validateFrameSubset retains the canonical graph for reference evidence while
+// validating only the supplied native frames. It neither changes frame topology
+// nor initializes, allocates or admits records.
+func (p *Program) validateFrameSubset(ctx context.Context, validator xhandler.Validator, transactionStarted bool, selected []*Frame) error {
 	collect := !transactionStarted && p.aggregateValidation()
 	aggregate := &xhandler.Validation{}
 	groups := map[*Record][]*Frame{}
 	var order []*Record
-	for _, frame := range p.frames.Rows {
+	for _, frame := range selected {
 		if frame == nil || frame.Record == nil || frame.Record.Auxiliary || frame.Action == xhandler.WriteDelete && !(transactionStarted && hasReconciliation(p.metadata.Root)) {
 			continue
 		}

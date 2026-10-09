@@ -16,6 +16,67 @@ type reservationRow struct {
 	Name string `sqlx:"name"`
 }
 
+// A selected slice reuses the native allocator; it does not clone its rows.
+// Distinct ignored slots stay untouched, while a shared pointer remains shared.
+// Source-phase execution must account for this before publishing a reached group.
+func TestManagedSelectedAllocationPreservesNativeHolderAliases(t *testing.T) {
+	for _, alias := range []bool{false, true} {
+		t.Run(map[bool]string{false: "distinct ignored holder", true: "ignored alias"}[alias], func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			defer cancel()
+			h := sqlite.New(t)
+			if err := h.ExecStatements(ctx, "CREATE TABLE records(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT)"); err != nil {
+				t.Fatal(err)
+			}
+			data := NewData(h.DB)
+			if err := data.BeginInvocation(); err != nil {
+				t.Fatal(err)
+			}
+			defer data.Complete(context.Background(), fmt.Errorf("test cleanup"))
+			reached := &reservationRow{Name: "reached"}
+			ignored := &reservationRow{Name: "ignored"}
+			if alias {
+				ignored = reached
+			}
+			successor := &reservationRow{Name: "successor"}
+			holder := []*reservationRow{ignored, reached, successor}
+			if err := data.Allocate(ctx, "records", []*reservationRow{holder[1]}, "ID"); err != nil {
+				t.Fatal(err)
+			}
+			if reached.ID != 1 || successor.ID != 0 || holder[1] != reached || holder[2] != successor {
+				t.Fatalf("selected allocation changed unrelated slots: reached=%d successor=%d", reached.ID, successor.ID)
+			}
+			wantIgnored := int64(0)
+			if alias {
+				wantIgnored = reached.ID
+			}
+			if ignored.ID != wantIgnored {
+				t.Fatalf("native alias semantics changed: ignored=%d want=%d", ignored.ID, wantIgnored)
+			}
+			if err := data.Insert("records", []*reservationRow{reached}); err != nil {
+				t.Fatal(err)
+			}
+			// Allocating the next reached group must not drain the prior INSERT.
+			if err := data.Allocate(ctx, "records", []*reservationRow{successor}, "ID"); err != nil {
+				t.Fatal(err)
+			}
+			if successor.ID != 2 {
+				t.Fatalf("successor allocation lost the shared native sequence: %d", successor.ID)
+			}
+			var count int
+			if err := data.tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM records").Scan(&count); err != nil || count != 0 {
+				t.Fatalf("allocation drained buffered INSERT: count=%d err=%v", count, err)
+			}
+			if err := data.Complete(ctx, fmt.Errorf("abort reached groups")); err == nil {
+				t.Fatal("failed invocation reported success")
+			}
+			if err := h.DB.QueryRowContext(ctx, "SELECT COUNT(*) FROM records").Scan(&count); err != nil || count != 0 {
+				t.Fatalf("failed invocation persisted product rows: count=%d err=%v", count, err)
+			}
+		})
+	}
+}
+
 func TestManagedReservationsSeparatePhysicalTableFromCustomSequenceSQLite(t *testing.T) {
 	type customRow struct {
 		ID int64 `sqlx:"id,primaryKey=true,sequence=custom_sequence"`
