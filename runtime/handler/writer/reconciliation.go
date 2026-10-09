@@ -115,8 +115,9 @@ type reconciliationRoleMetadata struct {
 	fields      map[string]Field
 }
 type reconciliationMetadata struct {
-	fields map[string]Field
-	roles  []reconciliationRoleMetadata
+	rootDecision *finiteRootDecisionMetadata
+	fields       map[string]Field
+	roles        []reconciliationRoleMetadata
 }
 type reconciliationAllocation struct {
 	frame                    *Frame
@@ -192,6 +193,12 @@ func validateReconciliation(metadata *Metadata, inputType, outputType reflect.Ty
 	}
 	if root.WriterIdentityPolicy != "" || root.WriterActionPolicy != "" || root.ConcurrencyToken != nil || root.MutationPredicateGroup != nil || root.QueueContract != "" || root.OnDeleteNotFound != "" {
 		return fmt.Errorf("finite_reconciliation unsupported root policy combination")
+	}
+	if declaration.Mode == "source-phases" {
+		return fmt.Errorf("finite_reconciliation source-phases is unavailable until phase/allocation/payload authority is complete")
+	}
+	if declaration.RootAction != "" {
+		return fmt.Errorf("finite_reconciliation rootAction requires source-phases")
 	}
 	if declaration.Mode != "same-parent-root-first" {
 		return fmt.Errorf("finite_reconciliation requires same-parent-root-first")

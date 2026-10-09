@@ -323,6 +323,7 @@ func hasWritableRole(record *Record) bool {
 // Program is invocation-owned universal mutation state. The same type is used
 // for every writer component; only Metadata and values differ.
 type Program struct {
+	finiteRootDecision          *finiteRootDecision
 	reconciliation              *reconciliationAttempt
 	reconciliationFrames        []*Frame
 	reconciliationSeal          string
@@ -1090,6 +1091,9 @@ func (h *Handler) program(input any) (*Program, error) {
 		result.prepareHooks(h.metadata.Root)
 		result.hook = result.hooksByRecord[h.metadata.Root]
 		entities := value.Elem().Field(h.metadata.InputField)
+		if err := result.captureFiniteRootDecision(entities); err != nil {
+			return nil, err
+		}
 		if err := result.captureOriginal(h.metadata.Root, entities); err != nil {
 			return nil, err
 		}
@@ -1231,6 +1235,9 @@ func (p *Program) prepare(ctx context.Context, binder xhandler.Binder) error {
 	if err := p.assemblePreviousRelations(p.metadata.Root); err != nil {
 		return err
 	}
+	if err := p.validateFiniteRootDecision(entities); err != nil {
+		return err
+	}
 	if err := p.buildRecordFrames(ctx, binder, p.metadata.Root, entities, nil); err != nil {
 		return err
 	}
@@ -1283,6 +1290,9 @@ func (p *Program) prepare(ctx context.Context, binder xhandler.Binder) error {
 			return err
 		}
 		p.frames = &MutationFrames{}
+		if err = p.validateFiniteRootDecision(entities); err != nil {
+			return err
+		}
 		if err = p.buildRecordFrames(ctx, binder, p.metadata.Root, entities, nil); err != nil {
 			return err
 		}
@@ -1710,7 +1720,7 @@ func (p *Program) validationOptions(frame *Frame, transactionStarted bool) xhand
 		options.HonorPresence = true
 		options.Fields = frame.Fields
 	}
-	if frame.Previous.IsValid() && !isPolicyInsert(frame) {
+	if frame.Previous.IsValid() && !isPolicyInsert(frame) && !p.isFiniteRootInsert(frame) {
 		options.Previous = frame.Previous.Interface()
 		options.PreviousFields = p.fieldsOf(frame.Previous.Elem().Type())
 		options.Fields = frame.Fields
@@ -2294,6 +2304,12 @@ func (p *Program) buildEntityFrame(ctx context.Context, binder xhandler.Binder, 
 		default:
 			return fmt.Errorf("unsupported writer operation %q", p.metadata.Operation)
 		}
+		if parent == nil && record == p.metadata.Root && p.finiteRootDecision != nil {
+			action = p.finiteRootDecision.action
+			if action == xhandler.WriteUpdate && !previous.IsValid() {
+				return fmt.Errorf("finite_reconciliation root UPDATE requires real Current at occurrence %d", position)
+			}
+		}
 		noopMissing := p.metadata.Operation == "patch" && record.WriterIdentityPolicy == assignedUpdateIdentity && !previous.IsValid() && requestedNonzeroIdentity(record, entity.Elem()) && !deleteRequested
 		if noopMissing {
 			if err := p.checkMissingIdentityGuards(ctx, binder, record, entity.Elem()); err != nil {
@@ -2394,7 +2410,7 @@ func scalarFamily(kind reflect.Kind) uint8 {
 }
 
 func (p *Program) applyInvariants(frame *Frame) error {
-	if !frame.Previous.IsValid() || isPolicyInsert(frame) {
+	if !frame.Previous.IsValid() || isPolicyInsert(frame) || p.isFiniteRootInsert(frame) {
 		return nil
 	}
 	current, previous := frame.Entity.Elem(), frame.Previous.Elem()
