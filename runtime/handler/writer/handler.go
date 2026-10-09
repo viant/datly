@@ -326,6 +326,7 @@ type Program struct {
 	finiteRootDecision          *finiteRootDecision
 	sourceSliceGroups           map[*Action]*sourceSliceGroup
 	reconciliation              *reconciliationAttempt
+	phaseSelectionAttempted     bool
 	reconciliationFrames        []*Frame
 	reconciliationSeal          string
 	queueSlots                  []queueSlotSeal

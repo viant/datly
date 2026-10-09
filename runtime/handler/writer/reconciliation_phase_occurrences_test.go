@@ -12,7 +12,11 @@ import (
 	"github.com/viant/datly/sql/dml"
 )
 
-type phaseOccurrenceInput struct{ Rows []*phaseTestRoot }
+type phaseOccurrenceInput struct {
+	Rows            []*phaseTestRoot
+	CurrentChildren []*phaseTestChild
+	Parameter       string `parameter:"Parameter,kind=query,in=parameter"`
+}
 
 func withPhaseOccurrenceContext(t *testing.T, check func(context.Context)) {
 	t.Helper()

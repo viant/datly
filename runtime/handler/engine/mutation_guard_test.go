@@ -386,3 +386,27 @@ func TestWriteEligibilityAllowsMetadataAndLogging(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// A caught read must remain visible both to the observational boundary and
+// the captured invocation owner, even if the Program caller swallows errors.
+func TestReconciliationReadRetainsBothCapturedAndCallbackFailures(t *testing.T) {
+	scope := &dataScope{}
+	guard := scope.mutationGuard()
+	finish, err := BeginReconciliation(withDataScope(context.Background(), scope))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer finish()
+	if err := guard.enableCapturedExecution(); err != nil {
+		t.Fatal(err)
+	}
+	if err := guard.admitStreamingQuery(); err == nil {
+		t.Fatal("streaming read admitted")
+	}
+	if !errors.Is(finish(), ErrWriteEligibilityMutation) || guard.capturedExecutionFailure() == nil {
+		t.Fatal("read did not retain both failures", guard.violation, guard.capturedExecutionFailure())
+	}
+	if guard.streamingQueryUsed {
+		t.Fatal("denied query admitted for dispatch")
+	}
+}

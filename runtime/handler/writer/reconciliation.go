@@ -95,7 +95,7 @@ type ReconciliationContext struct{ attempt *reconciliationAttempt }
 // Roots preserves initialized root order, holder occurrence order and bound
 // Current enumeration order. Every returned value is detached from writer state.
 func (c ReconciliationContext) Roots() ([]ReconciliationRoot, error) {
-	if c.attempt == nil || !c.attempt.active {
+	if c.attempt == nil || !c.attempt.active || c.attempt.observationsClosed {
 		return nil, fmt.Errorf("reconciliation context is retired")
 	}
 	result := make([]ReconciliationRoot, 0, len(c.attempt.roots))
@@ -153,10 +153,12 @@ type reconciliationRootOccurrences struct {
 	roles []reconciliationRoleOccurrences
 }
 type reconciliationAttempt struct {
-	active      bool
-	roots       []reconciliationRootOccurrences
-	tickets     map[*reconciliationTicket]bool
-	allocations map[*Frame]*reconciliationAllocation
+	observationsClosed bool
+	selectionSealed    *finitePhasePlan
+	active             bool
+	roots              []reconciliationRootOccurrences
+	tickets            map[*reconciliationTicket]bool
+	allocations        map[*Frame]*reconciliationAllocation
 }
 
 func hasReconciliation(root *Record) bool { return root != nil && root.reconciliation != nil }
