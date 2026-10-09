@@ -31,7 +31,11 @@ func (p *Program) queue(ctx context.Context, binder xhandler.Binder) error {
 			return err
 		}
 		for position := 0; position < len(p.actions.Rows); {
-			if end := p.sourceSliceEnd(position); end > position {
+			end, groupErr := p.sourceSliceAdmissionEnd(position)
+			if groupErr != nil {
+				return groupErr
+			}
+			if end > position {
 				if err = p.queueSourceSlice(ctx, binder, dml, p.actions.Rows[position:end]); err != nil {
 					return err
 				}

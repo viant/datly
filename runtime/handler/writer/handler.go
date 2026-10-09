@@ -324,6 +324,7 @@ func hasWritableRole(record *Record) bool {
 // for every writer component; only Metadata and values differ.
 type Program struct {
 	finiteRootDecision          *finiteRootDecision
+	sourceSliceGroups           map[*Action]*sourceSliceGroup
 	reconciliation              *reconciliationAttempt
 	reconciliationFrames        []*Frame
 	reconciliationSeal          string
@@ -581,6 +582,8 @@ type Action struct {
 	Entity reflect.Value
 	// Native actions retain their graph role even when entity pointers alias.
 	frame *Frame
+	// Minted only by native finite-phase lowering; never supplied by hooks.
+	sourceGroup *sourceSliceGroup
 }
 
 func (p *Program) allocate(ctx context.Context, sequencer xhandler.Sequencer, record *Record, roots reflect.Value) error {
