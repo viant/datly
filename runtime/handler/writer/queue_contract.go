@@ -262,7 +262,7 @@ func (p *Program) sourceSliceEnd(start int) int {
 	for end < len(p.actions.Rows) {
 		action := p.actions.Rows[end]
 		frame := p.actionFrame(action)
-		if frame == nil || action.Kind != xhandler.WriteInsert || frame.Record != first.Record || frame.Parent != first.Parent || (action.sourceGroup != nil || p.sourceSliceGroups[action] != nil) {
+		if frame == nil || action.Kind != xhandler.WriteInsert || frame.Record != first.Record || frame.Parent != first.Parent {
 			break
 		}
 		end++
@@ -270,22 +270,13 @@ func (p *Program) sourceSliceEnd(start int) int {
 	return end
 }
 
-func (p *Program) queueSourceSlice(ctx context.Context, binder xhandler.Binder, dml xhandler.DML, actions []*Action, appended ...*bool) error {
+func (p *Program) queueSourceSlice(ctx context.Context, binder xhandler.Binder, dml xhandler.DML, actions []*Action) error {
 	native, ok := dml.(rhandler.QueueContractDML)
 	if !ok {
 		return fmt.Errorf("native queue_contract capability is unavailable")
 	}
 	if len(actions) == 0 || actions[0] == nil {
 		return fmt.Errorf("empty source-slice group")
-	}
-	group := actions[0].sourceGroup
-	if group != p.sourceSliceGroups[actions[0]] {
-		return fmt.Errorf("native source-slice membership changed")
-	}
-	if group != nil {
-		if err := p.validateSourceSliceGroup(group, actions); err != nil {
-			return err
-		}
 	}
 	first := p.actionFrame(actions[0])
 	if first == nil {
@@ -295,7 +286,7 @@ func (p *Program) queueSourceSlice(ctx context.Context, binder xhandler.Binder, 
 	seals := make([]queueSlotSeal, 0, len(actions))
 	for i, action := range actions {
 		frame := p.actionFrame(action)
-		if frame == nil || frame.Record != first.Record || (group == nil && frame.Parent != first.Parent) || action.sourceGroup != group || p.sourceSliceGroups[action] != group || action.Kind != xhandler.WriteInsert || !frame.holderIndexed {
+		if frame == nil || frame.Record != first.Record || frame.Parent != first.Parent || action.Kind != xhandler.WriteInsert || !frame.holderIndexed {
 			return fmt.Errorf("invalid source-slice group")
 		}
 		if err := p.validateActionPolicyFacts(); err != nil {
@@ -324,14 +315,8 @@ func (p *Program) queueSourceSlice(ctx context.Context, binder xhandler.Binder, 
 	p.guardMu.Lock()
 	p.queueSlots = append(p.queueSlots, seals...)
 	p.guardMu.Unlock()
-	if group != nil && !group.attempted.CompareAndSwap(false, true) {
-		return fmt.Errorf("native source-slice group already attempted")
-	}
 	if err := native.InsertWithQueueContract(first.Record.Table, rows.Interface(), rhandler.SourceSlice); err != nil {
 		return fmt.Errorf("%s %s: %w", xhandler.WriteInsert, first.Record.Table, err)
-	}
-	if len(appended) != 0 && appended[0] != nil {
-		*appended[0] = true
 	}
 	for _, action := range actions {
 		frame := p.actionFrame(action)

@@ -16,7 +16,6 @@ import (
 
 	dexec "github.com/viant/datly/exec"
 	"github.com/viant/datly/internal/dialectcontext"
-	"github.com/viant/datly/internal/drainowner"
 	rhandler "github.com/viant/datly/runtime/handler"
 	handlerengine "github.com/viant/datly/runtime/handler/engine"
 	predicate "github.com/viant/datly/runtime/predicate/velty"
@@ -324,22 +323,7 @@ func hasWritableRole(record *Record) bool {
 // Program is invocation-owned universal mutation state. The same type is used
 // for every writer component; only Metadata and values differ.
 type Program struct {
-	finiteRootDecision          *finiteRootDecision
-	sourceSliceGroups           map[*Action]*sourceSliceGroup
 	reconciliation              *reconciliationAttempt
-	phaseSelectionAttempted     bool
-	rootPreparationAttempted    bool
-	rootAllocationAttempted     bool
-	rootProjectionAttempted     bool
-	rootAdmissionAttempted      bool
-	rootAdmissionPublished      bool
-	rootAdmissionSpan           []*Action
-	rootAdmissionContainer      *MutationActions
-	finiteCursorAttempted       bool
-	finiteCursorPublished       bool
-	finiteCursor                *finitePhaseCursor
-	finiteCursorNext            *finitePhaseTransition
-	finitePendingUpdate         *finitePendingUpdate
 	reconciliationFrames        []*Frame
 	reconciliationSeal          string
 	queueSlots                  []queueSlotSeal
@@ -349,9 +333,6 @@ type Program struct {
 	afterQueueInputSnapshot     string
 	guardMu                     sync.Mutex
 	guardIssued                 bool
-	guardBinding                *drainowner.GuardBinding
-	projectedRootActionsIssued  bool
-	projectedRootActionCount    int
 	guardBinder                 xhandler.Binder
 	executionAttempted          bool
 	executionFailure            error
@@ -603,9 +584,6 @@ type Action struct {
 	Entity reflect.Value
 	// Native actions retain their graph role even when entity pointers alias.
 	frame *Frame
-	// Minted only by native finite-phase lowering; never supplied by hooks.
-	sourceGroup *sourceSliceGroup
-	projected   *projectedRootAction
 }
 
 func (p *Program) allocate(ctx context.Context, sequencer xhandler.Sequencer, record *Record, roots reflect.Value) error {
@@ -842,17 +820,7 @@ func (h *Handler) Execute(ctx context.Context, invocation rhandler.Invocation) (
 			if guardErr = registrar.EnableCapturedExecutionGuards(); guardErr != nil {
 				return nil, guardErr
 			}
-			binding, bindingErr := h.CapturedExecutionGuardBinding(invocation)
-			if bindingErr != nil {
-				return nil, bindingErr
-			}
-			if bound, ok := service.(interface {
-				RegisterBoundExecutionGuard(func(context.Context) error, *drainowner.GuardBinding) error
-			}); ok && binding != nil {
-				guardErr = bound.RegisterBoundExecutionGuard(check, binding)
-			} else {
-				guardErr = registrar.RegisterExecutionGuard(check)
-			}
+			guardErr = registrar.RegisterExecutionGuard(check)
 			if guardErr != nil {
 				return nil, guardErr
 			}
@@ -989,42 +957,13 @@ func (h *Handler) CapturedExecutionGuard(invocation rhandler.Invocation) (func(c
 		return nil, fmt.Errorf("captured writer guard already issued or finalized; fresh capture required")
 	}
 	program.guardIssued, program.guardBinder = true, invocation.Binder
-	program.guardBinding = drainowner.NewGuardBinding()
 	program.guardMu.Unlock()
 	return func(ctx context.Context) error {
 		program.guardMu.Lock()
 		ready, failure := program.executionGuardReady, program.executionFailure
-		sourceAttempted, binding := program.phaseSelectionAttempted, program.guardBinding
 		program.guardMu.Unlock()
 		if failure != nil {
 			return failure
-		}
-		if sourceAttempted {
-			if !program.sameGuardBinder(invocation) {
-				err := fmt.Errorf("source phase captured binder ownership changed")
-				if program.reconciliation != nil {
-					program.reconciliation.active = false
-				}
-				program.retainExecutionFailure(err)
-				return err
-			}
-			terminal, scopeErr := drainowner.GuardPurpose(ctx, binding)
-			if scopeErr == nil {
-				scopeErr = ctx.Err()
-			}
-			if scopeErr == nil {
-				scopeErr = program.validateFiniteRetainedActions()
-			}
-			if scopeErr == nil && terminal {
-				scopeErr = fmt.Errorf("source phase execution is incomplete; completion proof unavailable")
-			}
-			if scopeErr != nil {
-				if program.reconciliation != nil {
-					program.reconciliation.active = false
-				}
-				program.retainExecutionFailure(scopeErr)
-				return scopeErr
-			}
 		}
 		if !ready {
 			return nil
@@ -1043,24 +982,6 @@ func (h *Handler) CapturedExecutionGuard(invocation rhandler.Invocation) (func(c
 		}
 		return errors.Join(program.validateAfterQueueInputState(), program.validateReconciliationSeal())
 	}, nil
-}
-
-// CapturedExecutionGuardBinding is an optional Datly-native registration
-// association; ordinary external owners retain their existing guard fallback.
-func (h *Handler) CapturedExecutionGuardBinding(invocation rhandler.Invocation) (*drainowner.GuardBinding, error) {
-	program, err := h.capturedProgram(invocation)
-	if err != nil {
-		return nil, err
-	}
-	program.guardMu.Lock()
-	defer program.guardMu.Unlock()
-	if !program.guardIssued || program.executionAttempted || program.finalized || !program.sameGuardBinder(invocation) {
-		return nil, fmt.Errorf("captured writer binding has invalid issuance or binder ownership")
-	}
-	if program.finiteRootDecision == nil {
-		return nil, nil
-	}
-	return program.guardBinding, nil
 }
 
 func (h *Handler) CapturedExecutionGuardRegistered(invocation rhandler.Invocation) error {
@@ -1175,9 +1096,6 @@ func (h *Handler) program(input any) (*Program, error) {
 		result.prepareHooks(h.metadata.Root)
 		result.hook = result.hooksByRecord[h.metadata.Root]
 		entities := value.Elem().Field(h.metadata.InputField)
-		if err := result.captureFiniteRootDecision(entities); err != nil {
-			return nil, err
-		}
 		if err := result.captureOriginal(h.metadata.Root, entities); err != nil {
 			return nil, err
 		}
@@ -1319,9 +1237,6 @@ func (p *Program) prepare(ctx context.Context, binder xhandler.Binder) error {
 	if err := p.assemblePreviousRelations(p.metadata.Root); err != nil {
 		return err
 	}
-	if err := p.validateFiniteRootDecision(entities); err != nil {
-		return err
-	}
 	if err := p.buildRecordFrames(ctx, binder, p.metadata.Root, entities, nil); err != nil {
 		return err
 	}
@@ -1374,9 +1289,6 @@ func (p *Program) prepare(ctx context.Context, binder xhandler.Binder) error {
 			return err
 		}
 		p.frames = &MutationFrames{}
-		if err = p.validateFiniteRootDecision(entities); err != nil {
-			return err
-		}
 		if err = p.buildRecordFrames(ctx, binder, p.metadata.Root, entities, nil); err != nil {
 			return err
 		}
@@ -1720,24 +1632,11 @@ func identityOfFrame(frame *Frame) frameIdentity {
 // actionFrame retains the native action's authoritative role, never a
 // last-wins entity-pointer lookup. An uncaptured association fails closed.
 func (p *Program) actionFrame(action *Action) *Frame {
-	if action != nil && action.projected == nil && p.reconciliation != nil {
-		for _, owned := range p.reconciliation.projectedActions {
-			if owned == action {
-				_ = p.validateProjectedRootAction(action)
-				return nil
-			}
-		}
-	}
-	if action != nil && action.projected != nil {
-		if err := p.validateProjectedRootAction(action); err != nil {
-			return nil
-		}
-	}
 	if action == nil || action.frame == nil || !action.Entity.IsValid() || action.Entity.Kind() != reflect.Pointer || action.Entity.IsNil() {
 		return nil
 	}
 	frame := action.frame
-	if !frame.Entity.IsValid() || frame.Entity.Kind() != reflect.Pointer || frame.Entity.IsNil() || (frame.Entity.Pointer() != action.Entity.Pointer() && action.projected == nil) {
+	if !frame.Entity.IsValid() || frame.Entity.Kind() != reflect.Pointer || frame.Entity.IsNil() || frame.Entity.Pointer() != action.Entity.Pointer() {
 		return nil
 	}
 	for _, owned := range p.frames.Rows {
@@ -1821,7 +1720,7 @@ func (p *Program) validationOptionsWithReferences(frame *Frame, transactionStart
 		options.HonorPresence = true
 		options.Fields = frame.Fields
 	}
-	if frame.Previous.IsValid() && !isPolicyInsert(frame) && !p.isFiniteRootInsert(frame) {
+	if frame.Previous.IsValid() && !isPolicyInsert(frame) {
 		options.Previous = frame.Previous.Interface()
 		options.PreviousFields = p.fieldsOf(frame.Previous.Elem().Type())
 		options.Fields = frame.Fields
@@ -2033,13 +1932,6 @@ func (p *Program) validateFrameSubset(ctx context.Context, validator xhandler.Va
 }
 
 func (p *Program) callEntityHook(ctx context.Context, name string, frame *Frame) error {
-	if name == "AfterQueue" && p.phaseSelectionAttempted {
-		return p.callFiniteAfterQueueHook(ctx, frame)
-	}
-	return p.callEntityHookNative(ctx, name, frame)
-}
-
-func (p *Program) callEntityHookNative(ctx context.Context, name string, frame *Frame) error {
 	if err := p.validateActionPolicyFacts(); err != nil {
 		return err
 	}
@@ -2418,12 +2310,6 @@ func (p *Program) buildEntityFrame(ctx context.Context, binder xhandler.Binder, 
 		default:
 			return fmt.Errorf("unsupported writer operation %q", p.metadata.Operation)
 		}
-		if parent == nil && record == p.metadata.Root && p.finiteRootDecision != nil {
-			action = p.finiteRootDecision.action
-			if action == xhandler.WriteUpdate && !previous.IsValid() {
-				return fmt.Errorf("finite_reconciliation root UPDATE requires real Current at occurrence %d", position)
-			}
-		}
 		noopMissing := p.metadata.Operation == "patch" && record.WriterIdentityPolicy == assignedUpdateIdentity && !previous.IsValid() && requestedNonzeroIdentity(record, entity.Elem()) && !deleteRequested
 		if noopMissing {
 			if err := p.checkMissingIdentityGuards(ctx, binder, record, entity.Elem()); err != nil {
@@ -2524,7 +2410,7 @@ func scalarFamily(kind reflect.Kind) uint8 {
 }
 
 func (p *Program) applyInvariants(frame *Frame) error {
-	if !frame.Previous.IsValid() || isPolicyInsert(frame) || p.isFiniteRootInsert(frame) {
+	if !frame.Previous.IsValid() || isPolicyInsert(frame) {
 		return nil
 	}
 	current, previous := frame.Entity.Elem(), frame.Previous.Elem()

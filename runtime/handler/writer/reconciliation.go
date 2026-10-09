@@ -23,9 +23,6 @@ type reconciliationTicket struct {
 	frame    *Frame
 	previous reflect.Value
 	current  bool
-	// Native bound-Current ordinal, retained independently of parent grouping.
-	// -1 denotes a working occurrence or an older finite-mode ticket.
-	currentOrdinal int
 }
 
 // ReconciliationAssignment changes only a declared scalar and optionally marks
@@ -134,9 +131,8 @@ type reconciliationRoleMetadata struct {
 	fields      map[string]Field
 }
 type reconciliationMetadata struct {
-	rootDecision *finiteRootDecisionMetadata
-	fields       map[string]Field
-	roles        []reconciliationRoleMetadata
+	fields map[string]Field
+	roles  []reconciliationRoleMetadata
 }
 type reconciliationAllocation struct {
 	frame                    *Frame
@@ -153,28 +149,11 @@ type reconciliationRootOccurrences struct {
 	roles []reconciliationRoleOccurrences
 }
 type reconciliationAttempt struct {
-	observationsClosed        bool
-	selectionSealed           *finitePhasePlan
-	selectionState            string
-	selectionOutput           string
-	rootPrepared              bool
-	preparedState             string
-	preparedOutput            string
-	rootAllocated             bool
-	rootAdmitted              bool
-	rootAppendPrefix          int
-	rootAdmissionState        string
-	allocatedRootKeys         []int64
-	allocationState           string
-	rootProjections           []finiteRootProjection
-	projectedActionsAttempted bool
-	projectedActions          []*Action
-	projectedAuthorities      []*projectedRootAction
-	projectionState           string
-	active                    bool
-	roots                     []reconciliationRootOccurrences
-	tickets                   map[*reconciliationTicket]bool
-	allocations               map[*Frame]*reconciliationAllocation
+	observationsClosed bool
+	active             bool
+	roots              []reconciliationRootOccurrences
+	tickets            map[*reconciliationTicket]bool
+	allocations        map[*Frame]*reconciliationAllocation
 }
 
 func hasReconciliation(root *Record) bool { return root != nil && root.reconciliation != nil }
@@ -321,13 +300,6 @@ func (p *Program) captureReconciliationAllocation(ctx context.Context) error {
 				return fmt.Errorf("finite_reconciliation unexplained cross-role pointer association")
 			}
 			if prior.Parent != frame.Parent && prior.Parent != nil && frame.Parent != nil {
-				// Repeated source slots can name the same root storage before its
-				// ID resolves. Exact storage equality is not reparenting.
-				sameRoot := p.finiteRootDecision != nil && prior.Parent.Record == p.metadata.Root && frame.Parent.Record == p.metadata.Root && prior.Parent.Entity.IsValid() && frame.Parent.Entity.IsValid() && prior.Parent.Entity.Kind() == reflect.Pointer && frame.Parent.Entity.Kind() == reflect.Pointer && !prior.Parent.Entity.IsNil() && !frame.Parent.Entity.IsNil() && prior.Parent.Entity.Pointer() == frame.Parent.Entity.Pointer()
-				if sameRoot {
-					owners[frame.Entity.Pointer()] = frame
-					continue
-				}
 				relation := relationFor(frame.Parent.Record, frame.Record)
 				for _, link := range relation.Links {
 					left := prior.Parent.Entity.Elem().FieldByIndex(link.Parent.Index)
@@ -353,7 +325,7 @@ func (p *Program) captureReconciliationAllocation(ctx context.Context) error {
 	return nil
 }
 func (a *reconciliationAttempt) mint(root *Frame, record *Record, frame *Frame, previous reflect.Value, current bool) OccurrenceRef {
-	ticket := &reconciliationTicket{owner: a, root: root, record: record, frame: frame, previous: previous, current: current, currentOrdinal: -1}
+	ticket := &reconciliationTicket{owner: a, root: root, record: record, frame: frame, previous: previous, current: current}
 	a.tickets[ticket] = true
 	return OccurrenceRef{ticket}
 }
