@@ -26,15 +26,15 @@ func TestFactoryInputShapeStructuralBoundary(t *testing.T) {
 		valid     bool
 	}{
 		{"single auxiliary leaf", factoryInputProjection, true},
-		{"operational root", "SELECT a.TARGET AS Target FROM CI_AUDIENCE a", false},
+		{"physical root", "SELECT a.TARGET AS Target FROM CI_AUDIENCE a", true},
 		{"extra statement", factoryInputProjection + "; DELETE FROM CI_AUDIENCE", false},
-		{"join", "SELECT a.TARGET AS Target FROM (CI_AUDIENCE) a JOIN (OTHER) b ON b.ID=a.ID", false},
-		{"computed expression", "SELECT CONCAT(a.TARGET,'x') AS Target FROM (CI_AUDIENCE) a", false},
-		{"wildcard", "SELECT a.* FROM (CI_AUDIENCE) a", false},
-		{"filter", "SELECT a.TARGET AS Target FROM (CI_AUDIENCE) a WHERE a.TARGET IS NOT NULL", false},
-		{"union", "SELECT a.TARGET AS Target FROM (CI_AUDIENCE) a UNION SELECT b.TARGET AS Target FROM (CI_AUDIENCE) b", false},
-		{"writable metadata", "SELECT a.TARGET AS Target,writer_action_policy(a,'insert-delete') FROM (CI_AUDIENCE) a", false},
-		{"view connector", "SELECT a.TARGET AS Target,use_connector(a,'mysql') FROM (CI_AUDIENCE) a", false},
+		{"join", "SELECT a.TARGET AS Target FROM (CI_AUDIENCE) a JOIN (OTHER) b ON b.ID=a.ID", true},
+		{"computed expression", "SELECT CONCAT(a.TARGET,'x') AS Target FROM (CI_AUDIENCE) a", true},
+		{"wildcard", "SELECT a.* FROM (CI_AUDIENCE) a", true},
+		{"filter", "SELECT a.TARGET AS Target FROM (CI_AUDIENCE) a WHERE a.TARGET IS NOT NULL", true},
+		{"union", "SELECT a.TARGET AS Target FROM (CI_AUDIENCE) a UNION SELECT b.TARGET AS Target FROM (CI_AUDIENCE) b", true},
+		{"writable metadata", "SELECT a.TARGET AS Target,writer_action_policy(a,'insert-delete') FROM (CI_AUDIENCE) a", true},
+		{"view connector", "SELECT a.TARGET AS Target,use_connector(a,'mysql') FROM (CI_AUDIENCE) a", true},
 		{"service", "$sql.Insert($Data, 'CI_AUDIENCE')", false},
 		{"template", "#if($Data) " + factoryInputProjection + " #end", false},
 	} {
@@ -154,7 +154,6 @@ func TestFactoryInputShapeNativeGeneration(t *testing.T) {
 
 func TestFactoryInputShapeFailuresDoNotPublish(t *testing.T) {
 	for _, tc := range []struct{ name, old, replacement, authored string }{
-		{name: "operational root", old: "FROM (CI_AUDIENCE) a", replacement: "FROM CI_AUDIENCE a"},
 		{name: "additional statement", old: factoryInputProjection, replacement: factoryInputProjection + "; DELETE FROM CI_AUDIENCE"},
 		{name: "current binding", old: "#define($_ = $InpData", replacement: "#define($_ = $Current<[]*Res>(view/Current))\n#define($_ = $InpData"},
 		{name: "imported body", old: "$InpData<[]*Res>", replacement: "$InpData<[]*archive.Res>"},
@@ -198,7 +197,7 @@ func TestFactoryShapeRuntime(t *testing.T){
  component,err:=(&bootstrap.RouteSource{HolderType:holder.Name(),FieldName:field.Name,PackageName:"archive",PackagePath:holder.PkgPath(),Tag:metadata,InputType:"ArchiveInput",OutputType:"ArchiveOutput"}).Resolve(reflect.TypeFor[ArchiveInput](),reflect.TypeFor[ArchiveOutput]());require.NoError(t,err)
  require.Nil(t,component.RootView);require.Empty(t,component.Views);require.Empty(t,component.Settings.DefaultConnector);require.Empty(t,component.Settings.Mutation)
  artifact,err:=bootstrap.BuildArtifact(bootstrap.ArtifactInput{Component:component,InputType:reflect.TypeFor[ArchiveInput](),OutputType:reflect.TypeFor[ArchiveOutput]()});require.NoError(t,err);require.Empty(t,artifact.ViewDependencies)
- require.Equal(t,reflect.TypeFor[[]*Res](),reflect.TypeOf(Data{}.Data));typ:=reflect.TypeFor[Res]();require.Equal(t,2,typ.NumField());for _,name:=range []string{"Target","Exclusion"}{f,ok:=typ.FieldByName(name);require.True(t,ok);require.Equal(t,reflect.TypeFor[string](),f.Type);require.Equal(t,"-",f.Tag.Get("sqlx"))}
+ require.Equal(t,reflect.TypeFor[[]*Res](),reflect.TypeOf(Data{}.Data));typ:=reflect.TypeFor[Res]();require.Equal(t,3,typ.NumField());for _,name:=range []string{"Target","Exclusion"}{f,ok:=typ.FieldByName(name);require.True(t,ok);require.Equal(t,reflect.TypeFor[string](),f.Type);require.Equal(t,"-",f.Tag.Get("sqlx"))}
  cwd,err:=os.Getwd();require.NoError(t,err)
  for _,eager:=range []bool{false,true}{ctx,cancel:=context.WithCancel(context.Background());server,err:=standalone.New(ctx,standalone.Options{Config:&config.Config{BaseDir:filepath.Dir(cwd),GoBootstrap:&config.Packages{Packages:[]string{"github.com/viant/datly/handlerfixture/archive"},EagerComponents:eager},Endpoint:config.Endpoint{Address:"127.0.0.1:0"}},Holders:[]any{ArchiveDatly}});require.NoError(t,err);require.NoError(t,server.Reload(ctx,1))
  target:=dexec.ComponentTarget{Component:spec.Key{Kind:spec.KindComponent,Scope:"github.com/viant/datly/handlerfixture/archive",Name:"Archive"},Route:spec.RouteRef{Method:"PATCH",Path:"/archive"}}
@@ -213,7 +212,6 @@ func TestFactoryShapeRuntime(t *testing.T){
 
 func TestFactoryInputShapeExpandedBoundary(t *testing.T) {
 	for _, tc := range []struct{ name, sql string }{
-		{"expanded operational root", strings.Replace(factoryInputProjection, "(CI_AUDIENCE)", "CI_AUDIENCE", 1)},
 		{"expanded additional statement", factoryInputProjection + "; DELETE FROM CI_AUDIENCE"},
 		{"expanded service", `$sql.Insert($Data,'CI_AUDIENCE')`},
 	} {

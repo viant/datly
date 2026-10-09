@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/viant/datly/spec"
+	"github.com/viant/datly/tag"
 	authoring "github.com/viant/datly/transcribe/compile"
 	"github.com/viant/x"
 )
@@ -78,6 +79,39 @@ func (r *planResolver) resolve() (*Plan, error) {
 	}
 	if r.viewIndexes, err = r.resolveViews(); err != nil {
 		return nil, err
+	}
+	if h := r.input.ExternalHandler; h != nil && h.GeneratedContracts && h.InputShape != nil {
+		// Request-body relations carry shape and SQLX metadata only. Executable
+		// read tags remain exclusively on independently declared input views.
+		identities := map[string]bool{}
+		visited := map[*spec.View]bool{}
+		var visit func(*spec.View)
+		visit = func(view *spec.View) {
+			if view == nil || visited[view] {
+				return
+			}
+			visited[view] = true
+			if identity, err := view.Identity(); err == nil {
+				identities[identity] = true
+			}
+			for _, relation := range view.Relations {
+				if relation != nil {
+					visit(relation.View)
+				}
+			}
+		}
+		visit(h.InputShape)
+		for index := range r.plan.Views {
+			view := &r.plan.Views[index]
+			if !identities[view.Identity] {
+				continue
+			}
+			for i := range view.Fields {
+				if view.Fields[i].RelationHolder {
+					view.Fields[i].Tag = withoutStructTags(view.Fields[i].Tag, tag.ViewName, tag.SQLName, tag.RelationName)
+				}
+			}
+		}
 	}
 	if err = r.applySetMarkerViews(); err != nil {
 		return nil, err

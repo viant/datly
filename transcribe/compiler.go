@@ -253,31 +253,10 @@ func (c *Compiler) Compile(ctx context.Context, source *Source) (*Result, error)
 		return nil, fmt.Errorf("normalize independent view contracts: %w", err)
 	}
 	applySourceDefaults(component, source)
-	if source.ColumnRefiner != nil {
-		columnCompilation := source.ColumnRefiner.BeginCompilation()
-		templateInput, compileErr := (&discoveryInputCompiler{
-			component: component, declarations: declarations.generation,
-			viewBindings: gen.ViewBindings(viewBindings), resolver: typeResolver, source: source,
-		}).compile()
-		if compileErr != nil {
-			return nil, compileErr
-		}
-		if err = columnCompilation.RefineRoot(ctx, component, source.Resources, templateInput); err != nil {
-			return nil, err
-		}
-		templateInput, compileErr = (&discoveryInputCompiler{
-			component: component, declarations: declarations.generation,
-			viewBindings: gen.ViewBindings(viewBindings), resolver: typeResolver, source: source,
-		}).compile()
-		if compileErr != nil {
-			return nil, compileErr
-		}
-		if err = columnCompilation.RefineViews(ctx, component, source.Resources, templateInput); err != nil {
-			return nil, err
-		}
-	} else if err := column.New(nil).ValidateSourceProjections(component, source.Resources, typeResolver); err != nil {
+	if err = refineComponentColumns(ctx, component, source, declarations.generation, gen.ViewBindings(viewBindings), typeResolver); err != nil {
 		return nil, err
 	}
+
 	if _, err := bootstrap.NormalizeCodecReferences(component, compiledTypeContext); err != nil {
 		return nil, err
 	}
@@ -376,4 +355,35 @@ func applySourceDefaults(component *spec.Component, source *Source) {
 	if strings.TrimSpace(component.Settings.DefaultConnector) == "" {
 		component.Settings.DefaultConnector = strings.TrimSpace(source.Connector)
 	}
+}
+
+// refineComponentColumns shares the reader discovery order with generated
+// custom contracts: body columns first, then typed dependent input reads.
+func refineComponentColumns(ctx context.Context, component *spec.Component, source *Source, declarations gen.Declarations, viewBindings gen.ViewBindings, typeResolver *typecatalog.Resolver) error {
+	if source.ColumnRefiner != nil {
+		columnCompilation := source.ColumnRefiner.BeginCompilation()
+		templateInput, compileErr := (&discoveryInputCompiler{
+			component: component, declarations: declarations,
+			viewBindings: viewBindings, resolver: typeResolver, source: source,
+		}).compile()
+		if compileErr != nil {
+			return compileErr
+		}
+		if err := columnCompilation.RefineRoot(ctx, component, source.Resources, templateInput); err != nil {
+			return err
+		}
+		templateInput, compileErr = (&discoveryInputCompiler{
+			component: component, declarations: declarations,
+			viewBindings: viewBindings, resolver: typeResolver, source: source,
+		}).compile()
+		if compileErr != nil {
+			return compileErr
+		}
+		if err := columnCompilation.RefineViews(ctx, component, source.Resources, templateInput); err != nil {
+			return err
+		}
+	} else if err := column.New(nil).ValidateSourceProjections(component, source.Resources, typeResolver); err != nil {
+		return err
+	}
+	return nil
 }

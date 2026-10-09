@@ -10,37 +10,34 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"reflect"
 	"strings"
 
 	"github.com/viant/datly/spec"
 	dsql "github.com/viant/datly/sql"
+	authoring "github.com/viant/datly/transcribe/compile"
 	"github.com/viant/datly/transcribe/dql"
 	"github.com/viant/datly/transcribe/dql/statement"
+	gen "github.com/viant/datly/transcribe/generate"
 	"github.com/viant/datly/transcribe/gobuild"
 	"github.com/viant/datly/typecatalog"
-	"github.com/viant/sqlparser"
-	"github.com/viant/sqlparser/expr"
 )
 
 // compileFactoryInputShape uses the existing reader parser and column-discovery
 // owners in an isolated authoring component. Only the resulting shape transfers
-// to generation: the executable factory component has no root or SQL capability.
-func (c *Compiler) compileFactoryInputShape(ctx context.Context, source *Source, prepared *dql.PreparedSource, runtime *spec.Component, connector string, resolver *typecatalog.Resolver, build *gobuild.Context) (*spec.View, error) {
+// to generation: the executable factory component has no body reader root.
+// Independently declared input reads retain their ordinary runtime bindings.
+func (c *Compiler) compileFactoryInputShape(ctx context.Context, source *Source, prepared *dql.PreparedSource, runtime *spec.Component, connector string, resolver *typecatalog.Resolver, build *gobuild.Context, declarations gen.Declarations, bindings gen.ViewBindings) (*spec.View, error) {
 	if strings.TrimSpace(prepared.SQL) == "" {
+		if len(runtime.Views) != 0 {
+			if err := refineComponentColumns(ctx, runtime, source, declarations, bindings, resolver); err != nil {
+				return nil, err
+			}
+		}
 		return nil, nil
 	}
 	settings := runtime.Settings
 	if settings.Mutation != "" || settings.SequenceStrategy != "" || settings.IndependentChildTransactions || settings.Report != nil || settings.Cache != nil || settings.WarmupTarget != nil {
 		return nil, fmt.Errorf("factory input shape cannot contain mutation, transaction, report, cache or warmup settings")
-	}
-	for _, p := range runtime.Parameters {
-		if p == nil {
-			continue
-		}
-		if p.DeclarationSQL != "" || strings.EqualFold(p.Source.Kind, "view") || strings.EqualFold(p.Name, "Current") || strings.EqualFold(p.Name, "Previous") {
-			return nil, fmt.Errorf("factory input shape cannot contain executable or Current/Previous bindings")
-		}
 	}
 	sqlSource := &spec.ViewSource{SQL: prepared.SQL, Embeds: dql.EmbeddedSQLRefs(prepared.SQL)}
 	if err := dsql.ResolveSource(runtime.Name, sqlSource, source.Resources); err != nil {
@@ -54,17 +51,17 @@ func (c *Compiler) compileFactoryInputShape(ctx context.Context, source *Source,
 		return nil, err
 	}
 	resolved.TypeContext = prepared.TypeContext
-	authoring := runtime.Clone()
-	authoring.Settings.DefaultConnector = connector
-	authoring.RootView = &spec.View{Key: spec.Key{Kind: spec.KindView, Scope: source.Scope, Name: runtime.Name}, Name: runtime.Name, Source: sqlSource}
-	root, err := (&readPlanCompiler{sourceMap: newSourceMap(len(sqlSource.SQL), nil, resolved.TrimPrefix, sqlSource.SQL), path: source.Path, types: resolver}).compile(authoring, resolved)
+	shapeComponent := runtime.Clone()
+	shapeComponent.Settings.DefaultConnector = connector
+	shapeComponent.RootView = &spec.View{Key: spec.Key{Kind: spec.KindView, Scope: source.Scope, Name: runtime.Name}, Name: runtime.Name, Source: sqlSource}
+	root, err := (&readPlanCompiler{sourceMap: newSourceMap(len(sqlSource.SQL), nil, resolved.TrimPrefix, sqlSource.SQL), path: source.Path, types: resolver}).compile(shapeComponent, resolved)
 	if err != nil {
 		return nil, err
 	}
 	if err = validateFactoryShape(root); err != nil {
 		return nil, err
 	}
-	if err = validateFactoryShapeOwnership(ctx, build, prepared.TypeContext.PackagePath, runtime.Name, root); err != nil {
+	if err = validateFactoryShapeOwnership(ctx, build, prepared.TypeContext.PackagePath, runtime.Name, root, runtime.Settings.Generation.File("view", "views.go")); err != nil {
 		return nil, err
 	}
 	bodyCount := 0
@@ -85,26 +82,56 @@ func (c *Compiler) compileFactoryInputShape(ctx context.Context, source *Source,
 	if source.ColumnRefiner == nil {
 		return nil, fmt.Errorf("factory input shape requires native column discovery")
 	}
-	authoring.RootView = root
-	// The projection is parameter-free. Discovery receives neither request values
-	// nor a runtime view binding; its connector is isolated in authoring settings.
-	if err = source.ColumnRefiner.BeginCompilation().RefineRoot(ctx, authoring, nil, nil); err != nil {
+	shapeComponent.RootView = root
+	if err = refineComponentColumns(ctx, shapeComponent, source, declarations, bindings, resolver); err != nil {
 		return nil, err
 	}
-	if err = validateFactoryShape(authoring.RootView); err != nil {
+	if err = authoring.BackfillRelationMetadata(shapeComponent, source.Resources); err != nil {
 		return nil, err
 	}
-	for _, column := range authoring.RootView.Columns {
-		if column == nil || column.Type.IsZero() || strings.TrimSpace(column.DatabaseType) == "" {
-			return nil, fmt.Errorf("factory input shape requires discovered column type metadata")
+	if err = validateFactoryShape(shapeComponent.RootView); err != nil {
+		return nil, err
+	}
+	if err = validateFactoryDiscoveredShape(shapeComponent.RootView); err != nil {
+		return nil, err
+	}
+	runtime.Views = shapeComponent.Views
+	// Resolve generated names and inherited destinations through the same planner
+	// used for publication, including children without an explicit type/dest.
+	factoryName := strings.TrimPrefix(runtime.Routes[0].Handler, prepared.TypeContext.PackagePath+".")
+	plan, err := gen.New(gen.Input{Component: runtime, Declarations: declarations, ViewBindings: bindings, TypeResolver: resolver, TargetPackage: prepared.TypeContext.PackagePath, ExternalHandler: &gen.ExternalHandler{Package: prepared.TypeContext.PackagePath, Name: factoryName, GeneratedContracts: true, InputShape: shapeComponent.RootView}}).Plan()
+	if err != nil {
+		return nil, err
+	}
+	bodyIdentities := map[string]bool{}
+	var collect func(*spec.View)
+	collect = func(view *spec.View) {
+		identity, _ := view.Identity()
+		if bodyIdentities[identity] {
+			return
+		}
+		bodyIdentities[identity] = true
+		for _, relation := range view.Relations {
+			if relation != nil && relation.View != nil {
+				collect(relation.View)
+			}
 		}
 	}
-	return authoring.RootView, nil
+	collect(shapeComponent.RootView)
+	for _, view := range plan.Views {
+		if bodyIdentities[view.Identity] && view.Ownership == gen.ViewGenerated {
+			if err := validateFactoryShapeOwnership(ctx, build, prepared.TypeContext.PackagePath, runtime.Name, &spec.View{TypeName: view.Type, Dest: view.Destination}); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	return shapeComponent.RootView, nil
 }
 
 // validateFactoryProjection rejects executable syntax before connector lookup,
-// including expanded resources. It deliberately permits only a direct physical
-// auxiliary leaf with named scalar columns and existing shape metadata calls.
+// including expanded resources. Native reader compilation owns graph syntax
+// and metadata validation after this statement boundary check.
 func validateFactoryProjection(prepared *dql.PreparedSource) error {
 	if prepared.Directives == nil || len(prepared.Directives.Params) != 0 || len(prepared.Directives.Views) != 0 || !prepared.Directives.Settings.IsZero() || (prepared.Directives.Settings != nil && prepared.Directives.Settings.Mutation != "") || prepared.Directives.Route != nil || prepared.Directives.Static != nil || prepared.Directives.HandlerFactory != "" || prepared.Directives.HandlerName != "" || prepared.Directives.MCP != nil || prepared.Directives.MCPOnly || prepared.Directives.Internal || !prepared.Directives.Documentation.IsZero() || (prepared.TypeContext != nil && (prepared.TypeContext.PackagePath != "" || prepared.TypeContext.DefaultPackage != "" || len(prepared.TypeContext.Imports) != 0)) {
 		return fmt.Errorf("factory input projection cannot contain expanded declarations")
@@ -116,100 +143,45 @@ func validateFactoryProjection(prepared *dql.PreparedSource) error {
 	if item == nil || item.Kind != statement.KindRead || !item.TemplateBalanced || item.SQLStart != item.Start || item.SQLEnd != item.End {
 		return fmt.Errorf("factory input shape cannot contain an executable template or service program")
 	}
-	parsed, err := sqlparser.ParseQuery(prepared.SQL, sqlparser.WithStructuralValidation())
-	if err != nil {
-		return err
-	}
-	table, aux, err := sqlparser.SourceTable(parsed.From.X)
-	if err != nil {
-		return err
-	}
-	if table == "" || !aux || len(parsed.Joins) != 0 || parsed.Union != nil || len(parsed.WithSelects) != 0 || parsed.WithRecursive || parsed.Qualify != nil || len(parsed.GroupBy) != 0 || parsed.Having != nil || parsed.QualifyClause != nil || len(parsed.OrderBy) != 0 || parsed.Window != nil || parsed.Limit != nil || parsed.Offset != nil || parsed.Kind != "" {
-		return fmt.Errorf("factory input shape requires a direct auxiliary leaf projection without query operations")
-	}
-	alias := strings.TrimSpace(parsed.From.Alias)
-	if alias == "" {
-		return fmt.Errorf("factory input projection requires an explicit source alias")
-	}
-	columns := 0
-	for _, item := range parsed.List {
-		if item == nil {
-			return fmt.Errorf("factory input projection has an empty item")
-		}
-		switch value := item.Expr.(type) {
-		case *expr.Selector:
-			ident, ok := value.X.(*expr.Ident)
-			if value.Name != alias || value.Expression != "" || !ok || ident.Name == "*" || item.Alias == "" {
-				return fmt.Errorf("factory input projection requires named direct source columns")
-			}
-			columns++
-		case *expr.Call:
-			name, ok := value.X.(*expr.Ident)
-			if !ok {
-				return fmt.Errorf("factory input shape metadata must be a simple native directive")
-			}
-			arity := 0
-			switch strings.ToLower(name.Name) {
-			case "type", "dest", "tag":
-				arity = 2
-			case "required", "optional":
-				arity = 1
-			default:
-				return fmt.Errorf("factory input shape cannot use directive or function %q", name.Name)
-			}
-			if len(value.Args) != arity || item.Alias != "" {
-				return fmt.Errorf("factory input shape metadata has an invalid argument shape")
-			}
-			if arity == 2 {
-				if _, ok := value.Args[1].(*expr.Literal); !ok {
-					return fmt.Errorf("factory input shape metadata requires a literal")
-				}
-			}
-			switch target := value.Args[0].(type) {
-			case *expr.Ident:
-				if target.Name != alias {
-					return fmt.Errorf("factory input shape directive targets another source")
-				}
-			case *expr.Selector:
-				_, ok := target.X.(*expr.Ident)
-				if target.Name != alias || !ok || target.Expression != "" {
-					return fmt.Errorf("factory input shape directive targets another column")
-				}
-			default:
-				return fmt.Errorf("factory input shape directive has an invalid target")
-			}
-		default:
-			return fmt.Errorf("factory input shape cannot contain expressions or executable SQL")
-		}
-	}
-	if columns == 0 {
-		return fmt.Errorf("factory input shape requires direct source columns")
-	}
 	return nil
 }
 
 func validateFactoryShape(view *spec.View) error {
-	if view == nil || !view.Auxiliary || view.Source == nil || strings.TrimSpace(view.Source.Table) == "" || !token.IsIdentifier(view.TypeName) || !token.IsExported(view.TypeName) || len(view.Columns) == 0 {
-		return fmt.Errorf("factory input shape must resolve one auxiliary leaf and a generated type")
+	if view == nil || view.Source == nil {
+		return fmt.Errorf("factory input shape requires a SQL-derived graph")
 	}
-	if view.Source.URI != "" || len(view.Source.Embeds) != 0 || view.Source.Bindings != nil || !view.Source.Controls.IsZero() {
-		return fmt.Errorf("factory input shape cannot contain resource or executable source bindings")
-	}
-	remainder := view.Clone()
-	remainder.Key = spec.Key{}
-	remainder.Name = ""
-	remainder.Namespace = ""
-	remainder.Auxiliary = false
-	remainder.TypeName = ""
-	remainder.Dest = ""
-	remainder.Columns = nil
-	remainder.Source = nil
-	if !reflect.DeepEqual(remainder, &spec.View{}) {
-		return fmt.Errorf("factory input shape cannot contain relations, lifecycle, selector or execution metadata")
+	if view.EntityHooks != "" || view.QueueContract != "" || view.WriterActionPolicy != "" || view.Reconciliation != nil || view.MutationPredicateGroup != nil {
+		return fmt.Errorf("factory input shape cannot contain writer execution metadata")
 	}
 	for _, column := range view.Columns {
-		if column == nil || column.Source == "" || column.Expression != "" || column.Codec != nil || column.DeleteMarker || column.ConcurrencyToken || column.ExplicitType || strings.TrimSpace(column.Tag) != `sqlx:"-"` {
-			return fmt.Errorf("factory input shape must retain direct scalar source-column authority")
+		if column == nil || strings.Contains(column.Tag, `sql:"`) {
+			return fmt.Errorf("factory input shape cannot contain runtime SQL tags")
+		}
+	}
+	for _, relation := range view.Relations {
+		if relation != nil && relation.View != nil {
+			if err := validateFactoryShape(relation.View); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func validateFactoryDiscoveredShape(view *spec.View) error {
+	if len(view.Columns) == 0 {
+		return fmt.Errorf("factory input shape has no discovered columns")
+	}
+	for _, column := range view.Columns {
+		if column == nil || column.EffectiveType().IsZero() {
+			return fmt.Errorf("factory input shape requires discovered column types")
+		}
+	}
+	for _, relation := range view.Relations {
+		if relation != nil && relation.View != nil {
+			if err := validateFactoryDiscoveredShape(relation.View); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -217,7 +189,21 @@ func validateFactoryShape(view *spec.View) error {
 
 // Current native-generated source is legitimate regeneration input. An authored
 // declaration or alias of this exact local type would compete with SQL authority.
-func validateFactoryShapeOwnership(ctx context.Context, build *gobuild.Context, pkg, owner string, shape *spec.View) error {
+func validateFactoryShapeOwnership(ctx context.Context, build *gobuild.Context, pkg, owner string, shape *spec.View, inherited ...string) error {
+	destination := strings.TrimSpace(shape.Dest)
+	if destination == "" && len(inherited) > 0 {
+		destination = inherited[0]
+	}
+	for _, relation := range shape.Relations {
+		if relation != nil && relation.View != nil {
+			if err := validateFactoryShapeOwnership(ctx, build, pkg, owner, relation.View, destination); err != nil {
+				return err
+			}
+		}
+	}
+	if shape.TypeName == "" {
+		return nil
+	}
 	args := []string{"list", "-e", "-json"}
 	if build.Tags != "" {
 		args = append(args, "-tags", build.Tags)
@@ -273,7 +259,7 @@ func validateFactoryShapeOwnership(ctx context.Context, build *gobuild.Context, 
 				if !ok || typ.Name.Name != shape.TypeName {
 					continue
 				}
-				if filepath.Clean(file) != filepath.Clean(shape.Dest) || !strings.HasPrefix(string(data), "// Code generated by Datly for "+owner+"; DO NOT EDIT.\n") {
+				if filepath.Clean(file) != filepath.Clean(destination) || !strings.HasPrefix(string(data), "// Code generated by Datly for "+owner+"; DO NOT EDIT.\n") {
 					return fmt.Errorf("factory input shape %s conflicts with authored or imported authority in %s", shape.TypeName, file)
 				}
 			}

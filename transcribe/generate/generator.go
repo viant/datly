@@ -123,6 +123,29 @@ func New(input Input) *Generator {
 	}
 	input.VeltyHandler = input.VeltyHandler.Clone()
 	input.ExternalHandler = input.ExternalHandler.Clone()
+	if input.ExternalHandler != nil && input.ExternalHandler.GeneratedContracts && input.ExternalHandler.InputShape != nil {
+		if input.SetMarkerViews == nil {
+			input.SetMarkerViews = map[string]bool{}
+		}
+		visited := map[*spec.View]bool{}
+		var mark func(*spec.View)
+		mark = func(view *spec.View) {
+			if view == nil || visited[view] {
+				return
+			}
+			visited[view] = true
+			if identity, err := view.Identity(); err == nil {
+				input.SetMarkerViews[identity] = true
+			}
+			for _, relation := range view.Relations {
+				if relation != nil {
+					mark(relation.View)
+				}
+			}
+		}
+		mark(input.ExternalHandler.InputShape)
+	}
+
 	var entityErr error
 	input.EntitySupport, entityErr = input.EntitySupport.Clone()
 	if cloneErr == nil {
