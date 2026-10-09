@@ -11,6 +11,7 @@ import (
 type finiteSourcePhases struct {
 	root           *Record
 	roles          []finiteSourceRole
+	fields         map[string]Field
 	insert, update []finiteSourcePhase
 }
 type finiteSourceRole struct {
@@ -109,5 +110,5 @@ func compileFiniteSourcePhases(root *Record, declaration *spec.Reconciliation) (
 	if err != nil {
 		return nil, err
 	}
-	return &finiteSourcePhases{root: root, roles: canonicalRoles, insert: insert, update: update}, nil
+	return &finiteSourcePhases{root: root, roles: canonicalRoles, fields: rootFields, insert: insert, update: update}, nil
 }

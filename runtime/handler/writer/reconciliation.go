@@ -50,7 +50,23 @@ type ReconciliationRootPlan struct {
 	Assignments []ReconciliationAssignment
 	Roles       []ReconciliationRolePlan
 }
-type ReconciliationPlan struct{ Roots []ReconciliationRootPlan }
+type ReconciliationPlan struct {
+	Roots  []ReconciliationRootPlan
+	Phases []ReconciliationPhasePlan
+}
+
+// Phase names resolve against compiled authoring authority. Hooks select
+// occurrences and scalar values; they cannot supply actions, tables or ordering.
+type ReconciliationPhasePlan struct {
+	Phase string
+	Roots []ReconciliationRootPhasePlan
+}
+type ReconciliationRootPhasePlan struct {
+	Root     OccurrenceRef
+	Selected []ReconciliationSelection
+	Deletes  []OccurrenceRef
+	Followup []ReconciliationAssignment
+}
 
 // ReconciliationObservation contains detached values for business selection.
 // Row, Previous and allocation values convey evidence, never naming authority.
@@ -551,6 +567,9 @@ func (p *Program) reconciliationState() (string, error) {
 }
 
 func (p *Program) applyReconciliationPlan(ctx context.Context, plan ReconciliationPlan) error {
+	if plan.Phases != nil {
+		return fmt.Errorf("finite_reconciliation phase selections require source-phases")
+	}
 	attempt := p.reconciliation
 	if len(plan.Roots) != len(attempt.roots) {
 		return fmt.Errorf("finite_reconciliation requires every root occurrence in unchanged order")

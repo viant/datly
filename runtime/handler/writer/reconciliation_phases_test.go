@@ -18,12 +18,13 @@ type phaseTestRoot struct {
 type phaseTestChild struct {
 	ID, ParentID int
 	Value        string
+	Pointer      *string
 }
 
 func finitePhaseFixture() (*Record, *spec.Reconciliation) {
-	key := Field{Name: "ID", Index: []int{0}, Has: []int{0}, AutoIncrement: true}
+	key := Field{Name: "ID", Index: []int{0}, Has: []int{4, 0}, AutoIncrement: true}
 	root := &Record{Path: "Rows", Table: "items", EntityType: reflect.TypeFor[phaseTestRoot](), Keys: []Field{key}, Sequence: &key, Fields: []Field{key, {Name: "Enabled", Index: []int{1}}}, CurrentField: 0}
-	child := &Record{Path: "Rows/Children", Table: "children", EntityType: reflect.TypeFor[phaseTestChild](), Keys: []Field{key}, Fields: []Field{key, {Name: "ParentID", Index: []int{1}}, {Name: "Value", Index: []int{2}}}, CurrentField: 1}
+	child := &Record{Path: "Rows/Children", Table: "children", EntityType: reflect.TypeFor[phaseTestChild](), Keys: []Field{key}, Fields: []Field{key, {Name: "ParentID", Index: []int{1}}, {Name: "Value", Index: []int{2}}, {Name: "Pointer", Index: []int{3}}}, CurrentField: 1}
 	detail := *child
 	detail.Path = "Rows/Details"
 	detail.Table = "details"
@@ -32,7 +33,7 @@ func finitePhaseFixture() (*Record, *spec.Reconciliation) {
 		Insert: []spec.ReconciliationPhase{{Name: "details", Holder: "Details", Scope: "all-roots", Workflow: "working-inserts"}, {Name: "other-details", Holder: "Details", Scope: "all-roots", Workflow: "working-updates-then-inserts", UpdateBasis: "working"}, {Name: "children", Holder: "Children", Scope: "each-root", Workflow: "working-inserts", Followup: &spec.ReconciliationRootFollowup{Placement: "after-phase", Fields: []string{"Enabled"}}}},
 		Update: []spec.ReconciliationPhase{{Name: "details", Holder: "Details", Scope: "all-roots", Workflow: "working-updates-then-inserts", UpdateBasis: "working"}, {Name: "children", Holder: "Children", Scope: "each-root", Workflow: "working-updates-current-deletes-then-inserts", UpdateBasis: "current", Followup: &spec.ReconciliationRootFollowup{Placement: "after-group", Fields: []string{"Enabled"}}}},
 	}
-	return root, &spec.Reconciliation{Mode: "source-phases", RootAction: "all-supplied-positive-keys", RootFields: []string{"Enabled"}, Roles: []spec.ReconciliationRole{{Holder: "Children", Fields: []string{"Value"}}, {Holder: "Details", Fields: []string{"Value"}}}, SourcePhases: phases}
+	return root, &spec.Reconciliation{Mode: "source-phases", RootAction: "all-supplied-positive-keys", RootFields: []string{"Enabled"}, Roles: []spec.ReconciliationRole{{Holder: "Children", Fields: []string{"Value", "Pointer"}}, {Holder: "Details", Fields: []string{"Value", "Pointer"}}}, SourcePhases: phases}
 }
 func TestFiniteSourcePhaseCompilerPreservesAuthorityAndBoundaries(t *testing.T) {
 	root, decl := finitePhaseFixture()
