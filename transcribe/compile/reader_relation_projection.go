@@ -63,7 +63,7 @@ func validateRelationSourceOutputs(parsed *query.Select, root, view *spec.View) 
 				if link == nil {
 					continue
 				}
-				if parent == view {
+				if parent == view && !hookRelationColumn(view, link.ParentColumn) {
 					if err := require(link.ParentColumn); err != nil {
 						return err
 					}

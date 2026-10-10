@@ -85,6 +85,18 @@ func resolveProjectedLinks(view *data.View, links data.Links, rewrite bool) (err
 		if link == nil {
 			continue
 		}
+		if !rewrite {
+			hook := false
+			for _, column := range view.Columns {
+				if column != nil && hookRelationTag(column.Tag) && (strings.EqualFold(column.Column, link.Column) || strings.EqualFold(column.Name, link.Field) || strings.EqualFold(column.Name, link.Column)) {
+					hook = true
+					break
+				}
+			}
+			if hook {
+				continue
+			}
+		}
 		matched := false
 		sqlColumn := link.Column
 		for _, metadata := range view.Columns {
