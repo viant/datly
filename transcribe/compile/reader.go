@@ -12,6 +12,7 @@ import (
 	"github.com/viant/sqlparser/expr"
 	"github.com/viant/sqlparser/node"
 	"github.com/viant/sqlparser/query"
+	sqltext "github.com/viant/sqlparser/source"
 )
 
 const (
@@ -328,7 +329,7 @@ func queryNamespace(parsed *query.Select) string {
 		return ""
 	}
 	if alias := strings.TrimSpace(parsed.From.Alias); alias != "" {
-		return alias
+		return sqltext.TrimQuote(alias)
 	}
 	return terminalName(parsed.From.X)
 }
