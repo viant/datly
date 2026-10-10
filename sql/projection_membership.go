@@ -304,23 +304,29 @@ func (p SelectorProjection) applyMappings(columns []ProjectionColumn) {
 	if p.View == nil {
 		return
 	}
+	// Normalize each original source name once. Repeated names within one
+	// column retain one target; names shared by columns remain ambiguous.
+	targets := make(map[string]int)
+	for i, column := range columns {
+		for _, name := range column.names {
+			key := canonicalProjectionName(name)
+			if key == "" {
+				continue
+			}
+			if prior, exists := targets[key]; exists && prior != i {
+				targets[key] = -1
+			} else if !exists {
+				targets[key] = i
+			}
+		}
+	}
 	aliases := make([][]string, len(columns))
 	add := func(name, source string) {
 		if name == "" || source == "" {
 			return
 		}
-		found := -1
-		for i, column := range columns {
-			if !column.Matches(source) {
-				continue
-			}
-			if found >= 0 {
-				found = -2
-				break
-			}
-			found = i
-		}
-		if found >= 0 {
+		found, exists := targets[canonicalProjectionName(source)]
+		if exists && found >= 0 {
 			aliases[found] = append(aliases[found], name)
 		}
 	}
