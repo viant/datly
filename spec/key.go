@@ -34,9 +34,11 @@ func ParseKey(input string) (Key, error) {
 	}, nil
 }
 
+// Replacer is immutable after construction and safe for concurrent use.
+var keyPartEscaper = strings.NewReplacer(`\`, `\\`, `:`, `\:`)
+
 func escapeKeyPart(input string) string {
-	replacer := strings.NewReplacer(`\`, `\\`, `:`, `\:`)
-	return replacer.Replace(input)
+	return keyPartEscaper.Replace(input)
 }
 
 func unescapeKeyPart(input string) string {
