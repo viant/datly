@@ -2,6 +2,9 @@ package generate
 
 import (
 	"fmt"
+	sqlio "github.com/viant/sqlx/io"
+	"reflect"
+	"strings"
 
 	"github.com/viant/datly/spec"
 	"github.com/viant/datly/typecatalog"
@@ -44,6 +47,43 @@ func (v *linkedViewCastValidator) validate(view *spec.View, prefix string) error
 			continue
 		}
 		path := prefix + wanted.Name
+		// Linked Go names are authored. Resolve explicit native SQLX mappings
+		// before applying the inferred generated name to the existing shape.
+		wantedTag := sqlio.ParseTag(reflect.StructTag(wanted.Tag))
+		if !wantedTag.Transient && wantedTag.Column != "" {
+			linkedFields, err := v.shape.FieldsAt(strings.TrimSuffix(prefix, "."))
+			if err != nil {
+				return err
+			}
+			mapped := ""
+			for _, field := range linkedFields {
+				if !field.Exported {
+					continue
+				}
+				fieldTag := sqlio.ParseTag(field.Tag)
+				if fieldTag.Transient || fieldTag.Column == "" {
+					continue
+				}
+				matched := false
+				for _, expected := range strings.Split(wantedTag.Column, "|") {
+					for _, candidate := range strings.Split(fieldTag.Column, "|") {
+						if strings.EqualFold(expected, candidate) {
+							matched = true
+						}
+					}
+				}
+				if !matched {
+					continue
+				}
+				if mapped != "" {
+					return fmt.Errorf("ambiguous SQLX mapping %q on uneditable linked type %s", wantedTag.Column, v.shape.Descriptor().Key())
+				}
+				mapped = prefix + field.Name
+			}
+			if mapped != "" {
+				path = mapped
+			}
+		}
 		actual, err := v.shape.ResolveField(path)
 		if err != nil {
 			return fmt.Errorf("CAST field %s on uneditable linked type %s: %w", path, v.shape.Descriptor().Key(), err)

@@ -3,6 +3,7 @@ package generate
 import (
 	"encoding/json"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/viant/datly/spec"
@@ -43,6 +44,63 @@ func TestLinkedViewTypeRetainsImportedPackageIdentity(t *testing.T) {
 			}
 			if tc.accepted && (len(plan.Views) != 1 || plan.Views[0].Ownership != ViewLinked || plan.Views[0].Package != pkg || plan.Views[0].Type != "model.Row") {
 				t.Fatalf("linked authority lost: %+v", plan.Views)
+			}
+		})
+	}
+}
+
+type linkedSQLXNameRow struct {
+	URLPolicy bool `sqlx:"URL_POLICY"`
+}
+type linkedSQLXNameParent struct{ Children []*linkedSQLXNameRow }
+type linkedSQLXNameAmbiguous struct {
+	First  bool `sqlx:"URL_POLICY"`
+	Second bool `sqlx:"URL_POLICY"`
+}
+
+func TestLinkedViewCASTUsesNativeSQLXFieldIdentity(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		row     any
+		cast    string
+		nested  bool
+		failure string
+	}{
+		{"original acronym", linkedSQLXNameRow{}, "bool", false, ""},
+		{"nested original acronym", linkedSQLXNameParent{}, "bool", true, ""},
+		{"mismatch rejected", linkedSQLXNameRow{}, "int", false, "uneditable linked field"},
+		{"duplicate mapping rejected", linkedSQLXNameAmbiguous{}, "bool", false, "ambiguous SQLX"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			catalog := typecatalog.NewCatalog()
+			descriptor := x.NewType(reflect.TypeOf(tc.row))
+			if err := catalog.Register(typecatalog.TypeOriginPackage, descriptor); err != nil {
+				t.Fatal(err)
+			}
+			resolver, err := typecatalog.NewResolver(catalog, typecatalog.TranscribeAuthority, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			view := &spec.View{Name: "Linked", Columns: []*spec.Column{{Name: "URL_POLICY", Source: "URL_POLICY", Type: spec.TypeRef{Name: tc.cast}, ExplicitType: true}}}
+			if tc.nested {
+				view = &spec.View{Name: "Parent", Relations: []*spec.Relation{{Name: "Children", Holder: "Children", View: view}}}
+			}
+			before, _ := json.Marshal(view)
+			identity, err := view.Identity()
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, err = New(Input{Component: &spec.Component{Name: "Records", RootView: &spec.View{Name: "Root"}, Views: []*spec.View{view}}, TypeResolver: resolver, Views: ViewReferences{identity: &ViewReference{DescriptorKey: descriptor.Key()}}}).Plan()
+			if tc.failure == "" {
+				if err != nil {
+					t.Fatal(err)
+				}
+			} else if err == nil || !strings.Contains(err.Error(), tc.failure) {
+				t.Fatalf("error=%v", err)
+			}
+			after, _ := json.Marshal(view)
+			if string(before) != string(after) {
+				t.Fatal("linked source metadata mutated")
 			}
 		})
 	}
