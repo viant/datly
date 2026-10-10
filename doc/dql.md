@@ -575,6 +575,20 @@ denies that property even if a request field binds it; generation and runtime
 compilation preserve that denial. A duplicate permission call is not required
 when binding-inferred permission is intended.
 Selector policy calls can still enable independently injected properties.
+Explicitly qualified `allowed_order_by_columns` targets may also name ordering-only
+columns in the query's immediate FROM/JOIN scope. For example, `p.id` permits
+`sort=id` and `sort=p.id` without adding ID to a DISTINCT result. An alias such as
+`owner:u.name` has the same exact source ownership requirement. Only a complete
+transparent declaration wrapper may be removed to put ordering and pagination
+in that scope. Unqualified entries do not expand the output projection, criteria
+fields or source access; numeric ordering still addresses selected outputs.
+The database must support DISTINCT ordering by the omitted column in its
+configured dialect and SQL mode.
+Wrapper removal rejects conflicting authored order/window/pagination slots and
+deferred selector criteria, partition, relation or lock clauses whose ownership
+cannot be preserved. Declare filters inside the original source scope instead of
+relying on a removed wrapper alias.
+
 An explicit Criteria field defaults to the compiled view's columns unless
 `selector_filterable` narrows that set.
 `selector_default_limit` is both the

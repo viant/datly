@@ -61,7 +61,26 @@ func (b *Builder) resolveControls(options *builderOptions, excludePagination boo
 		}
 		source.sqlText = prepared.sql
 	}
-	resolver := selectorResolver{policy: policy, sqlText: paginationInspectionSource(source.sqlText), view: source.view, projection: source.projection, reportOrderFields: options.reportOrderFields}
+	resolver := selectorResolver{sourceSQL: source.sqlText, policy: policy, sqlText: paginationInspectionSource(source.sqlText), view: source.view, projection: source.projection, reportOrderFields: options.reportOrderFields}
+	orderingSQL, err := resolver.orderingSource(options.controls, options.selector)
+	if err != nil {
+		return nil, err
+	}
+	if orderingSQL != resolver.sqlText {
+		// These invocation clauses are applied after source resolution. Their
+		// namespace cannot be proven from the SQL wrapper alone.
+		if options.partition != nil || options.forUpdate ||
+			(!options.skipRelationFilter && (options.relation != nil || len(options.compositeColumns) > 0)) {
+			return nil, invalidOrdering("source ordering cannot remove a declaration wrapper with deferred partition, relation or lock clauses")
+		}
+		// The local source changes only after a transparent wrapper proof.
+		// Shared view/selector metadata and caller state remain untouched.
+		options.sqlText = orderingSQL
+		resolver.sqlText = orderingSQL
+		resolver.sourceSQL = orderingSQL
+		resolver.sourceOrdering = true
+	}
+
 	if excludePagination && len(options.projection) == 0 && options.selector != nil {
 		resolver.ordinalReference = options.selector.Columns
 	}
@@ -95,6 +114,8 @@ func applyMatcherWindow(query *cache.ParmetrizedQuery, controls *spec.ViewContro
 }
 
 type selectorResolver struct {
+	sourceSQL         string
+	sourceOrdering    bool
 	reportOrderFields []string
 	ordinalReference  []string
 	projection        []string
@@ -119,6 +140,13 @@ func (r selectorResolver) controls(base *spec.ViewControls, input *xstate.Select
 			limit := r.policy.DefaultLimit
 			result.Limit = &limit
 		}
+	}
+	if r.sourceOrdering && result.OrderBy != "" && (input == nil || strings.TrimSpace(input.OrderBy) == "") {
+		resolved, err := r.orderBy(result.OrderBy)
+		if err != nil {
+			return nil, err
+		}
+		result.OrderBy = resolved
 	}
 	if input != nil {
 		if strings.TrimSpace(input.OrderBy) != "" {
@@ -254,7 +282,21 @@ func (r selectorResolver) orderBy(source string) (string, error) {
 				}
 			}
 			if matched == nil {
-				return "", invalidOrdering("order by field %q is not in source projection", name)
+				target, authorized, err := r.qualifiedOrderTarget(name)
+				if err != nil {
+					return "", invalidOrdering("%s", err)
+				}
+				if !authorized {
+					return "", invalidOrdering("order by field %q is not in source projection", name)
+				}
+				if _, err = (dsql.SelectorProjection{SQL: r.sqlText}).SourceOrderingSQL(target); err != nil {
+					return "", invalidOrdering("%s", err)
+				}
+				if direction != "" {
+					target += " " + direction
+				}
+				result = append(result, target)
+				continue
 			}
 			if !r.orderPermitted(*matched) {
 				return "", invalidOrdering("order by field %q is not allowed", name)
@@ -388,4 +430,132 @@ func normalizeOrderSyntax(source string) string {
 		items[i] = item
 	}
 	return strings.Join(items, ", ")
+}
+
+// qualifiedOrderTarget keeps source-only access opt-in through existing exact
+// authored qualified targets. Terminal shorthand is local to that allowlist.
+func (r selectorResolver) qualifiedOrderTarget(name string) (string, bool, error) {
+	if r.policy == nil || r.reportOrderFields != nil {
+		return "", false, nil
+	}
+	mapped, aliased, err := r.orderAlias(name)
+	if err != nil {
+		return "", false, err
+	}
+	target := ""
+	accept := func(candidate string, aliasMatch bool) error {
+		parts, e := sqlparser.TableIdentifierParts(candidate)
+		if e != nil || len(parts) != 2 {
+			return nil
+		}
+		matches := (dsql.ProjectionNames{candidate}).Matches(mapped)
+		if !aliased {
+			matches = matches || (dsql.ProjectionNames{parts[1]}).Matches(name)
+		}
+		if aliasMatch {
+			matches = true
+		}
+		if !matches {
+			return nil
+		}
+		if target != "" && !(dsql.ProjectionNames{target}).Matches(candidate) {
+			return fmt.Errorf("ambiguous source order field %q", name)
+		}
+		target = candidate
+		return nil
+	}
+	for _, column := range r.policy.Orderable {
+		if err = accept(string(column), false); err != nil {
+			return "", false, err
+		}
+	}
+	for alias, column := range r.policy.OrderAliases {
+		if err = accept(string(column), (dsql.ProjectionNames{alias}).Matches(name)); err != nil {
+			return "", false, err
+		}
+	}
+	return target, target != "", nil
+}
+
+// orderingSource unwraps at most one proven declaration wrapper when sorting
+// on an explicitly authorized field absent from the public SELECT projection.
+func (r *selectorResolver) orderingSource(base *spec.ViewControls, input *xstate.Selector) (string, error) {
+	order := ""
+	if base != nil {
+		order = base.OrderBy
+	}
+	if order == "" && r.policy != nil {
+		order = r.policy.DefaultOrder
+	}
+	if input != nil && strings.TrimSpace(input.OrderBy) != "" {
+		order = input.OrderBy
+	}
+	if order == "" || r.policy == nil {
+		return r.sqlText, nil
+	}
+	qualified := false
+	for _, v := range r.policy.Orderable {
+		if parts, e := sqlparser.TableIdentifierParts(string(v)); e == nil && len(parts) == 2 {
+			qualified = true
+		}
+	}
+	for _, v := range r.policy.OrderAliases {
+		if parts, e := sqlparser.TableIdentifierParts(string(v)); e == nil && len(parts) == 2 {
+			qualified = true
+		}
+	}
+	if !qualified {
+		return r.sqlText, nil
+	}
+	items, err := r.parseOrder(order)
+	if err != nil {
+		return "", invalidOrdering("%s", err)
+	}
+	columns, err := (dsql.SelectorProjection{SQL: r.sqlText, View: r.view}).Columns(nil)
+	if err != nil {
+		return r.sqlText, nil
+	} // Ordinary resolution owns opaque metadata errors.
+	result := r.sqlText
+	for _, item := range items {
+		if item.positional {
+			continue
+		}
+		mapped, aliased, e := r.orderAlias(item.name)
+		if e != nil {
+			return "", invalidOrdering("%s", e)
+		}
+		projected := false
+		for _, col := range columns {
+			if col.Matches(mapped) && (!aliased || col.MatchesOutput(mapped)) {
+				projected = true
+			}
+		}
+		if projected {
+			continue
+		}
+		target, authorized, e := r.qualifiedOrderTarget(item.name)
+		if e != nil {
+			return "", invalidOrdering("%s", e)
+		}
+		if !authorized {
+			return "", invalidOrdering("order by field %q is not in source projection", item.name)
+		}
+		sourceSQL := r.sqlText
+		if r.sourceSQL != "" {
+			sourceSQL = r.sourceSQL
+		}
+		owner, e := (dsql.SelectorProjection{SQL: sourceSQL}).SourceOrderingSQL(target)
+		if e != nil {
+			return "", invalidOrdering("%s", e)
+		}
+		if owner != sourceSQL && input != nil && strings.TrimSpace(input.Criteria) != "" {
+			return "", invalidOrdering("source ordering cannot remove a declaration wrapper with selector criteria")
+		}
+		if result != r.sqlText && owner != result {
+			return "", invalidOrdering("source ordering has conflicting owners")
+		}
+		r.sourceOrdering = true
+		result = owner
+	}
+	return result, nil
 }
