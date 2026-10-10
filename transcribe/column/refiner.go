@@ -13,6 +13,7 @@ import (
 	"github.com/viant/datly/exec"
 	"github.com/viant/datly/spec"
 	dsql "github.com/viant/datly/sql"
+	sqlbuilder "github.com/viant/datly/sql/builder"
 	sqltemplate "github.com/viant/datly/sql/template"
 	"github.com/viant/datly/typecatalog"
 	"github.com/viant/sqlparser"
@@ -366,7 +367,11 @@ func schemaDiscoverySQL(SQL string) (string, error) {
 	const prefix = "${predicate."
 	// Prepare a private metadata copy before evaluation and lineage inference.
 	// Runtime pagination has no window during discovery; authored SQL is retained.
-	result := sqltext.Token("$PAGINATION").ReplaceAll(SQL, "")
+	result, err := sqlbuilder.NewBuilder().ProjectionSource(SQL)
+	if err != nil {
+		return "", err
+	}
+	result = sqltext.Token("$PAGINATION").ReplaceAll(result, "")
 	for {
 		start := strings.Index(result, prefix)
 		if start < 0 {
