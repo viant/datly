@@ -33,6 +33,9 @@ JOIN (SELECT 1 AS PARENT_ID) c ON p.DERIVED_IDS=c.PARENT_ID`
 	if strings.Contains(view.Source.SQL, "DERIVED_IDS") {
 		t.Fatalf("hook key was projected into SQL: %s", view.Source.SQL)
 	}
+	if len(view.Columns) != 1 || view.Columns[0].Type.Name != "int" || view.Columns[0].Type.Cardinality != spec.CardinalityMany {
+		t.Fatalf("linked hook type lost: %+v", view.Columns)
+	}
 	component := &spec.Component{RootView: view}
 	if err = BackfillRelationMetadata(component); err != nil {
 		t.Fatal(err)

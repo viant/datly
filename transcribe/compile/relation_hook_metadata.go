@@ -3,6 +3,7 @@ package compile
 import (
 	"fmt"
 	"github.com/viant/datly/spec"
+	"github.com/viant/datly/transcribe/dql"
 	"github.com/viant/datly/typecatalog"
 	sqlio "github.com/viant/sqlx/io"
 	xshape "github.com/viant/x/shape"
@@ -64,7 +65,15 @@ func lowerLinkedHookKeys(root *spec.View, directives []viewDirective, types *typ
 						}
 					}
 					if !found {
-						view.Columns = append(view.Columns, &spec.Column{Name: field.Name, Source: link.ParentColumn, Type: spec.TypeRef{Name: field.TypeExpr}, ExplicitType: true, Tag: string(field.Tag)})
+						identity, err := field.CanonicalType()
+						if err != nil {
+							return err
+						}
+						typeRef, err := dql.ColumnType(identity, nil)
+						if err != nil {
+							return err
+						}
+						view.Columns = append(view.Columns, &spec.Column{Name: field.Name, Source: link.ParentColumn, Type: typeRef, ExplicitType: true, Tag: string(field.Tag)})
 					}
 				}
 			}
