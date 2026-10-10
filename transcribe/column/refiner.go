@@ -321,11 +321,12 @@ func (r *Compilation) discover(ctx context.Context, view *spec.View, connector s
 	if strings.TrimSpace(query) == "" {
 		return evaluated, nil
 	}
-	identities, err := resolveResultSources(view.Columns, source)
+	resultView := sqlResultView(view)
+	identities, err := resolveResultSources(resultView.Columns, source)
 	if err != nil {
 		return nil, err
 	}
-	detected, err := r.refiner.detectColumnsWithSources(ctx, db, view, identities, query, evaluated.Args...)
+	detected, err := r.refiner.detectColumnsWithSources(ctx, db, resultView, identities, query, evaluated.Args...)
 	if err != nil {
 		return nil, fmt.Errorf("SQLX discovery failed for %q: %w", query, err)
 	}
@@ -337,10 +338,10 @@ func (r *Compilation) discover(ctx context.Context, view *spec.View, connector s
 	for _, column := range columns {
 		projected = append(projected, column.Name)
 	}
-	if err := validateResultAnnotations(view, projected, identities); err != nil {
+	if err := validateResultAnnotations(resultView, projected, identities); err != nil {
 		return nil, err
 	}
-	if err := identities.validateResults(view.Columns, projected); err != nil {
+	if err := identities.validateResults(resultView.Columns, projected); err != nil {
 		return nil, err
 	}
 	// Discovery uses the resolved authoredSource, including embedded resources,
