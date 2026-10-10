@@ -99,3 +99,81 @@ func TestResolveViewResourcesRequiresFilesystem(t *testing.T) {
 		t.Fatalf("BuildArtifact() error = %v", err)
 	}
 }
+
+func TestLinkedRelativeSQLResourcesUseEnclosingNamespace(t *testing.T) {
+	type leaf struct{ ID int }
+	type detail struct {
+		ID     int
+		UserID int
+		Leaves []leaf `view:"leaves" sql:"uri=sql/leaves.sql" on:"ID:id=ID:id"`
+	}
+	type row struct {
+		ID      int
+		Details []detail `view:"details" sql:"uri=sql/details.sql" on:"ID:id=UserID:user_id"`
+	}
+	type output struct{ Data []row }
+	resources := resource.New()
+	for _, namespace := range []string{"first", "second"} {
+		require.NoError(t, resources.Register(namespace, fstest.MapFS{
+			"sql/users.sql":   {Data: []byte("SELECT id FROM users")},
+			"sql/details.sql": {Data: []byte("SELECT id,user_id FROM " + namespace + "_details")},
+			"sql/leaves.sql":  {Data: []byte("SELECT id FROM " + namespace + "_leaves")},
+		}))
+	}
+	for _, namespace := range []string{"first", "second", "first"} {
+		component := &spec.Component{RootView: &spec.View{Name: "users", Source: &spec.ViewSource{URI: namespace + ":sql/users.sql"}}, Parameters: []*spec.Parameter{{Name: "Data", Source: spec.BindSource{Kind: "output", Name: "view"}}}}
+		artifact, err := BuildArtifact(ArtifactInput{Component: component, OutputType: reflect.TypeFor[output](), DirectViewField: "Data", Resources: resources})
+		require.NoError(t, err)
+		details := artifact.Reader.Root.View.Relations[0].Of.View
+		require.Equal(t, "SELECT id,user_id FROM "+namespace+"_details", details.Spec.Source.SQL)
+		require.Equal(t, "SELECT id FROM "+namespace+"_leaves", details.Relations[0].Of.View.Spec.Source.SQL)
+		require.Equal(t, namespace+":sql/users.sql", component.RootView.Source.URI)
+		original, _ := reflect.TypeFor[row]().FieldByName("Details")
+		require.Equal(t, "uri=sql/details.sql", original.Tag.Get("sql"))
+	}
+}
+
+func TestLinkedExplicitSQLNamespaceOverridesParentAndDoesNotUseGlobalDefault(t *testing.T) {
+	type child struct {
+		ID       int
+		ParentID int
+	}
+	type externalRow struct {
+		ID       int
+		Children []child `view:"children" sql:"uri=other:children.sql" on:"ID:id=ParentID:parent_id"`
+	}
+	type missingRow struct {
+		ID       int
+		Children []child `view:"children" sql:"uri=children.sql" on:"ID:id=ParentID:parent_id"`
+	}
+	resources := resource.New()
+	require.NoError(t, resources.Register("parent", fstest.MapFS{"parents.sql": {Data: []byte("SELECT id FROM parents")}}))
+	require.NoError(t, resources.Register("other", fstest.MapFS{"children.sql": {Data: []byte("SELECT id,parent_id FROM external_children")}}))
+	resources, err := resources.WithDefault(fstest.MapFS{"children.sql": {Data: []byte("SELECT id,parent_id FROM global_children")}})
+	require.NoError(t, err)
+	for _, tc := range []struct {
+		output  any
+		missing bool
+	}{{struct{ Data []externalRow }{}, false}, {struct{ Data []missingRow }{}, true}} {
+		component := &spec.Component{RootView: &spec.View{Name: "parents", Source: &spec.ViewSource{URI: "parent:parents.sql"}}, Parameters: []*spec.Parameter{{Name: "Data", Source: spec.BindSource{Kind: "output", Name: "view"}}}}
+		artifact, err := BuildArtifact(ArtifactInput{Component: component, OutputType: reflect.TypeOf(tc.output), DirectViewField: "Data", Resources: resources})
+		if tc.missing {
+			require.ErrorContains(t, err, "parent:children.sql")
+		} else {
+			require.NoError(t, err)
+			require.Equal(t, "SELECT id,parent_id FROM external_children", artifact.Reader.Root.View.Relations[0].Of.View.Spec.Source.SQL)
+		}
+	}
+}
+
+func TestSharedRelativeSQLViewRejectsConflictingScopes(t *testing.T) {
+	resources := resource.New()
+	require.NoError(t, resources.Register("first", fstest.MapFS{"parent.sql": {Data: []byte("SELECT id FROM first_parents")}, "child.sql": {Data: []byte("SELECT id FROM first_children")}}))
+	require.NoError(t, resources.Register("second", fstest.MapFS{"parent.sql": {Data: []byte("SELECT id FROM second_parents")}, "child.sql": {Data: []byte("SELECT id FROM second_children")}}))
+	shared := &data.View{Spec: spec.View{Name: "shared", Source: &spec.ViewSource{URI: "child.sql"}}}
+	parent := func(namespace string) *data.View {
+		return &data.View{Spec: spec.View{Name: namespace, Source: &spec.ViewSource{URI: namespace + ":parent.sql"}}, Relations: data.Relations{&data.Relation{Name: "child", Of: &data.RelationRef{View: shared}}}}
+	}
+	root := &data.View{Spec: spec.View{Name: "root", Source: &spec.ViewSource{SQL: "SELECT id FROM root"}}, Relations: data.Relations{&data.Relation{Name: "first", Of: &data.RelationRef{View: parent("first")}}, &data.Relation{Name: "second", Of: &data.RelationRef{View: parent("second")}}}}
+	require.ErrorContains(t, resolveViewResources(root, resources), "conflicting inherited SQL resource namespaces")
+}

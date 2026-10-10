@@ -228,6 +228,11 @@ func (r *planResolver) prepareResources() (*ResourcePlan, error) {
 			}
 		}
 	}
+	if r.input.SQLResources {
+		if err := r.linkedRelationResources(result, files, retainedFiles); err != nil {
+			return nil, err
+		}
+	}
 	// Linked local rows keep their existing SQL URIs and assets while a changed
 	// input or response envelope is regenerated. Current authored assets win.
 	if retained != nil {
