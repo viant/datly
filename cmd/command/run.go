@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"net/http"
 
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/viant/bindly/locator"
@@ -20,6 +21,7 @@ import (
 )
 
 type Service struct {
+	RequestMiddleware func(http.Handler) http.Handler
 	// LinkedArtifact is immutable executable and linked-resource provenance
 	// supplied by the trusted embedding host. Standalone validates and copies it.
 	LinkedArtifact *exec.LinkedArtifact
@@ -73,7 +75,7 @@ func (s Service) Run(ctx context.Context, args []string, stdout, stderr io.Write
 		fmt.Fprintln(stderr, err)
 		return 1
 	}
-	server, err := standalone.New(ctx, standalone.Options{Config: cfg, LinkedArtifact: s.LinkedArtifact, RequireComponentBinding: s.RequireComponentBinding, Registry: s.Registry, Workspace: s.Workspace, Holders: s.Holders, Providers: s.Providers, InvocationLogger: s.InvocationLogger, InvocationDiffer: s.InvocationDiffer, DefaultAuthenticator: s.DefaultAuthenticator, RequireLinked: true, Diagnostics: stderr})
+	server, err := standalone.New(ctx, standalone.Options{RequestMiddleware: s.RequestMiddleware, Config: cfg, LinkedArtifact: s.LinkedArtifact, RequireComponentBinding: s.RequireComponentBinding, Registry: s.Registry, Workspace: s.Workspace, Holders: s.Holders, Providers: s.Providers, InvocationLogger: s.InvocationLogger, InvocationDiffer: s.InvocationDiffer, DefaultAuthenticator: s.DefaultAuthenticator, RequireLinked: true, Diagnostics: stderr})
 	if err != nil {
 		fmt.Fprintln(stderr, err)
 		return 1

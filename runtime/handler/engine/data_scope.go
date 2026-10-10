@@ -61,6 +61,8 @@ type dataScope struct {
 	registering              sync.WaitGroup
 	enrollmentMu             sync.Mutex
 	guardedFailure           error
+	serverExecutionChecks    []func(context.Context) error
+	serverExecutionEnrolled  int
 	contextReleases          []context.CancelFunc
 	connectors               connector.Provider
 }
@@ -630,6 +632,9 @@ func (s *dataScope) resolve(ctx context.Context) (xhandler.Data, error) {
 		if err := root.enrollExecutionOwner(unit); err != nil {
 			return nil, err
 		}
+	}
+	if err := s.enrollServerExecutionChecks(ctx); err != nil {
+		return nil, err
 	}
 	if s.requireBufferedOwner || root.requireBufferedOwner || s.relation == ComponentBufferedImperative {
 		if s.data != nil {

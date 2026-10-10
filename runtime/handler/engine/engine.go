@@ -70,6 +70,7 @@ func New() *Engine { return &Engine{} }
 
 func (e *Engine) Execute(ctx context.Context, request Request) (actual any, failure error) {
 	callContext := ctx
+	serverGuards := rhandler.ServerExecutionGuards(ctx)
 	ctx, _ = rhandler.WithPhaseObserver(ctx, nil, 0, 0)
 	var phases *rhandler.PhaseScope
 	phaseEnded := false
@@ -258,6 +259,15 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 
 	finish = func(result any, operationErr error) (any, error) {
 		finishing = true
+		if operationErr == nil && len(serverGuards) > 0 {
+			for _, check := range serverGuards {
+				if guardErr := completionOperation("server execution release", func() error { return check(ctx) }); guardErr != nil {
+					result = nil
+					operationErr = guardErr
+					break
+				}
+			}
+		}
 		protectedPrepareFailed := false
 		protectedCompletionFailed := false
 		// Mutation adapters may opt into a declared error output before a
@@ -565,6 +575,17 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 			if guardErr = guarded.CapturedExecutionGuardRegistered(invocation); guardErr != nil {
 				return finish(nil, guardErr)
 			}
+		}
+	}
+	for _, check := range serverGuards {
+		if guardErr := completionOperation("server execution admission", func() error { return check(ctx) }); guardErr != nil {
+			return finish(nil, guardErr)
+		}
+	}
+	if data != nil && len(serverGuards) > 0 {
+		data.deferServerExecutionChecks(serverGuards)
+		if _, guardErr := data.resolve(ctx); guardErr != nil {
+			return finish(nil, guardErr)
 		}
 	}
 	snapshotReady = true
