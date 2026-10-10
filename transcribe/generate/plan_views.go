@@ -256,8 +256,14 @@ func (r *planResolver) resolveLinkedView(view *spec.View, reference *ViewReferen
 	if descriptor == nil || strings.TrimSpace(descriptor.Name) == "" || strings.TrimSpace(descriptor.PkgPath) == "" {
 		return ViewPlan{}, fmt.Errorf("linked view %q is not a named package type", key)
 	}
-	if explicit := strings.TrimSpace(view.TypeName); explicit != "" && explicit != descriptor.Name {
-		return ViewPlan{}, fmt.Errorf("linked view type %q does not match package type %q", explicit, descriptor.Name)
+	if explicit := strings.TrimSpace(view.TypeName); explicit != "" {
+		canonical, err := r.plan.CanonicalType(descriptor.PkgPath, explicit)
+		if err != nil {
+			return ViewPlan{}, fmt.Errorf("resolve linked view type %q: %w", explicit, err)
+		}
+		if canonical != descriptor.Key() {
+			return ViewPlan{}, fmt.Errorf("linked view type %q does not match package type %q", explicit, descriptor.Key())
+		}
 	}
 	if err := r.validateLinkedViewCasts(view, descriptor); err != nil {
 		return ViewPlan{}, err

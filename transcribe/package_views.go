@@ -9,6 +9,7 @@ import (
 
 	"github.com/viant/datly/spec"
 	dtag "github.com/viant/datly/tag"
+	"github.com/viant/datly/transcribe/generate"
 	"github.com/viant/datly/typecatalog"
 	"github.com/viant/x"
 	xshape "github.com/viant/x/shape"
@@ -186,8 +187,18 @@ func (r *packageViewResolver) add(target map[string]linkedInputView, name string
 	if view == nil {
 		return fmt.Errorf("independent view %q has no canonical package view", name)
 	}
-	if explicit := strings.TrimSpace(view.TypeName); explicit != "" && explicit != descriptor.Name {
-		return fmt.Errorf("view %q type %q does not match package type %q", name, explicit, descriptor.Name)
+	if explicit := strings.TrimSpace(view.TypeName); explicit != "" {
+		authority := &generate.Plan{}
+		if r.component.TypeContext != nil {
+			authority.Imports = r.component.TypeContext.Imports
+		}
+		canonical, err := authority.CanonicalType(descriptor.PkgPath, explicit)
+		if err != nil {
+			return fmt.Errorf("resolve view %q type %q: %w", name, explicit, err)
+		}
+		if canonical != descriptor.Key() {
+			return fmt.Errorf("view %q type %q does not match package type %q", name, explicit, descriptor.Key())
+		}
 	}
 	identity, err := view.Identity()
 	if err != nil {
