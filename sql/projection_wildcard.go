@@ -175,8 +175,17 @@ func (p SelectorProjection) wildcardSourceColumns(stmt *query.Select, src wildca
 	// Resolve at this boundary instead of treating output
 	// metadata as the schema of an inner physical table. Joined or mixed outer
 	// projections still need source-specific resolution below.
+	hasWildcard := false
+	for _, item := range nested.List {
+		if projectionStar(item) != nil {
+			hasWildcard = true
+			break
+		}
+	}
 	trustedSubset := len(preparedSource) > 0 && preparedSource[0]
-	prepared := !src.joined && (trustedSubset || len(stmt.List) == 1 && projectionStar(stmt.List[0]) != nil) && p.View != nil && len(p.View.Columns) > 0
+	// A closed inner list already owns every output. Prepared wildcard proofs
+	// can only supply columns for an inner star, never for explicit outputs.
+	prepared := hasWildcard && !src.joined && (trustedSubset || len(stmt.List) == 1 && projectionStar(stmt.List[0]) != nil) && p.View != nil && len(p.View.Columns) > 0
 	if prepared && src.preservesPhysicalWildcard(stmt.WithSelects, 0, false) {
 		return p.wildcardMetadataColumns(stmt, src)
 	}
