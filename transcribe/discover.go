@@ -38,6 +38,9 @@ type Discovery struct {
 	BaseDir    string
 	ModuleDirs []string
 	Include    []string
+	// SourceFile restricts component compilation to this source basename.
+	// Package resource snapshots retain the entire original source directory.
+	SourceFile string
 	// TypeInclude loads package-level type authority without selecting those
 	// packages for component discovery or resource loading.
 	TypeInclude   []string
@@ -108,6 +111,9 @@ func (d *Discovery) Compile(ctx context.Context) (*ProjectGeneration, error) {
 	err = workspace.Walk(ctx, d.Include, d.Exclude, func(file xmodule.File) error {
 		packagePaths = append(packagePaths, file.ImportPath)
 		if !sourceFileExtensions[strings.ToLower(filepath.Ext(file.Path))] {
+			return nil
+		}
+		if d.SourceFile != "" && filepath.Base(file.Path) != d.SourceFile {
 			return nil
 		}
 		files = append(files, file)

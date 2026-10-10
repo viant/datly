@@ -86,3 +86,40 @@ FROM (SELECT 1 AS ID) r
 		})
 	}
 }
+
+func TestTranscribeSelectedSourceIgnoresInvalidSiblingAndRetainsSharedSQL(t *testing.T) {
+	root := t.TempDir()
+	(testharness.GeneratedModule{Path: "example.com/app"}).Write(t, root)
+	directory := filepath.Join(root, "source")
+	if err := os.MkdirAll(directory, 0755); err != nil {
+		t.Fatal(err)
+	}
+	for name, text := range map[string]string{
+		"selected.dql": `#package('example.com/app/api/selected')
+#setting($_ = $input_type('Input'))
+#setting($_ = $output_type('Output'))
+#setting($_ = $route('/selected','GET'))
+#define($_ = $Data<[]*Row>(output/view))
+SELECT r.*, type(r,'Row'), CAST(r.ID AS int)
+FROM (${embed:shared.sql}) r`,
+		"shared.sql": "SELECT 1 AS ID",
+		"unrelated.dql": `#package('example.com/app/api/unrelated')
+#setting($_ = $route('/unrelated','GET'))
+SELECT * FROM (SELECT`,
+	} {
+		if err := os.WriteFile(filepath.Join(directory, name), []byte(text), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var output, diagnostic bytes.Buffer
+	status := Run(context.Background(), []string{"transcribe", "get", "-dir", root, "-source", "selected.dql", "example.com/app/source"}, &output, &diagnostic)
+	if status != 0 {
+		t.Fatalf("selected source failed due to unrelated source: %d %s", status, diagnostic.String())
+	}
+	if files, err := os.ReadDir(filepath.Join(root, "api", "selected")); err != nil || len(files) == 0 {
+		t.Fatalf("selected component missing: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "api", "unrelated")); !os.IsNotExist(err) {
+		t.Fatalf("unselected component was published: %v", err)
+	}
+}

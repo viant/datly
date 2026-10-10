@@ -79,7 +79,7 @@ func Transcribe(ctx context.Context, args []string, stdout, stderr io.Writer, ha
 		return 1
 	}
 	schema.Const = instance
-	discovery := &transcribe.Discovery{Const: instance, BaseDir: resolvedDirectory, Include: flags.Args()}
+	discovery := &transcribe.Discovery{Const: instance, BaseDir: resolvedDirectory, Include: flags.Args(), SourceFile: *sourceFile}
 	discovery.HandlerBindings = handlers
 	if *operation == "handler" {
 		discovery.Connector = schema.connector
