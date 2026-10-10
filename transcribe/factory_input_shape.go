@@ -27,11 +27,17 @@ import (
 // to generation: the executable factory component has no body reader root.
 // Independently declared input reads retain their ordinary runtime bindings.
 func (c *Compiler) compileFactoryInputShape(ctx context.Context, source *Source, prepared *dql.PreparedSource, runtime *spec.Component, connector string, resolver *typecatalog.Resolver, build *gobuild.Context, declarations gen.Declarations, bindings gen.ViewBindings) (*spec.View, error) {
+	shapeComponent := runtime.Clone()
+	// These contracts are generated from the current declarations. Discovery
+	// must not resolve a same-named imported or previously generated Input.
+	// Keep the executable component's contract settings intact.
+	shapeComponent.Settings.InputType = ""
 	if strings.TrimSpace(prepared.SQL) == "" {
-		if len(runtime.Views) != 0 {
-			if err := refineComponentColumns(ctx, runtime, source, declarations, bindings, resolver); err != nil {
+		if len(shapeComponent.Views) != 0 {
+			if err := refineComponentColumns(ctx, shapeComponent, source, declarations, bindings, resolver); err != nil {
 				return nil, err
 			}
+			runtime.Views = shapeComponent.Views
 		}
 		return nil, nil
 	}
@@ -51,7 +57,6 @@ func (c *Compiler) compileFactoryInputShape(ctx context.Context, source *Source,
 		return nil, err
 	}
 	resolved.TypeContext = prepared.TypeContext
-	shapeComponent := runtime.Clone()
 	shapeComponent.Settings.DefaultConnector = connector
 	shapeComponent.RootView = &spec.View{Key: spec.Key{Kind: spec.KindView, Scope: source.Scope, Name: runtime.Name}, Name: runtime.Name, Source: sqlSource}
 	root, err := (&readPlanCompiler{sourceMap: newSourceMap(len(sqlSource.SQL), nil, resolved.TrimPrefix, sqlSource.SQL), path: source.Path, types: resolver}).compile(shapeComponent, resolved)
@@ -99,7 +104,7 @@ func (c *Compiler) compileFactoryInputShape(ctx context.Context, source *Source,
 	// Resolve generated names and inherited destinations through the same planner
 	// used for publication, including children without an explicit type/dest.
 	factoryName := strings.TrimPrefix(runtime.Routes[0].Handler, prepared.TypeContext.PackagePath+".")
-	plan, err := gen.New(gen.Input{Component: runtime, Declarations: declarations, ViewBindings: bindings, TypeResolver: resolver, TargetPackage: prepared.TypeContext.PackagePath, ExternalHandler: &gen.ExternalHandler{Package: prepared.TypeContext.PackagePath, Name: factoryName, GeneratedContracts: true, InputShape: shapeComponent.RootView}}).Plan()
+	plan, err := gen.New(gen.Input{Component: runtime, Declarations: declarations, ViewBindings: bindings, TypeResolver: resolver, Resources: source.Resources, TargetPackage: prepared.TypeContext.PackagePath, ExternalHandler: &gen.ExternalHandler{Package: prepared.TypeContext.PackagePath, Name: factoryName, GeneratedContracts: true, InputShape: shapeComponent.RootView}}).Plan()
 	if err != nil {
 		return nil, err
 	}

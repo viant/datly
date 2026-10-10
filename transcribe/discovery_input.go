@@ -233,10 +233,14 @@ func (c *discoveryInputCompiler) inputType() (reflect.Type, error) {
 	if c.source != nil {
 		targetPackage = strings.TrimSpace(c.source.Scope)
 	}
-	return gen.New(gen.Input{
+	input := gen.Input{
 		Component: c.component, Declarations: c.declarations,
 		TypeResolver: c.resolver, TargetPackage: targetPackage, ViewBindings: c.viewBindings,
-	}).RuntimeInputType()
+	}
+	if c.source != nil {
+		input.Resources = c.source.Resources
+	}
+	return gen.New(input).RuntimeInputType()
 }
 
 func (c *discoveryInputCompiler) linkedInputAllowed() bool {
