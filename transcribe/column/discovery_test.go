@@ -9,6 +9,30 @@ import (
 	"github.com/viant/datly/spec"
 )
 
+func TestLinkedScalarAuthoritySurvivesEmptyAggregateDiscovery(t *testing.T) {
+	h := testharness.NewSQLiteHarness(t)
+	ctx := context.Background()
+	if err := h.ExecStatements(ctx, `CREATE TABLE records (id INTEGER, unknown)`); err != nil {
+		t.Fatal(err)
+	}
+	SQL := `SELECT id, COUNT(*) AS total FROM records WHERE 1=0 GROUP BY id`
+	view := &spec.View{Name: "Records", Source: &spec.ViewSource{SQL: SQL}, Columns: []*spec.Column{
+		{Name: "ID", Source: "id", NameInferred: true, Type: spec.TypeRef{Name: "int"}},
+		{Name: "Total", Source: "total", NameInferred: true, Type: spec.TypeRef{Name: "int"}},
+	}}
+	component := &spec.Component{Settings: &spec.Settings{DefaultConnector: "main"}, RootView: view}
+	if err := New(Connections{"main": h.DB}).Refine(ctx, component, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	if len(view.Columns) != 2 || view.Columns[1].Type.Name != "int" || view.Source.SQL != SQL {
+		t.Fatalf("linked aggregate type/source changed: %+v", view)
+	}
+	view.Source.SQL = `SELECT id, COUNT(*) AS total, unknown FROM records WHERE 1=0 GROUP BY id`
+	if err := New(Connections{"main": h.DB}).Refine(ctx, component, nil, nil); err == nil || !strings.Contains(err.Error(), "unknown") {
+		t.Fatalf("an undeclared physical result must still fail discovery: %v", err)
+	}
+}
+
 func TestRefinerPseudoColumnMappingSQLite(t *testing.T) {
 	h := testharness.NewSQLiteHarness(t)
 	ctx := context.Background()

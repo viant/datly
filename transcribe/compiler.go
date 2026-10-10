@@ -364,6 +364,11 @@ func applySourceDefaults(component *spec.Component, source *Source) {
 // custom contracts: body columns first, then typed dependent input reads.
 func refineComponentColumns(ctx context.Context, component *spec.Component, source *Source, declarations gen.Declarations, viewBindings gen.ViewBindings, typeResolver *typecatalog.Resolver) error {
 	if source.ColumnRefiner != nil {
+		if source.PackageComponent != nil && strings.TrimSpace(source.Text) == "" && source.LinkedOutputType != nil {
+			if err := bootstrap.CompileOutputColumns(component, source.LinkedOutputType); err != nil {
+				return err
+			}
+		}
 		columnCompilation := source.ColumnRefiner.BeginCompilation()
 		templateInput, compileErr := (&discoveryInputCompiler{
 			component: component, declarations: declarations,

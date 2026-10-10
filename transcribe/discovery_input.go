@@ -211,6 +211,12 @@ func (c *discoveryInputCompiler) inputType() (reflect.Type, error) {
 	if c.component == nil {
 		return nil, fmt.Errorf("transcribe column: component is required")
 	}
+	// A Go-only component retains its exact linked contract, just as package
+	// compilation retains that contract after discovery. Expanded defaults are
+	// not an authored overlay requiring a synthetic replacement input.
+	if c.source != nil && c.source.PackageComponent != nil && strings.TrimSpace(c.source.Text) == "" && c.source.LinkedInputType != nil {
+		return c.source.LinkedInputType, nil
+	}
 	if c.linkedInputAllowed() && c.component.Settings != nil && c.resolver != nil {
 		expression := strings.TrimSpace(c.component.Settings.InputType)
 		if expression != "" {

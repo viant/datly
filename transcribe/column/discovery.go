@@ -55,7 +55,7 @@ func declaredResultColumns(columns []*spec.Column, identities resultSourceIdenti
 		if column != nil && column.ExplicitType && column.Type.IsZero() {
 			return nil, fmt.Errorf("CAST column %s has no Go type", column.Name)
 		}
-		if column != nil && column.ExplicitType && identities[column] != "" {
+		if column != nil && (column.ExplicitType || column.NameInferred && !column.Type.IsZero()) && identities[column] != "" {
 			declared = append(declared, identities[column])
 		}
 	}

@@ -11,6 +11,7 @@ import (
 	"github.com/viant/datly/report"
 	"github.com/viant/datly/runtime/registry"
 	"github.com/viant/datly/transcribe"
+	"github.com/viant/datly/transcribe/column"
 	"github.com/viant/datly/typecatalog"
 	xmodule "github.com/viant/x/module"
 )
@@ -38,6 +39,9 @@ func (m *indexedMaterializer) Materialize(ctx context.Context, entry *bootstrapi
 	}
 	selection := []string{owner.Scope}
 	discovery := transcribe.Discovery{Const: m.source.config.Const, Workspace: m.workspace, Include: selection, TypeInclude: indexedMaterializerTypeSelection(owner.Scope, entry.Sources), Exclude: m.source.config.GoBootstrap.Exclude, Connector: m.source.config.Connector, Types: types, Registry: m.source.registry, Holders: m.source.holders, RequireLinked: m.source.requireLinked}
+	if m.source.connections != nil {
+		discovery.ColumnRefiner = column.New(m.source.connections)
+	}
 	project, err := discovery.Compile(ctx)
 	if err != nil {
 		m.logMaterialize(component, 0, started, err)

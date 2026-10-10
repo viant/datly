@@ -2,6 +2,7 @@ package bootstrap
 
 import (
 	"fmt"
+	"reflect"
 	"slices"
 	"strings"
 
@@ -21,10 +22,16 @@ type outputColumnCompiler struct {
 }
 
 func (c *artifactCompiler) compileOutputColumns(component *spec.Component) error {
+	return CompileOutputColumns(component, c.input.OutputType)
+}
+
+// CompileOutputColumns resolves the existing linked row projection before SQL
+// metadata discovery, as well as before runtime artifact compilation.
+func CompileOutputColumns(component *spec.Component, outputType reflect.Type) error {
 	if component.RootView == nil || component.RootView.Columns != nil {
 		return nil
 	}
-	fields, err := dtag.NewBindingIndex(c.input.OutputType)
+	fields, err := dtag.NewBindingIndex(outputType)
 	if err != nil {
 		return err
 	}
@@ -39,7 +46,7 @@ func (c *artifactCompiler) compileOutputColumns(component *spec.Component) error
 		if !ok {
 			return fmt.Errorf("output view holder %s is missing", param.Name)
 		}
-		return (&outputColumnCompiler{output: xshape.Linked(c.input.OutputType)}).compile(component.RootView, field.Name)
+		return (&outputColumnCompiler{output: xshape.Linked(outputType)}).compile(component.RootView, field.Name)
 	}
 	return nil
 }
