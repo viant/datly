@@ -275,6 +275,20 @@ func canonicalProjectionName(value string) string {
 	if value == "" {
 		return ""
 	}
+	// Plain ASCII identifiers need neither decoding nor JSON escaping. Match
+	// TableIdentifierParts' unquoted grammar; everything else uses the parser.
+	plainASCII := true
+	for i := 0; i < len(value); i++ {
+		c := value[i]
+		if c == '_' || c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || i > 0 && (c >= '0' && c <= '9' || c == '$') {
+			continue
+		}
+		plainASCII = false
+		break
+	}
+	if plainASCII {
+		return `identifier:["` + strings.ToLower(value) + `"]`
+	}
 	parts, err := sqlparser.TableIdentifierParts(value)
 	if err != nil {
 		// A computed output label is one name, not a qualified identifier. Keep
