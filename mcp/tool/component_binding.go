@@ -1,18 +1,17 @@
 package tool
 
 import (
-	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 
 	"github.com/viant/datly/exec"
 	"github.com/viant/mcp-protocol/schema"
 )
 
-// ComponentBindingMetaKey is both the tools/list observed identity entry and
-// the tools/call params._meta expected identity entry. Business arguments do
-// not carry component identity and cannot select a current-generation alias.
+// ComponentBindingMetaKey identifies the rejected legacy wire extension.
+// Component identity belongs to resource/datasource definitions, not MCP meta.
 const ComponentBindingMetaKey = "viant.datly/component"
 
 // LinkedComponentBinding derives only the route contract fingerprint. Artifact
@@ -36,24 +35,17 @@ func LinkedComponentBinding(plan *Plan, artifact exec.LinkedArtifact) (exec.Comp
 	return binding, binding.Validate()
 }
 
-func expectedComponentBinding(request *schema.CallToolRequest) (*exec.ComponentBinding, error) {
+func rejectLegacyComponentBinding(request *schema.CallToolRequest) error {
 	raw, err := json.Marshal(request.Params.Meta)
 	if err != nil {
-		return nil, exec.ErrComponentBinding
+		return err
 	}
 	var metadata map[string]json.RawMessage
-	if json.Unmarshal(raw, &metadata) != nil {
-		return nil, exec.ErrComponentBinding
+	if err := json.Unmarshal(raw, &metadata); err != nil {
+		return err
 	}
-	raw, found := metadata[ComponentBindingMetaKey]
-	if !found {
-		return nil, nil
+	if _, found := metadata[ComponentBindingMetaKey]; found {
+		return fmt.Errorf("MCP component wire metadata is unsupported; declare component identity on the resource or datasource")
 	}
-	var binding exec.ComponentBinding
-	decoder := json.NewDecoder(bytes.NewReader(raw))
-	decoder.DisallowUnknownFields()
-	if decoder.Decode(&binding) != nil || binding.Validate() != nil {
-		return nil, exec.ErrComponentBinding
-	}
-	return &binding, nil
+	return nil
 }

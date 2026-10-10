@@ -31,16 +31,16 @@ type Config struct {
 	Authorization     *authorization.Policy
 	AuthorizeTool     func(context.Context, exec.ComponentTarget) error
 	AuthorizeResource func(context.Context, string) error
-	// ToolMetadata supplies host-owned, exact component identity metadata for
+	// ToolMetadata supplies host-owned application annotations for
 	// MCP tools. The compiler merges it into schema.Tool.Meta without allowing
 	// a host to replace the tool name or input/output contract.
 	ToolMetadata func(context.Context, exec.ComponentTarget) (map[string]interface{}, error)
 	// LinkedArtifact is authoritative immutable deployment provenance. Every
 	// exposed component gets its actual key and compiled route schema fingerprint.
 	LinkedArtifact *exec.LinkedArtifact
-	// RequireComponentBinding denies calls lacking the exact observed binding,
-	// including when artifact provenance is unavailable. Artifact-backed tools
-	// always require a binding regardless of this flag.
+	// Deprecated: component binding belongs to resource/datasource execution.
+	// Setting RequireComponentBinding returns a construction error; MCP tools
+	// accept ordinary schema arguments under their existing authorization.
 	RequireComponentBinding bool
 	// Catalog callbacks authorize metadata independently of execution. They are
 	// evaluated for the request's pinned generation, never from skill frontmatter.
@@ -91,6 +91,9 @@ func New(config Config) (*Service, error) {
 
 // Compile stages resource snapshots in the caller's generation context.
 func (config Config) Compile(ctx context.Context) (*Service, error) {
+	if config.RequireComponentBinding {
+		return nil, fmt.Errorf("MCP component wire binding is unsupported; declare component identity on the resource or datasource")
+	}
 	if ctx == nil {
 		return nil, fmt.Errorf("MCP staging context is required")
 	}

@@ -73,7 +73,7 @@ func commandFixtureArtifact(t *testing.T) *exec.LinkedArtifact {
 	return &exec.LinkedArtifact{Revision: "fixture-native-release", ContentFingerprint: hex.EncodeToString(h.Sum(nil))}
 }
 
-func TestCommandLinkedArtifactBindingRunStartLazyEager(t *testing.T) {
+func TestCommandLinkedArtifactOrdinaryMCPRunStartLazyEager(t *testing.T) {
 	for _, verb := range []string{"run", "start"} {
 		for _, eager := range []bool{false, true} {
 			t.Run(fmt.Sprintf("%s/eager=%v", verb, eager), func(t *testing.T) {
@@ -93,7 +93,7 @@ func TestCommandLinkedArtifactBindingRunStartLazyEager(t *testing.T) {
 				status := make(chan int, 1)
 				go func() {
 					defer close(finished)
-					status <- (command.Service{Registry: exports, Holders: []any{commandArtifactWriter{}}, LinkedArtifact: artifact, RequireComponentBinding: true}).Run(ctx, []string{verb, "-conf", f.Config}, &output, &diagnostics)
+					status <- (command.Service{Registry: exports, Holders: []any{commandArtifactWriter{}}, LinkedArtifact: artifact}).Run(ctx, []string{verb, "-conf", f.Config}, &output, &diagnostics)
 				}()
 				t.Cleanup(func() {
 					cancel()
@@ -119,25 +119,12 @@ func TestCommandLinkedArtifactBindingRunStartLazyEager(t *testing.T) {
 				defer native.Close()
 				listing, err := native.ListTools(ctx, nil)
 				require.NoError(t, err)
-				var pin, writerPin exec.ComponentBinding
 				for _, entry := range listing.Tools {
-					if entry.Name == "PinnedWrite" {
-						raw, err := json.Marshal(entry.Meta[tool.ComponentBindingMetaKey])
-						require.NoError(t, err)
-						require.NoError(t, json.Unmarshal(raw, &writerPin))
-					}
-					if entry.Name == "NativeReportCube" {
-						raw, err := json.Marshal(entry.Meta[tool.ComponentBindingMetaKey])
-						require.NoError(t, err)
-						require.NoError(t, json.Unmarshal(raw, &pin))
-					}
+					require.NotContains(t, entry.Meta, tool.ComponentBindingMetaKey)
 				}
-				require.NoError(t, writerPin.Validate())
-				require.NoError(t, pin.Validate())
-				require.Equal(t, artifact.Revision, pin.Revision)
-				require.Equal(t, artifact.ContentFingerprint, pin.ContentFingerprint)
-				// Constructor copies the caller's manifest before publishing tool metadata.
-				artifact.Revision = "caller-mutated"
+				pin := exec.ComponentBinding{Kind: "linked", ID: "legacy", Revision: artifact.Revision, ContentFingerprint: artifact.ContentFingerprint, SchemaFingerprint: strings.Repeat("c", 64)}
+				writerPin := pin
+
 				args := map[string]interface{}{"dimensions": map[string]interface{}{"country": true}, "measures": map[string]interface{}{"amount": true}, "filters": map[string]interface{}{"permit": true}}
 				invoke := func(binding *exec.ComponentBinding) (*schema.CallToolResult, error) {
 					params := &schema.CallToolRequestParams{Name: "NativeReportCube", Arguments: args}
@@ -146,14 +133,14 @@ func TestCommandLinkedArtifactBindingRunStartLazyEager(t *testing.T) {
 					}
 					return native.CallTool(ctx, params)
 				}
-				result, err := invoke(&pin)
+				result, err := invoke(nil)
 				require.NoError(t, err)
 				require.False(t, result.IsError != nil && *result.IsError)
 				raw, err := json.Marshal(result.StructuredContent)
 				require.NoError(t, err)
 				require.Contains(t, string(raw), `"amount":7`)
-				_, err = invoke(nil)
-				require.ErrorContains(t, err, "exact component binding")
+				_, err = invoke(&pin)
+				require.ErrorContains(t, err, "resource")
 				for _, field := range []string{"revision", "content", "schema", "id"} {
 					wrong := pin
 					switch field {
@@ -167,34 +154,32 @@ func TestCommandLinkedArtifactBindingRunStartLazyEager(t *testing.T) {
 						wrong.ID = "other-component"
 					}
 					_, err = invoke(&wrong)
-					require.ErrorContains(t, err, "exact component binding", field)
+					require.ErrorContains(t, err, "resource", field)
 				}
-				// Rejected exact bindings never change the fixture and cannot execute using
-				// a stale or unbound contract. The approved pin remains usable afterward.
-				result, err = invoke(&pin)
+				// Rejected legacy wire pins never execute; ordinary schema calls remain usable.
+				result, err = invoke(nil)
 				require.NoError(t, err)
 				raw, err = json.Marshal(result.StructuredContent)
 				require.NoError(t, err)
 				require.Contains(t, string(raw), `"amount":7`)
 				writeParams := &schema.CallToolRequestParams{Name: "PinnedWrite", Arguments: map[string]interface{}{"Record": map[string]interface{}{"id": 2, "name": "approved"}}}
-				_, err = native.CallTool(ctx, writeParams)
-				require.ErrorContains(t, err, "exact component binding")
+
 				wrongWriter := writerPin
 				wrongWriter.ContentFingerprint = strings.Repeat("d", 64)
 				writeParams.Meta = schema.RequestMetaObject{AdditionalProperties: map[string]interface{}{tool.ComponentBindingMetaKey: wrongWriter}}
 				_, err = native.CallTool(ctx, writeParams)
-				require.ErrorContains(t, err, "exact component binding")
+				require.ErrorContains(t, err, "resource")
 				var count int
 				require.NoError(t, f.DB.DB.QueryRowContext(ctx, "SELECT COUNT(*) FROM records WHERE id=2").Scan(&count))
-				require.Zero(t, count, "unbound or mismatched native write changed SQLite")
-				writeParams.Meta = schema.RequestMetaObject{AdditionalProperties: map[string]interface{}{tool.ComponentBindingMetaKey: writerPin}}
+				require.Zero(t, count, "legacy pinned native write changed SQLite")
+				writeParams.Meta = schema.RequestMetaObject{}
 				writeResult, err := native.CallTool(ctx, writeParams)
 				require.NoError(t, err)
 				require.False(t, writeResult.IsError != nil && *writeResult.IsError)
 				var name string
 				require.NoError(t, f.DB.DB.QueryRowContext(ctx, "SELECT name FROM records WHERE id=2").Scan(&name))
 				require.Equal(t, "approved", name)
-				t.Logf("native HTTP and MCP SQL amount=7; exact pin %s %s; unbound and four mismatches denied; native write denied without effect then approved pin inserted SQLite record", pin.Revision, pin.ContentFingerprint)
+				t.Log("native HTTP and ordinary MCP SQL amount=7; legacy wire pins denied without effect; ordinary schema write inserted SQLite record")
 				native.Close()
 				cancel()
 				<-finished
