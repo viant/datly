@@ -329,3 +329,60 @@ func TestCASTAliasedSQLRemainsExecutable(t *testing.T) {
 		t.Fatalf("SQL CAST gained Go type authority: %+v", result.Columns[0])
 	}
 }
+
+type castLocalValue struct{ Label string }
+type castLocalRow struct {
+	Payload *castLocalValue
+	Values  []*castLocalValue
+}
+type castLocalParent struct{ Children []*castLocalRow }
+
+func TestCASTLinkedSamePackageNamedIdentity(t *testing.T) {
+	local := reflect.TypeFor[castLocalRow]().PkgPath()
+	for _, tc := range []struct {
+		name, casts     string
+		row             any
+		nested, failure bool
+	}{
+		{name: "local pointer", casts: "CAST(r.payload AS *self.castLocalValue)", row: castLocalRow{}},
+		{name: "local slice pointers", casts: "CAST(r.values AS []*self.castLocalValue)", row: castLocalRow{}},
+		{name: "nested local pointer", casts: "CAST(r.payload AS *self.castLocalValue)", row: castLocalParent{}, nested: true},
+		{name: "different external identity", casts: "CAST(r.payload AS *clock.Time)", row: castLocalRow{}, failure: true},
+		{name: "pointer versus value", casts: "CAST(r.payload AS self.castLocalValue)", row: castLocalRow{}, failure: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			catalog := typecatalog.NewCatalog()
+			descriptor := x.NewType(reflect.TypeOf(tc.row))
+			for _, typ := range []*x.Type{descriptor, x.NewType(reflect.TypeFor[castLocalRow]()), x.NewType(reflect.TypeFor[castLocalValue]()), x.NewType(reflect.TypeFor[time.Time]())} {
+				if err := catalog.Register(typecatalog.TypeOriginPackage, typ); err != nil {
+					t.Fatal(err)
+				}
+			}
+			scope := &spec.TypeContext{DefaultPackage: local, Imports: []spec.ImportSpec{{Alias: "self", Package: local}, {Alias: "clock", Package: "time"}}}
+			resolver, err := typecatalog.NewResolver(catalog, typecatalog.TranscribeAuthority, &typecatalog.ResolutionContext{DefaultPackage: local, Imports: []typecatalog.PackageImport{{Alias: "self", Package: local}, {Alias: "clock", Package: "time"}}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			view, err := tcompile.NewReader().Compile(tcompile.ReadInput{View: &spec.View{Name: "Linked", Source: &spec.ViewSource{}}, SQL: "SELECT r.*," + tc.casts + " FROM records r", Types: resolver, TypeContext: scope})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tc.nested {
+				view = &spec.View{Name: "Parent", Relations: []*spec.Relation{{Name: "Children", Holder: "Children", View: view}}}
+			}
+			identity, err := view.Identity()
+			if err != nil {
+				t.Fatal(err)
+			}
+			component := &spec.Component{Name: "Records", RootView: &spec.View{Name: "Root"}, Views: []*spec.View{view}, TypeContext: scope}
+			_, err = generate.New(generate.Input{TargetPackage: local, Component: component, TypeResolver: resolver, Views: generate.ViewReferences{identity: &generate.ViewReference{DescriptorKey: descriptor.Key()}}}).Plan()
+			if tc.failure {
+				if err == nil || !strings.Contains(err.Error(), "uneditable linked field") {
+					t.Fatalf("identity mismatch accepted: %v", err)
+				}
+			} else if err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}

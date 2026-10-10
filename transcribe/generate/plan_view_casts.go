@@ -38,7 +38,7 @@ func (v *linkedViewCastValidator) validate(view *spec.View, prefix string) error
 	for _, imported := range v.plan.Imports {
 		imports[imported.Alias] = imported.Package
 	}
-	contract := xshape.Contract{Packages: xshape.Packages{Imports: imports}}
+	contract := xshape.Contract{Packages: xshape.Packages{Default: v.plan.Package, Imports: imports}}
 	for _, wanted := range fields {
 		if !wanted.ExplicitType {
 			continue
