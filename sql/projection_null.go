@@ -20,6 +20,22 @@ func prepareStarProjection(sqlText string, selected []string, view *data.View, d
 	if view == nil || len(view.Columns) == 0 {
 		return nil, false, nil
 	}
+	// Prepare already validated SQL output membership. A default read only
+	// needs a star wrapper when the scan metadata requests a null fallback.
+	if len(selected) == 0 {
+		needsFallback := false
+		if !view.NullsAllowed() {
+			for _, column := range view.Columns {
+				if column != nil && column.Nullable && strings.TrimSpace(column.NullFallback) != "" {
+					needsFallback = true
+					break
+				}
+			}
+		}
+		if !needsFallback {
+			return nil, false, nil
+		}
+	}
 	source := strings.TrimSuffix(strings.TrimSpace(sqlText), ";")
 	selectStmt, err := sqlparser.ParseQuery(source)
 	if err != nil || selectStmt == nil || !selectStmt.List.IsStarExpr() {
