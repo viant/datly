@@ -54,6 +54,45 @@ orchestration; it is not required for this generated-writer workflow.
 
 ## Describe the writable graph
 
+### Queue one statement and retain its inserted identity
+
+For a route whose write is one static INSERT, operation-based transcription can
+generate a typed buffered statement handler. Declare scalar inputs and a signed
+integer output destination, then author the statement in DQL:
+
+```sql
+#package('pkg/records')
+
+#setting($_ = $route('/records/{name}', 'PATCH'))
+
+#define($_ = $Name<string>(path/name))
+#define($_ = $Identity<int64>(output/body))
+
+$dml.ExecuteWithResult("INSERT INTO records(name) VALUES (?)", $Output.Identity, $Input.Name)
+```
+
+Run `datly transcribe patch` with the normal source and destination options.
+Generation preserves this route's lack of a request body. An optional single
+SELECT graph can supply SQL-derived output shapes; its wildcard fields evolve
+when the authoring schema changes and the component is regenerated. That graph
+does not add a second persistence owner or an automatic response read.
+
+The generated handler binds the invocation's existing DML capability and queues
+the exact SQL and typed arguments. Root completion executes it in journal order
+using the existing shared buffer and transaction. The statement's `LastInsertId`
+is checked for signed overflow and assigned before output finalization,
+independently of `RowsAffected`. Application input initialization and validation
+and output finalization use the normal contract lifecycle. An injected child
+does not flush the caller's buffer.
+
+This bounded form accepts one static INSERT with one explicit VALUES row,
+scalar Input/Output field arguments, and an addressable signed integer identity
+destination. It rejects dynamic SQL, multiple writes, record sequencing,
+reconciliation, identity/action policies, entity hooks and mutation tokens.
+It does not allocate IDs, classify inserts versus updates, retry statements,
+or query an identity afterward. Other writable graphs continue to use their
+existing generated mutation policy.
+
 Consider three tables:
 
 | Table | Role | Relationship |

@@ -165,7 +165,16 @@ func (g Generator) generate(ctx context.Context, root, dir string, compiled *Res
 		return nil, err
 	}
 	if operation == "get" {
+		if compiled.StatementProgram != "" {
+			return nil, fmt.Errorf("buffered result statements require a native write operation")
+		}
 		return g.generateCompiled(ctx, root, dir, compiled)
+	}
+	if compiled.StatementProgram != "" {
+		if language != HandlerGo {
+			return nil, fmt.Errorf("buffered statement result requires the native Go target")
+		}
+		return g.generateStatement(ctx, root, dir, compiled)
 	}
 	if err := column.ApplyWriterMetadata(compiled.Component); err != nil {
 		return nil, err

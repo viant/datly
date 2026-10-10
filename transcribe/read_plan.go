@@ -3,6 +3,7 @@ package transcribe
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/viant/datly/spec"
 	tcompile "github.com/viant/datly/transcribe/compile"
@@ -35,7 +36,15 @@ func (c *readPlanCompiler) compile(component *spec.Component, prepared *dql.Prep
 	if len(reads) == 0 {
 		return nil, nil
 	}
-	if len(prepared.Statements) != 1 || len(reads) != 1 {
+	statementShape := len(prepared.Statements) == 2 && len(reads) == 1
+	if statementShape {
+		for _, item := range prepared.Statements {
+			if item.Kind != statement.KindRead && (item.Kind != statement.KindService || !strings.EqualFold(item.Operation, "ExecuteWithResult")) {
+				statementShape = false
+			}
+		}
+	}
+	if (len(prepared.Statements) != 1 && !statementShape) || len(reads) != 1 {
 		offset := reads[0].SQLStart
 		position := c.sourceMap.Position(offset)
 		diagnostic := &Diagnostic{
@@ -64,8 +73,21 @@ func (c *readPlanCompiler) compile(component *spec.Component, prepared *dql.Prep
 	if item.SQLEnd < item.End {
 		frame.Suffix = prepared.SQL[item.SQLEnd:item.End]
 	}
+	view := component.RootView
+	if statementShape {
+		// The component's initial source contains the complete authored program.
+		// Discovery must consume only the selected shape query, never queued DML.
+		copyView := *view
+		copySource := spec.ViewSource{}
+		if view.Source != nil {
+			copySource = *view.Source
+		}
+		copySource.SQL = prepared.SQL[item.SQLStart:item.SQLEnd]
+		copyView.Source = &copySource
+		view = &copyView
+	}
 	result, err := tcompile.NewReader().Compile(tcompile.ReadInput{
-		View: component.RootView, SQL: prepared.SQL[item.SQLStart:item.SQLEnd], Template: frame, Types: c.types, TypeContext: component.TypeContext,
+		View: view, SQL: prepared.SQL[item.SQLStart:item.SQLEnd], Template: frame, Types: c.types, TypeContext: component.TypeContext,
 	})
 	if err == nil {
 		if component.Settings != nil {

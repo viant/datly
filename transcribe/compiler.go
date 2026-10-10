@@ -39,6 +39,7 @@ type Result struct {
 	ViewBindings            gen.ViewBindings
 	GeneratedTypes          []gen.GeneratedTypeReference
 	GoHandler               *gen.GoHandlerAsset
+	StatementProgram        string
 	ExternalHandler         *gen.ExternalHandler
 	VeltyHandler            *gen.VeltyHandlerAsset
 	ContractTypeOverrides   ContractTypeOverrides
@@ -278,7 +279,26 @@ func (c *Compiler) Compile(ctx context.Context, source *Source) (*Result, error)
 		return nil, err
 	}
 	veltyHandler := source.VeltyHandler.Clone()
-	veltyHandler, err = resolveAuthoredHandler(prepared, component, goHandler, veltyHandler)
+	statementProgram := ""
+	for _, item := range prepared.Statements {
+		if item.Kind == statement.KindService && strings.EqualFold(item.Operation, "ExecuteWithResult") {
+			shapeOnly := len(prepared.Statements) == 2
+			if shapeOnly {
+				for _, other := range prepared.Statements {
+					if other != item && other.Kind != statement.KindRead {
+						shapeOnly = false
+					}
+				}
+			}
+			if statementProgram != "" || goHandler != nil || veltyHandler != nil || (len(prepared.Statements) != 1 && !shapeOnly) {
+				return nil, fmt.Errorf("buffered result statement cannot be combined with another handler or authored statement")
+			}
+			statementProgram = strings.TrimSpace(prepared.SQL[item.Start:item.End])
+		}
+	}
+	if statementProgram == "" {
+		veltyHandler, err = resolveAuthoredHandler(prepared, component, goHandler, veltyHandler)
+	}
 	if err != nil {
 		span := pointSpan(source.Text, 0)
 		var programErr *veltyProgramError
@@ -306,6 +326,7 @@ func (c *Compiler) Compile(ctx context.Context, source *Source) (*Result, error)
 		Declarations:            declarations.generation,
 		ViewBindings:            gen.ViewBindings(viewBindings),
 		GoHandler:               goHandler,
+		StatementProgram:        statementProgram,
 		VeltyHandler:            veltyHandler,
 		ContractTypeOverrides:   contractTypeOverrides,
 		AuthoredBorrowedSQLRows: authoredBorrowedRows,

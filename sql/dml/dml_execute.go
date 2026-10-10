@@ -145,8 +145,18 @@ func (d *Data) executeDeleteStep(ctx context.Context, db *sql.DB, tx *sql.Tx, st
 
 func (d *Data) executeSQLStep(ctx context.Context, tx *sql.Tx, step executionStep) error {
 	for _, operation := range step.operations {
-		if _, err := tx.ExecContext(ctx, operation.dml, operation.args...); err != nil {
+		result, err := tx.ExecContext(ctx, operation.dml, operation.args...)
+		if err != nil {
 			return err
+		}
+		if operation.lastInsertID != nil {
+			id, err := result.LastInsertId()
+			if err != nil {
+				return err
+			}
+			if err := assignLastInsertID(operation.lastInsertID, id); err != nil {
+				return err
+			}
 		}
 	}
 	return nil

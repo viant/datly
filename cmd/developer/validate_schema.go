@@ -15,6 +15,7 @@ import (
 	"sync"
 
 	_ "github.com/mattn/go-sqlite3"
+	_ "github.com/viant/sqlx/metadata/product/mysql"
 	_ "github.com/viant/sqlx/metadata/product/sqlite"
 )
 

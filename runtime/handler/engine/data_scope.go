@@ -258,6 +258,20 @@ func (c dmlCapability) Execute(dml string, args ...any) error {
 	return c.service.Execute(dml, args...)
 }
 
+// ExecuteWithResult is an optional native capability; Xdatly DML stays unchanged.
+func (c dmlCapability) ExecuteWithResult(statement string, dest any, args ...any) error {
+	if err := c.guard.check("ExecuteWithResult"); err != nil {
+		return err
+	}
+	service, ok := c.service.(interface {
+		ExecuteWithResult(string, any, ...any) error
+	})
+	if !ok {
+		return fmt.Errorf("native buffered statement result capability unavailable")
+	}
+	return service.ExecuteWithResult(statement, dest, args...)
+}
+
 // sequencerCapability exposes allocation and optional pending-ID reservation
 // under the focused sequencer key, without exposing database ownership.
 type sequencerCapability struct {

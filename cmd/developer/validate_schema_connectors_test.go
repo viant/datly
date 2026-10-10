@@ -12,7 +12,22 @@ import (
 	"testing"
 
 	"github.com/viant/datly/internal/testharness/sqlite"
+	"github.com/viant/sqlx/metadata/registry"
 )
+
+func TestSchemaMySQLConnectionSelectsNativeMetadata(t *testing.T) {
+	// Opening does not connect. Discovery must identify this driver before any
+	// column/constraint query rather than fall back to generic ANSI metadata.
+	db, err := sql.Open("mysql", "user:password@tcp(127.0.0.1:1)/records")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	product := registry.MatchProduct(db)
+	if product == nil || product.Name != "MySQL" {
+		t.Fatalf("MySQL schema discovery selected %+v", product)
+	}
+}
 
 func TestSchemaNamedConnectionsRemainDistinctAndReadOnly(t *testing.T) {
 	ctx := context.Background()

@@ -55,6 +55,9 @@ func (c *Compiler) Transcribe(ctx context.Context, request Request) (*GeneratedP
 	if err != nil {
 		return nil, err
 	}
+	if compiled.StatementProgram != "" {
+		return nil, fmt.Errorf("buffered statement results require operation-based native generation")
+	}
 	input, packageDir, err := generationInput(request.Destination, "generated", compiled)
 	if err != nil {
 		return nil, err

@@ -31,6 +31,7 @@ type dataOperation struct {
 	data            any
 	dml             string
 	args            []any
+	lastInsertID    any
 	match           *xhandler.Match
 	criteria        *sqlx.Criteria
 	executed        bool

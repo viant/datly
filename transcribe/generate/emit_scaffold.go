@@ -141,6 +141,9 @@ func scaffoldArtifacts(dir string, plan *Plan) ([]EmittedFile, []EmittedFile, []
 			existing[filepath.Clean(relative)] = true
 		}
 		for _, role := range []string{"mutation", "links", "frames", "previous", "layout", "actions", "mutation_output", "validation"} {
+			if role == "links" && plan.FactoryLink != nil {
+				continue
+			}
 			destination := plan.Generation.File(role, role+".go")
 			if existing[filepath.Clean(destination)] {
 				continue
