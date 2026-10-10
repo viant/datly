@@ -124,11 +124,12 @@ func (r *Refiner) ValidateSourceProjections(component *spec.Component, resources
 				if source.Table == "" {
 					source.Table = directSourceTable(SQL)
 				}
-				identities, err := resolveResultSources(view.Columns, source)
+				resultView := sqlResultView(view)
+				identities, err := resolveResultSources(resultView.Columns, source)
 				if err != nil {
 					return err
 				}
-				if err := validateResultAnnotations(view, names, identities); err != nil {
+				if err := validateResultAnnotations(resultView, names, identities); err != nil {
 					return err
 				}
 			}

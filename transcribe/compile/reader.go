@@ -122,6 +122,9 @@ func (r *Reader) Compile(input ReadInput) (*spec.View, error) {
 	if err != nil {
 		return nil, &Error{Code: CodeViewDirective, Cause: err}
 	}
+	if err := lowerLinkedHookKeys(root, directives, input.Types); err != nil {
+		return nil, err
+	}
 	sourceDecomposed, err := decomposeReadSources(parsed, root, input.Template)
 	if err != nil {
 		return nil, err
