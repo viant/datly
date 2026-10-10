@@ -101,6 +101,10 @@ func (r *planResolver) linkedRelationResources(resources *ResourcePlan, files ma
 						if strings.TrimSpace(query.SQL) == "" {
 							return fmt.Errorf("linked relation %s SQL resource %q has no canonical query", name, path)
 						}
+						query.SQL, err = r.linkedSQLResource(shape.Descriptor().PkgPath, path, query.SQL)
+						if err != nil {
+							return err
+						}
 						if previous, ok := files[path]; ok && previous != query.SQL {
 							return fmt.Errorf("linked relation %s has conflicting SQL resource %q", name, path)
 						}

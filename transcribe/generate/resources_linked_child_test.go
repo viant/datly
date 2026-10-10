@@ -19,18 +19,25 @@ type linkedResourceChild struct {
 	ParentId int    `sqlx:"parent_id"`
 	Label    string `sqlx:"label"`
 }
+type linkedResourceScopedParent struct {
+	Id       int                    `sqlx:"id"`
+	Children []*linkedResourceChild `view:"children,table=children" on:"Id:id=ParentId:c.parent_id" sql:"uri=queries/children.sql"`
+}
 type linkedResourceParent struct {
 	Id       int                    `sqlx:"id"`
 	Children []*linkedResourceChild `view:"children,table=children" on:"Id:id=ParentId:parent_id" sql:"uri=queries/children.sql"`
 }
 
 func TestLinkedChildSQLResourcesNativeRuntime(t *testing.T) {
-	testLinkedChildSQLResourcesNativeRuntime(t, false)
+	testLinkedChildSQLResourcesNativeRuntime(t, false, false)
 }
 func TestImportedLinkedChildSQLResourcesNativeRuntime(t *testing.T) {
-	testLinkedChildSQLResourcesNativeRuntime(t, true)
+	testLinkedChildSQLResourcesNativeRuntime(t, true, false)
 }
-func testLinkedChildSQLResourcesNativeRuntime(t *testing.T, imported bool) {
+func TestImportedLinkedChildSQLRetainsOriginalResource(t *testing.T) {
+	testLinkedChildSQLResourcesNativeRuntime(t, true, true)
+}
+func testLinkedChildSQLResourcesNativeRuntime(t *testing.T, imported, wrapped bool) {
 	root := t.TempDir()
 	testharness.WriteGeneratedGoMod(t, root)
 	pkg := "example.com/generated/parents"
@@ -38,15 +45,22 @@ func testLinkedChildSQLResourcesNativeRuntime(t *testing.T, imported bool) {
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		t.Fatal(err)
 	}
-	const rows = `package parents
+	rows := `package parents
  type Child struct { Id int ` + "`sqlx:\"id\"`" + `; ParentId int ` + "`sqlx:\"parent_id\"`" + `; Label string ` + "`sqlx:\"label\"`" + ` }
  type Row struct { Id int ` + "`sqlx:\"id\"`" + `; Children []*Child ` + "`view:\"children,table=children\" on:\"Id:id=ParentId:parent_id\" sql:\"uri=queries/children.sql\"`" + ` }
 `
+	if wrapped {
+		rows = strings.ReplaceAll(rows, "ParentId:parent_id", "ParentId:c.parent_id")
+	}
 	if err := os.WriteFile(filepath.Join(dir, "rows.go"), []byte(rows), 0600); err != nil {
 		t.Fatal(err)
 	}
 	catalog := typecatalog.NewCatalog()
-	descriptor := x.NewType(reflect.TypeFor[linkedResourceParent](), x.WithName("Row"), x.WithPkgPath(pkg))
+	rowType := reflect.TypeFor[linkedResourceParent]()
+	if wrapped {
+		rowType = reflect.TypeFor[linkedResourceScopedParent]()
+	}
+	descriptor := x.NewType(rowType, x.WithName("Row"), x.WithPkgPath(pkg))
 	if err := catalog.Register(typecatalog.TypeOriginPackage, descriptor); err != nil {
 		t.Fatal(err)
 	}
@@ -55,6 +69,16 @@ func testLinkedChildSQLResourcesNativeRuntime(t *testing.T, imported bool) {
 		t.Fatal(err)
 	}
 	child := &spec.View{Name: "children", Source: &spec.ViewSource{SQL: "SELECT c.id,c.parent_id,c.label FROM children c ORDER BY c.id", Table: "children"}, Columns: []*spec.Column{{Name: "Id", Source: "id", Type: spec.TypeRef{Name: "int"}}, {Name: "ParentId", Source: "parent_id", Type: spec.TypeRef{Name: "int"}}, {Name: "Label", Source: "label", Type: spec.TypeRef{Name: "string"}}}}
+	originalChildSQL := child.Source.SQL
+	if wrapped {
+		child.Source.SQL = "SELECT * FROM (" + originalChildSQL + ") children"
+		if err := os.MkdirAll(filepath.Join(dir, "queries"), 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "queries/children.sql"), []byte(originalChildSQL), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
 	parent := &spec.View{Name: "parents", Source: &spec.ViewSource{SQL: "SELECT p.id FROM parents p ORDER BY p.id", Table: "parents"}, Columns: []*spec.Column{{Name: "Id", Source: "id", Type: spec.TypeRef{Name: "int"}}}, Relations: []*spec.Relation{{Name: "Children", Holder: "Children", View: child, Cardinality: spec.CardinalityMany}}}
 	component := &spec.Component{Name: "Parents", Key: spec.Key{Kind: spec.KindComponent, Scope: pkg, Name: "Parents"}, Settings: &spec.Settings{DefaultConnector: "main"}, Routes: []*spec.Route{{Method: "GET", Path: "/parents"}}, RootView: parent, Parameters: []*spec.Parameter{{Name: "Data", Source: spec.BindSource{Kind: "output", Name: "view"}, TypeExpr: "[]*" + pkg + ".Row"}}}
 	target, packageName, outputDir := pkg, "parents", dir
@@ -71,7 +95,7 @@ func testLinkedChildSQLResourcesNativeRuntime(t *testing.T, imported bool) {
 			childSQL = file.Content
 		}
 	}
-	if childSQL != child.Source.SQL {
+	if childSQL != originalChildSQL {
 		t.Fatalf("linked child SQL missing or rewritten: %q", childSQL)
 	}
 	if _, err = EmitScaffold(outputDir, plan); err != nil {
