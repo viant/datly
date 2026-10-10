@@ -26,6 +26,15 @@ func retainNamedIdentity(view *spec.View, source *spec.ViewSource, constraints m
 	if parsed.From.Alias == "" || len(parsed.Joins) != 0 || parsed.Union != nil || parsed.Kind != "" || len(parsed.GroupBy) > 0 || parsed.Having != nil {
 		return nil
 	}
+	// A sole source wildcard already retains every column exposed by the
+	// inner query. There is no omitted outer identity to augment. Discovery
+	// still proves key lineage against its evaluated, DB-bound source below;
+	// do not analyze or rewrite authored table templates unnecessarily here.
+	if len(parsed.List) == 1 {
+		if namespace, wildcard := projectionWildcard(parsed.List[0].Expr); wildcard && (namespace == "" || strings.EqualFold(namespace, parsed.From.Alias)) {
+			return nil
+		}
+	}
 	if table, _, err := sqlparser.SourceTable(parsed.From.X); err != nil {
 		return err
 	} else if table != "" {

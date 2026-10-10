@@ -607,9 +607,9 @@ func (r *packageComponentResolver) param(role contractRole, field xshape.Field, 
 		group := binding.ResolutionGroup
 		param.ResolutionGroup = &spec.ResolutionGroupSpec{Name: group.Name, After: append([]string(nil), group.After...), DependsOn: append([]string(nil), group.DependsOn...)}
 	}
-	// Output-owned capability bindings retain their server source rather than
-	// becoming body slots. The SDK logger remains an ordinary typed capability.
-	if role == outputContract && strings.EqualFold(binding.Location.Kind, "logger") {
+	// Output-owned constants and capabilities retain their server source rather
+	// than becoming body slots. They use the ordinary typed binding contract.
+	if role == outputContract && (strings.EqualFold(binding.Location.Kind, "logger") || strings.EqualFold(binding.Location.Kind, "const")) {
 		param.EmitOutput = true
 	}
 	if binding.DefaultValue != nil {

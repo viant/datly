@@ -84,7 +84,6 @@ func (c *artifactCompiler) compile() (*Artifact, error) {
 		if _, err := input.Const.For(input.Component); err != nil {
 			return nil, err
 		}
-		input.Component = input.Const.Apply(input.Component)
 	}
 	outputDescriptor := linkedContractType(input.OutputType)
 	if input.HandlerOwnedOutput {
@@ -105,8 +104,18 @@ func (c *artifactCompiler) compile() (*Artifact, error) {
 			return nil, err
 		}
 	}
+	// Validate all authored defaults before an instance can replace them,
+	// including constants discovered from linked Go contracts above.
+	if _, err = input.Const.For(component); err != nil {
+		return nil, err
+	}
 	if err = input.Const.Validate(component, c.lookupType); err != nil {
 		return nil, err
+	}
+	// Linked contracts can declare constants absent from the incoming spec.
+	// Apply the frozen instance once, after their declarations are validated.
+	if input.Const != nil {
+		component = input.Const.Apply(component)
 	}
 	if err = c.compileOutputColumns(component); err != nil {
 		return nil, err

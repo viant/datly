@@ -73,6 +73,17 @@ and nested fields; routine per-field JSON tags are unnecessary. Custom handlers 
 Output finalizers can enrich it at the supported lifecycle point. Do not expose
 internal Has markers or read-provenance metadata as user data.
 
+An output can also expose a server constant through the existing declaration:
+
+```sql
+#define($_ = $Source<string>(const/catalogSource).Value('catalog').Output())
+```
+
+The generated output retains `kind=const` and its typed default. Native execution
+binds it from the component's canonical constants before output finalization;
+HTTP query parameters and MCP arguments cannot override it. Trusted instance
+constant files retain their ordinary precedence over authored defaults.
+
 ### Rename a field while retaining the case policy
 
 Use a `format` name when the public name differs from the Go field or SQL column:
