@@ -62,3 +62,37 @@ func TestResolveSourcePreservesURIWhenInlineSQLIsAlreadyAvailable(t *testing.T) 
 		t.Fatalf("source = %+v", source)
 	}
 }
+
+func TestResolveSourceExpandsNestedResourcesRelativeToAuthoredFile(t *testing.T) {
+	resources := fstest.MapFS{
+		"creative/query.sql":      {Data: []byte("SELECT c.id FROM records c JOIN (${embed:ids.sql}) ids ON ids.id=c.id")},
+		"creative/ids.sql":        {Data: []byte("SELECT id FROM (${embed:detail/ids.sql}) detail")},
+		"creative/detail/ids.sql": {Data: []byte("SELECT id FROM records")},
+	}
+	want := "SELECT c.id FROM records c JOIN (SELECT id FROM (SELECT id FROM records) detail) ids ON ids.id=c.id"
+	for _, source := range []*spec.ViewSource{
+		{URI: "creative/query.sql"},
+		{URI: "creative/query.sql", Embeds: []*spec.EmbeddedSQLRef{{Path: "creative/ids.sql", Raw: "${embed:ids.sql}"}}},
+		{SQL: "${embed:creative/query.sql}", Embeds: []*spec.EmbeddedSQLRef{{Path: "creative/query.sql", Raw: "${embed:creative/query.sql}"}}},
+	} {
+		if err := ResolveSource("creative", source, resources); err != nil {
+			t.Fatal(err)
+		}
+		if source.SQL != want || len(source.Embeds) != 0 {
+			t.Fatalf("nested authored resources unresolved: %+v", source)
+		}
+	}
+}
+
+func TestResolveSourceNestedFailuresDoNotChangeAuthoredSource(t *testing.T) {
+	for _, body := range []string{"SELECT * FROM (${embed:missing.sql}) ids", "SELECT * FROM (${embed:query.sql}) ids"} {
+		resources := fstest.MapFS{"creative/query.sql": {Data: []byte(body)}}
+		source := &spec.ViewSource{SQL: "${embed:creative/query.sql}", Embeds: []*spec.EmbeddedSQLRef{{Path: "creative/query.sql", Raw: "${embed:creative/query.sql}"}}}
+		if err := ResolveSource("creative", source, resources); err == nil {
+			t.Fatalf("nested invalid source accepted: %s", body)
+		}
+		if source.SQL != "${embed:creative/query.sql}" || len(source.Embeds) != 1 {
+			t.Fatal("failure changed source authority")
+		}
+	}
+}
