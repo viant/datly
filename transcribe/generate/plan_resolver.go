@@ -106,6 +106,9 @@ func (r *planResolver) resolve() (*Plan, error) {
 			for i := range view.Fields {
 				if view.Fields[i].RelationHolder {
 					view.Fields[i].Tag = withoutStructTags(view.Fields[i].Tag, tag.ViewName, tag.SQLName, tag.RelationName)
+					// SQLX treats on-tagged relations as transient. Preserve
+					// that exclusion when body-only shapes omit read tags.
+					view.Fields[i].Tag = replaceStructTag(view.Fields[i].Tag, "sqlx", "-")
 				}
 			}
 		}

@@ -117,6 +117,9 @@ func (g Generator) generateCompiled(ctx context.Context, root, dir string, compi
 	if err != nil {
 		return nil, err
 	}
+	if err := prepareFactoryCompanions(compiled, &input); err != nil {
+		return nil, err
+	}
 	return NewCompiler().generateInputAt(ctx, root, dir, compiled, input)
 }
 
