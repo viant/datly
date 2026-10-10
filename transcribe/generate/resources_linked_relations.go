@@ -25,7 +25,7 @@ func (r *planResolver) linkedRelationResources(resources *ResourcePlan, files ma
 		return err
 	}
 	for _, planned := range r.plan.Views {
-		if planned.Ownership != ViewLinked || planned.Package != r.input.TargetPackage {
+		if planned.Ownership != ViewLinked {
 			continue
 		}
 		view := canonical[planned.Identity]

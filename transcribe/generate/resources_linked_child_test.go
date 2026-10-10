@@ -25,6 +25,12 @@ type linkedResourceParent struct {
 }
 
 func TestLinkedChildSQLResourcesNativeRuntime(t *testing.T) {
+	testLinkedChildSQLResourcesNativeRuntime(t, false)
+}
+func TestImportedLinkedChildSQLResourcesNativeRuntime(t *testing.T) {
+	testLinkedChildSQLResourcesNativeRuntime(t, true)
+}
+func testLinkedChildSQLResourcesNativeRuntime(t *testing.T, imported bool) {
 	root := t.TempDir()
 	testharness.WriteGeneratedGoMod(t, root)
 	pkg := "example.com/generated/parents"
@@ -51,7 +57,11 @@ func TestLinkedChildSQLResourcesNativeRuntime(t *testing.T) {
 	child := &spec.View{Name: "children", Source: &spec.ViewSource{SQL: "SELECT c.id,c.parent_id,c.label FROM children c ORDER BY c.id", Table: "children"}, Columns: []*spec.Column{{Name: "Id", Source: "id", Type: spec.TypeRef{Name: "int"}}, {Name: "ParentId", Source: "parent_id", Type: spec.TypeRef{Name: "int"}}, {Name: "Label", Source: "label", Type: spec.TypeRef{Name: "string"}}}}
 	parent := &spec.View{Name: "parents", Source: &spec.ViewSource{SQL: "SELECT p.id FROM parents p ORDER BY p.id", Table: "parents"}, Columns: []*spec.Column{{Name: "Id", Source: "id", Type: spec.TypeRef{Name: "int"}}}, Relations: []*spec.Relation{{Name: "Children", Holder: "Children", View: child, Cardinality: spec.CardinalityMany}}}
 	component := &spec.Component{Name: "Parents", Key: spec.Key{Kind: spec.KindComponent, Scope: pkg, Name: "Parents"}, Settings: &spec.Settings{DefaultConnector: "main"}, Routes: []*spec.Route{{Method: "GET", Path: "/parents"}}, RootView: parent, Parameters: []*spec.Parameter{{Name: "Data", Source: spec.BindSource{Kind: "output", Name: "view"}, TypeExpr: "[]*" + pkg + ".Row"}}}
-	plan, err := New(Input{Component: component, TargetPackage: pkg, PackageName: "parents", ProjectRoot: root, TypeResolver: resolver, SQLResources: true, Views: ViewReferences{RootViewPath: &ViewReference{DescriptorKey: descriptor.Key()}}}).Plan()
+	target, packageName, outputDir := pkg, "parents", dir
+	if imported {
+		target, packageName, outputDir = "example.com/generated/reader", "reader", filepath.Join(root, "reader")
+	}
+	plan, err := New(Input{Component: component, TargetPackage: target, PackageName: packageName, ProjectRoot: root, TypeResolver: resolver, SQLResources: true, Views: ViewReferences{RootViewPath: &ViewReference{DescriptorKey: descriptor.Key()}}}).Plan()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -64,7 +74,7 @@ func TestLinkedChildSQLResourcesNativeRuntime(t *testing.T) {
 	if childSQL != child.Source.SQL {
 		t.Fatalf("linked child SQL missing or rewritten: %q", childSQL)
 	}
-	if _, err = EmitScaffold(dir, plan); err != nil {
+	if _, err = EmitScaffold(outputDir, plan); err != nil {
 		t.Fatal(err)
 	}
 	actual, err := os.ReadFile(filepath.Join(dir, "rows.go"))
@@ -93,7 +103,11 @@ func TestLinkedChildSQLResourcesNativeRuntime(t *testing.T) {
  }
  }
 `
-	if err = os.WriteFile(filepath.Join(root, "runtime_test.go"), []byte(fixture), 0600); err != nil {
+	runtimeFixture := fixture
+	if imported {
+		runtimeFixture = strings.ReplaceAll(runtimeFixture, "example.com/generated/parents", target)
+	}
+	if err = os.WriteFile(filepath.Join(root, "runtime_test.go"), []byte(runtimeFixture), 0600); err != nil {
 		t.Fatal(err)
 	}
 	command := exec.Command("go", "test", "-mod=mod", "-race", "-timeout=120s", ".")
