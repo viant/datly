@@ -216,7 +216,18 @@ func (r *planResolver) prepareResources() (*ResourcePlan, error) {
 			return nil, err
 		}
 	}
-	if r.input.SQLResources && r.plan.Output.Ownership == ContractLinked {
+	needsLinkedOutputSQL := false
+	for _, field := range r.plan.Output.Fields {
+		if raw := tags.NewTags(field.Tag).Lookup(tag.SQLName); raw != nil {
+			if source := tag.ParseSQL(string(raw.Values)); source != nil && strings.TrimSpace(source.Text) != "" {
+				needsLinkedOutputSQL = true
+				break
+			}
+		}
+	}
+	// SQL-free external factories carry validated Go contract identities,
+	// not reader row descriptors. Inspect linked fields only for planned SQL.
+	if r.input.SQLResources && r.plan.Output.Ownership == ContractLinked && needsLinkedOutputSQL {
 		descriptor, err := r.types.Descriptor(r.plan.Output.DescriptorKey)
 		if err != nil {
 			return nil, err
