@@ -274,7 +274,13 @@ func (r *Compilation) discover(ctx context.Context, view *spec.View, connector s
 			// Resource-backed and inline SQL have identical table authority once
 			// the evaluated query proves one direct physical source. Persist that
 			// fact for writer planning; readers do not depend on it.
-			view.Source.Table = table
+			// Keep the authored identifier when expansion revealed an instance
+			// constant. The evaluated table is only the discovery DB target.
+			if authoredTable := directSourceTable(authoredSource.SQL); authoredTable != "" {
+				view.Source.Table = authoredTable
+			} else {
+				view.Source.Table = table
+			}
 		}
 	}
 	// Metadata reads follow the table actually selected by the evaluated query.

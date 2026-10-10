@@ -2,11 +2,13 @@ package transcribe
 
 import (
 	"context"
+	"github.com/viant/bindly/resource"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"testing/fstest"
 
 	"github.com/viant/datly/internal/testharness"
 	"github.com/viant/datly/transcribe/column"
@@ -15,6 +17,16 @@ import (
 // Generate once against the default schema, then execute the emitted contracts
 // with two instances. Discovery must not freeze the default physical DML table.
 func TestGeneratedWriterInstanceTableSQLite(t *testing.T) {
+	for _, embedded := range []bool{false, true} {
+		name := "inline"
+		if embedded {
+			name = "embedded"
+		}
+		t.Run(name, func(t *testing.T) { testGeneratedWriterInstanceTableSQLite(t, embedded) })
+	}
+}
+
+func testGeneratedWriterInstanceTableSQLite(t *testing.T, embedded bool) {
 	ctx := context.Background()
 	db := testharness.NewSQLiteHarness(t)
 	if err := db.ExecStatements(ctx, "CREATE TABLE records(id INTEGER NOT NULL,region INTEGER NOT NULL,PRIMARY KEY(id,region))"); err != nil {
@@ -28,7 +40,16 @@ func TestGeneratedWriterInstanceTableSQLite(t *testing.T) {
 		"#define($_ = $Table<string>(const/Table).Value('records'))\n" +
 		"#define($_ = $Data<[]*Record>(output/body))\n" +
 		"SELECT r.*,type(r,'Record') FROM (SELECT id,region FROM `${Table}`) r"
-	if _, err := (Generator{Operation: "post"}).Generate(ctx, GenerationRequest{Destination: root, Source: &Source{Name: "Records", Scope: "example.com/instancewriter/source", Text: source, Connector: "main", ColumnRefiner: column.New(column.Connections{"main": db.DB})}}); err != nil {
+	var resources *resource.Store
+	if embedded {
+		var err error
+		resources, err = resource.New().WithDefault(fstest.MapFS{"records.sql": {Data: []byte("SELECT id,region FROM `${Table}`")}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		source = strings.Replace(source, "SELECT id,region FROM `${Table}`", "${embed:records.sql}", 1)
+	}
+	if _, err := (Generator{Operation: "post"}).Generate(ctx, GenerationRequest{Destination: root, Source: &Source{Name: "Records", Scope: "example.com/instancewriter/source", Text: source, Resources: resources, Connector: "main", ColumnRefiner: column.New(column.Connections{"main": db.DB})}}); err != nil {
 		t.Fatal(err)
 	}
 	input, err := os.ReadFile(filepath.Join(root, "generated", "input.go"))
@@ -53,6 +74,7 @@ import (
  "database/sql"
  "path/filepath"
  "testing"
+
  _ "github.com/mattn/go-sqlite3"
  "github.com/viant/datly/bootstrap/connector"
  "github.com/viant/datly/constant"
