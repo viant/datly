@@ -24,7 +24,15 @@ func (c *sourceComponent) reflectedArtifactInput(component *spec.Component, sour
 	if component == nil || source == nil || source.LinkedInputType == nil || source.LinkedOutputType == nil {
 		return bootstrap.ArtifactInput{}, fmt.Errorf("reflected component contract is incomplete")
 	}
-	resources, err := linkedDefaultResources(resources, source.LinkedInputType)
+	var err error
+	if source.PackagePath != "" && source.HolderType != "" {
+		holder := bootstrap.LinkedHolder(c.source.holders, source.PackagePath, source.HolderType)
+		resources, err = linkedDefaultResources(resources, reflect.TypeOf(holder))
+		if err != nil {
+			return bootstrap.ArtifactInput{}, err
+		}
+	}
+	resources, err = linkedDefaultResources(resources, source.LinkedInputType)
 	if err != nil {
 		return bootstrap.ArtifactInput{}, err
 	}

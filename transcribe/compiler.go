@@ -335,6 +335,9 @@ func (c *Compiler) Compile(ctx context.Context, source *Source) (*Result, error)
 	if err := linkDeclaredOutputView(result, loader.authoredComponent); err != nil {
 		return nil, err
 	}
+	if err := linkDeclaredOutputContract(result, loader.authoredComponent); err != nil {
+		return nil, err
+	}
 	if err := c.admitBorrowedSQLRows(ctx, result); err != nil {
 		return nil, err
 	}

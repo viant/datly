@@ -166,3 +166,17 @@ JSON envelopes, not shared Go types or stored JSON. It opts into the existing
 native encoder semantics, including byte arrays and tag/embedding behavior;
 custom JSON values retain their authored serializer. See
 [output encoding](../runtime/output/README.md) for schema and format behavior.
+
+## Retain an authored output contract while generating a reader
+
+An explicitly qualified `output_type('wire.Output')` selects an existing named
+Go output contract when its imported package supplies that type. The reader
+still generates its input, component holder, and SQL assets. The authored output
+fields must match the declared output bindings and types; methods such as
+`Finalize` and `response.Response` capabilities stay on the original Go type.
+Root view fields retain their authored `view` and `sql` tags. Package the DQL SQL
+at their existing URI using `sql_dest`; generation rejects a destination that
+would relocate that uneditable URI. Component holders supply their embedded
+filesystem for relative SQL paths; an authored input filesystem keeps priority.
+Bare output names and unresolved destination types retain generated ownership.
+Existing package component overlays retain their contract comparison rules.
