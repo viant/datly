@@ -288,6 +288,12 @@ func (r *Compilation) discover(ctx context.Context, view *spec.View, connector s
 		}
 	}
 	var constraints map[string]tableConstraint
+	// SQLX metadata takes the decoded table name, while executable SQL keeps
+	// its identifier delimiters. Let SQLParser distinguish one quoted name
+	// from a qualified path instead of passing quotes as part of the name.
+	if parts, parseErr := sqlparser.TableIdentifierParts(source.Table); parseErr == nil && len(parts) == 1 {
+		source.Table = parts[0]
+	}
 	if table := strings.TrimSpace(source.Table); table != "" && !strings.Contains(table, "$") {
 		constraints, err = r.metadata.loadTableConstraints(ctx, db, table)
 		if err != nil {

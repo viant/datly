@@ -2553,6 +2553,11 @@ func Compile(component *spec.Component, inputType, outputType reflect.Type, oper
 	if metadata.Table == "" {
 		return nil, fmt.Errorf("writer root table is required")
 	}
+	if table, err := resolvedWriterTable(component, metadata.Table); err != nil {
+		return nil, fmt.Errorf("writer root table: %w", err)
+	} else {
+		metadata.Table = table
+	}
 	columns := map[string]*spec.Column{}
 	for _, column := range component.RootView.Columns {
 		if column != nil {
@@ -2869,6 +2874,11 @@ func compileRecord(component *spec.Component, inputType reflect.Type, name, path
 	}
 	if record.Table == "" {
 		return nil, fmt.Errorf("writer relation %s requires a table", path)
+	}
+	if table, err := resolvedWriterTable(component, record.Table); err != nil {
+		return nil, fmt.Errorf("writer relation %s table: %w", path, err)
+	} else {
+		record.Table = table
 	}
 	columns := map[string]*spec.Column{}
 	if view != nil {
