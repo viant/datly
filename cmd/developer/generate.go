@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"path/filepath"
 
 	"github.com/viant/datly/constant"
 
@@ -41,6 +42,7 @@ func Transcribe(ctx context.Context, args []string, stdout, stderr io.Writer, ha
 	}
 	constantURL := flags.String("const", "", "instance constants YAML/JSON file")
 	directory := flags.String("dir", ".", "project root; DQL/package metadata controls artifact destinations")
+	sourceFile := flags.String("source", "", "component source filename within the selected package, for example lookup.dql")
 	operation := &operationValue
 	language := flags.String("lang", "go", "handler language: go or velty")
 	var schema schemaOptions
@@ -91,6 +93,15 @@ func Transcribe(ctx context.Context, args []string, stdout, stderr io.Writer, ha
 	if err != nil {
 		fmt.Fprintln(stderr, err)
 		return 1
+	}
+	if *sourceFile != "" {
+		var selected []*transcribe.Result
+		for _, component := range project.Components {
+			if component.Source != nil && filepath.Base(component.Source.Path) == *sourceFile {
+				selected = append(selected, component)
+			}
+		}
+		project.Components = selected
 	}
 	if len(project.Components) != 1 {
 		fmt.Fprintf(stderr, "transcribe requires exactly one component in the selected source package; found %d\n", len(project.Components))
