@@ -355,7 +355,7 @@ func (r *Compilation) discover(ctx context.Context, view *spec.View, connector s
 		if err != nil {
 			return nil, fmt.Errorf("resolve table projection lineage: %w", err)
 		}
-		applyTableConstraints(view.Columns, constraints, lineage)
+		applyTableConstraints(view.Columns, constraints, lineage, source.Table)
 	}
 	return evaluated, nil
 }
