@@ -17,8 +17,9 @@ import (
 // Declaration resolution remains source authority for transcribe's ownership
 // comparison; inferred columns must not change that authored contract.
 type outputColumnCompiler struct {
-	output *xshape.Type
-	lookup xshape.Lookup
+	output    *xshape.Type
+	lookup    xshape.Lookup
+	discovery bool
 }
 
 func (c *artifactCompiler) compileOutputColumns(component *spec.Component) error {
@@ -28,6 +29,24 @@ func (c *artifactCompiler) compileOutputColumns(component *spec.Component) error
 // CompileOutputColumns resolves the existing linked row projection before SQL
 // metadata discovery, as well as before runtime artifact compilation.
 func CompileOutputColumns(component *spec.Component, outputType reflect.Type) error {
+	return compileOutputColumns(component, outputType, false)
+}
+
+// DiscoveryOutputColumns retains linked SQL-mapped hidden fields as type
+// authority for discovery. Their existing visibility tags remain authoritative.
+func DiscoveryOutputColumns(component *spec.Component, outputType reflect.Type) ([]*spec.Column, error) {
+	copy := component.Clone()
+	if copy.RootView == nil {
+		return nil, nil
+	}
+	copy.RootView.Columns = nil
+	if err := compileOutputColumns(copy, outputType, true); err != nil {
+		return nil, err
+	}
+	return copy.RootView.Columns, nil
+}
+
+func compileOutputColumns(component *spec.Component, outputType reflect.Type, discovery bool) error {
 	if component.RootView == nil || component.RootView.Columns != nil {
 		return nil
 	}
@@ -46,7 +65,7 @@ func CompileOutputColumns(component *spec.Component, outputType reflect.Type) er
 		if !ok {
 			return fmt.Errorf("output view holder %s is missing", param.Name)
 		}
-		return (&outputColumnCompiler{output: xshape.Linked(outputType)}).compile(component.RootView, field.Name)
+		return (&outputColumnCompiler{output: xshape.Linked(outputType), discovery: discovery}).compile(component.RootView, field.Name)
 	}
 	return nil
 }
@@ -99,15 +118,18 @@ func (r *outputColumnCompiler) column(field xshape.Field, path string) (*spec.Co
 	if !field.Exported {
 		return nil, false, nil
 	}
-	if field.Tag.Get("setMarker") == "true" || field.Tag.Get("internal") == "true" {
+	if field.Tag.Get("setMarker") == "true" {
 		return nil, true, nil
 	}
 	formatting, err := format.Parse(field.Tag, "json")
 	if err != nil {
 		return nil, false, err
 	}
-	if formatting.Ignore {
-		return nil, true, nil
+	if field.Tag.Get("internal") == "true" || formatting.Ignore {
+		// Only explicit SQL mappings carry hidden result-column authority.
+		if !r.discovery || sqlxio.ParseTag(field.Tag).Name() == "" {
+			return nil, true, nil
+		}
 	}
 	metadata, err := dtag.ParseField(field.StructField())
 	if err != nil {

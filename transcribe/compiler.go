@@ -423,12 +423,17 @@ func refineComponentColumns(ctx context.Context, component *spec.Component, sour
 		linkedViews = factoryInputs[0].Views
 	}
 	if source.ColumnRefiner != nil {
+		columnCompilation := source.ColumnRefiner.BeginCompilation()
 		if source.PackageComponent != nil && strings.TrimSpace(source.Text) == "" && source.LinkedOutputType != nil {
 			if err := bootstrap.CompileOutputColumns(component, source.LinkedOutputType); err != nil {
 				return err
 			}
+			declared, err := bootstrap.DiscoveryOutputColumns(component, source.LinkedOutputType)
+			if err != nil {
+				return err
+			}
+			columnCompilation.DeclareColumns(component.RootView, declared)
 		}
-		columnCompilation := source.ColumnRefiner.BeginCompilation()
 		templateInput, compileErr := (&discoveryInputCompiler{
 			component: component, declarations: declarations,
 			viewBindings: viewBindings, resolver: typeResolver, source: source, factoryShape: factoryShape, views: linkedViews,

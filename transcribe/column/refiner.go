@@ -334,11 +334,26 @@ func (r *Compilation) discover(ctx context.Context, view *spec.View, connector s
 		return evaluated, nil
 	}
 	resultView := sqlResultView(view)
-	identities, err := resolveResultSources(resultView.Columns, source)
+	discoveryView := *resultView
+	discoveryView.Columns = append([]*spec.Column(nil), resultView.Columns...)
+	metadataOnly := map[string]bool{}
+	visibleSources := map[string]bool{}
+	for _, col := range resultView.Columns {
+		if col != nil {
+			visibleSources[normalizedName(col.Source)] = true
+		}
+	}
+	for _, col := range r.declared[view] {
+		if col != nil && !visibleSources[normalizedName(col.Source)] {
+			discoveryView.Columns = append(discoveryView.Columns, col)
+			metadataOnly[normalizedName(col.Source)] = true
+		}
+	}
+	identities, err := resolveResultSources(discoveryView.Columns, source)
 	if err != nil {
 		return nil, err
 	}
-	detected, err := r.refiner.detectColumnsWithSources(ctx, db, resultView, identities, query, evaluated.Args...)
+	detected, err := r.refiner.detectColumnsWithSources(ctx, db, &discoveryView, identities, query, evaluated.Args...)
 	if err != nil {
 		return nil, fmt.Errorf("SQLX discovery failed for %q: %w", query, err)
 	}
@@ -362,7 +377,13 @@ func (r *Compilation) discover(ctx context.Context, view *spec.View, connector s
 	// Persisting a projection quoted with the discovery connector's dialect
 	// would make portable resources depend on the schema fixture. Runtime
 	// selector lowering uses the actual execution dialect instead.
-	view.Columns = mergeColumnsWithSources(view.Columns, columns, identities)
+	visibleColumns := make([]*spec.Column, 0, len(columns))
+	for _, col := range columns {
+		if !metadataOnly[normalizedName(col.Source)] {
+			visibleColumns = append(visibleColumns, col)
+		}
+	}
+	view.Columns = mergeColumnsWithSources(view.Columns, visibleColumns, identities)
 	if table := strings.TrimSpace(source.Table); table != "" && !strings.Contains(table, "$") {
 		lineage, err := directProjectionLineage(source)
 		if err != nil {

@@ -91,6 +91,16 @@ func (r *Refiner) PhysicalSourceIdentity(ctx context.Context, connector, unquali
 type Compilation struct {
 	refiner  *Refiner
 	metadata discoveryMetadata
+	declared map[*spec.View][]*spec.Column
+}
+
+// DeclareColumns supplies linked SQL field authority for this compilation only.
+// Fields absent from the public view remain discovery-only metadata.
+func (r *Compilation) DeclareColumns(view *spec.View, columns []*spec.Column) {
+	if r.declared == nil {
+		r.declared = make(map[*spec.View][]*spec.Column)
+	}
+	r.declared[view] = columns
 }
 
 // BeginCompilation starts isolated metadata reuse without retaining state on r.
