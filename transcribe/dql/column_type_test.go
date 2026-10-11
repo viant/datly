@@ -19,6 +19,7 @@ func TestColumnTypePointerSliceOrder(t *testing.T) {
 		{"[]model.T", false, true, false},
 		{"[]*model.T", true, true, false},
 		{"*[]model.T", false, true, true},
+		{"*[]*model.T", true, true, true},
 		{"([](*model.T))", true, true, false},
 	} {
 		t.Run(tc.expression, func(t *testing.T) {
@@ -36,7 +37,7 @@ func TestColumnTypePointerSliceOrder(t *testing.T) {
 			require.Equal(t, actual, decoded)
 		})
 	}
-	for _, expression := range []string{"**model.T", "[][]model.T", "*[]*model.T", "[]**model.T", "[3]model.T", "missing.T"} {
+	for _, expression := range []string{"**model.T", "[][]model.T", "*[]**model.T", "[]**model.T", "[3]model.T", "missing.T"} {
 		t.Run("reject "+expression, func(t *testing.T) {
 			_, err := ColumnType(expression, context)
 			require.Error(t, err)
