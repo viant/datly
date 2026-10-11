@@ -203,6 +203,13 @@ generated-file edits and preserves separate application hooks and linked contrac
 resolve duplicate column names; follow the integrated
 [naming rules](selectors-and-formats.md).
 
+Linked rows retain their existing SQL resource paths and bytes. Original generated
+SQL may keep `$criteria.AppendBinding($Unsafe.Name)` for a declared query input
+while authored DQL emits `$Name`; both use the existing runtime input binder.
+Resource validation recognizes those emitted-value forms and transparent source
+wrappers, while rejecting changed predicates, projections and outer clauses.
+Template decisions, quoted strings and local variables retain their own authority.
+
 A relation join such as `LEFT JOIN detail d ON p.id = d.parent_id AND 1=1`
 adds the supported to-one cardinality hint while retaining the actual join key.
 It is not an authorization condition and does not enforce database uniqueness.
