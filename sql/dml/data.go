@@ -100,6 +100,20 @@ func NewData(db *sql.DB, opts ...Option) *Data {
 		},
 	})
 	drainowner.RegisterJournal(data, drainowner.NativeJournal{External: data.externalTx,
+		ValidateGuard: func(receiver, expected, queue any, binding *drainowner.GuardBinding) error {
+			view, ok := receiver.(*Data)
+			associated, associatedOK := expected.(*Data)
+			if !ok || !associatedOK || view == nil || view != associated || view.owner() != data {
+				return drainowner.ErrOwner
+			}
+			if queue != nil {
+				queued, queueOK := queue.(*Data)
+				if !queueOK || queued != view {
+					return drainowner.ErrOwner
+				}
+			}
+			return view.ValidateBoundExecutionGuard(binding)
+		},
 		Bind: func(component any, frame *drainowner.Frame) error {
 			child, ok := component.(*Data)
 			if !ok || child.owner() != data {

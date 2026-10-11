@@ -129,3 +129,27 @@ func ValidateGuardOwner(receiver any, binding *GuardBinding) error {
 	}
 	return nil
 }
+
+// ValidateBoundView delegates read-only view membership to the callback retained
+// in the exact constructor registration. It never discovers a method on the
+// supplied capability or grants mutation, drain or transaction authority.
+func ValidateBoundView(receiver, expected, queue any, binding *GuardBinding) error {
+	if binding == nil || binding.cell == nil {
+		return ErrGuardBinding
+	}
+	cell := binding.cell
+	cell.mu.Lock()
+	state, valid := cell.owner, cell.self == binding
+	cell.mu.Unlock()
+	if !valid || state == nil {
+		return ErrGuardBinding
+	}
+	state.mu.Lock()
+	native := state.journalNative
+	state.mu.Unlock()
+	if native == nil || native.ValidateGuard == nil {
+		return ErrOwner
+	}
+	// Native callbacks execute outside bookkeeping locks.
+	return native.ValidateGuard(receiver, expected, queue, binding)
+}

@@ -33,7 +33,9 @@ Embedding uses `report.NewProjectCompiler(...).CompileArtifacts(...)` followed b
 API-key route cannot become an MCP tool: set `reportMCPTool=false` and
 `reportComposeMCPTool=false` on that reader, or author an MCP-compatible policy.
 JWT verification requires configured `JWTValidator` plus the declared source input;
-a body property is not an ambient credential.
+a body property is not an ambient credential. Compiled JWT verifier inputs stay
+outside cube filters, so an omitted frame filter cannot mask Authorization and
+a frame's `jwt` property cannot replace the transport credential.
 
 Declare field roles and input filters in the source contract. The derived API
 preserves source authorization and maps requested contract field names to SQL

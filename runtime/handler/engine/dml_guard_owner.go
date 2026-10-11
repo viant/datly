@@ -4,13 +4,12 @@ import (
 	"context"
 
 	"github.com/viant/datly/internal/drainowner"
-	"github.com/viant/datly/sql/dml"
 	xhandler "github.com/viant/xdatly/handler"
 )
 
 // ValidateBoundDML verifies the already-resolved focused capability against its
 // exact current scope and registered native journal. It never resolves data,
-// invokes a callback, unwraps arbitrary providers or returns a native owner.
+// invokes application callbacks, unwraps arbitrary providers or returns a native owner.
 func ValidateBoundDML(ctx context.Context, service xhandler.DML, binding *drainowner.GuardBinding) error {
 	if ctx == nil {
 		return drainowner.ErrGuardBinding
@@ -23,14 +22,14 @@ func ValidateBoundDML(ctx context.Context, service xhandler.DML, binding *draino
 		return drainowner.ErrGuardBinding
 	}
 	var capability dmlCapability
+	var queue any
 	switch value := service.(type) {
 	case dmlCapability:
 		capability = value
 	case queueContractDMLCapability:
 		capability = value.dmlCapability
-		native, ok := capability.service.(*dml.Data)
-		queue, queueOK := value.queue.(*dml.Data)
-		if !ok || !queueOK || native != queue {
+		queue = value.queue
+		if queue == nil {
 			return drainowner.ErrOwner
 		}
 	default:
@@ -46,12 +45,8 @@ func ValidateBoundDML(ctx context.Context, service xhandler.DML, binding *draino
 	if closed || failure != nil || expected == nil || capability.guard != scope.mutationGuard() {
 		return drainowner.ErrGuardBinding
 	}
-	native, ok := capability.service.(*dml.Data)
-	if !ok || native == nil || expected != native {
-		return drainowner.ErrOwner
-	}
 	if err := capability.guard.check("source phase owner association"); err != nil {
 		return err
 	}
-	return native.ValidateBoundExecutionGuard(binding)
+	return drainowner.ValidateBoundView(capability.service, expected, queue, binding)
 }

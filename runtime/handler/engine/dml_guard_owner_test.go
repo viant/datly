@@ -141,3 +141,39 @@ func TestBoundDMLWaitsForFullResolutionPublication(t *testing.T) {
 		t.Fatal("fully resolved owner rejected", err)
 	}
 }
+
+func TestBoundDMLMissingNativeQueueRejected(t *testing.T) {
+	source := dml.Source{DB: testharness.NewSQLiteHarness(t).DB}
+	_, err := New().Execute(context.Background(), Request{Input: testRouteInput(t, reflect.TypeFor[struct{}]()), DataSource: source,
+		Handler: rh.HandlerFunc(func(ctx context.Context, in rh.Invocation) (any, error) {
+			value, _, err := in.Binder.Lookup(ctx, xh.DMLKey)
+			if err != nil {
+				return nil, err
+			}
+			capability := value.(queueContractDMLCapability)
+			scope := ctx.Value(dataScopeContextKey{}).(*dataScope)
+			binding := drainowner.NewGuardBinding()
+			calls := 0
+			if err = scope.registerExecutionGuard(ctx, func(context.Context) error { calls++; return nil }, binding); err != nil {
+				return nil, err
+			}
+			for _, queue := range []any{nil, (*dml.Data)(nil)} {
+				invalid := capability
+				if queue == nil {
+					invalid.queue = nil
+				} else {
+					invalid.queue = queue.(*dml.Data)
+				}
+				if err = ValidateBoundDML(ctx, invalid, binding); err == nil {
+					t.Fatal("missing native queue accepted")
+				}
+			}
+			if calls != 0 {
+				t.Fatal("association invoked application callback")
+			}
+			return nil, nil
+		})})
+	if err != nil {
+		t.Fatal(err)
+	}
+}

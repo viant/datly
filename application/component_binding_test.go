@@ -14,7 +14,7 @@ import (
 	"github.com/viant/mcp-protocol/schema"
 )
 
-func TestExpectedComponentBindingPinnedGenerationAndUnavailableHistoricalArtifact(t *testing.T) {
+func TestOrdinaryComponentReloadRejectsLegacyPins(t *testing.T) {
 	ctx := context.Background()
 	f := &reloadFixture{}
 	f.init(t)
@@ -50,45 +50,48 @@ func TestExpectedComponentBindingPinnedGenerationAndUnavailableHistoricalArtifac
 	}
 	publish(1, "released-artifact-one", strings.Repeat("a", 64))
 	native := (mcpclient.Config{Source: manager, ProtocolVersion: "2026-07-28"}).New(t)
-	observe := func() exec.ComponentBinding {
+	observe := func() {
 		t.Helper()
 		listing, err := native.ListTools(ctx, nil)
 		if err != nil || len(listing.Tools) != 1 {
 			t.Fatalf("list %+v %v", listing, err)
 		}
-		raw, err := json.Marshal(listing.Tools[0].Meta[tool.ComponentBindingMetaKey])
+		if _, exists := listing.Tools[0].Meta[tool.ComponentBindingMetaKey]; exists {
+			t.Fatal("ordinary component identity published on MCP wire")
+		}
+	}
+	call := func(want string) {
+		t.Helper()
+		result, err := native.CallTool(ctx, &schema.CallToolRequestParams{Name: "bound.records"})
 		if err != nil {
 			t.Fatal(err)
 		}
-		var pin exec.ComponentBinding
-		if err := json.Unmarshal(raw, &pin); err != nil {
-			t.Fatal(err)
+		if result.IsError != nil && *result.IsError {
+			t.Fatalf("tool execution failed: %+v", result)
 		}
-		return pin
+		body, err := json.Marshal(result.StructuredContent)
+		if err != nil || string(body) != want {
+			t.Fatalf("active generation body=%s want=%s error=%v", body, want, err)
+		}
 	}
-	call := func(pin exec.ComponentBinding) error {
+	reject := func(pin exec.ComponentBinding) {
+		t.Helper()
 		_, err := native.CallTool(ctx, &schema.CallToolRequestParams{Name: "bound.records", Meta: schema.RequestMetaObject{AdditionalProperties: map[string]interface{}{tool.ComponentBindingMetaKey: pin}}})
-		return err
+		if err == nil || !strings.Contains(err.Error(), "resource") {
+			t.Fatalf("legacy pinned intent not rejected clearly: %v", err)
+		}
 	}
-	one := observe()
-	if err := call(one); err != nil {
-		t.Fatal(err)
-	}
+	observe()
+	call(`{"rows":[{"value":7}]}`)
+	one := exec.ComponentBinding{Revision: "released-artifact-one", ContentFingerprint: strings.Repeat("a", 64)}
+	reject(one)
 	publish(2, "released-artifact-two", strings.Repeat("b", 64))
-	// Same tool name after reload must never execute new bytes using an old pin.
-	if err := call(one); err == nil {
-		t.Fatal("historical pin fell back to current generation")
-	}
-	two := observe()
-	if one == two {
-		t.Fatal("source changed without a new binding")
-	}
-	if err := call(two); err != nil {
-		t.Fatal(err)
-	}
+	observe()
+	reject(one)
+	two := exec.ComponentBinding{Revision: "released-artifact-two", ContentFingerprint: strings.Repeat("b", 64)}
+	reject(two)
 	unknown := two
 	unknown.Revision = "unavailable-artifact"
-	if err := call(unknown); err == nil {
-		t.Fatal("unavailable artifact fell back to active source")
-	}
+	reject(unknown)
+	call(`{"rows":[{"value":"new"}]}`)
 }

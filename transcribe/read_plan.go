@@ -40,7 +40,7 @@ func (c *readPlanCompiler) compile(component *spec.Component, prepared *dql.Prep
 	statementShape := len(prepared.Statements) == 2 && len(reads) == 1
 	if statementShape {
 		for _, item := range prepared.Statements {
-			if item.Kind != statement.KindRead && (item.Kind != statement.KindService || !strings.EqualFold(item.Operation, "ExecuteWithResult")) {
+			if item.Kind != statement.KindRead && (item.Kind != statement.KindService || (!strings.EqualFold(item.Operation, "ExecuteWithResult") && !strings.EqualFold(item.Operation, "Merge"))) {
 				statementShape = false
 			}
 		}

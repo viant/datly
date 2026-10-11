@@ -298,6 +298,7 @@ func (m *Manager) Reload(ctx context.Context, request Request) error {
 		if err != nil {
 			return err
 		}
+		snapshot = snapshot.WithProvenance(entry.Documentation)
 		entry.Documentation = snapshot
 		entry.Input = entry.Input.WithDocumentation(snapshot)
 	}
@@ -385,6 +386,7 @@ func (m *Manager) Reload(ctx context.Context, request Request) error {
 				}
 				if loadErr == nil {
 					snapshot, loadErr = snapshot.ForComponent(entry.Component, entry.OutputType)
+					snapshot = snapshot.WithProvenance(entry.Documentation)
 				}
 				if loadErr != nil {
 					return nil, loadErr

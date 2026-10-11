@@ -2,6 +2,7 @@ package template
 
 import (
 	"fmt"
+	"github.com/viant/datly/constant/identifier"
 	"sort"
 
 	sqltext "github.com/viant/sqlparser/source"
@@ -26,7 +27,7 @@ func bindEmittedInputVariables(source string, root *stmt.Block, spans map[ast.No
 		byName[binding.name] = binding
 	}
 	locals := map[string]bool{}
-	collectLocalVariables(root.Statements(), locals)
+	identifier.CollectLocalVariables(root.Statements(), locals)
 	var replacements []sourceReplacement
 	if err := collectInputReplacements(source, root.Statements(), spans, byName, locals, &replacements); err != nil {
 		return "", err
@@ -96,42 +97,6 @@ func collectInputReplacements(source string, statements []ast.Statement, spans m
 		}
 	}
 	return nil
-}
-
-func collectLocalVariables(statements []ast.Statement, result map[string]bool) {
-	for _, statement := range statements {
-		switch actual := statement.(type) {
-		case *stmt.Statement:
-			collectAssignedVariable(actual, result)
-		case *stmt.If:
-			collectLocalVariables(actual.Body.Statements(), result)
-			for branch := actual.Else; branch != nil; branch = branch.Else {
-				collectLocalVariables(branch.Body.Statements(), result)
-			}
-		case *stmt.ForEach:
-			if actual.Item != nil {
-				result[actual.Item.ID] = true
-			}
-			if actual.Index != nil {
-				result[actual.Index.ID] = true
-			}
-			collectLocalVariables(actual.Statements(), result)
-		case *stmt.ForLoop:
-			if assignment, ok := actual.Init.(*stmt.Statement); ok {
-				collectAssignedVariable(assignment, result)
-			}
-			collectLocalVariables(actual.Statements(), result)
-		}
-	}
-}
-
-func collectAssignedVariable(assignment *stmt.Statement, result map[string]bool) {
-	if assignment == nil {
-		return
-	}
-	if target, ok := assignment.X.(*expr.Select); ok && target.ID != "" {
-		result[target.ID] = true
-	}
 }
 
 func hasControlFlow(root *stmt.Block) bool {

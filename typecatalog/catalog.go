@@ -289,6 +289,25 @@ func (c *Catalog) Resolve(authority Authority, key string) (*x.Type, bool, error
 	return detached, ok, err
 }
 
+// Origin reports the ownership selected by the same authority as Resolve.
+// Generation uses it to retain generated declarations across regeneration,
+// rather than treating their discovered source as an authored linked contract.
+func (c *Catalog) Origin(authority Authority, key string) (TypeOrigin, bool, error) {
+	if c == nil {
+		return "", false, fmt.Errorf("type catalog is required")
+	}
+	if err := validateAuthority(authority); err != nil {
+		return "", false, err
+	}
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	selected, ok := selectRegistration(authority, c.items[strings.TrimSpace(key)])
+	if !ok {
+		return "", false, nil
+	}
+	return selected.Origin, true, nil
+}
+
 // ResolveRuntimeType returns only the immutable Go identity of the selected
 // descriptor. A found synthetic-only declaration returns nil, true; it must not
 // fall through to a lower-priority origin's compiled type.
@@ -309,11 +328,11 @@ func (c *Catalog) ResolveRuntimeType(authority Authority, key string) (reflect.T
 }
 
 func resolveRegistrations(authority Authority, registrations []registration) (*x.Type, bool) {
-	selected, ok := resolveRegistration(authority, registrations)
+	selected, ok := selectRegistration(authority, registrations)
 	return selected.Type, ok
 }
 
-func resolveRegistration(authority Authority, registrations []registration) (registration, bool) {
+func selectRegistration(authority Authority, registrations []registration) (registration, bool) {
 	if len(registrations) == 0 {
 		return registration{}, false
 	}
@@ -372,7 +391,7 @@ func (c *Catalog) resolverTypes(authority Authority) (map[string]*x.Type, map[st
 	result := make(map[string]*x.Type, len(c.items))
 	origins := make(map[string]TypeOrigin, len(c.items))
 	for key, registrations := range c.items {
-		if selected, ok := resolveRegistration(authority, registrations); ok {
+		if selected, ok := selectRegistration(authority, registrations); ok {
 			result[key] = selected.Type
 			origins[key] = selected.Origin
 		}

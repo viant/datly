@@ -88,3 +88,43 @@ func TestBoundGuardRejectsRetiredAndBrokenViewLinks(t *testing.T) {
 		})
 	}
 }
+
+func TestConstructorRegisteredGuardViewKeepsExactMembership(t *testing.T) {
+	d := NewData(testharness.NewSQLiteHarness(t).DB)
+	if err := d.BeginInvocation(); err != nil {
+		t.Fatal(err)
+	}
+	binding := drainowner.NewGuardBinding()
+	calls := 0
+	if err := d.RegisterBoundExecutionGuard(func(context.Context) error { calls++; return nil }, binding); err != nil {
+		t.Fatal(err)
+	}
+	child := d.ComponentData(ComponentBinding, "child").(*Data)
+	for _, view := range []*Data{d, child} {
+		if err := drainowner.ValidateBoundView(view, view, view, binding); err != nil {
+			t.Fatal(err)
+		}
+	}
+	foreign := NewData(d.db)
+	copied := *child
+	forwarded := &struct{ *Data }{child}
+	for _, invalid := range []struct{ receiver, expected, queue any }{
+		{child, d, child}, {child, child, d}, {child, child, foreign},
+		{foreign, foreign, foreign}, {&copied, &copied, &copied}, {forwarded, forwarded, forwarded},
+	} {
+		if err := drainowner.ValidateBoundView(invalid.receiver, invalid.expected, invalid.queue, binding); err == nil {
+			t.Fatal("foreign, copied or mixed native view accepted")
+		}
+	}
+	copiedBinding := *binding
+	if err := drainowner.ValidateBoundView(child, child, child, &copiedBinding); err == nil {
+		t.Fatal("copied binding accepted")
+	}
+	child.open = false
+	if err := drainowner.ValidateBoundView(child, child, child, binding); err == nil {
+		t.Fatal("closed child accepted")
+	}
+	if calls != 0 || len(d.queue) != 0 || d.tx != nil {
+		t.Fatal("membership validation invoked application callbacks or SQL effects")
+	}
+}

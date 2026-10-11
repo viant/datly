@@ -6,7 +6,6 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/viant/datly/transcribe/dql/statement"
 	plan "github.com/viant/datly/transcribe/handler/ast"
 	"github.com/viant/sqlparser"
 	sqlsource "github.com/viant/sqlparser/source"
@@ -15,7 +14,7 @@ import (
 	veltyparser "github.com/viant/velty/parser"
 )
 
-// CompileStatement resolves a bounded result-bearing service call using the
+// CompileStatement resolves a bounded buffered service call using the
 // existing Velty AST and SQL statement boundaries. Authority contains final
 // canonical Go fields, never names inferred from the authored expression.
 func (c *Compiler) CompileStatement(source string, authority map[string]plan.StatementSelector) (*plan.StatementPlan, error) {
@@ -35,15 +34,22 @@ func (c *Compiler) CompileStatement(source string, authority map[string]plan.Sta
 		service = selector
 	}
 	if service == nil || service.ID != "dml" {
-		return nil, fmt.Errorf("statement program requires dml.ExecuteWithResult")
+		return nil, fmt.Errorf("statement program requires dml.Execute, dml.ExecuteWithResult or dml.Merge")
 	}
 	method, ok := service.X.(*expr.Select)
-	if !ok || method.ID != "ExecuteWithResult" {
-		return nil, fmt.Errorf("statement program requires dml.ExecuteWithResult")
+	if !ok || (method.ID != "ExecuteWithResult" && method.ID != "Execute" && method.ID != "Merge") {
+		return nil, fmt.Errorf("statement program requires dml.Execute, dml.ExecuteWithResult or dml.Merge")
+	}
+	if method.ID == "Merge" {
+		return compileMergeStatement(method, authority)
+	}
+	argumentOffset := 1
+	if method.ID == "ExecuteWithResult" {
+		argumentOffset = 2
 	}
 	call, ok := method.X.(*expr.Call)
-	if !ok || call.X != nil || len(call.Args) < 2 {
-		return nil, fmt.Errorf("ExecuteWithResult requires static SQL, result destination and ordered argument selectors")
+	if !ok || call.X != nil || len(call.Args) < argumentOffset {
+		return nil, fmt.Errorf("%s requires static SQL and its destination/argument selectors", method.ID)
 	}
 	literal, ok := call.Args[0].(*expr.Literal)
 	if !ok || literal.RType != reflect.TypeFor[string]() {
@@ -53,21 +59,34 @@ func (c *Compiler) CompileStatement(source string, authority map[string]plan.Sta
 	if err := sqlsource.ValidateStructure(sqlText); err != nil {
 		return nil, fmt.Errorf("statement SQL: %w", err)
 	}
-	spans := statement.Parse(sqlText)
-	if len(spans) != 1 || spans[0].Kind != statement.KindExec {
+	kind := sqlparser.ParseKind(sqlText)
+	if staticStatementCount(sqlText) != 1 {
 		return nil, fmt.Errorf("statement SQL requires one static executable statement")
 	}
 	// LastInsertId is an insertion result. DDL, transaction control, and other
 	// statement kinds cannot acquire this capability through authoring.
-	if !strings.EqualFold(spans[0].Operation, "INSERT") {
+	if method.ID == "ExecuteWithResult" && !kind.IsInsert() {
 		return nil, fmt.Errorf("LastInsertId requires an INSERT statement")
 	}
-	parsed, err := sqlparser.ParseInsert(sqlText)
-	if err != nil {
-		return nil, fmt.Errorf("statement INSERT: %w", err)
-	}
-	if len(parsed.Columns) == 0 || len(parsed.Values) != len(parsed.Columns) {
-		return nil, fmt.Errorf("statement result requires one explicit INSERT row; batching is unsupported")
+	switch kind {
+	case sqlparser.KindInsert:
+		parsed, err := sqlparser.ParseInsert(sqlText)
+		if err != nil {
+			return nil, fmt.Errorf("statement INSERT: %w", err)
+		}
+		if method.ID == "ExecuteWithResult" && (len(parsed.Columns) == 0 || len(parsed.Values) != len(parsed.Columns)) {
+			return nil, fmt.Errorf("statement result requires one explicit INSERT row; batching is unsupported")
+		}
+	case sqlparser.KindUpdate:
+		if _, err := sqlparser.ParseUpdate(sqlText); err != nil {
+			return nil, fmt.Errorf("statement UPDATE: %w", err)
+		}
+	case sqlparser.KindDelete:
+		if _, err := sqlparser.ParseDelete(sqlText); err != nil {
+			return nil, fmt.Errorf("statement DELETE: %w", err)
+		}
+	default:
+		return nil, fmt.Errorf("buffered statement requires INSERT, UPDATE or DELETE")
 	}
 	bindings := 0
 	scanner := sqlsource.NewCodeScanner(sqlText, 0)
@@ -79,18 +98,21 @@ func (c *Compiler) CompileStatement(source string, authority map[string]plan.Sta
 			bindings++
 		}
 	}
-	if bindings != len(call.Args)-2 {
-		return nil, fmt.Errorf("statement has %d placeholders but %d arguments", bindings, len(call.Args)-2)
+	if bindings != len(call.Args)-argumentOffset {
+		return nil, fmt.Errorf("statement has %d placeholders but %d arguments", bindings, len(call.Args)-argumentOffset)
 	}
-	dest, err := resolveStatementSelector(call.Args[1], authority)
-	if err != nil {
-		return nil, fmt.Errorf("result destination: %w", err)
+	result := &plan.StatementPlan{SQL: sqlText, Method: method.ID}
+	if method.ID == "ExecuteWithResult" {
+		dest, err := resolveStatementSelector(call.Args[1], authority)
+		if err != nil {
+			return nil, fmt.Errorf("result destination: %w", err)
+		}
+		if !dest.Addressable || !signedStatementInteger(dest.Type.Name) {
+			return nil, fmt.Errorf("result destination must be an addressable signed integer field")
+		}
+		result.LastInsertID = dest
 	}
-	if !dest.Addressable || !signedStatementInteger(dest.Type.Name) {
-		return nil, fmt.Errorf("result destination must be an addressable signed integer field")
-	}
-	result := &plan.StatementPlan{SQL: sqlText, LastInsertID: dest}
-	for i, arg := range call.Args[2:] {
+	for i, arg := range call.Args[argumentOffset:] {
 		field, err := resolveStatementSelector(arg, authority)
 		if err != nil {
 			return nil, fmt.Errorf("statement argument %d: %w", i+1, err)
@@ -101,6 +123,36 @@ func (c *Compiler) CompileStatement(source string, authority map[string]plan.Sta
 		result.Arguments = append(result.Arguments, field)
 	}
 	return result, nil
+}
+
+// staticStatementCount uses SQLParser's protected-region lexer for boundaries.
+// The final whitespace lets PreviousSignificant include a trailing quoted
+// region while excluding trailing comments. Parenthesized SQL remains one unit.
+func staticStatementCount(text string) int {
+	source := text + "\n "
+	scanner := sqlsource.NewCodeScanner(source, 0)
+	count, boundary, depth := 0, -1, 0
+	for pos, ok := scanner.Next(); ok; pos, ok = scanner.Next() {
+		switch source[pos] {
+		case '(', '{', '[':
+			depth++
+		case ')', '}', ']':
+			depth--
+		case ';':
+			if depth == 0 {
+				if previous, _ := scanner.PreviousSignificant(); previous > boundary {
+					count++
+				}
+				boundary = pos
+			}
+		}
+		if pos == len(source)-1 {
+			if previous, _ := scanner.PreviousSignificant(); previous > boundary {
+				count++
+			}
+		}
+	}
+	return count
 }
 
 func resolveStatementSelector(value any, authority map[string]plan.StatementSelector) (plan.StatementSelector, error) {

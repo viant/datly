@@ -125,7 +125,9 @@ func compileMetadata(component *spec.Component, contract *registry.RouteInputCon
 			}
 			param = &spec.Parameter{Name: name, Source: spec.BindSource{Kind: binding.Location.Kind, Name: binding.Location.In}, Description: nativeField.Tag.Get("desc")}
 		}
-		if cubeOwnedSelector(component, param) || !param.Source.RequestValue() {
+		// Verified credentials retain their ordinary transport binding; frame
+		// filters must neither mask them nor substitute body values for them.
+		if cubeOwnedSelector(component, param) || inputField.VerifiesJWT() || !param.Source.RequestValue() {
 			continue
 		}
 		internal, err := inputField.Internal()

@@ -13,6 +13,7 @@ import (
 	"github.com/viant/bindly/locator"
 	"github.com/viant/datly/bootstrap"
 	dexec "github.com/viant/datly/exec"
+	"github.com/viant/datly/internal/drainowner"
 	"github.com/viant/datly/internal/testharness/sqlite"
 	rh "github.com/viant/datly/runtime/handler"
 	"github.com/viant/datly/runtime/handler/writer"
@@ -231,20 +232,34 @@ func TestNativeStreaming49DesiredProxyToNativeLiveFailure(t *testing.T) {
 					request := activity49Request(native, 1)
 					request.Input = &streaming49Input{Rows: []*streaming49Row{{ID: 1, Label: "native-1"}}}
 					result, rootError := r.InvokeComponent(ctx, request)
-					if streamError == nil {
-						t.Fatalf("proxy streaming stage not reached: root=%v", rootError)
-					}
-					if rootError == nil || !errors.Is(rootError, streamError) {
-						t.Errorf("DESIRED_STREAMING_ROOT_GAP error=%v result=%T", rootError, result)
-					}
-					wrapped := native.Handler.(*streaming49Handler)
-					if result != wrapped.canonicalResult {
-						t.Errorf("canonical native error output identity changed root=%p delegated=%p", result, wrapped.canonicalResult)
-					}
-					if attempt != nil && !errors.Is(attempt, streamError) {
-						t.Errorf("native/proxy rejection lost original streaming cause: %v", attempt)
+					if callerOther {
+						// Opening a caller-owned second owner is inadmissible in the protected
+						// multi-owner path. No streaming or subsequent native effects may run.
+						if !errors.Is(rootError, drainowner.ErrOrderedComposition) || streamError != nil || attempt != nil || allocated.ID != 0 || len(before) != 0 || len(after) != 0 {
+							t.Fatalf("mixed caller-owner admission root=%v stream=%v attempt=%v allocated=%d before=%v after=%v", rootError, streamError, attempt, allocated.ID, before, after)
+						}
+					} else {
+						if streamError == nil {
+							t.Fatalf("proxy streaming stage not reached: root=%v", rootError)
+						}
+						if rootError == nil || !errors.Is(rootError, streamError) {
+							t.Errorf("DESIRED_STREAMING_ROOT_GAP error=%v result=%T", rootError, result)
+						}
+						wrapped := native.Handler.(*streaming49Handler)
+						if result != wrapped.canonicalResult {
+							t.Errorf("canonical native error output identity changed root=%p delegated=%p", result, wrapped.canonicalResult)
+						}
+						if attempt != nil && !errors.Is(attempt, streamError) {
+							t.Errorf("native/proxy rejection lost original streaming cause: %v", attempt)
+						}
 					}
 					for _, s := range []*streaming49Source{mainSource, otherSource} {
+						if callerOther && s == otherSource {
+							if s.Native() != nil {
+								t.Fatal("inadmissible caller-owned second DB unit opened")
+							}
+							continue
+						}
 						if s.Native() == nil {
 							t.Fatal("genuine DB unit missing")
 						}

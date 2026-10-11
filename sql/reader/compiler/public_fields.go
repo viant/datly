@@ -2,7 +2,7 @@ package compiler
 
 import (
 	"github.com/viant/datly/data"
-	"github.com/viant/datly/runtime/output"
+	"github.com/viant/datly/output"
 	"reflect"
 	"strings"
 )

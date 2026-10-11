@@ -102,7 +102,7 @@ func (p SelectorProjection) HasSourceOutput(namespace, name string) (found, comp
 			end = at
 		}
 	}
-	parsed, err := sqlparser.ParseQuery(p.SQL[start:end])
+	parsed, err := parseProjectionQuery(p.SQL[start:end])
 	if err != nil {
 		return false, false, &UnresolvedProjectionError{Cause: err}
 	}
@@ -228,7 +228,7 @@ func (p SelectorProjection) columns() ([]ProjectionColumn, bool, error) {
 	if ok {
 		parsed, err = parts.parse()
 	} else {
-		parsed, err = sqlparser.ParseQuery(p.SQL)
+		parsed, err = parseProjectionQuery(p.SQL)
 	}
 	if err != nil || parsed == nil || len(parsed.List) == 0 {
 		return nil, false, &UnresolvedProjectionError{Cause: err}
@@ -239,7 +239,7 @@ func (p SelectorProjection) columns() ([]ProjectionColumn, bool, error) {
 			return nil, false, &UnresolvedProjectionError{}
 		}
 		if projectionStar(item) != nil {
-			full, err := sqlparser.ParseQuery(strings.TrimSuffix(strings.TrimSpace(p.SQL), ";"))
+			full, err := parseProjectionQuery(strings.TrimSuffix(strings.TrimSpace(p.SQL), ";"))
 			if err != nil || full == nil {
 				return nil, false, &UnresolvedProjectionError{Cause: err}
 			}
@@ -424,7 +424,7 @@ func (p SelectorProjection) SourceOrderingSQL(target string) (string, error) {
 		return "", fmt.Errorf("source ordering requires a qualified identifier")
 	}
 	text := unwrapProjectionSQL(p.SQL)
-	stmt, err := sqlparser.ParseQuery(text)
+	stmt, err := parseProjectionQuery(text)
 	if err != nil || stmt == nil {
 		return "", fmt.Errorf("source ordering scope is unresolved")
 	}
@@ -475,7 +475,7 @@ func (p SelectorProjection) SourceOrderingSQL(target string) (string, error) {
 		}
 		text = unwrapProjectionSQL(raw.Raw)
 		removedWrapper = true
-		stmt, err = sqlparser.ParseQuery(text)
+		stmt, err = parseProjectionQuery(text)
 		if err != nil || stmt == nil || stmt.Union != nil || !owner(stmt) {
 			return "", fmt.Errorf("source ordering target %q has no immediate owner", target)
 		}

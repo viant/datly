@@ -38,7 +38,7 @@ func unwrapGroupedProjectionWrapper(sqlText string, selected []string) (string, 
 // The statement is owned by this invocation. Projection consumers can reuse
 // the inspected outer or unwrapped inner AST without reparsing its SQL.
 func parseGroupedProjectionSource(sqlText string, selected []string) (string, []string, *query.Select, error) {
-	outer, err := sqlparser.ParseQuery(sqlText)
+	outer, err := parseProjectionQuery(sqlText)
 	if err != nil {
 		return sqlText, selected, nil, err
 	}
@@ -58,7 +58,7 @@ func parseGroupedProjectionSource(sqlText string, selected []string) (string, []
 	innerSQL := unwrapProjectionSQL(raw.Raw)
 	inner, _ := raw.X.(*query.Select)
 	if inner == nil {
-		inner, err = sqlparser.ParseQuery(innerSQL)
+		inner, err = parseProjectionQuery(innerSQL)
 		if err != nil {
 			return sqlText, selected, outer, nil
 		}
@@ -179,7 +179,7 @@ func (s selectProjectionSource) parse() (*query.Select, error) {
 			result.List = append(result.List, &query.Item{Expr: &expr.Ident{Name: core}, Alias: alias})
 			continue
 		}
-		parsed, err := sqlparser.ParseQuery("SELECT " + raw + " FROM projection_source")
+		parsed, err := parseProjectionQuery("SELECT " + raw + " FROM projection_source")
 		if err != nil {
 			return nil, fmt.Errorf("source projection item %q: %w", raw, err)
 		}
@@ -207,7 +207,7 @@ func normalizeSelectProjection(sqlText string) string {
 }
 
 func normalizeParsedSelectProjection(sqlText string) string {
-	selectStmt, err := sqlparser.ParseQuery(sqlText)
+	selectStmt, err := parseProjectionQuery(sqlText)
 	if err != nil || selectStmt == nil || len(selectStmt.List) == 0 {
 		return sqlText
 	}
@@ -241,6 +241,15 @@ func normalizeParsedSelectProjection(sqlText string) string {
 func mayNormalizeProjection(sqlText string) bool {
 	if !strings.Contains(sqlText, "(") {
 		return false
+	}
+	// Normalization owns only the outer SELECT list. Reuse its existing
+	// source boundaries so calls inside a derived source do not trigger a
+	// full statement parse. Unresolved statements retain the conservative gate.
+	if source, ok := newSelectProjectionSource(sqlText); ok {
+		sqlText = sqlText[source.selectIndex+len("select") : source.fromIndex]
+		if !strings.Contains(sqlText, "(") {
+			return false
+		}
 	}
 	if strings.Contains(sqlText, "/*") || strings.Contains(sqlText, "--") || strings.ContainsAny(sqlText, "#`\"") {
 		return true

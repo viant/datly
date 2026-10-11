@@ -115,3 +115,29 @@ func TestInstanceDoesNotExpandRequestEmittedUnsafeText(t *testing.T) {
 		t.Fatalf("request text was expanded: %q", result.SQL)
 	}
 }
+
+func TestFullTableConstantIdentifierUsesTrustedValues(t *testing.T) {
+	for _, value := range []string{"records", "main.records", "`main`.`records`"} {
+		values, err := constant.New(map[string]string{"Table": value})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, source := range []string{"$Unsafe.Table", "${Unsafe.Table}", "Unsafe_Table"} {
+			actual, err := (ConstantRenderer{Values: values}).Identifier(source)
+			if err != nil || actual != value {
+				t.Fatalf("%q -> %q: %v", source, actual, err)
+			}
+		}
+	}
+	for _, value := range []string{"", "records; DELETE FROM records", "records r", "records WHERE 1=1"} {
+		values, _ := constant.New(map[string]string{"Table": value})
+		if _, err := (ConstantRenderer{Values: values}).Identifier("$Unsafe.Table"); err == nil {
+			t.Fatalf("invalid table constant admitted: %q", value)
+		}
+	}
+	values, _ := constant.New(map[string]string{"Table": "records"})
+	actual, err := (ConstantRenderer{Values: values}).Identifier("`$Unsafe.Table`")
+	if err != nil || actual != "`$Unsafe.Table`" {
+		t.Fatalf("quoted literal expanded: %q %v", actual, err)
+	}
+}

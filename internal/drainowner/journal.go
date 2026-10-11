@@ -66,9 +66,10 @@ type JournalRecord struct {
 }
 
 type NativeJournal struct {
-	Bind     func(any, *Frame) error
-	Snapshot func() []JournalRecord
-	External bool
+	ValidateGuard func(receiver, expected, queue any, binding *GuardBinding) error
+	Bind          func(any, *Frame) error
+	Snapshot      func() []JournalRecord
+	External      bool
 }
 
 func RegisterJournal(receiver any, native NativeJournal) {

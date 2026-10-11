@@ -12,7 +12,7 @@ import (
 // sources, and unresolved mappings simply supply no defaults; they never gate
 // an explicit application type. No table schemas or row values are consulted.
 func (p SelectorProjection) LiteralKinds(labels []string) map[int]string {
-	stmt, err := sqlparser.ParseQuery(p.SQL)
+	stmt, err := parseProjectionQuery(p.SQL)
 	if err != nil {
 		return nil
 	}

@@ -85,3 +85,64 @@ func TestCompileBufferedStatementProtectedSQLLiterals(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestCompileBufferedStatementExecute(t *testing.T) {
+	for _, sql := range []string{
+		"UPDATE records SET name='' WHERE owner_id=?",
+		"DELETE FROM records WHERE owner_id=?",
+		"INSERT INTO records(owner_id) VALUES (?)",
+	} {
+		result, err := (&Compiler{}).CompileStatement(`$dml.Execute("`+sql+`", $Input.OwnerID)`, statementAuthority())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if result.Method != "Execute" || result.SQL != sql || len(result.Arguments) != 1 || len(result.LastInsertID.Path) != 0 {
+			t.Fatalf("non-result queue changed: %+v", result)
+		}
+	}
+	if _, err := (&Compiler{}).CompileStatement(`$dml.Execute("UPDATE records SET name='? $literal' /* ? */")`, statementAuthority()); err != nil {
+		t.Fatal(err)
+	}
+	for _, source := range []string{
+		`$dml.Execute("UPDATE records SET name=?", $Input.Missing)`,
+		`$dml.Execute("UPDATE records SET name=?", $Input.Rows)`,
+		`$dml.Execute("UPDATE records SET name=?")`,
+		`$dml.Execute("UPDATE records SET name=''", $Input.Name)`,
+		`$dml.Execute("UPDATE records SET name='' WHERE id=1; DELETE FROM records")`,
+		`$dml.Execute("BEGIN")`,
+		`$dml.Execute("CREATE TABLE records(id INT)")`,
+		`$dml.Execute("UPDATE records SET name=$Input.Name")`,
+		`$dml.Execute($Input.Name)`,
+		`$dml.Execute("UPDATE records SET name=(")`,
+	} {
+		if _, err := (&Compiler{}).CompileStatement(source, statementAuthority()); err == nil {
+			t.Fatalf("unsupported program admitted: %s", source)
+		}
+	}
+}
+
+func TestCompileBufferedStatementNativeBoundaries(t *testing.T) {
+	for _, sql := range []string{
+		"UPDATE records SET name='; ? $literal' WHERE owner_id=?; /* DELETE FROM records; */",
+		"UPDATE records SET name='a' WHERE owner_id=?; -- DELETE FROM records;",
+		"UPDATE records SET name='a' WHERE owner_id=? -- trailing comment",
+		"UPDATE records SET name='a' WHERE owner_id=?; /* quoted ';' */ ;",
+	} {
+		result, err := (&Compiler{}).CompileStatement(`$dml.Execute("`+sql+`", $Input.OwnerID)`, statementAuthority())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if result.SQL != sql {
+			t.Fatalf("authored SQL changed: %q", result.SQL)
+		}
+	}
+	for _, sql := range []string{
+		"UPDATE records SET name='a' WHERE owner_id=?; DELETE FROM records",
+		"UPDATE records SET name='a' WHERE owner_id=?; 'quoted second statement'",
+		"UPDATE records SET name='a' WHERE owner_id=?; /* comment */ 'quoted second statement' /* trailing */",
+	} {
+		if _, err := (&Compiler{}).CompileStatement(`$dml.Execute("`+sql+`", $Input.OwnerID)`, statementAuthority()); err == nil {
+			t.Fatalf("multiple statements admitted: %q", sql)
+		}
+	}
+}

@@ -107,3 +107,26 @@ func TestGuardPurposeCloseRace(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+type spoofedGuardValidator struct{ calls int }
+
+func (s *spoofedGuardValidator) ValidateBoundExecutionGuard(*GuardBinding) error {
+	s.calls++
+	return nil
+}
+
+func TestBoundViewNeverDiscoversProviderValidationMethods(t *testing.T) {
+	owner := guardTestOwner()
+	RegisterJournal(owner, NativeJournal{})
+	binding := NewGuardBinding()
+	if err := BindExecutionGuard(owner, binding); err != nil {
+		t.Fatal(err)
+	}
+	spoofed := &spoofedGuardValidator{}
+	if err := ValidateBoundView(spoofed, spoofed, spoofed, binding); !errors.Is(err, ErrOwner) {
+		t.Fatalf("unregistered validation: %v", err)
+	}
+	if spoofed.calls != 0 {
+		t.Fatal("arbitrary provider validation method invoked")
+	}
+}

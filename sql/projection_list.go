@@ -17,7 +17,7 @@ func ParseProjectionList(projection string) (query.List, error) {
 	if list, ok := identifierProjectionList(sqltext.SplitTopLevelCSV(projection)); ok {
 		return list, nil
 	}
-	parsed, err := sqlparser.ParseQuery("SELECT " + projection + " FROM criteria_source")
+	parsed, err := parseProjectionQuery("SELECT " + projection + " FROM criteria_source")
 	if err != nil || parsed == nil {
 		return nil, err
 	}
