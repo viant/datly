@@ -1,12 +1,15 @@
 package dml
 
 import (
+	"database/sql"
 	"errors"
 	"strings"
 
 	"github.com/viant/datly/internal/drainowner"
 	rhandler "github.com/viant/datly/runtime/handler"
 	"github.com/viant/sqlx"
+	"github.com/viant/sqlx/metadata/info"
+	"github.com/viant/sqlx/moption"
 	xhandler "github.com/viant/xdatly/handler"
 )
 
@@ -17,6 +20,7 @@ const (
 	dataOpUpdate  dataOperationKind = "update"
 	dataOpDelete  dataOperationKind = "delete"
 	dataOpExecute dataOperationKind = "execute"
+	dataOpMerge   dataOperationKind = "merge"
 )
 
 type dataOperation struct {
@@ -35,7 +39,11 @@ type dataOperation struct {
 	match           *xhandler.Match
 	criteria        *sqlx.Criteria
 	executed        bool
+	executionTx     *sql.Tx
 	reserved        bool
+	mergeConfig     info.MergeConfig
+	mergeOptions    []moption.Option
+	mergeResult     *info.MergeResult
 }
 
 func (d *Data) Insert(tableName string, data any) error {

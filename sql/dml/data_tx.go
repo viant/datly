@@ -304,6 +304,7 @@ func (d *Data) executePendingLocked(ctx context.Context, matched []*dataOperatio
 		owner.mu.Lock()
 		for _, operation := range step.operations {
 			operation.executed = true
+			operation.executionTx = tx
 			operation.reserved = false
 		}
 		owner.mu.Unlock()

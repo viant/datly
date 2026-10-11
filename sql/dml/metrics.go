@@ -30,6 +30,8 @@ func (s executionStep) beginMetric(ctx context.Context) executionMetric {
 		result.operation = "UPDATE"
 	case dataOpDelete:
 		result.operation = "DELETE"
+	case dataOpMerge:
+		result.operation = "MERGE"
 	}
 	result.restart()
 	return result

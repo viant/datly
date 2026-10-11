@@ -115,7 +115,7 @@ Use it to:
 
 **Release preparation on the local `v1` branch.** This checkout uses the canonical
 `github.com/viant/datly` module and published `github.com/viant/xdatly` SDK
-`v1.0.1-0.20261005144549-60dd64a21442`, with pinned native dependencies.
+`v1.0.1-0.20261011023101-d5ce35689c9c`, with pinned native dependencies.
 No Datly 1.0 release tag or published CLI version is claimed. The Go Reference
 badge links to the public module index; it may show an earlier published version.
 [Status](doc/status.md) records integrated behavior and remaining release gates,

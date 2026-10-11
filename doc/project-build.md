@@ -25,7 +25,7 @@ For explicit initialization of a new module:
 ```sh
 datly init -dir ./app -module example.com/app \
   -local github.com/viant/datly=/absolute/path/to/datly \
-  -pin github.com/viant/xdatly@v1.0.1-0.20261005144549-60dd64a21442
+  -pin github.com/viant/xdatly@v1.0.1-0.20261011023101-d5ce35689c9c
 ```
 
 Relative `-local` paths resolve from the new project directory. Go does not

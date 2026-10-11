@@ -1148,6 +1148,25 @@ transaction is completed by its owner. Flushing into a supplied transaction does
 not transfer commit ownership. Caller-pending, failure and unknown completion
 must not be reported as confirmed commits.
 
+### Buffered SQLX merge
+
+Native DML also provides the optional `runtime/handler.MergeDML` capability.
+Resolve the invocation DML capability and assert this interface before calling
+`Merge(table, rows, config, &result, options...)`. It queues SQLX's existing
+dialect-specific merge executor with the supplied configuration and options.
+The result destination receives the original SQLX `MergeResult` when draining
+executes the operation; the invocation owner retains commit and rollback.
+A successful merge result alone does not establish a confirmed commit.
+
+SQLX fetches destination rows through the database outside the supplied
+transaction. Native DML therefore rejects an already executed, uncommitted
+journal prefix with `dml.ErrMergeUncommittedPrefix`. Use a separately owned
+component transaction when the original workflow requires an independent merge
+commit boundary. The database pool must also accommodate SQLX's destination
+fetch and any configured transient allocator alongside the owner transaction.
+Do not supply `moption.WithTransaction`; native DML supplies its own transaction.
+Merge metrics retain the target table and use operation type `MERGE`.
+
 ### Composition shares the completion owner
 
 A component invoked through the scoped component invoker participates in the

@@ -15,6 +15,7 @@ import (
 	handlerprovider "github.com/viant/datly/runtime/handler/provider"
 	"github.com/viant/sqlx"
 	"github.com/viant/sqlx/metadata/info"
+	"github.com/viant/sqlx/moption"
 	"github.com/viant/xdatly/connector"
 	xhandler "github.com/viant/xdatly/handler"
 )
@@ -176,6 +177,17 @@ func (p transactionSQLProvider) Connector(ctx context.Context, name string) (rha
 type dmlCapability struct {
 	guard   *mutationGuard
 	service xhandler.DML
+}
+
+func (c dmlCapability) Merge(table string, rows any, config info.MergeConfig, result *info.MergeResult, options ...moption.Option) error {
+	if err := c.guard.check("Merge"); err != nil {
+		return err
+	}
+	service, ok := c.service.(rhandler.MergeDML)
+	if !ok {
+		return fmt.Errorf("native SQLX merge unavailable for %s", table)
+	}
+	return service.Merge(table, rows, config, result, options...)
 }
 
 func (c dmlCapability) Dialect(ctx context.Context) (*info.Dialect, error) {

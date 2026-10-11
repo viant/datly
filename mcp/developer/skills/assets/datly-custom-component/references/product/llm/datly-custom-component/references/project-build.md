@@ -16,7 +16,7 @@ and existing module choices. New packages are found by normal traversal; runtime
 exposure is a separate policy. Never infer aliases to repair discovery errors.
 
 The main Datly module remains a local `v1` checkout. The release copy pins the
-published SDK `v1.0.1-0.20261005144549-60dd64a21442` and native dependencies.
+published SDK `v1.0.1-0.20261011023101-d5ce35689c9c` and native dependencies.
 Use a `-local` mapping for Datly and exact published `-pin` values for dependencies.
 `v0.0.0` is only a local requirement placeholder paired with a replacement, not
 a published release. Dependency replacements are not inherited by Go: supply the
