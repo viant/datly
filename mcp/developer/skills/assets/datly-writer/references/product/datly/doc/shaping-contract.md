@@ -46,12 +46,24 @@ predicates and writer Current/Previous queries use actual SQL result/source
 columns; typed matching, setters and presence use the Go fields. A field rename
 must not remove primary-key metadata, broaden row scope or change relation keys.
 
+Writer Current projections follow explicit inner SQL aliases through named-view
+wildcard wrappers. For example, a query exposing `pod_id` is read and filtered
+through `pod_id`, even when its underlying physical column is `id` and its Go
+field is `PodId`. Composite lookup helpers retain each SQL output name separately;
+two tables exposing different aliases of `id` must not collapse to one key. Alias
+resolution belongs to the compiled plan and does not inspect runtime row values.
+
 ## Public naming and types
 
 - Outer direct-column `AS` renames a generated Go field.
 - `format:"name=DisplayName"` controls public serialization naming. Global
   `case_format('lc')` then produces `displayName`; it does not change SQL columns.
 - A nonempty `json` name is an exact public-name override.
+- SQL-nullable scalars in native writer shapes and SQL-derived generated
+  handler-factory body graphs infer `omitempty`. Independent Current/read views
+  retain their own policy. Explicit JSON tags override this default; nonnullable
+  scalar zeroes and nonnil pointers holding zero remain present. Factory body
+  shaping does not enable automatic persistence.
 - Standalone outer `CAST(view.column AS GoType)` supplies Go type authority.
   A database SQL CAST inside the view keeps its SQL meaning.
 - `T`, `*T`, slices and maps retain their Go semantics. NULL differs from a
@@ -72,6 +84,26 @@ explicitly linked Go contracts. Create-once lifecycle scaffolds and those linked
 contracts remain application-owned. Changes to DQL fields can require updates to
 application code that uses them. No `.datly-gen.json`, ownership flag or replacement
 tracking sidecar is required.
+
+A qualified `output_type` links an existing application-owned contract. When
+that qualified name declares a generated destination, regeneration retains its
+generated ownership from the type catalog. Discovering its emitted Go source
+does not convert it into a linked contract or remove its generated definition.
+
+A qualified, typed output holder explicitly selects an existing Go row graph:
+
+```sql
+#import('rows', 'example.com/app/records')
+#set($_ = $Data<[]*rows.Record>(output/view))
+#set($_ = $Meta<*rows.Meta>(output/derived) /* SELECT COUNT(1) AS count FROM records */)
+```
+
+The response envelope and inputs can still be generated. The selected row types,
+their nested relations, fields, tags and methods remain Go-owned. Transcription
+retains their local SQL resource assets without requiring database discovery;
+this proves Go shape authority, not current database schema compatibility. An
+unqualified output row name continues to declare a generated shape. Select each
+existing derived row explicitly too when it shares a source file with linked rows.
 
 Validate the generated shape **and the actual compiled vendor SQL**, then execute
 it through the native reader/writer with realistic fixtures. A manually invented

@@ -9,6 +9,18 @@ import (
 	"strings"
 )
 
+// WithProvenance retains a compiled component's immutable occurrence graph when
+// its annotations are overlaid with application-wide documentation. It does not
+// copy annotations or reinterpret authored SQL.
+func (s *Snapshot) WithProvenance(compiled *Snapshot) *Snapshot {
+	if s == nil || compiled == nil || compiled.views == nil {
+		return s
+	}
+	result := *s
+	result.views = compiled.views
+	return &result
+}
+
 // ForComponent fixes view/column provenance from canonical contracts, without
 // walking Go fields or changing the structural view model.
 func (s *Snapshot) ForComponent(component *spec.Component, output reflect.Type) (*Snapshot, error) {

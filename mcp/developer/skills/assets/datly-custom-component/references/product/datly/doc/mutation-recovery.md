@@ -36,6 +36,44 @@ the generated typed reader or fresh Current data.
 
 ## Decisions
 
+### Explicit rolled-back graph retry
+
+A root with multiple queued writes can opt into a separate retry-only contract:
+
+```go
+func (*Lifecycle) RetryTransaction(ctx context.Context, input *Input, output *Output,
+    outcome handler.MutationOutcome) (bool, error)
+```
+
+This does not relax `Recover` admission or permit winner acceptance. `true`
+requests one fresh invocation only after a confirmed rollback of one locally
+owned database unit. Nested work, multiple finalizers, uncertain outcomes,
+unrelated failures, and extra completion diagnostics are excluded. Mutation
+evidence identifies the failed operation; earlier successful statements have
+also rolled back. Driver-coded contention before queued DML can carry an empty
+operation with `Contention=true`. Missing initialized hook state declines retry.
+Returning true after the retry limit fails; false retains the original failure.
+
+Native replay preserves original request presence and refreshes all reads.
+Coded contention uses a cancellable bounded backoff after rollback, never while
+holding a transaction. Root hooks must account for repeated external effects;
+commit-dependent actions still belong after confirmed completion. Leaf auxiliary
+component hooks and child hooks cannot declare this root policy.
+
+Transaction admission follows the selected handler path. The generated mutation
+adapter starts a required transaction after initial validation and before
+sequencing. The runtime writer handler requests a pre-binding transaction when
+its graph contains a writable record; a read-only leaf auxiliary graph does
+not request one. A composed child can join an existing parent unit. These paths
+must not be treated as a guarantee that every generated writer starts a
+transaction before binding. See [the mutation lifecycle](../../llm/datly-writer/references/writer-contract.md#5-required-generated-mutation-lifecycle).
+
+Scoped allocation's separate native replay policy also recognizes confirmed
+rolled-back driver contention during binding/allocation, without pretending
+that any DML executed.
+
+### Single-operation decisions
+
 - `RecoveryNone` preserves the original result/error.
 - `RecoveryAccept` returns the output corrected by the hook, suppressing an
   eligible operation error for the public result. Actual transaction evidence

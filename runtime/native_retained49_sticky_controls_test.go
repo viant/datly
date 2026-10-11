@@ -98,7 +98,7 @@ func TestNativeRetained49DesiredStickyOrdinaryInvoker(t *testing.T) {
 			parent.DataSource = dml.Source{DB: faultDB}
 			r := activity49Runtime(t, parent, ordinary, buffered, captured)
 			result, rootError := r.ExecuteRoute(context.Background(), "POST", "/sticky-parent", nil)
-			if !errors.Is(enrollment, drainowner.ErrDrainOverlap) || drainError != nil {
+			if !errors.Is(enrollment, drainowner.ErrDrainOverlap) || !errors.Is(drainError, drainowner.ErrDrainOverlap) {
 				t.Fatalf("intended ordinary callback stage enrollment=%v drain=%v", enrollment, drainError)
 			}
 			if !errors.Is(rootError, drainowner.ErrDrainOverlap) || result != nil {

@@ -165,7 +165,7 @@ retains existing defaults. The option affects native JSON output and tabular
 JSON envelopes, not shared Go types or stored JSON. It opts into the existing
 native encoder semantics, including byte arrays and tag/embedding behavior;
 custom JSON values retain their authored serializer. See
-[output encoding](../runtime/output/README.md) for schema and format behavior.
+[output encoding](../output/README.md) for schema and format behavior.
 
 ## Retain an authored output contract while generating a reader
 

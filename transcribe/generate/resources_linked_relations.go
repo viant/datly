@@ -50,7 +50,9 @@ func (r *planResolver) linkedRelationResources(resources *ResourcePlan, files ma
 				return err
 			}
 			for _, relation := range view.Relations {
-				if relation == nil || relation.View == nil {
+				// Derived relations are independent output holders, not fields
+				// on the linked row. Their own planned view owns their resources.
+				if relation == nil || relation.View == nil || relation.Kind == spec.RelationKindDerived {
 					continue
 				}
 				name := typecatalog.FieldName(relation.Holder)

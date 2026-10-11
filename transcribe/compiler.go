@@ -281,7 +281,13 @@ func (c *Compiler) Compile(ctx context.Context, source *Source) (*Result, error)
 	veltyHandler := source.VeltyHandler.Clone()
 	statementProgram := ""
 	for _, item := range prepared.Statements {
-		if item.Kind == statement.KindService && strings.EqualFold(item.Operation, "ExecuteWithResult") {
+		// Preserve existing Velty programs, including their unqualified argument
+		// names and assignments. The typed statement product uses explicit
+		// canonical Input/Output arguments and is one standalone service call.
+		if strings.EqualFold(item.Operation, "Execute") && (len(prepared.Statements) != 1 || !canonicalBufferedExecute(prepared.SQL[item.Start:item.End])) {
+			continue
+		}
+		if item.Kind == statement.KindService && (strings.EqualFold(item.Operation, "ExecuteWithResult") || strings.EqualFold(item.Operation, "Execute")) {
 			shapeOnly := len(prepared.Statements) == 2
 			if shapeOnly {
 				for _, other := range prepared.Statements {

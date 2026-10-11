@@ -103,6 +103,15 @@ func linkDeclaredOutputContract(result *Result, authored *spec.Component) error 
 	if descriptor.Name == "" || descriptor.PkgPath == "" {
 		return fmt.Errorf("output contract %q requires existing named Go type authority", expression)
 	}
+	if result.Source != nil && result.Source.Types != nil {
+		origin, _, err := result.Source.Types.Origin(typecatalog.PackageAuthority, descriptor.Key())
+		if err != nil {
+			return err
+		}
+		if origin == typecatalog.TypeOriginGenerated {
+			return nil
+		}
+	}
 	shape := xshape.New(descriptor, result.TypeResolver.Descriptor)
 	fields, err := shape.Fields()
 	if err != nil {

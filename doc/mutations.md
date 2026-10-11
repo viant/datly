@@ -54,7 +54,26 @@ orchestration; it is not required for this generated-writer workflow.
 
 ## Describe the writable graph
 
-### Queue one statement and retain its inserted identity
+### Queue one statement, optionally retaining its inserted identity
+
+For a single static INSERT, UPDATE or DELETE that does not return an identity,
+use the existing buffered `Execute` call. Its arguments are typed scalar
+Input/Output fields in SQL placeholder order:
+
+```sql
+#package('pkg/constraints')
+#setting($_ = $route('/constraints/{type}', 'PATCH'))
+#define($_ = $ConstraintType<int>(path/type))
+#define($_ = $Identity<int64>(output/body))
+
+$dml.Execute("UPDATE constraints SET audience_ids = '' WHERE type = ?", $Input.ConstraintType)
+```
+
+Run `datly transcribe patch` with the normal source and destination options.
+This queues the authored bulk statement rather than reading identities and
+rewriting it as individual row updates. The normal root completion owns its
+transaction and reports execution failures; a child does not commit or flush.
+`Execute` does not populate `Identity` or expose a rows-affected result.
 
 For a route whose write is one static INSERT, operation-based transcription can
 generate a typed buffered statement handler. Declare scalar inputs and a signed
@@ -85,9 +104,11 @@ independently of `RowsAffected`. Application input initialization and validation
 and output finalization use the normal contract lifecycle. An injected child
 does not flush the caller's buffer.
 
-This bounded form accepts one static INSERT with one explicit VALUES row,
+`ExecuteWithResult` accepts one static INSERT with one explicit VALUES row,
 scalar Input/Output field arguments, and an addressable signed integer identity
-destination. It rejects dynamic SQL, multiple writes, record sequencing,
+destination. `Execute` accepts one static INSERT, UPDATE or DELETE with scalar
+field arguments and no result destination. Both reject dynamic SQL, multiple
+writes, transaction control, DDL, record sequencing,
 reconciliation, identity/action policies, entity hooks and mutation tokens.
 It does not allocate IDs, classify inserts versus updates, retry statements,
 or query an identity afterward. Other writable graphs continue to use their

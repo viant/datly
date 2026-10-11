@@ -137,6 +137,9 @@ func TestCatalogPackageAuthorityPrefersGeneratedTypeOverDQLMetadata(t *testing.T
 	if err != nil || !ok || actual.Type != generatedType.Type {
 		t.Fatalf("package authority resolved %#v, %v; want generated type", actual, err)
 	}
+	if origin, ok, err := catalog.Origin(PackageAuthority, generatedType.Key()); err != nil || !ok || origin != TypeOriginGenerated {
+		t.Fatalf("package authority origin = %s,%v,%v; want generated", origin, ok, err)
+	}
 }
 
 func TestCatalogRegistryIsDeterministicSnapshot(t *testing.T) {
@@ -368,5 +371,30 @@ func TestCatalogRejectsSyntheticMethodAndTypeParameterConflicts(t *testing.T) {
 		if err := catalog.Register(TypeOriginGenerated, conflicting); err == nil {
 			t.Fatal("expected synthetic definition conflict")
 		}
+	}
+}
+
+func TestCatalogOriginUsesResolutionAuthority(t *testing.T) {
+	catalog := NewCatalog()
+	const key = "example.com/contracts.Output"
+	options := []x.Option{x.WithName("Output"), x.WithPkgPath("example.com/contracts")}
+	for _, entry := range []struct {
+		origin TypeOrigin
+		typeOf reflect.Type
+	}{{TypeOriginDQL, reflect.TypeFor[dqlSample]()}, {TypeOriginGenerated, reflect.TypeFor[generatedSample]()}, {TypeOriginPackage, reflect.TypeFor[packageSample]()}} {
+		if err := catalog.Register(entry.origin, x.NewType(entry.typeOf, options...)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for authority, want := range map[Authority]TypeOrigin{PackageAuthority: TypeOriginPackage, TranscribeAuthority: TypeOriginDQL} {
+		if got, found, err := catalog.Origin(authority, key); err != nil || !found || got != want {
+			t.Fatalf("Origin(%s) = %s,%v,%v; want %s", authority, got, found, err, want)
+		}
+	}
+	if got, found, err := catalog.Origin(PackageAuthority, "missing.Type"); err != nil || found || got != "" {
+		t.Fatalf("missing origin: %s,%v,%v", got, found, err)
+	}
+	if _, _, err := catalog.Origin("invalid", key); err == nil {
+		t.Fatal("invalid authority accepted")
 	}
 }

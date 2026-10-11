@@ -715,7 +715,7 @@ func mergeColumnsWithSources(base, discovered []*spec.Column, identities resultS
 }
 
 func validateColumns(origin string, columns []*spec.Column) error {
-	seenNames := map[string]string{}
+	seenNames := map[string][]*spec.Column{}
 	seenFields := map[string]string{}
 	for _, column := range columns {
 		if column == nil {
@@ -726,11 +726,21 @@ func validateColumns(origin string, columns []*spec.Column) error {
 			return fmt.Errorf("%s column name is required", origin)
 		}
 		key := strings.ToLower(name)
-		if previous := seenNames[key]; previous != "" {
-			return fmt.Errorf("%s columns %q and %q are ambiguous", origin, previous, name)
+		for _, previous := range seenNames[key] {
+			// Linked row names are exact Go identifiers. Distinct original fields
+			// may differ only in case when their SQL result mappings are distinct.
+			// Authored SQL aliases retain case-insensitive uniqueness.
+			if !column.NameInferred || !previous.NameInferred || previous.Name == name ||
+				normalizedName(column.Source) == "" || normalizedName(previous.Source) == "" ||
+				normalizedName(column.Source) == normalizedName(previous.Source) {
+				return fmt.Errorf("%s columns %q and %q are ambiguous", origin, previous.Name, name)
+			}
 		}
-		seenNames[key] = name
+		seenNames[key] = append(seenNames[key], column)
 		fieldName := typecatalog.FieldName(name)
+		if column.NameInferred {
+			fieldName = typecatalog.ExportedFieldName(name)
+		}
 		if fieldName == "" {
 			return fmt.Errorf("%s column %q has no canonical Go field name", origin, name)
 		}

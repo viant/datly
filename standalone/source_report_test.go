@@ -210,3 +210,29 @@ func assertStandaloneReport(t *testing.T, body []byte, kind string, eu float64) 
 		require.Equal(t, float64(0), result.Data[1].Store)
 	}
 }
+
+func TestStandaloneComposeVerifierCannotBecomeFrameFilter(t *testing.T) {
+	s, _, token := newStandaloneReport(t)
+	for _, tc := range []struct {
+		name, header, frame string
+		status              int
+	}{
+		{"valid transport with invalid frame token", token, "Bearer invalid", 200},
+		{"invalid transport with valid frame token", "Bearer invalid", token, 401},
+		{"missing transport with valid frame token", "", token, 401},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			body := strings.ReplaceAll(spendCompose, `"tenant":"acme",`, `"tenant":"acme","jwt":"`+tc.frame+`",`)
+			request := httptest.NewRequest("POST", "/secure/cube/compose", strings.NewReader(body))
+			request.Header.Set("Content-Type", "application/json")
+			request.Header.Set("X-Report-Key", "report-secret")
+			request.Header.Set("Authorization", tc.header)
+			response := httptest.NewRecorder()
+			s.ServeHTTP(response, request)
+			require.Equal(t, tc.status, response.Code, response.Body.String())
+			if response.Code == 200 {
+				assertStandaloneReport(t, response.Body.Bytes(), "compose", 150)
+			}
+		})
+	}
+}

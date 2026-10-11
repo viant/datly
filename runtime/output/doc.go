@@ -1,3 +1,2 @@
-// Package output compiles component output encoding independently of transport
-// and delegates wire formats to their native codec owners.
+// Package output preserves the runtime output API over the shared output owner.
 package output

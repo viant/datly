@@ -85,6 +85,11 @@ contracts remain application-owned. Changes to DQL fields can require updates to
 application code that uses them. No `.datly-gen.json`, ownership flag or replacement
 tracking sidecar is required.
 
+A qualified `output_type` links an existing application-owned contract. When
+that qualified name declares a generated destination, regeneration retains its
+generated ownership from the type catalog. Discovering its emitted Go source
+does not convert it into a linked contract or remove its generated definition.
+
 A qualified, typed output holder explicitly selects an existing Go row graph:
 
 ```sql

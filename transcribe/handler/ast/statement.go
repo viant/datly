@@ -13,6 +13,8 @@ type StatementSelector struct {
 // StatementPlan preserves one authored SQL statement and its ordered bindings.
 // It has no record classification, allocator, batching, or retry policy.
 type StatementPlan struct {
+	// Method is Execute or ExecuteWithResult. Empty retains the original result call.
+	Method       string
 	SQL          string
 	Arguments    []StatementSelector
 	LastInsertID StatementSelector

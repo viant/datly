@@ -7,7 +7,6 @@ import (
 
 	"github.com/viant/datly/bootstrap"
 	"github.com/viant/datly/report"
-	inputcompiler "github.com/viant/datly/runtime/handler/compiler"
 	"github.com/viant/datly/spec"
 	"github.com/viant/datly/typecatalog"
 	"github.com/viant/x"
@@ -65,7 +64,7 @@ func (r *planResolver) resolveCubes() error {
 	if err != nil {
 		return err
 	}
-	described, err := inputcompiler.New(inputcompiler.Input{Component: component, InputType: input, TypeLookup: materializer.identifierType}).Describe()
+	described, err := bootstrap.DescribeInputContract(component, input, materializer.identifierType)
 	if err != nil {
 		return fmt.Errorf("describe cube source input: %w", err)
 	}
@@ -82,7 +81,7 @@ func (r *planResolver) resolveCubes() error {
 	// Cube composition remains a runtime-derived capability over this exact
 	// source. Only the ordinary cube facade is emitted as linked Go here.
 	component.Settings.Report.Compose = nil
-	project, err := report.NewProjectCompiler(report.ProjectConfig{Types: types}).Compile([]report.Source{{Component: component, Input: described.Input, OutputType: output}})
+	project, err := report.NewProjectCompiler(report.ProjectConfig{Types: types}).Compile([]report.Source{{Component: component, Input: described, OutputType: output}})
 	if err != nil {
 		return err
 	}

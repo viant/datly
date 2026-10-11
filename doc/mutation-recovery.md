@@ -66,7 +66,7 @@ sequencing. The runtime writer handler requests a pre-binding transaction when
 its graph contains a writable record; a read-only leaf auxiliary graph does
 not request one. A composed child can join an existing parent unit. These paths
 must not be treated as a guarantee that every generated writer starts a
-transaction before binding. See [the mutation lifecycle](mutations.md#understand-the-complete-lifecycle).
+transaction before binding. See [the mutation lifecycle](../llm/datly-writer/references/writer-contract.md#5-required-generated-mutation-lifecycle).
 
 Scoped allocation's separate native replay policy also recognizes confirmed
 rolled-back driver contention during binding/allocation, without pretending

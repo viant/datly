@@ -150,7 +150,7 @@ func (s wildcardSource) queryAtDepth(ctes query.WithSelects, depth int) (*query.
 	// The parser can retain an empty Select for a parenthesized SELECT. That
 	// partial AST is not authoritative when the raw source has a closed list.
 	if (nested == nil || len(nested.List) == 0) && raw != "" {
-		nested, _ = sqlparser.ParseQuery(raw)
+		nested, _ = parseProjectionQuery(raw)
 	}
 	return nested, raw
 }

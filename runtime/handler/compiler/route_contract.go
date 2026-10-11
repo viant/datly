@@ -42,6 +42,25 @@ func (c routeContractCompiler) compile(projection *bindly.Projection) (*registry
 		if bindingErr != nil {
 			return nil, bindingErr
 		}
+		// A transport name may be shared across source kinds or inactive routes,
+		// but one effective source cannot identify two input destinations.
+		transport := make(map[string]string)
+		for _, binding := range routeBindings {
+			kind, name := binding.Location.Kind, binding.Location.In
+			switch kind {
+			case "query", "header", "cookie", "path", "form":
+			default:
+				continue
+			}
+			if kind == "header" {
+				name = strings.ToLower(name)
+			}
+			key := kind + "\x00" + name
+			if previous, exists := transport[key]; exists && previous != binding.Path {
+				return nil, fmt.Errorf("route %s input alias %q targets both %s and %s", ref.String(), name, previous, binding.Path)
+			}
+			transport[key] = binding.Path
+		}
 		plan := c.canonicalPlan
 		if hasActivation || plan == nil {
 			var planErr error

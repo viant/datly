@@ -43,7 +43,8 @@ func (p SelectorProjection) Prepare(selected []string) (result *Projection, fail
 	if len(selected) > 0 {
 		return p.prepare(selected)
 	}
-	if _, _, err := (SelectorProjection{SQL: sqlText, View: view}).columns(); err != nil {
+	outputs, _, err := (SelectorProjection{SQL: sqlText, View: view}).columns()
+	if err != nil {
 		var unprepared *databaseProjectionSchema
 		if errors.As(err, &unprepared) {
 			// A default opaque wildcard needs no projection rewrite. Its first
@@ -56,7 +57,7 @@ func (p SelectorProjection) Prepare(selected []string) (result *Projection, fail
 			return nil, err
 		}
 	}
-	if projected, handled, err := prepareStarProjection(sqlText, selected, view, p.Dialect); handled || err != nil {
+	if projected, handled, err := prepareStarProjectionWithOutputs(sqlText, selected, view, p.Dialect, outputs); handled || err != nil {
 		return projected, err
 	}
 	source, err := applyNullProjection(sqlText, view)
@@ -124,7 +125,7 @@ func applyFilteredSelectorProjectionInspected(sqlText string, selected []string,
 	if !ok {
 		return "", fmt.Errorf("source projection is unresolved")
 	}
-	selectStmt, err := sqlparser.ParseQuery(sqlText)
+	selectStmt, err := parseProjectionQuery(sqlText)
 	if err == nil && selectStmt != nil && len(selectStmt.List) == len(source.parts) && inspected != nil {
 		*inspected = selectStmt
 	}
