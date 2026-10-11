@@ -434,6 +434,22 @@ func refineComponentColumns(ctx context.Context, component *spec.Component, sour
 			}
 			columnCompilation.DeclareColumns(component.RootView, declared)
 		}
+		if source.PackageComponent != nil && strings.TrimSpace(source.Text) == "" && source.LinkedInputType != nil {
+			linkedInputs, err := newPackageViewResolver(component, nil).inputDescriptors(source.LinkedInputType)
+			if err != nil {
+				return err
+			}
+			for _, linked := range linkedInputs {
+				if err := bootstrap.CompileLinkedViewColumns(linked.view, linked.descriptor.Type); err != nil {
+					return err
+				}
+				declared, err := bootstrap.DiscoveryLinkedViewColumns(linked.view, linked.descriptor.Type)
+				if err != nil {
+					return err
+				}
+				columnCompilation.DeclareColumns(linked.view, declared)
+			}
+		}
 		templateInput, compileErr := (&discoveryInputCompiler{
 			component: component, declarations: declarations,
 			viewBindings: viewBindings, resolver: typeResolver, source: source, factoryShape: factoryShape, views: linkedViews,

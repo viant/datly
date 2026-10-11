@@ -70,6 +70,23 @@ func compileOutputColumns(component *spec.Component, outputType reflect.Type, di
 	return nil
 }
 
+// CompileLinkedViewColumns projects a linked row contract without extending an
+// already supplied canonical projection.
+func CompileLinkedViewColumns(view *spec.View, rowType reflect.Type) error {
+	return (&outputColumnCompiler{output: xshape.Linked(rowType)}).compile(view, "")
+}
+
+// DiscoveryLinkedViewColumns includes SQL-mapped hidden fields only as private
+// discovery authority; they do not extend the view's public projection.
+func DiscoveryLinkedViewColumns(view *spec.View, rowType reflect.Type) ([]*spec.Column, error) {
+	copy := view.Clone()
+	copy.Columns = nil
+	if err := (&outputColumnCompiler{output: xshape.Linked(rowType), discovery: true}).compile(copy, ""); err != nil {
+		return nil, err
+	}
+	return copy.Columns, nil
+}
+
 // compile follows original Datly repository/shape/load's schema
 // inference boundary. A supplied list (including an explicit empty projection)
 // remains authoritative; output-only fields must not extend that projection.
