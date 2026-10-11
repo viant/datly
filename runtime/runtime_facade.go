@@ -38,6 +38,7 @@ type Runtime struct {
 	relatedMetadata       sync.Map
 	outputCapabilityPlans sync.Map
 	canonicalConstants    map[string]locator.Provider
+	lazyConstants         sync.Map
 	invoker               *handlerengine.Engine
 	injector              *bindly.Injector
 	// clientProviders are applied to every component that does not register
