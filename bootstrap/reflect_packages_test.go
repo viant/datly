@@ -4,6 +4,7 @@ import (
 	"reflect"
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/viant/datly/typecatalog"
 	"github.com/viant/xdatly"
@@ -172,4 +173,31 @@ func TestReflectRecursiveSelectionIncludesLinkedRootComponent(t *testing.T) {
 		}
 	}
 	t.Fatal("recursive selection omitted the component linked into the root package")
+}
+
+// The package containing the holder differs from both imported contracts.
+type ReflectedImportedContracts struct {
+	Read xdatly.Component[reflect.StructField, time.Time] `component:"ImportedContracts,path=/imported-contracts,method=GET"`
+}
+
+var reflectedImportedContractsAnchor = reflect.TypeFor[ReflectedImportedContracts]()
+
+func TestReflectedImportedContractPackageIdentity(t *testing.T) {
+	packages, err := ReflectPackages([]string{reflect.TypeFor[ReflectedImportedContracts]().PkgPath()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, route := range packages.Components {
+		if route.HolderType != "ReflectedImportedContracts" {
+			continue
+		}
+		if err := route.ValidateContractTypes(reflect.TypeFor[reflect.StructField](), reflect.TypeFor[time.Time]()); err != nil {
+			t.Fatal(err)
+		}
+		if err := route.ValidateContractTypes(reflect.TypeFor[ReflectedPackageInput](), reflect.TypeFor[time.Time]()); err == nil {
+			t.Fatal("different named input accepted")
+		}
+		return
+	}
+	t.Fatal("imported contract holder was not discovered")
 }

@@ -10,9 +10,11 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/viant/datly/spec"
 	"github.com/viant/datly/tag"
 	"github.com/viant/datly/typecatalog"
 	"github.com/viant/x"
+	xshape "github.com/viant/x/shape"
 	"github.com/viant/xunsafe"
 )
 
@@ -136,9 +138,21 @@ func reflectPackage(packagePath string) (result reflectedPackageResult) {
 				result.err = fmt.Errorf("reflect component-tagged field %s.%s (%s) is not xdatly.Component[I,O]", typeOf, field.Name, field.Type)
 				return result
 			}
+			contracts := &packageComponentResolver{component: &spec.Component{TypeContext: &spec.TypeContext{}}}
+			inputExpression, err := contracts.fieldTypeExpression(xshape.Field{ReflectedType: inputField.Type})
+			if err != nil {
+				result.err = err
+				return result
+			}
+			outputExpression, err := contracts.fieldTypeExpression(xshape.Field{ReflectedType: outputField.Type})
+			if err != nil {
+				result.err = err
+				return result
+			}
 			source := &RouteSource{
 				HolderType: typeOf.Name(), FieldName: field.Name, PackagePath: packagePath,
-				Tag: componentTag, InputType: inputField.Type.String(), OutputType: outputField.Type.String(),
+				Tag: componentTag, InputType: inputExpression, OutputType: outputExpression,
+				Imports:         contracts.component.TypeContext.Imports,
 				LinkedInputType: inputField.Type, LinkedOutputType: outputField.Type,
 			}
 			collectContractTypes(result.contracts, inputField.Type)

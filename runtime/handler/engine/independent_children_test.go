@@ -34,12 +34,16 @@ func (independentSource) Open(context.Context) (xhandler.Data, error) {
 
 func TestIndependentChildOwnershipGuards(t *testing.T) {
 	contract := custom.New[independentInput, independentOutput](xhandler.ContractFunc[independentInput, independentOutput](func(context.Context, xhandler.Session, *independentInput, *independentOutput) error { return nil }))
+	function := custom.NewFunc[independentInput, independentOutput](func(context.Context, *independentInput) (*independentOutput, error) { return nil, nil })
 	for _, tc := range []struct {
 		description string
 		input       Request
 		inherited   bool
 		expected    string
 	}{
+		{"source-less custom function retains independent eligibility", Request{Handler: function}, false, ""},
+		{"custom function cannot own a root source", Request{Handler: function, DataSource: independentSource{}}, false, "root has a data source"},
+		{"custom function cannot escape caller unit", Request{Handler: function}, true, "caller has an inherited managed unit"},
 		{"source-less custom adapter retains independent eligibility", Request{Handler: contract}, false, ""},
 		{"root source is forbidden before effects", Request{Handler: contract, DataSource: independentSource{}}, false, "root has a data source"},
 		{"caller unit cannot be escaped", Request{Handler: contract}, true, "caller has an inherited managed unit"},

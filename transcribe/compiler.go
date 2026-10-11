@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/viant/datly/spec"
+	dsql "github.com/viant/datly/sql"
 	"github.com/viant/datly/transcribe/column"
 	authoring "github.com/viant/datly/transcribe/compile"
 	"github.com/viant/datly/transcribe/dql"
@@ -435,7 +436,21 @@ func refineComponentColumns(ctx context.Context, component *spec.Component, sour
 		if compileErr != nil {
 			return compileErr
 		}
-		if err := columnCompilation.RefineRoot(ctx, component, source.Resources, templateInput); err != nil {
+		rootDiscovery := component
+		if source.LinkedHandler != nil && component.RootView != nil && component.RootView.Source != nil {
+			rootSource := component.RootView.Source.Clone()
+			if err := dsql.ResolveSource(component.RootView.Name, rootSource, source.Resources); err != nil {
+				return err
+			}
+			classification := statement.Parse(rootSource.SQL).Classify()
+			if classification.HasService && !classification.HasRead && !classification.HasUnknown {
+				// A linked handler owns the buffered statement program. It has no
+				// SQL result set to discover; independent input reads still do.
+				rootDiscovery = component.Clone()
+				rootDiscovery.RootView = nil
+			}
+		}
+		if err := columnCompilation.RefineRoot(ctx, rootDiscovery, source.Resources, templateInput); err != nil {
 			return err
 		}
 		templateInput, compileErr = (&discoveryInputCompiler{

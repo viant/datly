@@ -2,6 +2,7 @@ package custom
 
 import (
 	"context"
+	"errors"
 	"reflect"
 	"strings"
 	"testing"
@@ -153,5 +154,16 @@ func TestHandlerStaticBindingRejectsRequestScopeEvenWithProvider(t *testing.T) {
 	}).BindStatic(context.Background(), injector)
 	if second != err {
 		t.Fatalf("static binding validation was reparsed: first=%p second=%p", err, second)
+	}
+}
+
+func TestFuncHandlerPreservesNilOutput(t *testing.T) {
+	cause := errors.New("function failed")
+	for _, err := range []error{nil, cause} {
+		h := NewFunc[staticInput, staticOutput](func(context.Context, *staticInput) (*staticOutput, error) { return nil, err })
+		actual, actualErr := h.Execute(context.Background(), rhandler.Invocation{Input: &staticInput{}})
+		if actual != nil || actualErr != err {
+			t.Fatalf("nil output changed: %#v err=%v", actual, actualErr)
+		}
 	}
 }

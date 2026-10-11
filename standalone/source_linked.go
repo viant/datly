@@ -11,6 +11,8 @@ import (
 	"github.com/viant/datly/report"
 	"github.com/viant/datly/runtime/registry"
 	"github.com/viant/datly/spec"
+	"github.com/viant/datly/transcribe"
+	"github.com/viant/datly/transcribe/column"
 	"github.com/viant/datly/typecatalog"
 )
 
@@ -59,6 +61,22 @@ func (m *linkedMaterializer) Materialize(ctx context.Context, entry *bootstrapin
 	input, err := components.reflectedArtifactInput(current.component.Clone(), current.source, types, m.resources)
 	if err != nil {
 		return nil, fmt.Errorf("linked component %s: %w", owner.String(), err)
+	}
+	if m.source.connections != nil {
+		compiled, err := (&transcribe.PackageCompilation{
+			Source: &transcribe.Source{Scope: current.source.PackagePath, Name: current.component.Name,
+				Const: m.source.config.Const, Connector: m.source.config.Connector,
+				Resources: input.Resources, ColumnRefiner: column.New(m.source.connections)},
+			Component: current.source, InputType: input.InputType, OutputType: input.OutputType, Types: types,
+		}).Compile(ctx)
+		if err != nil {
+			if m.source.logger != nil {
+				m.source.logger.Error("linked column discovery failed", "component", owner.String(), "error", err)
+			}
+			return nil, fmt.Errorf("linked component %s columns: %w", owner.String(), err)
+		}
+		input.Component = compiled.Component
+		input.Types = compiled.Source.Types
 	}
 	compilation, err := report.NewProjectCompiler(report.ProjectConfig{Registry: m.source.registry, Types: types}).CompileArtifacts([]bootstrap.ArtifactInput{input})
 	if err != nil {
