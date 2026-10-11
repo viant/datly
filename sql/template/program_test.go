@@ -208,6 +208,29 @@ func TestCompiler_CompileProtectsQuotedUnsafeWhileEmittingCodeUnsafe(t *testing.
 	}
 }
 
+func TestCompiler_CompileEmitsUnsafeBacktickIdentifier(t *testing.T) {
+	type input struct{ Table string }
+	for _, source := range []string{
+		"SELECT id FROM `$Unsafe.Table`",
+		"SELECT '$Unsafe.Table' AS literal FROM `${Unsafe.Table}` -- `$Unsafe.Table`",
+	} {
+		program, err := (Compiler{Source: source, InputType: reflect.TypeFor[input]()}).Compile()
+		if err != nil || program == nil {
+			t.Fatalf("compile %q: program=%v error=%v", source, program, err)
+		}
+		for _, table := range []string{"project.dataset.history", "e2e.dataset.history"} {
+			result, err := program.Evaluate(context.Background(), Invocation{Input: reflect.ValueOf(input{Table: table})})
+			want := strings.Replace(source, "`$Unsafe.Table`", "`"+table+"`", 1)
+			if strings.Contains(source, "`${Unsafe.Table}`") {
+				want = strings.Replace(source, "`${Unsafe.Table}`", "`"+table+"`", 1)
+			}
+			if err != nil || result.SQL != want || len(result.Args) != 0 {
+				t.Fatalf("evaluate %q: result=%+v error=%v want=%q", source, result, err, want)
+			}
+		}
+	}
+}
+
 func TestCompiler_CompileSupportsInvocationViewContext(t *testing.T) {
 	type input struct{ Enabled bool }
 	program, err := (Compiler{

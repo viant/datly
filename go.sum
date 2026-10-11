@@ -1119,6 +1119,8 @@ github.com/viant/sqlx v0.26.1-0.20261007205057-0330f64d8fd3 h1:KDThaahA2EqZfFf4V
 github.com/viant/sqlx v0.26.1-0.20261007205057-0330f64d8fd3/go.mod h1:/qyxibjy9VpDiYZwHVwSNHnPXI4476LqYtDty8V0Rg4=
 github.com/viant/sqlx v0.26.1-0.20261011061018-eb0f3444679c h1:FNFdyZcdqjKVcaR5iapZ8k6+zXOb2oRypgB2RkUC/+c=
 github.com/viant/sqlx v0.26.1-0.20261011061018-eb0f3444679c/go.mod h1:/qyxibjy9VpDiYZwHVwSNHnPXI4476LqYtDty8V0Rg4=
+github.com/viant/sqlx v0.26.1-0.20261011082317-f4c7202ba1e2 h1:zPyeZIZw6W1vjwtgaBxxA6OYw68fcUllvw43ANgdQOs=
+github.com/viant/sqlx v0.26.1-0.20261011082317-f4c7202ba1e2/go.mod h1:/qyxibjy9VpDiYZwHVwSNHnPXI4476LqYtDty8V0Rg4=
 github.com/viant/structology v0.10.1-0.20261005184011-cdaab8ea7dab h1:2wVCxyM5mb8K6Z7K6aaKicB8Twq2mmKxU4PDDO6QpYg=
 github.com/viant/structology v0.10.1-0.20261005184011-cdaab8ea7dab/go.mod h1:sNNuCH9Zt+QUNeV1slf/QKBdOdUIj0AVdhDFR09+8Ig=
 github.com/viant/structology v0.10.1-0.20261010052450-67e71257a7da h1:0tmsPkYOF8rdQkN6vMfmhpqcOO40pWuIDb95gcTTYqM=

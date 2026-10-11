@@ -63,7 +63,18 @@ func collectGeneratedRowAuthority(component *spec.Component, prepared *dql.Prepa
 				return err
 			}
 			name := strings.TrimPrefix(key, a.plan.Package+".")
-			if name != key && token.IsIdentifier(name) && ast.IsExported(name) {
+			local := name != key
+			if !local && view.Dest != "" {
+				// A split generated row keeps its explicit SQL owner and destination
+				// on regeneration. Provenance and destination confinement are still
+				// checked by generatedOutputRow and the ordinary shape planner.
+				ref, err := (xshape.Resolver{}).Reference(key)
+				if err != nil {
+					return err
+				}
+				name = ref.Name
+			}
+			if (local || view.Dest != "") && token.IsIdentifier(name) && ast.IsExported(name) {
 				a.owners[key] = append(a.owners[key], view)
 			}
 		}
