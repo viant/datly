@@ -73,6 +73,12 @@ func (r *planResolver) prepareResources() (*ResourcePlan, error) {
 			result.sourceText = ""
 		}
 	}
+	// An explicit root SQL alias has its own destination. The canonical view
+	// name may also be a child alias and must retain that child's destination.
+	rootSQLRole := r.plan.RootViewName
+	if root := r.input.Component.RootView; root != nil && root.Namespace != "" && r.plan.Generation.SQLFile(root.Namespace, "") != "" {
+		rootSQLRole = root.Namespace
+	}
 	files := map[string]string{}
 	if !r.plan.Documentation.IsZero() {
 		packaged, err := (docs.Loader{Resources: r.input.Resources}).Package(context.Background(), docs.PackageRequest{Source: r.plan.Documentation, Namespace: result.Namespace})
@@ -141,7 +147,7 @@ func (r *planResolver) prepareResources() (*ResourcePlan, error) {
 			role := field.Name
 			if rootType := unwrapQualifiedTypeName(field.Type); rootType != "" && rootType == unwrapQualifiedTypeName(r.plan.RootViewType) {
 				name = lowerSnake(r.plan.ComponentName)
-				role = r.plan.RootViewName
+				role = rootSQLRole
 				if strings.TrimSpace(role) == "" {
 					role = r.plan.ComponentName
 				}
@@ -150,7 +156,7 @@ func (r *planResolver) prepareResources() (*ResourcePlan, error) {
 				return fmt.Errorf("SQL field identity %s has no resource name", identity)
 			}
 			defaultPath := defaultSQLResourcePath(name)
-			rootRole := r.plan.RootViewName
+			rootRole := rootSQLRole
 			if strings.TrimSpace(rootRole) == "" {
 				rootRole = r.plan.ComponentName
 			}
@@ -189,7 +195,7 @@ func (r *planResolver) prepareResources() (*ResourcePlan, error) {
 			}
 			name := lowerSnake(field.Name)
 			defaultPath := defaultSQLResourcePath(name)
-			rootRole := r.plan.RootViewName
+			rootRole := rootSQLRole
 			if strings.TrimSpace(rootRole) == "" {
 				rootRole = r.plan.ComponentName
 			}
@@ -272,7 +278,7 @@ func (r *planResolver) prepareResources() (*ResourcePlan, error) {
 				} else if namespace != result.Namespace {
 					return nil, fmt.Errorf("linked output field %s SQL namespace %q differs from component resources %q", field.Name, namespace, result.Namespace)
 				}
-				role := r.plan.RootViewName
+				role := rootSQLRole
 				if role == "" {
 					role = r.plan.ComponentName
 				}
