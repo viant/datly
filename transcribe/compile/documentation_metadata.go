@@ -3,13 +3,10 @@ package compile
 import (
 	"github.com/viant/datly/data"
 	"github.com/viant/datly/spec"
-	"github.com/viant/sqlparser"
 	"io/fs"
-	"strings"
 )
 
-// BackfillDocumentationMetadata resolves dictionary lineage once during
-// authoring. Linked loading consumes the persisted origins, including unknowns.
+// BackfillDocumentationMetadata derives transient occurrence lineage during authoring.
 func BackfillDocumentationMetadata(component *spec.Component, resources ...fs.FS) error {
 	if component == nil {
 		return nil
@@ -21,48 +18,22 @@ func BackfillDocumentationMetadata(component *spec.Component, resources ...fs.FS
 			return nil
 		}
 		seen[view] = true
-		complete := view.DocumentationTable != ""
-		for _, column := range view.Columns {
-			if column != nil && column.DocumentationOrigin == nil {
-				complete = false
-			}
+		resolved := data.FromView(nil, view)
+		ready, err := resolveMetadataSQL(resolved, resources)
+		if err != nil {
+			return err
 		}
-		if !complete {
-			resolved := data.FromView(nil, view)
-			ready, err := resolveMetadataSQL(resolved, resources)
-			if err != nil {
-				return err
-			}
-			if ready && resolved.Spec.Source != nil && strings.TrimSpace(resolved.Spec.Source.SQL) != "" {
-				// Templates or opaque vendor SQL may not expose a statically proven lineage.
-				// Preserve their authored table metadata and defer query validation to its owner.
-				if parsed, err := sqlparser.ParseQuery(resolved.Spec.Source.SQL); err == nil && parsed != nil {
-					lineage := (sqlparser.Lineage{Query: parsed}).Compile()
-					if view.DocumentationTable == "" {
-						view.DocumentationTable = view.Source.Table
-						if view.DocumentationTable == "" {
-							view.DocumentationTable = lineage.RootTable()
-						}
-					}
-					for _, column := range view.Columns {
-						if column == nil || column.DocumentationOrigin != nil {
-							continue
-						}
-						column.DocumentationOrigin = &spec.ColumnOrigin{}
-						name := column.Output
-						if name == "" {
-							name = column.Source
-						}
-						if name == "" {
-							name = column.Name
-						}
-						if origin, ok := lineage.Lookup(name); ok {
-							column.DocumentationOrigin.Table = origin.Table
-							column.DocumentationOrigin.Column = origin.Column
-						}
-					}
-				}
-			}
+		if !ready {
+			original := view.Source
+			view.Source = nil
+			view.CompileProjectionOrigins()
+			view.Source = original
+		}
+		if ready {
+			original := view.Source
+			view.Source = resolved.Spec.Source
+			view.CompileProjectionOrigins()
+			view.Source = original
 		}
 		for _, relation := range view.Relations {
 			if relation != nil {

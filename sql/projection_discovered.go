@@ -18,7 +18,7 @@ func (p SelectorProjection) ResolveDiscoveredColumns(names []string, dialect *in
 	if !ok {
 		return p.SQL, false, nil
 	}
-	parsed, err := sqlparser.ParseQuery(p.SQL)
+	parsed, err := parseProjectionQuery(p.SQL)
 	if err != nil || parsed == nil || len(parsed.List) != 1 || len(parsed.Joins) > 0 {
 		return p.SQL, false, nil
 	}

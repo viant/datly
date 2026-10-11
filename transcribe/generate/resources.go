@@ -15,6 +15,7 @@ import (
 	"github.com/viant/datly/internal/packageasset"
 	"github.com/viant/datly/tag"
 	"github.com/viant/tagly/tags"
+	xshape "github.com/viant/x/shape"
 )
 
 // ResourcePlan keeps regenerable package assets separate from append-only Go
@@ -25,6 +26,12 @@ type ResourcePlan struct {
 	Symbol      string
 	Files       []EmittedFile
 	sourceText  string
+}
+
+// authoredSource identifies a linked filesystem declaration outside generated
+// ownership. Its bytes remain application-owned when envelopes are regenerated.
+func (r *ResourcePlan) authoredSource() bool {
+	return r != nil && r.sourceText != "" && generatedOwner([]byte(r.sourceText)) == ""
 }
 
 func (r *ResourcePlan) retained(file string) bool {
@@ -61,7 +68,7 @@ func (r *planResolver) prepareResources() (*ResourcePlan, error) {
 	if retained != nil {
 		retainedFiles = retained.Files
 		result.Files = nil
-		if r.plan.Input.Ownership == ContractGenerated || r.plan.Output.Ownership == ContractGenerated {
+		if (r.plan.Input.Ownership == ContractGenerated || r.plan.Output.Ownership == ContractGenerated) && !result.authoredSource() {
 			result.sourceText = ""
 		}
 	}
@@ -209,7 +216,74 @@ func (r *planResolver) prepareResources() (*ResourcePlan, error) {
 			return nil, err
 		}
 	}
-	if r.input.SQLResources && r.plan.Output.Ownership == ContractGenerated {
+	needsLinkedOutputSQL := false
+	for _, field := range r.plan.Output.Fields {
+		if raw := tags.NewTags(field.Tag).Lookup(tag.SQLName); raw != nil {
+			if source := tag.ParseSQL(string(raw.Values)); source != nil && strings.TrimSpace(source.Text) != "" {
+				needsLinkedOutputSQL = true
+				break
+			}
+		}
+	}
+	// SQL-free external factories carry validated Go contract identities,
+	// not reader row descriptors. Inspect linked fields only for planned SQL.
+	if r.input.SQLResources && r.plan.Output.Ownership == ContractLinked && needsLinkedOutputSQL {
+		descriptor, err := r.types.Descriptor(r.plan.Output.DescriptorKey)
+		if err != nil {
+			return nil, err
+		}
+		fields, err := xshape.New(descriptor, r.types.Descriptor).Fields()
+		if err != nil {
+			return nil, err
+		}
+		for _, planned := range r.plan.Output.Fields {
+			for _, field := range fields {
+				if field.Name != planned.Name {
+					continue
+				}
+				metadata, err := tag.ParseField(field.StructField())
+				if err != nil {
+					return nil, err
+				}
+				if metadata.Binding == nil || metadata.Binding.Location.Kind != "output" || metadata.Binding.Location.In != "view" {
+					continue
+				}
+				raw := tags.NewTags(planned.Tag).Lookup(tag.SQLName)
+				if raw == nil {
+					continue
+				}
+				source := tag.ParseSQL(string(raw.Values))
+				if source == nil || strings.TrimSpace(source.Text) == "" {
+					continue
+				}
+				if metadata.SQL == nil {
+					return nil, fmt.Errorf("linked output field %s requires authored SQL metadata", field.Name)
+				}
+				if metadata.SQL.URI == "" {
+					if metadata.SQL.Text != source.Text {
+						return nil, fmt.Errorf("linked output field %s has different uneditable SQL", field.Name)
+					}
+					continue
+				}
+				namespace, path, qualified := strings.Cut(metadata.SQL.URI, ":")
+				if !qualified {
+					path = metadata.SQL.URI
+				} else if namespace != result.Namespace {
+					return nil, fmt.Errorf("linked output field %s SQL namespace %q differs from component resources %q", field.Name, namespace, result.Namespace)
+				}
+				name := lowerSnake(r.plan.ComponentName)
+				role := r.plan.RootViewName
+				if role == "" {
+					role = r.plan.ComponentName
+				}
+				wanted := r.plan.Generation.SQLFileFor(role, role, defaultSQLResourcePath(name))
+				if path != wanted {
+					return nil, fmt.Errorf("linked output field %s SQL destination %q differs from uneditable URI %q", field.Name, wanted, metadata.SQL.URI)
+				}
+			}
+		}
+	}
+	if r.input.SQLResources {
 		if err := externalize(r.plan.Output.Type, r.plan.Output.Fields); err != nil {
 			return nil, err
 		}
@@ -220,6 +294,11 @@ func (r *planResolver) prepareResources() (*ResourcePlan, error) {
 			if err := externalize(view.Name, view.Fields); err != nil {
 				return nil, err
 			}
+		}
+	}
+	if r.input.SQLResources {
+		if err := r.linkedRelationResources(result, files, retainedFiles); err != nil {
+			return nil, err
 		}
 	}
 	// Linked local rows keep their existing SQL URIs and assets while a changed

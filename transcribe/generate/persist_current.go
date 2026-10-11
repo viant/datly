@@ -47,6 +47,16 @@ func (p *scaffoldPersistence) prepareCurrent(target string) error {
 // current projected tree. The ordinary wrapper uses the destination itself.
 func (p *scaffoldPersistence) prepareCurrentAt(target, readRoot string) error {
 	p.renames = map[string]bool{}
+	if p.plan != nil && p.plan.Resources.authoredSource() {
+		resource := p.plan.Resources
+		current, err := os.ReadFile(filepath.Join(readRoot, resource.Destination))
+		if err != nil && !os.IsNotExist(err) {
+			return err
+		}
+		if err == nil && string(current) != resource.sourceText {
+			return fmt.Errorf("linked authored resource declaration %q changed after planning", resource.Destination)
+		}
+	}
 	desired, err := p.desiredFiles(target)
 	if err != nil {
 		return err

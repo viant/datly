@@ -24,7 +24,15 @@ func (c *sourceComponent) reflectedArtifactInput(component *spec.Component, sour
 	if component == nil || source == nil || source.LinkedInputType == nil || source.LinkedOutputType == nil {
 		return bootstrap.ArtifactInput{}, fmt.Errorf("reflected component contract is incomplete")
 	}
-	resources, err := linkedDefaultResources(resources, source.LinkedInputType)
+	var err error
+	if source.PackagePath != "" && source.HolderType != "" {
+		holder := bootstrap.LinkedHolder(c.source.holders, source.PackagePath, source.HolderType)
+		resources, err = linkedDefaultResources(resources, reflect.TypeOf(holder))
+		if err != nil {
+			return bootstrap.ArtifactInput{}, err
+		}
+	}
+	resources, err = linkedDefaultResources(resources, source.LinkedInputType)
 	if err != nil {
 		return bootstrap.ArtifactInput{}, err
 	}
@@ -36,7 +44,12 @@ func (c *sourceComponent) reflectedArtifactInput(component *spec.Component, sour
 		}
 	}
 	if component.Settings != nil && component.Settings.Mutation != "" {
-		handler, err = writerhandler.New(component, source.LinkedInputType, source.LinkedOutputType, component.Settings.Mutation)
+		// BuildArtifact validates the original declarations independently. The
+		// writer's immutable metadata must use the same instance as its reads.
+		if _, err = c.source.config.Const.For(component); err != nil {
+			return bootstrap.ArtifactInput{}, err
+		}
+		handler, err = writerhandler.New(c.source.config.Const.Apply(component), source.LinkedInputType, source.LinkedOutputType, component.Settings.Mutation)
 		if err != nil {
 			return bootstrap.ArtifactInput{}, err
 		}
@@ -112,7 +125,10 @@ func (c *sourceComponent) artifactInput(compiled *transcribe.Result) (bootstrap.
 		return bootstrap.ArtifactInput{}, fmt.Errorf("component %s input/output contracts must be linked structs", compiled.Component.Key.String())
 	}
 	if settings.Mutation != "" {
-		handler, err = writerhandler.New(compiled.Component, input, output, settings.Mutation)
+		if _, err = c.source.config.Const.For(compiled.Component); err != nil {
+			return bootstrap.ArtifactInput{}, err
+		}
+		handler, err = writerhandler.New(c.source.config.Const.Apply(compiled.Component), input, output, settings.Mutation)
 		if err != nil {
 			return bootstrap.ArtifactInput{}, err
 		}

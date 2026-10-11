@@ -24,7 +24,7 @@ func TestGoComponentPredicateDependencies(t *testing.T) {
 		{name: "conflict", reference: predicateTestPackage + ".Threshold", explicit: reflect.TypeFor[availablePredicate](), existing: reflect.TypeFor[linkedpredicate.Threshold](), wantError: "different compiled identity"},
 		{name: "incompatible", reference: predicateTestPackage + ".Threshold", explicit: reflect.TypeFor[incompatiblePredicate](), wantError: "does not implement predicate.Handler"},
 		{name: "missing", reference: predicateTestPackage + ".Absent", wantError: "was not found"},
-		{name: "unlinked", reference: predicateTestPackage + ".SourceOnly", wantError: "not linked into this binary"},
+		{name: "unlinked", reference: predicateTestPackage + ".SourceOnly", wantError: "does not implement predicate.Handler"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()

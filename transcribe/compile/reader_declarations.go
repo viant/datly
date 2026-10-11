@@ -19,7 +19,7 @@ import (
 // SQL-aliased CAST remains executable, and type authority never implies a
 // transient SQL mapping: that is an explicitly authored tag decision.
 // Invariants lower to the existing Go field tag on the targeted outer view.
-func lowerColumnDeclarations(parsed *query.Select, root *spec.View, types *typecatalog.Resolver, typeContext *spec.TypeContext) (bool, error) {
+func lowerColumnDeclarations(parsed *query.Select, root *spec.View, types *typecatalog.Resolver, typeContext *spec.TypeContext, generatedTypes ...func(string) (bool, error)) (bool, error) {
 	views := canonicalViews(root)
 	filtered := make(query.List, 0, len(parsed.List))
 	changed := false
@@ -167,6 +167,15 @@ func lowerColumnDeclarations(parsed *query.Select, root *spec.View, types *typec
 				// Structural types such as maps have independently named key/value
 				// dependencies, not one named descriptor for the whole expression.
 				_, err := (xshape.Resolver{Rewriter: func(name string) (string, error) {
+					if len(generatedTypes) != 0 && generatedTypes[0] != nil {
+						owned, err := generatedTypes[0](name)
+						if err != nil {
+							return "", err
+						}
+						if owned {
+							return name, nil
+						}
+					}
 					resolved, err := types.ResolveShape(name)
 					if err != nil {
 						return "", err

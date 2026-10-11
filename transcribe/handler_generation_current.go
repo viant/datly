@@ -2,16 +2,22 @@ package transcribe
 
 import (
 	"fmt"
+	"reflect"
+	"strings"
 
 	"github.com/viant/datly/spec"
 	gen "github.com/viant/datly/transcribe/generate"
 	plan "github.com/viant/datly/transcribe/handler/ast"
 	"github.com/viant/datly/transcribe/handler/compiler"
 	"github.com/viant/datly/typecatalog"
+	sqlio "github.com/viant/sqlx/io"
 	xshape "github.com/viant/x/shape"
 )
 
-type currentFieldAuthority struct{ name, expression string }
+type currentFieldAuthority struct {
+	name, expression string
+	tag              reflect.StructTag
+}
 
 func (g *handlerGeneration) refineCurrentProjection(record *plan.RecordPlan, generated *gen.Plan, valueType, currentType string) error {
 	if record.Current == nil {
@@ -81,6 +87,31 @@ func (fields currentFieldAuthorities) resolve(name string) (currentFieldAuthorit
 	if result != nil {
 		return *result, nil
 	}
+	// Physical columns already have authority in native SQLX metadata. A Go
+	// projection rename must not discard it or infer a mapping from JSON names.
+	for i := range fields {
+		mapping := sqlio.ParseTag(fields[i].tag)
+		if mapping.Transient {
+			continue
+		}
+		matched := false
+		for _, column := range strings.Split(mapping.Column, "|") {
+			if column != "" && strings.EqualFold(strings.TrimSpace(column), name) {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			continue
+		}
+		if result != nil {
+			return currentFieldAuthority{}, fmt.Errorf("ambiguous SQLX canonical field %q", name)
+		}
+		result = &fields[i]
+	}
+	if result != nil {
+		return *result, nil
+	}
 	// Keep the existing acronym compatibility, while also matching the authored
 	// conversion against the unchanged canonical name. Formatting an already
 	// canonical single-letter prefix again can change its identity.
@@ -112,7 +143,7 @@ func (g *handlerGeneration) currentProjectionFields(generated *gen.Plan, express
 			if err != nil {
 				return nil, err
 			}
-			result = append(result, currentFieldAuthority{name: field.Name, expression: canonical})
+			result = append(result, currentFieldAuthority{name: field.Name, expression: canonical, tag: reflect.StructTag(field.Tag)})
 		}
 		return result, nil
 	}
@@ -138,7 +169,7 @@ func (g *handlerGeneration) currentProjectionFields(generated *gen.Plan, express
 		if err != nil {
 			return nil, err
 		}
-		result = append(result, currentFieldAuthority{name: field.Name, expression: canonical})
+		result = append(result, currentFieldAuthority{name: field.Name, expression: canonical, tag: field.Tag})
 	}
 	return result, nil
 }

@@ -85,6 +85,11 @@ A component in `orders/` uses prefix-free names such as `input.go`, `output.go`,
 exact DQL file overrides win. The supported commands are
 `datly transcribe get|patch|post|put`; the `gen` alias is removed.
 
+When a source package contains several component files, select one with
+`datly transcribe get -source lookup.dql module/package`. The filename selects
+within that package; shared SQL assets and DQL destinations keep their existing
+locations. A missing or ambiguous selection fails before artifacts are emitted.
+
 See [filename settings, support roles and safe migration](dql.md#generated-filenames-and-destinations).
 
 ## Compilation and persistence are separate

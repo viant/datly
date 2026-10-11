@@ -48,6 +48,10 @@ an unresolved qualified name must fail instead of becoming an empty local type.
 This adapts original Datly's newer `repository/shape` pipeline, not its older
 translator architecture. See [authoring](authoring.md).
 
+Authoring consumers obtain codec-aware input descriptions through
+`bootstrap.DescribeInputContract`. It uses the existing metadata-only binding
+compiler phase; executable registration still requires its codec providers.
+
 ## Execution and dependencies
 
 At registration, canonical package/DQL metadata compiles into immutable Bindly
@@ -76,6 +80,8 @@ remains caller-owned; flushing work into it does not confirm commit.
 | Datly source/package authority and precedence | [typecatalog](../typecatalog) |
 | Typed row mapping and native read cache services | SQLX `io/read` |
 | Reader collection, relation policy and SQL build inputs | [sql/reader](../sql/reader), [sql/builder](../sql/builder) |
+| Output naming, visibility, schemas and native encoding | [output](../output); `runtime/output` retains aliases for existing callers |
+| Immutable SQL identifier constants shared by readers and writers | [constant/identifier](../constant/identifier), using native Velty spans and SQLParser protected regions |
 | Mutation policy and custom orchestration | Handler semantic compilation and application handlers |
 | Artifact assembly and protected regeneration | [transcribe/generate](../transcribe/generate) |
 | Generation publication and owned background lifetime | [application](../application) |
@@ -85,6 +91,11 @@ Normal row execution does not use `[]map[string]any` as an intermediate result
 or cache contract. Derived outputs remain ordinary typed relations; runtime
 metadata does not add a parallel view shape. Read caching stays native to SQLX,
 including warmup; handlers do not acquire a second cache lifecycle.
+
+Native guard association uses the constructor-retained journal validation callback.
+The engine checks the active scope and mutation guard; the SQL DML owner checks
+exact view identity, queue association and live child membership. This read-only
+validation does not invoke application callbacks or acquire write authority.
 
 ## Reload and lifetime
 

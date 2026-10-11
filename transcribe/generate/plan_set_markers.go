@@ -7,6 +7,7 @@ import (
 
 	"github.com/viant/datly/spec"
 	"github.com/viant/datly/typecatalog"
+	xshape "github.com/viant/x/shape"
 )
 
 // applySetMarkerViews adds SQLX presence metadata only to generated view
@@ -23,6 +24,43 @@ func (r *planResolver) applySetMarkerViews() error {
 	borrowedEdges, err := r.borrowedAncestorPresenceEdges()
 	if err != nil {
 		return err
+	}
+	// Auxiliary relations are still request-body fields for a generated custom
+	// contract. Admit their ordinary presence independently of writer intent.
+	if h := r.input.ExternalHandler; h != nil && h.GeneratedContracts && h.InputShape != nil {
+		visited := map[*spec.View]bool{}
+		var addShapeEdges func(*spec.View) error
+		addShapeEdges = func(view *spec.View) error {
+			if view == nil || visited[view] {
+				return nil
+			}
+			visited[view] = true
+			parent, err := view.Identity()
+			if err != nil {
+				return err
+			}
+			for _, relation := range view.Relations {
+				if relation == nil || relation.View == nil {
+					continue
+				}
+				child, err := relation.View.Identity()
+				if err != nil {
+					return err
+				}
+				holder := relation.Holder
+				if holder == "" {
+					holder = relation.Name
+				}
+				borrowedEdges[borrowedPresenceEdge{parent: parent, holder: typecatalog.FieldName(holder), child: child}] = true
+				if err := addShapeEdges(relation.View); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+		if err := addShapeEdges(h.InputShape); err != nil {
+			return err
+		}
 	}
 	planned := make(map[string]*ViewPlan, len(r.plan.Views))
 	linked := map[string]bool{}
@@ -59,8 +97,12 @@ func (r *planResolver) applySetMarkerViews() error {
 			}
 		}
 	}
-	identities := make([]string, 0, len(r.input.SetMarkerViews))
-	for identity, enabled := range r.input.SetMarkerViews {
+	selected, err := r.generatedReferenceMarkerViews(planned)
+	if err != nil {
+		return err
+	}
+	identities := make([]string, 0, len(selected))
+	for identity, enabled := range selected {
 		if enabled {
 			identities = append(identities, identity)
 		}
@@ -72,6 +114,12 @@ func (r *planResolver) applySetMarkerViews() error {
 			return fmt.Errorf("set-marker view %q is not canonical", identity)
 		}
 		viewPlan := planned[identity]
+		// Discovery precedes refinement of child wildcard columns. Its temporary
+		// input needs row identity, but cannot create markers for undiscovered fields.
+		// Concrete publication still requires the complete SQLX marker contract.
+		if !r.requireConcreteHelpers && r.input.ExternalHandler != nil && r.input.ExternalHandler.GeneratedContracts && viewPlan != nil && len(viewPlan.Fields) == 0 {
+			continue
+		}
 		if viewPlan == nil {
 			if linked[identity] {
 				continue
@@ -86,6 +134,65 @@ func (r *planResolver) applySetMarkerViews() error {
 		}
 	}
 	return nil
+}
+
+// A scalar reference consumes the same generated row as an independent read.
+// It inherits body presence without becoming a relation or persistence owner.
+func (r *planResolver) generatedReferenceMarkerViews(planned map[string]*ViewPlan) (map[string]bool, error) {
+	selected := map[string]bool{}
+	named := map[string]*ViewPlan{}
+	for _, view := range planned {
+		if view.Ownership != ViewGenerated {
+			continue
+		}
+		pkg := view.Package
+		if pkg == "" {
+			pkg = r.plan.Package
+		}
+		if pkg != "" {
+			named[pkg+"."+view.Name] = view
+		}
+	}
+	var visit func(string) error
+	visit = func(identity string) error {
+		if selected[identity] {
+			return nil
+		}
+		selected[identity] = true
+		view := planned[identity]
+		if view == nil || view.Ownership != ViewGenerated {
+			return nil
+		}
+		for _, field := range view.Fields {
+			if field.Type == "" {
+				continue
+			}
+			canonical, err := r.plan.CanonicalType(r.plan.Package, field.Type)
+			if err != nil {
+				return err
+			}
+			_, err = (xshape.Resolver{Rewriter: func(key string) (string, error) {
+				if dependency := named[key]; dependency != nil {
+					if err := visit(dependency.Identity); err != nil {
+						return "", err
+					}
+				}
+				return key, nil
+			}}).Rewrite(canonical)
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	for identity, enabled := range r.input.SetMarkerViews {
+		if enabled {
+			if err := visit(identity); err != nil {
+				return nil, err
+			}
+		}
+	}
+	return selected, nil
 }
 
 func (r *planResolver) canonicalViewIndex() (map[string]*spec.View, error) {
@@ -122,6 +229,11 @@ func (r *planResolver) canonicalViewIndex() (map[string]*spec.View, error) {
 			if err := add(view); err != nil {
 				return nil, err
 			}
+		}
+	}
+	if r.input.ExternalHandler != nil {
+		if err := add(r.input.ExternalHandler.InputShape); err != nil {
+			return nil, err
 		}
 	}
 	return result, nil

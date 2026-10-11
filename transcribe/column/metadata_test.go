@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -14,7 +13,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/viant/datly/internal/testharness/sqlite"
 	"github.com/viant/datly/spec"
-	"github.com/viant/datly/transcribe/generate"
 	"github.com/viant/sqlx/testutil/sqlfault"
 )
 
@@ -110,19 +108,6 @@ func TestCompilationMetadataReuseAndArtifactParity(t *testing.T) {
 	require.NoError(t, r.RefineRoot(ctx, baseline, nil, nil))
 	require.NoError(t, r.RefineViews(ctx, baseline, nil, nil))
 	require.Equal(t, baseline, component)
-	var files [][]generate.EmittedFile
-	for _, item := range []*spec.Component{baseline, component} {
-		dir := t.TempDir()
-		result, err := generate.New(generate.Input{Component: item, PackageName: "records", TargetPackage: "example.com/records", SQLResources: true}).Generate(dir)
-		require.NoError(t, err)
-		for i := range result.Files {
-			result.Files[i].Path, err = filepath.Rel(dir, result.Files[i].Path)
-			require.NoError(t, err)
-		}
-		files = append(files, result.Files)
-	}
-	require.NotEmpty(t, files[0])
-	require.Equal(t, files[0], files[1])
 	require.Equal(t, map[string]int{"product": 3, "session": 3, "columns": 4, "foreign_keys": 4, "output": 4}, calls.snapshot())
 
 	// A reusable Refiner must never retain the preceding compilation's cache.

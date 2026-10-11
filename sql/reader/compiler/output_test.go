@@ -17,6 +17,25 @@ func TestResolveOutputField(t *testing.T) {
 	}
 	outputType := reflect.TypeOf(output{})
 
+	t.Run("explicit view wins over preceding body fields", func(t *testing.T) {
+		component := &spec.Component{Parameters: []*spec.Parameter{
+			{Name: "Summary", Source: spec.BindSource{Kind: "output", Name: "body"}},
+			{Name: "Custom", Source: spec.BindSource{Kind: "output", Name: "view"}},
+		}}
+		if actual := ResolveOutputField(component, outputType, ViewSlot); actual != "Custom" {
+			t.Fatalf("expected explicit SQL view Custom, got %q", actual)
+		}
+	})
+
+	t.Run("body remains compatible without explicit view", func(t *testing.T) {
+		component := &spec.Component{Parameters: []*spec.Parameter{
+			{Name: "Custom", Source: spec.BindSource{Kind: "output", Name: "body"}},
+		}}
+		if actual := ResolveOutputField(component, outputType, ViewSlot); actual != "Custom" {
+			t.Fatalf("expected body fallback Custom, got %q", actual)
+		}
+	})
+
 	t.Run("missing or pointer output type", func(t *testing.T) {
 		if actual := ResolveOutputField(nil, nil, ViewSlot); actual != "" {
 			t.Fatalf("expected no field for nil output, got %q", actual)

@@ -25,6 +25,8 @@ type discoveryInputCompiler struct {
 	viewBindings gen.ViewBindings
 	resolver     *typecatalog.Resolver
 	source       *Source
+	factoryShape *gen.ExternalHandler
+	views        gen.ViewReferences
 }
 
 func (c *discoveryInputCompiler) compile() (*column.TemplateInput, error) {
@@ -108,6 +110,18 @@ func (c *discoveryInputCompiler) compile() (*column.TemplateInput, error) {
 			converted, convertErr := (conv.ValueConverter{}).Convert(*param.Value, target.Type())
 			if convertErr != nil {
 				return nil, fmt.Errorf("transcribe column: constant %s cannot convert to %s", param.Name, target.Type())
+			}
+			target.Set(reflect.ValueOf(converted))
+			continue
+		}
+		collectionType := target.Type()
+		for collectionType.Kind() == reflect.Pointer {
+			collectionType = collectionType.Elem()
+		}
+		if collectionType.Kind() == reflect.Slice || collectionType.Kind() == reflect.Array {
+			converted, convertErr := (conv.ValueConverter{}).Convert(*param.Value, target.Type())
+			if convertErr != nil {
+				return nil, fmt.Errorf("transcribe column: convert default for parameter %s: %w", param.Name, convertErr)
 			}
 			target.Set(reflect.ValueOf(converted))
 			continue
@@ -199,6 +213,12 @@ func (c *discoveryInputCompiler) inputType() (reflect.Type, error) {
 	if c.component == nil {
 		return nil, fmt.Errorf("transcribe column: component is required")
 	}
+	// A Go-only component retains its exact linked contract, just as package
+	// compilation retains that contract after discovery. Expanded defaults are
+	// not an authored overlay requiring a synthetic replacement input.
+	if c.source != nil && c.source.PackageComponent != nil && strings.TrimSpace(c.source.Text) == "" && c.source.LinkedInputType != nil {
+		return c.source.LinkedInputType, nil
+	}
 	if c.linkedInputAllowed() && c.component.Settings != nil && c.resolver != nil {
 		expression := strings.TrimSpace(c.component.Settings.InputType)
 		if expression != "" {
@@ -215,10 +235,36 @@ func (c *discoveryInputCompiler) inputType() (reflect.Type, error) {
 	if c.source != nil {
 		targetPackage = strings.TrimSpace(c.source.Scope)
 	}
-	return gen.New(gen.Input{
-		Component: c.component, Declarations: c.declarations,
+	// The source namespace may be a DQL directory. Generated declarations
+	// belong to the authored Go package, as they do in final generation.
+	if c.component.TypeContext != nil && strings.TrimSpace(c.component.TypeContext.PackagePath) != "" {
+		targetPackage = strings.TrimSpace(c.component.TypeContext.PackagePath)
+	}
+	component := c.component
+	if c.factoryShape != nil {
+		targetPackage = c.factoryShape.Package
+		component = c.component.Clone()
+		component.RootView = nil
+	}
+	input := gen.Input{
+		ExternalHandler: c.factoryShape,
+		Component:       component, Declarations: c.declarations,
 		TypeResolver: c.resolver, TargetPackage: targetPackage, ViewBindings: c.viewBindings,
-	}).RuntimeInputType()
+		Views: c.views,
+	}
+	if c.source != nil {
+		input.Resources = c.source.Resources
+		// Reuse the package compilation authority during provisional discovery,
+		// before packageAuthority.compile attaches its final linked references.
+		if c.source.PackageComponent != nil && c.factoryShape == nil && c.resolver != nil {
+			var err error
+			input.Views, err = packageInputViewReferences(component, c.source.PackageComponent, c.resolver)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+	return gen.New(input).ColumnDiscoveryInputType()
 }
 
 func (c *discoveryInputCompiler) linkedInputAllowed() bool {

@@ -57,8 +57,14 @@ func (p *Program) afterQueueInputWasStarted() bool {
 // response metadata. The native output body is populated after this boundary;
 // mutations through any existing output alias are covered by the input graph.
 func (p *Program) afterQueueInputState() (string, error) {
+	return p.afterQueueInputStateForActions(p.actions.Rows)
+}
+
+// Explicit action spans preserve immutable predecessor evidence while the native
+// journal grows. This never swaps the Program journal during validation.
+func (p *Program) afterQueueInputStateForActions(actions []*Action) (string, error) {
 	input := reflect.ValueOf(p.input).Elem()
-	values := []reflect.Value{input.Field(p.metadata.InputField), reflect.ValueOf(len(p.frames.Rows)), reflect.ValueOf(len(p.actions.Rows))}
+	values := []reflect.Value{input.Field(p.metadata.InputField), reflect.ValueOf(len(p.frames.Rows)), reflect.ValueOf(len(actions))}
 	seen := map[*Record]bool{}
 	var currents func(*Record)
 	currents = func(record *Record) {
@@ -91,7 +97,7 @@ func (p *Program) afterQueueInputState() (string, error) {
 			}
 		}
 	}
-	for _, action := range p.actions.Rows {
+	for _, action := range actions {
 		values = append(values, reflect.ValueOf(reflect.ValueOf(action).Pointer()))
 		if action != nil {
 			values = append(values, reflect.ValueOf(action.Kind), action.Entity, reflect.ValueOf(reflect.ValueOf(action.frame).Pointer()))

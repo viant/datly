@@ -13,7 +13,6 @@ import (
 const ViewName = "view"
 
 type View struct {
-	DocumentationTable       string
 	Name                     string
 	TypeName                 string
 	Dest                     string
@@ -164,7 +163,7 @@ func ParseView(value string) (*View, error) {
 		case "connector":
 			result.Connector = value
 		case "doctable":
-			result.DocumentationTable = value
+			// Obsolete documentation tags carry no authority.
 		case "table":
 			result.Table = value
 		case "cache":

@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/viant/datly/spec"
+	"github.com/viant/datly/tag"
 	authoring "github.com/viant/datly/transcribe/compile"
 	"github.com/viant/x"
 )
@@ -24,13 +25,11 @@ type planResolver struct {
 
 func (r *planResolver) resolve() (*Plan, error) {
 	r.input.Component = r.input.Component.Clone()
+	r.input.ExternalHandler = r.input.ExternalHandler.Clone()
 	if err := authoring.BackfillRelationMetadata(r.input.Component, r.input.Resources); err != nil {
 		return nil, err
 	}
 	if err := authoring.BackfillReportMetadata(r.input.Component, r.input.Resources); err != nil {
-		return nil, err
-	}
-	if err := authoring.BackfillDocumentationMetadata(r.input.Component, r.input.Resources); err != nil {
 		return nil, err
 	}
 	// Writer shapes may be planned before lowering; reader plans cannot dispatch
@@ -78,6 +77,42 @@ func (r *planResolver) resolve() (*Plan, error) {
 	}
 	if r.viewIndexes, err = r.resolveViews(); err != nil {
 		return nil, err
+	}
+	if h := r.input.ExternalHandler; h != nil && h.GeneratedContracts && h.InputShape != nil {
+		// Request-body relations carry shape and SQLX metadata only. Executable
+		// read tags remain exclusively on independently declared input views.
+		identities := map[string]bool{}
+		visited := map[*spec.View]bool{}
+		var visit func(*spec.View)
+		visit = func(view *spec.View) {
+			if view == nil || visited[view] {
+				return
+			}
+			visited[view] = true
+			if identity, err := view.Identity(); err == nil {
+				identities[identity] = true
+			}
+			for _, relation := range view.Relations {
+				if relation != nil {
+					visit(relation.View)
+				}
+			}
+		}
+		visit(h.InputShape)
+		for index := range r.plan.Views {
+			view := &r.plan.Views[index]
+			if !identities[view.Identity] {
+				continue
+			}
+			for i := range view.Fields {
+				if view.Fields[i].RelationHolder {
+					view.Fields[i].Tag = withoutStructTags(view.Fields[i].Tag, tag.ViewName, tag.SQLName, tag.RelationName)
+					// SQLX treats on-tagged relations as transient. Preserve
+					// that exclusion when body-only shapes omit read tags.
+					view.Fields[i].Tag = replaceStructTag(view.Fields[i].Tag, "sqlx", "-")
+				}
+			}
+		}
 	}
 	if err = r.applySetMarkerViews(); err != nil {
 		return nil, err
@@ -261,6 +296,7 @@ func (r *planResolver) validateHandlerSelection() error {
 
 func (r *planResolver) validateViewReferences() error {
 	component := r.input.Component
+	var canonical map[string]*spec.View
 	for path := range r.input.Views {
 		if path == RootViewPath {
 			continue
@@ -268,11 +304,14 @@ func (r *planResolver) validateViewReferences() error {
 		if component == nil {
 			return fmt.Errorf("linked view %q requires canonical component metadata", path)
 		}
-		if ref := r.input.Views[path]; ref != nil && ref.Borrowed != nil {
-			canonical, err := r.canonicalViewIndex()
+		if canonical == nil {
+			var err error
+			canonical, err = r.canonicalViewIndex()
 			if err != nil {
 				return err
 			}
+		}
+		if ref := r.input.Views[path]; ref != nil && ref.Borrowed != nil {
 			view := canonical[path]
 			proof := ref.Borrowed
 			if view == nil || len(proof.BorrowerGraph) == 0 || proof.BorrowerGraph[len(proof.BorrowerGraph)-1] != path || proof.Expected.Package != r.input.TargetPackage || ref.DescriptorKey != proof.Expected.Package+"."+proof.Expected.Name {
@@ -281,6 +320,14 @@ func (r *planResolver) validateViewReferences() error {
 			continue
 		}
 		matched := false
+		if view := canonical[path]; view != nil && strings.Contains(view.TypeName, ".") && r.types != nil {
+			descriptor, err := r.types.Descriptor(view.TypeName)
+			if err != nil {
+				return err
+			}
+			ref := r.input.Views[path]
+			matched = descriptor != nil && ref != nil && descriptor.Key() == ref.DescriptorKey
+		}
 		if component.RootView != nil {
 			for _, relation := range component.RootView.Relations {
 				if relation == nil || relation.View == nil || relation.Kind != spec.RelationKindDerived {

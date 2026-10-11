@@ -20,7 +20,7 @@ The sibling release staging copy is not required to build or install the publish
 bundle. Edit the repository sources and product guides, then regenerate.
 
 Product inputs use `datly/` and `xdatly/` sibling checkouts. Check out xdatly at
-`08752d9972c16da25047f5f0ad979c2894f7d5ff`, matching the published SDK version in
+`60dd64a2144200b4ccc5a2ae97fe8dff9a0ed2b9`, matching the published SDK version in
 `go.mod`. The exact approved SDK references are read-only packaging inputs.
 Clone or copy this repository as `datly` in that workspace; no sibling `llm`
 directory is needed. Materialized bundles contain their references and need

@@ -154,6 +154,17 @@ func (s *packageSet) validateSourceHandler(index int) error {
 	for name, content := range sources {
 		files[filepath.Join(s.dirs[index], name)] = []byte(content)
 	}
+	// Factory validation must see the projected resource files referenced by
+	// generated go:embed declarations, as well as the selected Go sources.
+	for _, file := range s.files[index] {
+		rel, err := filepath.Rel(s.dirs[index], file.Path)
+		if err != nil {
+			return err
+		}
+		if rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) && !strings.HasSuffix(file.Path, ".go") {
+			files[file.Path] = []byte(file.Content)
+		}
+	}
 	return s.plans[index].ExternalHandler.Build.Validate(s.plans[index].Package, files)
 }
 

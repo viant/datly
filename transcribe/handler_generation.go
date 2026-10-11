@@ -302,6 +302,10 @@ func hasWritableDescendant(record *handlerplan.RecordPlan) bool {
 }
 
 func (g *handlerGeneration) withGeneratedPresence(semantic *handlerplan.Plan, generated *gen.Plan) (*handlerplan.Plan, error) {
+	return g.withGeneratedPresenceForGraph(semantic, generated, false)
+}
+
+func (g *handlerGeneration) withGeneratedPresenceForGraph(semantic *handlerplan.Plan, generated *gen.Plan, includeAuxiliary bool) (*handlerplan.Plan, error) {
 	if semantic == nil || semantic.Root == nil {
 		return semantic, nil
 	}
@@ -327,7 +331,7 @@ func (g *handlerGeneration) withGeneratedPresence(semantic *handlerplan.Plan, ge
 		if record == nil {
 			return fmt.Errorf("generated entity presence plan contains a nil record")
 		}
-		if record.Auxiliary && !hasWritableDescendant(record) && !ancestors[record.Identity] {
+		if !includeAuxiliary && record.Auxiliary && !hasWritableDescendant(record) && !ancestors[record.Identity] {
 			for _, relation := range record.Relations {
 				if relation == nil || relation.Child == nil {
 					return fmt.Errorf("generated PATCH presence plan contains an incomplete relation")

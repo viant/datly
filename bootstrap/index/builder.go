@@ -321,9 +321,19 @@ func shapeHasWarmupTag(shape *xshape.Type, path string, visited map[string]bool)
 }
 
 func shapeWarmupKey(shape *xshape.Type, path string) string {
+	if path != "" {
+		// Recursive fields revisit a named type through a different field path.
+		// Use its canonical identity so the existing visited set stops the cycle.
+		if resolved, err := shape.ResolveField(path); err == nil && resolved.Descriptor != nil {
+			return resolved.Descriptor.Key()
+		}
+	}
 	descriptor := shape.Descriptor()
 	if descriptor == nil {
 		return path
+	}
+	if path == "" {
+		return descriptor.Key()
 	}
 	return descriptor.Key() + "\x00" + path
 }

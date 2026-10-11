@@ -18,17 +18,23 @@ import (
 )
 
 type viewPlanner struct {
-	borrowed       map[*spec.View]ViewPlan
-	plan           *Plan
-	velty          bool
-	names          map[*spec.View]string
-	owners         map[string]*spec.View
-	parents        map[*spec.View]string
-	dests          map[*spec.View]string
-	visiting       map[*spec.View]bool
-	ordered        []*spec.View
-	outputs        map[*spec.Relation]*spec.Parameter
-	reuseLeafTypes bool
+	factoryBodyViews map[string]bool
+	requireConcrete  bool
+	sharedBodyRows   map[*spec.View]*spec.View
+	explicitReads    map[*spec.View]bool
+	readTypes        map[*spec.View][]string
+	borrowed         map[*spec.View]ViewPlan
+	linkedRelated    map[*spec.View]ViewPlan
+	plan             *Plan
+	velty            bool
+	names            map[*spec.View]string
+	owners           map[string]*spec.View
+	parents          map[*spec.View]string
+	dests            map[*spec.View]string
+	visiting         map[*spec.View]bool
+	ordered          []*spec.View
+	outputs          map[*spec.Relation]*spec.Parameter
+	reuseLeafTypes   bool
 }
 
 func (r *planResolver) resolveViews() (map[string]int, error) {
@@ -38,9 +44,19 @@ func (r *planResolver) resolveViews() (map[string]int, error) {
 	if plan == nil || component == nil {
 		return indexes, nil
 	}
+	root := component.RootView
+	if root == nil && r.input.ExternalHandler != nil {
+		root = r.input.ExternalHandler.InputShape
+	}
 	planner := &viewPlanner{
-		borrowed: map[*spec.View]ViewPlan{},
-		plan:     plan, velty: r.input.VeltyHandler != nil, names: map[*spec.View]string{}, owners: map[string]*spec.View{},
+		factoryBodyViews: generatedFactoryBodyViews(r.input.ExternalHandler),
+		requireConcrete:  r.requireConcreteHelpers,
+		sharedBodyRows:   map[*spec.View]*spec.View{},
+		explicitReads:    map[*spec.View]bool{},
+		readTypes:        map[*spec.View][]string{},
+		borrowed:         map[*spec.View]ViewPlan{},
+		linkedRelated:    map[*spec.View]ViewPlan{},
+		plan:             plan, velty: r.input.VeltyHandler != nil, names: map[*spec.View]string{}, owners: map[string]*spec.View{},
 		parents: map[*spec.View]string{}, dests: map[*spec.View]string{}, visiting: map[*spec.View]bool{},
 		outputs:        map[*spec.Relation]*spec.Parameter{},
 		reuseLeafTypes: len(r.input.SetMarkerViews) == 0,
@@ -73,6 +89,43 @@ func (r *planResolver) resolveViews() (map[string]int, error) {
 		indexes[identity] = len(plan.Views)
 		plan.Views = append(plan.Views, linked)
 	}
+	if r.input.Views[RootViewPath] == nil {
+		visited := map[*spec.View]bool{}
+		var related func(*spec.View) error
+		related = func(view *spec.View) error {
+			if view == nil || visited[view] {
+				return nil
+			}
+			visited[view] = true
+			for _, relation := range view.Relations {
+				if relation == nil || relation.View == nil || relation.Kind == spec.RelationKindDerived {
+					continue
+				}
+				child := relation.View
+				identity, err := child.Identity()
+				if err != nil {
+					return err
+				}
+				if ref := r.input.Views[identity]; ref != nil && ref.Borrowed == nil {
+					linked, err := r.resolveLinkedView(child, ref, identity)
+					if err != nil {
+						return err
+					}
+					planner.linkedRelated[child] = linked
+					indexes[identity] = len(plan.Views)
+					plan.Views = append(plan.Views, linked)
+					continue
+				}
+				if err := related(child); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+		if err := related(root); err != nil {
+			return nil, err
+		}
+	}
 	for _, param := range preferDefinedParams(component.Parameters) {
 		if !param.IsDerivedOutput() {
 			continue
@@ -94,10 +147,6 @@ func (r *planResolver) resolveViews() (map[string]int, error) {
 			planner.names[relation.View] = linked.Name
 			plan.Views = append(plan.Views, linked)
 		}
-	}
-	root := component.RootView
-	if root == nil && r.input.ExternalHandler != nil {
-		root = r.input.ExternalHandler.InputShape
 	}
 	if root != nil {
 		rootIdentity, err := root.Identity()
@@ -167,6 +216,21 @@ func (r *planResolver) resolveViews() (map[string]int, error) {
 		if err != nil {
 			return nil, err
 		}
+		// Only an explicit Current row reference can select body-owned reuse.
+		if reference := strings.TrimSpace(view.TypeName); reference != "" {
+			planner.readTypes[view] = append(planner.readTypes[view], reference)
+		}
+		for _, parameter := range component.Parameters {
+			if parameter == nil || !strings.EqualFold(parameter.Source.Kind, "view") || r.input.ViewBindings[parameter.Identity()] != identity {
+				continue
+			}
+			for _, reference := range []string{parameter.TypeExpr, parameter.OutputTypeExpr} {
+				if strings.TrimSpace(reference) != "" {
+					planner.readTypes[view] = append(planner.readTypes[view], unwrapQualifiedTypeName(reference))
+				}
+			}
+		}
+		planner.explicitReads[view] = len(planner.readTypes[view]) != 0
 		if err := planner.assign(view, typeName, destination); err != nil {
 			return nil, err
 		}
@@ -200,6 +264,23 @@ func (r *planResolver) resolveViews() (map[string]int, error) {
 		plan.Views = append(plan.Views, ViewPlan{
 			Identity: identity, Name: name, Type: name, Destination: planner.dests[view], Fields: fields, Ownership: ViewGenerated,
 		})
+	}
+	for _, current := range component.Views {
+		owner, shared := planner.sharedBodyRows[current]
+		if !shared {
+			continue
+		}
+		identity, err := current.Identity()
+		if err != nil {
+			return nil, err
+		}
+		index, ok := emittedTypes[planner.names[owner]]
+		if !ok {
+			return nil, fmt.Errorf("shared Current %q has no generated body owner", current.Name)
+		}
+		owned := plan.Views[index]
+		indexes[identity] = len(plan.Views)
+		plan.Views = append(plan.Views, ViewPlan{Identity: identity, Name: owned.Name, Type: owned.Type, Package: r.input.TargetPackage, Ownership: ViewSharedBody, SharedBodyIdentity: owned.Identity})
 	}
 	for _, linked := range linkedViews {
 		indexes[linked.identity] = len(plan.Views)
@@ -254,8 +335,14 @@ func (r *planResolver) resolveLinkedView(view *spec.View, reference *ViewReferen
 	if descriptor == nil || strings.TrimSpace(descriptor.Name) == "" || strings.TrimSpace(descriptor.PkgPath) == "" {
 		return ViewPlan{}, fmt.Errorf("linked view %q is not a named package type", key)
 	}
-	if explicit := strings.TrimSpace(view.TypeName); explicit != "" && explicit != descriptor.Name {
-		return ViewPlan{}, fmt.Errorf("linked view type %q does not match package type %q", explicit, descriptor.Name)
+	if explicit := strings.TrimSpace(view.TypeName); explicit != "" {
+		canonical, err := r.plan.CanonicalType(descriptor.PkgPath, explicit)
+		if err != nil {
+			return ViewPlan{}, fmt.Errorf("resolve linked view type %q: %w", explicit, err)
+		}
+		if canonical != descriptor.Key() {
+			return ViewPlan{}, fmt.Errorf("linked view type %q does not match package type %q", explicit, descriptor.Key())
+		}
 	}
 	if err := r.validateLinkedViewCasts(view, descriptor); err != nil {
 		return ViewPlan{}, err
@@ -267,11 +354,42 @@ func (r *planResolver) resolveLinkedView(view *spec.View, reference *ViewReferen
 }
 
 func (r *planResolver) independentViewType(view *spec.View, identity string) (string, error) {
-	if explicit := strings.TrimSpace(view.TypeName); explicit != "" {
-		return explicit, nil
-	}
 	name := view.CanonicalName()
-	var expression string
+	var canonical string
+	resolve := func(expression string) error {
+		base := unwrapQualifiedTypeName(strings.TrimSpace(expression))
+		if base == "" {
+			return nil
+		}
+		// Package-free provisional plans may retain an already local identifier.
+		// They cannot establish authority for a qualified generated type.
+		if r.plan.Package == "" {
+			if !token.IsIdentifier(base) || !ast.IsExported(base) {
+				return fmt.Errorf("independent view %q qualified type %q requires a generated package", name, expression)
+			}
+			if canonical != "" && canonical != base {
+				return fmt.Errorf("independent view %q has conflicting parameter types %q and %q", name, canonical, base)
+			}
+			canonical = base
+			return nil
+		}
+		resolved, err := r.plan.CanonicalType(r.plan.Package, base)
+		if err != nil {
+			return fmt.Errorf("independent view %q type %q: %w", name, expression, err)
+		}
+		local := strings.TrimPrefix(resolved, r.plan.Package+".")
+		if local == resolved || !token.IsIdentifier(local) || !ast.IsExported(local) {
+			return fmt.Errorf("independent view %q type %q must resolve to an exported Go identifier in generated package %q", name, expression, r.plan.Package)
+		}
+		if canonical != "" && canonical != resolved {
+			return fmt.Errorf("independent view %q has conflicting parameter types %q and %q", name, canonical, resolved)
+		}
+		canonical = resolved
+		return nil
+	}
+	if err := resolve(view.TypeName); err != nil {
+		return "", err
+	}
 	for _, param := range preferDefinedParams(r.input.Component.Parameters) {
 		if param == nil || !strings.EqualFold(strings.TrimSpace(param.Source.Kind), "view") {
 			continue
@@ -286,26 +404,21 @@ func (r *planResolver) independentViewType(view *spec.View, identity string) (st
 		if boundIdentity := strings.TrimSpace(r.input.ViewBindings[param.Identity()]); boundIdentity != "" && boundIdentity != identity {
 			continue
 		}
-		candidate := strings.TrimSpace(param.OutputTypeExpr)
-		if candidate == "" {
-			candidate = strings.TrimSpace(param.TypeExpr)
+		// Resolve the binding before interpreting its row name. A parameter
+		// matching multiple views cannot lend type authority to the first one.
+		if len(r.input.Component.Views) != 0 {
+			if _, err := r.independentViewForParam(param); err != nil {
+				return "", err
+			}
 		}
-		if candidate == "" {
-			candidate = defaultTagTypeName(param.Tag)
+		for _, candidate := range []string{param.TypeExpr, param.OutputTypeExpr, defaultTagTypeName(param.Tag)} {
+			if err := resolve(candidate); err != nil {
+				return "", err
+			}
 		}
-		if expression != "" && expression != candidate {
-			return "", fmt.Errorf("independent view %q has conflicting parameter types %q and %q", name, expression, candidate)
-		}
-		expression = candidate
 	}
-	if base := unwrapQualifiedTypeName(expression); base != "" {
-		if index := strings.LastIndex(base, "."); index != -1 {
-			base = base[index+1:]
-		}
-		if token.IsIdentifier(base) && ast.IsExported(base) {
-			return base, nil
-		}
-		return "", fmt.Errorf("independent view %q type %q must resolve to an exported Go identifier", name, expression)
+	if canonical != "" {
+		return strings.TrimPrefix(canonical, r.plan.Package+"."), nil
 	}
 	typeName := typecatalog.FieldName(name)
 	if !strings.HasSuffix(typeName, "View") {
@@ -422,8 +535,28 @@ func (p *viewPlanner) assign(view *spec.View, typeName, destination string) erro
 		return nil
 	}
 	typeName = strings.TrimSpace(typeName)
+	if linked, ok := p.linkedRelated[view]; ok {
+		p.names[view] = linked.Type
+		return nil
+	}
 	if typeName == "" {
 		return fmt.Errorf("generated view %q has no type name", view.Name)
+	}
+	if strings.Contains(typeName, ".") {
+		if p.plan == nil || strings.TrimSpace(p.plan.Package) == "" {
+			return fmt.Errorf("generated view %q qualified type %q requires a generated package", view.Name, typeName)
+		}
+		canonical, err := p.plan.CanonicalType(p.plan.Package, typeName)
+		if err != nil {
+			return fmt.Errorf("generated view %q type %q: %w", view.Name, typeName, err)
+		}
+		local := strings.TrimPrefix(canonical, p.plan.Package+".")
+		if local == canonical || !token.IsIdentifier(local) || !ast.IsExported(local) {
+			return fmt.Errorf("generated view %q type %q must resolve to an exported Go identifier in generated package %q", view.Name, typeName, p.plan.Package)
+		}
+		// Normalize only the emitted slot. The canonical source view retains
+		// its authored identity, including the import/package qualifier.
+		typeName = local
 	}
 	if !token.IsIdentifier(typeName) || !ast.IsExported(typeName) {
 		return fmt.Errorf("generated view %q type %q must be an exported Go identifier", view.Name, typeName)
@@ -436,6 +569,19 @@ func (p *viewPlanner) assign(view *spec.View, typeName, destination string) erro
 		return nil
 	}
 	if owner := p.owners[typeName]; owner != nil && owner != view {
+		ownerIdentity, _ := owner.Identity()
+		viewIdentity, _ := view.Identity()
+		if p.factoryBodyViews[ownerIdentity] && p.factoryBodyViews[viewIdentity] {
+			return fmt.Errorf("generated body views %q and %q compete for type %q", owner.Name, view.Name, typeName)
+		}
+		if p.factoryBodyViews[ownerIdentity] && p.explicitReads[view] {
+			if err := p.shareBodyRow(view, owner, destination); err != nil {
+				return err
+			}
+			p.names[view] = typeName
+			p.sharedBodyRows[view] = owner
+			return nil
+		}
 		// Explicit names can share one generated leaf contract. Keep inferred
 		// name collisions, mutation presence and relation-specific metadata strict.
 		if !p.reuseLeafTypes || owner.TypeName == "" || view.TypeName == "" ||
@@ -513,7 +659,11 @@ func generatedViewDestination(view *spec.View, inherited string) (string, error)
 }
 
 func (p *viewPlanner) fields(view *spec.View) ([]Field, error) {
-	fields, err := resolveScalarViewFields(p.plan, view, p.velty)
+	identity, err := view.Identity()
+	if err != nil {
+		return nil, err
+	}
+	fields, err := resolveScalarViewFieldsWithOmission(p.plan, view, p.velty, p.factoryBodyViews[identity])
 	if err != nil {
 		return nil, err
 	}
@@ -560,6 +710,37 @@ func (p *viewPlanner) fields(view *spec.View) ([]Field, error) {
 }
 
 func resolveScalarViewFields(plan *Plan, view *spec.View, includeVelty bool) ([]Field, error) {
+	return resolveScalarViewFieldsWithOmission(plan, view, includeVelty, false)
+}
+
+// Factory input shapes own body presentation, independently of persistence.
+// Current/read views outside this canonical graph retain their existing policy.
+func generatedFactoryBodyViews(handler *ExternalHandler) map[string]bool {
+	identities := map[string]bool{}
+	if handler == nil || !handler.GeneratedContracts || handler.InputShape == nil {
+		return identities
+	}
+	visited := map[*spec.View]bool{}
+	var visit func(*spec.View)
+	visit = func(view *spec.View) {
+		if view == nil || visited[view] {
+			return
+		}
+		visited[view] = true
+		if identity, err := view.Identity(); err == nil {
+			identities[identity] = true
+		}
+		for _, relation := range view.Relations {
+			if relation != nil {
+				visit(relation.View)
+			}
+		}
+	}
+	visit(handler.InputShape)
+	return identities
+}
+
+func resolveScalarViewFieldsWithOmission(plan *Plan, view *spec.View, includeVelty, factoryBody bool) ([]Field, error) {
 	if plan == nil || view == nil {
 		return nil, nil
 	}
@@ -605,7 +786,7 @@ func resolveScalarViewFields(plan *Plan, view *spec.View, includeVelty bool) ([]
 		fieldTag := scalarColumnFieldTag(column, source, includeVelty)
 		// SQL nullability supplies the original writer omission default; Go
 		// requiredness and CAST shape do not change the physical fact.
-		if column.Nullable && strings.TrimSpace(plan.Settings.Mutation) != "" && !hasStructTag(fieldTag, "json") && !strings.EqualFold(reflect.StructTag(fieldTag).Get("internal"), "true") {
+		if column.Nullable && (factoryBody || strings.TrimSpace(plan.Settings.Mutation) != "") && !hasStructTag(fieldTag, "json") && !strings.EqualFold(reflect.StructTag(fieldTag).Get("internal"), "true") {
 			fieldTag = appendStructTag(fieldTag, "json", ",omitempty")
 		}
 		if column.Groupable != nil && *column.Groupable && !hasStructTag(fieldTag, "groupable") {
@@ -711,7 +892,7 @@ func appendViewTagsWithMatch(fieldTag string, view *spec.View, match string) (st
 		return fieldTag, nil
 	}
 	fieldTag = withoutStructTags(fieldTag, tag.ViewName, tag.SQLName)
-	metadata := tag.View{DocumentationTable: view.DocumentationTable, Name: view.CanonicalName(), TypeName: view.TypeName, Dest: view.Dest, EntityHooks: view.EntityHooks, WriterIdentityPolicy: view.WriterIdentityPolicy, WriterActionPolicy: view.WriterActionPolicy, QueueContract: view.QueueContract, Reconciliation: view.Reconciliation.Clone(), InsertValidationPresence: view.InsertValidationPresence, RootNullPolicy: view.RootNullPolicy, NestedNullPolicy: view.NestedNullPolicy, RowLock: view.RowLock, RowLockOrder: view.RowLockOrder, OnDeleteNotFound: view.OnDeleteNotFound, MutationPredicateGroup: view.MutationPredicateGroup, Batch: view.BatchSize,
+	metadata := tag.View{Name: view.CanonicalName(), TypeName: view.TypeName, Dest: view.Dest, EntityHooks: view.EntityHooks, WriterIdentityPolicy: view.WriterIdentityPolicy, WriterActionPolicy: view.WriterActionPolicy, QueueContract: view.QueueContract, Reconciliation: view.Reconciliation.Clone(), InsertValidationPresence: view.InsertValidationPresence, RootNullPolicy: view.RootNullPolicy, NestedNullPolicy: view.NestedNullPolicy, RowLock: view.RowLock, RowLockOrder: view.RowLockOrder, OnDeleteNotFound: view.OnDeleteNotFound, MutationPredicateGroup: view.MutationPredicateGroup, Batch: view.BatchSize,
 		BatchConcurrency: view.BatchConcurrency,
 		Auxiliary:        view.Auxiliary,
 		Match:            match,

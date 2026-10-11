@@ -24,6 +24,18 @@ func canBatchInsert(operations []*dataOperation) bool {
 		return false
 	}
 	for _, operation := range operations {
+		// A collection is already a SQLX payload. Batching collections adds an
+		// unsupported outer slice; preserve the existing per-payload execution.
+		typ := reflect.TypeOf(operation.data)
+		if typ == nil {
+			return false
+		}
+		if typ.Kind() == reflect.Pointer {
+			typ = typ.Elem()
+		}
+		if typ.Kind() != reflect.Struct {
+			return false
+		}
 		if insertNeedsGeneratedIDBackfill(operation.data) {
 			return false
 		}

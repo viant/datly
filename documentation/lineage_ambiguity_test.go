@@ -48,3 +48,48 @@ func TestDictionaryDoesNotAttributeWildcardDuplicateToTable(t *testing.T) {
 		}
 	}
 }
+
+func TestDocumentationOverlayRetainsCompiledProvenance(t *testing.T) {
+	store := resource.New()
+	if err := store.Register("p", fstest.MapFS{
+		"before.yaml": {Data: []byte("Columns:\n  users: {id: Original identifier}\n")},
+		"after.yaml":  {Data: []byte("Columns:\n  users: {id: Updated identifier}\n")},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	loader := docs.Loader{Resources: store}
+	before, err := loader.Load(context.Background(), xdocs.Source{DocURL: "p:before.yaml"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	component := &spec.Component{Parameters: []*spec.Parameter{{Name: "Rows", Source: spec.BindSource{Kind: "output", Name: "view"}}}, RootView: &spec.View{Name: "rows", Source: &spec.ViewSource{SQL: "SELECT u.id FROM users u"}, Columns: []*spec.Column{{Name: "ID", Source: "id"}}}}
+	if err := authoring.BackfillDocumentationMetadata(component); err != nil {
+		t.Fatal(err)
+	}
+	before, err = before.ForComponent(component, reflect.TypeFor[lineageOutput]())
+	if err != nil {
+		t.Fatal(err)
+	}
+	after, err := loader.Load(context.Background(), xdocs.Source{DocURL: "p:after.yaml"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Annotation refresh must use the compiled occurrence, not reparse SQL or
+	// replace its provenance with a new, unresolved source declaration.
+	component.RootView = &spec.View{Name: "rows", Source: &spec.ViewSource{SQL: "opaque resource reference"}}
+	after, err = after.ForComponent(component, reflect.TypeFor[lineageOutput]())
+	if err != nil {
+		t.Fatal(err)
+	}
+	after = after.WithProvenance(before)
+	field := reflect.TypeFor[lineageRow]().Field(0)
+	if got := after.StructField("Rows.ID", field).Description; got != "Updated identifier" {
+		t.Fatalf("updated annotation with compiled provenance: %q", got)
+	}
+	if got := before.StructField("Rows.ID", field).Description; got != "Original identifier" {
+		t.Fatalf("previous immutable snapshot changed: %q", got)
+	}
+	if got := after.WithProvenance(nil).StructField("Rows.ID", field).Description; got != "Updated identifier" {
+		t.Fatalf("nil provenance erased annotation: %q", got)
+	}
+}

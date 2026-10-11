@@ -25,6 +25,44 @@ func resolveAuthoredHandler(prepared *dql.PreparedSource, component *spec.Compon
 	return transcribeVeltyHandler(prepared, component)
 }
 
+// canonicalBufferedExecute distinguishes the typed queue contract from the
+// existing unqualified Velty service program without changing that program.
+func canonicalBufferedExecute(source string) bool {
+	root, _, err := veltyparser.ParseWithSpansDetailed([]byte(source))
+	if err != nil {
+		return false
+	}
+	var service *expr.Select
+	for _, node := range root.Statements() {
+		if text, ok := node.(*stmt.Append); ok && strings.TrimSpace(text.Append) == "" {
+			continue
+		}
+		value, ok := node.(*expr.Select)
+		if !ok || service != nil {
+			return false
+		}
+		service = value
+	}
+	if service == nil || service.ID != "dml" {
+		return false
+	}
+	method, ok := service.X.(*expr.Select)
+	if !ok || method.ID != "Execute" {
+		return false
+	}
+	call, ok := method.X.(*expr.Call)
+	if !ok || call.X != nil || len(call.Args) < 2 {
+		return false
+	}
+	for _, argument := range call.Args[1:] {
+		field, ok := argument.(*expr.Select)
+		if !ok || (field.ID != "Input" && field.ID != "Output") {
+			return false
+		}
+	}
+	return true
+}
+
 // transcribeVeltyHandler promotes explicitly authored DML service programs to
 // the existing Velty handler artifact. Raw SQL DML and mixed read/write source
 // require their own parser-backed transcription and are deliberately excluded.

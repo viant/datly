@@ -96,7 +96,11 @@ func canonicalRootSource(parsed *query.Select, root *spec.View, frame TemplateFr
 	}
 	cteBacked := referencesCTE(parsed.From.X, parsed.WithSelects)
 	if len(projection) == 0 && !cteBacked && parsed.Qualify == nil && len(parsed.OrderBy) == 0 && parsed.Limit == nil && parsed.Offset == nil {
-		return canonicalReadSource(parsed.From.X, queryNamespace(parsed), nil, false, frame)
+		alias := strings.TrimSpace(parsed.From.Alias)
+		if alias == "" {
+			alias = queryNamespace(parsed)
+		}
+		return canonicalReadSource(parsed.From.X, alias, nil, false, frame)
 	}
 	if len(projection) == 0 {
 		projection = query.List{query.NewItem(expr.NewSelector("*"))}

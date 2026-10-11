@@ -9,7 +9,6 @@ import (
 	"path"
 	"strings"
 
-	readerpredicate "github.com/viant/datly/runtime/predicate/velty"
 	"github.com/viant/datly/spec"
 	"github.com/viant/datly/transcribe/column"
 	authoring "github.com/viant/datly/transcribe/compile"
@@ -39,12 +38,15 @@ type Result struct {
 	ViewBindings            gen.ViewBindings
 	GeneratedTypes          []gen.GeneratedTypeReference
 	GoHandler               *gen.GoHandlerAsset
+	StatementProgram        string
 	ExternalHandler         *gen.ExternalHandler
 	VeltyHandler            *gen.VeltyHandlerAsset
 	ContractTypeOverrides   ContractTypeOverrides
 	AuthoredBorrowedSQLRows []spec.BorrowedSQLRow
 	borrowedConsumedFiles   []gen.BorrowedAuthorityFile
-	Diagnostics             []*Diagnostic
+	// generatedOutputRows retains exact SQL-owned output admission for the next linking pass.
+	generatedOutputRows map[*spec.View]bool
+	Diagnostics         []*Diagnostic
 }
 
 // ContractTypeOverrides records only type names explicitly authored by DQL.
@@ -82,18 +84,24 @@ func (c *Compiler) Compile(ctx context.Context, source *Source) (*Result, error)
 		}
 		return c.compileHandler(source, header, body)
 	}
+	authoredText := source.Text
+	source, resourcePatches, err := prepareParameterizedEmbeds(ctx, source)
+	if err != nil {
+		return nil, err
+	}
 	readerName, err := dql.ParseReaderRouteName(source.Text)
 	if err != nil {
 		return nil, err
 	}
 	prepared := dql.PrepareSource(source.Text)
-	sourceMap := newSourceMap(len(source.Text), nil, prepared.TrimPrefix, source.Text)
+	authoredMap := newSourceMap(len(authoredText), resourcePatches, 0, authoredText)
+	sourceMap := newSourceMap(len(authoredText), resourcePatches, prepared.TrimPrefix, authoredText)
 	if len(prepared.Diagnostics) > 0 {
 		diagnostics := make([]*Diagnostic, 0, len(prepared.Diagnostics))
 		for _, item := range prepared.Diagnostics {
 			diagnostics = append(diagnostics, &Diagnostic{
 				Code: item.Code, Severity: SeverityError, Message: item.Message, Path: source.Path,
-				Span: Span{Start: positionAt(source.Text, item.Offset), End: positionAt(source.Text, item.End)},
+				Span: Span{Start: authoredMap.Position(item.Offset), End: authoredMap.Position(item.End)},
 			})
 		}
 		return nil, &CompileError{Cause: prepared.Err(), Diagnostics: diagnostics}
@@ -119,7 +127,7 @@ func (c *Compiler) Compile(ctx context.Context, source *Source) (*Result, error)
 		}
 		if item, ok := dql.DiagnosticForError(err); ok {
 			diagnostic.Code = item.Code
-			diagnostic.Span = Span{Start: positionAt(source.Text, item.Offset), End: positionAt(source.Text, item.End)}
+			diagnostic.Span = Span{Start: sourceMap.Position(item.Offset), End: sourceMap.Position(item.End)}
 		} else {
 			sourceMap.Remap([]*Diagnostic{diagnostic})
 		}
@@ -176,7 +184,7 @@ func (c *Compiler) Compile(ctx context.Context, source *Source) (*Result, error)
 		return nil, &CompileError{Cause: err, Diagnostics: []*Diagnostic{diagnostic}}
 	}
 	compiledTypeContext := compileTypeContext(source, component.TypeContext)
-	if err = (readerpredicate.DefinitionCompiler{Context: compiledTypeContext, Catalog: source.Types, RequireAvailable: true}).Compile(component); err != nil {
+	if err = compilePredicateContracts(component, source.Types, compiledTypeContext); err != nil {
 		return nil, err
 	}
 	var typeResolver *typecatalog.Resolver
@@ -198,15 +206,7 @@ func (c *Compiler) Compile(ctx context.Context, source *Source) (*Result, error)
 			return nil, err
 		}
 	}
-	readPlan, err := (&readPlanCompiler{sourceMap: sourceMap, path: source.Path, types: typeResolver}).compile(component, prepared)
-	if err != nil {
-		return nil, err
-	}
-	if readPlan != nil {
-		component.RootView = readPlan
-	}
-	declarations, err := newDeclarationCompiler(component, authoredViews).compile()
-	if err != nil {
+	declarationFailure := func(err error) error {
 		span := pointSpan(source.Text, 0)
 		var declarationErr *declarationError
 		if errors.As(err, &declarationErr) && prepared.Directives != nil {
@@ -218,8 +218,28 @@ func (c *Compiler) Compile(ctx context.Context, source *Source) (*Result, error)
 			Code: diagnosticDeclarationSQL, Severity: SeverityError, Message: err.Error(), Path: source.Path,
 			Span: span,
 		}
-		return nil, &CompileError{Cause: err, Diagnostics: []*Diagnostic{diagnostic}}
+		return &CompileError{Cause: err, Diagnostics: []*Diagnostic{diagnostic}}
 	}
+	metadataDeclarations, err := newDeclarationCompiler(component, authoredViews, source.Resources).compile()
+	if err != nil {
+		return nil, declarationFailure(err)
+	}
+	generatedRows, err := collectGeneratedRowAuthority(component, prepared, metadataDeclarations, typeResolver, source.Path, sourceMap)
+	if err != nil {
+		return nil, err
+	}
+	readPlan := generatedRows.root
+	if generatedRows.plan == nil {
+		// Without package declarations, retain ordinary catalog validation.
+		readPlan, err = (&readPlanCompiler{sourceMap: sourceMap, path: source.Path, types: typeResolver}).compile(component, prepared)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if readPlan != nil {
+		component.RootView = readPlan
+	}
+	declarations := metadataDeclarations
 	if declarations != nil {
 		component.Views, err = declarations.removeSkeletons(component.Views)
 		if err != nil {
@@ -252,32 +272,15 @@ func (c *Compiler) Compile(ctx context.Context, source *Source) (*Result, error)
 	if err != nil {
 		return nil, fmt.Errorf("normalize independent view contracts: %w", err)
 	}
-	applySourceDefaults(component, source)
-	if source.ColumnRefiner != nil {
-		columnCompilation := source.ColumnRefiner.BeginCompilation()
-		templateInput, compileErr := (&discoveryInputCompiler{
-			component: component, declarations: declarations.generation,
-			viewBindings: gen.ViewBindings(viewBindings), resolver: typeResolver, source: source,
-		}).compile()
-		if compileErr != nil {
-			return nil, compileErr
-		}
-		if err = columnCompilation.RefineRoot(ctx, component, source.Resources, templateInput); err != nil {
-			return nil, err
-		}
-		templateInput, compileErr = (&discoveryInputCompiler{
-			component: component, declarations: declarations.generation,
-			viewBindings: gen.ViewBindings(viewBindings), resolver: typeResolver, source: source,
-		}).compile()
-		if compileErr != nil {
-			return nil, compileErr
-		}
-		if err = columnCompilation.RefineViews(ctx, component, source.Resources, templateInput); err != nil {
-			return nil, err
-		}
-	} else if err := column.New(nil).ValidateSourceProjections(component, source.Resources, typeResolver); err != nil {
+	packageViews, err := packageInputViewReferences(component, source.PackageComponent, typeResolver)
+	if err != nil {
 		return nil, err
 	}
+	applySourceDefaults(component, source)
+	if err = refineComponentColumns(ctx, component, source, declarations.generation, gen.ViewBindings(viewBindings), typeResolver); err != nil {
+		return nil, err
+	}
+
 	if _, err := bootstrap.NormalizeCodecReferences(component, compiledTypeContext); err != nil {
 		return nil, err
 	}
@@ -287,16 +290,38 @@ func (c *Compiler) Compile(ctx context.Context, source *Source) (*Result, error)
 	if err := authoring.BackfillReportMetadata(component, source.Resources); err != nil {
 		return nil, err
 	}
-	if err := authoring.BackfillDocumentationMetadata(component, source.Resources); err != nil {
-		return nil, err
-	}
 	enrichDescription(ctx, component, source.Docs)
 	goHandler, err := source.GoHandler.Clone()
 	if err != nil {
 		return nil, err
 	}
 	veltyHandler := source.VeltyHandler.Clone()
-	veltyHandler, err = resolveAuthoredHandler(prepared, component, goHandler, veltyHandler)
+	statementProgram := ""
+	for _, item := range prepared.Statements {
+		// Preserve existing Velty programs, including their unqualified argument
+		// names and assignments. The typed statement product uses explicit
+		// canonical Input/Output arguments and is one standalone service call.
+		if strings.EqualFold(item.Operation, "Execute") && (len(prepared.Statements) != 1 || !canonicalBufferedExecute(prepared.SQL[item.Start:item.End])) {
+			continue
+		}
+		if item.Kind == statement.KindService && (strings.EqualFold(item.Operation, "ExecuteWithResult") || strings.EqualFold(item.Operation, "Execute") || strings.EqualFold(item.Operation, "Merge")) {
+			shapeOnly := len(prepared.Statements) == 2
+			if shapeOnly {
+				for _, other := range prepared.Statements {
+					if other != item && other.Kind != statement.KindRead {
+						shapeOnly = false
+					}
+				}
+			}
+			if statementProgram != "" || goHandler != nil || veltyHandler != nil || (len(prepared.Statements) != 1 && !shapeOnly) {
+				return nil, fmt.Errorf("buffered result statement cannot be combined with another handler or authored statement")
+			}
+			statementProgram = strings.TrimSpace(prepared.SQL[item.Start:item.End])
+		}
+	}
+	if statementProgram == "" {
+		veltyHandler, err = resolveAuthoredHandler(prepared, component, goHandler, veltyHandler)
+	}
 	if err != nil {
 		span := pointSpan(source.Text, 0)
 		var programErr *veltyProgramError
@@ -323,13 +348,21 @@ func (c *Compiler) Compile(ctx context.Context, source *Source) (*Result, error)
 		TypeAuthority:           typecatalog.TranscribeAuthority,
 		Declarations:            declarations.generation,
 		ViewBindings:            gen.ViewBindings(viewBindings),
+		Views:                   packageViews,
 		GoHandler:               goHandler,
+		StatementProgram:        statementProgram,
 		VeltyHandler:            veltyHandler,
 		ContractTypeOverrides:   contractTypeOverrides,
 		AuthoredBorrowedSQLRows: authoredBorrowedRows,
 		borrowedConsumedFiles:   borrowedConsumed,
 	}
-	if err := linkDeclaredOutputView(result, loader.authoredComponent); err != nil {
+	if err := linkDeclaredOutputView(result, loader.authoredComponent, generatedRows); err != nil {
+		return nil, err
+	}
+	if err := linkDeclaredOutputContract(result, loader.authoredComponent); err != nil {
+		return nil, err
+	}
+	if err := linkDeclaredRelatedViews(result, generatedRows); err != nil {
 		return nil, err
 	}
 	if err := c.admitBorrowedSQLRows(ctx, result); err != nil {
@@ -376,4 +409,46 @@ func applySourceDefaults(component *spec.Component, source *Source) {
 	if strings.TrimSpace(component.Settings.DefaultConnector) == "" {
 		component.Settings.DefaultConnector = strings.TrimSpace(source.Connector)
 	}
+}
+
+// refineComponentColumns shares the reader discovery order with generated
+// custom contracts: body columns first, then typed dependent input reads.
+func refineComponentColumns(ctx context.Context, component *spec.Component, source *Source, declarations gen.Declarations, viewBindings gen.ViewBindings, typeResolver *typecatalog.Resolver, factoryInputs ...gen.Input) error {
+	var factoryShape *gen.ExternalHandler
+	var linkedViews gen.ViewReferences
+	if len(factoryInputs) != 0 {
+		factoryShape = factoryInputs[0].ExternalHandler
+		linkedViews = factoryInputs[0].Views
+	}
+	if source.ColumnRefiner != nil {
+		if source.PackageComponent != nil && strings.TrimSpace(source.Text) == "" && source.LinkedOutputType != nil {
+			if err := bootstrap.CompileOutputColumns(component, source.LinkedOutputType); err != nil {
+				return err
+			}
+		}
+		columnCompilation := source.ColumnRefiner.BeginCompilation()
+		templateInput, compileErr := (&discoveryInputCompiler{
+			component: component, declarations: declarations,
+			viewBindings: viewBindings, resolver: typeResolver, source: source, factoryShape: factoryShape, views: linkedViews,
+		}).compile()
+		if compileErr != nil {
+			return compileErr
+		}
+		if err := columnCompilation.RefineRoot(ctx, component, source.Resources, templateInput); err != nil {
+			return err
+		}
+		templateInput, compileErr = (&discoveryInputCompiler{
+			component: component, declarations: declarations,
+			viewBindings: viewBindings, resolver: typeResolver, source: source, factoryShape: factoryShape, views: linkedViews,
+		}).compile()
+		if compileErr != nil {
+			return compileErr
+		}
+		if err := columnCompilation.RefineViews(ctx, component, source.Resources, templateInput); err != nil {
+			return err
+		}
+	} else if err := column.New(nil).ValidateSourceProjections(component, source.Resources, typeResolver); err != nil {
+		return err
+	}
+	return nil
 }

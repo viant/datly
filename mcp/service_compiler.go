@@ -250,7 +250,6 @@ func (c *serviceCompiler) publish(ctx context.Context, catalog *Catalog, policy 
 		plan, _ := catalog.Tool(name)
 		handler := tool.NewHandler(plan, componentInvoker)
 		metadata := plan.Metadata()
-
 		if c.config.ToolMetadata != nil {
 			values, err := c.config.ToolMetadata(ctx, plan.Target())
 			if err != nil {

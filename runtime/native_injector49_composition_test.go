@@ -284,7 +284,15 @@ func lease49Run(t *testing.T, late, twoDB, caller bool, fault string, ordinarySe
 	if !callbackEntered || !firstFinished {
 		t.Fatalf("intended real composition stage missing callback=%t first=%t err=%v", callbackEntered, firstFinished, operation)
 	}
-	if ordinarySecond {
+	// Protected multi-owner composition requires locally owned, undrained units.
+	// Caller-owned or previously drained roots must reject the second owner before
+	// its business work, preserving the original root rollback and caller ownership.
+	orderedRejected := twoDB && (caller || late) && !ordinarySecond && fault != "after-first" && fault != "cancel-second"
+	if orderedRejected {
+		if !errors.Is(operation, drainowner.ErrOrderedComposition) || secondFinished {
+			t.Errorf("inadmissible cross-owner composition error=%v secondFinished=%t", operation, secondFinished)
+		}
+	} else if ordinarySecond {
 		if operation != nil {
 			t.Errorf("native no-early-SQL desired assertion failed: %v", operation)
 		}
@@ -309,7 +317,7 @@ func lease49Run(t *testing.T, late, twoDB, caller bool, fault string, ordinarySe
 			}
 		}
 	}
-	if fault != "after-first" && fault != "cancel-second" && !secondFinished {
+	if !orderedRejected && fault != "after-first" && fault != "cancel-second" && !secondFinished {
 		t.Errorf("real second child never finished: %v", operation)
 	}
 	rootRows := []int(nil)
@@ -328,7 +336,7 @@ func lease49Run(t *testing.T, late, twoDB, caller bool, fault string, ordinarySe
 		wantRoot = []int{1, 2, 3, 5}
 		wantOther = []int{4}
 	}
-	if fault != "" || (ordinarySecond && operation != nil) {
+	if orderedRejected || fault != "" || (ordinarySecond && operation != nil) {
 		wantRoot = nil
 		wantOther = nil
 	}

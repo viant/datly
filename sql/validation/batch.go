@@ -26,6 +26,11 @@ type validationBatch struct {
 }
 
 func (s *Service) batch(value any, policies []xhandler.ValidationOptions) (*validationBatch, error) {
+	for _, policy := range policies {
+		if policy.CheckOnly {
+			return nil, fmt.Errorf("check-only validation is not supported in batches")
+		}
+	}
 	typ := reflect.TypeOf(value)
 	if typ == nil || typ.Kind() != reflect.Slice {
 		return nil, fmt.Errorf("framework batch validation requires a typed entity slice, got %T", value)

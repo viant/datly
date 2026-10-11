@@ -1,6 +1,7 @@
 package sql
 
 import (
+	"context"
 	"fmt"
 	"io/fs"
 	"strings"
@@ -31,6 +32,12 @@ func ResolveSource(viewName string, source *spec.ViewSource, resources fs.FS) er
 			return fmt.Errorf("read SQL resource %q for view %q: %w", uri, viewName, err)
 		}
 		resolved = string(body)
+		if len(source.Embeds) == 0 {
+			resolved, err = expandEmbeddedResources(context.Background(), resolved, resources, uri, map[string]bool{uri: true}, 0)
+			if err != nil {
+				return fmt.Errorf("expand SQL resource %q for view %q: %w", uri, viewName, err)
+			}
+		}
 	}
 	for _, reference := range source.Embeds {
 		if reference == nil || strings.TrimSpace(reference.Path) == "" {
@@ -46,7 +53,11 @@ func ResolveSource(viewName string, source *spec.ViewSource, resources fs.FS) er
 		if !strings.Contains(resolved, reference.Raw) {
 			return fmt.Errorf("view %q SQL does not contain resource token %q", viewName, reference.Raw)
 		}
-		resolved = strings.ReplaceAll(resolved, reference.Raw, string(body))
+		expanded, err := expandEmbeddedResources(context.Background(), string(body), resources, reference.Path, map[string]bool{reference.Path: true}, 0)
+		if err != nil {
+			return fmt.Errorf("expand SQL resource %q for view %q: %w", reference.Path, viewName, err)
+		}
+		resolved = strings.ReplaceAll(resolved, reference.Raw, expanded)
 	}
 	if err := validateSourceStructure(viewName, resolved); err != nil {
 		return err

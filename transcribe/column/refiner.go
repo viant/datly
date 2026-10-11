@@ -13,6 +13,7 @@ import (
 	"github.com/viant/datly/exec"
 	"github.com/viant/datly/spec"
 	dsql "github.com/viant/datly/sql"
+	sqlbuilder "github.com/viant/datly/sql/builder"
 	sqltemplate "github.com/viant/datly/sql/template"
 	"github.com/viant/datly/typecatalog"
 	"github.com/viant/sqlparser"
@@ -273,7 +274,13 @@ func (r *Compilation) discover(ctx context.Context, view *spec.View, connector s
 			// Resource-backed and inline SQL have identical table authority once
 			// the evaluated query proves one direct physical source. Persist that
 			// fact for writer planning; readers do not depend on it.
-			view.Source.Table = table
+			// Keep the authored identifier when expansion revealed an instance
+			// constant. The evaluated table is only the discovery DB target.
+			if authoredTable := directSourceTable(authoredSource.SQL); authoredTable != "" {
+				view.Source.Table = authoredTable
+			} else {
+				view.Source.Table = table
+			}
 		}
 	}
 	// Metadata reads follow the table actually selected by the evaluated query.
@@ -287,6 +294,12 @@ func (r *Compilation) discover(ctx context.Context, view *spec.View, connector s
 		}
 	}
 	var constraints map[string]tableConstraint
+	// SQLX metadata takes the decoded table name, while executable SQL keeps
+	// its identifier delimiters. Let SQLParser distinguish one quoted name
+	// from a qualified path instead of passing quotes as part of the name.
+	if parts, parseErr := sqlparser.TableIdentifierParts(source.Table); parseErr == nil && len(parts) == 1 {
+		source.Table = parts[0]
+	}
 	if table := strings.TrimSpace(source.Table); table != "" && !strings.Contains(table, "$") {
 		constraints, err = r.metadata.loadTableConstraints(ctx, db, table)
 		if err != nil {
@@ -320,11 +333,12 @@ func (r *Compilation) discover(ctx context.Context, view *spec.View, connector s
 	if strings.TrimSpace(query) == "" {
 		return evaluated, nil
 	}
-	identities, err := resolveResultSources(view.Columns, source)
+	resultView := sqlResultView(view)
+	identities, err := resolveResultSources(resultView.Columns, source)
 	if err != nil {
 		return nil, err
 	}
-	detected, err := r.refiner.detectColumnsWithSources(ctx, db, view, identities, query, evaluated.Args...)
+	detected, err := r.refiner.detectColumnsWithSources(ctx, db, resultView, identities, query, evaluated.Args...)
 	if err != nil {
 		return nil, fmt.Errorf("SQLX discovery failed for %q: %w", query, err)
 	}
@@ -336,10 +350,10 @@ func (r *Compilation) discover(ctx context.Context, view *spec.View, connector s
 	for _, column := range columns {
 		projected = append(projected, column.Name)
 	}
-	if err := validateResultAnnotations(view, projected, identities); err != nil {
+	if err := validateResultAnnotations(resultView, projected, identities); err != nil {
 		return nil, err
 	}
-	if err := identities.validateResults(view.Columns, projected); err != nil {
+	if err := identities.validateResults(resultView.Columns, projected); err != nil {
 		return nil, err
 	}
 	// Discovery uses the resolved authoredSource, including embedded resources,
@@ -354,7 +368,7 @@ func (r *Compilation) discover(ctx context.Context, view *spec.View, connector s
 		if err != nil {
 			return nil, fmt.Errorf("resolve table projection lineage: %w", err)
 		}
-		applyTableConstraints(view.Columns, constraints, lineage)
+		applyTableConstraints(view.Columns, constraints, lineage, source.Table)
 	}
 	return evaluated, nil
 }
@@ -366,7 +380,11 @@ func schemaDiscoverySQL(SQL string) (string, error) {
 	const prefix = "${predicate."
 	// Prepare a private metadata copy before evaluation and lineage inference.
 	// Runtime pagination has no window during discovery; authored SQL is retained.
-	result := sqltext.Token("$PAGINATION").ReplaceAll(SQL, "")
+	result, err := sqlbuilder.NewBuilder().ProjectionSource(SQL)
+	if err != nil {
+		return "", err
+	}
+	result = sqltext.Token("$PAGINATION").ReplaceAll(result, "")
 	for {
 		start := strings.Index(result, prefix)
 		if start < 0 {
@@ -697,7 +715,7 @@ func mergeColumnsWithSources(base, discovered []*spec.Column, identities resultS
 }
 
 func validateColumns(origin string, columns []*spec.Column) error {
-	seenNames := map[string]string{}
+	seenNames := map[string][]*spec.Column{}
 	seenFields := map[string]string{}
 	for _, column := range columns {
 		if column == nil {
@@ -708,11 +726,21 @@ func validateColumns(origin string, columns []*spec.Column) error {
 			return fmt.Errorf("%s column name is required", origin)
 		}
 		key := strings.ToLower(name)
-		if previous := seenNames[key]; previous != "" {
-			return fmt.Errorf("%s columns %q and %q are ambiguous", origin, previous, name)
+		for _, previous := range seenNames[key] {
+			// Linked row names are exact Go identifiers. Distinct original fields
+			// may differ only in case when their SQL result mappings are distinct.
+			// Authored SQL aliases retain case-insensitive uniqueness.
+			if !column.NameInferred || !previous.NameInferred || previous.Name == name ||
+				normalizedName(column.Source) == "" || normalizedName(previous.Source) == "" ||
+				normalizedName(column.Source) == normalizedName(previous.Source) {
+				return fmt.Errorf("%s columns %q and %q are ambiguous", origin, previous.Name, name)
+			}
 		}
-		seenNames[key] = name
+		seenNames[key] = append(seenNames[key], column)
 		fieldName := typecatalog.FieldName(name)
+		if column.NameInferred {
+			fieldName = typecatalog.ExportedFieldName(name)
+		}
 		if fieldName == "" {
 			return fmt.Errorf("%s column %q has no canonical Go field name", origin, name)
 		}

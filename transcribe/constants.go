@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/viant/datly/constant"
 	"github.com/viant/datly/spec"
 	"github.com/viant/datly/transcribe/dql"
 )
@@ -123,20 +124,7 @@ func resolveConstantViewTables(view *spec.View, constants map[string]string) err
 }
 
 func constantTableName(table string) string {
-	value := strings.TrimSpace(table)
-	if len(value) >= 2 && (value[0] == '`' && value[len(value)-1] == '`' || value[0] == '"' && value[len(value)-1] == '"') {
-		return ""
-	}
-	switch {
-	case strings.HasPrefix(value, "${Unsafe.") && strings.HasSuffix(value, "}"):
-		return strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(value, "${Unsafe."), "}"))
-	case strings.HasPrefix(value, "$Unsafe."):
-		return strings.TrimSpace(strings.TrimPrefix(value, "$Unsafe."))
-	case strings.HasPrefix(value, "Unsafe_"):
-		return strings.TrimSpace(strings.TrimPrefix(value, "Unsafe_"))
-	default:
-		return ""
-	}
+	return constant.TableName(table)
 }
 
 func constantDiagnosticSpan(prepared *dql.PreparedSource, err error) (dql.SourceSpan, bool) {

@@ -25,7 +25,7 @@ type Service struct {
 	// LinkedArtifact is immutable executable and linked-resource provenance
 	// supplied by the trusted embedding host. Standalone validates and copies it.
 	LinkedArtifact *exec.LinkedArtifact
-	// RequireComponentBinding denies native MCP calls without the exact observed pin.
+	// Deprecated: true is rejected. Ordinary MCP calls do not require component metadata.
 	RequireComponentBinding bool
 	// InvocationDiffer is statically injected by the trusted application host.
 	InvocationDiffer xdiffer.Differ

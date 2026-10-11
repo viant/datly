@@ -167,3 +167,51 @@ SELECT id FROM records`})
 	require.NoError(t, err)
 	require.Equal(t, reflect.TypeFor[linkedcodec.QueryList](), typ)
 }
+
+func TestGeneratedParameterCodecUsesInvocationValueLookup(t *testing.T) {
+	base := t.TempDir()
+	const module = "example.com/codecdependency"
+	(testharness.GeneratedModule{Path: module}).Write(t, base)
+	source := &Source{Scope: module + "/reader", Name: "Records", Text: `#import('transform','` + codecTestPackage + `')
+#setting($_ = $route('/records','GET'))
+#define($_ = $Suffix<string>(const/suffix).Value('/'))
+#define($_ = $Label<string>(query/label).WithCodec('transform.WithSuffix'))
+SELECT r.label, CAST(r.label AS string) FROM records r WHERE r.label=$Label`}
+	result, err := (&Discovery{BaseDir: base}).CompileSource(context.Background(), source)
+	require.NoError(t, err)
+	input, dir, err := generationInput(base, "reader", result)
+	require.NoError(t, err)
+	input.SQLResources = true
+	generated, err := NewCompiler().generateInputAt(context.Background(), base, dir, result, input)
+	require.NoError(t, err)
+	fixture := fmt.Sprintf(`package dependency_test
+import (
+ "context"
+ "database/sql"
+ "net/http/httptest"
+ "path/filepath"
+ "testing"
+ "github.com/stretchr/testify/require"
+ _ "modernc.org/sqlite"
+ _ %q
+ _ %q
+ "github.com/viant/datly/bootstrap/connector"
+ "github.com/viant/datly/standalone"
+ "github.com/viant/datly/standalone/config"
+)
+func TestGeneratedInvocationLookup(t *testing.T){
+ root,err:=filepath.Abs(".");require.NoError(t,err)
+ for _,eager:=range []bool{false,true}{t.Run(map[bool]string{false:"indexed",true:"eager"}[eager],func(t *testing.T){
+ dsn:=filepath.Join(t.TempDir(),"records.db");db,err:=sql.Open("sqlite",dsn);require.NoError(t,err)
+ _,err=db.Exec("CREATE TABLE records(label TEXT);INSERT INTO records VALUES('ONE/'),('TWO/')");require.NoError(t,err);require.NoError(t,db.Close())
+ ctx:=context.Background();server,err:=standalone.New(ctx,standalone.Options{Config:&config.Config{BaseDir:root,GoBootstrap:&config.Packages{Packages:[]string{%q},EagerComponents:eager},Connectors:[]connector.Config{{Name:"main",Driver:"sqlite",DSN:dsn}},Connector:"main"}});require.NoError(t,err);defer server.Shutdown(ctx);require.NoError(t,server.Reload(ctx,1))
+ for _,label:=range []string{"one","two"}{rec:=httptest.NewRecorder();server.ServeHTTP(rec,httptest.NewRequest("GET","/records?label="+label,nil));require.Equal(t,200,rec.Code,rec.Body.String());require.Contains(t,rec.Body.String(),map[string]string{"one":"ONE/","two":"TWO/"}[label])}
+ })}
+}
+`, generated.Result.Plan.Package, codecTestPackage, generated.Result.Plan.Package)
+	writeSourceFile(t, base, "codec_dependency_test.go", fixture)
+	command := exec.Command("go", "test", "-race", "-mod=mod", "-count=1", "-timeout=120s", ".")
+	command.Dir, command.Env = base, append(os.Environ(), "GOWORK=off")
+	output, err := command.CombinedOutput()
+	require.NoError(t, err, string(output))
+}

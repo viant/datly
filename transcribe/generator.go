@@ -9,6 +9,7 @@ import (
 
 	"github.com/viant/datly/spec"
 	"github.com/viant/datly/transcribe/column"
+	tcompile "github.com/viant/datly/transcribe/compile"
 	gen "github.com/viant/datly/transcribe/generate"
 	handlercompiler "github.com/viant/datly/transcribe/handler/compiler"
 	"github.com/viant/datly/typecatalog"
@@ -117,6 +118,9 @@ func (g Generator) generateCompiled(ctx context.Context, root, dir string, compi
 	if err != nil {
 		return nil, err
 	}
+	if err := prepareFactoryCompanions(compiled, &input); err != nil {
+		return nil, err
+	}
 	return NewCompiler().generateInputAt(ctx, root, dir, compiled, input)
 }
 
@@ -149,6 +153,7 @@ func (g Generator) generate(ctx context.Context, root, dir string, compiled *Res
 			compiled.Component.Settings = &spec.Settings{}
 		}
 		compiled.Component.Settings.Mutation = operation
+		retainWriterConstantTables(compiled.Component)
 	}
 	if language != HandlerGo && language != HandlerVelty {
 		return nil, fmt.Errorf("unsupported transcribe language %q", language)
@@ -165,7 +170,16 @@ func (g Generator) generate(ctx context.Context, root, dir string, compiled *Res
 		return nil, err
 	}
 	if operation == "get" {
+		if compiled.StatementProgram != "" {
+			return nil, fmt.Errorf("buffered result statements require a native write operation")
+		}
 		return g.generateCompiled(ctx, root, dir, compiled)
+	}
+	if compiled.StatementProgram != "" {
+		if language != HandlerGo {
+			return nil, fmt.Errorf("buffered statement result requires the native Go target")
+		}
+		return g.generateStatement(ctx, root, dir, compiled)
 	}
 	if err := column.ApplyWriterMetadata(compiled.Component); err != nil {
 		return nil, err
@@ -216,6 +230,39 @@ func (g Generator) generate(ctx context.Context, root, dir string, compiled *Res
 		return nil, handlers.diagnostic(err)
 	}
 	return NewCompiler().generateInputAt(ctx, root, dir, &copy, input)
+}
+
+// Compilation uses authored defaults for physical discovery. Writer artifacts
+// must retain the existing symbolic target so bootstrap can apply each instance.
+func retainWriterConstantTables(component *spec.Component) {
+	seen := map[*spec.View]bool{}
+	var visit func(*spec.View)
+	visit = func(view *spec.View) {
+		if view == nil || seen[view] {
+			return
+		}
+		seen[view] = true
+		if view.Source != nil {
+			// Reuse the DQL reader's template-aware table parser; raw SQL lineage
+			// deliberately treats dynamic sources as having no physical identity.
+			parsed, err := tcompile.NewReader().Compile(tcompile.ReadInput{View: &spec.View{Name: view.Name}, SQL: view.Source.SQL})
+			if err == nil && parsed.Source != nil {
+				name := constantTableName(parsed.Source.Table)
+				if value, found := constantValue(component.Settings.Const, name); name != "" && found && value == view.Source.Table {
+					view.Source.Table = "$Unsafe." + name
+				}
+			}
+		}
+		for _, relation := range view.Relations {
+			if relation != nil {
+				visit(relation.View)
+			}
+		}
+	}
+	visit(component.RootView)
+	for _, view := range component.Views {
+		visit(view)
+	}
 }
 
 func validateWriterRoute(operation, method string, root *spec.View) error {

@@ -19,6 +19,23 @@ type linkedDiscoveryInput struct {
 	Tenant int `parameter:"TenantID,kind=query,in=tenantID"`
 }
 
+func TestGoOnlyDiscoveryUsesExactLinkedInputAfterDefaultExpansion(t *testing.T) {
+	linked := reflect.TypeFor[linkedDiscoveryInput]()
+	compiler := &discoveryInputCompiler{
+		component: &spec.Component{Parameters: []*spec.Parameter{{Name: "TenantID", Source: spec.BindSource{Kind: "query", Name: "tenantID"}, TypeExpr: "int"}}},
+		source:    &Source{PackageComponent: &spec.Component{}, LinkedInputType: linked},
+	}
+	actual, err := compiler.inputType()
+	if err != nil || actual != linked {
+		t.Fatalf("Go-only discovery must retain the linked identity: %v, %v", actual, err)
+	}
+	compiler.source.Text = "SELECT tenant_id FROM tenants"
+	actual, err = compiler.inputType()
+	if err != nil || actual == linked {
+		t.Fatalf("an authored overlay must still build its changed input: %v, %v", actual, err)
+	}
+}
+
 type linkedDiscoveryDateInput struct {
 	KeywordFrom *time.Time `parameter:"KeywordFrom,kind=form,in=keyword_from"`
 	KeywordTo   *time.Time `parameter:"KeywordTo,kind=form,in=keyword_to"`

@@ -13,8 +13,9 @@ import (
 )
 
 // MatchReference resolves an exact native constraint and compares SQL-bound
-// values in the active default transaction. The generated caller separately
-// proves parent INSERT policy, captured edge authority and execution order.
+// values in the active default transaction. The generated caller or trusted
+// application-owned buffered writer separately proves the exact table, earlier
+// successful typed parent INSERT, captured bindings and same DML owner.
 // This method neither queries the database nor issues a receipt for that proof.
 func (s *Service) MatchReference(ctx context.Context, child, parent any, expected xhandler.ValidationReference) (*xhandler.ValidationReference, error) {
 	if ctx == nil {

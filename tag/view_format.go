@@ -49,7 +49,7 @@ func (v View) Value() (string, error) {
 		if value == "" {
 			return nil
 		}
-		if name == "table" || name == "docTable" {
+		if name == "table" {
 			if strings.ContainsAny(value, "\n\r") {
 				return fmt.Errorf("view table contains an unsupported delimiter")
 			}
@@ -62,7 +62,7 @@ func (v View) Value() (string, error) {
 		return nil
 	}
 	for _, item := range []struct{ name, value string }{
-		{"rootNullPolicy", v.RootNullPolicy}, {"nestedNullPolicy", v.NestedNullPolicy}, {"writerIdentity", v.WriterIdentityPolicy}, {"writerActionPolicy", v.WriterActionPolicy}, {"queueContract", v.QueueContract}, {"onDeleteNotFound", v.OnDeleteNotFound}, {"type", v.TypeName}, {"dest", v.Dest}, {"entityHooks", v.EntityHooks}, {"rowLock", v.RowLock}, {"rowLockOrder", v.RowLockOrder}, {"uri", v.URI}, {"connector", v.Connector}, {"table", v.Table}, {"docTable", v.DocumentationTable},
+		{"rootNullPolicy", v.RootNullPolicy}, {"nestedNullPolicy", v.NestedNullPolicy}, {"writerIdentity", v.WriterIdentityPolicy}, {"writerActionPolicy", v.WriterActionPolicy}, {"queueContract", v.QueueContract}, {"onDeleteNotFound", v.OnDeleteNotFound}, {"type", v.TypeName}, {"dest", v.Dest}, {"entityHooks", v.EntityHooks}, {"rowLock", v.RowLock}, {"rowLockOrder", v.RowLockOrder}, {"uri", v.URI}, {"connector", v.Connector}, {"table", v.Table},
 
 		{"cache", v.Cache}, {"cacheWarmup", v.CacheWarmup},
 		{"orderBy", v.OrderBy}, {"match", v.Match},

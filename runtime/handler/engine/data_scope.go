@@ -15,6 +15,7 @@ import (
 	handlerprovider "github.com/viant/datly/runtime/handler/provider"
 	"github.com/viant/sqlx"
 	"github.com/viant/sqlx/metadata/info"
+	"github.com/viant/sqlx/moption"
 	"github.com/viant/xdatly/connector"
 	xhandler "github.com/viant/xdatly/handler"
 )
@@ -47,6 +48,7 @@ type dataScope struct {
 	order                    string
 	once                     sync.Once
 	data                     xhandler.Data
+	associationData          xhandler.Data // fully resolved view; protected by root.mu
 	err                      error
 	completionErr            error
 	completion               xhandler.Outcome
@@ -179,6 +181,17 @@ type dmlCapability struct {
 	service xhandler.DML
 }
 
+func (c dmlCapability) Merge(table string, rows any, config info.MergeConfig, result *info.MergeResult, options ...moption.Option) error {
+	if err := c.guard.check("Merge"); err != nil {
+		return err
+	}
+	service, ok := c.service.(rhandler.MergeDML)
+	if !ok {
+		return fmt.Errorf("native SQLX merge unavailable for %s", table)
+	}
+	return service.Merge(table, rows, config, result, options...)
+}
+
 func (c dmlCapability) Dialect(ctx context.Context) (*info.Dialect, error) {
 	provider, ok := c.service.(rhandler.DialectProvider)
 	if !ok {
@@ -257,6 +270,20 @@ func (c dmlCapability) Execute(dml string, args ...any) error {
 		return err
 	}
 	return c.service.Execute(dml, args...)
+}
+
+// ExecuteWithResult is an optional native capability; Xdatly DML stays unchanged.
+func (c dmlCapability) ExecuteWithResult(statement string, dest any, args ...any) error {
+	if err := c.guard.check("ExecuteWithResult"); err != nil {
+		return err
+	}
+	service, ok := c.service.(interface {
+		ExecuteWithResult(string, any, ...any) error
+	})
+	if !ok {
+		return fmt.Errorf("native buffered statement result capability unavailable")
+	}
+	return service.ExecuteWithResult(statement, dest, args...)
 }
 
 // sequencerCapability exposes allocation and optional pending-ID reservation
@@ -659,6 +686,9 @@ func (s *dataScope) resolve(ctx context.Context) (xhandler.Data, error) {
 			}
 		}
 	}
+	root.mu.Lock()
+	s.associationData = s.data
+	root.mu.Unlock()
 	return s.data, s.err
 }
 
@@ -965,7 +995,7 @@ func (s *dataScope) enrollExecutionOwner(unit *dataScope) error {
 	}
 	return nil
 }
-func (s *dataScope) registerExecutionGuard(ctx context.Context, check func(context.Context) error) error {
+func (s *dataScope) registerExecutionGuard(ctx context.Context, check func(context.Context) error, bindings ...*drainowner.GuardBinding) error {
 	root := s.root
 	if root == nil {
 		root = s
@@ -1028,7 +1058,16 @@ func (s *dataScope) registerExecutionGuard(ctx context.Context, check func(conte
 	if !ok {
 		return root.failGuardedExecution(fmt.Errorf("captured writer execution requires an enrolled invocation owner"))
 	}
-	if err := completionOperation("register captured writer execution guard", func() error { return owner.RegisterExecutionGuard(check) }); err != nil {
+	if err := completionOperation("register captured writer execution guard", func() error {
+		if len(bindings) > 0 && bindings[0] != nil {
+			if bound, ok := owner.(interface {
+				RegisterBoundExecutionGuard(func(context.Context) error, *drainowner.GuardBinding) error
+			}); ok {
+				return bound.RegisterBoundExecutionGuard(check, bindings[0])
+			}
+		}
+		return owner.RegisterExecutionGuard(check)
+	}); err != nil {
 		return root.failGuardedExecution(err)
 	}
 	return nil

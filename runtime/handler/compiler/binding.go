@@ -201,8 +201,20 @@ func newCodecTransformer(codec xcodec.Instance) xform.Transformer {
 	return &codecTransformer{codec: codec}
 }
 
-func (t *codecTransformer) Transform(ctx context.Context, _ locator.Resolver, input any) (any, error) {
+func (t *codecTransformer) Transform(ctx context.Context, resolver locator.Resolver, input any) (any, error) {
 	// Bindly already converts to the declared codec source type. Do not collapse
 	// collection inputs; scalar codecs receive their declared scalar type.
-	return t.codec.Value(ctx, input)
+	return t.codec.Value(ctx, input, xcodec.WithValueLookup(func(ctx context.Context, name string) (any, error) {
+		if resolver == nil {
+			return nil, fmt.Errorf("codec input parameter %s is unavailable", name)
+		}
+		value, found, err := resolver.Value(ctx, &bindstate.Location{Kind: "param", In: name})
+		if err != nil {
+			return nil, err
+		}
+		if !found {
+			return nil, fmt.Errorf("codec input parameter %s is unavailable", name)
+		}
+		return value, nil
+	}))
 }

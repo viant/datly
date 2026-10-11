@@ -28,6 +28,7 @@ func (e *AmbiguityError) Error() string {
 type Resolver struct {
 	authority    Authority
 	types        map[string]*x.Type
+	origins      map[string]TypeOrigin
 	context      *ResolutionContext
 	provenance   map[string]Provenance
 	implicitTime bool
@@ -38,7 +39,7 @@ func NewResolver(catalog *Catalog, authority Authority, context *ResolutionConte
 }
 
 func NewResolverWithProvenance(catalog *Catalog, authority Authority, context *ResolutionContext, provenance map[string]Provenance) (*Resolver, error) {
-	types, err := catalog.resolverTypes(authority)
+	types, origins, err := catalog.resolverTypes(authority)
 	if err != nil {
 		return nil, err
 	}
@@ -48,11 +49,13 @@ func NewResolverWithProvenance(catalog *Catalog, authority Authority, context *R
 	implicitTime := types["time.Time"] == nil
 	if implicitTime {
 		types["time.Time"] = x.NewType(reflect.TypeOf(time.Time{}))
+		origins["time.Time"] = TypeOriginPackage
 	}
 	for _, typeOf := range []reflect.Type{reflect.TypeFor[xresponse.Status](), reflect.TypeFor[xhandler.Violation]()} {
 		key := typeOf.PkgPath() + "." + typeOf.Name()
 		if types[key] == nil {
 			types[key] = x.NewType(typeOf)
+			origins[key] = TypeOriginPackage
 		}
 	}
 	// Go 1.25 may expose json.RawMessage's runtime identity through the
@@ -62,8 +65,9 @@ func NewResolverWithProvenance(catalog *Catalog, authority Authority, context *R
 	const rawMessageKey = "encoding/json.RawMessage"
 	if types[rawMessageKey] == nil {
 		types[rawMessageKey] = x.NewType(reflect.TypeFor[json.RawMessage](), x.WithPkgPath("encoding/json"), x.WithName("RawMessage"))
+		origins[rawMessageKey] = TypeOriginPackage
 	}
-	return &Resolver{authority: authority, types: types, context: NormalizeContext(context), provenance: cloneProvenance(provenance), implicitTime: implicitTime}, nil
+	return &Resolver{authority: authority, types: types, origins: origins, context: NormalizeContext(context), provenance: cloneProvenance(provenance), implicitTime: implicitTime}, nil
 }
 
 func (r *Resolver) Resolve(typeExpr string) (string, error) {
@@ -178,7 +182,7 @@ func (r *Resolver) shapeResolver() xshape.Resolver {
 	for _, item := range r.context.Imports {
 		result.Imports[strings.TrimSpace(item.Alias)] = strings.TrimSpace(item.Package)
 	}
-	if name := strings.TrimSpace(r.context.PackageName); name != "" && result.Package != "" {
+	if name := strings.TrimSpace(r.context.PackageName); name != "" && result.Package != "" && result.Imports[name] == "" {
 		result.Imports[name] = result.Package
 	}
 	return result
@@ -386,7 +390,7 @@ func (r *Resolver) newResolution(expression, target, key, matchKind string) *Res
 	}
 	return &Resolution{
 		Expression: strings.TrimSpace(expression), Target: strings.TrimSpace(target),
-		ResolvedKey: key, MatchKind: matchKind, Provenance: r.lookupProvenance(key),
+		ResolvedKey: key, MatchKind: matchKind, Provenance: r.lookupProvenance(key), Origin: r.origins[key],
 	}
 }
 

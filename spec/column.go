@@ -4,16 +4,8 @@ import "strings"
 
 // Column is canonical compile-time metadata for one scalar view projection.
 // Runtime field handles and database services are resolved by later owners.
-// ColumnOrigin identifies the physical dictionary source for documentation.
-// A non-nil empty origin records an ambiguous/computed output with no source.
-type ColumnOrigin struct {
-	Table  string `json:"table,omitempty"`
-	Column string `json:"column,omitempty"`
-}
-
 type Column struct {
-	DocumentationOrigin *ColumnOrigin `json:"documentationOrigin,omitempty"`
-	Name                string        `json:"name"`
+	Name string `json:"name"`
 	// Output and Selector retain authoring-time SQL projection identities.
 	Output           string `json:"output,omitempty"`
 	Selector         string `json:"selector,omitempty"`
@@ -75,10 +67,6 @@ func (c *Column) Clone() *Column {
 		return nil
 	}
 	result := *c
-	if c.DocumentationOrigin != nil {
-		origin := *c.DocumentationOrigin
-		result.DocumentationOrigin = &origin
-	}
 	if c.Groupable != nil {
 		groupable := *c.Groupable
 		result.Groupable = &groupable

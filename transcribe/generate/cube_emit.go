@@ -30,7 +30,7 @@ func (p *Plan) cubeFileText() (string, error) {
 	handlerAlias := add("github.com/viant/datly/runtime/handler", "rhandler")
 	reflectAlias := add("reflect", "reflect")
 	componentAlias := add("github.com/viant/xdatly", "xdatly")
-	var body strings.Builder
+	var body, anchors strings.Builder
 	for _, cube := range p.Cubes {
 		inputName := cube.InputName
 		if cube.GenerateInput {
@@ -113,7 +113,8 @@ func (p *Plan) cubeFileText() (string, error) {
 		}
 		fmt.Fprintf(&body, "func New%s() (%s.TypedHandler,error) { return %s.NewLinkedFacade[%s,%s,%s](%s) }\n", cube.Name, handlerAlias, reportAlias, inputName, outputName, p.HolderName(), strconv.Quote(string(encoded)))
 		fmt.Fprintf(&body, "func (%s) DatlyHandler(name string) func() (%s.TypedHandler,error) { if name==%s {return New%s};return nil }\n", holder, handlerAlias, strconv.Quote("New"+cube.Name), cube.Name)
-		fmt.Fprintf(&body, "func %sDatlyType() %s.Type {return %s.TypeFor[%s]()}\nvar %sDatly=new(%s)\nvar _datlyReachable%s=%s.TypeFor[%s]()\nvar %sHandler=%s{}.DatlyHandler\n", cube.Name, reflectAlias, reflectAlias, holder, cube.Name, holder, holder, reflectAlias, holder, cube.Name, holder)
+		fmt.Fprintf(&anchors, "var _anchor%s = %s.TypeFor[%s]()\n", holder, reflectAlias, holder)
+		fmt.Fprintf(&body, "func %sDatlyType() %s.Type {return %s.TypeFor[%s]()}\nvar %sDatly=new(%s)\nvar %sHandler=%s{}.DatlyHandler\n", cube.Name, reflectAlias, reflectAlias, holder, cube.Name, holder, cube.Name, holder)
 	}
 	var result strings.Builder
 	fmt.Fprintf(&result, "package %s\n\nimport (\n", p.PackageName())
@@ -129,7 +130,9 @@ func (p *Plan) cubeFileText() (string, error) {
 			fmt.Fprintf(&result, "%s %q\n", item.Alias, item.Package)
 		}
 	}
-	result.WriteString(")\n")
+	result.WriteString(")\n\nfunc init() {}\n\n")
+	result.WriteString(anchors.String())
+	result.WriteString("\n")
 	result.WriteString(used)
 	return result.String(), nil
 }

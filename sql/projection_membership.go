@@ -102,7 +102,7 @@ func (p SelectorProjection) HasSourceOutput(namespace, name string) (found, comp
 			end = at
 		}
 	}
-	parsed, err := sqlparser.ParseQuery(p.SQL[start:end])
+	parsed, err := parseProjectionQuery(p.SQL[start:end])
 	if err != nil {
 		return false, false, &UnresolvedProjectionError{Cause: err}
 	}
@@ -228,7 +228,7 @@ func (p SelectorProjection) columns() ([]ProjectionColumn, bool, error) {
 	if ok {
 		parsed, err = parts.parse()
 	} else {
-		parsed, err = sqlparser.ParseQuery(p.SQL)
+		parsed, err = parseProjectionQuery(p.SQL)
 	}
 	if err != nil || parsed == nil || len(parsed.List) == 0 {
 		return nil, false, &UnresolvedProjectionError{Cause: err}
@@ -239,7 +239,7 @@ func (p SelectorProjection) columns() ([]ProjectionColumn, bool, error) {
 			return nil, false, &UnresolvedProjectionError{}
 		}
 		if projectionStar(item) != nil {
-			full, err := sqlparser.ParseQuery(strings.TrimSuffix(strings.TrimSpace(p.SQL), ";"))
+			full, err := parseProjectionQuery(strings.TrimSuffix(strings.TrimSpace(p.SQL), ";"))
 			if err != nil || full == nil {
 				return nil, false, &UnresolvedProjectionError{Cause: err}
 			}
@@ -304,23 +304,29 @@ func (p SelectorProjection) applyMappings(columns []ProjectionColumn) {
 	if p.View == nil {
 		return
 	}
+	// Normalize each original source name once. Repeated names within one
+	// column retain one target; names shared by columns remain ambiguous.
+	targets := make(map[string]int)
+	for i, column := range columns {
+		for _, name := range column.names {
+			key := canonicalProjectionName(name)
+			if key == "" {
+				continue
+			}
+			if prior, exists := targets[key]; exists && prior != i {
+				targets[key] = -1
+			} else if !exists {
+				targets[key] = i
+			}
+		}
+	}
 	aliases := make([][]string, len(columns))
 	add := func(name, source string) {
 		if name == "" || source == "" {
 			return
 		}
-		found := -1
-		for i, column := range columns {
-			if !column.Matches(source) {
-				continue
-			}
-			if found >= 0 {
-				found = -2
-				break
-			}
-			found = i
-		}
-		if found >= 0 {
+		found, exists := targets[canonicalProjectionName(source)]
+		if exists && found >= 0 {
 			aliases[found] = append(aliases[found], name)
 		}
 	}
@@ -404,4 +410,119 @@ func projectionStar(item *query.Item) *expr.Star {
 		}
 	}
 	return nil
+}
+
+// SourceOrderingSQL finds the immediate owner of an explicitly authorized
+// qualified ordering target. Only a complete, transparent declaration wrapper
+// may be removed; physical source names are then validated by the database.
+func (p SelectorProjection) SourceOrderingSQL(target string) (string, error) {
+	if sqltext.Token("$PAGINATION").Contains(p.SQL) {
+		return "", fmt.Errorf("source ordering conflicts with an authored pagination slot")
+	}
+	parts, err := sqlparser.TableIdentifierParts(target)
+	if err != nil || len(parts) != 2 {
+		return "", fmt.Errorf("source ordering requires a qualified identifier")
+	}
+	text := unwrapProjectionSQL(p.SQL)
+	stmt, err := parseProjectionQuery(text)
+	if err != nil || stmt == nil {
+		return "", fmt.Errorf("source ordering scope is unresolved")
+	}
+	owner := func(q *query.Select) bool {
+		sources := []wildcardSource{{alias: q.From.Alias, node: q.From.X}}
+		for _, join := range q.Joins {
+			if join != nil {
+				sources = append(sources, wildcardSource{alias: join.Alias, node: join.With})
+			}
+		}
+		matches := 0
+		for _, src := range sources {
+			if src.node == nil {
+				continue
+			}
+			if src.alias == "" {
+				src.alias = sqlparser.NewColumn(query.NewItem(src.node)).Identity()
+			}
+			if src.matchesQualifier(parts[:1]) {
+				matches++
+			}
+		}
+		return matches == 1
+	}
+	removedWrapper := false
+	if !owner(stmt) {
+		// Reuse the parser's raw source, retaining its exact original SQL.
+		// No recursive descent, field rewrite, outer predicate or window loss.
+		raw, ok := stmt.From.X.(*expr.Raw)
+		if !ok || stmt.From.Alias == "" || len(stmt.List) != 1 || stmt.List[0].Alias != "" ||
+			strings.EqualFold(stmt.Kind, "DISTINCT") || len(stmt.Joins) > 0 || stmt.QualifyClause != nil || len(stmt.GroupBy) > 0 || stmt.Having != nil ||
+			stmt.Union != nil || len(stmt.WithSelects) > 0 || len(stmt.OrderBy) > 0 || stmt.Qualify != nil ||
+			stmt.Window != nil || stmt.Limit != nil || stmt.Offset != nil {
+			return "", fmt.Errorf("source ordering target %q has no immediate owner", target)
+		}
+		star := projectionStar(stmt.List[0])
+		if star == nil || len(star.Except) > 0 {
+			return "", fmt.Errorf("source ordering wrapper is not transparent")
+		}
+		if star.X != nil {
+			qualifier := strings.TrimSuffix(sqlparser.Stringify(star.X), ".")
+			if selector, ok := star.X.(*expr.Selector); ok {
+				qualifier = selector.Name
+			}
+			if !(ProjectionNames{stmt.From.Alias}).Matches(qualifier) {
+				return "", fmt.Errorf("source ordering wrapper is not transparent")
+			}
+		}
+		text = unwrapProjectionSQL(raw.Raw)
+		removedWrapper = true
+		stmt, err = parseProjectionQuery(text)
+		if err != nil || stmt == nil || stmt.Union != nil || !owner(stmt) {
+			return "", fmt.Errorf("source ordering target %q has no immediate owner", target)
+		}
+	}
+	if removedWrapper && (len(stmt.OrderBy) > 0 || stmt.Limit != nil || stmt.Offset != nil || stmt.Window != nil) {
+		return "", fmt.Errorf("source ordering conflicts with an authored order or window")
+	}
+	found, complete, err := (SelectorProjection{SQL: text}).HasSourceOutput(parts[0], parts[1])
+	if err != nil {
+		return "", err
+	}
+	if !found && complete {
+		return "", fmt.Errorf("source ordering field %q is not exposed by its source", target)
+	}
+	// An unresolved physical table is permitted only after the exact alias
+	// owner was proven above. Opaque derived queries are not physical tables.
+	if !complete {
+		physical := false
+		sources := []wildcardSource{{alias: stmt.From.Alias, node: stmt.From.X}}
+		for _, join := range stmt.Joins {
+			if join != nil {
+				sources = append(sources, wildcardSource{alias: join.Alias, node: join.With})
+			}
+		}
+		for _, src := range sources {
+			if src.node == nil {
+				continue
+			}
+			if src.alias == "" {
+				src.alias = sqlparser.NewColumn(query.NewItem(src.node)).Identity()
+			}
+			if !src.matchesQualifier(parts[:1]) {
+				continue
+			}
+			switch src.node.(type) {
+			case *expr.Ident, *expr.Selector:
+				physical = true
+				for _, cte := range stmt.WithSelects {
+					if (ProjectionNames{cte.Alias}).Matches(sqlparser.Stringify(src.node)) {
+						physical = false
+					}
+				}
+			}
+		}
+		if !physical {
+			return "", fmt.Errorf("source ordering field %q requires source metadata", target)
+		}
+	}
+	return text, nil
 }

@@ -299,7 +299,7 @@ func projectionWildcard(projection node.Node) (string, bool) {
 	}
 }
 
-func applyTableConstraints(columns []*spec.Column, constraints map[string]tableConstraint, lineage *projectionLineage) {
+func applyTableConstraints(columns []*spec.Column, constraints map[string]tableConstraint, lineage *projectionLineage, sourceTables ...string) {
 	if len(columns) == 0 || len(constraints) == 0 || lineage == nil {
 		return
 	}
@@ -342,7 +342,49 @@ func applyTableConstraints(columns []*spec.Column, constraints map[string]tableC
 			column.Default = &value
 		}
 		applyReferenceConstraint(column, constraint.reference, resultName)
+		if constraint.unique && len(sourceTables) != 0 {
+			applyUniqueTableConstraint(column, sourceTables[0], resultName)
+		}
 	}
+}
+
+// SQLX compiles uniqueness from scalar tags, independently of view metadata.
+// The caller supplies only the table whose physical projection was proven.
+func applyUniqueTableConstraint(column *spec.Column, table, resultName string) {
+	if table = strings.TrimSpace(table); table == "" {
+		return
+	}
+	parsed := tags.NewTags(strings.TrimSpace(column.Tag))
+	sqlxTag := parsed.Lookup(sqlio.TagSqlx)
+	metadata := sqlio.ParseTag(reflect.StructTag(parsed.Stringify()))
+	if metadata.Transient || metadata.Table != "" {
+		return
+	}
+	if sqlxTag != nil {
+		blocked := false
+		_ = sqlxTag.Values.Match(func(value string) error {
+			key := strings.TrimSpace(value)
+			if i := strings.IndexByte(key, '='); i >= 0 {
+				key = strings.TrimSpace(key[:i])
+			}
+			if strings.EqualFold(key, "table") || strings.EqualFold(key, "uniqueDep") || strings.EqualFold(key, "unique") && !metadata.IsUnique {
+				blocked = true
+			}
+			return nil
+		})
+		if blocked {
+			return
+		}
+	} else {
+		mapping := firstValue(column.Source, column.Name)
+		if resultName = strings.TrimSpace(resultName); resultName != "" && !strings.EqualFold(mapping, resultName) {
+			mapping += "|" + resultName
+		}
+		parsed.Set(sqlio.TagSqlx, mapping)
+		sqlxTag = parsed.Lookup(sqlio.TagSqlx)
+	}
+	sqlxTag.Append("table=" + table)
+	column.Tag = parsed.Stringify()
 }
 
 func applyReferenceConstraint(column *spec.Column, reference *tableReference, resultName string) {

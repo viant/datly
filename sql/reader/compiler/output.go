@@ -25,8 +25,9 @@ var (
 
 // ResolveOutputField resolves the exported output-struct field backing a
 // reserved output slot. It first honors an explicit output-kind param whose
-// Source.Name matches the slot output name (view also accepts body), then uses the slot's conventional
-// field when no param claims it.
+// Source.Name matches the slot output name. View accepts body as a fallback only
+// when no explicit view field exists, so application body fields cannot shadow
+// the declared SQL result. The conventional field is used when neither claims it.
 func ResolveOutputField(component *spec.Component, outputType reflect.Type, slot OutputSlot) string {
 	for outputType != nil && outputType.Kind() == reflect.Ptr {
 		outputType = outputType.Elem()
@@ -35,17 +36,23 @@ func ResolveOutputField(component *spec.Component, outputType reflect.Type, slot
 		return ""
 	}
 	if component != nil {
-		for _, param := range component.Parameters {
-			if param == nil {
-				continue
-			}
-			name := strings.TrimSpace(param.Source.Name)
-			matches := strings.EqualFold(name, slot.OutputName) || slot.OutputName == ViewSlot.OutputName && strings.EqualFold(name, "body")
-			if !strings.EqualFold(strings.TrimSpace(param.Source.Kind), "output") || !matches {
-				continue
-			}
-			if field, ok := typecatalog.FieldByName(outputType, param.Name); ok {
-				return field.Name
+		names := []string{slot.OutputName}
+		if slot.OutputName == ViewSlot.OutputName {
+			names = append(names, "body")
+		}
+		for _, outputName := range names {
+			for _, param := range component.Parameters {
+				if param == nil {
+					continue
+				}
+				name := strings.TrimSpace(param.Source.Name)
+				matches := strings.EqualFold(name, outputName)
+				if !strings.EqualFold(strings.TrimSpace(param.Source.Kind), "output") || !matches {
+					continue
+				}
+				if field, ok := typecatalog.FieldByName(outputType, param.Name); ok {
+					return field.Name
+				}
 			}
 		}
 	}

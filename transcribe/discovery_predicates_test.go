@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	readerpredicate "github.com/viant/datly/runtime/predicate/velty"
 	"github.com/viant/datly/transcribe/dql"
 	"github.com/viant/datly/transcribe/testdata/linkedpredicate"
 	"github.com/viant/datly/typecatalog"
@@ -124,7 +125,7 @@ func TestPredicateDiscoveryRegistryPrecedenceAndFailureIsolation(t *testing.T) {
 		{name: "conflicting identities", reference: "Threshold", explicit: reflect.TypeFor[availablePredicate](), existing: reflect.TypeFor[linkedpredicate.Threshold](), wantError: "different compiled identity"},
 		{name: "incompatible explicit identity", reference: "Threshold", explicit: reflect.TypeFor[incompatiblePredicate](), wantError: "does not implement predicate.Handler"},
 		{name: "missing type", reference: "Absent", wantError: "was not found"},
-		{name: "unlinked type", reference: "SourceOnly", wantError: "not linked into this binary"},
+		{name: "valid source type", reference: "SourceOnly"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			base := predicateDiscoveryWorkspace(t)
@@ -149,9 +150,16 @@ func (*SourceOnly) Compute(context.Context, any) (*predicate.Criteria, error) { 
 				require.ErrorContains(t, err, tc.wantError)
 			} else {
 				require.NoError(t, err)
-				actual, _, err := result.Source.Types.ResolveRuntimeType(typecatalog.PackageAuthority, predicateTestPackage+".Threshold")
-				require.NoError(t, err)
-				require.Equal(t, tc.explicit, actual)
+				if tc.reference == "SourceOnly" {
+					require.Equal(t, predicateTestPackage+".SourceOnly", result.Component.Parameters[0].Predicates[0].Args[0])
+					runtimeErr := (readerpredicate.DefinitionCompiler{Catalog: result.Source.Types, RequireAvailable: true}).Compile(result.Component)
+					require.ErrorContains(t, runtimeErr, "not linked into this binary")
+				}
+				if tc.reference != "SourceOnly" {
+					actual, _, err := result.Source.Types.ResolveRuntimeType(typecatalog.PackageAuthority, predicateTestPackage+".Threshold")
+					require.NoError(t, err)
+					require.Equal(t, tc.explicit, actual)
+				}
 			}
 			actual, _, err := catalog.ResolveRuntimeType(typecatalog.PackageAuthority, predicateTestPackage+".Threshold")
 			require.NoError(t, err)

@@ -52,7 +52,115 @@ A reader is generated separately with `get` and its own DQL/package. An
 existing application handler remains an explicit alternative with its own
 orchestration; it is not required for this generated-writer workflow.
 
+### Keep an existing imperative writer's persistence ownership
+
+A same-package `handler_factory` can generate its local Input/Output and SQL-derived
+body while the application handler retains its existing scoped DML and sequencing.
+Use canonical `transcribe post` for this factory path with the authored POST, PATCH
+or PUT route, or a DELETE route with independently declared Current reads. The
+public route remains exactly as declared; the factory path does not synthesize an
+automatic mutation handler. Ordinary `transcribe put` continues
+to select the generated update policy described above.
+
+When a request body is needed, declare one body parameter as the direct generated
+`*Record` or `[]*Record` type.
+An object remains an object; a collection remains a collection. Describe the row
+in the DQL SQL graph, using the real authoring connector so transcription derives
+columns, keys and FK metadata. Regeneration updates that shape after schema changes.
+An optional object binds omitted data and explicit null to nil, preserving its
+presence marker so the application's original validation can distinguish them.
+Codecs, alternate output types, foreign root types and container wrappers cannot
+replace this generated body authority.
+
+A Current-only DELETE factory needs no body graph. Its declared read views generate
+the Input fields and bind before the handler runs; the handler decides which rows
+to delete through scoped DML. The HTTP verb does not infer deletion or create an
+automatic mutation handler.
+
+A factory without a body can also borrow an existing authored Current row in its
+own package or another package. Use its canonical package identity (or a declared
+import alias) in the view parameter, for example `[]*rows.Record`; keep the SQL
+projection in DQL. Transcription links that exact type and preserves its SQLX
+column mappings and presence marker. Fetched rows do not acquire write presence;
+the handler sets the fields it intends to write. Mixed generated `?` read rows
+continue to evolve from their SQL schema independently.
+
+The explicitly selected factory package owns generated contracts even when the
+DQL is stored elsewhere. Borrowed local rows must be exported authored types in
+the selected Go build; a stale generated row is not reusable type authority.
+Borrowed rows cannot declare generated destinations, change wrappers/cardinality
+or use CAST to redefine their fields. Keep a named type anchor such as
+`var _anchorRecord = reflect.TypeFor[Record]()` when the row needs runtime package
+discovery; an anchor retains the type without registering it.
+
+The body SQL is a shape source, not an executable body read or a second persistence
+owner. Independent Current/read parameters retain their normal native bindings.
+The handler uses the invocation's existing `handler.DML` and `handler.Sequencer`
+capabilities. With buffered composition, child calls share the caller's journal;
+only its completion owner executes and commits the writes. Do not flush from a
+child, or queue those same records through another generated writer.
+
 ## Describe the writable graph
+
+### Queue one statement, optionally retaining its inserted identity
+
+For a single static INSERT, UPDATE or DELETE that does not return an identity,
+use the existing buffered `Execute` call. Its arguments are typed scalar
+Input/Output fields in SQL placeholder order:
+
+```sql
+#package('pkg/constraints')
+#setting($_ = $route('/constraints/{type}', 'PATCH'))
+#define($_ = $ConstraintType<int>(path/type))
+#define($_ = $Identity<int64>(output/body))
+
+$dml.Execute("UPDATE constraints SET audience_ids = '' WHERE type = ?", $Input.ConstraintType)
+```
+
+Run `datly transcribe patch` with the normal source and destination options.
+This queues the authored bulk statement rather than reading identities and
+rewriting it as individual row updates. The normal root completion owns its
+transaction and reports execution failures; a child does not commit or flush.
+`Execute` does not populate `Identity` or expose a rows-affected result.
+
+For a route whose write is one static INSERT, operation-based transcription can
+generate a typed buffered statement handler. Declare scalar inputs and a signed
+integer output destination, then author the statement in DQL:
+
+```sql
+#package('pkg/records')
+
+#setting($_ = $route('/records/{name}', 'PATCH'))
+
+#define($_ = $Name<string>(path/name))
+#define($_ = $Identity<int64>(output/body))
+
+$dml.ExecuteWithResult("INSERT INTO records(name) VALUES (?)", $Output.Identity, $Input.Name)
+```
+
+Run `datly transcribe patch` with the normal source and destination options.
+Generation preserves this route's lack of a request body. An optional single
+SELECT graph can supply SQL-derived output shapes; its wildcard fields evolve
+when the authoring schema changes and the component is regenerated. That graph
+does not add a second persistence owner or an automatic response read.
+
+The generated handler binds the invocation's existing DML capability and queues
+the exact SQL and typed arguments. Root completion executes it in journal order
+using the existing shared buffer and transaction. The statement's `LastInsertId`
+is checked for signed overflow and assigned before output finalization,
+independently of `RowsAffected`. Application input initialization and validation
+and output finalization use the normal contract lifecycle. An injected child
+does not flush the caller's buffer.
+
+`ExecuteWithResult` accepts one static INSERT with one explicit VALUES row,
+scalar Input/Output field arguments, and an addressable signed integer identity
+destination. `Execute` accepts one static INSERT, UPDATE or DELETE with scalar
+field arguments and no result destination. Both reject dynamic SQL, multiple
+writes, transaction control, DDL, record sequencing,
+reconciliation, identity/action policies, entity hooks and mutation tokens.
+It does not allocate IDs, classify inserts versus updates, retry statements,
+or query an identity afterward. Other writable graphs continue to use their
+existing generated mutation policy.
 
 Consider three tables:
 
@@ -998,6 +1106,18 @@ The different output `Finalize` signatures are alternatives on a Go type;
 | Output `FinalizeMCP(ctx, mcp.Context)` | Applicable MCP success hook in the ordinary output lifecycle |
 | Definition `FinalizeFailure` | Handles failure when a generated Program is unavailable; input/output may be nil |
 
+A typed custom contract can explicitly implement the existing runtime
+`handler.OutcomeFinalizer`. `custom.New` and `custom.Factory` preserve that
+opt-in; ordinary custom contracts keep their existing output lifecycle. The
+callback receives the invocation, typed result and resolved `handler.Outcome`
+once after the owning root completes. Nested callbacks wait for the caller's
+outcome, so compensation observes a later parent failure. Check
+`outcome.CommitConfirmed()` before publishing success. Handle a nil result on
+early input failure, and return only new callback errors rather than repeating
+`outcome.Error`. A callback failure after commit does not undo that commit.
+This opt-in replaces ordinary output finalizers for that handler; use the
+error-aware output contract when a precommit veto is required.
+
 ```mermaid
 sequenceDiagram
     participant Handler
@@ -1075,6 +1195,25 @@ Data combines buffered DML, sequencing and flush capabilities. A locally owned
 transaction is completed by its owner. Flushing into a supplied transaction does
 not transfer commit ownership. Caller-pending, failure and unknown completion
 must not be reported as confirmed commits.
+
+### Buffered SQLX merge
+
+Native DML also provides the optional `runtime/handler.MergeDML` capability.
+Resolve the invocation DML capability and assert this interface before calling
+`Merge(table, rows, config, &result, options...)`. It queues SQLX's existing
+dialect-specific merge executor with the supplied configuration and options.
+The result destination receives the original SQLX `MergeResult` when draining
+executes the operation; the invocation owner retains commit and rollback.
+A successful merge result alone does not establish a confirmed commit.
+
+SQLX fetches destination rows through the database outside the supplied
+transaction. Native DML therefore rejects an already executed, uncommitted
+journal prefix with `dml.ErrMergeUncommittedPrefix`. Use a separately owned
+component transaction when the original workflow requires an independent merge
+commit boundary. The database pool must also accommodate SQLX's destination
+fetch and any configured transient allocator alongside the owner transaction.
+Do not supply `moption.WithTransaction`; native DML supplies its own transaction.
+Merge metrics retain the target table and use operation type `MERGE`.
 
 ### Composition shares the completion owner
 
@@ -1359,3 +1498,34 @@ this grouped policy and is rejected before work starts.
 It queues shallow row images separately, preserving its existing pointer and
 presence semantics. Neither queue policy authorizes arbitrary actions, changes
 the allocator, or replaces a finite reconciliation plan.
+
+
+### Checking associated values without writing them
+
+For an associated value that the component checks but does not insert or update,
+use the existing protected `FrameworkValidatorKey` with action-neutral options:
+
+```go
+off := false
+checked, err := validator.Validate(ctx, association, handler.ValidationOptions{
+    CheckOnly: true,
+    Fields: selectedFields,
+    CheckUnique: &off,
+    Shallow: true,
+    Location: "Data[0].Associations[0]",
+})
+```
+
+`selectedFields` supplies canonical Go field names from the bound presence
+marker. An empty, non-nil set checks no fields. This mode runs selected Go,
+not-null and reference checks through the invocation's existing connection and
+transaction. It does not assert that the value is a new or existing mutation.
+Uniqueness must be explicitly disabled; `Action`, `Previous`, `PreviousFields`,
+`HonorPresence`, `DeferredFields` and `SatisfiedReferences` are forbidden.
+Use one typed entity per call; batches reject `CheckOnly`.
+
+Validation sees rows already executed in the active transaction. Queued DML is
+still buffered and is not database-visible: these checks never flush it or
+complete the transaction. Actual inserts and updates retain their regular
+validation policies, including matched Current/read provenance and complete
+final validation. This mode must not replace mutation validation.

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sort"
 
 	"github.com/viant/bindly/resource"
@@ -26,6 +27,9 @@ func (c *discoveryCompilation) compilePackages(ctx context.Context, project *Pro
 		}
 		pkg := c.packages[identity]
 		route := pkg.Routes[0]
+		if c.discovery.SourceFile != "" && filepath.Base(route.SourceFile) != c.discovery.SourceFile {
+			continue
+		}
 		resources, err := c.packageResources(ctx, route.Dir)
 		if err != nil {
 			return err

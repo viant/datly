@@ -246,7 +246,7 @@ The output plan currently recognizes `json`, `tabular`, `csv`, `xml`, `xls` and
 global lowerCamel names; the output compiler validates other case-format names
 through its text-format owner. `date_format` passes through the date-format to
 Go-layout converter. Per-field tags and explicit JSON names retain their
-separate precedence (`runtime/output/plan.go`, `formats.go`, `wire.go`).
+separate precedence (`output/plan.go`, `formats.go`, `wire.go`).
 
 ### Cache settings and warmup options
 
@@ -575,6 +575,20 @@ denies that property even if a request field binds it; generation and runtime
 compilation preserve that denial. A duplicate permission call is not required
 when binding-inferred permission is intended.
 Selector policy calls can still enable independently injected properties.
+Explicitly qualified `allowed_order_by_columns` targets may also name ordering-only
+columns in the query's immediate FROM/JOIN scope. For example, `p.id` permits
+`sort=id` and `sort=p.id` without adding ID to a DISTINCT result. An alias such as
+`owner:u.name` has the same exact source ownership requirement. Only a complete
+transparent declaration wrapper may be removed to put ordering and pagination
+in that scope. Unqualified entries do not expand the output projection, criteria
+fields or source access; numeric ordering still addresses selected outputs.
+The database must support DISTINCT ordering by the omitted column in its
+configured dialect and SQL mode.
+Wrapper removal rejects conflicting authored order/window/pagination slots and
+deferred selector criteria, partition, relation or lock clauses whose ownership
+cannot be preserved. Declare filters inside the original source scope instead of
+relying on a removed wrapper alias.
+
 An explicit Criteria field defaults to the compiled view's columns unless
 `selector_filterable` narrows that set.
 `selector_default_limit` is both the
@@ -1022,7 +1036,7 @@ consult when syntax and behavior differ; the EBNF does not replace these checks.
 | Auxiliary graph, composite links, AND 1=1 | `transcribe/compile/reader_relation_projection.go`, `transcribe/handler/compiler/relations.go`, `generation_auxiliary.go` | `transcribe/auxiliary_runtime_test.go`, `to_one_hint_test.go`, `to_one_hint_runtime_test.go`, `to_one_hint_regenerate_test.go` |
 | Lifecycle and invariant metadata | `transcribe/handler/compiler/entity_hooks.go`, `entity_invariants.go`, `transcribe/generate/lifecycle.go` | `transcribe/lifecycle_target_test.go`, `mutation_hook_scaffold_test.go`, `entity_invariant_generation_test.go` |
 | File roles, shapes, regeneration ownership | `spec/generation_files.go`, `transcribe/generate/filename_settings.go`, `destination_packages.go`, `persist*.go` | `transcribe/generate/filename_layout_test.go`, `cmd/datly/generate_regeneration_test.go`, `transcribe/authored_hook_destinations_test.go` |
-| Global casing and explicit names | `runtime/output`, pinned Structology JSON marshaler | `runtime/output/wire_test.go` |
+| Global casing and explicit names | `output`, pinned Structology JSON marshaler | `output/wire_test.go` |
 | Resources / static / MCP folders / YAML | `transcribe/resources.go`, `transcribe/generate/static.go`, `transcribe/description.go`, `spec/resource_folder.go` | `transcribe/package_resources_sqlite_test.go`, `static_test.go`, `mcp_folders_test.go`, `shared_documentation_test.go` |
 | Cache and warmup metadata | `transcribe/dql/component_settings_cache.go`, `spec/cache_warmup.go`, bootstrap native SQLX cache wiring | `spec/cache_warmup_test.go`, `transcribe/dql/parse_test.go` |
 | DQL + Velty boundary and SQL fragment arguments | `transcribe/dql/template_sql.go`, `sql/template`, `sql/fragment`, `runtime/predicate/velty` | `transcribe/compile/reader_template_test.go`, `sql/template/program_test.go`, `runtime/predicate/velty/builder_test.go` |

@@ -32,7 +32,7 @@ func (p *Projection) OutputControls(controls *spec.ViewControls) (*spec.ViewCont
 	if controls == nil || len(p.outer) == 0 || strings.TrimSpace(controls.OrderBy) == "" {
 		return controls, nil
 	}
-	parsed, err := sqlparser.ParseQuery("SELECT 1 FROM projection_order ORDER BY " + controls.OrderBy)
+	parsed, err := parseProjectionQuery("SELECT 1 FROM projection_order ORDER BY " + controls.OrderBy)
 	if err != nil || parsed == nil || len(parsed.OrderBy) == 0 || parsed.Limit != nil || parsed.Offset != nil || parsed.Union != nil {
 		return nil, fmt.Errorf("order by cannot be resolved in projected output scope")
 	}
@@ -54,11 +54,11 @@ func (p *Projection) GroupedOutputControls(controls *spec.ViewControls) (*spec.V
 	if controls == nil || strings.TrimSpace(controls.OrderBy) == "" {
 		return controls, nil
 	}
-	selectStmt, err := sqlparser.ParseQuery(p.Source)
+	selectStmt, err := parseProjectionQuery(p.Source)
 	if err != nil || selectStmt == nil || len(selectStmt.List) == 0 {
 		return nil, fmt.Errorf("grouped projection order cannot be resolved")
 	}
-	parsed, err := sqlparser.ParseQuery("SELECT 1 FROM grouped_projection_order ORDER BY " + controls.OrderBy)
+	parsed, err := parseProjectionQuery("SELECT 1 FROM grouped_projection_order ORDER BY " + controls.OrderBy)
 	if err != nil || parsed == nil || len(parsed.OrderBy) == 0 || parsed.Limit != nil || parsed.Offset != nil || parsed.Union != nil {
 		return nil, fmt.Errorf("grouped projection order cannot be resolved")
 	}

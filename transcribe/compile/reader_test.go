@@ -782,3 +782,16 @@ func TestReaderPreservesDatabaseExpressions(t *testing.T) {
 		})
 	}
 }
+
+func TestReaderCompileQuotedRootAliasPreservesSQL(t *testing.T) {
+	actual, err := NewReader().Compile(ReadInput{View: &spec.View{Name: "Orders", Source: &spec.ViewSource{}}, SQL: "SELECT order.*, items.* FROM (SELECT id FROM orders) `order` JOIN (SELECT order_id FROM items) items ON items.order_id = order.id"})
+	if err != nil {
+		t.Fatalf("Compile() error = %v", err)
+	}
+	if actual.Namespace != "order" || actual.Relations[0].ParentNamespace != "order" {
+		t.Fatalf("namespaces: root=%q parent=%q", actual.Namespace, actual.Relations[0].ParentNamespace)
+	}
+	if got := strings.Join(strings.Fields(actual.Source.SQL), " "); got != "SELECT * FROM (SELECT id FROM orders) `order`" {
+		t.Fatalf("root SQL = %q", got)
+	}
+}

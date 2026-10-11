@@ -9,6 +9,15 @@ import (
 	h "github.com/viant/xdatly/handler"
 )
 
+type subsetRoot struct {
+	ID       int
+	Children []*subsetChild
+}
+type subsetChild struct {
+	ID, ParentID int
+	Value        string
+}
+
 type subsetValidationProbe struct {
 	rows       []any
 	options    [][]h.ValidationOptions
@@ -34,7 +43,16 @@ func (v *subsetValidationProbe) Validate(_ context.Context, rows any, options ..
 
 func subsetValidationFixture(t *testing.T) *Program {
 	t.Helper()
-	p, _, _ := phaseOccurrenceFixture(t)
+	key := Field{Name: "ID", Index: []int{0}, AutoIncrement: true}
+	root := &Record{Path: "Rows", Table: "items", EntityType: reflect.TypeFor[subsetRoot](), Keys: []Field{key}, Sequence: &key, Fields: []Field{key}, reconciliation: &reconciliationMetadata{}}
+	child := &Record{Path: "Rows/Children", Table: "children", EntityType: reflect.TypeFor[subsetChild](), Keys: []Field{key}, Fields: []Field{key, {Name: "ParentID", Index: []int{1}}, {Name: "Value", Index: []int{2}}}}
+	root.Relations = []*Relation{{Field: []int{1}, Child: child, Links: []Link{{Parent: key, Child: Field{Name: "ParentID", Index: []int{1}}}}}}
+	p := &Program{metadata: &Metadata{Root: root}, frames: &MutationFrames{}, previousFields: map[*Record]fieldSet{child: {"ID": true, "ParentID": true, "Value": true}}}
+	for id := 1; id <= 2; id++ {
+		row := &subsetRoot{ID: id, Children: []*subsetChild{{ParentID: id, Value: "new"}}}
+		parent := &Frame{Record: root, Entity: reflect.ValueOf(row)}
+		p.frames.Rows = append(p.frames.Rows, parent, &Frame{Record: child, Entity: reflect.ValueOf(row.Children[0]), Parent: parent})
+	}
 	for i, frame := range p.frames.Rows {
 		frame.Action = h.WriteInsert
 		frame.Location = string(rune('a' + i))
@@ -53,11 +71,11 @@ func TestValidationSubsetRetainsGraphAndTypedGroupOrder(t *testing.T) {
 	if err := p.validateFrameSubset(context.Background(), probe, false, selected); err != nil {
 		t.Fatal(err)
 	}
-	children, ok := probe.rows[0].([]*phaseTestChild)
+	children, ok := probe.rows[0].([]*subsetChild)
 	if !ok || len(children) != 2 || children[0] != graph.Rows[3].Entity.Interface() || children[1] != graph.Rows[1].Entity.Interface() {
 		t.Fatal("selected typed child order lost")
 	}
-	roots, ok := probe.rows[1].([]*phaseTestRoot)
+	roots, ok := probe.rows[1].([]*subsetRoot)
 	if !ok || len(roots) != 1 || roots[0] != graph.Rows[2].Entity.Interface() {
 		t.Fatal("first occurrence record grouping lost")
 	}
@@ -126,7 +144,7 @@ func TestValidationSubsetPreservesSparseAndTransactionalOptions(t *testing.T) {
 	p := subsetValidationFixture(t)
 	child := p.frames.Rows[1]
 	child.Action = h.WriteUpdate
-	previous := &phaseTestChild{ID: 10, ParentID: 1, Value: "previous"}
+	previous := &subsetChild{ID: 10, ParentID: 1, Value: "previous"}
 	child.Previous = reflect.ValueOf(previous)
 	probe := &subsetValidationProbe{}
 	if err := p.validateFrameSubset(context.Background(), probe, false, []*Frame{child}); err != nil {

@@ -51,3 +51,33 @@ func TestRefinerEmbeddedWildcardKeepsAuthoredProjection(t *testing.T) {
 		})
 	}
 }
+
+func TestRefinerNestedEmbeddedSourcesKeepOriginalSQLAndAliases(t *testing.T) {
+	h := testharness.NewSQLiteHarness(t)
+	ctx := context.Background()
+	if err := h.ExecStatements(ctx, `CREATE TABLE records(id INTEGER PRIMARY KEY,status TEXT NOT NULL)`); err != nil {
+		t.Fatal(err)
+	}
+	const authored = "SELECT c.* FROM (${embed:creative/creative.sql}) c"
+	const creative = "SELECT cr.id,cr.status FROM records cr JOIN (${embed:ids.sql}) ids ON ids.id=cr.id"
+	resources := fstest.MapFS{"creative/creative.sql": {Data: []byte(creative)}, "creative/ids.sql": {Data: []byte("SELECT id FROM records")}}
+	embedded := &spec.Component{Settings: &spec.Settings{DefaultConnector: "main"}, RootView: &spec.View{Name: "Creative", Source: &spec.ViewSource{SQL: authored, Embeds: []*spec.EmbeddedSQLRef{{Path: "creative/creative.sql", Raw: "${embed:creative/creative.sql}"}}}}}
+	inline := embedded.Clone()
+	inline.RootView.Source = &spec.ViewSource{SQL: "SELECT c.* FROM (SELECT cr.id,cr.status FROM records cr JOIN (SELECT id FROM records) ids ON ids.id=cr.id) c"}
+	refiner := New(Connections{"main": h.DB})
+	if err := refiner.Refine(ctx, inline, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := refiner.Refine(ctx, embedded, resources, nil); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(inline.RootView.Columns, embedded.RootView.Columns) {
+		t.Fatalf("nested columns differ: %#v / %#v", inline.RootView.Columns, embedded.RootView.Columns)
+	}
+	if embedded.RootView.Source.SQL != authored || len(embedded.RootView.Source.Embeds) != 1 {
+		t.Fatal("discovery rewrote authored SQL")
+	}
+	if string(resources["creative/creative.sql"].Data) != creative {
+		t.Fatal("discovery rewrote source resource")
+	}
+}

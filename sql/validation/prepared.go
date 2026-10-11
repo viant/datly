@@ -35,8 +35,10 @@ func (p *plan) prepare(policy xhandler.ValidationOptions) (preparedCandidate, er
 	policy.PreviousFields = p.snapshot(policy.PreviousFields)
 	result := preparedCandidate{policy: policy}
 	var err error
-	if result.native, err = p.candidate(policy); err != nil {
-		return preparedCandidate{}, err
+	if !policy.CheckOnly {
+		if result.native, err = p.candidate(policy); err != nil {
+			return preparedCandidate{}, err
+		}
 	}
 	options := []govalidator.Option{govalidator.WithShallow(true)}
 	if policy.Location != "" {

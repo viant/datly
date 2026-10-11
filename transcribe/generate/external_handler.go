@@ -44,7 +44,7 @@ func (r *planResolver) resolveExternalHandler() error {
 	} else if h.Package == "" || !token.IsIdentifier(h.Name) || !token.IsExported(h.Name) || r.plan.Input.Ownership != ContractLinked || r.plan.Output.Ownership != ContractLinked {
 		return fmt.Errorf("external handler requires imported contracts and an exported factory")
 	}
-	if r.input.Component.RootView != nil || len(r.input.Component.Views) != 0 {
+	if r.input.Component.RootView != nil || (!h.GeneratedContracts && len(r.input.Component.Views) != 0) {
 		return fmt.Errorf("external handler registration cannot contain reader views")
 	}
 	if r.plan.Handler != h.Package+"."+h.Name {

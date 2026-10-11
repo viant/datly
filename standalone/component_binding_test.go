@@ -42,6 +42,8 @@ func TestStandaloneLinkedArtifactOrdinaryMCPLazyAndEager(t *testing.T) {
 			require.Equal(t, "fixture-artifact-release", server.source.linkedArtifact.Revision)
 			found := false
 			for _, entry := range listing.Tools {
+				require.NotContains(t, entry.Meta, tool.ComponentBindingMetaKey)
+				require.NotContains(t, entry.Meta, tool.ComponentBindingMetaKey)
 				if entry.Name == "NativeReportCube" {
 					found = true
 					require.NotContains(t, entry.Meta, tool.ComponentBindingMetaKey)

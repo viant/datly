@@ -141,6 +141,9 @@ func scaffoldArtifacts(dir string, plan *Plan) ([]EmittedFile, []EmittedFile, []
 			existing[filepath.Clean(relative)] = true
 		}
 		for _, role := range []string{"mutation", "links", "frames", "previous", "layout", "actions", "mutation_output", "validation"} {
+			if role == "links" && plan.FactoryLink != nil {
+				continue
+			}
 			destination := plan.Generation.File(role, role+".go")
 			if existing[filepath.Clean(destination)] {
 				continue
@@ -148,8 +151,14 @@ func scaffoldArtifacts(dir string, plan *Plan) ([]EmittedFile, []EmittedFile, []
 			files = append(files, EmittedFile{Path: filepath.Join(dir, destination), Content: supportRoleSource(packageName, role)})
 		}
 	}
+	var userFiles []EmittedFile
 	if resources := plan.Resources; resources != nil {
-		files = append(files, EmittedFile{Path: filepath.Join(dir, resources.Destination), Content: resources.source(packageName)})
+		source := EmittedFile{Path: filepath.Join(dir, resources.Destination), Content: resources.source(packageName)}
+		if resources.authoredSource() {
+			userFiles = append(userFiles, source)
+		} else {
+			files = append(files, source)
+		}
 		for _, file := range resources.Files {
 			files = append(files, EmittedFile{Path: filepath.Join(dir, file.Path), Content: file.Content})
 		}
@@ -261,7 +270,6 @@ func scaffoldArtifacts(dir string, plan *Plan) ([]EmittedFile, []EmittedFile, []
 			EmittedFile{Path: filepath.Join(dir, plan.VeltyHandler.ResourceDestination), Content: plan.VeltyHandler.Template},
 		)
 	}
-	var userFiles []EmittedFile
 	if plan.HookScaffold != nil {
 		content, err := hookScaffoldFileText(packageName, plan.HookScaffold)
 		if err != nil {

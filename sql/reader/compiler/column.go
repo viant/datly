@@ -54,7 +54,7 @@ func columnsFromType(rowType reflect.Type) ([]*data.Column, error) {
 			Column:    columnName,
 			Output:    metadata.SQLOutput,
 			Groupable: metadata.Groupable,
-			Tag:       string(field.Tag),
+			Tag:       dtag.CanonicalFieldTag(string(field.Tag)),
 		}
 		nullable := field.Type.Kind() == reflect.Ptr
 		column.ConfigureNullability(nullable, field.Type.Kind().String())

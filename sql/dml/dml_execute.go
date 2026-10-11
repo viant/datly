@@ -24,6 +24,8 @@ func (d *Data) executePlanStep(ctx context.Context, db *sql.DB, tx *sql.Tx, step
 		return d.executeDeleteStep(ctx, db, tx, step)
 	case dataOpExecute:
 		return d.executeSQLStep(ctx, tx, step)
+	case dataOpMerge:
+		return d.executeMergeStep(ctx, db, tx, step)
 	default:
 		return fmt.Errorf("unsupported data operation %q", step.kind)
 	}
@@ -145,8 +147,18 @@ func (d *Data) executeDeleteStep(ctx context.Context, db *sql.DB, tx *sql.Tx, st
 
 func (d *Data) executeSQLStep(ctx context.Context, tx *sql.Tx, step executionStep) error {
 	for _, operation := range step.operations {
-		if _, err := tx.ExecContext(ctx, operation.dml, operation.args...); err != nil {
+		result, err := tx.ExecContext(ctx, operation.dml, operation.args...)
+		if err != nil {
 			return err
+		}
+		if operation.lastInsertID != nil {
+			id, err := result.LastInsertId()
+			if err != nil {
+				return err
+			}
+			if err := assignLastInsertID(operation.lastInsertID, id); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -178,7 +190,7 @@ func (d *Data) insertConnectionRetryEligible(ctx context.Context, dialect *info.
 	owner.mu.Lock()
 	defer owner.mu.Unlock()
 	for _, result := range owner.mutationResults {
-		if result.Error == nil && result.Affected > 0 && (result.Operation == string(dataOpInsert) || result.Operation == string(dataOpUpdate)) {
+		if result.Error == nil && result.Affected > 0 && (result.Operation == string(dataOpInsert) || result.Operation == string(dataOpUpdate) || result.Operation == string(dataOpMerge)) {
 			return false
 		}
 	}

@@ -94,7 +94,12 @@ func (s *Service) Validate(ctx context.Context, value any, options ...any) (*xha
 	if err != nil {
 		return nil, err
 	}
-	native := append(nativeCheckOptions(policy), []sqlvalidator.Option{sqlvalidator.WithShallow(true), sqlvalidator.WithCandidatePolicies([]sqlvalidator.CandidatePolicy{candidate.native}), sqlvalidator.WithLocation(policy.Location)}...)
+	native := append(nativeCheckOptions(policy), sqlvalidator.WithShallow(true), sqlvalidator.WithLocation(policy.Location))
+	if policy.CheckOnly {
+		native = append(native, sqlvalidator.WithFieldFilter(policy.Fields.Has))
+	} else {
+		native = append(native, sqlvalidator.WithCandidatePolicies([]sqlvalidator.CandidatePolicy{candidate.native}))
+	}
 	if connection.Tx != nil {
 		native = append(native, sqlvalidator.WithTransaction(connection.Tx))
 	}

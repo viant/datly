@@ -323,13 +323,7 @@ func hasWritableRole(record *Record) bool {
 // Program is invocation-owned universal mutation state. The same type is used
 // for every writer component; only Metadata and values differ.
 type Program struct {
-	finiteRootDecision          *finiteRootDecision
-	sourceSliceGroups           map[*Action]*sourceSliceGroup
 	reconciliation              *reconciliationAttempt
-	phaseSelectionAttempted     bool
-	rootPreparationAttempted    bool
-	rootAllocationAttempted     bool
-	rootProjectionAttempted     bool
 	reconciliationFrames        []*Frame
 	reconciliationSeal          string
 	queueSlots                  []queueSlotSeal
@@ -431,6 +425,11 @@ func (p *Program) graphIndex() *graphIndex {
 	if p.graph != nil && len(p.graph.rows) == len(rows) && (len(rows) == 0 || &p.graph.rows[0] == &rows[0]) {
 		return p.graph
 	}
+	p.graph = newGraphIndex(rows)
+	return p.graph
+}
+
+func newGraphIndex(rows []*Frame) *graphIndex {
 	index := &graphIndex{rows: rows, positions: make(map[*Frame]int, len(rows)), byPointer: make(map[uintptr]*Frame, len(rows)), inserts: map[insertKey][]insertReference{}}
 	for position, frame := range rows {
 		if frame == nil {
@@ -456,7 +455,6 @@ func (p *Program) graphIndex() *graphIndex {
 			index.inserts[key] = append(index.inserts[key], insertReference{position: position, frame: frame, value: value})
 		}
 	}
-	p.graph = index
 	return index
 }
 
@@ -586,8 +584,6 @@ type Action struct {
 	Entity reflect.Value
 	// Native actions retain their graph role even when entity pointers alias.
 	frame *Frame
-	// Minted only by native finite-phase lowering; never supplied by hooks.
-	sourceGroup *sourceSliceGroup
 }
 
 func (p *Program) allocate(ctx context.Context, sequencer xhandler.Sequencer, record *Record, roots reflect.Value) error {
@@ -824,7 +820,8 @@ func (h *Handler) Execute(ctx context.Context, invocation rhandler.Invocation) (
 			if guardErr = registrar.EnableCapturedExecutionGuards(); guardErr != nil {
 				return nil, guardErr
 			}
-			if guardErr = registrar.RegisterExecutionGuard(check); guardErr != nil {
+			guardErr = registrar.RegisterExecutionGuard(check)
+			if guardErr != nil {
 				return nil, guardErr
 			}
 			if guardErr = h.CapturedExecutionGuardRegistered(invocation); guardErr != nil {
@@ -986,6 +983,7 @@ func (h *Handler) CapturedExecutionGuard(invocation rhandler.Invocation) (func(c
 		return errors.Join(program.validateAfterQueueInputState(), program.validateReconciliationSeal())
 	}, nil
 }
+
 func (h *Handler) CapturedExecutionGuardRegistered(invocation rhandler.Invocation) error {
 	if h == nil || h.metadata == nil || !hasRetainedWriterGuards(h.metadata.Root) {
 		return nil
@@ -1098,9 +1096,6 @@ func (h *Handler) program(input any) (*Program, error) {
 		result.prepareHooks(h.metadata.Root)
 		result.hook = result.hooksByRecord[h.metadata.Root]
 		entities := value.Elem().Field(h.metadata.InputField)
-		if err := result.captureFiniteRootDecision(entities); err != nil {
-			return nil, err
-		}
 		if err := result.captureOriginal(h.metadata.Root, entities); err != nil {
 			return nil, err
 		}
@@ -1242,9 +1237,6 @@ func (p *Program) prepare(ctx context.Context, binder xhandler.Binder) error {
 	if err := p.assemblePreviousRelations(p.metadata.Root); err != nil {
 		return err
 	}
-	if err := p.validateFiniteRootDecision(entities); err != nil {
-		return err
-	}
 	if err := p.buildRecordFrames(ctx, binder, p.metadata.Root, entities, nil); err != nil {
 		return err
 	}
@@ -1297,9 +1289,6 @@ func (p *Program) prepare(ctx context.Context, binder xhandler.Binder) error {
 			return err
 		}
 		p.frames = &MutationFrames{}
-		if err = p.validateFiniteRootDecision(entities); err != nil {
-			return err
-		}
 		if err = p.buildRecordFrames(ctx, binder, p.metadata.Root, entities, nil); err != nil {
 			return err
 		}
@@ -1707,6 +1696,10 @@ func (p *Program) unresolvedParentLinks(frame *Frame) bool {
 }
 
 func (p *Program) validationOptions(frame *Frame, transactionStarted bool) xhandler.ValidationOptions {
+	return p.validationOptionsWithReferences(frame, transactionStarted, p.satisfiedGraphReferences(frame))
+}
+
+func (p *Program) validationOptionsWithReferences(frame *Frame, transactionStarted bool, graphReferences []xhandler.ValidationReference) xhandler.ValidationOptions {
 	unique, refs := true, true
 	if frame.NoopMissingIdentity {
 		// An unmatched no-op has no Previous evidence. Complete candidate
@@ -1727,12 +1720,11 @@ func (p *Program) validationOptions(frame *Frame, transactionStarted bool) xhand
 		options.HonorPresence = true
 		options.Fields = frame.Fields
 	}
-	if frame.Previous.IsValid() && !isPolicyInsert(frame) && !p.isFiniteRootInsert(frame) {
+	if frame.Previous.IsValid() && !isPolicyInsert(frame) {
 		options.Previous = frame.Previous.Interface()
 		options.PreviousFields = p.fieldsOf(frame.Previous.Elem().Type())
 		options.Fields = frame.Fields
 	}
-	graphReferences := p.satisfiedGraphReferences(frame)
 	if frame.Action == xhandler.WriteUpdate && len(graphReferences) > 0 {
 		// SQLX reference receipts are insert-only. For a sparse update whose new
 		// FK value is proven to match an earlier insert in this ordered graph,
@@ -2318,12 +2310,6 @@ func (p *Program) buildEntityFrame(ctx context.Context, binder xhandler.Binder, 
 		default:
 			return fmt.Errorf("unsupported writer operation %q", p.metadata.Operation)
 		}
-		if parent == nil && record == p.metadata.Root && p.finiteRootDecision != nil {
-			action = p.finiteRootDecision.action
-			if action == xhandler.WriteUpdate && !previous.IsValid() {
-				return fmt.Errorf("finite_reconciliation root UPDATE requires real Current at occurrence %d", position)
-			}
-		}
 		noopMissing := p.metadata.Operation == "patch" && record.WriterIdentityPolicy == assignedUpdateIdentity && !previous.IsValid() && requestedNonzeroIdentity(record, entity.Elem()) && !deleteRequested
 		if noopMissing {
 			if err := p.checkMissingIdentityGuards(ctx, binder, record, entity.Elem()); err != nil {
@@ -2424,7 +2410,7 @@ func scalarFamily(kind reflect.Kind) uint8 {
 }
 
 func (p *Program) applyInvariants(frame *Frame) error {
-	if !frame.Previous.IsValid() || isPolicyInsert(frame) || p.isFiniteRootInsert(frame) {
+	if !frame.Previous.IsValid() || isPolicyInsert(frame) {
 		return nil
 	}
 	current, previous := frame.Entity.Elem(), frame.Previous.Elem()
@@ -2566,6 +2552,11 @@ func Compile(component *spec.Component, inputType, outputType reflect.Type, oper
 	}
 	if metadata.Table == "" {
 		return nil, fmt.Errorf("writer root table is required")
+	}
+	if table, err := resolvedWriterTable(component, metadata.Table); err != nil {
+		return nil, fmt.Errorf("writer root table: %w", err)
+	} else {
+		metadata.Table = table
 	}
 	columns := map[string]*spec.Column{}
 	for _, column := range component.RootView.Columns {
@@ -2883,6 +2874,11 @@ func compileRecord(component *spec.Component, inputType reflect.Type, name, path
 	}
 	if record.Table == "" {
 		return nil, fmt.Errorf("writer relation %s requires a table", path)
+	}
+	if table, err := resolvedWriterTable(component, record.Table); err != nil {
+		return nil, fmt.Errorf("writer relation %s table: %w", path, err)
+	} else {
+		record.Table = table
 	}
 	columns := map[string]*spec.Column{}
 	if view != nil {

@@ -163,3 +163,55 @@ func assertResolvedRootSQL(t *testing.T, input bootstrap.ArtifactInput, expected
 		t.Fatalf("root SQL = %q, want %q", got, expected)
 	}
 }
+
+type resourceHolderInput struct{}
+type resourceHolderA struct{}
+
+func (resourceHolderA) EmbedFS() *embed.FS { return &eagerOverlapAResources }
+
+type resourceHolderB struct{}
+
+func (resourceHolderB) EmbedFS() *embed.FS { return &eagerOverlapBResources }
+
+func TestReflectedArtifactInputScopesDefaultFSByExactHolder(t *testing.T) {
+	holders := []any{resourceHolderA{}, resourceHolderB{}}
+	for _, holder := range holders {
+		typ := reflect.TypeOf(holder)
+		component := testResourceComponent(typ.Name(), "unused.sql")
+		source := &sourceComponent{source: &source{config: &config.Config{}, holders: holders}}
+		route := &bootstrap.RouteSource{PackagePath: typ.PkgPath(), HolderType: typ.Name(), LinkedInputType: reflect.TypeFor[resourceHolderInput](), LinkedOutputType: reflect.TypeFor[eagerOverlapOutput]()}
+		input, err := source.reflectedArtifactInput(component, route, typecatalog.NewCatalog(), resource.New())
+		if err != nil {
+			t.Fatal(err)
+		}
+		own, other := "testdata/eager_overlap_a/query.sql", "testdata/eager_overlap_b/query.sql"
+		if typ.Name() == "resourceHolderB" {
+			own, other = other, own
+		}
+		expected, err := fs.ReadFile(holder.(bootstrap.Embedder).EmbedFS(), own)
+		if err != nil {
+			t.Fatal(err)
+		}
+		actual, err := fs.ReadFile(input.Resources, own)
+		if err != nil || string(actual) != string(expected) {
+			t.Fatalf("holder %s default: %q %v", typ.Name(), actual, err)
+		}
+		if _, err = fs.ReadFile(input.Resources, other); err == nil {
+			t.Fatalf("holder %s leaked sibling filesystem", typ.Name())
+		}
+	}
+	// An authored input's resource capability keeps its established priority.
+	source := &sourceComponent{source: &source{config: &config.Config{}, holders: holders}}
+	typ := reflect.TypeFor[resourceHolderB]()
+	route := &bootstrap.RouteSource{PackagePath: typ.PkgPath(), HolderType: typ.Name(), LinkedInputType: reflect.TypeFor[eagerOverlapAInput](), LinkedOutputType: reflect.TypeFor[eagerOverlapOutput]()}
+	input, err := source.reflectedArtifactInput(testResourceComponent("Override", "unused.sql"), route, typecatalog.NewCatalog(), resource.New())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = fs.ReadFile(input.Resources, "testdata/eager_overlap_a/query.sql"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = fs.ReadFile(input.Resources, "testdata/eager_overlap_b/query.sql"); err == nil {
+		t.Fatal("holder bypassed authored input resource capability")
+	}
+}

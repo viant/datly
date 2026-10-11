@@ -448,3 +448,23 @@ func TestRefinerPreservesAuthoredJoinedWildcardAcrossDiscoveryDialect(t *testing
 		t.Fatalf("discovery dialect escaped into runtime: %s", runtimeSQL)
 	}
 }
+
+func TestRefinerDiscoversRelationCriteriaWithoutChangingAuthoredSQL(t *testing.T) {
+	harness := testharness.NewSQLiteHarness(t)
+	ctx := context.Background()
+	if err := harness.ExecStatements(ctx, `CREATE TABLE criteria_records (id INTEGER PRIMARY KEY, status TEXT NOT NULL)`); err != nil {
+		t.Fatal(err)
+	}
+	for _, clause := range []string{"$WHERE_CRITERIA", "WHERE 1=1 $AND_CRITERIA", "WHERE 1=0 $OR_CRITERIA"} {
+		t.Run(clause, func(t *testing.T) {
+			authored := "SELECT r.id, r.status, '$AND_CRITERIA' AS marker FROM criteria_records r " + clause
+			component := &spec.Component{Settings: &spec.Settings{DefaultConnector: "main"}, RootView: &spec.View{Name: "Records", Source: &spec.ViewSource{SQL: authored}}}
+			if err := New(Connections{"main": harness.DB}).Refine(ctx, component, nil, nil); err != nil {
+				t.Fatal(err)
+			}
+			if component.RootView.Source.SQL != authored || len(component.RootView.Columns) != 3 || !component.RootView.Columns[0].PrimaryKey {
+				t.Fatalf("source/columns = %q / %+v", component.RootView.Source.SQL, component.RootView.Columns)
+			}
+		})
+	}
+}

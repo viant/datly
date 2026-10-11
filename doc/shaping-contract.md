@@ -59,6 +59,11 @@ resolution belongs to the compiled plan and does not inspect runtime row values.
 - `format:"name=DisplayName"` controls public serialization naming. Global
   `case_format('lc')` then produces `displayName`; it does not change SQL columns.
 - A nonempty `json` name is an exact public-name override.
+- SQL-nullable scalars in native writer shapes and SQL-derived generated
+  handler-factory body graphs infer `omitempty`. Independent Current/read views
+  retain their own policy. Explicit JSON tags override this default; nonnullable
+  scalar zeroes and nonnil pointers holding zero remain present. Factory body
+  shaping does not enable automatic persistence.
 - Standalone outer `CAST(view.column AS GoType)` supplies Go type authority.
   A database SQL CAST inside the view keeps its SQL meaning.
 - `T`, `*T`, slices and maps retain their Go semantics. NULL differs from a
@@ -80,7 +85,20 @@ contracts remain application-owned. Changes to DQL fields can require updates to
 application code that uses them. No `.datly-gen.json`, ownership flag or replacement
 tracking sidecar is required.
 
-A qualified, typed output holder explicitly selects an existing Go row graph:
+A qualified `output_type` links an existing application-owned contract. When
+that qualified name declares a generated destination, regeneration retains its
+generated ownership from the type catalog. Discovering its emitted Go source
+does not convert it into a linked contract or remove its generated definition.
+
+A qualified, typed output holder selects an existing Go row graph unless its
+exact local type is explicitly declared by SQL on the root output view and
+has no authored Go type authority. That explicit SQL declaration can generate
+the row on the first transcription and regenerate it as the schema evolves.
+Qualification alone does not grant generated ownership. Existing linked and
+borrowed references, authored Go types, and artifact protection remain authoritative.
+Generated components retain their named `reflect.TypeFor` discovery anchors.
+
+To select an existing Go row graph:
 
 ```sql
 #import('rows', 'example.com/app/records')
@@ -94,6 +112,52 @@ retains their local SQL resource assets without requiring database discovery;
 this proves Go shape authority, not current database schema compatibility. An
 unqualified output row name continues to declare a generated shape. Select each
 existing derived row explicitly too when it shares a source file with linked rows.
+
+### Qualified generated factory contracts
+
+A local factory can use package-qualified names for SQL-generated contracts:
+
+```sql
+#package('example.com/app/records')
+
+#import('records','example.com/app/records')
+
+#setting($_ = $handler_factory('records.NewSave','Save'))
+#setting($_ = $input_type('records.Input'))
+#setting($_ = $output_type('records.Output'))
+
+#define($_ = $Data<[]*records.Record>(body/data).Optional())
+
+SELECT r.*, type(r,'records.Record') FROM records r
+```
+
+Aliases and full import-path qualifications resolve to the same package identity.
+A qualification does not itself select Go ownership. The factory destination owns
+new contracts and this SQL body graph; existing authored types and aliases remain
+protected from replacement. Previously generated files can be regenerated only
+under their existing component and configured file ownership. External authored
+factory contracts retain their source-backed behavior.
+
+The generated body must directly use a pointer or a slice of pointers to the SQL-owned root row;
+codecs and alternate body-output types cannot replace that contract. Authored DQL
+retains its qualification while internal generation uses local Go identifiers.
+The generated component retains the native `reflect.TypeFor` anchor and typed
+factory construction capability; no application registry is required.
+
+An independent Current read can explicitly select that same generated body row:
+
+```sql
+#define($_ = $Current<[]*records.Record>(view/Current) /* SELECT r.* FROM records r WHERE r.ID = $ID */)
+```
+
+The body SQL owns the row, relations, methods and presence marker. Current keeps
+its own SQL, filters and read identity; it neither emits another row declaration
+nor expands the public body. Loaded Current rows have no request presence until
+application setters mark it. A composing writer can pass the same row pointers
+without converting them into a second DTO. Current columns must map to compatible
+SQLX fields in the body; incompatible types, foreign package identities, conflicting
+destinations and ambiguous mappings fail generation. Unknown physical types may
+be provisional during discovery but cannot pass final generation unchecked.
 
 Validate the generated shape **and the actual compiled vendor SQL**, then execute
 it through the native reader/writer with realistic fixtures. A manually invented

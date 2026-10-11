@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/viant/datly/spec"
+	dtag "github.com/viant/datly/tag"
 	"github.com/viant/tagly/tags"
 )
 
@@ -33,7 +34,7 @@ func fieldTag(param *spec.Parameter, tagName string, metadata []structTagValue) 
 		value = strings.ReplaceAll(value, `'`, `\'`)
 		return "'" + value + "'"
 	}
-	if param.EmitOutput && kind != "logger" {
+	if param.EmitOutput && kind != "logger" && kind != "const" {
 		kind = "output"
 		if inName == "" {
 			inName = "body"
@@ -106,7 +107,7 @@ func fieldTag(param *spec.Parameter, tagName string, metadata []structTagValue) 
 }
 
 func contractFieldTags(raw string) string {
-	parsed := tags.NewTags(strings.TrimSpace(raw))
+	parsed := tags.NewTags(strings.TrimSpace(dtag.CanonicalFieldTag(raw)))
 	filtered := parsed[:0]
 	for _, item := range parsed {
 		if item == nil || isCanonicalParameterTag(item.Name) {

@@ -91,13 +91,19 @@ func (s *Service) nonWindowQuery(ctx context.Context, session *Session, input re
 		return nil, err
 	}
 	rootSelector := selectors.forView(rootPlan.View)
+	nonWindowSelector := rsql.NonWindowSelector(rootSelector)
+	if nonWindowSelector != nil {
+		// Ordinals follow root selection while summaries retain all source columns.
+		nonWindowSelector.Columns = viewProjection(rootPlan.View, rootSelector)
+		nonWindowSelector.Fields = nil
+	}
 	builder := rsql.NewBuilder()
 	query, err := builder.Build(ctx,
 		rsql.WithBuilderComponent(session.Component),
 		rsql.WithBuilderView(rootPlan.View),
 		rsql.WithBuilderCriteriaCompiler(rootPlan.Criteria),
 		rsql.WithBuilderControls(rsql.NonWindowControls(rootSource.Controls, rootSelector)),
-		rsql.WithBuilderSelector(rsql.NonWindowSelector(rootSelector)),
+		rsql.WithBuilderSelector(nonWindowSelector),
 		rsql.WithBuilderInput(input.Elem()),
 		rsql.WithBuilderParameterResolver(session.Parameters),
 		rsql.WithBuilderTemplate(rootPlan.Template),
@@ -108,10 +114,18 @@ func (s *Service) nonWindowQuery(ctx context.Context, session *Session, input re
 	if err != nil {
 		return nil, err
 	}
+	// Build has validated and emitted ordering; the matcher retains only the window.
+	matcherSelector := rootSelector
+	if rootSelector != nil {
+		cloned := *rootSelector
+		cloned.OrderBy = ""
+		matcherSelector = &cloned
+	}
 	return builder.QueryMatcher(ctx, query,
 		rsql.WithBuilderComponent(session.Component),
 		rsql.WithBuilderView(rootPlan.View),
-		rsql.WithBuilderSelector(rootSelector),
+		rsql.WithBuilderSQL(query.SQL),
+		rsql.WithBuilderSelector(matcherSelector),
 	)
 }
 

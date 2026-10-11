@@ -26,15 +26,15 @@ func TestFactoryInputShapeStructuralBoundary(t *testing.T) {
 		valid     bool
 	}{
 		{"single auxiliary leaf", factoryInputProjection, true},
-		{"operational root", "SELECT a.TARGET AS Target FROM CI_AUDIENCE a", false},
+		{"physical root", "SELECT a.TARGET AS Target FROM CI_AUDIENCE a", true},
 		{"extra statement", factoryInputProjection + "; DELETE FROM CI_AUDIENCE", false},
-		{"join", "SELECT a.TARGET AS Target FROM (CI_AUDIENCE) a JOIN (OTHER) b ON b.ID=a.ID", false},
-		{"computed expression", "SELECT CONCAT(a.TARGET,'x') AS Target FROM (CI_AUDIENCE) a", false},
-		{"wildcard", "SELECT a.* FROM (CI_AUDIENCE) a", false},
-		{"filter", "SELECT a.TARGET AS Target FROM (CI_AUDIENCE) a WHERE a.TARGET IS NOT NULL", false},
-		{"union", "SELECT a.TARGET AS Target FROM (CI_AUDIENCE) a UNION SELECT b.TARGET AS Target FROM (CI_AUDIENCE) b", false},
-		{"writable metadata", "SELECT a.TARGET AS Target,writer_action_policy(a,'insert-delete') FROM (CI_AUDIENCE) a", false},
-		{"view connector", "SELECT a.TARGET AS Target,use_connector(a,'mysql') FROM (CI_AUDIENCE) a", false},
+		{"join", "SELECT a.TARGET AS Target FROM (CI_AUDIENCE) a JOIN (OTHER) b ON b.ID=a.ID", true},
+		{"computed expression", "SELECT CONCAT(a.TARGET,'x') AS Target FROM (CI_AUDIENCE) a", true},
+		{"wildcard", "SELECT a.* FROM (CI_AUDIENCE) a", true},
+		{"filter", "SELECT a.TARGET AS Target FROM (CI_AUDIENCE) a WHERE a.TARGET IS NOT NULL", true},
+		{"union", "SELECT a.TARGET AS Target FROM (CI_AUDIENCE) a UNION SELECT b.TARGET AS Target FROM (CI_AUDIENCE) b", true},
+		{"writable metadata", "SELECT a.TARGET AS Target,writer_action_policy(a,'insert-delete') FROM (CI_AUDIENCE) a", true},
+		{"view connector", "SELECT a.TARGET AS Target,use_connector(a,'mysql') FROM (CI_AUDIENCE) a", true},
 		{"service", "$sql.Insert($Data, 'CI_AUDIENCE')", false},
 		{"template", "#if($Data) " + factoryInputProjection + " #end", false},
 	} {
@@ -84,13 +84,31 @@ func (*Handler) Exec(ctx context.Context,_ handler.Session,in *ArchiveInput,out 
 	return root, source
 }
 func TestFactoryInputShapeNativeGeneration(t *testing.T) {
+	testFactoryInputShapeNativeGeneration(t, "")
+}
+
+func TestFactoryInputShapeQualifiedNativeGeneration(t *testing.T) {
+	for _, qualifier := range []string{"archive", handlerFixtureModule + "/archive"} {
+		t.Run(qualifier, func(t *testing.T) { testFactoryInputShapeNativeGeneration(t, qualifier) })
+	}
+}
+
+func testFactoryInputShapeNativeGeneration(t *testing.T, qualifier string) {
+	t.Helper()
 	root, source := factoryInputShapeFixture(t)
+	if qualifier != "" {
+		source.Text = strings.ReplaceAll(source.Text, "'ArchiveInput'", "'"+qualifier+".ArchiveInput'")
+		source.Text = strings.ReplaceAll(source.Text, "'ArchiveOutput'", "'"+qualifier+".ArchiveOutput'")
+		source.Text = strings.ReplaceAll(source.Text, "[]*Res>", "[]*"+qualifier+".Res>")
+		source.Text = strings.ReplaceAll(source.Text, "type(a,'Res')", "type(a,'"+qualifier+".Res')")
+	}
 	db, err := sql.Open("sqlite3", filepath.Join(t.TempDir(), "shape.db"))
 	require.NoError(t, err)
 	defer db.Close()
 	_, err = db.Exec("CREATE TABLE CI_AUDIENCE(TARGET TEXT, EXCLUSION TEXT)")
 	require.NoError(t, err)
 	source.ColumnRefiner = column.New(column.Connections{"shape-discovery-only": db})
+	authoredDQL := source.Text
 	writeSourceHandlerFile(t, root, "dql/shape.dql", source.Text)
 	before := sourceHandlerSnapshot(t, root)
 	var first map[string]string
@@ -124,6 +142,7 @@ func TestFactoryInputShapeNativeGeneration(t *testing.T) {
 		}
 		generated, err := (Generator{Operation: "post"}).Generate(context.Background(), GenerationRequest{Compiled: compiled, Destination: root})
 		require.NoError(t, err)
+		require.Equal(t, authoredDQL, source.Text)
 		plan := generated.Result.Plan
 		require.Nil(t, plan.MutationHandler)
 		require.Empty(t, plan.Connector)
@@ -154,16 +173,17 @@ func TestFactoryInputShapeNativeGeneration(t *testing.T) {
 
 func TestFactoryInputShapeFailuresDoNotPublish(t *testing.T) {
 	for _, tc := range []struct{ name, old, replacement, authored string }{
-		{name: "operational root", old: "FROM (CI_AUDIENCE) a", replacement: "FROM CI_AUDIENCE a"},
 		{name: "additional statement", old: factoryInputProjection, replacement: factoryInputProjection + "; DELETE FROM CI_AUDIENCE"},
 		{name: "current binding", old: "#define($_ = $InpData", replacement: "#define($_ = $Current<[]*Res>(view/Current))\n#define($_ = $InpData"},
-		{name: "imported body", old: "$InpData<[]*Res>", replacement: "$InpData<[]*archive.Res>"},
+		{name: "foreign body", old: "$InpData<[]*Res>", replacement: "$InpData<[]*foreign.Res>"},
 		{name: "alternate output type", old: "$InpData<[]*Res>", replacement: "$InpData<[]*Res,[]*archive.OutputRes>"},
 		{name: "same output type", old: "$InpData<[]*Res>", replacement: "$InpData<[]*Res,[]*Res>"},
 		{name: "body codec", old: "$InpData<[]*Res>(body/data)", replacement: "$InpData<[]*Res>(body/data).WithCodec('JSON')"},
 		{name: "body output emission", old: "$InpData<[]*Res>(body/data)", replacement: "$InpData<[]*Res>(body/data).Output()"},
 		{name: "queue metadata", old: "type(a,'Res')", replacement: "type(a,'Res'),queue_contract(a,'source-slice')"},
 		{name: "competing authored Res", authored: "type Res struct { Target string; Exclusion string }"},
+		{name: "qualified competing authored Res", old: "type(a,'Res')", replacement: "type(a,'archive.Res')", authored: "type Res struct { Target string; Exclusion string }"},
+		{name: "qualified competing local alias", old: "type(a,'Res')", replacement: "type(a,'archive.Res')", authored: "type Res = OutputRes"},
 		{name: "competing local alias", authored: "type Res = OutputRes"},
 		{name: "runtime SQL tag", old: `sqlx:"-"`, replacement: `sqlx:"-" sql:"SELECT 1"`},
 		{name: "mutation setting", old: factoryInputProjection, replacement: "#setting($_ = $mutation('patch'))\n" + factoryInputProjection},
@@ -198,7 +218,7 @@ func TestFactoryShapeRuntime(t *testing.T){
  component,err:=(&bootstrap.RouteSource{HolderType:holder.Name(),FieldName:field.Name,PackageName:"archive",PackagePath:holder.PkgPath(),Tag:metadata,InputType:"ArchiveInput",OutputType:"ArchiveOutput"}).Resolve(reflect.TypeFor[ArchiveInput](),reflect.TypeFor[ArchiveOutput]());require.NoError(t,err)
  require.Nil(t,component.RootView);require.Empty(t,component.Views);require.Empty(t,component.Settings.DefaultConnector);require.Empty(t,component.Settings.Mutation)
  artifact,err:=bootstrap.BuildArtifact(bootstrap.ArtifactInput{Component:component,InputType:reflect.TypeFor[ArchiveInput](),OutputType:reflect.TypeFor[ArchiveOutput]()});require.NoError(t,err);require.Empty(t,artifact.ViewDependencies)
- require.Equal(t,reflect.TypeFor[[]*Res](),reflect.TypeOf(Data{}.Data));typ:=reflect.TypeFor[Res]();require.Equal(t,2,typ.NumField());for _,name:=range []string{"Target","Exclusion"}{f,ok:=typ.FieldByName(name);require.True(t,ok);require.Equal(t,reflect.TypeFor[string](),f.Type);require.Equal(t,"-",f.Tag.Get("sqlx"))}
+ require.Equal(t,reflect.TypeFor[[]*Res](),reflect.TypeOf(Data{}.Data));typ:=reflect.TypeFor[Res]();require.Equal(t,3,typ.NumField());for _,name:=range []string{"Target","Exclusion"}{f,ok:=typ.FieldByName(name);require.True(t,ok);require.Equal(t,reflect.TypeFor[string](),f.Type);require.Equal(t,"-",f.Tag.Get("sqlx"))}
  cwd,err:=os.Getwd();require.NoError(t,err)
  for _,eager:=range []bool{false,true}{ctx,cancel:=context.WithCancel(context.Background());server,err:=standalone.New(ctx,standalone.Options{Config:&config.Config{BaseDir:filepath.Dir(cwd),GoBootstrap:&config.Packages{Packages:[]string{"github.com/viant/datly/handlerfixture/archive"},EagerComponents:eager},Endpoint:config.Endpoint{Address:"127.0.0.1:0"}},Holders:[]any{ArchiveDatly}});require.NoError(t,err);require.NoError(t,server.Reload(ctx,1))
  target:=dexec.ComponentTarget{Component:spec.Key{Kind:spec.KindComponent,Scope:"github.com/viant/datly/handlerfixture/archive",Name:"Archive"},Route:spec.RouteRef{Method:"PATCH",Path:"/archive"}}
@@ -213,7 +233,6 @@ func TestFactoryShapeRuntime(t *testing.T){
 
 func TestFactoryInputShapeExpandedBoundary(t *testing.T) {
 	for _, tc := range []struct{ name, sql string }{
-		{"expanded operational root", strings.Replace(factoryInputProjection, "(CI_AUDIENCE)", "CI_AUDIENCE", 1)},
 		{"expanded additional statement", factoryInputProjection + "; DELETE FROM CI_AUDIENCE"},
 		{"expanded service", `$sql.Insert($Data,'CI_AUDIENCE')`},
 	} {
@@ -257,3 +276,100 @@ func TestFactoryInputShapeStagedSignatureFailureAtomic(t *testing.T) {
 	require.Equal(t, before, sourceHandlerSnapshot(t, root))
 	t.Log(err)
 }
+
+// SQL-derived factory bodies keep presentation defaults without acquiring DML.
+func TestFactoryInputShapeNullableJSONAndEvolution(t *testing.T) {
+	root, source := generatedPostFactoryFixture(t)
+	writeSourceHandlerFile(t, root, "archive/business.go", `package archive
+import("context";"github.com/viant/xdatly/handler")
+var observed *ArchiveInput
+type Handler struct{}
+func NewArchive() handler.Contract[ArchiveInput,ArchiveOutput]{return &Handler{}}
+func(*Handler) Exec(_ context.Context,_ handler.Session,in *ArchiveInput,out *ArchiveOutput)error{observed=in;out.Status="ok";out.Data=in.Data;return nil}
+`)
+	source.Text = fmt.Sprintf(`#package(%q)
+#import('archive',%q)
+#setting($_ = $handler_factory('archive.NewArchive','Archive'))
+#setting($_ = $route('/archive-nullable','PATCH'))
+#setting($_ = $connector('shape-discovery-only'))
+#setting($_ = $input_type('ArchiveInput'))
+#setting($_ = $output_type('ArchiveOutput'))
+#setting($_ = $case_format('lc'))
+#define($_ = $Data<[]*Record>(body/data).Optional())
+#define($_ = $Status<string>(output/status))
+#define($_ = $Data<[]*Record>(output/body).WithTag('json:"data"'))
+SELECT r.*, type(r,'Record'), CAST(r.ID AS int), CAST(r.LABEL AS *string),
+CAST(r.AMOUNT AS *int), CAST(r.ENABLED AS *bool), CAST(r.MANDATORY AS *string),
+CAST(r.OVERRIDE AS *string), tag(r.OVERRIDE,'json:"override,omitempty"')
+FROM records r`, handlerFixtureModule+"/archive", handlerFixtureModule+"/archive")
+	db, err := sql.Open("sqlite3", filepath.Join(t.TempDir(), "shape.db"))
+	require.NoError(t, err)
+	defer db.Close()
+	_, err = db.Exec("CREATE TABLE records(ID INTEGER NOT NULL,LABEL TEXT,AMOUNT INTEGER,ENABLED BOOLEAN,MANDATORY TEXT NOT NULL,OVERRIDE TEXT NOT NULL)")
+	require.NoError(t, err)
+	source.Connector = "shape-discovery-only"
+	source.ColumnRefiner = column.New(column.Connections{"shape-discovery-only": db})
+	original := source.Text
+	for evolution := 0; evolution < 2; evolution++ {
+		if evolution == 1 {
+			_, err = db.Exec("ALTER TABLE records ADD COLUMN PROBE TEXT NULL")
+			require.NoError(t, err)
+		}
+		var first map[string]string
+		for pass := 0; pass < 2; pass++ {
+			compiled, e := (&Discovery{BaseDir: root, GoBuild: source.GoBuild, ColumnRefiner: source.ColumnRefiner}).CompileSource(t.Context(), source)
+			require.NoError(t, e)
+			// Pinned sqlite3 v1.14.16 reports every result column nullable. This
+			// direct-table fixture normalizes only independently retained physical
+			// NOT NULL facts; it is not native SQLite nullability coverage.
+			seen := map[string]bool{}
+			for _, c := range compiled.ExternalHandler.InputShape.Columns {
+				name := strings.ToUpper(c.Source)
+				switch name {
+				case "ID", "MANDATORY", "OVERRIDE":
+					require.True(t, c.NotNull, name)
+					require.True(t, c.Nullable, "pinned SQLite driver observation: "+name)
+					c.Nullable = false
+					seen[name] = true
+				default:
+					require.False(t, c.NotNull, name)
+					require.True(t, c.Nullable, name)
+				}
+			}
+			require.Len(t, seen, 3)
+			require.Nil(t, compiled.Component.RootView)
+			require.Empty(t, compiled.Component.Settings.Mutation)
+			generated, e := (Generator{Operation: "post"}).Generate(t.Context(), GenerationRequest{Compiled: compiled, Destination: root})
+			require.NoError(t, e)
+			require.Empty(t, generated.Result.Plan.Settings.Mutation)
+			require.Nil(t, generated.Result.Plan.MutationHandler)
+			require.Equal(t, original, source.Text)
+			snapshot := sourceHandlerSnapshot(t, root)
+			if pass == 0 {
+				first = snapshot
+			} else {
+				require.Equal(t, first, snapshot)
+			}
+		}
+	}
+	writeSourceHandlerFile(t, root, "archive/runtime_test.go", factoryNullableJSONRuntime)
+	cmd := exec.CommandContext(t.Context(), "go", "test", "-mod=readonly", "-race", "-count=1", "-timeout=2m", "-v", "./archive")
+	cmd.Dir = root
+	output, err := cmd.CombinedOutput()
+	require.NoError(t, err, "%s", output)
+	t.Logf("native nullable body JSON/presence runtime:\n%s", output)
+}
+
+const factoryNullableJSONRuntime = `package archive
+import("context";"encoding/json";"net/http/httptest";"path/filepath";"os";"reflect";"strings";"testing";
+_ "github.com/mattn/go-sqlite3";"github.com/viant/datly/bootstrap/connector";"github.com/stretchr/testify/require";"github.com/viant/datly/standalone";"github.com/viant/datly/standalone/config";dexec "github.com/viant/datly/exec";"github.com/viant/datly/spec";requestprovider "github.com/viant/bindly/provider/request")
+func TestNativeFactoryNullableJSON(t *testing.T){
+ typ:=reflect.TypeFor[Record]();for _,name:=range []string{"Label","Amount","Enabled","Probe"}{f,ok:=typ.FieldByName(name);require.True(t,ok);require.Contains(t,f.Tag.Get("json"),"omitempty")}
+ for _,name:=range []string{"Id","Mandatory"}{f,ok:=typ.FieldByName(name);require.True(t,ok);require.NotContains(t,f.Tag.Get("json"),"omitempty")}
+ zero:=0;empty:="";flag:=false;r:=Record{Amount:&zero,Label:&empty,Enabled:&flag};raw,err:=json.Marshal(r);require.NoError(t,err);require.JSONEq(t,"{\"id\":0,\"label\":\"\",\"amount\":0,\"enabled\":false,\"mandatory\":null}",string(raw))
+ cwd,err:=os.Getwd();require.NoError(t,err);ctx:=context.Background();server,err:=standalone.New(ctx,standalone.Options{Config:&config.Config{Connectors:[]connector.Config{{Name:"shape-discovery-only",Driver:"sqlite3",DSN:":memory:"}},BaseDir:filepath.Dir(cwd),GoBootstrap:&config.Packages{Packages:[]string{"github.com/viant/datly/handlerfixture/archive"}},Endpoint:config.Endpoint{Address:"127.0.0.1:0"}},Holders:[]any{ArchiveDatly}});require.NoError(t,err);defer server.Shutdown(ctx);require.NoError(t,server.Reload(ctx,1))
+ for _,tc:=range []struct{body,want string;labelPresent bool}{{"{\"data\":[{\"id\":0}]}","{\"status\":\"ok\",\"data\":[{\"id\":0,\"mandatory\":null}]}",false},{"{\"data\":[{\"id\":0,\"label\":null}]}","{\"status\":\"ok\",\"data\":[{\"id\":0,\"mandatory\":null}]}",true},{"{\"data\":[{\"id\":0,\"label\":\"\",\"amount\":0,\"enabled\":false}]}","{\"status\":\"ok\",\"data\":[{\"id\":0,\"label\":\"\",\"amount\":0,\"enabled\":false,\"mandatory\":null}]}",true}}{
+ req:=httptest.NewRequest("PATCH","/archive-nullable",strings.NewReader(tc.body));req.Header.Set("Content-Type","application/json");rec:=httptest.NewRecorder();server.ServeHTTP(rec,req);if rec.Code!=200{diagnosticReq:=httptest.NewRequest("PATCH","/archive-nullable",strings.NewReader(tc.body));diagnosticReq.Header.Set("Content-Type","application/json");scope,e:=requestprovider.New(diagnosticReq);require.NoError(t,e);_,e=server.InvokeComponent(ctx,dexec.ComponentRequest{Target:dexec.ComponentTarget{Component:spec.Key{Kind:spec.KindComponent,Scope:"github.com/viant/datly/handlerfixture/archive",Name:"Archive"},Route:spec.RouteRef{Method:"PATCH",Path:"/archive-nullable"}},Providers:scope.Providers()});t.Logf("HTTP failure invocation cause: %v",e)};require.Equal(t,200,rec.Code,rec.Body.String());require.JSONEq(t,tc.want,rec.Body.String());require.Len(t,observed.Data,1);require.NotNil(t,observed.Data[0].Has);require.Equal(t,tc.labelPresent,observed.Data[0].Has.Label)
+ }
+}
+`

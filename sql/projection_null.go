@@ -17,18 +17,42 @@ func prepareStarProjection(sqlText string, selected []string, view *data.View, d
 	if len(dialects) > 0 {
 		dialect = dialects[0]
 	}
+	return prepareStarProjectionWithOutputs(sqlText, selected, view, dialect, nil)
+}
+
+// outputs may be reused only from membership validation of this SQL and view
+// in the current Prepare call. Standalone callers still resolve membership here.
+func prepareStarProjectionWithOutputs(sqlText string, selected []string, view *data.View, dialect *info.Dialect, outputs []ProjectionColumn) (*Projection, bool, error) {
 	if view == nil || len(view.Columns) == 0 {
 		return nil, false, nil
 	}
+	// Prepare already validated SQL output membership. A default read only
+	// needs a star wrapper when the scan metadata requests a null fallback.
+	if len(selected) == 0 {
+		needsFallback := false
+		if !view.NullsAllowed() {
+			for _, column := range view.Columns {
+				if column != nil && column.Nullable && strings.TrimSpace(column.NullFallback) != "" {
+					needsFallback = true
+					break
+				}
+			}
+		}
+		if !needsFallback {
+			return nil, false, nil
+		}
+	}
 	source := strings.TrimSuffix(strings.TrimSpace(sqlText), ";")
-	selectStmt, err := sqlparser.ParseQuery(source)
+	selectStmt, err := parseProjectionQuery(source)
 	if err != nil || selectStmt == nil || !selectStmt.List.IsStarExpr() {
 		return nil, false, nil
 	}
 	allowNulls := view.NullsAllowed()
-	outputs, _, err := (SelectorProjection{SQL: source, View: view}).columns()
-	if err != nil {
-		return nil, true, err
+	if outputs == nil {
+		outputs, _, err = (SelectorProjection{SQL: source, View: view}).columns()
+		if err != nil {
+			return nil, true, err
+		}
 	}
 	columns := make([]*data.Column, 0, len(outputs))
 	for _, output := range outputs {
@@ -100,7 +124,7 @@ func (p SelectorProjection) prepareSelectedStar(columns, chosen []ProjectionColu
 		names = append(names, column.output)
 	}
 	source := p.SQL
-	parsed, err := sqlparser.ParseQuery(source)
+	parsed, err := parseProjectionQuery(source)
 	if err != nil {
 		return nil, err
 	}
@@ -193,7 +217,7 @@ func applyNullProjectionInspected(sqlText string, view *data.View, selectStmt *q
 	}
 	var err error
 	if selectStmt == nil {
-		selectStmt, err = sqlparser.ParseQuery(sqlText)
+		selectStmt, err = parseProjectionQuery(sqlText)
 	}
 	if err != nil || selectStmt == nil || len(selectStmt.List) == 0 {
 		return sqlText, nil
