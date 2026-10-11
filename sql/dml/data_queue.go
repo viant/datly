@@ -36,6 +36,8 @@ type dataOperation struct {
 	dml             string
 	args            []any
 	lastInsertID    any
+	batchSize       int
+	affected        *int64
 	match           *xhandler.Match
 	criteria        *sqlx.Criteria
 	executed        bool

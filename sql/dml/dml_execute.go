@@ -61,6 +61,9 @@ func (d *Data) executeInsertStep(ctx context.Context, db *sql.DB, tx *sql.Tx, st
 		} else if operation.queueContract == rhandler.SourceSlice && supportsInsertBatching(dialect) {
 			options = buildExecutionOptions(tx, db, boundedInsertBatchSize(reflect.ValueOf(operation.data).Len()))
 		}
+		if operation.batchSize > 0 {
+			options = buildExecutionOptions(tx, db, operation.batchSize)
+		}
 		if i > 0 {
 			metric.restart()
 		}
@@ -72,6 +75,9 @@ func (d *Data) executeInsertStep(ctx context.Context, db *sql.DB, tx *sql.Tx, st
 		metric.complete(count, err)
 		if err != nil {
 			return err
+		}
+		if operation.affected != nil {
+			*operation.affected = count
 		}
 	}
 	return nil
@@ -123,6 +129,9 @@ func (d *Data) executeDeleteStep(ctx context.Context, db *sql.DB, tx *sql.Tx, st
 			metric.restart()
 		}
 		writeOptions := options
+		if operation.batchSize > 0 {
+			writeOptions = buildExecutionOptions(tx, db, operation.batchSize)
+		}
 		if operation.match != nil {
 			writeOptions = append(append([]option.Option(nil), options...), option.IfMatch{Column: operation.match.Column, Value: operation.match.Value})
 		}
@@ -140,6 +149,9 @@ func (d *Data) executeDeleteStep(ctx context.Context, db *sql.DB, tx *sql.Tx, st
 		metric.complete(count, err)
 		if err != nil {
 			return err
+		}
+		if operation.affected != nil {
+			*operation.affected = count
 		}
 	}
 	return nil

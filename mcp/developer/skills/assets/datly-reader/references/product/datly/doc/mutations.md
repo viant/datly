@@ -60,6 +60,27 @@ It does not allocate IDs, classify inserts versus updates, retry statements,
 or query an identity afterward. Other writable graphs continue to use their
 existing generated mutation policy.
 
+For an explicit SQLX row batch, a generated statement handler accepts four
+canonical selectors:
+
+```sql
+#define($_ = $Table<string>(param/table))
+#define($_ = $Rows<[]*model.Record>(param/rows))
+#define($_ = $BatchSize<int>(query/batchSize).Value('8000'))
+#define($_ = $Affected<int64>(output/body))
+$dml.Insert($Input.Table, $Input.Rows, $Input.BatchSize, $Output.Affected)
+```
+
+Use `$dml.Delete` with the same arguments for key-based deletion. The linked row
+shape must expose SQLX column tags and, for deletion, primary-key tags. Batch size
+must be positive, rows must be a typed slice of nonnil struct pointers, and the
+result must be an addressable `int64` Output field. The existing SQLX service
+builds statements; affected rows come from the database after successful journal
+execution. Empty slices queue no write. Root completion owns the transaction,
+including rollback if a later chunk fails. Explicit batch size does not create
+an independent commit per chunk. Existing two-argument DML calls retain their
+existing handling.
+
 Consider three tables:
 
 | Table | Role | Relationship |
