@@ -291,6 +291,7 @@ func TestNativeWriterWriteEligibilityLateScopedChildRollbackSQLite(t *testing.T)
 	root := eligibilityTransactionComponent(t, "ScopedEligibility", "PATCH", "/scoped-eligible", "eligible", nativeEligibilityScopedLinked.Name(), reflect.TypeFor[nativeEligibilityInput](), reflect.TypeFor[nativeEligibilityOutput]())
 	child := eligibilityTransactionComponent(t, "EligibilityChild", "POST", "/eligibility-child", "eligible_child", nativeEligibilityChildLinked.Name(), reflect.TypeFor[eligibilityChildInput](), reflect.TypeFor[eligibilityChildOutput]())
 	commits := 0
+	root.Component.Settings.ComponentCallPolicy = "imperative"
 	root.DataSource = dml.Source{DB: db.DB, OnCommit: func(context.Context) { commits++ }}
 	root.Providers = []locator.Provider{eligibilityCurrentProvider(db.DB)}
 	child.DataSource = dml.Source{DB: db.DB}

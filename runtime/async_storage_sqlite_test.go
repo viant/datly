@@ -16,6 +16,7 @@ import (
 	veltyhandler "github.com/viant/datly/runtime/handler/velty"
 	"github.com/viant/datly/runtime/jobs"
 	"github.com/viant/datly/runtime/route"
+	"github.com/viant/datly/spec"
 	sqldml "github.com/viant/datly/sql/dml"
 	xasync "github.com/viant/xdatly/async"
 	xhandler "github.com/viant/xdatly/handler"
@@ -323,7 +324,7 @@ func TestAsyncCustomMutationCompletionStorageSQLite(t *testing.T) {
 		status                       xasync.Status
 	}{{"commit", false, false, false, xasync.StatusDone}, {"rollback", false, false, true, xasync.StatusError}, {"panic rollback", false, true, false, xasync.StatusError}, {"caller pending", true, false, false, xasync.StatusRunning}} {
 		t.Run(tc.name, func(t *testing.T) {
-			f := newAsyncReaderFixture(t)
+			f := newAsyncReaderFixture(t, &spec.Settings{ComponentCallPolicy: "imperative"})
 			app := testharness.NewSQLiteHarness(t)
 			ctx := context.Background()
 			if err := app.ExecStatements(ctx, `CREATE TABLE audit(id INTEGER)`); err != nil {

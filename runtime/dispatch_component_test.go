@@ -528,6 +528,7 @@ func TestRuntimeMultiComponentTransactionOwnership(t *testing.T) {
 			parent := componentSpec("ParentWrite", http.MethodPost, "/parent-write", []*spec.Parameter{{
 				Name: "Child", Source: spec.BindSource{Kind: "component", Name: "POST:/child-write"},
 			}})
+			parent.Settings = &spec.Settings{ComponentCallPolicy: "imperative"}
 			childArtifact := componentArtifact(t, child, reflect.TypeOf(childInput{}), reflect.TypeOf(childOutput{}))
 			parentArtifact := componentArtifact(t, parent, reflect.TypeOf(parentInput{}), reflect.TypeOf(parentOutput{}))
 

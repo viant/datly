@@ -35,7 +35,8 @@ type Settings struct {
 	// ProtectedFlushTables authorizes explicit protected prefix flushes for this
 	// component's exact normalized tables. It is never inherited by child calls.
 	ProtectedFlushTables []string `json:"protectedFlushTables,omitempty"`
-	// ComponentCallPolicy selects canonical explicit child-call journal behavior.
+	// ComponentCallPolicy defaults to buffered child calls. Imperative prefix
+	// flushing requires an explicit policy; omitted descendants inherit it.
 	ComponentCallPolicy string               `json:"componentCallPolicy,omitempty"`
 	ResponseCompression *ResponseCompression `json:"responseCompression,omitempty"`
 	// IndependentChildTransactions opts a source-less custom orchestrator into

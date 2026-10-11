@@ -30,6 +30,7 @@ func TestCapturedWriterChildErrorPreservesResultAndCallerRollback(t *testing.T) 
 			_, err = observed.DB.Exec("CREATE TABLE caller_audit(id INTEGER PRIMARY KEY)")
 			require.NoError(t, err)
 			parentSpec := componentSpec("CapturedErrorCaller", "POST", "/captured-error-caller", nil)
+			parentSpec.Settings = &spec.Settings{ComponentCallPolicy: "imperative"}
 			artifact := componentArtifact(t, parentSpec, reflect.TypeFor[struct{}](), reflect.TypeFor[capturederror.Output]())
 			var childResult any
 			parent := &registry.RegisteredComponent{Component: artifact.Component, Input: artifact.Input, OutputType: reflect.TypeFor[capturederror.Output](), DataSource: dml.Source{DB: observed.DB}, Handler: rh.HandlerFunc(func(ctx context.Context, inv rh.Invocation) (any, error) {

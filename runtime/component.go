@@ -49,6 +49,10 @@ type scopedComponentInvoker struct {
 	buffered  bool
 }
 
+// resolvedComponentCallPolicyKey carries dispatcher policy through binding
+// descendants, whose relationship marker alone cannot retain imperative policy.
+type resolvedComponentCallPolicyKey struct{}
+
 func (i *scopedComponentInvoker) InvokeComponent(ctx context.Context, request dexec.ComponentRequest) (any, error) {
 	if i == nil || i.runtime == nil {
 		return nil, fmt.Errorf("component invoker is not configured")
@@ -56,6 +60,11 @@ func (i *scopedComponentInvoker) InvokeComponent(ctx context.Context, request de
 	if i.authority != nil {
 		ctx = i.authority(ctx)
 	}
+	policy := "imperative"
+	if i.buffered {
+		policy = "buffered"
+	}
+	ctx = context.WithValue(ctx, resolvedComponentCallPolicyKey{}, policy)
 	relation := handlerengine.ComponentImperative
 	if i.buffered {
 		if request.IndependentChildTransactions {
@@ -171,17 +180,32 @@ func (r *Runtime) invokeComponent(ctx context.Context, request dexec.ComponentRe
 		return nil, err
 	}
 	inheritedBuffered := handlerengine.IsBufferedComponent(ctx)
+	inheritedPolicy, _ := ctx.Value(resolvedComponentCallPolicyKey{}).(string)
+	if inheritedBuffered {
+		inheritedPolicy = "buffered"
+	}
 	policy := ""
 	if registered.Component.Settings != nil {
 		policy = registered.Component.Settings.ComponentCallPolicy
 	}
-	if inheritedBuffered && policy == "imperative" {
+	if inheritedPolicy == "buffered" && policy == "imperative" {
 		return nil, fmt.Errorf("imperative component call policy conflicts with inherited buffered calls")
 	}
-	buffered := inheritedBuffered || policy == "buffered"
-	if buffered && (request.IndependentChildTransactions || registered.Component.Settings != nil && registered.Component.Settings.IndependentChildTransactions) {
+	independent := request.IndependentChildTransactions || registered.Component.Settings != nil && registered.Component.Settings.IndependentChildTransactions
+	if policy == "" {
+		policy = inheritedPolicy
+		if policy == "" {
+			policy = "buffered"
+			if independent {
+				policy = "imperative"
+			}
+		}
+	}
+	buffered := policy == "buffered"
+	if buffered && independent {
 		return nil, fmt.Errorf("buffered component calls cannot use independent child transactions")
 	}
+	ctx = context.WithValue(ctx, resolvedComponentCallPolicyKey{}, policy)
 	if !componentOwnsRoute(registered.Component, route) {
 		return nil, fmt.Errorf("component %s does not own route %s", identity, route.String())
 	}
