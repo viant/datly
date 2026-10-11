@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/viant/datly/constant"
 	"github.com/viant/datly/spec"
 	gen "github.com/viant/datly/transcribe/generate"
 	plan "github.com/viant/datly/transcribe/handler/ast"
@@ -66,7 +67,12 @@ func (g Generator) generateStatement(ctx context.Context, root, dir string, comp
 			authority[contract.root+"."+field.Name] = plan.StatementSelector{Path: plan.FieldPath{contract.root, field.Name}, Type: typ, Addressable: true}
 		}
 	}
-	semantic, err := (&handlercompiler.Compiler{}).CompileStatement(compiled.StatementProgram, authority)
+	var defaults *constant.Values
+	constants, err := defaults.For(compiled.Component)
+	if err != nil {
+		return nil, err
+	}
+	semantic, err := (&handlercompiler.Compiler{}).CompileStatement(compiled.StatementProgram, authority, constants)
 	if err != nil {
 		return nil, err
 	}

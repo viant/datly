@@ -15,7 +15,7 @@ import (
 // operation. The surrounding native program retains binding, lifecycle and
 // transaction ownership; this function never obtains a connection or drains.
 func StatementQueue(value *plan.StatementPlan, config Config) (*ast.File, error) {
-	if value == nil || (value.SQL == "" && value.Method != "Merge") {
+	if value == nil || (value.SQL == "" && value.Method != "Merge" && value.Method != "Insert" && value.Method != "Delete") {
 		return nil, fmt.Errorf("canonical statement plan is required")
 	}
 	if !token.IsIdentifier(config.Package) || token.Lookup(config.Package).IsKeyword() || !token.IsIdentifier(config.Factory) {
@@ -66,7 +66,7 @@ func StatementQueue(value *plan.StatementPlan, config Config) (*ast.File, error)
 	if method == "" {
 		method = "ExecuteWithResult"
 	}
-	if method != "Execute" && method != "ExecuteWithResult" && method != "Merge" {
+	if method != "Execute" && method != "ExecuteWithResult" && method != "Merge" && method != "Insert" && method != "Delete" {
 		return nil, fmt.Errorf("unsupported buffered statement method %q", method)
 	}
 	args := []ast.Expr{&ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(value.SQL)}}
@@ -102,13 +102,26 @@ func StatementQueue(value *plan.StatementPlan, config Config) (*ast.File, error)
 			return nil, err
 		}
 	}
+	if method == "Insert" || method == "Delete" {
+		var err error
+		args, capability, err = statementBatchCall(value, selector)
+		if err != nil {
+			return nil, err
+		}
+		method += "WithBatchSize"
+	}
 	body := []ast.Stmt{
 		&ast.IfStmt{Cond: &ast.BinaryExpr{X: &ast.BinaryExpr{X: ast.NewIdent("input"), Op: token.EQL, Y: nilExpr}, Op: token.LOR, Y: &ast.BinaryExpr{X: ast.NewIdent("output"), Op: token.EQL, Y: nilExpr}}, Body: &ast.BlockStmt{List: []ast.Stmt{fail("statement contracts are required")}}},
 		&ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent("capability"), ast.NewIdent("ok")}, Tok: token.DEFINE, Rhs: []ast.Expr{&ast.TypeAssertExpr{X: ast.NewIdent("data"), Type: capability}}},
 		&ast.IfStmt{Cond: &ast.UnaryExpr{Op: token.NOT, X: ast.NewIdent("ok")}, Body: &ast.BlockStmt{List: []ast.Stmt{fail("native buffered statement capability unavailable")}}},
 		returnStmt(callExpr(selectExpr(ast.NewIdent("capability"), method), args...)),
 	}
-	function := &ast.FuncDecl{Name: ast.NewIdent(config.Factory + "QueueStatement"), Type: &ast.FuncType{Params: &ast.FieldList{List: []*ast.Field{namedField("data", ast.NewIdent("any")), namedField("input", &ast.StarExpr{X: parseExpr(config.InputType)}), namedField("output", &ast.StarExpr{X: parseExpr(config.OutputType)})}}, Results: &ast.FieldList{List: []*ast.Field{{Type: ast.NewIdent("error")}}}}, Body: &ast.BlockStmt{List: body}}
+	queueParams := []*ast.Field{namedField("data", ast.NewIdent("any")), namedField("input", &ast.StarExpr{X: parseExpr(config.InputType)}), namedField("output", &ast.StarExpr{X: parseExpr(config.OutputType)})}
+	if len(value.SQLConstants) > 0 {
+		queueParams = append(queueParams, namedField("statementSQL", ast.NewIdent("string")))
+		args[0] = ast.NewIdent("statementSQL")
+	}
+	function := &ast.FuncDecl{Name: ast.NewIdent(config.Factory + "QueueStatement"), Type: &ast.FuncType{Params: &ast.FieldList{List: queueParams}, Results: &ast.FieldList{List: []*ast.Field{{Type: ast.NewIdent("error")}}}}, Body: &ast.BlockStmt{List: body}}
 	paths := make([]string, 0, len(l.usedImports))
 	for path := range l.usedImports {
 		paths = append(paths, path)

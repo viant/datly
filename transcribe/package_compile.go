@@ -164,6 +164,9 @@ func (a *packageAuthority) compile(ctx context.Context) (*Result, error) {
 	compileSource := *a.source
 	compileSource.PackageComponent = component
 	compileSource.Types = a.catalog
+	compileSource.LinkedInputType = a.input.Type
+	compileSource.LinkedOutputType = a.output.Type
+	compileSource.LinkedHandler = a.route.LinkedHandler
 	result, err := NewCompiler().Compile(ctx, &compileSource)
 	if err != nil {
 		return nil, err

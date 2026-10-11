@@ -6,6 +6,8 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/viant/datly/constant"
+	"github.com/viant/datly/constant/identifier"
 	plan "github.com/viant/datly/transcribe/handler/ast"
 	"github.com/viant/sqlparser"
 	sqlsource "github.com/viant/sqlparser/source"
@@ -17,7 +19,7 @@ import (
 // CompileStatement resolves a bounded buffered service call using the
 // existing Velty AST and SQL statement boundaries. Authority contains final
 // canonical Go fields, never names inferred from the authored expression.
-func (c *Compiler) CompileStatement(source string, authority map[string]plan.StatementSelector) (*plan.StatementPlan, error) {
+func (c *Compiler) CompileStatement(source string, authority map[string]plan.StatementSelector, constants ...*constant.Values) (*plan.StatementPlan, error) {
 	root, _, err := veltyparser.ParseWithSpansDetailed([]byte(source))
 	if err != nil {
 		return nil, fmt.Errorf("statement program: %w", err)
@@ -34,11 +36,14 @@ func (c *Compiler) CompileStatement(source string, authority map[string]plan.Sta
 		service = selector
 	}
 	if service == nil || service.ID != "dml" {
-		return nil, fmt.Errorf("statement program requires dml.Execute, dml.ExecuteWithResult or dml.Merge")
+		return nil, fmt.Errorf("statement program requires dml.Execute, dml.ExecuteWithResult, dml.Merge, dml.Insert or dml.Delete")
 	}
 	method, ok := service.X.(*expr.Select)
-	if !ok || (method.ID != "ExecuteWithResult" && method.ID != "Execute" && method.ID != "Merge") {
-		return nil, fmt.Errorf("statement program requires dml.Execute, dml.ExecuteWithResult or dml.Merge")
+	if !ok || (method.ID != "ExecuteWithResult" && method.ID != "Execute" && method.ID != "Merge" && method.ID != "Insert" && method.ID != "Delete") {
+		return nil, fmt.Errorf("statement program requires dml.Execute, dml.ExecuteWithResult, dml.Merge, dml.Insert or dml.Delete")
+	}
+	if method.ID == "Insert" || method.ID == "Delete" {
+		return compileBatchStatement(method, authority)
 	}
 	if method.ID == "Merge" {
 		return compileMergeStatement(method, authority)
@@ -56,6 +61,29 @@ func (c *Compiler) CompileStatement(source string, authority map[string]plan.Sta
 		return nil, fmt.Errorf("statement SQL must be a string literal")
 	}
 	sqlText := literal.Value
+	var constantNames []string
+	if len(constants) > 1 {
+		return nil, fmt.Errorf("statement accepts one immutable constant set")
+	}
+	if len(constants) == 1 && constants[0] != nil {
+		renderer := identifier.Renderer{Values: constants[0]}
+		refs, err := renderer.References(sqlText)
+		if err != nil {
+			return nil, fmt.Errorf("statement constants: %w", err)
+		}
+		seen := map[string]bool{}
+		for _, ref := range refs {
+			if !seen[ref.Name] {
+				constantNames = append(constantNames, ref.Name)
+				seen[ref.Name] = true
+			}
+		}
+		sqlText, err = renderer.Render(sqlText)
+		if err != nil {
+			return nil, fmt.Errorf("statement constants: %w", err)
+		}
+	}
+
 	if err := sqlsource.ValidateStructure(sqlText); err != nil {
 		return nil, fmt.Errorf("statement SQL: %w", err)
 	}
@@ -101,7 +129,7 @@ func (c *Compiler) CompileStatement(source string, authority map[string]plan.Sta
 	if bindings != len(call.Args)-argumentOffset {
 		return nil, fmt.Errorf("statement has %d placeholders but %d arguments", bindings, len(call.Args)-argumentOffset)
 	}
-	result := &plan.StatementPlan{SQL: sqlText, Method: method.ID}
+	result := &plan.StatementPlan{SQL: literal.Value, Method: method.ID, SQLConstants: constantNames}
 	if method.ID == "ExecuteWithResult" {
 		dest, err := resolveStatementSelector(call.Args[1], authority)
 		if err != nil {

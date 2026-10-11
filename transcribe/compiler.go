@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/viant/datly/spec"
+	dsql "github.com/viant/datly/sql"
 	"github.com/viant/datly/transcribe/column"
 	authoring "github.com/viant/datly/transcribe/compile"
 	"github.com/viant/datly/transcribe/dql"
@@ -304,7 +305,8 @@ func (c *Compiler) Compile(ctx context.Context, source *Source) (*Result, error)
 		if strings.EqualFold(item.Operation, "Execute") && (len(prepared.Statements) != 1 || !canonicalBufferedExecute(prepared.SQL[item.Start:item.End])) {
 			continue
 		}
-		if item.Kind == statement.KindService && (strings.EqualFold(item.Operation, "ExecuteWithResult") || strings.EqualFold(item.Operation, "Execute") || strings.EqualFold(item.Operation, "Merge")) {
+		batchStatement := (strings.EqualFold(item.Operation, "Insert") || strings.EqualFold(item.Operation, "Delete")) && canonicalBufferedBatch(prepared.SQL[item.Start:item.End])
+		if item.Kind == statement.KindService && (batchStatement || strings.EqualFold(item.Operation, "ExecuteWithResult") || strings.EqualFold(item.Operation, "Execute") || strings.EqualFold(item.Operation, "Merge")) {
 			shapeOnly := len(prepared.Statements) == 2
 			if shapeOnly {
 				for _, other := range prepared.Statements {
@@ -434,7 +436,21 @@ func refineComponentColumns(ctx context.Context, component *spec.Component, sour
 		if compileErr != nil {
 			return compileErr
 		}
-		if err := columnCompilation.RefineRoot(ctx, component, source.Resources, templateInput); err != nil {
+		rootDiscovery := component
+		if source.LinkedHandler != nil && component.RootView != nil && component.RootView.Source != nil {
+			rootSource := component.RootView.Source.Clone()
+			if err := dsql.ResolveSource(component.RootView.Name, rootSource, source.Resources); err != nil {
+				return err
+			}
+			classification := statement.Parse(rootSource.SQL).Classify()
+			if classification.HasService && !classification.HasRead && !classification.HasUnknown {
+				// A linked handler owns the buffered statement program. It has no
+				// SQL result set to discover; independent input reads still do.
+				rootDiscovery = component.Clone()
+				rootDiscovery.RootView = nil
+			}
+		}
+		if err := columnCompilation.RefineRoot(ctx, rootDiscovery, source.Resources, templateInput); err != nil {
 			return err
 		}
 		templateInput, compileErr = (&discoveryInputCompiler{

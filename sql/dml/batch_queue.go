@@ -1,0 +1,35 @@
+package dml
+
+import (
+	"fmt"
+	rhandler "github.com/viant/datly/runtime/handler"
+	"reflect"
+)
+
+type batchQueueOptions struct {
+	size     int
+	affected *int64
+}
+
+// InsertWithBatchSize queues a source slice with SQLX's explicit batch option.
+// The existing owner controls execution and completion; results appear at drain.
+func (d *Data) InsertWithBatchSize(table string, rows any, size int, affected *int64) error {
+	return d.appendBatch(table, rows, size, affected, dataOpInsert)
+}
+
+// DeleteWithBatchSize retains SQLX's composite-key batch deletion mechanism.
+func (d *Data) DeleteWithBatchSize(table string, rows any, size int, affected *int64) error {
+	return d.appendBatch(table, rows, size, affected, dataOpDelete)
+}
+
+func (d *Data) appendBatch(table string, rows any, size int, affected *int64, kind dataOperationKind) error {
+	if size <= 0 || affected == nil {
+		return fmt.Errorf("batch size must be positive and affected-row destination nonnil")
+	}
+	value := reflect.ValueOf(rows)
+	// Bound the SQLX buffer to supplied rows, retaining the declared chunk limit.
+	if value.IsValid() && value.Kind() == reflect.Slice && value.Len() > 0 && size > value.Len() {
+		size = value.Len()
+	}
+	return d.appendWithQueueContract(table, rows, kind, rhandler.SourceSlice, batchQueueOptions{size, affected})
+}

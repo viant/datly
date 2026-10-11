@@ -180,10 +180,40 @@ func validateHandlerParameters(binding *HandlerBinding, authored, bound []*spec.
 		if param.Required != nil && *param.Required != (actual.Required != nil && *actual.Required) {
 			return fmt.Errorf("handler parameter %q requiredness conflicts with linked contract", param.Name)
 		}
-		// Contracts remain handwritten. Do not pretend newly authored predicates,
-		// defaults, codecs or tags have been applied to their compiled Go types.
+		wireMatch := func(expression string) (string, bool) {
+			if actual.WireTypeExpr == "" {
+				return "", false
+			}
+			for _, candidate := range []string{actual.WireTypeExpr, expression} {
+				named, err := (xshape.Resolver{}).Named(candidate)
+				if err != nil || named != candidate {
+					return "", false
+				}
+			}
+			owner, err := resolver.Type(actual.WireTypeExpr)
+			if err != nil {
+				return "", false
+			}
+			declared, err := resolver.Type(expression)
+			if owner == nil {
+				return "", false
+			}
+			return owner.PkgPath() + "." + owner.Name(), err == nil && owner == declared
+		}
+		if param.WireTypeExpr != "" {
+			if _, ok := wireMatch(param.WireTypeExpr); !ok {
+				return fmt.Errorf("handler parameter %q wireType conflicts with linked contract", param.Name)
+			}
+		}
+		if param.Tag != "" {
+			if _, ok := sourceHandlerTags(reflect.StructTag(""), param.Tag, false, wireMatch); !ok {
+				return fmt.Errorf("handler parameter %q tags conflict with linked contract", param.Name)
+			}
+		}
+		// Contracts remain handwritten. Only proved discovery metadata is accepted.
 		remainder := *param
 		remainder.Name, remainder.TypeExpr, remainder.Raw = "", "", ""
+		remainder.WireTypeExpr, remainder.Tag = "", ""
 		remainder.Source, remainder.Required, remainder.Declaration = spec.BindSource{}, nil, ""
 		if !reflect.DeepEqual(remainder, spec.Parameter{}) {
 			return fmt.Errorf("handler parameter %q has unsupported contract overrides", param.Name)

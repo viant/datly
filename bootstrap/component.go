@@ -309,6 +309,25 @@ func (r *packageComponentResolver) resolveField(contract *packageContract, field
 	}
 	if param != nil {
 		contract.paramsByField[field.Name] = param
+		if param.WireTypeExpr != "" && metadata.WireType != "" && param.WireTypeExpr != metadata.WireType {
+			if r.types == nil {
+				return nil, fmt.Errorf("resolve package %s %s: conflicting wireType declarations require component type authority", contract.role.label(), field.Name)
+			}
+			declared, err := r.types.Resolve(param.WireTypeExpr)
+			if err != nil {
+				return nil, fmt.Errorf("resolve package %s %s wireType: %w", contract.role.label(), field.Name, err)
+			}
+			owned, err := r.types.Resolve(metadata.WireType)
+			if err != nil {
+				return nil, fmt.Errorf("resolve package %s %s wireType: %w", contract.role.label(), field.Name, err)
+			}
+			if declared == "" || declared != owned {
+				return nil, fmt.Errorf("resolve package %s %s: conflicting wireType declarations", contract.role.label(), field.Name)
+			}
+		}
+		if param.WireTypeExpr == "" {
+			param.WireTypeExpr = metadata.WireType
+		}
 	}
 	if err = r.resolveParamType(contract.role, field, param); err != nil {
 		return nil, err
@@ -595,6 +614,7 @@ func (r *packageComponentResolver) param(role contractRole, field xshape.Field, 
 	param := &spec.Parameter{
 		Name: name, Source: spec.BindSource{Kind: binding.Location.Kind, Name: binding.Location.In},
 		QueryListCSV: metadata.QueryListCSV, TypeExpr: binding.DataType, Tag: string(field.Tag), Cardinality: binding.Cardinality,
+		WireTypeExpr:   metadata.WireType,
 		BodyNullPolicy: binding.BodyNullPolicy,
 		Required:       binding.Required, Cacheable: binding.Cacheable,
 		MinAllowedRecords: binding.MinAllowedRecords, MaxAllowedRecords: binding.MaxAllowedRecords, ExpectedReturned: binding.ExpectedReturned,

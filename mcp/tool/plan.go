@@ -27,6 +27,7 @@ type Argument struct {
 	destinationType reflect.Type
 	wireSchema      *spec.WireSchema
 	wireSchemas     map[string]*spec.WireSchema
+	wireType        reflect.Type
 	bodyNullPolicy  string
 	required        bool
 	description     string

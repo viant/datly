@@ -155,7 +155,19 @@ func (c *Compiler) compileSourceHandler(ctx context.Context, source *Source, hea
 			}
 		}
 	}
-	if err = validateSourceHandlerParameters(loader, contracts[0], contracts[1], prepared.TypeContext, d.Params); err != nil {
+	fields, err := sourceHandlerFields(contracts[0])
+	if err != nil {
+		return nil, err
+	}
+	outputs, err := sourceHandlerFields(contracts[1])
+	if err != nil {
+		return nil, err
+	}
+	wireTypes, wireMatch, err := sourceHandlerWireTypes(loader, fields, prepared.TypeContext)
+	if err != nil {
+		return nil, err
+	}
+	if err = validateSourceHandlerParameters(loader, fields, outputs, prepared.TypeContext, d.Params, wireMatch); err != nil {
 		return nil, err
 	}
 	connector := header.Connector
@@ -212,6 +224,19 @@ func (c *Compiler) compileSourceHandler(ctx context.Context, source *Source, hea
 		}
 		descriptors[i] = descriptor
 	}
+	for _, descriptor := range wireTypes {
+		if _, exists, e := copy.Types.Resolve(typecatalog.TranscribeAuthority, descriptor.Key()); e != nil {
+			return nil, e
+		} else if !exists {
+			if err = copy.Types.Register(typecatalog.TypeOriginPackage, descriptor); err != nil {
+				return nil, err
+			}
+		}
+	}
+	wireReferences := make([]string, 0, len(wireTypes))
+	for _, descriptor := range wireTypes {
+		wireReferences = append(wireReferences, descriptor.PkgPath+"."+descriptor.Name)
+	}
 	input, output := descriptors[0], descriptors[1]
 	typeContext := compileTypeContext(&copy, prepared.TypeContext)
 	resolver, err := typecatalog.NewResolver(copy.Types, typecatalog.TranscribeAuthority, typeContext)
@@ -220,10 +245,11 @@ func (c *Compiler) compileSourceHandler(ctx context.Context, source *Source, hea
 	}
 	return &Result{Source: &copy, Component: component, TypeContext: typeContext, TypeResolver: resolver, TypeAuthority: typecatalog.TranscribeAuthority,
 		Contracts:       gen.ContractReferences{Input: &gen.ContractReference{Expression: input.Name, DescriptorKey: input.Key()}, Output: &gen.ContractReference{Expression: output.Name, DescriptorKey: output.Key()}},
-		ExternalHandler: &gen.ExternalHandler{Package: packages[0], Name: names[0], Build: build.WithContext(nil)}}, nil
+		ExternalHandler: &gen.ExternalHandler{Package: packages[0], Name: names[0], Build: build.WithContext(nil), WireTypes: wireReferences}}, nil
 }
 
 type sourceHandlerField struct {
+	pkg      *types.Package
 	typ      types.Type
 	binding  bindly.BindingSpec
 	tags     reflect.StructTag
@@ -288,20 +314,12 @@ func sourceHandlerFields(typ types.Type) (map[string]sourceHandlerField, error) 
 		if _, exists := result[key]; exists {
 			return nil, fmt.Errorf("ambiguous handler binding %q", key)
 		}
-		result[key] = sourceHandlerField{typ: field.Type(), binding: binding, tags: reflect.StructTag(tags), embedded: field.Embedded()}
+		result[key] = sourceHandlerField{pkg: field.Pkg(), typ: field.Type(), binding: binding, tags: reflect.StructTag(tags), embedded: field.Embedded()}
 	}
 	return result, nil
 }
 
-func validateSourceHandlerParameters(loader types.Importer, input, output types.Type, tc *spec.TypeContext, params []*spec.Parameter) error {
-	fields, err := sourceHandlerFields(input)
-	if err != nil {
-		return err
-	}
-	outputs, err := sourceHandlerFields(output)
-	if err != nil {
-		return err
-	}
+func validateSourceHandlerParameters(loader types.Importer, fields, outputs map[string]sourceHandlerField, tc *spec.TypeContext, params []*spec.Parameter, wireMatch func(string, string) (string, bool)) error {
 	scope := types.NewPackage("datly.local/handlercheck", "handlercheck")
 	for _, imp := range tc.Imports {
 		pkg, err := loader.Import(imp.Package)
@@ -374,10 +392,20 @@ func validateSourceHandlerParameters(loader types.Importer, input, output types.
 			}
 			remainder.ErrorStatusCode = 0
 		}
+		if param.WireTypeExpr != "" {
+			canonical, ok := wireMatch(param.Name, param.WireTypeExpr)
+			if !ok {
+				return fmt.Errorf("handler parameter %q wireType conflicts with source contract", param.Name)
+			}
+			param.WireTypeExpr = canonical
+		}
+		remainder.WireTypeExpr = ""
 		if param.Tag != "" {
-			if !sourceHandlerTagsMatch(field.tags, param.Tag, field.embedded) {
+			reconciled, ok := sourceHandlerTags(field.tags, param.Tag, field.embedded, func(value string) (string, bool) { return wireMatch(param.Name, value) })
+			if !ok {
 				return fmt.Errorf("handler parameter %q tags conflict with source contract", param.Name)
 			}
+			param.Tag = reconciled
 			remainder.Tag = ""
 		}
 		remainder.Codec = nil
@@ -394,20 +422,26 @@ func validateSourceHandlerParameters(loader types.Importer, input, output types.
 // Compare complete tag keys and decoded values. Substring matching would let
 // xjson satisfy json, and cannot prove a declaration belongs to the contract.
 func sourceHandlerTagsMatch(existing reflect.StructTag, authored string, embedded bool) bool {
+	_, ok := sourceHandlerTags(existing, authored, embedded, nil)
+	return ok
+}
+
+func sourceHandlerTags(existing reflect.StructTag, authored string, embedded bool, wireMatch func(string) (string, bool)) (string, bool) {
+	var reconciled []string
 	seen := map[string]bool{}
 	for rest := strings.TrimSpace(authored); rest != ""; {
 		colon := strings.IndexByte(rest, ':')
 		if colon <= 0 {
-			return false
+			return "", false
 		}
 		key := rest[:colon]
 		if strings.ContainsAny(key, " \t\r\n\"") || seen[key] {
-			return false
+			return "", false
 		}
 		seen[key] = true
 		quoted := rest[colon+1:]
 		if len(quoted) < 2 || quoted[0] != '"' {
-			return false
+			return "", false
 		}
 		end := 1
 		for end < len(quoted) {
@@ -421,26 +455,33 @@ func sourceHandlerTagsMatch(existing reflect.StructTag, authored string, embedde
 			end++
 		}
 		if end >= len(quoted) {
-			return false
+			return "", false
 		}
 		value, err := strconv.Unquote(quoted[:end+1])
 		if err != nil {
-			return false
+			return "", false
 		}
 		actual, found := existing.Lookup(key)
 		if !found && embedded && key == "anonymous" && value == "true" {
 			actual, found = "true", true
 		}
-		if !found || actual != value {
-			return false
+		if key == "wireType" && wireMatch != nil {
+			canonical, ok := wireMatch(value)
+			if !ok {
+				return "", false
+			}
+			value = canonical
+		} else if !found || actual != value {
+			return "", false
 		}
+		reconciled = append(reconciled, key+":"+strconv.Quote(value))
 		rest = quoted[end+1:]
 		if rest != "" && rest[0] != ' ' {
-			return false
+			return "", false
 		}
 		rest = strings.TrimSpace(rest)
 	}
-	return len(seen) != 0
+	return strings.Join(reconciled, " "), len(seen) != 0
 }
 
 // generatedPostFactory is deliberately narrower than source-backed handler

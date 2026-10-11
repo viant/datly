@@ -317,6 +317,10 @@ func (r *Runtime) invokeComponent(ctx context.Context, request dexec.ComponentRe
 	if err != nil {
 		return nil, err
 	}
+	constants, err := r.constantProvider(registered.Component)
+	if err != nil {
+		return nil, err
+	}
 	return r.invoker.Execute(ctx, handlerengine.Request{
 		IndependentChildTransactions: request.IndependentChildTransactions || (registered.Component.Settings != nil && registered.Component.Settings.IndependentChildTransactions),
 		SequenceStrategy:             sequenceStrategy,
@@ -335,7 +339,7 @@ func (r *Runtime) invokeComponent(ctx context.Context, request dexec.ComponentRe
 		Scope:                        effectiveScope,
 		Capabilities:                 registered.Capabilities,
 		Providers:                    registered.Providers,
-		Constants:                    r.canonicalConstants[identity],
+		Constants:                    constants,
 		Components:                   r.componentProvider(effectiveScope, registered.Component),
 		ComponentInvoker:             r.componentInvokerProvider(effectiveScope, buffered),
 		DataSource:                   dataSource,

@@ -147,7 +147,7 @@ func (p *inputProjection) add(field InputField) error {
 		prior := previous.binding
 		// Different consumers may bind the same request value. Merge identical wire
 		// contracts and requiredness; incompatible constraints must not be discarded.
-		if previous.SourceType() != field.SourceType() || prior.When != binding.When || prior.Scope != binding.Scope || prior.With != binding.With ||
+		if previous.SourceType() != field.SourceType() || previous.wireType != field.wireType || prior.When != binding.When || prior.Scope != binding.Scope || prior.With != binding.With ||
 			!reflect.DeepEqual(prior.MinAllowedRecords, binding.MinAllowedRecords) || !reflect.DeepEqual(prior.MaxAllowedRecords, binding.MaxAllowedRecords) ||
 			!reflect.DeepEqual(prior.ExpectedReturned, binding.ExpectedReturned) || !reflect.DeepEqual(prior.DefaultValue, binding.DefaultValue) {
 			return fmt.Errorf("conflicting transitive transport input %s", key)

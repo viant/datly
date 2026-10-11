@@ -20,6 +20,7 @@ import (
 // Reference identifies an immutable constant site in the original source.
 type Reference struct {
 	Start, End int
+	Name       string
 	Value      string
 }
 
@@ -127,7 +128,7 @@ func (r Renderer) References(source string) ([]Reference, error) {
 						return fmt.Errorf("identifier constant %q must contain only letters, digits, underscores or hyphens", node.ID)
 					}
 				}
-				replacements = append(replacements, Reference{Start: span.Start, End: prefix, Value: value})
+				replacements = append(replacements, Reference{Start: span.Start, End: prefix, Name: node.ID, Value: value})
 			case *stmt.If:
 				if err := visit(node.Body.Statements()); err != nil {
 					return err

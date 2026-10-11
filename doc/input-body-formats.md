@@ -13,3 +13,21 @@ For a short offset source protocol, author `timeLayout=2006-01-02T15:04:05Z07`. 
 The formatter retains original object token order, duplicate keys, and untouched value bytes. Typed JSON decoding still decides case-variant last-wins. Only standard JSON-authorized names are eligible: explicit json aliases do not grant the Go field name, anonymous fields follow normal flattening/dominance, and recursive type plans retain finite nested payload references. The compiler/engine regression matrices compare these behaviors with the ordinary decoder and include large integer precision.
 
 Unformatted JSON siblings (including raw JSON scalars, arrays, and objects) remain byte-preserved. Reusable/domain types implementing `json.Unmarshaler` keep authority over their entire representation; nested internal date tags are not inspected or transformed. Tests cover custom scalar and custom object representations alongside a separately formatted sibling date.
+
+# Authored MCP representations for custom JSON bodies
+
+A custom JSON body decoder owns its accepted JSON shape. Native MCP discovery requires explicit representation authority instead of inferring that shape from the decoder's Go fields. Define a distinct method-free named representation in the application's package and attach its canonical identity to the bound input field:
+
+```go
+type RequestWire Request
+
+type Input struct {
+    Body *Request `parameter:",kind=body" wireType:"example.com/application/request.RequestWire"`
+}
+```
+
+The application owner asserts that `RequestWire` describes the JSON accepted by `Request`. An alias (`type RequestWire = Request`) retains its custom methods and does not supply that authority. Discovery never executes JSON methods. Runtime HTTP and MCP binding continue using the original `*Request`; `wireType` affects schema discovery only. RawMessage remains unconstrained JSON, and pointer nullability and binding requiredness retain their existing rules.
+
+Initial support is limited to a direct named body argument without a codec. Anonymous custom bodies fail clearly. The component-scoped catalog must resolve a linked non-pointer named representation; missing, ambiguous, conflicting, cyclic, ordinary-source overrides and simultaneous scalar WireSchema metadata fail. A representation with custom JSON methods also requires authority and is therefore unsuitable for this direct declaration.
+
+DQL can retain the same Go annotation through the existing `WithTag('wireType:"example.com/application/request.RequestWire"')` mechanism. For a linked external Input, put the tag on the authored Go field. Additional DQL declarations must resolve to the same type. Generation retains the representation with normal reflect.TypeFor anchors so a fresh binary can rediscover it. No decoder replacement or global registration is required.

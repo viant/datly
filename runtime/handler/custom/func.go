@@ -19,6 +19,11 @@ func NewFunc[I any, O any](fn xhandler.Func[I, O]) rhandler.TypedHandler {
 	return &funcHandler[I, O]{fn: fn}
 }
 
+// SupportsIndependentChildTransactions uses the same engine ownership guards as custom contracts.
+func (h *funcHandler[I, O]) SupportsIndependentChildTransactions() bool {
+	return h != nil && h.fn != nil
+}
+
 func (h *funcHandler[I, O]) InputType() reflect.Type {
 	return reflect.TypeFor[I]()
 }
@@ -35,5 +40,9 @@ func (h *funcHandler[I, O]) Execute(ctx context.Context, invocation rhandler.Inv
 	if !ok || input == nil {
 		return nil, fmt.Errorf("custom handler input must be *%s, got %T", reflect.TypeFor[I](), invocation.Input)
 	}
-	return h.fn(ctx, input)
+	output, err := h.fn(ctx, input)
+	if output == nil {
+		return nil, err
+	}
+	return output, err
 }

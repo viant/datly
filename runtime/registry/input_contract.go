@@ -19,6 +19,9 @@ type RouteInput struct {
 	Route    spec.RouteRef
 	Plan     *bindly.Plan
 	Bindings []bindly.BindingSpec
+	// WireTypes is a route-local constructor carrier keyed by canonical binding path.
+	// Entries are retained by value in InputField, never used by runtime binding.
+	WireTypes map[string]reflect.Type
 }
 
 // InputField is one canonical route-effective component input field.
@@ -34,6 +37,7 @@ type InputField struct {
 	verifiedJWT     bool
 	wireSchema      *spec.WireSchema
 	wireSchemas     map[string]*spec.WireSchema
+	wireType        reflect.Type
 }
 
 // RouteInputContract is the exact binding contract for one component route.
@@ -115,9 +119,13 @@ func NewInputContract(inputType reflect.Type, projection *bindly.Projection, rou
 			if err != nil {
 				return nil, fmt.Errorf("route input contract %s field %s: %w", key, binding.Path, err)
 			}
+			wireType := route.WireTypes[binding.Path]
+			if wireType != nil && (wireSchema != nil || len(wireSchemas) != 0) {
+				return nil, fmt.Errorf("route input contract %s field %s: wireType conflicts with scalar wire schema", key, binding.Path)
+			}
 			fields = append(fields, InputField{
 				owner: inputType, origin: route.Route, path: binding.Path, destinationType: destinationType, binding: binding, anonymous: anonymous, dependency: dependency, verifiedJWT: verifiedJWT,
-				wireSchema: wireSchema, wireSchemas: wireSchemas,
+				wireSchema: wireSchema, wireSchemas: wireSchemas, wireType: wireType,
 			})
 		}
 		var replayPaths []string
@@ -220,8 +228,12 @@ func (c *RouteInputContract) WithOptionalBindings(names ...string) (*RouteInputC
 		return c, nil
 	}
 	bindings := make([]bindly.BindingSpec, 0, len(c.fields))
+	wireTypes := make(map[string]reflect.Type)
 	matched := map[string]int{}
 	for _, field := range c.fields {
+		if field.wireType != nil {
+			wireTypes[field.path] = field.wireType
+		}
 		binding := cloneBindingSpec(field.binding)
 		keys := inputFieldMatchKeys(field)
 		for _, key := range keys {
@@ -251,13 +263,18 @@ func (c *RouteInputContract) WithOptionalBindings(names ...string) (*RouteInputC
 	if err != nil {
 		return nil, err
 	}
-	contract, err := NewInputContract(c.inputType, c.contract.projection, RouteInput{Route: c.route, Plan: plan, Bindings: bindings})
+	contract, err := NewInputContract(c.inputType, c.contract.projection, RouteInput{Route: c.route, Plan: plan, Bindings: bindings, WireTypes: wireTypes})
 	if err != nil {
 		return nil, err
 	}
 	result, ok := contract.ForRoute(c.route)
 	if !ok {
 		return nil, fmt.Errorf("rebuilt route input contract not found: %s", c.route.String())
+	}
+	for index := range result.fields {
+		binding := result.fields[index].binding
+		result.fields[index] = c.fields[index]
+		result.fields[index].binding = binding
 	}
 	return result, nil
 }
@@ -277,6 +294,7 @@ func (c *RouteInputContract) Fields() []InputField {
 }
 
 func (f InputField) Path() string                  { return f.path }
+func (f InputField) WireType() reflect.Type        { return f.wireType }
 func (f InputField) DestinationType() reflect.Type { return f.destinationType }
 func (f InputField) SourceType() reflect.Type {
 	if source, ok := f.binding.Transformer.(interface{ WireSourceType() reflect.Type }); ok {

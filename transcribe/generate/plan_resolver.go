@@ -52,6 +52,9 @@ func (r *planResolver) resolve() (*Plan, error) {
 		return plan, err
 	}
 	r.plan = plan
+	if err = r.resolveWireTypes(); err != nil {
+		return nil, err
+	}
 	borrowedPaths := make([]string, 0, len(r.input.Views))
 	for identity := range r.input.Views {
 		borrowedPaths = append(borrowedPaths, identity)

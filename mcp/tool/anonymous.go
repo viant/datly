@@ -1,6 +1,8 @@
 package tool
 
 import (
+	"encoding"
+	"encoding/json"
 	"fmt"
 	"reflect"
 	"strings"
@@ -20,6 +22,16 @@ func (c *Compiler) compileAnonymousBody(inputField registry.InputField) ([]Argum
 	}
 	types := xshape.Runtime{}
 	sourceType := types.Indirect(inputField.SourceType())
+	customJSON := false
+	if sourceType != nil {
+		pointer := reflect.PointerTo(sourceType)
+		// Match the pinned reflector's custom method sets without executing them.
+		customJSON = sourceType.Implements(reflect.TypeFor[json.Marshaler]()) || pointer.Implements(reflect.TypeFor[json.Marshaler]()) || pointer.Implements(reflect.TypeFor[json.Unmarshaler]()) ||
+			sourceType.Implements(reflect.TypeFor[encoding.TextMarshaler]()) || pointer.Implements(reflect.TypeFor[encoding.TextMarshaler]()) || pointer.Implements(reflect.TypeFor[encoding.TextUnmarshaler]())
+	}
+	if inputField.WireType() != nil || customJSON {
+		return nil, fmt.Errorf("anonymous body field %q custom JSON source requires a direct named body argument", inputField.Path())
+	}
 	destinationType := types.Indirect(inputField.DestinationType())
 	if sourceType == nil || sourceType.Kind() != reflect.Struct {
 		return nil, fmt.Errorf("anonymous body field %q source type must be a struct, got %v", inputField.Path(), inputField.SourceType())
