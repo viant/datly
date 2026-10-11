@@ -375,7 +375,9 @@ func (d *Data) completeNative(ctx context.Context, cause error, permit *drainown
 	state := xhandler.TransactionNone
 	localErr := failed
 	defer func() { owner.recordOutcome(state, localErr) }()
-	if failed != nil {
+	// A guarded execution can return the same failure already recorded by the
+	// journal. Preserve that cause and join only an additional failure.
+	if failed != nil && !errors.Is(cause, failed) {
 		cause = errors.Join(cause, failed)
 	}
 	if cause == nil {
