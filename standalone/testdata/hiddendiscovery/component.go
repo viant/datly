@@ -14,14 +14,16 @@ var LinkedType = reflect.TypeFor[Component]()
 
 type Input struct{}
 type Row struct {
-	ID        int     `sqlx:"id" json:"id"`
-	Lease     *string `sqlx:"lease_until_raw" internal:"true" json:"-"`
-	Cleanup   string  `sqlx:"cleanup_status" internal:"true" json:"-"`
-	Transient bool    `sqlx:"-" internal:"true" json:"-"`
+	Body         []byte  `sqlx:"binary_body" internal:"true" json:"-"`
+	NullableBody *[]byte `sqlx:"nullable_body" internal:"true" json:"-"`
+	ID           int     `sqlx:"id" json:"id"`
+	Lease        *string `sqlx:"lease_until_raw" internal:"true" json:"-"`
+	Cleanup      string  `sqlx:"cleanup_status" internal:"true" json:"-"`
+	Transient    bool    `sqlx:"-" internal:"true" json:"-"`
 }
 type Output struct {
-	Rows []*Row `json:"rows" parameter:"Rows,kind=output,in=view" view:"Rows" sql:"SELECT r.* FROM (SELECT 1 AS id, CAST(NULL AS CHAR) AS lease_until_raw, LOWER(TRIM(' DONE ')) AS cleanup_status) r"`
+	Rows []*Row `json:"rows" parameter:"Rows,kind=output,in=view" view:"Rows" sql:"SELECT r.* FROM (SELECT 1 AS id, COALESCE(NULL, CAST('ab' AS BLOB)) AS binary_body, CAST(NULL AS BLOB) AS nullable_body, CAST(NULL AS CHAR) AS lease_until_raw, LOWER(TRIM(' DONE ')) AS cleanup_status) r"`
 }
 type UnknownOutput struct {
-	Rows []*Row `json:"rows" parameter:"Rows,kind=output,in=view" view:"Rows" sql:"SELECT r.* FROM (SELECT 1 AS id, CAST(NULL AS CHAR) AS lease_until_raw, LOWER(TRIM(' DONE ')) AS cleanup_status, CAST(NULL AS CHAR) AS unowned) r"`
+	Rows []*Row `json:"rows" parameter:"Rows,kind=output,in=view" view:"Rows" sql:"SELECT r.* FROM (SELECT 1 AS id, COALESCE(NULL, CAST('ab' AS BLOB)) AS binary_body, CAST(NULL AS BLOB) AS nullable_body, CAST(NULL AS CHAR) AS lease_until_raw, LOWER(TRIM(' DONE ')) AS cleanup_status, CAST(NULL AS CHAR) AS unowned) r"`
 }

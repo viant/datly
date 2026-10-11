@@ -124,6 +124,11 @@ func (r *outputColumnCompiler) column(field xshape.Field, path string) (*spec.Co
 			return nil, true, nil
 		}
 		switch typ.Kind() {
+		case reflect.Slice:
+			// SQL binary values are scalars; structural slices remain excluded.
+			if typ != reflect.TypeFor[[]byte]() {
+				return nil, true, nil
+			}
 		case reflect.Bool, reflect.String, reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
 			reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Float32, reflect.Float64:
 		default:
