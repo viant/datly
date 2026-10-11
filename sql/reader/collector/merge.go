@@ -89,6 +89,16 @@ func (r *Collector) runOnRelation(ctx context.Context, snapshot *hookTopology) e
 			return err
 		}
 	}
+	// Ordinary concrete rows have no relation callback. Decide once per view
+	// rather than walking every row or allocating a worker queue. Children have
+	// already run, and dynamic/non-struct shapes retain the existing dispatch.
+	model := r.view.Schema.RowType()
+	for model != nil && model.Kind() == reflect.Pointer {
+		model = model.Elem()
+	}
+	if model != nil && model.Kind() == reflect.Struct && !reflect.PointerTo(model).Implements(reflect.TypeFor[xhandler.OnRelationer]()) {
+		return r.rebindTreeAfterHooks(snapshot)
+	}
 	dest := r.destValue
 	ptr := xunsafe.AsPointer(dest.Interface())
 	if ptr == nil || r.slice == nil {
