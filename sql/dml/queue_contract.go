@@ -53,10 +53,8 @@ func (d *Data) appendWithQueueContract(table string, data any, kind dataOperatio
 	}
 	if kind == dataOpInsert {
 		if payload.Kind() == reflect.Slice {
-			for i := 0; i < payload.Len(); i++ {
-				if payload.Index(i).Type().Implements(reflect.TypeFor[insert.Insertable]()) {
-					return fmt.Errorf("queue contract does not support SQLX OnInsert callbacks")
-				}
+			if payload.Len() > 0 && payload.Type().Elem().Implements(reflect.TypeFor[insert.Insertable]()) {
+				return fmt.Errorf("queue contract does not support SQLX OnInsert callbacks")
 			}
 		} else if payload.Type().Implements(reflect.TypeFor[insert.Insertable]()) {
 			return fmt.Errorf("queue contract does not support SQLX OnInsert callbacks")
@@ -64,9 +62,13 @@ func (d *Data) appendWithQueueContract(table string, data any, kind dataOperatio
 		if contract == rhandler.SourceRow && queueNeedsGeneratedIDBackfill(payload.Interface()) {
 			return fmt.Errorf("source-row INSERT requires native allocated identity before queue admission")
 		}
-		if contract == rhandler.SourceSlice {
+		if contract == rhandler.SourceSlice && payload.Len() > 0 {
+			// SourceSlice is a homogeneous slice of struct pointers. Resolve its
+			// native mapping once, then inspect every row's identity and presence.
+			marker := &option.SetMarker{}
+			columns, _, err := sqlio.StructColumnMapper(payload.Type().Elem(), marker)
 			for i := 0; i < payload.Len(); i++ {
-				if queueNeedsGeneratedIDBackfill(payload.Index(i).Interface()) {
+				if err != nil || queueRowNeedsGeneratedIDBackfill(payload.Index(i), columns, marker) {
 					return fmt.Errorf("source-slice INSERT row %d requires native allocated identity before queue admission", i)
 				}
 			}
@@ -131,27 +133,46 @@ func captureQueuePayload(payload reflect.Value, kind dataOperationKind) (*queueP
 	rows := []reflect.Value{payload}
 	if payload.Kind() == reflect.Slice {
 		result.slice = payload
-		rows = nil
+		rows = make([]reflect.Value, payload.Len())
+		result.elements = make([]uintptr, payload.Len())
 		for i := 0; i < payload.Len(); i++ {
-			rows = append(rows, payload.Index(i))
-			result.elements = append(result.elements, payload.Index(i).Pointer())
+			rows[i] = payload.Index(i)
+			result.elements[i] = payload.Index(i).Pointer()
 		}
 	}
-	for _, row := range rows {
-		columns, err := sqlio.StructColumns(row.Type(), option.IdentityOnly(kind == dataOpDelete))
-		if err != nil {
-			return nil, fmt.Errorf("queue payload mapping: %w", err)
+	if len(rows) == 0 {
+		return result, nil
+	}
+	rowType := rows[0].Type()
+	columns, err := sqlio.StructColumns(rowType, option.IdentityOnly(kind == dataOpDelete))
+	if err != nil {
+		return nil, fmt.Errorf("queue payload mapping: %w", err)
+	}
+	pathsByColumn := make([][][]int, len(columns))
+	for i, column := range columns {
+		fields, ok := column.(sqlio.ColumnWithFields)
+		if !ok {
+			return nil, fmt.Errorf("queue mapped column %s has no native field path", column.Name())
 		}
+		pathsByColumn[i], err = compiledQueuePaths(rowType, fields.Fields())
+		if err != nil {
+			return nil, err
+		}
+	}
+	var markerFields []int
+	if kind == dataOpInsert {
+		typ := rowType.Elem()
+		for i := 0; i < typ.NumField(); i++ {
+			if structology.IsSetMarker(typ.Field(i).Tag) {
+				markerFields = append(markerFields, i)
+			}
+		}
+	}
+	result.rows = make([]payloadRowEvidence, 0, len(rows))
+	for _, row := range rows {
 		evidence := payloadRowEvidence{row: reflect.ValueOf(row.Interface())}
-		for _, column := range columns {
-			fields, ok := column.(sqlio.ColumnWithFields)
-			if !ok {
-				return nil, fmt.Errorf("queue mapped column %s has no native field path", column.Name())
-			}
-			paths, err := compiledQueuePaths(row.Type(), fields.Fields())
-			if err != nil {
-				return nil, err
-			}
+		for i, column := range columns {
+			paths := pathsByColumn[i]
 			value, err := mappedQueueValue(row, paths)
 			if err != nil {
 				return nil, err
@@ -167,18 +188,12 @@ func captureQueuePayload(payload reflect.Value, kind dataOperationKind) (*queueP
 			evidence.fields = append(evidence.fields, payloadFieldEvidence{paths: paths, holders: holders, image: image})
 		}
 		// SQLX selectors can read a setMarker holder even though it is not a column.
-		if kind == dataOpInsert {
-			typ := row.Type().Elem()
-			for i := 0; i < typ.NumField(); i++ {
-				field := typ.Field(i)
-				if structology.IsSetMarker(field.Tag) {
-					image, err := captureQueueValue(row.Elem().Field(i), 0)
-					if err != nil {
-						return nil, err
-					}
-					evidence.fields = append(evidence.fields, payloadFieldEvidence{paths: [][]int{{i}}, image: image})
-				}
+		for _, i := range markerFields {
+			image, err := captureQueueValue(row.Elem().Field(i), 0)
+			if err != nil {
+				return nil, err
 			}
+			evidence.fields = append(evidence.fields, payloadFieldEvidence{paths: [][]int{{i}}, image: image})
 		}
 		result.rows = append(result.rows, evidence)
 	}
@@ -300,6 +315,10 @@ func queueNeedsGeneratedIDBackfill(data any) bool {
 	if err != nil {
 		return true
 	}
+	return queueRowNeedsGeneratedIDBackfill(row, columns, marker)
+}
+
+func queueRowNeedsGeneratedIDBackfill(row reflect.Value, columns sqlio.Columns, marker *option.SetMarker) bool {
 	for position, column := range columns {
 		if !sqlio.IsIdentityColumn(column) {
 			continue
@@ -333,7 +352,7 @@ func queueNeedsGeneratedIDBackfill(data any) bool {
 			return true
 		}
 		// SQLX explicitly supplied zero remains an assignment; nil never does.
-		if marker.Marker != nil && marker.IsSet(xunsafe.AsPointer(data), position) {
+		if marker.Marker != nil && marker.IsSet(xunsafe.AsPointer(row.Interface()), position) {
 			continue
 		}
 		// SQLX also installs numeric updaters for unsigned and other
