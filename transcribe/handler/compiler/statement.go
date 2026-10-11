@@ -34,11 +34,14 @@ func (c *Compiler) CompileStatement(source string, authority map[string]plan.Sta
 		service = selector
 	}
 	if service == nil || service.ID != "dml" {
-		return nil, fmt.Errorf("statement program requires dml.Execute or dml.ExecuteWithResult")
+		return nil, fmt.Errorf("statement program requires dml.Execute, dml.ExecuteWithResult or dml.Merge")
 	}
 	method, ok := service.X.(*expr.Select)
-	if !ok || (method.ID != "ExecuteWithResult" && method.ID != "Execute") {
-		return nil, fmt.Errorf("statement program requires dml.Execute or dml.ExecuteWithResult")
+	if !ok || (method.ID != "ExecuteWithResult" && method.ID != "Execute" && method.ID != "Merge") {
+		return nil, fmt.Errorf("statement program requires dml.Execute, dml.ExecuteWithResult or dml.Merge")
+	}
+	if method.ID == "Merge" {
+		return compileMergeStatement(method, authority)
 	}
 	argumentOffset := 1
 	if method.ID == "ExecuteWithResult" {

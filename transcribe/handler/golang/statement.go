@@ -15,7 +15,7 @@ import (
 // operation. The surrounding native program retains binding, lifecycle and
 // transaction ownership; this function never obtains a connection or drains.
 func StatementQueue(value *plan.StatementPlan, config Config) (*ast.File, error) {
-	if value == nil || value.SQL == "" {
+	if value == nil || (value.SQL == "" && value.Method != "Merge") {
 		return nil, fmt.Errorf("canonical statement plan is required")
 	}
 	if !token.IsIdentifier(config.Package) || token.Lookup(config.Package).IsKeyword() || !token.IsIdentifier(config.Factory) {
@@ -66,7 +66,7 @@ func StatementQueue(value *plan.StatementPlan, config Config) (*ast.File, error)
 	if method == "" {
 		method = "ExecuteWithResult"
 	}
-	if method != "Execute" && method != "ExecuteWithResult" {
+	if method != "Execute" && method != "ExecuteWithResult" && method != "Merge" {
 		return nil, fmt.Errorf("unsupported buffered statement method %q", method)
 	}
 	args := []ast.Expr{&ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(value.SQL)}}
@@ -94,7 +94,14 @@ func StatementQueue(value *plan.StatementPlan, config Config) (*ast.File, error)
 	fail := func(message string) ast.Stmt {
 		return returnStmt(callExpr(selectExpr(ast.NewIdent(fmtAlias), "Errorf"), &ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(message)}))
 	}
-	capability := &ast.InterfaceType{Methods: &ast.FieldList{List: []*ast.Field{{Names: []*ast.Ident{ast.NewIdent(method)}, Type: &ast.FuncType{Params: &ast.FieldList{List: params}, Results: &ast.FieldList{List: []*ast.Field{{Type: ast.NewIdent("error")}}}}}}}}
+	var capability ast.Expr = &ast.InterfaceType{Methods: &ast.FieldList{List: []*ast.Field{{Names: []*ast.Ident{ast.NewIdent(method)}, Type: &ast.FuncType{Params: &ast.FieldList{List: params}, Results: &ast.FieldList{List: []*ast.Field{{Type: ast.NewIdent("error")}}}}}}}}
+	if method == "Merge" {
+		var err error
+		args, capability, err = statementMergeCall(value, l, selector)
+		if err != nil {
+			return nil, err
+		}
+	}
 	body := []ast.Stmt{
 		&ast.IfStmt{Cond: &ast.BinaryExpr{X: &ast.BinaryExpr{X: ast.NewIdent("input"), Op: token.EQL, Y: nilExpr}, Op: token.LOR, Y: &ast.BinaryExpr{X: ast.NewIdent("output"), Op: token.EQL, Y: nilExpr}}, Body: &ast.BlockStmt{List: []ast.Stmt{fail("statement contracts are required")}}},
 		&ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent("capability"), ast.NewIdent("ok")}, Tok: token.DEFINE, Rhs: []ast.Expr{&ast.TypeAssertExpr{X: ast.NewIdent("data"), Type: capability}}},

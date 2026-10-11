@@ -287,7 +287,7 @@ func (c *Compiler) Compile(ctx context.Context, source *Source) (*Result, error)
 		if strings.EqualFold(item.Operation, "Execute") && (len(prepared.Statements) != 1 || !canonicalBufferedExecute(prepared.SQL[item.Start:item.End])) {
 			continue
 		}
-		if item.Kind == statement.KindService && (strings.EqualFold(item.Operation, "ExecuteWithResult") || strings.EqualFold(item.Operation, "Execute")) {
+		if item.Kind == statement.KindService && (strings.EqualFold(item.Operation, "ExecuteWithResult") || strings.EqualFold(item.Operation, "Execute") || strings.EqualFold(item.Operation, "Merge")) {
 			shapeOnly := len(prepared.Statements) == 2
 			if shapeOnly {
 				for _, other := range prepared.Statements {

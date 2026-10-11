@@ -54,7 +54,16 @@ func (g Generator) generateStatement(ctx context.Context, root, dir string, comp
 			if field.Anonymous || field.Implementation {
 				continue
 			}
-			authority[contract.root+"."+field.Name] = plan.StatementSelector{Path: plan.FieldPath{contract.root, field.Name}, Type: spec.TypeRef{Name: field.Type}, Addressable: true}
+			typ := spec.TypeRef{Name: field.Type}
+			// Freeze SQLX interface identity from the canonical import authority.
+			// An alias with the same spelling from another package cannot acquire it.
+			for _, imported := range contracts.Imports {
+				if imported.Package == "github.com/viant/sqlx/metadata/info" && (field.Type == imported.Alias+".MergeConfig" || field.Type == imported.Alias+".MergeResult") {
+					typ.Package = imported.Package
+					typ.Name = strings.TrimPrefix(field.Type, imported.Alias+".")
+				}
+			}
+			authority[contract.root+"."+field.Name] = plan.StatementSelector{Path: plan.FieldPath{contract.root, field.Name}, Type: typ, Addressable: true}
 		}
 	}
 	semantic, err := (&handlercompiler.Compiler{}).CompileStatement(compiled.StatementProgram, authority)

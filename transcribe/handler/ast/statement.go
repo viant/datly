@@ -13,9 +13,13 @@ type StatementSelector struct {
 // StatementPlan preserves one authored SQL statement and its ordered bindings.
 // It has no record classification, allocator, batching, or retry policy.
 type StatementPlan struct {
-	// Method is Execute or ExecuteWithResult. Empty retains the original result call.
+	// Method selects an existing buffered DML operation. Empty retains ExecuteWithResult.
 	Method       string
 	SQL          string
 	Arguments    []StatementSelector
 	LastInsertID StatementSelector
+	MergeTable   StatementSelector
+	MergeRows    StatementSelector
+	MergeConfig  StatementSelector
+	MergeResult  StatementSelector
 }
