@@ -13,6 +13,7 @@ import (
 	"golang.org/x/mod/module"
 
 	"github.com/viant/datly/internal/packageasset"
+	"github.com/viant/datly/spec"
 	"github.com/viant/datly/tag"
 	"github.com/viant/tagly/tags"
 	xshape "github.com/viant/x/shape"
@@ -271,14 +272,23 @@ func (r *planResolver) prepareResources() (*ResourcePlan, error) {
 				} else if namespace != result.Namespace {
 					return nil, fmt.Errorf("linked output field %s SQL namespace %q differs from component resources %q", field.Name, namespace, result.Namespace)
 				}
-				name := lowerSnake(r.plan.ComponentName)
 				role := r.plan.RootViewName
 				if role == "" {
 					role = r.plan.ComponentName
 				}
-				wanted := r.plan.Generation.SQLFileFor(role, role, defaultSQLResourcePath(name))
-				if path != wanted {
+				wanted := r.plan.Generation.SQLFile(role, "")
+				if wanted != "" && path != wanted {
 					return nil, fmt.Errorf("linked output field %s SQL destination %q differs from uneditable URI %q", field.Name, wanted, metadata.SQL.URI)
+				}
+				// A compiled contract owns its URI. Defaults must retain that
+				// destination; only an explicit conflicting sql_dest is invalid.
+				if wanted == "" {
+					if r.plan.Generation == nil {
+						r.plan.Generation = &spec.GenerationSettings{}
+					}
+					if err := r.plan.Generation.SetSQLFile(role, path); err != nil {
+						return nil, err
+					}
 				}
 			}
 		}

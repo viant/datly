@@ -51,6 +51,7 @@ func NewCatalog() *Catalog {
 func standardTypes() []*x.Type {
 	return []*x.Type{
 		x.NewType(reflect.TypeOf(xresponse.Status{})),
+		x.NewType(reflect.TypeFor[xresponse.Metrics]()),
 	}
 }
 
