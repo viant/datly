@@ -262,7 +262,7 @@ func TestDiscoveryQueryListDefaultsMatchRuntimeBinding(t *testing.T) {
 	type queryInput struct {
 		IDs []int `parameter:"IDs,kind=query,in=status"`
 	}
-	for _, raw := range []string{"1", "1,2", "[1,2]", "", "1,, 2", "1e2,2.9", "1,no"} {
+	for _, raw := range []string{"1", "1,2", "[1,2]", "", "1,, 2", "1e2,2.9", "1,no", "null", "[1,]"} {
 		for _, linked := range []bool{false, true} {
 			t.Run(fmt.Sprintf("%q/linked=%v", raw, linked), func(t *testing.T) {
 				literal := raw
