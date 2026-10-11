@@ -85,7 +85,7 @@ func (r *Collector) visitorMany(relation *Relation) func(value interface{}) erro
 					holderSlice = xunsafe.NewSlice(holderField.Type)
 				}
 				appender := holderSlice.Appender(sliceAddPtr)
-				appendRelationHolderValue(appender, holderField.Type, owner)
+				appender.Append(owner)
 				r.Lock().Unlock()
 				r.attachEvidence(index, position)
 			}
@@ -112,7 +112,7 @@ func (r *Collector) visitorMany(relation *Relation) func(value interface{}) erro
 					holderSlice = xunsafe.NewSlice(holderField.Type)
 				}
 				appender := holderSlice.Appender(sliceAddPtr)
-				appendRelationHolderValue(appender, holderField.Type, owner)
+				appender.Append(owner)
 				r.Lock().Unlock()
 				r.attachEvidence(index, position)
 			}

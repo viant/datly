@@ -246,7 +246,7 @@ func (r *Collector) mergeToParent(snapshot *hookTopology) error {
 						holderSlice = xunsafe.NewSlice(holderField.Type)
 					}
 					appender := holderSlice.Appender(holderField.ValuePointer(xunsafe.AsPointer(parentValue)))
-					appendRelationHolderValue(appender, holderField.Type, value)
+					appender.Append(value)
 					r.Lock().Unlock()
 					r.attachEvidence(position, i)
 				}
@@ -289,7 +289,7 @@ func (r *Collector) mergeToParent(snapshot *hookTopology) error {
 						holderSlice = xunsafe.NewSlice(holderField.Type)
 					}
 					appender := holderSlice.Appender(holderField.ValuePointer(xunsafe.AsPointer(parentValue)))
-					appendRelationHolderValue(appender, holderField.Type, value)
+					appender.Append(value)
 					r.Lock().Unlock()
 					r.attachEvidence(position, j)
 				}
