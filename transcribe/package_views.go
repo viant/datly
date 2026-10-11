@@ -174,7 +174,7 @@ func (r *packageViewResolver) typedInputDescriptors(packagePath string, bindings
 		default:
 			return nil, fmt.Errorf("external view parameter %q has unsupported cardinality %q", param.Name, param.Cardinality)
 		}
-		if err := r.add(byIdentity, name, descriptor); err != nil {
+		if err := r.addResolved(byIdentity, view, descriptor); err != nil {
 			return nil, err
 		}
 		identity, err := view.Identity()
@@ -307,6 +307,10 @@ func (r *packageViewResolver) add(target map[string]linkedInputView, name string
 			return fmt.Errorf("view %q type %q does not match package type %q", name, explicit, descriptor.Key())
 		}
 	}
+	return r.addResolved(target, view, descriptor)
+}
+
+func (r *packageViewResolver) addResolved(target map[string]linkedInputView, view *spec.View, descriptor *x.Type) error {
 	identity, err := view.Identity()
 	if err != nil {
 		return err

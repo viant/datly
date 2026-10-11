@@ -88,19 +88,16 @@ func linkDeclaredOutputView(result *Result, authored *spec.Component, generatedR
 				continue
 			}
 		}
-		descriptor, err := result.TypeResolver.Descriptor(expression)
+		resolved, err := result.TypeResolver.ResolveShape(expression)
 		if err != nil {
 			return fmt.Errorf("resolve output/view row type %q: %w", expression, err)
 		}
-		if descriptor == nil || descriptor.Name == "" || descriptor.PkgPath == "" {
+		if resolved == nil || resolved.Descriptor == nil || resolved.Descriptor.Name == "" || resolved.Descriptor.PkgPath == "" {
 			return fmt.Errorf("output/view row type %q requires existing named Go type authority", expression)
 		}
+		descriptor := resolved.Descriptor
 		if _, err := xshape.New(descriptor, result.TypeResolver.Descriptor).Fields(); err != nil {
 			return fmt.Errorf("output/view row type %q must be a Go struct: %w", expression, err)
-		}
-		resolved, err := result.TypeResolver.ResolveShape(expression)
-		if err != nil {
-			return err
 		}
 		// Persist canonical type identity in binding metadata. The authored alias
 		// need not appear in emitted Go when the row belongs to this package.

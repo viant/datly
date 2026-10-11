@@ -10,8 +10,8 @@ import (
 )
 
 // Build separate executables so references in the test binary cannot retain the
-// lifecycle accidentally. Go 1.25 retains TypeFor references even when the result
-// is assigned to the blank identifier; interface assertions alone do not link them.
+// lifecycle accidentally. Blank TypeFor retention varies with compiler
+// optimization; only the generated named anchor is a discovery contract.
 func TestLifecycleReachabilityRuntimeScan(t *testing.T) {
 	for _, tc := range []struct {
 		name        string
@@ -20,8 +20,8 @@ func TestLifecycleReachabilityRuntimeScan(t *testing.T) {
 		reference   string
 		want        string
 	}{
-		{name: "blank_typefor", reference: "var _ = reflect.TypeFor[Lifecycle]()\n", want: "found\n"},
-		{name: "init_blank_typefor", reference: "func init() { _ = reflect.TypeFor[Lifecycle]() }\n", want: "found\n"},
+		{name: "blank_typefor", reference: "var _ = reflect.TypeFor[Lifecycle]()\n"},
+		{name: "init_blank_typefor", reference: "func init() { _ = reflect.TypeFor[Lifecycle]() }\n"},
 		{name: "without_anchor", want: "missing\n"},
 		{name: "with_generated_anchor", anchored: true, want: "found\n"},
 		{name: "blank_interface_assertion", declaration: "type IFace interface { Run() }; var _ IFace = &Lifecycle{}", want: "missing\n"},
@@ -80,6 +80,13 @@ func main() {
 			command.Dir = root
 			command.Env = append(os.Environ(), "GOWORK=off", "GO111MODULE=on")
 			output, err := command.CombinedOutput()
+			if tc.want == "" {
+				if err != nil || (string(output) != "found\n" && string(output) != "missing\n") {
+					t.Fatalf("runtime scan probe: %q, error %v", output, err)
+				}
+				t.Logf("blank reference retention on this compiler: %s", strings.TrimSpace(string(output)))
+				return
+			}
 			if err != nil || string(output) != tc.want {
 				t.Fatalf("runtime scan: got %q, want %q, error %v", output, tc.want, err)
 			}

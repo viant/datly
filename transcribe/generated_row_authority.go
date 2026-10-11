@@ -17,10 +17,19 @@ import (
 // Only a uniquely declared local row may defer descriptor lookup until native
 // column discovery and the ordinary generation planner materialize its shape.
 type generatedRowAuthority struct {
-	plan     *gen.Plan
-	owners   map[string][]*spec.View
-	resolver *typecatalog.Resolver
-	views    []*spec.View
+	root         *spec.View
+	plan         *gen.Plan
+	owners       map[string][]*spec.View
+	resolver     *typecatalog.Resolver
+	views        []*spec.View
+	dependencies map[*spec.View][]generatedColumnDependencies
+}
+
+// Dependencies retain column order and context across both validation passes.
+type generatedColumnDependencies struct {
+	name string
+	keys []string
+	err  error
 }
 
 func collectGeneratedRowAuthority(component *spec.Component, prepared *dql.PreparedSource, declarations *declarationProducts, resolver *typecatalog.Resolver, path string, sourceMap *SourceMap) (*generatedRowAuthority, error) {
@@ -29,12 +38,17 @@ func collectGeneratedRowAuthority(component *spec.Component, prepared *dql.Prepa
 		return a, nil
 	}
 	a.plan = &gen.Plan{Package: component.TypeContext.PackagePath, Imports: component.TypeContext.Imports}
-	// Existing native parsing with no catalog produces declaration metadata only;
-	// the final root is separately compiled with strict dependency resolution.
-	root, err := (&readPlanCompiler{path: path, sourceMap: sourceMap}).compile(component, prepared)
+	// Parse and lower the canonical graph once, including resolver-dependent hook
+	// keys before source decomposition. Named CAST lookup is deferred until this
+	// graph supplies SQL ownership; validateDependencies below checks every named
+	// dependency before the graph can be returned to any downstream consumer.
+	root, err := (&readPlanCompiler{path: path, sourceMap: sourceMap, types: resolver,
+		generatedType: func(string) (bool, error) { return true, nil },
+	}).compile(component, prepared)
 	if err != nil {
 		return nil, err
 	}
+	a.root = root
 	seen := map[*spec.View]bool{}
 	var visit func(*spec.View) error
 	visit = func(view *spec.View) error {
@@ -108,16 +122,36 @@ func (a *generatedRowAuthority) walkDependencies(expression string, visit func(s
 }
 
 func (a *generatedRowAuthority) walkColumns(view *spec.View, visit func(string) error) error {
-	for _, column := range view.Columns {
-		if column == nil || !column.ExplicitType || column.Type.Name == "" {
-			continue
+	if a.dependencies == nil {
+		a.dependencies = map[*spec.View][]generatedColumnDependencies{}
+	}
+	columns, ok := a.dependencies[view]
+	if !ok {
+		for _, column := range view.Columns {
+			if column == nil || !column.ExplicitType || column.Type.Name == "" {
+				continue
+			}
+			name := column.Type.Name
+			if column.Type.Package != "" {
+				name = column.Type.Package + "." + name
+			}
+			dependency := generatedColumnDependencies{name: column.Name}
+			dependency.err = a.walkDependencies(name, func(key string) error {
+				dependency.keys = append(dependency.keys, key)
+				return nil
+			})
+			columns = append(columns, dependency)
 		}
-		name := column.Type.Name
-		if column.Type.Package != "" {
-			name = column.Type.Package + "." + name
+		a.dependencies[view] = columns
+	}
+	for _, column := range columns {
+		for _, key := range column.keys {
+			if err := visit(key); err != nil {
+				return fmt.Errorf("generated row reference %s.%s: %w", view.Name, column.name, err)
+			}
 		}
-		if err := a.walkDependencies(name, visit); err != nil {
-			return fmt.Errorf("generated row reference %s.%s: %w", view.Name, column.Name, err)
+		if column.err != nil {
+			return fmt.Errorf("generated row reference %s.%s: %w", view.Name, column.name, column.err)
 		}
 	}
 	return nil
@@ -129,21 +163,23 @@ func (a *generatedRowAuthority) validateDependencies() error {
 	}
 	for _, view := range a.views {
 		if err := a.walkColumns(view, func(dependency string) error {
-			owned, err := a.admits(dependency)
-			if err != nil {
-				return err
-			}
-			if owned {
-				return nil
-			}
+			// walkColumns already supplies canonical dependency identities.
+			// Preserve linked catalog authority, otherwise require one SQL owner.
 			shape, err := a.resolver.ResolveShape(dependency)
 			if err != nil {
 				return err
 			}
-			if shape == nil || shape.Descriptor == nil {
-				return fmt.Errorf("type %q was not found", dependency)
+			if shape != nil && shape.Descriptor != nil {
+				return nil
 			}
-			return nil
+			switch len(a.owners[dependency]) {
+			case 1:
+				return nil
+			case 0:
+				return fmt.Errorf("type %q was not found", dependency)
+			default:
+				return fmt.Errorf("generated type %q has multiple SQL owners", dependency)
+			}
 		}); err != nil {
 			return err
 		}
@@ -176,6 +212,18 @@ func (a *generatedRowAuthority) validateCycles() error {
 			if len(owners) == 0 {
 				return nil
 			}
+			// A selected authored package row keeps its existing Go shape.
+			// Its recursive pointers are not dependencies of generated SQL rows.
+			// Generated descriptors (including stale ones) still follow SQL owners.
+			if a.resolver != nil {
+				resolved, err := a.resolver.ResolveWithProvenance(key)
+				if err != nil {
+					return err
+				}
+				if resolved != nil && resolved.Origin == typecatalog.TypeOriginPackage {
+					return nil
+				}
+			}
 			if len(owners) != 1 {
 				return fmt.Errorf("generated type %q has multiple SQL owners", key)
 			}
@@ -199,33 +247,4 @@ func (a *generatedRowAuthority) validateCycles() error {
 		}
 	}
 	return nil
-}
-
-func (a *generatedRowAuthority) admits(expression string) (bool, error) {
-	if a == nil || a.plan == nil {
-		return false, nil
-	}
-	key, err := a.plan.CanonicalType(a.plan.Package, expression)
-	if err != nil {
-		return false, err
-	}
-	owners := a.owners[key]
-	if len(owners) == 0 {
-		return false, nil
-	}
-	// Existing descriptors retain catalog/linked authority. Native ownership of
-	// stale on-disk artifacts is established by the existing generation checks.
-	if a.resolver != nil {
-		shape, err := a.resolver.ResolveShape(expression)
-		if err != nil {
-			return false, err
-		}
-		if shape != nil && shape.Descriptor != nil {
-			return false, nil
-		}
-	}
-	if len(owners) != 1 {
-		return false, fmt.Errorf("generated type %q has multiple SQL owners", key)
-	}
-	return true, nil
 }

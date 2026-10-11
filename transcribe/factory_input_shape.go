@@ -78,9 +78,12 @@ func (c *Compiler) compileFactoryInputShape(ctx context.Context, source *Source,
 	if err != nil {
 		return nil, err
 	}
-	root, err := (&readPlanCompiler{sourceMap: shapeSourceMap, path: source.Path, types: resolver, generatedType: generatedRows.admits}).compile(shapeComponent, resolved)
-	if err != nil {
-		return nil, err
+	root := generatedRows.root
+	if generatedRows.plan == nil {
+		root, err = (&readPlanCompiler{sourceMap: shapeSourceMap, path: source.Path, types: resolver}).compile(shapeComponent, resolved)
+		if err != nil {
+			return nil, err
+		}
 	}
 	// Resolve qualified row names before ownership checks compare Go declarations.
 	authority := &gen.Plan{Imports: prepared.TypeContext.Imports}
@@ -351,12 +354,6 @@ func validateFactoryDiscoveredShape(view *spec.View) error {
 		}
 	}
 	return nil
-}
-
-// Current native-generated source is legitimate regeneration input. An authored
-// declaration or alias of this exact local type would compete with SQL authority.
-func validateFactoryShapeOwnership(ctx context.Context, build *gobuild.Context, pkg, owner string, shape *spec.View, inherited ...string) error {
-	return (&factoryDeclarations{ctx: ctx, build: build, pkg: pkg}).validateShape(owner, shape, inherited...)
 }
 
 // One compilation uses one build-selected declaration snapshot for both generated

@@ -228,17 +228,18 @@ func (c *Compiler) Compile(ctx context.Context, source *Source) (*Result, error)
 	if err != nil {
 		return nil, err
 	}
-	readPlan, err := (&readPlanCompiler{sourceMap: sourceMap, path: source.Path, types: typeResolver, generatedType: generatedRows.admits}).compile(component, prepared)
-	if err != nil {
-		return nil, err
+	readPlan := generatedRows.root
+	if generatedRows.plan == nil {
+		// Without package declarations, retain ordinary catalog validation.
+		readPlan, err = (&readPlanCompiler{sourceMap: sourceMap, path: source.Path, types: typeResolver}).compile(component, prepared)
+		if err != nil {
+			return nil, err
+		}
 	}
 	if readPlan != nil {
 		component.RootView = readPlan
 	}
-	declarations, err := newDeclarationCompiler(component, authoredViews, source.Resources).compile()
-	if err != nil {
-		return nil, declarationFailure(err)
-	}
+	declarations := metadataDeclarations
 	if declarations != nil {
 		component.Views, err = declarations.removeSkeletons(component.Views)
 		if err != nil {

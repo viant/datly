@@ -39,7 +39,7 @@ func TestFactoryInputShapeOwnershipReadonlyIncompleteGraph(t *testing.T) {
 				ctx, cancel = context.WithCancel(ctx)
 				cancel()
 			}
-			err := validateFactoryShapeOwnership(ctx, build, "example.com/factory/app", "Archive", &spec.View{TypeName: "Res", Dest: "res.go"})
+			err := (&factoryDeclarations{ctx: ctx, build: build, pkg: "example.com/factory/app"}).validateShape("Archive", &spec.View{TypeName: "Res", Dest: "res.go"})
 			if tc.cancel || tc.conflict != "" {
 				require.Error(t, err)
 			} else {
@@ -79,7 +79,7 @@ func TestFactoryInputShapeOwnershipBuildSelection(t *testing.T) {
 			writeSourceHandlerFile(t, root, "app/ignored.go", "//go:build other\n\npackage app\ntype Res struct{}\n")
 			before := sourceHandlerSnapshot(t, root)
 			build := &gobuild.Context{Dir: root, Tags: tc.tags, Env: []string{"GOWORK=off", "GO111MODULE=on", "GOFLAGS=" + tc.flags}}
-			err := validateFactoryShapeOwnership(context.Background(), build, "example.com/factory/app", "Archive", &spec.View{TypeName: "Res", Dest: "res.go"})
+			err := (&factoryDeclarations{ctx: context.Background(), build: build, pkg: "example.com/factory/app"}).validateShape("Archive", &spec.View{TypeName: "Res", Dest: "res.go"})
 			require.Error(t, err)
 			require.True(t, strings.Contains(err.Error(), tc.selected), "%v", err)
 			require.Equal(t, before, sourceHandlerSnapshot(t, root))
