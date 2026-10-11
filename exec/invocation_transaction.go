@@ -7,6 +7,13 @@ import (
 
 type invocationTransactionLookupKey struct{}
 
+// HasInvocationTransactionLookup reports whether this context can resolve an
+// invocation-owned transaction, without resolving or opening a database.
+func HasInvocationTransactionLookup(ctx context.Context) bool {
+	lookup, _ := ctx.Value(invocationTransactionLookupKey{}).(func(context.Context, *sql.DB) (*sql.Tx, error))
+	return lookup != nil
+}
+
 // WithInvocationTransactionLookup lets SQL readers find the transaction owned
 // by the first endpoint invocation. The lookup runs when a connector resolves,
 // after an imperative child writer may have started that transaction.
