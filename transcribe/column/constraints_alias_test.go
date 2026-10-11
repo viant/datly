@@ -44,7 +44,11 @@ func TestInferredForeignKeyRetainsProvenResultAlias(t *testing.T) {
 				t.Fatalf("repeat refinement changed mapping: %q -> %q", first, column.Tag)
 			}
 			parsed := sqlio.ParseTag(reflect.StructTag(column.Tag))
-			if tc.name == "authored alternatives" {
+			if tc.name == "transient" {
+				if raw != "-" || !parsed.Transient {
+					t.Fatalf("FK discovery widened excluded SQLX field: %s", raw)
+				}
+			} else if tc.name == "authored alternatives" {
 				if raw != `CUSTOM|SECOND,required=false,enc=JSON,refDb=authored_db,refTable=authored_table,refColumn=authored_id` {
 					t.Fatalf("authored mapping/options changed: %s", raw)
 				}

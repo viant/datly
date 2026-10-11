@@ -93,6 +93,14 @@ or use CAST to redefine their fields. Keep a named type anchor such as
 `var _anchorRecord = reflect.TypeFor[Record]()` when the row needs runtime package
 discovery; an anchor retains the type without registering it.
 
+When a Current read shares the SQL-derived body row, it may select physical
+columns explicitly excluded by the body's `internal_transient(column)` metadata.
+The reader consumes those values, including SQL NULL, without assigning them to
+the body, marking presence or creating scalar read indexes. Those fields remain
+excluded from SQLX writes, JSON and diffs. Current cannot introduce an unrelated
+field or widen the body; physical source identity must be unambiguous. Ordinary
+mapped fields retain their type and CAST checks.
+
 The body SQL is a shape source, not an executable body read or a second persistence
 owner. Independent Current/read parameters retain their normal native bindings.
 The handler uses the invocation's existing `handler.DML` and `handler.Sequencer`

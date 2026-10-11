@@ -386,6 +386,8 @@ func (u unmappedColumn) ScanType() reflect.Type {
 	return u.column.ScanType()
 }
 
+func (u unmappedColumn) Nullable() (bool, bool) { return u.column.Nullable() }
+
 func selectorStatelet(selector *xstate.Selector) *rcollector.Statelet {
 	if selector == nil {
 		return nil

@@ -411,6 +411,11 @@ func applyReferenceConstraint(column *spec.Column, reference *tableReference, re
 		return
 	}
 	authored := sqlio.ParseTag(reflect.StructTag(parsed.Stringify()))
+	if authored.Transient {
+		// Ignored SQLX fields have no executable FK mapping. Appending options
+		// would turn the exact exclusion tag into a mapped column named "-".
+		return
+	}
 	if authored.RefDb == "" && reference.schema != "" {
 		sqlxTag.Append("refDb=" + reference.schema)
 	}
