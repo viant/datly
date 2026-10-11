@@ -65,6 +65,9 @@ type Config struct {
 
 type Packages struct {
 	Packages, Exclude []string
+	// PreloadPackages materializes exact packages or recursive /... prefixes
+	// before publishing; other selected components retain lazy loading.
+	PreloadPackages []string
 	// LinkedOnly uses linked Go contracts and embedded resources to build the
 	// lazy route index without accessing source modules. DQL overlays and source
 	// reloads require the default source-backed mode.

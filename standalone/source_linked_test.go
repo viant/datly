@@ -183,3 +183,46 @@ func TestStandaloneLinkedRecursiveRootWithoutSources(t *testing.T) {
 	require.Equal(t, 200, response.Code, response.Body.String())
 	require.Contains(t, response.Body.String(), `"ready":true`)
 }
+
+func TestStandaloneLinkedOnlySelectivePreloadWithoutSourceDirectory(t *testing.T) {
+	for _, selected := range []string{"github.com/viant/datly/standalone/testdata/linkeddefault", "github.com/viant/datly/standalone/testdata/..."} {
+		t.Run(selected, func(t *testing.T) {
+			ctx := context.Background()
+			f := fixture.New(t)
+			f.WriteConfig(t, func(c map[string]any) {
+				c["GoBootstrap"] = map[string]any{"Packages": []string{"github.com/viant/datly/standalone/testdata/linkeddefault", fixture.Module + "/selectorpolicy"}, "LinkedOnly": true}
+			})
+			cfg, err := (config.Loader{}).Load(ctx, f.Config)
+			require.NoError(t, err)
+			cfg.BaseDir = filepath.Join(t.TempDir(), "missing-source")
+			// A parent prefix selects both scopes; exact scope leaves the second lazy.
+			cfg.GoBootstrap.PreloadPackages = []string{selected}
+			diagnostics := &synchronizedBuffer{}
+			_ = linkeddefault.LinkedType
+			_ = selectorpolicy.DatlyLinkedType
+			server, err := New(ctx, Options{Config: cfg, Diagnostics: diagnostics, RequireLinked: true})
+			require.NoError(t, err)
+			t.Cleanup(func() { require.NoError(t, server.Shutdown(context.Background())) })
+			require.NoError(t, server.Reload(ctx, 1))
+			count := strings.Count(diagnostics.text(), "datly bootstrap linked materialize")
+			if strings.HasSuffix(selected, "/...") {
+				require.Greater(t, count, 1)
+			} else {
+				require.Equal(t, 1, count)
+			}
+			// Preload changes compilation timing, never route catalog or business execution.
+			response := httptest.NewRecorder()
+			server.ServeHTTP(response, httptest.NewRequest("GET", "/selector-allowed", nil))
+			require.Equal(t, 200, response.Code, response.Body.String())
+			if !strings.HasSuffix(selected, "/...") {
+				require.Equal(t, 2, strings.Count(diagnostics.text(), "datly bootstrap linked materialize"))
+			}
+			request := httptest.NewRequest("POST", "/linked-default", strings.NewReader(`{}`))
+			request.Header.Set("Content-Type", "application/json")
+			response = httptest.NewRecorder()
+			server.ServeHTTP(response, request)
+			require.Equal(t, 200, response.Code, response.Body.String())
+			require.Contains(t, response.Body.String(), `"ready":true`)
+		})
+	}
+}

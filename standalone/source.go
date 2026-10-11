@@ -148,6 +148,16 @@ func (s *source) buildIndexed(snapshot *bootstrapindex.Snapshot, materializer bo
 		}
 	}
 	preload := map[string]spec.Key{}
+	if s.config.GoBootstrap != nil {
+		for _, entry := range entries {
+			for _, selected := range s.config.GoBootstrap.PreloadPackages {
+				base := strings.TrimSuffix(selected, "/...")
+				if entry.Key().Scope == base || strings.HasSuffix(selected, "/...") && strings.HasPrefix(entry.Key().Scope, base+"/") {
+					preload[entry.Key().String()] = entry.Key()
+				}
+			}
+		}
+	}
 	if s.config.Warmup != nil {
 		for _, entry := range entries {
 			if entry.Warmup || hasWarmupConfiguration(entry.Component) || hasDelegatedWarmupTarget(entry.Component) {
