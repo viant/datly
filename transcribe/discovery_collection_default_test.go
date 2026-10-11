@@ -7,6 +7,7 @@ import (
 	"github.com/viant/datly/spec"
 )
 
+// Non-query collection defaults retain strict native JSON conversion.
 func TestDiscoveryInputCompilerCollectionDefaults(t *testing.T) {
 	for _, item := range []struct {
 		name, expr, value string
@@ -19,7 +20,7 @@ func TestDiscoveryInputCompilerCollectionDefaults(t *testing.T) {
 		{"pointer collection", "*[]int", "[1]", slicePointer([]int{1})},
 	} {
 		t.Run(item.name, func(t *testing.T) {
-			compiled, err := (&discoveryInputCompiler{component: &spec.Component{Name: "Status", Parameters: []*spec.Parameter{{Name: "IDs", TypeExpr: item.expr, Value: &item.value, Source: spec.BindSource{Kind: "query", Name: "ids"}}}}}).compile()
+			compiled, err := (&discoveryInputCompiler{component: &spec.Component{Name: "Status", Parameters: []*spec.Parameter{{Name: "IDs", TypeExpr: item.expr, Value: &item.value, Source: spec.BindSource{Kind: "form", Name: "ids"}}}}}).compile()
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -34,7 +35,7 @@ func slicePointer(value []int) *[]int { return &value }
 
 func TestDiscoveryInputCompilerCollectionDefaultsRejectInvalid(t *testing.T) {
 	for _, value := range []string{`["bad"]`, `[1,]`, `1`} {
-		_, err := (&discoveryInputCompiler{component: &spec.Component{Name: "Status", Parameters: []*spec.Parameter{{Name: "IDs", TypeExpr: "[]int", Value: &value, Source: spec.BindSource{Kind: "query", Name: "ids"}}}}}).compile()
+		_, err := (&discoveryInputCompiler{component: &spec.Component{Name: "Status", Parameters: []*spec.Parameter{{Name: "IDs", TypeExpr: "[]int", Value: &value, Source: spec.BindSource{Kind: "form", Name: "ids"}}}}}).compile()
 		if err == nil {
 			t.Fatalf("invalid default %q accepted", value)
 		}

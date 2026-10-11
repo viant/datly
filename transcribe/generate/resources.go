@@ -13,6 +13,7 @@ import (
 	"golang.org/x/mod/module"
 
 	"github.com/viant/datly/internal/packageasset"
+	"github.com/viant/datly/spec"
 	"github.com/viant/datly/tag"
 	"github.com/viant/tagly/tags"
 	xshape "github.com/viant/x/shape"
@@ -71,6 +72,12 @@ func (r *planResolver) prepareResources() (*ResourcePlan, error) {
 		if (r.plan.Input.Ownership == ContractGenerated || r.plan.Output.Ownership == ContractGenerated) && !result.authoredSource() {
 			result.sourceText = ""
 		}
+	}
+	// An explicit root SQL alias has its own destination. The canonical view
+	// name may also be a child alias and must retain that child's destination.
+	rootSQLRole := r.plan.RootViewName
+	if root := r.input.Component.RootView; root != nil && root.Namespace != "" && r.plan.Generation.SQLFile(root.Namespace, "") != "" {
+		rootSQLRole = root.Namespace
 	}
 	files := map[string]string{}
 	if !r.plan.Documentation.IsZero() {
@@ -140,7 +147,7 @@ func (r *planResolver) prepareResources() (*ResourcePlan, error) {
 			role := field.Name
 			if rootType := unwrapQualifiedTypeName(field.Type); rootType != "" && rootType == unwrapQualifiedTypeName(r.plan.RootViewType) {
 				name = lowerSnake(r.plan.ComponentName)
-				role = r.plan.RootViewName
+				role = rootSQLRole
 				if strings.TrimSpace(role) == "" {
 					role = r.plan.ComponentName
 				}
@@ -149,7 +156,7 @@ func (r *planResolver) prepareResources() (*ResourcePlan, error) {
 				return fmt.Errorf("SQL field identity %s has no resource name", identity)
 			}
 			defaultPath := defaultSQLResourcePath(name)
-			rootRole := r.plan.RootViewName
+			rootRole := rootSQLRole
 			if strings.TrimSpace(rootRole) == "" {
 				rootRole = r.plan.ComponentName
 			}
@@ -188,7 +195,7 @@ func (r *planResolver) prepareResources() (*ResourcePlan, error) {
 			}
 			name := lowerSnake(field.Name)
 			defaultPath := defaultSQLResourcePath(name)
-			rootRole := r.plan.RootViewName
+			rootRole := rootSQLRole
 			if strings.TrimSpace(rootRole) == "" {
 				rootRole = r.plan.ComponentName
 			}
@@ -271,14 +278,23 @@ func (r *planResolver) prepareResources() (*ResourcePlan, error) {
 				} else if namespace != result.Namespace {
 					return nil, fmt.Errorf("linked output field %s SQL namespace %q differs from component resources %q", field.Name, namespace, result.Namespace)
 				}
-				name := lowerSnake(r.plan.ComponentName)
-				role := r.plan.RootViewName
+				role := rootSQLRole
 				if role == "" {
 					role = r.plan.ComponentName
 				}
-				wanted := r.plan.Generation.SQLFileFor(role, role, defaultSQLResourcePath(name))
-				if path != wanted {
+				wanted := r.plan.Generation.SQLFile(role, "")
+				if wanted != "" && path != wanted {
 					return nil, fmt.Errorf("linked output field %s SQL destination %q differs from uneditable URI %q", field.Name, wanted, metadata.SQL.URI)
+				}
+				// A compiled contract owns its URI. Defaults must retain that
+				// destination; only an explicit conflicting sql_dest is invalid.
+				if wanted == "" {
+					if r.plan.Generation == nil {
+						r.plan.Generation = &spec.GenerationSettings{}
+					}
+					if err := r.plan.Generation.SetSQLFile(role, path); err != nil {
+						return nil, err
+					}
 				}
 			}
 		}

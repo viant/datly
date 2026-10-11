@@ -151,7 +151,13 @@ func TestGenExecutableOuterProjection(t *testing.T) {
 					}
 					before := snapshot()
 					run()
-					if !reflect.DeepEqual(before, snapshot()) {
+					after := snapshot()
+					if !reflect.DeepEqual(before, after) {
+						for path, original := range before {
+							if actual := after[path]; actual != original {
+								t.Logf("changed %s\nbefore:\n%s\nafter:\n%s", path, original, actual)
+							}
+						}
 						t.Fatal("non-idempotent shapes")
 					}
 					rootKey, childKey, childFK := "Id", "Id", "OrderId"

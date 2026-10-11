@@ -145,7 +145,9 @@ func insertRelationClause(sqlText string, clause string) string {
 		}
 	}
 	if insertAt == len(sqlText) {
-		return strings.TrimRight(sqlText, " \t\r\n") + clause
+		return strings.TrimRight(sqlText, " \t") + clause
 	}
-	return strings.TrimRight(sqlText[:insertAt], " \t\r\n") + clause + " " + strings.TrimLeft(sqlText[insertAt:], " \t\r\n")
+	// A newline can terminate an authored SQL line comment. Keep it before
+	// injecting executable predicates or the comment would consume them.
+	return strings.TrimRight(sqlText[:insertAt], " \t") + clause + " " + strings.TrimLeft(sqlText[insertAt:], " \t\r\n")
 }

@@ -51,7 +51,7 @@ func NewResolverWithProvenance(catalog *Catalog, authority Authority, context *R
 		types["time.Time"] = x.NewType(reflect.TypeOf(time.Time{}))
 		origins["time.Time"] = TypeOriginPackage
 	}
-	for _, typeOf := range []reflect.Type{reflect.TypeFor[xresponse.Status](), reflect.TypeFor[xhandler.Violation]()} {
+	for _, typeOf := range []reflect.Type{reflect.TypeFor[xresponse.Status](), reflect.TypeFor[xresponse.Metrics](), reflect.TypeFor[xhandler.Violation]()} {
 		key := typeOf.PkgPath() + "." + typeOf.Name()
 		if types[key] == nil {
 			types[key] = x.NewType(typeOf)

@@ -338,18 +338,42 @@ func (r *Compilation) discover(ctx context.Context, view *spec.View, connector s
 	discoveryView.Columns = append([]*spec.Column(nil), resultView.Columns...)
 	metadataOnly := map[string]bool{}
 	visibleSources := map[string]bool{}
+	identityColumns := append([]*spec.Column(nil), view.Columns...)
+	identitySources := map[string]bool{}
+	for _, col := range view.Columns {
+		if col != nil {
+			name := col.Source
+			if name == "" {
+				name = col.Name
+			}
+			identitySources[normalizedName(name)] = true
+		}
+	}
 	for _, col := range resultView.Columns {
 		if col != nil {
 			visibleSources[normalizedName(col.Source)] = true
 		}
 	}
 	for _, col := range r.declared[view] {
-		if col != nil && !visibleSources[normalizedName(col.Source)] {
+		if col == nil || computedMapColumn(view, col) || hookParentColumn(view, col) {
+			continue
+		}
+		if !visibleSources[normalizedName(col.Source)] {
 			discoveryView.Columns = append(discoveryView.Columns, col)
 			metadataOnly[normalizedName(col.Source)] = true
+			name := col.Source
+			if name == "" {
+				name = col.Name
+			}
+			if !identitySources[normalizedName(name)] {
+				identityColumns = append(identityColumns, col)
+				identitySources[normalizedName(name)] = true
+			}
 		}
 	}
-	identities, err := resolveResultSources(discoveryView.Columns, source)
+	// Excluded computed maps retain authored result identity without becoming
+	// SQL metadata inputs; hidden declared scalar fields remain metadata-only.
+	identities, err := resolveResultSources(identityColumns, source)
 	if err != nil {
 		return nil, err
 	}

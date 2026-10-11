@@ -95,6 +95,7 @@ func (v *linkedViewCastValidator) validate(view *spec.View, prefix string) error
 				return err
 			}
 			mapped := ""
+			bestMatch, ambiguous := 0, false
 			for _, field := range linkedFields {
 				if !field.Exported {
 					continue
@@ -103,21 +104,33 @@ func (v *linkedViewCastValidator) validate(view *spec.View, prefix string) error
 				if fieldTag.Transient || fieldTag.Column == "" {
 					continue
 				}
-				matched := false
-				for _, expected := range strings.Split(wantedTag.Column, "|") {
+				matched := 0
+				for index, expected := range strings.Split(wantedTag.Column, "|") {
 					for _, candidate := range strings.Split(fieldTag.Column, "|") {
 						if strings.EqualFold(expected, candidate) {
-							matched = true
+							priority := 1
+							// Native SQLX mappings keep the physical name first.
+							// An explicit result alias distinguishes fields sharing it.
+							if index > 0 {
+								priority = 2
+							}
+							if priority > matched {
+								matched = priority
+							}
 						}
 					}
 				}
-				if !matched {
+				if matched == 0 || matched < bestMatch {
 					continue
 				}
-				if mapped != "" {
-					return fmt.Errorf("ambiguous SQLX mapping %q on uneditable linked type %s", wantedTag.Column, v.shape.Descriptor().Key())
+				if matched == bestMatch {
+					ambiguous = true
+					continue
 				}
-				mapped = prefix + field.Name
+				mapped, bestMatch, ambiguous = prefix+field.Name, matched, false
+			}
+			if ambiguous {
+				return fmt.Errorf("ambiguous SQLX mapping %q on uneditable linked type %s", wantedTag.Column, v.shape.Descriptor().Key())
 			}
 			if mapped != "" {
 				path = mapped

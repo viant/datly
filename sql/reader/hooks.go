@@ -6,6 +6,7 @@ import (
 	"reflect"
 
 	"github.com/viant/datly/data"
+	viewcontext "github.com/viant/datly/internal/viewcontext"
 	rcollector "github.com/viant/datly/sql/reader/collector"
 	"github.com/viant/datly/sql/reader/rowcodec"
 	xhandler "github.com/viant/xdatly/handler"
@@ -17,6 +18,7 @@ type rowHookVisitor struct {
 	collector      *rcollector.Collector
 	downstream     rcollector.VisitorFn
 	parentProvider func(any) (any, error)
+	parentContext  context.Context
 	decoder        *rowcodec.Decoder
 	evidence       *columnEvidence
 }
@@ -75,8 +77,13 @@ func (v *rowHookVisitor) hookContext(row any) (context.Context, error) {
 	if parent == nil {
 		return v.ctx, nil
 	}
-	hookContext := context.WithValue(v.ctx, xhandler.DataSyncKey, v.collector.Parent().DataSync())
-	return context.WithValue(hookContext, reflect.TypeOf(parent), parent), nil
+	// Each sequential visitor owns its mutable legacy context. Parallel reads
+	// and partitions create separate visitors, so parent values cannot leak
+	// between them. DataSync is constant for this visitor and set only once.
+	if v.parentContext == nil {
+		v.parentContext = viewcontext.NewContext(v.ctx).WithValue(xhandler.DataSyncKey, v.collector.Parent().DataSync())
+	}
+	return viewcontext.WithValue(v.parentContext, reflect.TypeOf(parent), parent), nil
 }
 
 func runOnRelation(ctx context.Context, row any) bool {

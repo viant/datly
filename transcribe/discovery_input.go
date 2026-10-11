@@ -1,6 +1,7 @@
 package transcribe
 
 import (
+	"context"
 	"fmt"
 	"reflect"
 	"strings"
@@ -8,6 +9,7 @@ import (
 	"github.com/viant/bindly"
 	"github.com/viant/bindly/xform/conv"
 	"github.com/viant/datly/constant"
+	runtimecompiler "github.com/viant/datly/runtime/handler/compiler"
 	"github.com/viant/datly/spec"
 	sqltemplate "github.com/viant/datly/sql/template"
 	"github.com/viant/datly/tag"
@@ -119,7 +121,29 @@ func (c *discoveryInputCompiler) compile() (*column.TemplateInput, error) {
 			collectionType = collectionType.Elem()
 		}
 		if collectionType.Kind() == reflect.Slice || collectionType.Kind() == reflect.Array {
-			converted, convertErr := (conv.ValueConverter{}).Convert(*param.Value, target.Type())
+			var converted any
+			var convertErr error
+			if strings.EqualFold(param.Source.Kind, "query") && param.Codec == nil {
+				// Compile just this field through the existing type owner so discovery
+				// uses query-list conversion without unrelated binding tags or codecs.
+				fieldType, fieldErr := (xshape.Runtime{}).Struct([]xshape.RuntimeField{{Name: field.Name, Type: field.Type, Tag: field.Tag}})
+				if fieldErr != nil {
+					return nil, fmt.Errorf("transcribe column: compile default field %s: %w", field.Name, fieldErr)
+				}
+				bindings, bindingErr := runtimecompiler.BuildBindingSpecs(
+					&spec.Component{Parameters: []*spec.Parameter{param}},
+					fieldType, nil)
+				if bindingErr != nil {
+					return nil, fmt.Errorf("transcribe column: compile default binding for parameter %s: %w", param.Name, bindingErr)
+				}
+				if len(bindings) == 1 && bindings[0].Transformer != nil {
+					converted, convertErr = bindings[0].Transformer.Transform(context.Background(), nil, *param.Value)
+				} else {
+					converted, convertErr = (conv.ValueConverter{}).Convert(*param.Value, target.Type())
+				}
+			} else {
+				converted, convertErr = (conv.ValueConverter{}).Convert(*param.Value, target.Type())
+			}
 			if convertErr != nil {
 				return nil, fmt.Errorf("transcribe column: convert default for parameter %s: %w", param.Name, convertErr)
 			}

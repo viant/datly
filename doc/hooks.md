@@ -45,6 +45,17 @@ fails the fetch. `OnRelation(context.Context)` runs after selected children are
 assembled and has no error return. An omitted relation is not proof of an empty
 relationship in the database.
 
+DQL `publish_parent(child_alias)` enables the child view's `PublishParent`
+setting and transcribes to `view:"child,publishParent=true"`. With this setting,
+`OnFetch` can read its parent
+from `ctx.Value(reflect.TypeOf(parent))` and the parent collector's DataSync
+from `ctx.Value(handler.DataSyncKey)`. Each sequential read reuses its own
+context, as in original Datly; parallel reads and partitions have separate
+owners. Read the parent during the callback and retain the entity pointer if
+needed later: retaining the context does not freeze its per-row parent value.
+`OnRelation` currently receives the invocation context without publishing its
+row's parent.
+
 Partitions and batched relation reads must complete before their view reduction.
 Reducer input order across partitions is unspecified. Input initialization and
 output finalization run at invocation scope, separately from per-row hooks.

@@ -115,11 +115,7 @@ func (b *Builder) QueryMatcher(ctx context.Context, query *cache.ParmetrizedQuer
 			result.By = options.matcherColumn(options.matcherBy)
 		} else if options.relation != nil && options.relation.Of != nil && len(options.relation.Of.On) > 0 {
 			link := options.relation.Of.On[0]
-			if link.Column != "" {
-				result.By = options.matcherColumn(link.Column)
-			} else {
-				result.By = link.Field
-			}
+			result.By = options.matcherColumn(link.OutputColumn())
 		}
 		if len(options.matcherIn) > 0 {
 			result.In = interfaceSlice(options.matcherIn)
@@ -274,11 +270,7 @@ func (b *Builder) Build(ctx context.Context, opts ...BuilderOption) (*cache.Parm
 	}
 	if options.relation != nil && len(options.relation.Of.On) > 0 && options.matcherBy == "" {
 		link := options.relation.Of.On[0]
-		if link.Column != "" {
-			result.By = options.matcherColumn(link.Column)
-		} else {
-			result.By = link.Field
-		}
+		result.By = options.matcherColumn(link.OutputColumn())
 	}
 	if options.matcherBy != "" {
 		result.By = options.matcherColumn(options.matcherBy)
@@ -294,6 +286,16 @@ func (b *Builder) Build(ctx context.Context, opts ...BuilderOption) (*cache.Parm
 func (o *builderOptions) matcherColumns(columns []string) []string {
 	result := make([]string, 0, len(columns))
 	for _, column := range columns {
+		// SQL predicates address source columns; native matchers read the
+		// result labels already resolved by the relation compiler.
+		if o.relation != nil && o.relation.Of != nil {
+			for i, source := range o.relation.Of.On.InColumnExpression() {
+				if (dsql.ProjectionNames{source}).Matches(column) {
+					column = o.relation.Of.On[i].OutputColumn()
+					break
+				}
+			}
+		}
 		result = append(result, o.matcherColumn(column))
 	}
 	return result

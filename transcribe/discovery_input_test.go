@@ -2,12 +2,16 @@ package transcribe
 
 import (
 	"context"
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/viant/bindly"
+	requestprovider "github.com/viant/bindly/provider/request"
 	"github.com/viant/datly/internal/testharness"
+	runtimecompiler "github.com/viant/datly/runtime/handler/compiler"
 	"github.com/viant/datly/spec"
 	tcolumn "github.com/viant/datly/transcribe/column"
 	"github.com/viant/datly/typecatalog"
@@ -248,6 +252,94 @@ func TestDiscoveryPlainConstRemainsTypedAndRejectsInvalidLiteral(t *testing.T) {
 		}
 		if compiled.Value.FieldByName("ID").Int() != 17 {
 			t.Fatal("plain typed constant changed")
+		}
+	}
+}
+
+// Discovery must materialize the same absent-query defaults as request binding,
+// without changing the authored literal to JSON or running request codecs.
+func TestDiscoveryQueryListDefaultsMatchRuntimeBinding(t *testing.T) {
+	type queryInput struct {
+		IDs []int `parameter:"IDs,kind=query,in=status"`
+	}
+	for _, raw := range []string{"1", "1,2", "[1,2]", "", "1,, 2", "1e2,2.9", "1,no", "null", "[1,]"} {
+		for _, linked := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%q/linked=%v", raw, linked), func(t *testing.T) {
+				literal := raw
+				component := &spec.Component{Parameters: []*spec.Parameter{{Name: "IDs", TypeExpr: "[]int", Source: spec.BindSource{Kind: "query", Name: "status"}, Value: &literal}}}
+				bindings, err := runtimecompiler.BuildBindingSpecs(component, reflect.TypeFor[queryInput](), nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+				injector, err := bindly.NewInjector()
+				if err != nil {
+					t.Fatal(err)
+				}
+				plan, err := injector.CompilePlan(reflect.TypeFor[queryInput](), bindings...)
+				if err != nil {
+					t.Fatal(err)
+				}
+				scope, err := injector.ForScope(requestprovider.NewValues().Providers()...)
+				if err != nil {
+					t.Fatal(err)
+				}
+				var runtime queryInput
+				runtimeErr := scope.Bind(context.Background(), &runtime, bindly.WithPlan(plan))
+				compiler := &discoveryInputCompiler{component: component}
+				if linked {
+					compiler.source = &Source{PackageComponent: component, LinkedInputType: reflect.TypeFor[queryInput]()}
+				}
+				discovered, discoveryErr := compiler.compile()
+				if runtimeErr != nil {
+					if discoveryErr == nil {
+						t.Fatalf("discovery accepted runtime-invalid default %q", raw)
+					}
+					return
+				}
+				if discoveryErr != nil {
+					t.Fatal(discoveryErr)
+				}
+				actual := discovered.Value.FieldByName("IDs").Interface()
+				if !reflect.DeepEqual(actual, runtime.IDs) {
+					t.Fatalf("discovery=%#v runtime=%#v", actual, runtime.IDs)
+				}
+				if literal != raw {
+					t.Fatalf("authored default mutated: %q", literal)
+				}
+			})
+		}
+	}
+}
+
+func TestDiscoveryConstCollectionKeepsStrictConversion(t *testing.T) {
+	literal := "1"
+	_, err := (&discoveryInputCompiler{component: &spec.Component{Parameters: []*spec.Parameter{{Name: "IDs", TypeExpr: "[]int", Source: spec.BindSource{Kind: "const", Name: "IDs"}, Value: &literal}}}}).compile()
+	if err == nil {
+		t.Fatal("scalar const must not use query CSV conversion")
+	}
+}
+
+func TestDiscoveryQueryListDefaultWithOtherInputFields(t *testing.T) {
+	type queryInput struct {
+		IDs   []int `parameter:"IDs,kind=query,in=status"`
+		Debug bool  `parameter:"Debug,kind=query,in=debug"`
+	}
+	literal := "1"
+	component := &spec.Component{Parameters: []*spec.Parameter{
+		{Name: "IDs", TypeExpr: "[]int", Source: spec.BindSource{Kind: "query", Name: "status"}, Value: &literal},
+		{Name: "Debug", TypeExpr: "bool", Source: spec.BindSource{Kind: "query", Name: "debug"}},
+	}}
+	for _, linked := range []bool{false, true} {
+		compiler := &discoveryInputCompiler{component: component}
+		if linked {
+			compiler.source = &Source{PackageComponent: component, LinkedInputType: reflect.TypeFor[queryInput]()}
+		}
+		discovered, err := compiler.compile()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := discovered.Value.FieldByName("IDs").Interface(); !reflect.DeepEqual(got, []int{1}) {
+			t.Fatalf("default=%#v", got)
 		}
 	}
 }
