@@ -334,7 +334,9 @@ func (r *Compilation) discover(ctx context.Context, view *spec.View, connector s
 		return evaluated, nil
 	}
 	resultView := sqlResultView(view)
-	identities, err := resolveResultSources(resultView.Columns, source)
+	// Excluded maps need no SQL result, but a projected placeholder must still
+	// merge into its authored field instead of creating a second inferred one.
+	identities, err := resolveResultSources(view.Columns, source)
 	if err != nil {
 		return nil, err
 	}
