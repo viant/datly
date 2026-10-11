@@ -333,10 +333,12 @@ func (r *Compilation) discover(ctx context.Context, view *spec.View, connector s
 	if strings.TrimSpace(query) == "" {
 		return evaluated, nil
 	}
-	resultView := sqlResultView(view)
+	discoveryView := *view
+	discoveryView.Columns = append(append([]*spec.Column(nil), view.Columns...), r.hidden[view]...)
+	resultView := sqlResultView(&discoveryView)
 	// Excluded maps need no SQL result, but a projected placeholder must still
 	// merge into its authored field instead of creating a second inferred one.
-	identities, err := resolveResultSources(view.Columns, source)
+	identities, err := resolveResultSources(discoveryView.Columns, source)
 	if err != nil {
 		return nil, err
 	}
@@ -364,7 +366,17 @@ func (r *Compilation) discover(ctx context.Context, view *spec.View, connector s
 	// Persisting a projection quoted with the discovery connector's dialect
 	// would make portable resources depend on the schema fixture. Runtime
 	// selector lowering uses the actual execution dialect instead.
-	view.Columns = mergeColumnsWithSources(view.Columns, columns, identities)
+	hiddenResults := map[string]bool{}
+	for _, column := range r.hidden[view] {
+		hiddenResults[normalizedName(identities[column])] = true
+	}
+	public := columns[:0]
+	for _, column := range columns {
+		if !hiddenResults[normalizedName(column.Name)] {
+			public = append(public, column)
+		}
+	}
+	view.Columns = mergeColumnsWithSources(view.Columns, public, identities)
 	if table := strings.TrimSpace(source.Table); table != "" && !strings.Contains(table, "$") {
 		lineage, err := directProjectionLineage(source)
 		if err != nil {

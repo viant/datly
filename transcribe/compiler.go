@@ -429,6 +429,13 @@ func refineComponentColumns(ctx context.Context, component *spec.Component, sour
 			}
 		}
 		columnCompilation := source.ColumnRefiner.BeginCompilation()
+		if source.PackageComponent != nil && strings.TrimSpace(source.Text) == "" && source.LinkedOutputType != nil {
+			hidden, err := bootstrap.CompileOutputDiscoveryColumns(component, source.LinkedOutputType)
+			if err != nil {
+				return err
+			}
+			columnCompilation.DeclareHiddenColumns(component.RootView, hidden)
+		}
 		templateInput, compileErr := (&discoveryInputCompiler{
 			component: component, declarations: declarations,
 			viewBindings: viewBindings, resolver: typeResolver, source: source, factoryShape: factoryShape, views: linkedViews,

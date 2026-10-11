@@ -17,8 +17,9 @@ import (
 // Declaration resolution remains source authority for transcribe's ownership
 // comparison; inferred columns must not change that authored contract.
 type outputColumnCompiler struct {
-	output *xshape.Type
-	lookup xshape.Lookup
+	output          *xshape.Type
+	lookup          xshape.Lookup
+	discoveryHidden bool
 }
 
 func (c *artifactCompiler) compileOutputColumns(component *spec.Component) error {
@@ -99,15 +100,37 @@ func (r *outputColumnCompiler) column(field xshape.Field, path string) (*spec.Co
 	if !field.Exported {
 		return nil, false, nil
 	}
-	if field.Tag.Get("setMarker") == "true" || field.Tag.Get("internal") == "true" {
+	if field.Tag.Get("setMarker") == "true" {
 		return nil, true, nil
 	}
 	formatting, err := format.Parse(field.Tag, "json")
 	if err != nil {
 		return nil, false, err
 	}
-	if formatting.Ignore {
+	hidden := formatting.Ignore || field.Tag.Get("internal") == "true"
+	if hidden && !r.discoveryHidden {
 		return nil, true, nil
+	}
+	if r.discoveryHidden && hidden {
+		mapped := sqlxio.ParseTag(field.Tag)
+		if mapped.Name() == "" || mapped.Transient || mapped.PresenceProvider {
+			return nil, true, nil
+		}
+		typ := field.ReflectedType
+		for typ != nil && typ.Kind() == reflect.Pointer {
+			typ = typ.Elem()
+		}
+		if typ == nil {
+			return nil, true, nil
+		}
+		switch typ.Kind() {
+		case reflect.Bool, reflect.String, reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+			reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Float32, reflect.Float64:
+		default:
+			if typ.PkgPath() != "time" || typ.Name() != "Time" {
+				return nil, true, nil
+			}
+		}
 	}
 	metadata, err := dtag.ParseField(field.StructField())
 	if err != nil {
@@ -176,4 +199,44 @@ func (r *outputColumnCompiler) column(field xshape.Field, path string) (*spec.Co
 		result.Codec = &spec.Codec{Body: metadata.Codec.Body, Args: append([]string(nil), metadata.Codec.Arguments...), OutputType: metadata.Codec.OutputType}
 	}
 	return result, field.Anonymous, nil
+}
+
+// CompileOutputDiscoveryColumns returns only hidden, explicitly mapped linked
+// row fields. Their types authorize metadata discovery, never public selectors
+// or JSON projection. It does not modify the component or its public columns.
+func CompileOutputDiscoveryColumns(component *spec.Component, outputType reflect.Type) ([]*spec.Column, error) {
+	if component == nil || component.RootView == nil || outputType == nil {
+		return nil, nil
+	}
+	fields, err := dtag.NewBindingIndex(outputType)
+	if err != nil {
+		return nil, err
+	}
+	for _, param := range spec.EffectiveParameters(component.Parameters) {
+		if param == nil || param.Source.Kind != "output" || param.Source.Name != "view" {
+			continue
+		}
+		field, ok, err := fields.Resolve(param)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			return nil, fmt.Errorf("output view holder %s is missing", param.Name)
+		}
+		view := component.RootView.Clone()
+		view.Columns = nil
+		compiler := &outputColumnCompiler{output: xshape.Linked(outputType), discoveryHidden: true}
+		if err := compiler.compile(view, field.Name); err != nil {
+			return nil, err
+		}
+		var result []*spec.Column
+		for _, column := range view.Columns {
+			tag := reflect.StructTag(column.Tag)
+			if tag.Get("internal") == "true" || tag.Get("json") == "-" {
+				result = append(result, column)
+			}
+		}
+		return result, nil
+	}
+	return nil, nil
 }

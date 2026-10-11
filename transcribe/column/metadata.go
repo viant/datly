@@ -91,6 +91,7 @@ func (r *Refiner) PhysicalSourceIdentity(ctx context.Context, connector, unquali
 type Compilation struct {
 	refiner  *Refiner
 	metadata discoveryMetadata
+	hidden   map[*spec.View][]*spec.Column
 }
 
 // BeginCompilation starts isolated metadata reuse without retaining state on r.
@@ -545,4 +546,20 @@ func physicalProjection(view *spec.View, exact map[string]sink.Column, folded ma
 		result = append(result, PhysicalProjectionFact{Physical: name, Projected: c.Name, Result: resultName, Mapping: mapping})
 	}
 	return result, nil
+}
+
+// DeclareHiddenColumns scopes linked hidden field types to this exact view and
+// compilation. These fields are validated against result metadata but never
+// added to the public canonical projection.
+func (r *Compilation) DeclareHiddenColumns(view *spec.View, columns []*spec.Column) {
+	if r.hidden == nil {
+		r.hidden = map[*spec.View][]*spec.Column{}
+	}
+	var copied []*spec.Column
+	for _, column := range columns {
+		if column != nil {
+			copied = append(copied, column.Clone())
+		}
+	}
+	r.hidden[view] = copied
 }
