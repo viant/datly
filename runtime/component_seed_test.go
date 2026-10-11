@@ -8,6 +8,7 @@ import (
 	"github.com/viant/bindly/locator"
 	"net/http"
 	"reflect"
+	"strings"
 	"sync"
 	"testing"
 
@@ -226,5 +227,39 @@ func TestReaderSeedRejectsUnsupportedNestedMutableGraph(t *testing.T) {
 	}
 	if *calls != 0 {
 		t.Fatal("dependency executed after invalid seed graph")
+	}
+}
+
+// A canonical Input retains its declared capability slot after data cloning,
+// but the detached nil slot carries no capability from the parent invocation.
+func TestReaderSeedCapabilityGuardAllowsEmptyInvokerSlot(t *testing.T) {
+	type input struct{ Invoker dexec.ComponentInvoker }
+	if err := rejectSeedCapabilities(reflect.ValueOf(&input{}), map[seedReference]bool{}); err != nil {
+		t.Fatal("empty excluded invoker slot rejected:", err)
+	}
+	if err := rejectSeedCapabilities(reflect.ValueOf(&input{Invoker: &Runtime{}}), map[seedReference]bool{}); err == nil {
+		t.Fatal("live parent invoker accepted as seed data")
+	}
+}
+
+func TestReaderSeedRejectsHiddenSliceCapability(t *testing.T) {
+	for _, alias := range []bool{false, true} {
+		t.Run(fmt.Sprintf("aliased=%v", alias), func(t *testing.T) {
+			rt, target, calls := readerSeedFixture(t)
+			backing := []any{&readerSeedNative{}}
+			var supplied any = backing[:0]
+			if alias {
+				// The same backing array can also be reached through a longer alias.
+				supplied = [][]any{backing[:0], backing}
+			}
+			extra := &readerSeedInput{Auth: &readerSeedAuth{Unsupported: supplied}, Has: &readerSeedMarkers{Auth: true}}
+			_, err := rt.InvokeComponent(context.Background(), dexec.ComponentRequest{Target: target, ExtraInput: dexec.WithInput(extra)})
+			if err == nil || !strings.Contains(err.Error(), "runtime capability") {
+				t.Fatalf("hidden reader capability was not rejected by seed guard: %v", err)
+			}
+			if *calls != 0 {
+				t.Fatal("dependency executed after invalid seed graph")
+			}
+		})
 	}
 }

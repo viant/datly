@@ -11,8 +11,9 @@ import (
 )
 
 type seedReference struct {
-	typ     reflect.Type
-	pointer uintptr
+	typ      reflect.Type
+	pointer  uintptr
+	capacity int
 }
 
 var seedCapabilityTypes = []reflect.Type{
@@ -24,7 +25,7 @@ var seedCapabilityTypes = []reflect.Type{
 // additionally rejects even stateless executable runtime capabilities nested
 // behind a data interface or pointer. It examines only the detached selection.
 func rejectSeedCapabilities(value reflect.Value, seen map[seedReference]bool) error {
-	if !value.IsValid() {
+	if !value.IsValid() || (value.Kind() == reflect.Interface && value.IsNil()) {
 		return nil
 	}
 	for _, capability := range seedCapabilityTypes {
@@ -34,9 +35,7 @@ func rejectSeedCapabilities(value reflect.Value, seen map[seedReference]bool) er
 	}
 	switch value.Kind() {
 	case reflect.Interface:
-		if !value.IsNil() {
-			return rejectSeedCapabilities(value.Elem(), seen)
-		}
+		return rejectSeedCapabilities(value.Elem(), seen)
 	case reflect.Pointer, reflect.Map, reflect.Slice:
 		if value.IsNil() {
 			return nil
@@ -47,7 +46,10 @@ func rejectSeedCapabilities(value reflect.Value, seen map[seedReference]bool) er
 		} else {
 			pointer = value.Pointer()
 		}
-		ref := seedReference{value.Type(), pointer}
+		ref := seedReference{typ: value.Type(), pointer: pointer}
+		if value.Kind() == reflect.Slice {
+			ref.capacity = value.Cap()
+		}
 		if seen[ref] {
 			return nil
 		}
@@ -66,6 +68,9 @@ func rejectSeedCapabilities(value reflect.Value, seen map[seedReference]bool) er
 				}
 			}
 		case reflect.Slice:
+			// CloneValue retains the full backing capacity, which the reader can
+			// recover by reslicing. Inspect that same detached graph.
+			value = value.Slice(0, value.Cap())
 			for i := 0; i < value.Len(); i++ {
 				if err := rejectSeedCapabilities(value.Index(i), seen); err != nil {
 					return err
