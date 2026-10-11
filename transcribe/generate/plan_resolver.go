@@ -25,6 +25,7 @@ type planResolver struct {
 
 func (r *planResolver) resolve() (*Plan, error) {
 	r.input.Component = r.input.Component.Clone()
+	r.input.ExternalHandler = r.input.ExternalHandler.Clone()
 	if err := authoring.BackfillRelationMetadata(r.input.Component, r.input.Resources); err != nil {
 		return nil, err
 	}
@@ -295,6 +296,7 @@ func (r *planResolver) validateHandlerSelection() error {
 
 func (r *planResolver) validateViewReferences() error {
 	component := r.input.Component
+	var canonical map[string]*spec.View
 	for path := range r.input.Views {
 		if path == RootViewPath {
 			continue
@@ -302,11 +304,14 @@ func (r *planResolver) validateViewReferences() error {
 		if component == nil {
 			return fmt.Errorf("linked view %q requires canonical component metadata", path)
 		}
-		if ref := r.input.Views[path]; ref != nil && ref.Borrowed != nil {
-			canonical, err := r.canonicalViewIndex()
+		if canonical == nil {
+			var err error
+			canonical, err = r.canonicalViewIndex()
 			if err != nil {
 				return err
 			}
+		}
+		if ref := r.input.Views[path]; ref != nil && ref.Borrowed != nil {
 			view := canonical[path]
 			proof := ref.Borrowed
 			if view == nil || len(proof.BorrowerGraph) == 0 || proof.BorrowerGraph[len(proof.BorrowerGraph)-1] != path || proof.Expected.Package != r.input.TargetPackage || ref.DescriptorKey != proof.Expected.Package+"."+proof.Expected.Name {
@@ -315,6 +320,14 @@ func (r *planResolver) validateViewReferences() error {
 			continue
 		}
 		matched := false
+		if view := canonical[path]; view != nil && strings.Contains(view.TypeName, ".") && r.types != nil {
+			descriptor, err := r.types.Descriptor(view.TypeName)
+			if err != nil {
+				return err
+			}
+			ref := r.input.Views[path]
+			matched = descriptor != nil && ref != nil && descriptor.Key() == ref.DescriptorKey
+		}
 		if component.RootView != nil {
 			for _, relation := range component.RootView.Relations {
 				if relation == nil || relation.View == nil || relation.Kind != spec.RelationKindDerived {

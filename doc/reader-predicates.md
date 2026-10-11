@@ -411,13 +411,18 @@ declare package authority; `security.OrderScope` resolves to
 are also supported, and generated metadata retains the canonical identity. There is no
 `RegisterPredicate("OrderScope", ...)` step. Only one handler type argument is
 accepted; configure dependencies through bound fields instead of extra positional
-DQL arguments. Transcription now requires the compiled handler type to be
-linked into the transcribing executable and to implement the SDK interface;
-an AST declaration or DQL import alone is insufficient. If the type exists in
-source but is not linked, run `datly link sync` and rebuild that executable.
-The executable predicate plan is still created once when the component is
-materialized; an indexed standalone component may remain lazy until first
-use, but transcription never emits a component with an unlinked predicate.
+DQL arguments. Transcription validates the exact SDK handler interface against the linked Go
+implementation or its real package source method set. This allows first
+transcription when a predicate uses an input type that generation will create.
+An import or type name without valid method authority is insufficient.
+Generation preserves the canonical handler identity and all predicate behavior;
+it does not fabricate an executable handler. Build the generated contracts with
+the real predicate package, run `datly link sync` where needed, and rebuild the
+runtime executable. Runtime materialization still requires the compiled handler
+and rejects source-only descriptors. Source signature validation alone cannot
+prove that the handler body compiles or behaves correctly. The executable plan
+is created when the component is materialized; an indexed standalone component
+may remain lazy until first use.
 
 ### Application handlers
 

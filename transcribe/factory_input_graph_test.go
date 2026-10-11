@@ -19,6 +19,15 @@ import (
 // A custom persistence owner uses a generated body graph and independently
 // declared reads. The graph supplies types and presence, never a reader root.
 func TestFactoryInputShapeJoinedCurrentGeneration(t *testing.T) {
+	testFactoryInputShapeJoinedCurrentGeneration(t, false)
+}
+
+func TestFactoryInputShapeSharedCurrentGeneration(t *testing.T) {
+	testFactoryInputShapeJoinedCurrentGeneration(t, true)
+}
+
+func testFactoryInputShapeJoinedCurrentGeneration(t *testing.T, shared bool) {
+	t.Helper()
 	root, source := factoryInputShapeFixture(t)
 	source.Text = strings.Replace(source.Text, "#setting($_ = $internal(true))\n", "", 1)
 	driver, dsn := "sqlite3", filepath.Join(t.TempDir(), "graph.db")
@@ -33,6 +42,14 @@ func TestFactoryInputShapeJoinedCurrentGeneration(t *testing.T) {
 	if mysql {
 		schema = []string{`CREATE TABLE PARENT(ID BIGINT PRIMARY KEY AUTO_INCREMENT,TARGET VARCHAR(255) NOT NULL,EXCLUSION VARCHAR(255) NOT NULL) ENGINE=InnoDB`, `CREATE TABLE CHILD(ID BIGINT PRIMARY KEY AUTO_INCREMENT,PARENT_ID BIGINT,VALUE VARCHAR(255),FOREIGN KEY(PARENT_ID) REFERENCES PARENT(ID)) ENGINE=InnoDB`, `CREATE TABLE NOTE(ID BIGINT PRIMARY KEY,PARENT_ID BIGINT,VALUE VARCHAR(255),FOREIGN KEY(PARENT_ID) REFERENCES PARENT(ID)) ENGINE=InnoDB`}
 	}
+	if shared {
+		for i := range schema {
+			if strings.HasPrefix(schema[i], "CREATE TABLE PARENT(") {
+				schema[i] = strings.Replace(schema[i], "EXCLUSION TEXT NOT NULL)", "EXCLUSION TEXT NOT NULL,SECRET TEXT)", 1)
+				schema[i] = strings.Replace(schema[i], "EXCLUSION VARCHAR(255) NOT NULL)", "EXCLUSION VARCHAR(255) NOT NULL,SECRET VARCHAR(255))", 1)
+			}
+		}
+	}
 	for _, statement := range schema {
 		_, err = db.Exec(statement)
 		require.NoError(t, err)
@@ -43,7 +60,45 @@ func TestFactoryInputShapeJoinedCurrentGeneration(t *testing.T) {
 	source.Text = strings.Replace(source.Text, "#define($_ = $Status", `#define($_ = $RecordIDs<?>(param/InpData) /* ? SELECT ARRAY_AGG(Id) AS IDs FROM `+"`/`"+` LIMIT 1 */)
 #define($_ = $Current<?>(view/Current).Cardinality('Many').TypeName('CurrentRow').Dest('current.go') /* SELECT p.*,CAST(p.TARGET AS string) FROM PARENT p WHERE $criteria.In("ID",$RecordIDs.IDs) */)
 #define($_ = $Status`, 1)
-	writeSourceHandlerFile(t, root, "archive/business.go", factoryInputGraphBusiness)
+	businessSource := factoryInputGraphBusiness
+	if shared {
+		source.Text = strings.Replace(source.Text, "FROM (SELECT * FROM PARENT) a", "FROM (SELECT *, '' AS LOGIC FROM PARENT) a", 1)
+		source.Text = strings.Replace(source.Text, "required(a.EXCLUSION) FROM", `required(a.EXCLUSION), tag(a.SECRET,'internal:"true" json:"-"'), internal_transient(a.LOGIC) FROM`, 1)
+		source.Text = strings.Replace(source.Text, "TypeName('CurrentRow').Dest('current.go')", "TypeName('archive.Res').Dest('res.go')", 1)
+		source.Text = strings.ReplaceAll(source.Text, "'ArchiveInput'", "'archive.ArchiveInput'")
+		source.Text = strings.ReplaceAll(source.Text, "'ArchiveOutput'", "'archive.ArchiveOutput'")
+		source.Text = strings.ReplaceAll(source.Text, "[]*Res>", "[]*archive.Res>")
+		source.Text = strings.ReplaceAll(source.Text, "type(a,'Res')", "type(a,'archive.Res')")
+		source.Text = strings.ReplaceAll(source.Text, "type(c,'Child')", "type(c,'archive.Child')")
+		source.Text = strings.ReplaceAll(source.Text, "type(n,'Note')", "type(n,'archive.Note')")
+		source.Text = strings.Replace(source.Text, "#define($_ = $Status", `#define($_ = $OtherCurrent<?>(view/OtherCurrent).Cardinality('Many').TypeName('archive.Res').Dest('res.go') /* SELECT p.* FROM PARENT p WHERE ID=9 */)
+#define($_ = $CurrentNote<?>(view/CurrentNote).Cardinality('Many').TypeName('archive.Note').Dest('res.go') /* SELECT n.* FROM NOTE n WHERE ID=11 */)
+#define($_ = $Status`, 1)
+		businessSource = strings.ReplaceAll(businessSource, "CurrentRow", "Res")
+		businessSource = strings.Replace(businessSource, "observedIndex=current", `observedIndex=current
+ if current.Has != nil { return fmt.Errorf("Current falsely marked request presence") }
+ if current.Secret == nil || *current.Secret != "server-only" { return fmt.Errorf("private persisted field was not read") }
+ if in.InpData[0].Secret != nil || in.InpData[0].Logic != "" { return fmt.Errorf("private or transient field widened request binding") }
+ if len(in.OtherCurrent)!=1 || in.OtherCurrent[0].Target!="decoy" { return fmt.Errorf("independent Current SQL lost") }
+ if current.C != nil || current.N != nil { return fmt.Errorf("Current loaded body-only relations") }
+ if len(in.CurrentNote)!=1 || in.CurrentNote[0].Has != nil { return fmt.Errorf("shared descendant lost read identity or presence") }
+ oldNote:=in.InpData[0].N
+ in.InpData[0].N=in.CurrentNote[0]
+ if in.InpData[0].N!=in.CurrentNote[0] { return fmt.Errorf("descendant pointer identity lost") }
+ in.CurrentNote[0].SetValue(in.CurrentNote[0].Value)
+ in.InpData[0].N=oldNote
+ bodyRows := append(in.InpData, current)
+ if bodyRows[len(bodyRows)-1] != current { return fmt.Errorf("Current body pointer identity lost") }
+ current.SetTarget("before")
+ if current.Has == nil || !current.Has.Target { return fmt.Errorf("shared Current methods unavailable") }`, 1)
+	}
+	// MySQL reports the primary key as non-nullable; SQLite's scan metadata
+	// supplies a pointer. Exercise each discovered contract without forcing
+	// the SQLite fixture's pointer into the MySQL generated row.
+	if mysql {
+		businessSource = strings.ReplaceAll(businessSource, "*in.Current[0].Id", "in.Current[0].Id")
+	}
+	writeSourceHandlerFile(t, root, "archive/business.go", businessSource)
 	require.NoDirExists(t, filepath.Join(root, "archive/sql"))
 
 	var first map[string]string
@@ -51,14 +106,22 @@ func TestFactoryInputShapeJoinedCurrentGeneration(t *testing.T) {
 		if round == 2 {
 			_, err = db.Exec(`ALTER TABLE CHILD ADD COLUMN EXTRA TEXT`)
 			require.NoError(t, err)
+			if shared {
+				_, err = db.Exec(`ALTER TABLE PARENT ADD COLUMN REVISION TEXT`)
+				require.NoError(t, err)
+			}
 		}
 		compiled, err := (&Discovery{BaseDir: root, GoBuild: source.GoBuild, ColumnRefiner: source.ColumnRefiner}).CompileSource(context.Background(), source)
 		require.NoError(t, err)
 		require.Nil(t, compiled.Component.RootView)
 		require.Empty(t, compiled.Component.Settings.Mutation)
 		require.Equal(t, "shape-discovery-only", compiled.Component.Settings.DefaultConnector)
-		require.Len(t, compiled.Component.Views, 1)
-		require.Len(t, compiled.ViewBindings, 1)
+		expectedReads := 1
+		if shared {
+			expectedReads = 3
+		}
+		require.Len(t, compiled.Component.Views, expectedReads)
+		require.Len(t, compiled.ViewBindings, expectedReads)
 		shape := compiled.ExternalHandler.InputShape
 		require.Len(t, shape.Relations, 2)
 		var primaryKey bool
@@ -99,6 +162,20 @@ func TestFactoryInputShapeJoinedCurrentGeneration(t *testing.T) {
 			}
 		}
 		now := sourceHandlerSnapshot(t, root)
+		if shared {
+			declarations := map[string]int{}
+			for file, contents := range now {
+				if filepath.Ext(file) != ".go" {
+					continue
+				}
+				for _, name := range []string{"Res", "ResHas", "Note", "NoteHas"} {
+					declarations[name] += strings.Count(contents, "type "+name+" struct")
+				}
+			}
+			for name, count := range declarations {
+				require.Equal(t, 1, count, "one body-owned declaration for %s", name)
+			}
+		}
 		if round == 0 {
 			first = now
 		} else if round == 1 {
@@ -106,6 +183,15 @@ func TestFactoryInputShapeJoinedCurrentGeneration(t *testing.T) {
 		} else {
 			require.NotEqual(t, first[filepath.Join(root, "archive/child.go")], now[filepath.Join(root, "archive/child.go")])
 			require.Contains(t, now[filepath.Join(root, "archive/child.go")], "Extra")
+			if shared {
+				require.NotEqual(t, first[filepath.Join(root, "archive/res.go")], now[filepath.Join(root, "archive/res.go")])
+				require.Contains(t, now[filepath.Join(root, "archive/res.go")], "Revision")
+				var generated string
+				for _, contents := range now {
+					generated += contents
+				}
+				require.Contains(t, generated, "SetRevision")
+			}
 		}
 	}
 	// A bad selected factory must not publish any changed Go or SQL resources.
@@ -121,7 +207,16 @@ func TestFactoryInputShapeJoinedCurrentGeneration(t *testing.T) {
 	require.Equal(t, invalidBefore, sourceHandlerSnapshot(t, root))
 	writeSourceHandlerFile(t, root, "archive/business.go", business)
 	if !mysql {
-		writeSourceHandlerFile(t, root, "archive/runtime_test.go", factoryInputGraphRuntime)
+		runtimeSource := factoryInputGraphRuntime
+		if shared {
+			runtimeSource = strings.ReplaceAll(runtimeSource, "EXCLUSION TEXT NOT NULL)", "EXCLUSION TEXT NOT NULL,SECRET TEXT,REVISION TEXT)")
+			runtimeSource = strings.ReplaceAll(runtimeSource, "INSERT INTO PARENT VALUES", "INSERT INTO PARENT(ID,TARGET,EXCLUSION) VALUES")
+			runtimeSource = strings.Replace(runtimeSource, `"INSERT INTO NOTE VALUES(11,1,'before')"`, `"INSERT INTO NOTE VALUES(11,1,'before')","UPDATE PARENT SET SECRET='server-only'"`, 1)
+			runtimeSource = strings.Replace(runtimeSource, `\"target\":\"after\"`, `\"target\":\"after\",\"secret\":\"untrusted\",\"logic\":\"untrusted\"`, 1)
+			runtimeSource = strings.ReplaceAll(runtimeSource, "require.Len(t,component.Views,1)", "require.Len(t,component.Views,3)")
+			runtimeSource = strings.ReplaceAll(runtimeSource, "require.Len(t,artifact.ViewDependencies,1)", "require.Len(t,artifact.ViewDependencies,3)")
+		}
+		writeSourceHandlerFile(t, root, "archive/runtime_test.go", runtimeSource)
 		cmd := exec.CommandContext(t.Context(), "go", "test", "-mod=readonly", "-race", "-count=1", "-v", "./archive")
 		cmd.Dir = root
 		output, err := cmd.CombinedOutput()

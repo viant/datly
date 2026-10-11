@@ -50,7 +50,7 @@ func (r *planResolver) linkedRelationResources(resources *ResourcePlan, files ma
 				return err
 			}
 			for _, relation := range view.Relations {
-				if relation == nil || relation.View == nil {
+				if relation == nil || relation.View == nil || relation.Kind == spec.RelationKindDerived {
 					continue
 				}
 				name := typecatalog.FieldName(relation.Holder)

@@ -20,6 +20,8 @@ type Provenance struct {
 }
 
 type Resolution struct {
+	// Origin is the selected catalog registration, not artifact overwrite authority.
+	Origin      TypeOrigin `json:",omitempty" yaml:",omitempty"`
 	Expression  string     `json:",omitempty" yaml:",omitempty"`
 	Target      string     `json:",omitempty" yaml:",omitempty"`
 	ResolvedKey string     `json:",omitempty" yaml:",omitempty"`

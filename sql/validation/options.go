@@ -41,6 +41,16 @@ func (s *Service) options(value any, options []any) (xhandler.ValidationOptions,
 	if !policy.Shallow {
 		return policy, fmt.Errorf("framework validation requires shallow per-entity calls")
 	}
+	if policy.CheckOnly {
+		if policy.Action != "" || !shape.IsNil(policy.Previous) || !shape.IsNil(policy.PreviousFields) || policy.HonorPresence || policy.DeferredFields != nil || len(policy.SatisfiedReferences) != 0 {
+			return policy, fmt.Errorf("check-only validation forbids mutation action and provenance")
+		}
+		if shape.IsNil(policy.Fields) || policy.CheckUnique == nil || *policy.CheckUnique {
+			return policy, fmt.Errorf("check-only validation requires explicit coverage and CheckUnique=false")
+		}
+		policy.Previous, policy.PreviousFields = nil, nil
+		return policy, nil
+	}
 	switch policy.Action {
 	case xhandler.WriteInsert:
 		if !shape.IsNil(policy.Previous) || !shape.IsNil(policy.PreviousFields) || (!policy.HonorPresence && !shape.IsNil(policy.Fields)) {

@@ -114,6 +114,10 @@ func (d *shapeDestinations) prepare() error {
 			reference = d.input.Views[identity]
 		}
 		if ref := reference; ref != nil {
+			// A generated parent's destination does not relocate its linked child.
+			if role != RootViewPath && ref.Borrowed == nil {
+				dest = v.Dest
+			}
 			if ref.Borrowed != nil {
 				if v.Dest != "" {
 					return fmt.Errorf("borrow_sql_row cannot declare a destination")

@@ -3,6 +3,7 @@ package transcribe
 import (
 	"context"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -25,6 +26,84 @@ SELECT record.*, metrics.*, use_connector(metrics, 'offline')
 FROM (SELECT id FROM records WHERE owner=$Scope) record
 JOIN (SELECT id, stamp, spend FROM metrics) metrics ON record.id=metrics.id
 `
+
+func TestTranscribeGeneratedParentLinksDeclaredRelatedRow(t *testing.T) {
+	root := t.TempDir()
+	testharness.WriteGeneratedGoMod(t, root)
+	catalog := typecatalog.NewCatalog()
+	require.NoError(t, catalog.Register(typecatalog.TypeOriginPackage, x.NewType(reflect.TypeFor[outputrows.Metric]())))
+	source := `#package('generated')
+#import('rows','github.com/viant/datly/transcribe/testdata/outputrows')
+#setting($_ = $route('/records', 'GET'))
+#set($_ = $Data<?>(output/view))
+SELECT record.*, cast(record.id AS int), metrics.*, type(metrics, 'rows.Metric'), use_connector(metrics, 'offline')
+FROM (SELECT 1 AS id) record
+JOIN (SELECT id, stamp, spend FROM metrics) metrics ON record.id=metrics.id
+`
+	generated, err := NewCompiler().Transcribe(context.Background(), Request{
+		Destination: root,
+		Source:      &Source{Scope: "example.com/generated/dql/records", Name: "Records", Types: catalog, Text: source},
+		Generation:  GenerationOptions{Operation: "get"},
+	})
+	require.NoError(t, err)
+	var linked int
+	for _, view := range generated.Result.Plan.Views {
+		if view.Ownership == gen.ViewLinked {
+			linked++
+			require.Equal(t, "Metric", view.Name)
+			require.Equal(t, "rows.Metric", view.Type)
+		}
+	}
+	require.Equal(t, 1, linked)
+	for _, rejection := range []struct{ name, projection, failure string }{
+		{"incompatible cast", "cast(metrics.spend AS int)", "uneditable linked field"},
+		{"relocated child", "dest(metrics, 'other/metrics.go')", "destination"},
+	} {
+		t.Run(rejection.name, func(t *testing.T) {
+			destination := t.TempDir()
+			testharness.WriteGeneratedGoMod(t, destination)
+			invalid := strings.Replace(source, "metrics.*,", "metrics.*, "+rejection.projection+",", 1)
+			_, err := NewCompiler().Transcribe(context.Background(), Request{Destination: destination, Source: &Source{Scope: "example.com/generated/dql/records", Name: "Records", Types: catalog, Text: invalid}, Generation: GenerationOptions{Operation: "get"}})
+			require.ErrorContains(t, err, rejection.failure)
+		})
+	}
+	var holder bool
+	for _, file := range generated.Result.Files {
+		require.NotContains(t, file.Content, "type Metric struct")
+		if strings.Contains(file.Content, "[]*rows.Metric") {
+			holder = true
+		}
+	}
+	require.True(t, holder, "generated parent must reference the existing related row")
+	fixture := `package fixture_test
+import (
+ "context"; "database/sql"; "encoding/json"; "net/http/httptest"; "path/filepath"; "testing"
+ _ "modernc.org/sqlite"
+ _ "GENERATED_PACKAGE"
+ "github.com/viant/datly/bootstrap/connector"
+ "github.com/viant/datly/standalone"
+ "github.com/viant/datly/standalone/config"
+)
+func TestRelatedRow(t *testing.T) {
+ dsn:=filepath.Join(t.TempDir(),"metrics.db"); db,err:=sql.Open("sqlite",dsn); if err!=nil {t.Fatal(err)}
+ _,err=db.Exec("CREATE TABLE metrics(id INTEGER,stamp TEXT,spend REAL); INSERT INTO metrics VALUES(1,NULL,2.5),(2,NULL,9)"); if err!=nil {t.Fatal(err)}; db.Close()
+ root,err:=filepath.Abs("."); if err!=nil {t.Fatal(err)}
+ ctx:=context.Background(); server,err:=standalone.New(ctx,standalone.Options{Config:&config.Config{BaseDir:root,GoBootstrap:&config.Packages{Packages:[]string{"GENERATED_PACKAGE"}},Connectors:[]connector.Config{{Name:"offline",Driver:"sqlite",DSN:dsn}},Connector:"offline"}}); if err!=nil {t.Fatal(err)}; defer server.Shutdown(ctx)
+ if err=server.Reload(ctx,1);err!=nil {t.Fatal(err)}
+ rec:=httptest.NewRecorder();server.ServeHTTP(rec,httptest.NewRequest("GET","/records",nil));if rec.Code!=200 {t.Fatalf("%d %s",rec.Code,rec.Body.String())}
+ var result struct {Data []struct {Id int; Metrics []struct {ID int64; Stamp *string; Spend *float64}}}
+ if err=json.Unmarshal(rec.Body.Bytes(),&result);err!=nil {t.Fatal(err)}
+ if len(result.Data)!=1||result.Data[0].Id!=1||len(result.Data[0].Metrics)!=1||result.Data[0].Metrics[0].ID!=1||result.Data[0].Metrics[0].Stamp!=nil||result.Data[0].Metrics[0].Spend==nil||*result.Data[0].Metrics[0].Spend!=2.5 {t.Fatalf("relation contract: %s",rec.Body.String())}
+}
+`
+	fixture = strings.ReplaceAll(fixture, "GENERATED_PACKAGE", generated.Result.Plan.Package)
+	require.NoError(t, os.WriteFile(filepath.Join(root, "runtime_test.go"), []byte(fixture), 0600))
+	command := exec.Command("go", "test", "-mod=mod", "-race", "-timeout=120s", ".")
+	command.Dir = root
+	command.Env = append(os.Environ(), "GOWORK=off", "GO111MODULE=on")
+	output, err := command.CombinedOutput()
+	require.NoError(t, err, string(output))
+}
 
 func TestTranscribeGetLinksDeclaredOutputRowWithoutDatabase(t *testing.T) {
 	root := t.TempDir()
@@ -54,6 +133,23 @@ func TestTranscribeGetLinksDeclaredOutputRowWithoutDatabase(t *testing.T) {
 func TestDeclaredOutputRowRequiresAuthority(t *testing.T) {
 	_, err := NewCompiler().Compile(context.Background(), &Source{Scope: "example.com/generated/dql/records", Name: "Records", Types: typecatalog.NewCatalog(), Text: declaredOutputRowDQL})
 	require.ErrorContains(t, err, "requires existing named Go type authority")
+}
+
+func TestDeclaredOutputRowPreservesPriorReference(t *testing.T) {
+	catalog := typecatalog.NewCatalog()
+	require.NoError(t, catalog.Register(typecatalog.TypeOriginPackage, x.NewType(reflect.TypeFor[outputrows.Row]())))
+	compiled, err := NewCompiler().Compile(context.Background(), &Source{Scope: "example.com/generated/dql/records", Name: "Records", Types: catalog, Text: declaredOutputRowDQL})
+	require.NoError(t, err)
+	prior := compiled.Views[gen.RootViewPath]
+	require.NotNil(t, prior)
+	borrowed := &gen.BorrowedRowAuthority{OwnerSource: "owner.dql", BorrowerSource: "borrower.dql"}
+	prior.Borrowed = borrowed
+	require.NoError(t, linkDeclaredOutputView(compiled, compiled.Component, nil))
+	require.Same(t, prior, compiled.Views[gen.RootViewPath])
+	require.Same(t, borrowed, compiled.Views[gen.RootViewPath].Borrowed)
+	prior.DescriptorKey = "example.com/conflicting.Row"
+	require.ErrorContains(t, linkDeclaredOutputView(compiled, compiled.Component, nil), "conflicting row type authorities")
+	require.Same(t, prior, compiled.Views[gen.RootViewPath], "rejected authority must remain intact")
 }
 
 func TestTranscribeGetPreservesLocalLinkedRowsAndSQLResources(t *testing.T) {

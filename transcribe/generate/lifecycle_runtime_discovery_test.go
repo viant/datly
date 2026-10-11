@@ -10,7 +10,8 @@ import (
 )
 
 // Build separate executables so references in the test binary cannot retain the
-// lifecycle accidentally. Interface checks select types but do not link them.
+// lifecycle accidentally. Go 1.25 retains TypeFor references even when the result
+// is assigned to the blank identifier; interface assertions alone do not link them.
 func TestLifecycleReachabilityRuntimeScan(t *testing.T) {
 	for _, tc := range []struct {
 		name        string
@@ -19,8 +20,8 @@ func TestLifecycleReachabilityRuntimeScan(t *testing.T) {
 		reference   string
 		want        string
 	}{
-		{name: "blank_typefor", reference: "var _ = reflect.TypeFor[Lifecycle]()\n", want: "missing\n"},
-		{name: "init_blank_typefor", reference: "func init() { _ = reflect.TypeFor[Lifecycle]() }\n", want: "missing\n"},
+		{name: "blank_typefor", reference: "var _ = reflect.TypeFor[Lifecycle]()\n", want: "found\n"},
+		{name: "init_blank_typefor", reference: "func init() { _ = reflect.TypeFor[Lifecycle]() }\n", want: "found\n"},
 		{name: "without_anchor", want: "missing\n"},
 		{name: "with_generated_anchor", anchored: true, want: "found\n"},
 		{name: "blank_interface_assertion", declaration: "type IFace interface { Run() }; var _ IFace = &Lifecycle{}", want: "missing\n"},

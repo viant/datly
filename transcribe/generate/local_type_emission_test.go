@@ -85,6 +85,7 @@ func TestLocalTypeEmissionDescriptorAuthority(t *testing.T) {
 	}
 	resolver.context = &spec.TypeContext{DefaultPackage: external}
 	resolver.plan.RootViewType = "Record"
+	resolver.plan.Views = []ViewPlan{{Type: "Record", Ownership: ViewGenerated}}
 	resolver.lookup = func(string) (*x.Type, error) {
 		t.Fatal("generated local view reached external lookup")
 		return nil, nil

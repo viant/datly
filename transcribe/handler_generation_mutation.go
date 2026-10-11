@@ -96,7 +96,7 @@ func (g *handlerGeneration) refineLinkedSelfRelations(record *plan.RecordPlan, f
 		if err != nil {
 			return err
 		}
-		authority = append(authority, currentFieldAuthority{name: field.Name, expression: expression})
+		authority = append(authority, currentFieldAuthority{name: field.Name, expression: expression, tag: field.Tag})
 	}
 	result := append([]plan.SelfRelationPlan(nil), record.SelfRelations...)
 	for _, field := range fields {

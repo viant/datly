@@ -52,6 +52,54 @@ A reader is generated separately with `get` and its own DQL/package. An
 existing application handler remains an explicit alternative with its own
 orchestration; it is not required for this generated-writer workflow.
 
+### Keep an existing imperative writer's persistence ownership
+
+A same-package `handler_factory` can generate its local Input/Output and SQL-derived
+body while the application handler retains its existing scoped DML and sequencing.
+Use canonical `transcribe post` for this factory path with the authored POST, PATCH
+or PUT route, or a DELETE route with independently declared Current reads. The
+public route remains exactly as declared; the factory path does not synthesize an
+automatic mutation handler. Ordinary `transcribe put` continues
+to select the generated update policy described above.
+
+When a request body is needed, declare one body parameter as the direct generated
+`*Record` or `[]*Record` type.
+An object remains an object; a collection remains a collection. Describe the row
+in the DQL SQL graph, using the real authoring connector so transcription derives
+columns, keys and FK metadata. Regeneration updates that shape after schema changes.
+An optional object binds omitted data and explicit null to nil, preserving its
+presence marker so the application's original validation can distinguish them.
+Codecs, alternate output types, foreign root types and container wrappers cannot
+replace this generated body authority.
+
+A Current-only DELETE factory needs no body graph. Its declared read views generate
+the Input fields and bind before the handler runs; the handler decides which rows
+to delete through scoped DML. The HTTP verb does not infer deletion or create an
+automatic mutation handler.
+
+A factory without a body can also borrow an existing authored Current row in its
+own package or another package. Use its canonical package identity (or a declared
+import alias) in the view parameter, for example `[]*rows.Record`; keep the SQL
+projection in DQL. Transcription links that exact type and preserves its SQLX
+column mappings and presence marker. Fetched rows do not acquire write presence;
+the handler sets the fields it intends to write. Mixed generated `?` read rows
+continue to evolve from their SQL schema independently.
+
+The explicitly selected factory package owns generated contracts even when the
+DQL is stored elsewhere. Borrowed local rows must be exported authored types in
+the selected Go build; a stale generated row is not reusable type authority.
+Borrowed rows cannot declare generated destinations, change wrappers/cardinality
+or use CAST to redefine their fields. Keep a named type anchor such as
+`var _anchorRecord = reflect.TypeFor[Record]()` when the row needs runtime package
+discovery; an anchor retains the type without registering it.
+
+The body SQL is a shape source, not an executable body read or a second persistence
+owner. Independent Current/read parameters retain their normal native bindings.
+The handler uses the invocation's existing `handler.DML` and `handler.Sequencer`
+capabilities. With buffered composition, child calls share the caller's journal;
+only its completion owner executes and commits the writes. Do not flush from a
+child, or queue those same records through another generated writer.
+
 ## Describe the writable graph
 
 ### Queue one statement and retain its inserted identity
@@ -1410,3 +1458,34 @@ this grouped policy and is rejected before work starts.
 It queues shallow row images separately, preserving its existing pointer and
 presence semantics. Neither queue policy authorizes arbitrary actions, changes
 the allocator, or replaces a finite reconciliation plan.
+
+
+### Checking associated values without writing them
+
+For an associated value that the component checks but does not insert or update,
+use the existing protected `FrameworkValidatorKey` with action-neutral options:
+
+```go
+off := false
+checked, err := validator.Validate(ctx, association, handler.ValidationOptions{
+    CheckOnly: true,
+    Fields: selectedFields,
+    CheckUnique: &off,
+    Shallow: true,
+    Location: "Data[0].Associations[0]",
+})
+```
+
+`selectedFields` supplies canonical Go field names from the bound presence
+marker. An empty, non-nil set checks no fields. This mode runs selected Go,
+not-null and reference checks through the invocation's existing connection and
+transaction. It does not assert that the value is a new or existing mutation.
+Uniqueness must be explicitly disabled; `Action`, `Previous`, `PreviousFields`,
+`HonorPresence`, `DeferredFields` and `SatisfiedReferences` are forbidden.
+Use one typed entity per call; batches reject `CheckOnly`.
+
+Validation sees rows already executed in the active transaction. Queued DML is
+still buffered and is not database-visible: these checks never flush it or
+complete the transaction. Actual inserts and updates retain their regular
+validation policies, including matched Current/read provenance and complete
+final validation. This mode must not replace mutation validation.

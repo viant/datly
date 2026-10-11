@@ -25,6 +25,8 @@ type discoveryInputCompiler struct {
 	viewBindings gen.ViewBindings
 	resolver     *typecatalog.Resolver
 	source       *Source
+	factoryShape *gen.ExternalHandler
+	views        gen.ViewReferences
 }
 
 func (c *discoveryInputCompiler) compile() (*column.TemplateInput, error) {
@@ -233,14 +235,36 @@ func (c *discoveryInputCompiler) inputType() (reflect.Type, error) {
 	if c.source != nil {
 		targetPackage = strings.TrimSpace(c.source.Scope)
 	}
+	// The source namespace may be a DQL directory. Generated declarations
+	// belong to the authored Go package, as they do in final generation.
+	if c.component.TypeContext != nil && strings.TrimSpace(c.component.TypeContext.PackagePath) != "" {
+		targetPackage = strings.TrimSpace(c.component.TypeContext.PackagePath)
+	}
+	component := c.component
+	if c.factoryShape != nil {
+		targetPackage = c.factoryShape.Package
+		component = c.component.Clone()
+		component.RootView = nil
+	}
 	input := gen.Input{
-		Component: c.component, Declarations: c.declarations,
+		ExternalHandler: c.factoryShape,
+		Component:       component, Declarations: c.declarations,
 		TypeResolver: c.resolver, TargetPackage: targetPackage, ViewBindings: c.viewBindings,
+		Views: c.views,
 	}
 	if c.source != nil {
 		input.Resources = c.source.Resources
+		// Reuse the package compilation authority during provisional discovery,
+		// before packageAuthority.compile attaches its final linked references.
+		if c.source.PackageComponent != nil && c.factoryShape == nil && c.resolver != nil {
+			var err error
+			input.Views, err = packageInputViewReferences(component, c.source.PackageComponent, c.resolver)
+			if err != nil {
+				return nil, err
+			}
+		}
 	}
-	return gen.New(input).RuntimeInputType()
+	return gen.New(input).ColumnDiscoveryInputType()
 }
 
 func (c *discoveryInputCompiler) linkedInputAllowed() bool {

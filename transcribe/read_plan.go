@@ -13,9 +13,10 @@ import (
 )
 
 type readPlanCompiler struct {
-	sourceMap *SourceMap
-	path      string
-	types     *typecatalog.Resolver
+	sourceMap     *SourceMap
+	path          string
+	types         *typecatalog.Resolver
+	generatedType func(string) (bool, error)
 }
 
 const (
@@ -87,7 +88,7 @@ func (c *readPlanCompiler) compile(component *spec.Component, prepared *dql.Prep
 		view = &copyView
 	}
 	result, err := tcompile.NewReader().Compile(tcompile.ReadInput{
-		View: view, SQL: prepared.SQL[item.SQLStart:item.SQLEnd], Template: frame, Types: c.types, TypeContext: component.TypeContext,
+		View: view, SQL: prepared.SQL[item.SQLStart:item.SQLEnd], Template: frame, Types: c.types, TypeContext: component.TypeContext, GeneratedType: c.generatedType,
 	})
 	if err == nil {
 		if component.Settings != nil {

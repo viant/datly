@@ -52,6 +52,54 @@ func TestLinkedViewTypeRetainsImportedPackageIdentity(t *testing.T) {
 type linkedSQLXNameRow struct {
 	URLPolicy bool `sqlx:"URL_POLICY"`
 }
+
+func TestDetachedFactoryBodyRetainsLinkedChildAuthority(t *testing.T) {
+	const pkg = "example.com/app/model"
+	catalog := typecatalog.NewCatalog()
+	descriptor := x.NewType(reflect.TypeFor[factorySparseLinkedRow](), x.WithName("Row"), x.WithPkgPath(pkg))
+	if err := catalog.Register(typecatalog.TypeOriginPackage, descriptor); err != nil {
+		t.Fatal(err)
+	}
+	resolver, err := typecatalog.NewResolver(catalog, typecatalog.PackageAuthority, &typecatalog.ResolutionContext{PackagePath: "example.com/app/write", Imports: []typecatalog.PackageImport{{Alias: "model", Package: pkg}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	child := &spec.View{Name: "Children", TypeName: "model.Row", Source: &spec.ViewSource{SQL: "SELECT id FROM children"}, Columns: []*spec.Column{{Name: "id", Type: spec.TypeRef{Name: "int"}}}}
+	identity, err := child.Identity()
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := &spec.View{Name: "Records", TypeName: "Record", Columns: []*spec.Column{{Name: "id", Type: spec.TypeRef{Name: "int"}}}, Relations: []*spec.Relation{{Name: "children", Holder: "Children", Cardinality: spec.CardinalityMany, View: child}}}
+	before, _ := json.Marshal(body)
+	plan := &Plan{Package: "example.com/app/write", RootViewType: "Record", ViewDest: "views.go", Imports: []spec.ImportSpec{{Alias: "model", Package: pkg}}}
+	g := New(Input{TypeResolver: resolver})
+	r := &planResolver{types: g.resolver, plan: plan, input: Input{Component: &spec.Component{Name: "Records"}, ExternalHandler: &ExternalHandler{GeneratedContracts: true, InputShape: body}, Views: ViewReferences{identity: &ViewReference{DescriptorKey: descriptor.Key()}}}}
+	if _, err := r.resolveViews(); err != nil {
+		t.Fatal(err)
+	}
+	after, _ := json.Marshal(body)
+	if string(before) != string(after) {
+		t.Fatal("factory body metadata changed")
+	}
+	var linked, local int
+	for _, view := range plan.Views {
+		if view.Ownership == ViewLinked {
+			linked++
+			if view.Package != pkg || view.Type != "model.Row" {
+				t.Fatalf("foreign identity lost: %+v", view)
+			}
+		} else {
+			local++
+			if view.Type != "Record" {
+				t.Fatalf("foreign child became generated: %+v", view)
+			}
+		}
+	}
+	if linked != 1 || local != 1 {
+		t.Fatalf("linked=%d local=%d views=%+v", linked, local, plan.Views)
+	}
+}
+
 type linkedSQLXNameParent struct{ Children []*linkedSQLXNameRow }
 type linkedSQLXNameAmbiguous struct {
 	First  bool `sqlx:"URL_POLICY"`

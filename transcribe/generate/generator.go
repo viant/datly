@@ -28,6 +28,8 @@ type DeclarationProjection struct {
 type Declarations map[string]Declaration
 
 type Input struct {
+	// Only ColumnDiscoveryInputType may plan not-yet-discovered inferred columns.
+	columnDiscovery bool
 	// Records the explicit trusted in-process Go/universal mutation selection.
 	// Settings, handler assets and marker maps cannot establish this context.
 	nativeMutationTargetSelected bool

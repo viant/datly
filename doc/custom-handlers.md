@@ -195,3 +195,36 @@ constraint. Entity writer hooks and DML require an actual writer handler; reusin
 its input type does not execute them. `Replay.Only` is not a substitute for
 Current reads, since it prepares selected replay sources rather than the full
 dependency plan.
+
+### Native validation in an application-owned buffered writer
+
+A trusted typed custom contract may resolve the protected
+`handler.FrameworkValidatorKey` through its invocation binder. Use the native
+validator rather than exposing validation policy as request data. Updates need
+detached typed Previous values, actual `ReadMetadata` provenance and explicit
+coverage. Keep validation coverage separate from persistence presence markers.
+
+When preserving a source that validates complete new records in Go but applies
+SQL reference/unique checks only to supplied fields, use the existing options in
+two passes: full Go/required coverage with `CheckRef` and `CheckUnique` false,
+then `HonorPresence` with explicit `Fields` and both database checks enabled.
+Deduplicate repeated diagnostics without dropping distinct violations. Collect
+business and schema violations before allocation or writes. This split is a
+source-specific policy, not a default for every custom writer.
+
+An INSERT child may reference an unflushed parent only when the trusted owner
+has successfully queued the exact typed parent INSERT to the exact table through
+the same invocation-scoped DML owner, before that child. Native `MatchReference`
+checks the exact constraint and captured key values in the active transaction;
+it does not prove write policy or order. Preserve those bindings until root
+completion. Only that proven INSERT reference may be supplied through
+`SatisfiedReferences`; validate all remaining required, null, unique and FK
+constraints with complete final insert coverage. A failed, later or mismatched
+parent write cannot supply that fact, and an existing parent UPDATE is not a
+pending INSERT. `DeferredFields` remains restricted to compiled producer
+authority and is not an application shortcut.
+
+Reuse the existing shared buffer. Do not also execute automatic writer DML for
+those rows, flush from a child, create a second action journal or replace the
+allocator. Database FK enforcement and root-owned rollback still apply. A
+successful queue operation is not proof of commit.

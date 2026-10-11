@@ -84,6 +84,113 @@ func (r *packageViewResolver) inputDescriptorsFromMetadata() ([]linkedInputView,
 	return r.ordered(byIdentity)
 }
 
+// externalInputDescriptors selects authored foreign rows without consulting
+// stale descriptors for local contracts that this invocation will generate.
+func (r *packageViewResolver) externalInputDescriptors(packagePath string, bindings generate.ViewBindings) ([]linkedInputView, error) {
+	return r.typedInputDescriptors(packagePath, bindings, nil)
+}
+
+// typedInputDescriptors retains foreign linking policy unless a factory proves
+// selected authored ownership for an explicitly borrowed local row.
+func (r *packageViewResolver) typedInputDescriptors(packagePath string, bindings generate.ViewBindings, authoredLocal func(string) (bool, error)) ([]linkedInputView, error) {
+	authority := &generate.Plan{Package: packagePath}
+	if r.component.TypeContext != nil {
+		authority.Imports = r.component.TypeContext.Imports
+	}
+	byIdentity := map[string]linkedInputView{}
+	for _, param := range spec.EffectiveParameters(r.component.Parameters) {
+		if param == nil || !strings.EqualFold(strings.TrimSpace(param.Source.Kind), "view") || strings.TrimSpace(param.TypeExpr) == "" || strings.TrimSpace(param.TypeExpr) == "?" {
+			continue
+		}
+		canonical, err := authority.CanonicalType(packagePath, param.TypeExpr)
+		if err != nil {
+			return nil, err
+		}
+		base, err := (xshape.Resolver{}).Named(canonical)
+		if err != nil {
+			return nil, err
+		}
+		name := strings.TrimSpace(param.Source.Name)
+		if name == "" {
+			name = strings.TrimSpace(param.Name)
+		}
+		view, err := r.independent(name)
+		if err != nil {
+			return nil, err
+		}
+		if view == nil {
+			return nil, fmt.Errorf("external view parameter %q has no canonical independent view", param.Name)
+		}
+		if explicit := strings.TrimSpace(view.TypeName); explicit != "" {
+			resolved, err := authority.CanonicalType(packagePath, explicit)
+			if err != nil {
+				return nil, err
+			}
+			if resolved != base {
+				return nil, fmt.Errorf("view %q type %q does not match package type %q", name, explicit, base)
+			}
+		}
+		if strings.HasPrefix(base, packagePath+".") {
+			if authoredLocal == nil {
+				continue
+			}
+			authored, err := authoredLocal(strings.TrimPrefix(base, packagePath+"."))
+			if err != nil {
+				return nil, err
+			}
+			if !authored {
+				return nil, fmt.Errorf("factory Current type %q requires selected authored ownership", base)
+			}
+		}
+		descriptor, err := r.types.Descriptor(canonical)
+		if err != nil || descriptor == nil || descriptor.Key() != base {
+			return nil, fmt.Errorf("external view parameter %q requires exact named type %q: %v", param.Name, base, err)
+		}
+		for index, candidate := range []string{param.OutputTypeExpr, reflect.StructTag(param.Tag).Get("typeName")} {
+			if strings.TrimSpace(candidate) == "" {
+				continue
+			}
+			resolved, err := authority.CanonicalType(packagePath, candidate)
+			if err != nil {
+				return nil, err
+			}
+			named, err := (xshape.Resolver{}).Named(resolved)
+			if err != nil || named != base {
+				return nil, fmt.Errorf("external view parameter %q has conflicting type %q and %q", param.Name, canonical, candidate)
+			}
+			if index == 0 && resolved != canonical {
+				return nil, fmt.Errorf("external view parameter %q has conflicting type wrappers %q and %q", param.Name, canonical, candidate)
+			}
+		}
+		switch strings.ToLower(strings.TrimSpace(param.Cardinality)) {
+		case "one":
+			if canonical != base && canonical != "*"+base {
+				return nil, fmt.Errorf("external view parameter %q type %q conflicts with One cardinality", param.Name, canonical)
+			}
+		case "", "many":
+			if canonical != "[]"+base && canonical != "[]*"+base {
+				return nil, fmt.Errorf("external view parameter %q type %q conflicts with Many cardinality", param.Name, canonical)
+			}
+		default:
+			return nil, fmt.Errorf("external view parameter %q has unsupported cardinality %q", param.Name, param.Cardinality)
+		}
+		if err := r.add(byIdentity, name, descriptor); err != nil {
+			return nil, err
+		}
+		identity, err := view.Identity()
+		if err != nil {
+			return nil, err
+		}
+		if bound := bindings[param.Identity()]; bound != "" && bound != identity {
+			return nil, fmt.Errorf("external view parameter %q has conflicting canonical binding", param.Name)
+		}
+		if view.Dest != "" {
+			return nil, fmt.Errorf("external view %q cannot declare a generated destination", name)
+		}
+	}
+	return r.ordered(byIdentity)
+}
+
 func (r *packageViewResolver) inputDescriptors(inputType reflect.Type) ([]linkedInputView, error) {
 	if r == nil || r.component == nil || inputType == nil {
 		return nil, nil
@@ -282,4 +389,29 @@ func (r *packageViewResolver) equal(left, right *spec.View) bool {
 	leftJSON, leftErr := json.Marshal(comparison.normalizedOwnershipView(left, "", false))
 	rightJSON, rightErr := json.Marshal(comparison.normalizedOwnershipView(right, "", false))
 	return leftErr == nil && rightErr == nil && bytes.Equal(leftJSON, rightJSON)
+}
+
+// Capture unchanged package row ownership before column discovery adds derived
+// physical metadata. That metadata cannot revoke an existing Go declaration.
+func packageInputViewReferences(component, packaged *spec.Component, types *typecatalog.Resolver) (generate.ViewReferences, error) {
+	if packaged == nil || types == nil {
+		return nil, nil
+	}
+	linked, err := newPackageViewResolver(packaged, types).inputDescriptorsFromMetadata()
+	if err != nil {
+		return nil, err
+	}
+	compiledViews := newPackageViewResolver(component, nil)
+	var result generate.ViewReferences
+	for _, row := range linked {
+		view := compiledViews.byIdentity(row.identity)
+		if view == nil || !compiledViews.equal(row.view, view) {
+			continue
+		}
+		if result == nil {
+			result = generate.ViewReferences{}
+		}
+		result[row.identity] = &generate.ViewReference{DescriptorKey: row.descriptor.Key()}
+	}
+	return result, nil
 }

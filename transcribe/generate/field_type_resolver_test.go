@@ -62,3 +62,50 @@ func TestFieldTypeResolverGeneratedContractReferences(t *testing.T) {
 		})
 	}
 }
+
+func TestFieldTypeResolverQualifiedGeneratedDeclaration(t *testing.T) {
+	const pkg = "example.com/generated/records"
+	for _, qualifier := range []string{"self", pkg} {
+		for _, wrapper := range []string{"", "*", "[]", "[]*", "*[]*"} {
+			t.Run(qualifier+wrapper, func(t *testing.T) {
+				plan := &Plan{Package: pkg, Imports: []spec.ImportSpec{{Alias: "self", Package: pkg}}, Views: []ViewPlan{{Type: "Record", Ownership: ViewGenerated}}}
+				resolver := &fieldTypeResolver{plan: plan, targetPackage: pkg, lookup: func(string) (*x.Type, error) {
+					t.Fatal("generated declaration required existing Go descriptor")
+					return nil, nil
+				}}
+				got, err := resolver.resolve(wrapper + qualifier + ".Record")
+				if err != nil || got != wrapper+"Record" {
+					t.Fatalf("got %q, %v", got, err)
+				}
+				if len(plan.knownLocalTypes) != 0 || len(plan.resolvedNamedTypes) != 0 {
+					t.Fatal("generated declaration treated as discovered Go type")
+				}
+			})
+		}
+	}
+}
+
+func TestFieldTypeResolverQualifiedDeclarationOwnership(t *testing.T) {
+	const pkg = "example.com/generated/records"
+	for _, tc := range []struct {
+		name string
+		plan Plan
+	}{
+		{"root name only", Plan{RootViewType: "Record"}},
+		{"linked row", Plan{Views: []ViewPlan{{Type: "Record", Ownership: ViewLinked}}}},
+		{"foreign row", Plan{Views: []ViewPlan{{Type: "Record", Package: "example.com/foreign", Ownership: ViewGenerated}}}},
+		{"linked contract", Plan{Input: ContractPlan{Type: "Record", Ownership: ContractLinked}}},
+		{"foreign contract", Plan{Input: ContractPlan{Type: "Record", Package: "example.com/foreign", Ownership: ContractGenerated}}},
+		{"foreign helper", Plan{HelperTypes: []HelperType{{Name: "Record", Package: "example.com/foreign"}}}},
+		{"shared body without owner", Plan{Views: []ViewPlan{{Type: "Record", Ownership: ViewSharedBody, SharedBodyIdentity: "missing"}}}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.plan.Imports = []spec.ImportSpec{{Alias: "self", Package: pkg}}
+			lookups := 0
+			r := &fieldTypeResolver{plan: &tc.plan, targetPackage: pkg, lookup: func(string) (*x.Type, error) { lookups++; return nil, errors.New("missing descriptor") }}
+			if got, err := r.resolve("[]*self.Record"); err == nil || lookups == 0 {
+				t.Fatalf("invalid exemption: %q %v lookups=%d", got, err, lookups)
+			}
+		})
+	}
+}

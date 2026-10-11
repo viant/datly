@@ -46,8 +46,10 @@ func (v dataValidation) Validate(ctx context.Context, value any, options ...any)
 	return v.service.Validate(ctx, value, options...)
 }
 
-// MatchReference is an internal generated-validation capability; it preserves
-// the same component lifetime and serialized transaction access as Validate.
+// MatchReference is a protected native validation capability for generated
+// writers and trusted application-owned buffered writers. It preserves the
+// same component lifetime and serialized transaction access as Validate.
+// Matching keys alone does not prove an earlier successful parent INSERT.
 func (v dataValidation) MatchReference(ctx context.Context, child, parent any, expected xhandler.ValidationReference) (*xhandler.ValidationReference, error) {
 	owner := v.data.owner()
 	effect, err := drainowner.BeginNativeEffect(owner)

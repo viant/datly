@@ -7,6 +7,7 @@ import (
 
 	"github.com/viant/datly/spec"
 	"github.com/viant/datly/typecatalog"
+	xshape "github.com/viant/x/shape"
 )
 
 // applySetMarkerViews adds SQLX presence metadata only to generated view
@@ -96,8 +97,12 @@ func (r *planResolver) applySetMarkerViews() error {
 			}
 		}
 	}
-	identities := make([]string, 0, len(r.input.SetMarkerViews))
-	for identity, enabled := range r.input.SetMarkerViews {
+	selected, err := r.generatedReferenceMarkerViews(planned)
+	if err != nil {
+		return err
+	}
+	identities := make([]string, 0, len(selected))
+	for identity, enabled := range selected {
 		if enabled {
 			identities = append(identities, identity)
 		}
@@ -109,6 +114,12 @@ func (r *planResolver) applySetMarkerViews() error {
 			return fmt.Errorf("set-marker view %q is not canonical", identity)
 		}
 		viewPlan := planned[identity]
+		// Discovery precedes refinement of child wildcard columns. Its temporary
+		// input needs row identity, but cannot create markers for undiscovered fields.
+		// Concrete publication still requires the complete SQLX marker contract.
+		if !r.requireConcreteHelpers && r.input.ExternalHandler != nil && r.input.ExternalHandler.GeneratedContracts && viewPlan != nil && len(viewPlan.Fields) == 0 {
+			continue
+		}
 		if viewPlan == nil {
 			if linked[identity] {
 				continue
@@ -123,6 +134,65 @@ func (r *planResolver) applySetMarkerViews() error {
 		}
 	}
 	return nil
+}
+
+// A scalar reference consumes the same generated row as an independent read.
+// It inherits body presence without becoming a relation or persistence owner.
+func (r *planResolver) generatedReferenceMarkerViews(planned map[string]*ViewPlan) (map[string]bool, error) {
+	selected := map[string]bool{}
+	named := map[string]*ViewPlan{}
+	for _, view := range planned {
+		if view.Ownership != ViewGenerated {
+			continue
+		}
+		pkg := view.Package
+		if pkg == "" {
+			pkg = r.plan.Package
+		}
+		if pkg != "" {
+			named[pkg+"."+view.Name] = view
+		}
+	}
+	var visit func(string) error
+	visit = func(identity string) error {
+		if selected[identity] {
+			return nil
+		}
+		selected[identity] = true
+		view := planned[identity]
+		if view == nil || view.Ownership != ViewGenerated {
+			return nil
+		}
+		for _, field := range view.Fields {
+			if field.Type == "" {
+				continue
+			}
+			canonical, err := r.plan.CanonicalType(r.plan.Package, field.Type)
+			if err != nil {
+				return err
+			}
+			_, err = (xshape.Resolver{Rewriter: func(key string) (string, error) {
+				if dependency := named[key]; dependency != nil {
+					if err := visit(dependency.Identity); err != nil {
+						return "", err
+					}
+				}
+				return key, nil
+			}}).Rewrite(canonical)
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	for identity, enabled := range r.input.SetMarkerViews {
+		if enabled {
+			if err := visit(identity); err != nil {
+				return nil, err
+			}
+		}
+	}
+	return selected, nil
 }
 
 func (r *planResolver) canonicalViewIndex() (map[string]*spec.View, error) {

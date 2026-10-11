@@ -17,6 +17,17 @@ import (
 // generated package itself exists. Linked contracts should use their compiled
 // reflect.Type directly; this method is the generated-contract counterpart.
 func (g *Generator) RuntimeInputType() (reflect.Type, error) {
+	return g.runtimeInputType(false)
+}
+
+// ColumnDiscoveryInputType permits temporary structural representations of
+// descriptor-only linked rows during column discovery. It does not establish
+// compiled named identity and must not be used for component execution.
+func (g *Generator) ColumnDiscoveryInputType() (reflect.Type, error) {
+	return g.runtimeInputType(true)
+}
+
+func (g *Generator) runtimeInputType(discoveryOnly bool) (reflect.Type, error) {
 	if g == nil {
 		return nil, fmt.Errorf("generator is required")
 	}
@@ -26,12 +37,16 @@ func (g *Generator) RuntimeInputType() (reflect.Type, error) {
 	if g.input.Component == nil {
 		return nil, fmt.Errorf("generation component is required")
 	}
-	plan, err := g.plan(false)
+	staged := *g
+	staged.input.columnDiscovery = discoveryOnly
+	plan, err := staged.plan(false)
 	if err != nil {
 		return nil, err
 	}
 	plan.omitUnresolvedHelpers()
-	return newRuntimeInputMaterializer(plan, g.resolver).inputType()
+	materializer := newRuntimeInputMaterializer(plan, g.resolver)
+	materializer.discoveryOnly = discoveryOnly
+	return materializer.inputType()
 }
 
 // RuntimeOutputType materializes the generated output contract used before a
@@ -83,14 +98,15 @@ func (plan *Plan) omitUnresolvedHelpers() {
 }
 
 type runtimeInputMaterializer struct {
-	plan         *Plan
-	resolver     typeResolver
-	imports      map[string]string
-	helpers      map[string]HelperType
-	views        map[string]ViewPlan
-	placeholders map[string]bool
-	types        map[string]reflect.Type
-	building     map[string]bool
+	discoveryOnly bool
+	plan          *Plan
+	resolver      typeResolver
+	imports       map[string]string
+	helpers       map[string]HelperType
+	views         map[string]ViewPlan
+	placeholders  map[string]bool
+	types         map[string]reflect.Type
+	building      map[string]bool
 }
 
 func newRuntimeInputMaterializer(plan *Plan, resolver typeResolver) *runtimeInputMaterializer {
@@ -119,6 +135,16 @@ func newRuntimeInputMaterializer(plan *Plan, resolver typeResolver) *runtimeInpu
 		}
 		result.views[view.Name] = view
 		result.views[view.Type] = view
+		if plan.Package != "" {
+			result.views[plan.Package+"."+view.Name] = view
+		}
+		if len(view.SetMarkerFields) != 0 {
+			marker := HelperType{Name: view.Name + "Has"}
+			for _, name := range view.SetMarkerFields {
+				marker.Fields = append(marker.Fields, Field{Name: name, Type: "bool"})
+			}
+			result.helpers[marker.Name] = marker
+		}
 	}
 	for _, name := range plan.referencedPlaceholderTypes() {
 		result.placeholders[name] = true
@@ -247,10 +273,42 @@ func (m *runtimeInputMaterializer) descriptorType(name string) (reflect.Type, er
 	if descriptor == nil {
 		return nil, fmt.Errorf("named type %q was not found", name)
 	}
-	if descriptor.Type == nil {
+	if descriptor.Type != nil {
+		return descriptor.Type, nil
+	}
+	if !m.discoveryOnly {
 		return nil, fmt.Errorf("named type %q has no compiled runtime type", name)
 	}
-	return descriptor.Type, nil
+	key = descriptor.Key()
+	if cached := m.types[key]; cached != nil {
+		return cached, nil
+	}
+	if m.building[key] {
+		return nil, fmt.Errorf("descriptor-only discovery type %q is recursive", key)
+	}
+	m.building[key] = true
+	defer delete(m.building, key)
+	fields, err := xshape.New(descriptor, m.resolver.Descriptor).Fields()
+	if err != nil {
+		return nil, err
+	}
+	temporary := make([]xshape.RuntimeField, 0, len(fields))
+	for _, field := range fields {
+		if !field.Exported {
+			continue
+		}
+		canonical, err := field.CanonicalType()
+		if err != nil {
+			return nil, err
+		}
+		temporary = append(temporary, xshape.RuntimeField{Name: field.Name, TypeExpr: canonical, Type: field.ReflectedType, Tag: field.Tag, Anonymous: field.Anonymous})
+	}
+	result, err := m.runtime().Struct(temporary)
+	if err != nil {
+		return nil, fmt.Errorf("materialize discovery type %q: %w", key, err)
+	}
+	m.types[key] = result
+	return result, nil
 }
 
 func standardRuntimeType(name string) reflect.Type {

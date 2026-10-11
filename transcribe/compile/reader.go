@@ -38,6 +38,9 @@ type ReadInput struct {
 	Template    TemplateFrame
 	Types       *typecatalog.Resolver
 	TypeContext *spec.TypeContext
+	// GeneratedType admits only an exact SQL-owned local declaration collected
+	// by the caller before concrete schema discovery. It supplies no descriptor.
+	GeneratedType func(string) (bool, error)
 }
 
 func NewReader() *Reader {
@@ -118,7 +121,7 @@ func (r *Reader) Compile(input ReadInput) (*spec.View, error) {
 	if err != nil {
 		return nil, err
 	}
-	columnsRewritten, err := lowerColumnDeclarations(parsed, root, input.Types, input.TypeContext)
+	columnsRewritten, err := lowerColumnDeclarations(parsed, root, input.Types, input.TypeContext, input.GeneratedType)
 	if err != nil {
 		return nil, &Error{Code: CodeViewDirective, Cause: err}
 	}
@@ -134,6 +137,9 @@ func (r *Reader) Compile(input ReadInput) (*spec.View, error) {
 	}
 	if !sourceDecomposed && (locksRewritten || projectionRewritten || columnsRewritten || len(directives) > 0 || directAuxiliary || root.Source.SQL == "" && (table == "" || referencesCTE(parsed.From.X, parsed.WithSelects))) {
 		root.Source.SQL = wrapReadProgram(input.Template, strings.TrimSpace((sqlparser.Stringifier{PreserveWindow: true}).String(parsed)))
+		// Lowered SQL may already contain materialized resources. Keep its typed
+		// resource references aligned with the executable source, as decomposition does.
+		root.Source.Embeds = dql.EmbeddedSQLRefs(root.Source.SQL)
 	}
 	if err := validateView(root, map[*spec.View]bool{}); err != nil {
 		return nil, err

@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 
+	readerpredicate "github.com/viant/datly/runtime/predicate/velty"
+	"github.com/viant/datly/spec"
 	"github.com/viant/datly/typecatalog"
 	"github.com/viant/x"
 	smodel "github.com/viant/x/syntetic/model"
@@ -58,21 +60,33 @@ SELECT id FROM records ${predicate.Builder().CombineAnd($predicate.FilterGroup(0
 	}
 }
 
-func TestTranscriptionRejectsSourceOnlyPredicate(t *testing.T) {
+func TestTranscriptionValidatesSourcePredicateContract(t *testing.T) {
 	const packagePath = "example.com/security"
 	for _, tc := range []struct {
-		name, method string
+		name, method              string
+		accepted                  bool
+		receiver, criteriaPackage string
 	}{
-		{"valid source method", "Compute(context.Context, any) (*predicate.Criteria, error)"},
-		{"wrong source return", "Compute(context.Context, any) (bool, error)"},
+		{"valid source method", "Compute(context.Context, any) (*predicate.Criteria, error)", true, "*Available", "github.com/viant/xdatly/predicate"},
+		{"value receiver", "Compute(context.Context, interface{}) (*predicate.Criteria, error)", true, "Available", "github.com/viant/xdatly/predicate"},
+		{"wrong Criteria package", "Compute(context.Context, any) (*predicate.Criteria, error)", false, "*Available", "example.com/other"},
+		{"wrong input", "Compute(context.Context, string) (*predicate.Criteria, error)", false, "*Available", "github.com/viant/xdatly/predicate"},
+		{"variadic", "Compute(context.Context, ...any) (*predicate.Criteria, error)", false, "*Available", "github.com/viant/xdatly/predicate"},
+		{"wrong context", "Compute(string, any) (*predicate.Criteria, error)", false, "*Available", "github.com/viant/xdatly/predicate"},
+		{"missing Compute", "Other(context.Context, any) (*predicate.Criteria, error)", false, "*Available", "github.com/viant/xdatly/predicate"},
+		{"wrong source return", "Compute(context.Context, any) (bool, error)", false, "*Available", "github.com/viant/xdatly/predicate"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			file, err := parser.ParseFile(token.NewFileSet(), "predicate.go", "package security\nfunc (*Available) "+tc.method+" { panic(0) }", 0)
+			file, err := parser.ParseFile(token.NewFileSet(), "predicate.go", "package security\nfunc ("+tc.receiver+") "+tc.method+" { panic(0) }", 0)
 			if err != nil {
 				t.Fatal(err)
 			}
 			declared := &smodel.Type{Name: "Available", PkgPath: packagePath, TypeSpec: &ast.TypeSpec{Name: ast.NewIdent("Available"), Type: &ast.StructType{Fields: &ast.FieldList{}}},
-				Imports: map[string]*smodel.ImportRef{"context": {Path: "context"}, "predicate": {Path: "github.com/viant/xdatly/predicate"}}, PtrMethodsAST: []*ast.FuncDecl{file.Decls[0].(*ast.FuncDecl)}}
+				Imports: map[string]*smodel.ImportRef{"context": {Path: "context"}, "predicate": {Path: tc.criteriaPackage}}, PtrMethodsAST: []*ast.FuncDecl{file.Decls[0].(*ast.FuncDecl)}}
+			if tc.receiver == "Available" {
+				declared.MethodsAST = declared.PtrMethodsAST
+				declared.PtrMethodsAST = nil
+			}
 			catalog := typecatalog.NewCatalog()
 			if err = catalog.RegisterPackage(typecatalog.TypeOriginPackage, &smodel.Package{PkgPath: packagePath, Types: []*smodel.Type{declared}}); err != nil {
 				t.Fatal(err)
@@ -81,10 +95,32 @@ func TestTranscriptionRejectsSourceOnlyPredicate(t *testing.T) {
 #setting($_ = $route('/records','GET'))
 #define($_ = $Minimum<int>(query/min).WithPredicate(0,'handler','security.Available'))
 SELECT id FROM records ${predicate.Builder().CombineAnd($predicate.FilterGroup(0, "AND")).Build("WHERE")}`}
-			_, err = NewCompiler().Compile(context.Background(), source)
-			if err == nil || !strings.Contains(err.Error(), "not linked into this binary") || !strings.Contains(err.Error(), "run datly link sync and rebuild") {
-				t.Fatalf("source-only predicate error=%v", err)
+			compiled, err := NewCompiler().Compile(context.Background(), source)
+			if tc.accepted {
+				if err != nil {
+					t.Fatal(err)
+				}
+				if got := compiled.Component.Parameters[0].Predicates[0].Args[0]; got != packagePath+".Available" {
+					t.Fatalf("canonical identity=%s", got)
+				}
+				if runtimeErr := (readerpredicate.DefinitionCompiler{Catalog: catalog, RequireAvailable: true}).Compile(compiled.Component); runtimeErr == nil || !strings.Contains(runtimeErr.Error(), "not linked into this binary") {
+					t.Fatalf("runtime must reject source-only handler: %v", runtimeErr)
+				}
+			} else if err == nil || !strings.Contains(err.Error(), "does not implement predicate.Handler") {
+				t.Fatalf("incompatible source predicate error=%v", err)
 			}
 		})
+	}
+}
+
+func TestTranscriptionRejectsNameOnlyPredicateAuthority(t *testing.T) {
+	catalog := typecatalog.NewCatalog()
+	const name = "example.com/security.Available"
+	if err := catalog.Register(typecatalog.TypeOriginPackage, &x.Type{PkgPath: "example.com/security", Name: "Available", Definition: "struct{}"}); err != nil {
+		t.Fatal(err)
+	}
+	component := &spec.Component{Parameters: []*spec.Parameter{{Name: "Minimum", Predicates: []*spec.Predicate{{Name: "handler", Args: []string{name}}}}}}
+	if err := compilePredicateContracts(component, catalog, nil); err == nil || !strings.Contains(err.Error(), "no source declaration authority") {
+		t.Fatalf("name-only authority error=%v", err)
 	}
 }

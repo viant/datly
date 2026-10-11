@@ -75,6 +75,11 @@ func (r *fieldTypeResolver) resolveFullPackagePath(authored string, parseErr err
 	if !strings.Contains(base, "/") || !strings.Contains(base, ".") {
 		return "", fmt.Errorf("resolve plan field type %q: invalid Go type expression: %v", authored, parseErr)
 	}
+	if local, err := r.qualifiedGeneratedType(base); err != nil {
+		return "", err
+	} else if local != "" {
+		return applyQualifiedWrapper(authored, local), nil
+	}
 	descriptor, err := r.requiredDescriptor(authored)
 	if err != nil {
 		return "", err
@@ -95,25 +100,48 @@ func (r *fieldTypeResolver) hasLocalType(name string) bool {
 			return true
 		}
 	}
-	if strings.TrimSpace(r.plan.RootViewType) == name {
-		return true
-	}
 	for _, view := range r.plan.Views {
-		if strings.TrimSpace(view.Type) == name && isTypeIdentifier(view.Type) {
+		if view.Ownership == ViewGenerated && (view.Package == "" || view.Package == r.targetPackage) && strings.TrimSpace(view.Type) == name && isTypeIdentifier(view.Type) {
 			return true
 		}
 	}
 	for _, helper := range r.plan.HelperTypes {
-		if strings.TrimSpace(helper.Name) == name {
+		if (helper.Package == "" || helper.Package == r.targetPackage) && strings.TrimSpace(helper.Name) == name {
 			return true
 		}
 	}
 	return false
 }
 
+// Qualified references to declarations this plan emits do not require an
+// existing Go descriptor. Keep that proof distinct from discovered Go types.
+func (r *fieldTypeResolver) qualifiedGeneratedType(authored string) (string, error) {
+	if r.plan == nil || r.targetPackage == "" || !strings.Contains(authored, ".") {
+		return "", nil
+	}
+	canonical, err := r.plan.CanonicalType(r.targetPackage, authored)
+	if err != nil {
+		return "", err
+	}
+	prefix := r.targetPackage + "."
+	if !strings.HasPrefix(canonical, prefix) {
+		return "", nil
+	}
+	name := strings.TrimPrefix(canonical, prefix)
+	if !isTypeIdentifier(name) || !r.hasLocalType(name) {
+		return "", nil
+	}
+	return name, nil
+}
+
 func (r *fieldTypeResolver) rewriteNamed(authored string) (string, error) {
 	if !strings.Contains(authored, ".") && (r.hasLocalType(authored) || !r.hasExternalDefaultPackage()) {
 		return authored, nil
+	}
+	if local, err := r.qualifiedGeneratedType(authored); err != nil {
+		return "", err
+	} else if local != "" {
+		return local, nil
 	}
 	descriptor, err := r.requiredDescriptor(authored)
 	if err != nil {

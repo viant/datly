@@ -56,6 +56,18 @@ func (plan *Plan) validateGeneratedNames() error {
 		}
 	}
 	for _, view := range plan.Views {
+		if view.Ownership == ViewSharedBody {
+			found := 0
+			for _, owner := range plan.Views {
+				if owner.Identity == view.SharedBodyIdentity && owner.Ownership == ViewGenerated && owner.Type == view.Type && owner.Name == view.Name {
+					found++
+				}
+			}
+			if found != 1 {
+				return fmt.Errorf("shared body view %q has no unique generated owner", view.Identity)
+			}
+			continue
+		}
 		name := view.Name
 		if view.Ownership == ViewLinked {
 			name = localTypeName(view.Type)

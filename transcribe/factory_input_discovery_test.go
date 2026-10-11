@@ -19,7 +19,15 @@ func TestFactoryInputDiscoveryGeneratedContractAuthority(t *testing.T) {
 	t.Run("independent reads only", func(t *testing.T) { testFactoryInputDiscoveryGeneratedContractAuthority(t, false) })
 }
 
+func TestFactoryInputDiscoveryQualifiedGeneratedContractAuthority(t *testing.T) {
+	testFactoryInputDiscoveryContractAuthority(t, true, "archive")
+}
+
 func testFactoryInputDiscoveryGeneratedContractAuthority(t *testing.T, body bool) {
+	testFactoryInputDiscoveryContractAuthority(t, body, "")
+}
+
+func testFactoryInputDiscoveryContractAuthority(t *testing.T, body bool, qualifier string) {
 	root, source := generatedPostFactoryFixture(t)
 	writeSourceHandlerFile(t, root, "dependency/types.go", `package dependency
  type Input struct { Ignored string }
@@ -47,6 +55,12 @@ func testFactoryInputDiscoveryGeneratedContractAuthority(t *testing.T, body bool
 #define($_ = $Status<string>(output/status))
 #define($_ = $Results<[]*dependency.Output>(output/body))
 SELECT r.*,type(r,'Record'),dest(r,'record.go') FROM records r`, handlerFixtureModule+"/archive", handlerFixtureModule+"/archive", handlerFixtureModule+"/dependency")
+	if qualifier != "" {
+		source.Text = strings.ReplaceAll(source.Text, "'Input'", "'"+qualifier+".Input'")
+		source.Text = strings.ReplaceAll(source.Text, "'Output'", "'"+qualifier+".Output'")
+		source.Text = strings.ReplaceAll(source.Text, "[]*Record>", "[]*"+qualifier+".Record>")
+		source.Text = strings.ReplaceAll(source.Text, "type(r,'Record')", "type(r,'"+qualifier+".Record')")
+	}
 	if !body {
 		source.Text = strings.Replace(source.Text, "#define($_ = $Data<[]*Record>(body/data).Optional())", `#define($_ = $Current<?>(view/Current).Cardinality('Many').TypeName('CurrentRow').Dest('current.go') /* SELECT * FROM records */)`, 1)
 		source.Text = strings.Replace(source.Text, "SELECT r.*,type(r,'Record'),dest(r,'record.go') FROM records r", "", 1)

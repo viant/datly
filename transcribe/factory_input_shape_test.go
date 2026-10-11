@@ -84,13 +84,31 @@ func (*Handler) Exec(ctx context.Context,_ handler.Session,in *ArchiveInput,out 
 	return root, source
 }
 func TestFactoryInputShapeNativeGeneration(t *testing.T) {
+	testFactoryInputShapeNativeGeneration(t, "")
+}
+
+func TestFactoryInputShapeQualifiedNativeGeneration(t *testing.T) {
+	for _, qualifier := range []string{"archive", handlerFixtureModule + "/archive"} {
+		t.Run(qualifier, func(t *testing.T) { testFactoryInputShapeNativeGeneration(t, qualifier) })
+	}
+}
+
+func testFactoryInputShapeNativeGeneration(t *testing.T, qualifier string) {
+	t.Helper()
 	root, source := factoryInputShapeFixture(t)
+	if qualifier != "" {
+		source.Text = strings.ReplaceAll(source.Text, "'ArchiveInput'", "'"+qualifier+".ArchiveInput'")
+		source.Text = strings.ReplaceAll(source.Text, "'ArchiveOutput'", "'"+qualifier+".ArchiveOutput'")
+		source.Text = strings.ReplaceAll(source.Text, "[]*Res>", "[]*"+qualifier+".Res>")
+		source.Text = strings.ReplaceAll(source.Text, "type(a,'Res')", "type(a,'"+qualifier+".Res')")
+	}
 	db, err := sql.Open("sqlite3", filepath.Join(t.TempDir(), "shape.db"))
 	require.NoError(t, err)
 	defer db.Close()
 	_, err = db.Exec("CREATE TABLE CI_AUDIENCE(TARGET TEXT, EXCLUSION TEXT)")
 	require.NoError(t, err)
 	source.ColumnRefiner = column.New(column.Connections{"shape-discovery-only": db})
+	authoredDQL := source.Text
 	writeSourceHandlerFile(t, root, "dql/shape.dql", source.Text)
 	before := sourceHandlerSnapshot(t, root)
 	var first map[string]string
@@ -124,6 +142,7 @@ func TestFactoryInputShapeNativeGeneration(t *testing.T) {
 		}
 		generated, err := (Generator{Operation: "post"}).Generate(context.Background(), GenerationRequest{Compiled: compiled, Destination: root})
 		require.NoError(t, err)
+		require.Equal(t, authoredDQL, source.Text)
 		plan := generated.Result.Plan
 		require.Nil(t, plan.MutationHandler)
 		require.Empty(t, plan.Connector)
@@ -156,13 +175,15 @@ func TestFactoryInputShapeFailuresDoNotPublish(t *testing.T) {
 	for _, tc := range []struct{ name, old, replacement, authored string }{
 		{name: "additional statement", old: factoryInputProjection, replacement: factoryInputProjection + "; DELETE FROM CI_AUDIENCE"},
 		{name: "current binding", old: "#define($_ = $InpData", replacement: "#define($_ = $Current<[]*Res>(view/Current))\n#define($_ = $InpData"},
-		{name: "imported body", old: "$InpData<[]*Res>", replacement: "$InpData<[]*archive.Res>"},
+		{name: "foreign body", old: "$InpData<[]*Res>", replacement: "$InpData<[]*foreign.Res>"},
 		{name: "alternate output type", old: "$InpData<[]*Res>", replacement: "$InpData<[]*Res,[]*archive.OutputRes>"},
 		{name: "same output type", old: "$InpData<[]*Res>", replacement: "$InpData<[]*Res,[]*Res>"},
 		{name: "body codec", old: "$InpData<[]*Res>(body/data)", replacement: "$InpData<[]*Res>(body/data).WithCodec('JSON')"},
 		{name: "body output emission", old: "$InpData<[]*Res>(body/data)", replacement: "$InpData<[]*Res>(body/data).Output()"},
 		{name: "queue metadata", old: "type(a,'Res')", replacement: "type(a,'Res'),queue_contract(a,'source-slice')"},
 		{name: "competing authored Res", authored: "type Res struct { Target string; Exclusion string }"},
+		{name: "qualified competing authored Res", old: "type(a,'Res')", replacement: "type(a,'archive.Res')", authored: "type Res struct { Target string; Exclusion string }"},
+		{name: "qualified competing local alias", old: "type(a,'Res')", replacement: "type(a,'archive.Res')", authored: "type Res = OutputRes"},
 		{name: "competing local alias", authored: "type Res = OutputRes"},
 		{name: "runtime SQL tag", old: `sqlx:"-"`, replacement: `sqlx:"-" sql:"SELECT 1"`},
 		{name: "mutation setting", old: factoryInputProjection, replacement: "#setting($_ = $mutation('patch'))\n" + factoryInputProjection},

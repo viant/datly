@@ -8,7 +8,7 @@ import (
 )
 
 func (p *plan) checkCoverage(policy xhandler.ValidationOptions) error {
-	if policy.Action == xhandler.WriteInsert {
+	if policy.CheckOnly || policy.Action == xhandler.WriteInsert {
 		return nil
 	}
 	byColumn := make(map[string]string, len(p.columns))

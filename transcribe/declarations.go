@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/viant/bindly/resource"
 	"github.com/viant/datly/spec"
+	dsql "github.com/viant/datly/sql"
 	tcompile "github.com/viant/datly/transcribe/compile"
 	"github.com/viant/datly/transcribe/dql"
 	gen "github.com/viant/datly/transcribe/generate"
@@ -37,10 +39,15 @@ type declarationCompiler struct {
 	component     *spec.Component
 	authoredViews []*spec.View
 	reader        *tcompile.Reader
+	resources     *resource.Store
 }
 
-func newDeclarationCompiler(component *spec.Component, authoredViews []*spec.View) *declarationCompiler {
-	return &declarationCompiler{component: component, authoredViews: authoredViews, reader: tcompile.NewReader()}
+func newDeclarationCompiler(component *spec.Component, authoredViews []*spec.View, resources ...*resource.Store) *declarationCompiler {
+	result := &declarationCompiler{component: component, authoredViews: authoredViews, reader: tcompile.NewReader()}
+	if len(resources) != 0 {
+		result.resources = resources[0]
+	}
+	return result
 }
 
 func (c *declarationCompiler) compile() (*declarationProducts, error) {
@@ -62,6 +69,14 @@ func (c *declarationCompiler) compile() (*declarationProducts, error) {
 		}
 		if analysis == nil {
 			continue
+		}
+		readSQL := analysis.SQL
+		if c.resources != nil {
+			source := &spec.ViewSource{SQL: readSQL, Embeds: dql.EmbeddedSQLRefs(readSQL)}
+			if err := dsql.ResolveSource(param.Name, source, c.resources); err != nil {
+				return nil, &declarationError{param: param.Name, identity: param.Identity(), err: err}
+			}
+			readSQL = source.SQL
 		}
 		if c.requiresGeneratedHelperProjection(param, analysis) && (!analysis.ProjectionComplete || len(analysis.Projection) == 0) {
 			return nil, &declarationError{
@@ -86,7 +101,7 @@ func (c *declarationCompiler) compile() (*declarationProducts, error) {
 				Cardinality: spec.CardinalityOne,
 				Source:      &spec.ViewSource{SQL: analysis.SQL, URI: strings.TrimSpace(param.ResourceRef), Embeds: dql.EmbeddedSQLRefs(analysis.SQL)},
 			}
-			compiled, err := c.reader.Compile(tcompile.ReadInput{View: view, SQL: analysis.SQL})
+			compiled, err := c.reader.Compile(tcompile.ReadInput{View: view, SQL: readSQL, TypeContext: c.component.TypeContext})
 			if err != nil {
 				return nil, &declarationError{param: param.Name, identity: param.Identity(), err: err}
 			}
@@ -126,7 +141,7 @@ func (c *declarationCompiler) compile() (*declarationProducts, error) {
 		view.Source.SQL = analysis.SQL
 		view.Source.URI = strings.TrimSpace(param.ResourceRef)
 		view.Source.Embeds = dql.EmbeddedSQLRefs(analysis.SQL)
-		compiled, err := c.reader.Compile(tcompile.ReadInput{View: view, SQL: analysis.SQL})
+		compiled, err := c.reader.Compile(tcompile.ReadInput{View: view, SQL: readSQL, TypeContext: c.component.TypeContext})
 		if err != nil {
 			return nil, &declarationError{param: name, identity: param.Identity(), err: err}
 		}

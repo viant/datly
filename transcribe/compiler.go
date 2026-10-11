@@ -9,7 +9,6 @@ import (
 	"path"
 	"strings"
 
-	readerpredicate "github.com/viant/datly/runtime/predicate/velty"
 	"github.com/viant/datly/spec"
 	"github.com/viant/datly/transcribe/column"
 	authoring "github.com/viant/datly/transcribe/compile"
@@ -45,7 +44,9 @@ type Result struct {
 	ContractTypeOverrides   ContractTypeOverrides
 	AuthoredBorrowedSQLRows []spec.BorrowedSQLRow
 	borrowedConsumedFiles   []gen.BorrowedAuthorityFile
-	Diagnostics             []*Diagnostic
+	// generatedOutputRows retains exact SQL-owned output admission for the next linking pass.
+	generatedOutputRows map[*spec.View]bool
+	Diagnostics         []*Diagnostic
 }
 
 // ContractTypeOverrides records only type names explicitly authored by DQL.
@@ -183,7 +184,7 @@ func (c *Compiler) Compile(ctx context.Context, source *Source) (*Result, error)
 		return nil, &CompileError{Cause: err, Diagnostics: []*Diagnostic{diagnostic}}
 	}
 	compiledTypeContext := compileTypeContext(source, component.TypeContext)
-	if err = (readerpredicate.DefinitionCompiler{Context: compiledTypeContext, Catalog: source.Types, RequireAvailable: true}).Compile(component); err != nil {
+	if err = compilePredicateContracts(component, source.Types, compiledTypeContext); err != nil {
 		return nil, err
 	}
 	var typeResolver *typecatalog.Resolver
@@ -205,15 +206,7 @@ func (c *Compiler) Compile(ctx context.Context, source *Source) (*Result, error)
 			return nil, err
 		}
 	}
-	readPlan, err := (&readPlanCompiler{sourceMap: sourceMap, path: source.Path, types: typeResolver}).compile(component, prepared)
-	if err != nil {
-		return nil, err
-	}
-	if readPlan != nil {
-		component.RootView = readPlan
-	}
-	declarations, err := newDeclarationCompiler(component, authoredViews).compile()
-	if err != nil {
+	declarationFailure := func(err error) error {
 		span := pointSpan(source.Text, 0)
 		var declarationErr *declarationError
 		if errors.As(err, &declarationErr) && prepared.Directives != nil {
@@ -225,7 +218,26 @@ func (c *Compiler) Compile(ctx context.Context, source *Source) (*Result, error)
 			Code: diagnosticDeclarationSQL, Severity: SeverityError, Message: err.Error(), Path: source.Path,
 			Span: span,
 		}
-		return nil, &CompileError{Cause: err, Diagnostics: []*Diagnostic{diagnostic}}
+		return &CompileError{Cause: err, Diagnostics: []*Diagnostic{diagnostic}}
+	}
+	metadataDeclarations, err := newDeclarationCompiler(component, authoredViews, source.Resources).compile()
+	if err != nil {
+		return nil, declarationFailure(err)
+	}
+	generatedRows, err := collectGeneratedRowAuthority(component, prepared, metadataDeclarations, typeResolver, source.Path, sourceMap)
+	if err != nil {
+		return nil, err
+	}
+	readPlan, err := (&readPlanCompiler{sourceMap: sourceMap, path: source.Path, types: typeResolver, generatedType: generatedRows.admits}).compile(component, prepared)
+	if err != nil {
+		return nil, err
+	}
+	if readPlan != nil {
+		component.RootView = readPlan
+	}
+	declarations, err := newDeclarationCompiler(component, authoredViews, source.Resources).compile()
+	if err != nil {
+		return nil, declarationFailure(err)
 	}
 	if declarations != nil {
 		component.Views, err = declarations.removeSkeletons(component.Views)
@@ -258,6 +270,10 @@ func (c *Compiler) Compile(ctx context.Context, source *Source) (*Result, error)
 	viewBindings, err := loader.normalizeIndependentViewParams(component, declaredViews)
 	if err != nil {
 		return nil, fmt.Errorf("normalize independent view contracts: %w", err)
+	}
+	packageViews, err := packageInputViewReferences(component, source.PackageComponent, typeResolver)
+	if err != nil {
+		return nil, err
 	}
 	applySourceDefaults(component, source)
 	if err = refineComponentColumns(ctx, component, source, declarations.generation, gen.ViewBindings(viewBindings), typeResolver); err != nil {
@@ -325,6 +341,7 @@ func (c *Compiler) Compile(ctx context.Context, source *Source) (*Result, error)
 		TypeAuthority:           typecatalog.TranscribeAuthority,
 		Declarations:            declarations.generation,
 		ViewBindings:            gen.ViewBindings(viewBindings),
+		Views:                   packageViews,
 		GoHandler:               goHandler,
 		StatementProgram:        statementProgram,
 		VeltyHandler:            veltyHandler,
@@ -332,10 +349,13 @@ func (c *Compiler) Compile(ctx context.Context, source *Source) (*Result, error)
 		AuthoredBorrowedSQLRows: authoredBorrowedRows,
 		borrowedConsumedFiles:   borrowedConsumed,
 	}
-	if err := linkDeclaredOutputView(result, loader.authoredComponent); err != nil {
+	if err := linkDeclaredOutputView(result, loader.authoredComponent, generatedRows); err != nil {
 		return nil, err
 	}
 	if err := linkDeclaredOutputContract(result, loader.authoredComponent); err != nil {
+		return nil, err
+	}
+	if err := linkDeclaredRelatedViews(result, generatedRows); err != nil {
 		return nil, err
 	}
 	if err := c.admitBorrowedSQLRows(ctx, result); err != nil {
@@ -386,7 +406,13 @@ func applySourceDefaults(component *spec.Component, source *Source) {
 
 // refineComponentColumns shares the reader discovery order with generated
 // custom contracts: body columns first, then typed dependent input reads.
-func refineComponentColumns(ctx context.Context, component *spec.Component, source *Source, declarations gen.Declarations, viewBindings gen.ViewBindings, typeResolver *typecatalog.Resolver) error {
+func refineComponentColumns(ctx context.Context, component *spec.Component, source *Source, declarations gen.Declarations, viewBindings gen.ViewBindings, typeResolver *typecatalog.Resolver, factoryInputs ...gen.Input) error {
+	var factoryShape *gen.ExternalHandler
+	var linkedViews gen.ViewReferences
+	if len(factoryInputs) != 0 {
+		factoryShape = factoryInputs[0].ExternalHandler
+		linkedViews = factoryInputs[0].Views
+	}
 	if source.ColumnRefiner != nil {
 		if source.PackageComponent != nil && strings.TrimSpace(source.Text) == "" && source.LinkedOutputType != nil {
 			if err := bootstrap.CompileOutputColumns(component, source.LinkedOutputType); err != nil {
@@ -396,7 +422,7 @@ func refineComponentColumns(ctx context.Context, component *spec.Component, sour
 		columnCompilation := source.ColumnRefiner.BeginCompilation()
 		templateInput, compileErr := (&discoveryInputCompiler{
 			component: component, declarations: declarations,
-			viewBindings: viewBindings, resolver: typeResolver, source: source,
+			viewBindings: viewBindings, resolver: typeResolver, source: source, factoryShape: factoryShape, views: linkedViews,
 		}).compile()
 		if compileErr != nil {
 			return compileErr
@@ -406,7 +432,7 @@ func refineComponentColumns(ctx context.Context, component *spec.Component, sour
 		}
 		templateInput, compileErr = (&discoveryInputCompiler{
 			component: component, declarations: declarations,
-			viewBindings: viewBindings, resolver: typeResolver, source: source,
+			viewBindings: viewBindings, resolver: typeResolver, source: source, factoryShape: factoryShape, views: linkedViews,
 		}).compile()
 		if compileErr != nil {
 			return compileErr

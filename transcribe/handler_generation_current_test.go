@@ -30,6 +30,13 @@ func TestCurrentFieldAuthorityPreservesCanonicalNames(t *testing.T) {
 		{"exact alternate prefix", currentFieldAuthorities{{name: "VAdtagUrl"}, {name: "VaDtagUrl"}}, "VaDtagUrl", "VaDtagUrl", ""},
 		{"ambiguous normalized spelling", currentFieldAuthorities{{name: "TenantID"}, {name: "TenantId"}}, "tenant_id", "", "ambiguous canonical field"},
 		{"missing", currentFieldAuthorities{{name: "VAdtagUrl"}}, "Missing", "", "was not found"},
+		{"physical renamed column", currentFieldAuthorities{{name: "BudgetMode", tag: `sqlx:"DAILY_BUDGET_TYPE"`}}, "DAILY_BUDGET_TYPE", "BudgetMode", ""},
+		{"alternative physical name", currentFieldAuthorities{{name: "BudgetMode", tag: `sqlx:"DAILY_BUDGET_TYPE|BUDGET_MODE"`}}, "budget_mode", "BudgetMode", ""},
+		{"repeated mapping same field", currentFieldAuthorities{{name: "BudgetMode", tag: `sqlx:"BUDGET_MODE|BUDGET_MODE"`}}, "BUDGET_MODE", "BudgetMode", ""},
+		{"exact Go before physical", currentFieldAuthorities{{name: "BUDGET_MODE"}, {name: "BudgetMode", tag: `sqlx:"BUDGET_MODE"`}}, "BUDGET_MODE", "BUDGET_MODE", ""},
+		{"ambiguous physical mapping", currentFieldAuthorities{{name: "First", tag: `sqlx:"BUDGET_MODE"`}, {name: "Second", tag: `sqlx:"BUDGET_MODE"`}}, "BUDGET_MODE", "", "ambiguous SQLX"},
+		{"transient excludes physical", currentFieldAuthorities{{name: "Logical", tag: `sqlx:"-" json:"BUDGET_MODE"`}}, "BUDGET_MODE", "", "was not found"},
+		{"exact transient remains usable", currentFieldAuthorities{{name: "Logical", tag: `sqlx:"-"`}}, "Logical", "Logical", ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			got, err := tc.fields.resolve(tc.query)

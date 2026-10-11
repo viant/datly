@@ -161,6 +161,8 @@ type ViewPlan struct {
 	SetMarkerFields []string
 	Ownership       ViewOwnership
 	DescriptorKey   string
+	// SharedBodyIdentity refers to the sole generated SQL-body declaration.
+	SharedBodyIdentity string
 }
 
 // Field returns a generated view field by its Go name.
@@ -192,8 +194,9 @@ func (p *Plan) ViewByType(typeName string) *ViewPlan {
 type ViewOwnership string
 
 const (
-	ViewGenerated ViewOwnership = "generated"
-	ViewLinked    ViewOwnership = "linked"
+	ViewGenerated  ViewOwnership = "generated"
+	ViewLinked     ViewOwnership = "linked"
+	ViewSharedBody ViewOwnership = "shared-body"
 )
 
 func (r *planResolver) resolveBase() (*Plan, error) {
@@ -219,9 +222,9 @@ func (r *planResolver) resolveBase() (*Plan, error) {
 	if shapeRoot == nil && r.input.ExternalHandler != nil {
 		shapeRoot = r.input.ExternalHandler.InputShape
 	}
-	materializeViewDestinations(shapeRoot, inheritedViewDest, map[*spec.View]bool{})
+	materializeViewDestinations(shapeRoot, inheritedViewDest, map[*spec.View]bool{}, r.input.Views)
 	for _, view := range component.Views {
-		materializeViewDestinations(view, inheritedViewDest, map[*spec.View]bool{})
+		materializeViewDestinations(view, inheritedViewDest, map[*spec.View]bool{}, r.input.Views)
 	}
 	rootViewType := upperCamel(name)
 	if !strings.HasSuffix(rootViewType, "View") {
@@ -388,11 +391,16 @@ func resolveRoutes(routes []*spec.Route) ([]RoutePlan, string, error) {
 	return result, handler, nil
 }
 
-func materializeViewDestinations(view *spec.View, inherited string, visited map[*spec.View]bool) {
+func materializeViewDestinations(view *spec.View, inherited string, visited map[*spec.View]bool, linked ...ViewReferences) {
 	if view == nil || visited[view] {
 		return
 	}
 	visited[view] = true
+	if len(linked) != 0 {
+		if identity, err := view.Identity(); err == nil && linked[0][identity] != nil {
+			return
+		}
+	}
 	effective := strings.TrimSpace(view.Dest)
 	if effective == "" {
 		effective = strings.TrimSpace(inherited)
@@ -402,7 +410,7 @@ func materializeViewDestinations(view *spec.View, inherited string, visited map[
 	}
 	for _, relation := range view.Relations {
 		if relation != nil {
-			materializeViewDestinations(relation.View, effective, visited)
+			materializeViewDestinations(relation.View, effective, visited, linked...)
 		}
 	}
 }
