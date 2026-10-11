@@ -216,6 +216,9 @@ func TestInjectorFinalizerConditionalSQLite(t *testing.T) {
 			f.init(t, test.external)
 			f.output.Enabled = test.enabled
 			f.flush = test.flush
+			if test.flush {
+				f.parent.Component.Settings = &spec.Settings{ComponentCallPolicy: "imperative"}
+			}
 			childErr := errors.New("child failure")
 			finalErr := errors.New("finalizer failure")
 			operationErr := errors.New("operation failure")

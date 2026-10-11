@@ -63,6 +63,7 @@ func TestConnectorAliasNestedWritesCommitOrRollbackTogether(t *testing.T) {
 				return &aliasTransactionOutput{}, nil
 			})}
 			parentSpec := componentSpec("AliasVersionClone", "POST", "/alias/clone", nil)
+			parentSpec.Settings = &spec.Settings{ComponentCallPolicy: "imperative"}
 			parentArtifact := componentArtifact(t, parentSpec, reflect.TypeFor[aliasTransactionInput](), reflect.TypeFor[aliasTransactionOutput]())
 			parent := &registry.RegisteredComponent{Component: parentArtifact.Component, Input: parentArtifact.Input, OutputType: reflect.TypeFor[aliasTransactionOutput](), DataSource: dml.Source{DB: studio}, Handler: rhandler.HandlerFunc(func(ctx context.Context, inv rhandler.Invocation) (any, error) {
 				value, found, err := inv.Binder.Lookup(ctx, xhandler.DataKey)

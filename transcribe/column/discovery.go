@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"reflect"
 
+	dexec "github.com/viant/datly/exec"
 	"github.com/viant/datly/spec"
 	dsql "github.com/viant/datly/sql"
 	"github.com/viant/sqlx/io"
@@ -46,6 +47,10 @@ func (r *Refiner) detectColumnsWithSources(ctx context.Context, db *sql.DB, view
 		}
 		return result
 	}}
+	detector.Tx, err = dexec.InvocationTransaction(ctx, db)
+	if err != nil {
+		return nil, err
+	}
 	return detector.Detect(ctx, db, query, args...)
 }
 

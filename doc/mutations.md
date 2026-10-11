@@ -1256,7 +1256,9 @@ Merge metrics retain the target table and use operation type `MERGE`.
 A component invoked through the scoped component invoker participates in the
 parent's Data scope. Work for the same known database unit uses its buffered
 DML and transaction owner; separate database units retain separate completion
-evidence. A nested component seal is not a root flush or a commit. The root
+evidence. Buffered composition is the default: omit `component_call_policy` for this behavior.
+Omitted child policies inherit the parent; declare `component_call_policy('imperative')`
+only when child calls must drain a prefix before returning. A nested component seal is not a root flush or a commit. The root
 completes participating units and then delivers their registered outcome
 callbacks. A successful child return or `AfterQueue` callback therefore cannot
 establish that its writes committed.

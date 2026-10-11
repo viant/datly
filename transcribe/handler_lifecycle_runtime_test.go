@@ -291,7 +291,7 @@ func newGeneratedHandler(t *testing.T) rhandler.Handler {
 	{{HANDLER_FACTORY}}
 }
 
-func executeGenerated(t *testing.T, ctx context.Context, source dexec.DataSource, body string) (*EventsOutput, error, int) {
+func executeGenerated(t *testing.T, ctx context.Context, source dexec.DataSource, body string, settings ...*spec.Settings) (*EventsOutput, error, int) {
 	t.Helper()
 	request := httptest.NewRequest("POST", "/events", strings.NewReader(body))
 	request.Header.Set("Content-Type", "application/json")
@@ -301,6 +301,9 @@ func executeGenerated(t *testing.T, ctx context.Context, source dexec.DataSource
 	}
 	bodyValues := 0
 	component := generatedComponent()
+	if len(settings) != 0 {
+		component.Settings = settings[0]
+	}
 	artifact := generatedArtifact(t)
 	runtime, err := druntime.NewRuntime([]*druntime.RegisteredComponent{{
 		Component: component, Input: artifact.Input, OutputType: reflect.TypeOf(EventsOutput{}),
@@ -398,7 +401,7 @@ func TestGeneratedHandlerFailureSkipsFlushAndPersistsNoBufferedWrites(t *testing
 	ctx := context.Background()
 	db := openLifecycleDB(t)
 	source := &failingDataSource{}
-	_, err, bodyValues := executeGenerated(t, ctx, source, ` + "`" + `{"Data":[{"id":"one","name":"first"},{"id":"two","name":"second"}]}` + "`" + `)
+	_, err, bodyValues := executeGenerated(t, ctx, source, ` + "`" + `{"Data":[{"id":"one","name":"first"},{"id":"two","name":"second"}]}` + "`" + `, &spec.Settings{ComponentCallPolicy: "imperative"})
 	if !errors.Is(err, errGeneratedHandler) {
 		t.Fatalf("handler error = %v", err)
 	}

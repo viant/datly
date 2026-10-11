@@ -135,7 +135,7 @@ func declarationColumnTypeNode(expression ast.Expr, context *spec.TypeContext, r
 	case *ast.ParenExpr:
 		return declarationColumnTypeNode(actual.X, context, result)
 	case *ast.StarExpr:
-		if result.Pointer || result.SlicePointer {
+		if result.Pointer {
 			return spec.TypeRef{}, fmt.Errorf("multiple pointer layers are not supported")
 		}
 		result.Pointer = true

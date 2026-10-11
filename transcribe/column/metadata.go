@@ -10,6 +10,8 @@ import (
 	"strings"
 	"sync"
 
+	dexec "github.com/viant/datly/exec"
+	"github.com/viant/datly/internal/txread"
 	"github.com/viant/datly/spec"
 	"github.com/viant/sqlparser"
 	sqlio "github.com/viant/sqlx/io"
@@ -53,19 +55,32 @@ func (r *Refiner) PhysicalSourceIdentity(ctx context.Context, connector, unquali
 	if db == nil {
 		return PhysicalSourceIdentity{}, fmt.Errorf("physical source DB is missing")
 	}
-	product, err := metadata.New().DetectProduct(ctx, db)
+	tx, err := dexec.InvocationTransaction(ctx, db)
+	if err != nil {
+		return PhysicalSourceIdentity{}, err
+	}
+	release, err := txread.Acquire(ctx, tx)
+	if err != nil {
+		return PhysicalSourceIdentity{}, err
+	}
+	defer release()
+	txOptions, err := discoveryTransactionOptions(ctx, db)
+	if err != nil {
+		return PhysicalSourceIdentity{}, err
+	}
+	product, err := metadata.New().DetectProduct(ctx, db, txOptions...)
 	if err != nil {
 		return PhysicalSourceIdentity{}, err
 	}
 	var sessions []sink.Session
-	if err = metadata.New().Info(ctx, db, info.KindSession, &sessions, product); err != nil {
+	if err = metadata.New().Info(ctx, db, info.KindSession, &sessions, append(txOptions, product)...); err != nil {
 		return PhysicalSourceIdentity{}, err
 	}
 	if len(sessions) != 1 || strings.TrimSpace(sessions[0].Schema) == "" {
 		return PhysicalSourceIdentity{}, fmt.Errorf("physical source requires one nonempty native schema identity")
 	}
 	session := sessions[0]
-	columns, err := config.Columns(ctx, &session, db, unqualifiedTable, product)
+	columns, err := config.Columns(ctx, &session, db, unqualifiedTable, append(txOptions, product)...)
 	if err != nil {
 		return PhysicalSourceIdentity{}, err
 	}
@@ -126,7 +141,11 @@ func (m *discoveryMetadata) product(ctx context.Context, db *sql.DB) (*database.
 	if product, ok := m.products[db]; ok {
 		return &product, nil
 	}
-	product, err := metadata.New().DetectProduct(ctx, db)
+	txOptions, err := discoveryTransactionOptions(ctx, db)
+	if err != nil {
+		return nil, err
+	}
+	product, err := metadata.New().DetectProduct(ctx, db, txOptions...)
 	if err != nil {
 		return nil, err
 	}
@@ -147,7 +166,11 @@ func (m *discoveryMetadata) session(ctx context.Context, db *sql.DB, product *da
 	if session, ok := m.sessions[db]; ok {
 		return &session, nil
 	}
-	session, err := config.Session(ctx, db, product)
+	txOptions, err := discoveryTransactionOptions(ctx, db)
+	if err != nil {
+		return nil, err
+	}
+	session, err := config.Session(ctx, db, append(txOptions, product)...)
 	if err != nil {
 		return nil, err
 	}
@@ -226,7 +249,20 @@ func (r *Refiner) PhysicalSourceConstraints(ctx context.Context, connector strin
 	if db == nil {
 		return fail(fmt.Errorf("physical constraint DB is missing"))
 	}
-	product, err := metadata.New().DetectProduct(ctx, db)
+	tx, err := dexec.InvocationTransaction(ctx, db)
+	if err != nil {
+		return fail(err)
+	}
+	release, err := txread.Acquire(ctx, tx)
+	if err != nil {
+		return fail(err)
+	}
+	defer release()
+	txOptions, err := discoveryTransactionOptions(ctx, db)
+	if err != nil {
+		return fail(err)
+	}
+	product, err := metadata.New().DetectProduct(ctx, db, txOptions...)
 	if err != nil {
 		return fail(err)
 	}
@@ -234,14 +270,14 @@ func (r *Refiner) PhysicalSourceConstraints(ctx context.Context, connector strin
 		return fail(fmt.Errorf("physical constraints unsupported product/version"))
 	}
 	var sessions []sink.Session
-	if err = metadata.New().Info(ctx, db, info.KindSession, &sessions, product); err != nil {
+	if err = metadata.New().Info(ctx, db, info.KindSession, &sessions, append(txOptions, product)...); err != nil {
 		return fail(err)
 	}
 	if len(sessions) != 1 || strings.TrimSpace(sessions[0].Schema) == "" {
 		return fail(fmt.Errorf("physical constraints require one nonempty native schema"))
 	}
 	session := sessions[0]
-	columns, err := config.Columns(ctx, &session, db, table, product)
+	columns, err := config.Columns(ctx, &session, db, table, append(txOptions, product)...)
 	if err != nil {
 		return fail(err)
 	}
@@ -265,7 +301,7 @@ func (r *Refiner) PhysicalSourceConstraints(ctx context.Context, connector strin
 	}
 	if product.Name == "MySQL" {
 		var tables []sink.Table
-		if err = metadata.New().Info(ctx, db, info.KindTables, &tables, product, option.NewArgs(session.Catalog, session.Schema)); err != nil {
+		if err = metadata.New().Info(ctx, db, info.KindTables, &tables, append(append([]option.Option(nil), txOptions...), product, option.NewArgs(session.Catalog, session.Schema))...); err != nil {
 			return fail(err)
 		}
 		matches := 0
@@ -285,10 +321,10 @@ func (r *Refiner) PhysicalSourceConstraints(ctx context.Context, connector strin
 	}
 	var pk, fk []sink.Key
 	args := option.NewArgs(session.Catalog, session.Schema, table)
-	if err = metadata.New().Info(ctx, db, info.KindPrimaryKeys, &pk, product, args); err != nil {
+	if err = metadata.New().Info(ctx, db, info.KindPrimaryKeys, &pk, append(append([]option.Option(nil), txOptions...), product, args)...); err != nil {
 		return fail(err)
 	}
-	if err = metadata.New().Info(ctx, db, info.KindForeignKeys, &fk, product, args); err != nil {
+	if err = metadata.New().Info(ctx, db, info.KindForeignKeys, &fk, append(append([]option.Option(nil), txOptions...), product, args)...); err != nil {
 		return fail(err)
 	}
 	nativePK := []string{}
@@ -350,7 +386,7 @@ func (r *Refiner) PhysicalSourceConstraints(ctx context.Context, connector strin
 		result.ForeignKeys = append(result.ForeignKeys, copyPhysicalKey(k))
 	}
 	var indexes []sink.Index
-	if err = metadata.New().Info(ctx, db, info.KindIndexes, &indexes, product, args); err != nil {
+	if err = metadata.New().Info(ctx, db, info.KindIndexes, &indexes, append(append([]option.Option(nil), txOptions...), product, args)...); err != nil {
 		return fail(err)
 	}
 	indexNames := map[string]bool{}
@@ -371,7 +407,7 @@ func (r *Refiner) PhysicalSourceConstraints(ctx context.Context, connector strin
 		}
 		fact := PhysicalIndexFact{Catalog: idx.Catalog, Schema: idx.Schema, TableSchema: idx.TableSchema, Table: idx.Table, Name: idx.Name, Type: idx.Type, Origin: idx.Origin, RawUnique: idx.Unique, Unique: unique, Partial: idx.Partial, ColumnCount: *idx.ColumnCount}
 		var members []sink.Column
-		if err = metadata.New().Info(ctx, db, info.KindIndex, &members, product, option.NewArgs(session.Catalog, session.Schema, table, idx.Name)); err != nil {
+		if err = metadata.New().Info(ctx, db, info.KindIndex, &members, append(append([]option.Option(nil), txOptions...), product, option.NewArgs(session.Catalog, session.Schema, table, idx.Name))...); err != nil {
 			return fail(err)
 		}
 		seen := map[int]bool{}
@@ -555,4 +591,15 @@ func physicalProjection(view *spec.View, exact map[string]sink.Column, folded ma
 		result = append(result, PhysicalProjectionFact{Physical: name, Projected: c.Name, Result: resultName, Mapping: mapping})
 	}
 	return result, nil
+}
+
+func discoveryTransactionOptions(ctx context.Context, db *sql.DB) ([]option.Option, error) {
+	tx, err := dexec.InvocationTransaction(ctx, db)
+	if err != nil {
+		return nil, err
+	}
+	if tx == nil {
+		return nil, nil
+	}
+	return []option.Option{tx}, nil
 }

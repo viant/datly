@@ -127,7 +127,7 @@ func TestNativeActivity49OrdinarySourceLessOwnership(t *testing.T) {
 			db := activity49DB(t)
 			child := activity49Native(t, "OrdinaryChild", "/ordinary-child", "", db)
 			sentinel := errors.New("later source-less parent failure")
-			parent := activity49Parent(t, "OrdinaryParent", "/ordinary-parent", "", nil, rh.HandlerFunc(func(ctx context.Context, inv rh.Invocation) (any, error) {
+			parent := activity49Parent(t, "OrdinaryParent", "/ordinary-parent", "imperative", nil, rh.HandlerFunc(func(ctx context.Context, inv rh.Invocation) (any, error) {
 				if engine.IsBufferedComponent(ctx) {
 					return nil, fmt.Errorf("ordinary parent policy changed")
 				}
@@ -245,7 +245,7 @@ func TestNativeActivity49BufferedSubtreeChildOwnership(t *testing.T) {
 				}
 				return out, nil
 			}))
-			outer := activity49Parent(t, "OrdinaryOuter", "/ordinary-outer", "", nil, rh.HandlerFunc(func(ctx context.Context, inv rh.Invocation) (any, error) {
+			outer := activity49Parent(t, "OrdinaryOuter", "/ordinary-outer", "imperative", nil, rh.HandlerFunc(func(ctx context.Context, inv rh.Invocation) (any, error) {
 				if engine.IsBufferedComponent(ctx) {
 					return nil, fmt.Errorf("source-less ordinary outer promoted")
 				}
@@ -370,7 +370,7 @@ func TestNativeActivity49DesiredLateEnrollmentRejectsLiveWork(t *testing.T) {
 			sibling.Handler = gate
 			buffered := activity49Native(t, "LateBuffered", "/late-buffered", "buffered", db)
 			siblingDone := make(chan error, 1)
-			parent := activity49Parent(t, "ExistingOrdinaryRoot", "/existing-ordinary-root", "", db, rh.HandlerFunc(func(ctx context.Context, inv rh.Invocation) (any, error) {
+			parent := activity49Parent(t, "ExistingOrdinaryRoot", "/existing-ordinary-root", "imperative", db, rh.HandlerFunc(func(ctx context.Context, inv rh.Invocation) (any, error) {
 				if engine.IsBufferedComponent(ctx) {
 					return nil, fmt.Errorf("ordinary root policy promoted")
 				}
@@ -479,7 +479,7 @@ func TestNativeActivity49DesiredLiveComposingParent(t *testing.T) {
 				return out, lateCause
 			}))
 			buffered := activity49Native(t, "ComposingLateBuffered", "/composing-late-buffered", "buffered", db)
-			parent := activity49Parent(t, "ExistingComposingRoot", "/existing-composing-root", "", db, rh.HandlerFunc(func(ctx context.Context, inv rh.Invocation) (any, error) {
+			parent := activity49Parent(t, "ExistingComposingRoot", "/existing-composing-root", "imperative", db, rh.HandlerFunc(func(ctx context.Context, inv rh.Invocation) (any, error) {
 				value, ok, err := inv.Binder.Lookup(ctx, xh.DataKey)
 				if err != nil || !ok {
 					return nil, fmt.Errorf("root actual data %v", err)

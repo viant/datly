@@ -51,12 +51,18 @@ Data's transaction; it is not client-bindable or installed by default.
 The first endpoint invocation owns transaction completion. Its first generic
 writer starts the transaction. Invoke child readers and writers through the
 scoped `exec.ComponentInvoker`; they share the database unit and buffered DML.
-By default, an imperative child writer flushes its queued prefix into that
-same transaction before returning, so a later child reader sees the write.
-With `component_call_policy('buffered')`, child calls retain their operations
-in the caller's journal; the owning root prepares and completes it. Do not
-flush between buffered calls. The endpoint's final error rolls back the shared
-unit, including any work already prepared in its transaction.
+By default, child calls retain their operations in the caller's journal; the
+owning root prepares and completes it. No `component_call_policy` setting is
+needed for buffered calls. Omitted child policies inherit their parent, including
+calls through a retained scoped invoker with a replacement context. Do not flush
+between these calls.
+Use `component_call_policy('imperative')` explicitly on components that need
+their imperative child calls to flush a queued prefix before returning, so a
+later child reader sees the write. A buffered ancestor cannot be overridden
+by an imperative or independent child. The separately configured source-less
+`independent_child_transactions` mode retains its independent completion policy.
+The endpoint's final error rolls back the shared unit, including any work
+already prepared in its transaction.
 
 Do not construct another `Runtime` with a fresh `*sql.Tx` inside a handler for
 the same database. Datly rejects that conflicting owner. For immediate SQL

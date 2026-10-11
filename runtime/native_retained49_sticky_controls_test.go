@@ -61,7 +61,7 @@ func TestNativeRetained49DesiredStickyOrdinaryInvoker(t *testing.T) {
 			})
 			buffered.DataSource = dml.Source{DB: faultDB}
 			captured.DataSource = dml.Source{DB: faultDB}
-			parent := activity49Parent(t, "StickyParent", "/sticky-parent", "", nil, rh.HandlerFunc(func(ctx context.Context, in rh.Invocation) (any, error) {
+			parent := activity49Parent(t, "StickyParent", "/sticky-parent", "imperative", nil, rh.HandlerFunc(func(ctx context.Context, in rh.Invocation) (any, error) {
 				var e error
 				retained, e = activity49Invoker(ctx, in.Binder)
 				if e != nil {
@@ -139,7 +139,7 @@ func TestNativeRetained49NeverEnrolledCaughtFailureControl(t *testing.T) {
 				}
 				return &bufferedCallOutput{}, v.(xh.Data).Execute("INSERT INTO records VALUES(3,'ordinary-next')")
 			}))
-			parent := activity49Parent(t, "OrdinaryControl", "/ordinary-control", "", db, rh.HandlerFunc(func(ctx context.Context, in rh.Invocation) (any, error) {
+			parent := activity49Parent(t, "OrdinaryControl", "/ordinary-control", "imperative", db, rh.HandlerFunc(func(ctx context.Context, in rh.Invocation) (any, error) {
 				v, ok, e := in.Binder.Lookup(ctx, xh.DataKey)
 				if e != nil || !ok {
 					return nil, e

@@ -131,7 +131,7 @@ func lease49Run(t *testing.T, late, twoDB, caller bool, fault string, ordinarySe
 	}
 	policy := "buffered"
 	if late {
-		policy = ""
+		policy = "imperative"
 	}
 	parentSpec := componentSpec("LeaseNativeRoot", "POST", "/lease-native-root", nil)
 	parentSpec.Settings = &spec.Settings{ComponentCallPolicy: policy}

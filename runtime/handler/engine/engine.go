@@ -320,7 +320,7 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 			_ = data.failGuardedExecution(operationErr)
 		}
 		if activityErr := retireActivity(operationErr); activityErr != nil {
-			operationErr = errors.Join(operationErr, activityErr)
+			operationErr = appendCompletionFailure(operationErr, activityErr)
 		}
 		if data != nil {
 			data.finishOutcome(completionFrame, invocation, result, operationErr)
@@ -328,7 +328,7 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 		if ownsData && data.protectedLifetime() {
 			if _, barrierErr := data.beginProtectedCompletion(ctx); barrierErr != nil {
 				protectedCompletionFailed = operationErr == nil
-				operationErr = errors.Join(operationErr, barrierErr)
+				operationErr = appendCompletionFailure(operationErr, barrierErr)
 			}
 			if !outcomeAware && !outputFinalized {
 				if _, errorAware := result.(xhandler.ErrorFinalizer); errorAware && operationErr == nil {

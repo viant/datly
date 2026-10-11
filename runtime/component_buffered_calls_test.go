@@ -39,9 +39,10 @@ type bufferedCallOutput struct {
 }
 
 func TestInjectedBufferedNativeWriterCallSiteOrder(t *testing.T) {
-	for _, mode := range []string{"buffered", "buffered failure", "ordinary", "nested replaced context", "binding nested replaced context", "overlapping buffered children", "request independent", "caller transaction", "caller failure", "source-less caller", "callee imperative", "callee independent", "root independent"} {
+	for _, mode := range []string{"buffered", "default buffered", "empty buffered", "buffered failure", "default buffered failure", "ordinary", "nested replaced context", "binding nested replaced context", "overlapping buffered children", "request independent", "caller transaction", "caller failure", "source-less caller", "callee imperative", "callee independent", "root independent"} {
 		t.Run(mode, func(t *testing.T) {
 			ctx := context.Background()
+			imperative := strings.HasPrefix(mode, "ordinary")
 			db := sqlite.New(t)
 			if err := db.ExecStatements(ctx, "CREATE TABLE records(id INTEGER PRIMARY KEY,label TEXT NOT NULL)", "CREATE TABLE sqlx_sequence_reservations(table_name TEXT PRIMARY KEY,value INTEGER NOT NULL CHECK(value >= 0))", "CREATE TABLE journal_order(seq INTEGER PRIMARY KEY AUTOINCREMENT,id INTEGER NOT NULL)", "CREATE TRIGGER record_order AFTER INSERT ON records BEGIN INSERT INTO journal_order(id) VALUES(new.id); END"); err != nil {
 				t.Fatal(err)
@@ -89,7 +90,11 @@ func TestInjectedBufferedNativeWriterCallSiteOrder(t *testing.T) {
 				child.Handler = &bufferedConcurrentNative{Handler: native, entered: entered, release: release}
 			}
 			parentSpec := componentSpec("BufferedParent", "POST", "/buffered-parent", nil)
-			if mode != "ordinary" {
+			if imperative {
+				parentSpec.Settings = &spec.Settings{ComponentCallPolicy: "imperative"}
+			} else if mode == "empty buffered" {
+				parentSpec.Settings = &spec.Settings{}
+			} else if mode != "default buffered" && mode != "default buffered failure" {
 				parentSpec.Settings = &spec.Settings{ComponentCallPolicy: "buffered"}
 			}
 			parentArtifact := componentArtifact(t, parentSpec, reflect.TypeFor[struct{}](), reflect.TypeFor[bufferedCallOutput]())
@@ -97,7 +102,7 @@ func TestInjectedBufferedNativeWriterCallSiteOrder(t *testing.T) {
 			sentinel := errors.New("parent failure after successful child")
 			var nested *registry.RegisteredComponent
 			nestedTarget := dexec.ComponentTarget{}
-			if mode == "nested replaced context" || mode == "binding nested replaced context" {
+			if strings.Contains(mode, "nested replaced context") {
 				nestedSpec := componentSpec("BufferedNested", "POST", "/buffered-nested", nil)
 				nestedArtifact := componentArtifact(t, nestedSpec, reflect.TypeFor[struct{}](), reflect.TypeFor[bufferedCallOutput]())
 				nestedTarget = dexec.ComponentTarget{Component: nestedSpec.Key, Route: spec.RouteRef{Method: "POST", Path: "/buffered-nested"}}
@@ -196,14 +201,14 @@ func TestInjectedBufferedNativeWriterCallSiteOrder(t *testing.T) {
 					return &bufferedCallOutput{}, nil
 				}
 				request := dexec.ComponentRequest{Target: childTarget, Input: &bufferedCallInput{Rows: []*bufferedCallRow{{ID: 2, Label: "child"}}}}
-				if mode == "nested replaced context" || mode == "binding nested replaced context" {
+				if strings.Contains(mode, "nested replaced context") {
 					request = dexec.ComponentRequest{Target: nestedTarget, Input: &struct{}{}}
 				}
 				if mode == "request independent" {
 					request.IndependentChildTransactions = true
 				}
 				var result any
-				if mode == "binding nested replaced context" {
+				if strings.Contains(mode, "binding nested replaced context") {
 					var dependency struct {
 						Child *bufferedCallOutput `bind:"kind=component,in=POST:/buffered-nested,required"`
 					}
@@ -248,7 +253,7 @@ func TestInjectedBufferedNativeWriterCallSiteOrder(t *testing.T) {
 				if callerTx != nil {
 					pending = 1
 				}
-				if mode == "ordinary" {
+				if imperative {
 					pending = 2
 				}
 				if err = assertPending(pending); err != nil {
@@ -261,7 +266,7 @@ func TestInjectedBufferedNativeWriterCallSiteOrder(t *testing.T) {
 				}
 				// The retained invoker must keep buffering even with a replaced context.
 				secondContext := context.Background()
-				if mode == "ordinary" {
+				if imperative {
 					secondContext = ctx
 				}
 				_, err = invoker.InvokeComponent(secondContext, dexec.ComponentRequest{Target: childTarget, Input: &bufferedCallInput{Rows: []*bufferedCallRow{{ID: 4, Label: "second child"}}}})
@@ -272,13 +277,13 @@ func TestInjectedBufferedNativeWriterCallSiteOrder(t *testing.T) {
 				if callerTx != nil {
 					pending = 1
 				}
-				if mode == "ordinary" {
+				if imperative {
 					pending = 4
 				}
 				if err = assertPending(pending); err != nil {
 					return nil, err
 				}
-				if mode == "buffered failure" || mode == "caller failure" {
+				if mode == "buffered failure" || mode == "default buffered failure" || mode == "caller failure" {
 					return nil, sentinel
 				}
 				return output, nil
@@ -303,14 +308,14 @@ func TestInjectedBufferedNativeWriterCallSiteOrder(t *testing.T) {
 				rootRequest.IndependentChildTransactions = true
 			}
 			_, err = runtime.InvokeComponent(ctx, rootRequest)
-			failure := mode == "buffered failure" || mode == "caller failure" || mode == "callee imperative" || strings.Contains(mode, "independent")
+			failure := mode == "buffered failure" || mode == "default buffered failure" || mode == "caller failure" || mode == "callee imperative" || strings.Contains(mode, "independent")
 			if (err != nil) != failure {
 				t.Fatalf("root error %v", err)
 			}
-			if (mode == "buffered failure" || mode == "caller failure") && !errors.Is(err, sentinel) {
+			if (mode == "buffered failure" || mode == "default buffered failure" || mode == "caller failure") && !errors.Is(err, sentinel) {
 				t.Fatalf("lost parent cause %v", err)
 			}
-			if mode != "ordinary" && retained != nil {
+			if !imperative && retained != nil {
 				if _, lateErr := retained.InvokeComponent(context.Background(), dexec.ComponentRequest{Target: childTarget, Input: &bufferedCallInput{Rows: []*bufferedCallRow{{ID: 5, Label: "late"}}}}); lateErr == nil {
 					t.Fatal("retained invoker escaped completed root")
 				}
@@ -338,7 +343,7 @@ func TestInjectedBufferedNativeWriterCallSiteOrder(t *testing.T) {
 				t.Fatal(err)
 			}
 			expected := []int{1, 2, 3, 4}
-			if mode == "binding nested replaced context" {
+			if strings.Contains(mode, "binding nested replaced context") {
 				expected = []int{1, 3, 4, 2}
 			}
 			if mode == "source-less caller" {
@@ -368,6 +373,51 @@ func TestInjectedBufferedNativeWriterCallSiteOrder(t *testing.T) {
 				if err = db.DB.QueryRowContext(ctx, "SELECT COUNT(*) FROM records").Scan(&count); err != nil || count != 0 {
 					t.Fatalf("caller rollback count%d err%v", count, err)
 				}
+			}
+		})
+	}
+}
+
+func TestComponentCallPolicyInheritedThroughBinding(t *testing.T) {
+	for _, policy := range []string{"", "imperative"} {
+		t.Run("root="+policy, func(t *testing.T) {
+			makeComponent := func(name, path string, handler rh.Handler) *registry.RegisteredComponent {
+				s := componentSpec(name, "POST", path, nil)
+				a := componentArtifact(t, s, reflect.TypeFor[struct{}](), reflect.TypeFor[struct{}]())
+				return &registry.RegisteredComponent{Component: a.Component, Input: a.Input, OutputType: reflect.TypeFor[struct{}](), Handler: handler}
+			}
+			calls := 0
+			leaf := makeComponent("PolicyLeaf", "/policy-leaf", rh.HandlerFunc(func(ctx context.Context, _ rh.Invocation) (any, error) {
+				calls++
+				if engine.IsBufferedComponent(ctx) != (policy == "") {
+					return nil, fmt.Errorf("leaf did not inherit root policy %q", policy)
+				}
+				return &struct{}{}, nil
+			}))
+			middle := makeComponent("PolicyBinding", "/policy-binding", rh.HandlerFunc(func(ctx context.Context, inv rh.Invocation) (any, error) {
+				value, found, err := inv.Binder.Lookup(ctx, dexec.ComponentInvokerKey)
+				if err != nil || !found {
+					return nil, fmt.Errorf("middle invoker: %v", err)
+				}
+				return value.(dexec.ComponentInvoker).InvokeComponent(context.Background(), dexec.ComponentRequest{Target: dexec.ComponentTarget{Component: leaf.Component.Key, Route: spec.RouteRef{Method: "POST", Path: "/policy-leaf"}}, Input: &struct{}{}})
+			}))
+			root := makeComponent("PolicyRoot", "/policy-root", rh.HandlerFunc(func(ctx context.Context, inv rh.Invocation) (any, error) {
+				var dependency struct {
+					Value *struct{} `bind:"kind=component,in=POST:/policy-binding,required"`
+				}
+				return &struct{}{}, inv.Binder.Bind(ctx, &dependency)
+			}))
+			if policy != "" {
+				root.Component.Settings = &spec.Settings{ComponentCallPolicy: policy}
+			}
+			rt, err := NewRuntime([]*registry.RegisteredComponent{root, middle, leaf})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer rt.Shutdown(context.Background())
+			_, err = rt.InvokeComponent(context.Background(), dexec.ComponentRequest{Target: dexec.ComponentTarget{Component: root.Component.Key, Route: spec.RouteRef{Method: "POST", Path: "/policy-root"}}, Input: &struct{}{}})
+			if err != nil || calls != 1 {
+				t.Fatalf("inherited policy: calls=%d error=%v", calls, err)
 			}
 		})
 	}
@@ -458,7 +508,7 @@ func TestBufferedEmptyRootClosesRetainedInvoker(t *testing.T) {
 			child := makeComponent("EmptyBufferedChild", "/empty-buffered-child", "buffered", capture)
 			root := makeComponent("EmptyBufferedRoot", "/empty-buffered-root", "buffered", capture)
 			if mode != "buffered root" {
-				root = makeComponent("OrdinaryRoot", "/ordinary-root", "", rh.HandlerFunc(func(ctx context.Context, inv rh.Invocation) (any, error) {
+				root = makeComponent("OrdinaryRoot", "/ordinary-root", "imperative", rh.HandlerFunc(func(ctx context.Context, inv rh.Invocation) (any, error) {
 					value, found, err := inv.Binder.Lookup(ctx, dexec.ComponentInvokerKey)
 					if err != nil || !found {
 						return nil, fmt.Errorf("root invoker: %v", err)

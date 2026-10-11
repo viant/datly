@@ -62,7 +62,9 @@ func (r *componentGuardReader) Read(ctx context.Context, _ any, binder xhandler.
 func TestRuntimeWriteEligibilityComponentAdmissionRetainsAuthority(t *testing.T) {
 	for _, mode := range []string{"custom GET", "first lookup during guard", "dependency replaced ctx", "reader dependency", "reader imperative", "reader allowed"} {
 		t.Run(mode, func(t *testing.T) {
-			parent := componentArtifact(t, componentSpec("GuardParent", "POST", "/guard-parent", nil), reflect.TypeFor[componentGuardInput](), reflect.TypeFor[componentGuardOutput]())
+			parentSpec := componentSpec("GuardParent", "POST", "/guard-parent", nil)
+			parentSpec.Settings = &spec.Settings{ComponentCallPolicy: "imperative"}
+			parent := componentArtifact(t, parentSpec, reflect.TypeFor[componentGuardInput](), reflect.TypeFor[componentGuardOutput]())
 			child := componentArtifact(t, componentSpec("GuardCustom", "GET", "/guard-custom", []*spec.Parameter{{Name: "Value", Source: spec.BindSource{Kind: "guardBinding", Name: "value"}, TypeExpr: "string"}}), reflect.TypeFor[componentGuardBindingInput](), reflect.TypeFor[componentGuardOutput]())
 			readerSpec := componentSpec("GuardReader", "GET", "/guard-reader", nil)
 			readerType := reflect.TypeFor[componentGuardInput]()

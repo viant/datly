@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/viant/datly/exec"
+	"github.com/viant/datly/internal/txread"
 	"github.com/viant/datly/spec"
 	dsql "github.com/viant/datly/sql"
 	sqlbuilder "github.com/viant/datly/sql/builder"
@@ -236,11 +237,24 @@ func (r *Compilation) discover(ctx context.Context, view *spec.View, connector s
 			return nil, err
 		}
 	}
+	tx, err := exec.InvocationTransaction(ctx, db)
+	if err != nil {
+		return nil, err
+	}
+	release, err := txread.Acquire(ctx, tx)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
 	product, err := r.metadata.product(ctx, db)
 	if err != nil {
 		return nil, err
 	}
-	dialect, err := config.Dialect(ctx, db, product)
+	txOptions, err := discoveryTransactionOptions(ctx, db)
+	if err != nil {
+		return nil, err
+	}
+	dialect, err := config.Dialect(ctx, db, append(txOptions, product)...)
 	if err != nil {
 		return nil, fmt.Errorf("resolve SQL dialect: %w", err)
 	}

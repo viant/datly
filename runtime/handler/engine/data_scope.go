@@ -854,7 +854,7 @@ func (s *dataScope) complete(ctx context.Context, handlerErr error) (completionE
 		var barrierErr error
 		units, barrierErr = root.beginProtectedCompletion(ctx)
 		if barrierErr != nil {
-			handlerErr = errors.Join(handlerErr, barrierErr)
+			handlerErr = appendCompletionFailure(handlerErr, barrierErr)
 		}
 		handlerErr = root.protectedCompletionFailure(handlerErr)
 	} else {
