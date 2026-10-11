@@ -16,6 +16,7 @@ type StatementPlan struct {
 	// Method selects an existing buffered DML operation. Empty retains ExecuteWithResult.
 	Method        string
 	SQL           string
+	SQLConstants  []string
 	Arguments     []StatementSelector
 	LastInsertID  StatementSelector
 	MergeTable    StatementSelector

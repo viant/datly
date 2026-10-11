@@ -116,7 +116,12 @@ func StatementQueue(value *plan.StatementPlan, config Config) (*ast.File, error)
 		&ast.IfStmt{Cond: &ast.UnaryExpr{Op: token.NOT, X: ast.NewIdent("ok")}, Body: &ast.BlockStmt{List: []ast.Stmt{fail("native buffered statement capability unavailable")}}},
 		returnStmt(callExpr(selectExpr(ast.NewIdent("capability"), method), args...)),
 	}
-	function := &ast.FuncDecl{Name: ast.NewIdent(config.Factory + "QueueStatement"), Type: &ast.FuncType{Params: &ast.FieldList{List: []*ast.Field{namedField("data", ast.NewIdent("any")), namedField("input", &ast.StarExpr{X: parseExpr(config.InputType)}), namedField("output", &ast.StarExpr{X: parseExpr(config.OutputType)})}}, Results: &ast.FieldList{List: []*ast.Field{{Type: ast.NewIdent("error")}}}}, Body: &ast.BlockStmt{List: body}}
+	queueParams := []*ast.Field{namedField("data", ast.NewIdent("any")), namedField("input", &ast.StarExpr{X: parseExpr(config.InputType)}), namedField("output", &ast.StarExpr{X: parseExpr(config.OutputType)})}
+	if len(value.SQLConstants) > 0 {
+		queueParams = append(queueParams, namedField("statementSQL", ast.NewIdent("string")))
+		args[0] = ast.NewIdent("statementSQL")
+	}
+	function := &ast.FuncDecl{Name: ast.NewIdent(config.Factory + "QueueStatement"), Type: &ast.FuncType{Params: &ast.FieldList{List: queueParams}, Results: &ast.FieldList{List: []*ast.Field{{Type: ast.NewIdent("error")}}}}, Body: &ast.BlockStmt{List: body}}
 	paths := make([]string, 0, len(l.usedImports))
 	for path := range l.usedImports {
 		paths = append(paths, path)

@@ -60,6 +60,21 @@ It does not allocate IDs, classify inserts versus updates, retry statements,
 or query an identity afterward. Other writable graphs continue to use their
 existing generated mutation policy.
 
+Buffered statements can use declared immutable identifier constants with the
+same quoted identifier notation as reader SQL. For example, a declared
+`$const('Table','CONSTRAINTS')` permits:
+
+```sql
+$dml.Execute("UPDATE `${Table}` SET AUDIENCE_IDS = '' WHERE TYPE = ?", $Input.ConstraintType)
+```
+
+The compiler validates the SQL using the authored default while preserving the
+original template. The generated handler binds the server's effective constant
+and uses the existing identifier renderer before queueing. Request query/body
+values do not select the target. Invalid identifier values fail before queueing;
+ordinary values remain bound scalar arguments. Request templates, calls and
+unknown constants remain unsupported.
+
 For an explicit SQLX row batch, a generated statement handler accepts four
 canonical selectors:
 

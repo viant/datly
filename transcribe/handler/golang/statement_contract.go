@@ -51,8 +51,24 @@ func StatementContract(value *plan.StatementPlan, config Config) (*ast.File, err
 	body := []ast.Stmt{
 		&ast.DeclStmt{Decl: &ast.GenDecl{Tok: token.VAR, Specs: []ast.Spec{&ast.ValueSpec{Names: []*ast.Ident{ast.NewIdent("dependencies")}, Type: dependencies}}}},
 		errorGuard(callExpr(selectExpr(callExpr(selectExpr(ast.NewIdent("session"), "Binder")), "Bind"), ast.NewIdent("ctx"), &ast.UnaryExpr{Op: token.AND, X: ast.NewIdent("dependencies")})),
-		returnStmt(callExpr(ast.NewIdent(config.Factory+"QueueStatement"), selectExpr(ast.NewIdent("dependencies"), "DML"), ast.NewIdent("input"), ast.NewIdent("output"))),
 	}
+	queueArgs := []ast.Expr{selectExpr(ast.NewIdent("dependencies"), "DML"), ast.NewIdent("input"), ast.NewIdent("output")}
+	if len(value.SQLConstants) > 0 {
+		constantAlias := addImport("github.com/viant/datly/constant", "constant")
+		identifierAlias := addImport("github.com/viant/datly/constant/identifier", "identifier")
+		entries := []ast.Expr{}
+		for i, name := range value.SQLConstants {
+			field := "SQLConst" + strconv.Itoa(i)
+			dependencies.Fields.List = append(dependencies.Fields.List, &ast.Field{Names: []*ast.Ident{ast.NewIdent(field)}, Type: ast.NewIdent("string"), Tag: &ast.BasicLit{Kind: token.STRING, Value: strconv.Quote("parameter:\"" + field + ",kind=const,in=" + name + ",required=true\"")}})
+			entries = append(entries, &ast.KeyValueExpr{Key: &ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(name)}, Value: selectExpr(ast.NewIdent("dependencies"), field)})
+		}
+		body = append(body, &ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent("constants"), ast.NewIdent("err")}, Tok: token.DEFINE, Rhs: []ast.Expr{callExpr(selectExpr(ast.NewIdent(constantAlias), "New"), &ast.CompositeLit{Type: &ast.MapType{Key: ast.NewIdent("string"), Value: ast.NewIdent("string")}, Elts: entries})}}, &ast.IfStmt{Cond: &ast.BinaryExpr{X: ast.NewIdent("err"), Op: token.NEQ, Y: ast.NewIdent("nil")}, Body: &ast.BlockStmt{List: []ast.Stmt{returnStmt(ast.NewIdent("err"))}}})
+		renderer := &ast.CompositeLit{Type: selectExpr(ast.NewIdent(identifierAlias), "Renderer"), Elts: []ast.Expr{&ast.KeyValueExpr{Key: ast.NewIdent("Values"), Value: ast.NewIdent("constants")}}}
+		body = append(body, &ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent("statementSQL"), ast.NewIdent("err")}, Tok: token.DEFINE, Rhs: []ast.Expr{callExpr(selectExpr(renderer, "Render"), &ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(value.SQL)})}}, &ast.IfStmt{Cond: &ast.BinaryExpr{X: ast.NewIdent("err"), Op: token.NEQ, Y: ast.NewIdent("nil")}, Body: &ast.BlockStmt{List: []ast.Stmt{returnStmt(ast.NewIdent("err"))}}})
+		queueArgs = append(queueArgs, ast.NewIdent("statementSQL"))
+	}
+	body = append(body, returnStmt(callExpr(ast.NewIdent(config.Factory+"QueueStatement"), queueArgs...)))
+
 	file.Decls = append(file.Decls, &ast.FuncDecl{Name: ast.NewIdent("Exec"), Recv: &ast.FieldList{List: []*ast.Field{namedField("h", &ast.StarExpr{X: ast.NewIdent(handler)})}}, Type: &ast.FuncType{Params: &ast.FieldList{List: []*ast.Field{namedField("ctx", selectExpr(ast.NewIdent(contextAlias), "Context")), namedField("session", selectExpr(ast.NewIdent(handlerAlias), "Session")), namedField("input", &ast.StarExpr{X: parseExpr(config.InputType)}), namedField("output", &ast.StarExpr{X: parseExpr(config.OutputType)})}}, Results: &ast.FieldList{List: []*ast.Field{{Type: ast.NewIdent("error")}}}}, Body: &ast.BlockStmt{List: body}})
 	return file, nil
 }
