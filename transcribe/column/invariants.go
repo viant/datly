@@ -44,6 +44,9 @@ func validateAnnotations(view *spec.View, projected []string, identities resultS
 		} else if column.ConcurrencyToken {
 			label = "concurrency_token"
 		} else if column.ExplicitType {
+			if computedMapColumn(view, column) {
+				continue
+			}
 			label = "CAST"
 		} else {
 			continue
