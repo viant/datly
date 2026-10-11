@@ -24,7 +24,7 @@ func (d *Data) DeleteWithQueueContract(table string, data any, contract rhandler
 	return d.appendWithQueueContract(table, data, dataOpDelete, contract)
 }
 
-func (d *Data) appendWithQueueContract(table string, data any, kind dataOperationKind, contract rhandler.QueueContract) error {
+func (d *Data) appendWithQueueContract(table string, data any, kind dataOperationKind, contract rhandler.QueueContract, batch ...batchQueueOptions) error {
 	v := reflect.ValueOf(data)
 	var payload reflect.Value
 	switch contract {
@@ -38,7 +38,7 @@ func (d *Data) appendWithQueueContract(table string, data any, kind dataOperatio
 		payload = reflect.New(v.Type())
 		payload.Elem().Set(v) // Exactly one shallow struct assignment.
 	case rhandler.SourceSlice:
-		if kind != dataOpInsert || !v.IsValid() || v.Kind() != reflect.Slice || v.Type().Elem().Kind() != reflect.Pointer || v.Type().Elem().Elem().Kind() != reflect.Struct {
+		if (kind != dataOpInsert && kind != dataOpDelete) || !v.IsValid() || v.Kind() != reflect.Slice || v.Type().Elem().Kind() != reflect.Pointer || v.Type().Elem().Elem().Kind() != reflect.Struct {
 			return fmt.Errorf("source-slice requires a typed slice of struct pointers")
 		}
 		for i := 0; i < v.Len(); i++ {
@@ -77,6 +77,9 @@ func (d *Data) appendWithQueueContract(table string, data any, kind dataOperatio
 		return err
 	}
 	operation := dataOperation{kind: kind, table: table, data: payload.Interface(), queueContract: contract, appendBarrier: true, payloadEvidence: evidence}
+	if len(batch) == 1 {
+		operation.batchSize, operation.affected = batch[0].size, batch[0].affected
+	}
 	owner := d.owner()
 	owner.mu.Lock()
 	defer owner.mu.Unlock()
