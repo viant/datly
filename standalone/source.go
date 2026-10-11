@@ -257,7 +257,11 @@ func (s *source) compileLinked(ctx context.Context, types *typecatalog.Catalog) 
 			}
 		}
 	}
-	return s.buildIndexed(snapshot, &linkedMaterializer{source: s, components: byKey, types: discovered.Types, resources: resources}, resources, discovered.Types, started)
+	materializer := &linkedMaterializer{source: s, components: byKey, types: discovered.Types, resources: resources}
+	if err := materializer.prepareMetadata(ctx); err != nil {
+		return nil, err
+	}
+	return s.buildIndexed(snapshot, materializer, resources, discovered.Types, started)
 }
 
 func indexedBootstrapCounts(snapshot *bootstrapindex.Snapshot) (components, routes, mcpTools int) {

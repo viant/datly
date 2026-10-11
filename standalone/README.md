@@ -74,6 +74,15 @@ use and cached until reload. This default creates no `paths.yaml` or persistent
 cache. Set `GoBootstrap.EagerComponents` only when the deployment explicitly
 wants every component compiled during startup.
 
+Linked-only deployments prepare physical SQL metadata before publishing the
+new generation. Runtime handlers and artifacts remain lazy. This prevents a
+cold child component from borrowing a second database connection while its
+caller holds a transaction. Each component receives detached metadata; an
+optional component's discovery failure remains local to that generation.
+Prepare schemas before `Reload`. If a setup handler creates tables afterward,
+or database availability changes, explicitly reload before using affected
+components. Reload retries discovery; cancellation publishes no partial generation.
+
 Named reader caches use `Caches` either inline or in a `DependencyURL` document:
 
 ```yaml

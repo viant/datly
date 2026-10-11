@@ -24,15 +24,7 @@ func (c *sourceComponent) reflectedArtifactInput(component *spec.Component, sour
 	if component == nil || source == nil || source.LinkedInputType == nil || source.LinkedOutputType == nil {
 		return bootstrap.ArtifactInput{}, fmt.Errorf("reflected component contract is incomplete")
 	}
-	var err error
-	if source.PackagePath != "" && source.HolderType != "" {
-		holder := bootstrap.LinkedHolder(c.source.holders, source.PackagePath, source.HolderType)
-		resources, err = linkedDefaultResources(resources, reflect.TypeOf(holder))
-		if err != nil {
-			return bootstrap.ArtifactInput{}, err
-		}
-	}
-	resources, err = linkedDefaultResources(resources, source.LinkedInputType)
+	resources, err := c.reflectedResources(source, resources)
 	if err != nil {
 		return bootstrap.ArtifactInput{}, err
 	}
@@ -55,6 +47,19 @@ func (c *sourceComponent) reflectedArtifactInput(component *spec.Component, sour
 		}
 	}
 	return bootstrap.ArtifactInput{Const: c.source.config.Const, Component: component, Types: types, InputType: source.LinkedInputType, OutputType: source.LinkedOutputType, Handler: handler, HandlerOwnedOutput: handler != nil, Resources: resources, CodecFactory: c.source.codecs}, nil
+}
+
+// Resource binding is metadata-only; it must not construct a runtime handler.
+func (c *sourceComponent) reflectedResources(source *bootstrap.RouteSource, resources *resource.Store) (*resource.Store, error) {
+	var err error
+	if source.PackagePath != "" && source.HolderType != "" {
+		holder := bootstrap.LinkedHolder(c.source.holders, source.PackagePath, source.HolderType)
+		resources, err = linkedDefaultResources(resources, reflect.TypeOf(holder))
+		if err != nil {
+			return nil, err
+		}
+	}
+	return linkedDefaultResources(resources, source.LinkedInputType)
 }
 
 func linkedDefaultResources(resources *resource.Store, inputType reflect.Type) (*resource.Store, error) {

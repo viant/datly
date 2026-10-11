@@ -3,6 +3,7 @@ package standalone
 import (
 	"context"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/viant/bindly/resource"
@@ -17,8 +18,10 @@ import (
 )
 
 type linkedComponent struct {
-	component *spec.Component
-	source    *bootstrap.RouteSource
+	component   *spec.Component
+	source      *bootstrap.RouteSource
+	metadata    *linkedMetadata
+	metadataErr error
 }
 
 // linkedMaterializer uses the same artifact/report/runtime compiler as eager
@@ -53,30 +56,20 @@ func (m *linkedMaterializer) Materialize(ctx context.Context, entry *bootstrapin
 	if current == nil {
 		return nil, fmt.Errorf("linked component not found: %s", owner.String())
 	}
-	types, err := m.types.Clone()
+	if current.metadataErr != nil {
+		return nil, current.metadataErr
+	}
+	if current.metadata == nil {
+		return nil, fmt.Errorf("linked component %s metadata was not prepared before publication", owner.String())
+	}
+	types, err := current.metadata.types.Clone()
 	if err != nil {
 		return nil, fmt.Errorf("linked component %s types: %w", owner.String(), err)
 	}
 	components := &sourceComponent{source: m.source}
-	input, err := components.reflectedArtifactInput(current.component.Clone(), current.source, types, m.resources)
+	input, err := components.reflectedArtifactInput(current.metadata.component.Clone(), current.source, types, current.metadata.resources)
 	if err != nil {
 		return nil, fmt.Errorf("linked component %s: %w", owner.String(), err)
-	}
-	if m.source.connections != nil {
-		compiled, err := (&transcribe.PackageCompilation{
-			Source: &transcribe.Source{Scope: current.source.PackagePath, Name: current.component.Name,
-				Const: m.source.config.Const, Connector: m.source.config.Connector,
-				Resources: input.Resources, ColumnRefiner: column.New(m.source.connections)},
-			Component: current.source, InputType: input.InputType, OutputType: input.OutputType, Types: types,
-		}).Compile(ctx)
-		if err != nil {
-			if m.source.logger != nil {
-				m.source.logger.Error("linked column discovery failed", "component", owner.String(), "error", err)
-			}
-			return nil, fmt.Errorf("linked component %s columns: %w", owner.String(), err)
-		}
-		input.Component = compiled.Component
-		input.Types = compiled.Source.Types
 	}
 	compilation, err := report.NewProjectCompiler(report.ProjectConfig{Registry: m.source.registry, Types: types}).CompileArtifacts([]bootstrap.ArtifactInput{input})
 	if err != nil {
@@ -102,4 +95,66 @@ func (m *linkedMaterializer) Materialize(ctx context.Context, entry *bootstrapin
 		m.source.logger.Info("datly bootstrap linked materialize", "component", entry.Key().String(), "related", len(related), "elapsed", time.Since(started).String())
 	}
 	return &bootstrapindex.Loaded{Registration: primary, Related: related}, nil
+}
+
+// Only physical metadata is prepared before the generation becomes visible.
+// Runtime handlers/artifacts remain lazy, generation-owned singleflight loads.
+// No caller invocation transaction is borrowed by the shared materializer.
+type linkedMetadata struct {
+	component *spec.Component
+	types     *typecatalog.Catalog
+	resources *resource.Store
+}
+
+func (m *linkedMaterializer) prepareMetadata(ctx context.Context) error {
+	keys := make([]string, 0, len(m.components))
+	for key := range m.components {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		current := m.components[key]
+		prepared, err := m.prepareComponentMetadata(ctx, current)
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		// A discovery failure is retained for this generation; an explicit reload
+		// after schema/connectivity repair retries it. Unrelated routes remain usable.
+		if err != nil {
+			current.metadataErr = fmt.Errorf("linked component %s columns: %w", key, err)
+			continue
+		}
+		current.metadata = prepared
+	}
+	return ctx.Err()
+}
+func (m *linkedMaterializer) prepareComponentMetadata(ctx context.Context, current *linkedComponent) (*linkedMetadata, error) {
+	types, err := m.types.Clone()
+	if err != nil {
+		return nil, err
+	}
+	components := &sourceComponent{source: m.source}
+	resources, err := components.reflectedResources(current.source, m.resources)
+	if err != nil {
+		return nil, err
+	}
+	component := current.component.Clone()
+	if m.source.connections != nil {
+		compiled, err := (&transcribe.PackageCompilation{
+			Source:    &transcribe.Source{Scope: current.source.PackagePath, Name: current.component.Name, Const: m.source.config.Const, Connector: m.source.config.Connector, Resources: resources, ColumnRefiner: column.New(m.source.connections)},
+			Component: current.source, InputType: current.source.LinkedInputType, OutputType: current.source.LinkedOutputType, Types: types,
+		}).Compile(ctx)
+		if err != nil {
+			return nil, err
+		}
+		component = compiled.Component.Clone()
+		types, err = compiled.Source.Types.Clone()
+		if err != nil {
+			return nil, err
+		}
+	}
+	return &linkedMetadata{component: component, types: types, resources: resources}, nil
 }
