@@ -62,7 +62,7 @@ func (r *planResolver) linkedSQLResource(pkg, path, canonical string) (string, e
 				if group, end, ok := sqltext.ReadGroupString(inner, 0, '(', ')'); ok && end == len(inner) {
 					inner = strings.TrimSpace(group[1 : len(group)-1])
 				}
-				if strings.TrimSpace(inner) == strings.TrimSpace(original) {
+				if strings.TrimSpace(inner) == strings.TrimSpace(sqltext.MaskLineComments(original)) {
 					return original, nil
 				}
 			}

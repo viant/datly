@@ -42,3 +42,27 @@ func TestLinkedSQLResourceDoesNotDiscardDQLBehavior(t *testing.T) {
 		}
 	}
 }
+
+func TestLinkedSQLResourceRetainsLineCommentsInDerivedSource(t *testing.T) {
+	root := t.TempDir()
+	testharness.WriteGeneratedGoMod(t, root)
+	dir := filepath.Join(root, "parents", "queries")
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	const original = "SELECT id, '-- protected' AS label FROM children\n-- original annotation\nWHERE id > 0\n"
+	if err := os.WriteFile(filepath.Join(dir, "children.sql"), []byte(original), 0600); err != nil {
+		t.Fatal(err)
+	}
+	resolver := &planResolver{input: Input{ProjectRoot: root}}
+	wrapper := "SELECT * FROM (" + original + ") children"
+	got, err := resolver.linkedSQLResource("example.com/generated/parents", "queries/children.sql", wrapper)
+	if err != nil || got != original {
+		t.Fatalf("original comment bytes lost: %q %v", got, err)
+	}
+	for _, changed := range []string{wrapper + " WHERE id=1", "SELECT * FROM (SELECT id, '-- changed' AS label FROM children\n-- original annotation\nWHERE id > 0\n) children"} {
+		if _, err := resolver.linkedSQLResource("example.com/generated/parents", "queries/children.sql", changed); err == nil {
+			t.Fatal("changed SQL behavior accepted")
+		}
+	}
+}
