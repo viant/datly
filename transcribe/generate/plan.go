@@ -41,6 +41,7 @@ type Plan struct {
 	Settings             dtag.Settings
 	Imports              []spec.ImportSpec
 	LifecycleTypes       []string
+	WireTypes            []string
 
 	ViewDest     string
 	RouterDest   string

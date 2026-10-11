@@ -16,6 +16,7 @@ type routeContractCompiler struct {
 	bindings      []bindly.BindingSpec
 	injector      *bindly.Injector
 	canonicalPlan *bindly.Plan
+	wireTypes     map[string]reflect.Type
 }
 
 func (c routeContractCompiler) compile(projection *bindly.Projection) (*registry.InputContract, error) {
@@ -69,7 +70,7 @@ func (c routeContractCompiler) compile(projection *bindly.Projection) (*registry
 				return nil, fmt.Errorf("compile input binding plan for %s: %w", ref.String(), planErr)
 			}
 		}
-		compiled = append(compiled, registry.RouteInput{Route: ref, Plan: plan, Bindings: routeBindings})
+		compiled = append(compiled, registry.RouteInput{Route: ref, Plan: plan, Bindings: routeBindings, WireTypes: c.wireTypes})
 	}
 	contract, err := registry.NewInputContract(c.inputType, projection, compiled...)
 	if err != nil {

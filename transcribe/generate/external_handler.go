@@ -20,6 +20,8 @@ type ExternalHandler struct {
 	// Build validates source-authored factories and staged registrations without
 	// requiring their contracts to be linked into the transcription executable.
 	Build *gobuild.Context
+	// WireTypes retains canonical Go-owner discovery references for linked Input.
+	WireTypes []string
 }
 
 func (h *ExternalHandler) Clone() *ExternalHandler {
@@ -28,6 +30,7 @@ func (h *ExternalHandler) Clone() *ExternalHandler {
 	}
 	result := *h
 	result.Build = h.Build.Clone()
+	result.WireTypes = append([]string(nil), h.WireTypes...)
 	result.InputShape = h.InputShape.Clone()
 	return &result
 }

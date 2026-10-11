@@ -75,7 +75,9 @@ type Parameter struct {
 	BodyNullPolicy  string               `json:"bodyNullPolicy,omitempty"`
 	QueryListCSV    bool                 `json:"queryListCSV,omitempty"`
 	TypeExpr        string               `json:"typeExpr,omitempty"`
-	OutputTypeExpr  string               `json:"outputTypeExpr,omitempty"`
+	// WireTypeExpr names an authored discovery representation; binding retains TypeExpr.
+	WireTypeExpr   string `json:"wireTypeExpr,omitempty"`
+	OutputTypeExpr string `json:"outputTypeExpr,omitempty"`
 	// DeclarationSQL preserves the `/* ... */` SQL/comment body attached to a
 	// declaration as an authored input to later transcribe stages.
 	DeclarationSQL    string                 `json:"declarationSQL,omitempty"`

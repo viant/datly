@@ -92,9 +92,13 @@ func (c *Compiler) compile(describe bool) (*Result, error) {
 	if err != nil {
 		return nil, err
 	}
+	wireTypes, err := c.compileWireTypes(bindings)
+	if err != nil {
+		return nil, err
+	}
 	result.Input, err = (routeContractCompiler{
 		component: c.input.Component, inputType: c.input.InputType, bindings: bindings,
-		injector: injector, canonicalPlan: plan,
+		injector: injector, canonicalPlan: plan, wireTypes: wireTypes,
 	}).compile(projection)
 	if err != nil {
 		return nil, err

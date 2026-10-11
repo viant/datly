@@ -2,9 +2,11 @@ package dql
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 
 	"github.com/viant/datly/spec"
+	"github.com/viant/datly/tag"
 )
 
 func parseDeclarations(blocks []directiveBlock) (result []*spec.Parameter, spans map[string]SourceSpan, views map[string]declarationViewOptions, err error) {
@@ -123,6 +125,7 @@ func parseDeclarations(blocks []directiveBlock) (result []*spec.Parameter, spans
 			OutputTypeExpr:    outputType,
 			DeclarationSQL:    declarationSQL,
 			Tag:               options.tag,
+			WireTypeExpr:      strings.TrimSpace(reflect.StructTag(tag.CanonicalFieldTag(options.tag)).Get("wireType")),
 			Cardinality:       options.cardinality,
 			Required:          required,
 			Cacheable:         options.cacheable,

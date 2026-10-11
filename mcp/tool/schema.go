@@ -9,8 +9,9 @@ import (
 )
 
 type schemaProjector struct {
-	docs    *docs.Snapshot
-	schemas map[string]*spec.WireSchema
+	docs     *docs.Snapshot
+	schemas  map[string]*spec.WireSchema
+	wireType reflect.Type
 }
 
 func schemaForType(t reflect.Type, _ map[reflect.Type]bool) (map[string]interface{}, error) {
@@ -20,7 +21,15 @@ func (p *schemaProjector) argument(t reflect.Type, path, property string, schema
 	if schema != nil {
 		return wireSchemaMap(schema), nil
 	}
-	result, err := (jsonschema.Reflector{ExcludeInternal: true, ExcludeField: func(field reflect.StructField) bool {
+	var authority map[reflect.Type]reflect.Type
+	if p.wireType != nil {
+		source := t
+		for source.Kind() == reflect.Pointer {
+			source = source.Elem()
+		}
+		authority = map[reflect.Type]reflect.Type{source: p.wireType}
+	}
+	result, err := (jsonschema.Reflector{WireTypes: authority, ExcludeInternal: true, ExcludeField: func(field reflect.StructField) bool {
 		return strings.TrimSpace(field.Tag.Get("mcp")) == "-"
 	}, Annotate: func(path string, field reflect.StructField) (string, any) {
 		annotation := p.docs.StructField(path, field)

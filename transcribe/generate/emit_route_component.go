@@ -186,7 +186,7 @@ func localLifecycleAnchors(plan *Plan) []lifecycleAnchor {
 	}
 	seen := map[string]bool{}
 	var result []lifecycleAnchor
-	for _, expression := range plan.LifecycleTypes {
+	for _, expression := range append(append([]string(nil), plan.LifecycleTypes...), plan.WireTypes...) {
 		expression = strings.TrimSpace(strings.TrimPrefix(expression, "*"))
 		name := expression
 		if alias, local, qualified := strings.Cut(expression, "."); qualified {
@@ -215,7 +215,7 @@ func externalLifecycleAnchors(plan *Plan) []lifecycleAnchor {
 	}
 	seen := map[string]bool{}
 	var result []lifecycleAnchor
-	for _, expression := range plan.LifecycleTypes {
+	for _, expression := range append(append([]string(nil), plan.LifecycleTypes...), plan.WireTypes...) {
 		expression = strings.TrimSpace(strings.TrimPrefix(expression, "*"))
 		index := strings.Index(expression, ".")
 		if index <= 0 {

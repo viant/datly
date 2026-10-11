@@ -48,11 +48,13 @@ type Field struct {
 	MCP            *bool
 	PathMCP        *bool
 	Invariant      string
+	WireType       string
 }
 
 func ParseField(field reflect.StructField) (*Field, error) {
 	field.Tag = reflect.StructTag(CanonicalFieldTag(string(field.Tag)))
 	result := &Field{
+		WireType:      strings.TrimSpace(field.Tag.Get("wireType")),
 		Source:        strings.TrimSpace(field.Tag.Get(SourceName)),
 		SQLOutput:     strings.TrimSpace(field.Tag.Get(SQLOutputName)),
 		SelectorAlias: strings.TrimSpace(field.Tag.Get(SelectorAlias)),

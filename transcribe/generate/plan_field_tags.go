@@ -98,6 +98,10 @@ func fieldTag(param *spec.Parameter, tagName string, metadata []structTagValue) 
 	if param.QueryListCSV {
 		base = appendStructTag(base, "queryList", "csv")
 	}
+	if param.WireTypeExpr != "" {
+		base = withoutStructTags(base, "wireType")
+		base = appendStructTag(base, "wireType", param.WireTypeExpr)
+	}
 	if strings.EqualFold(kind, "internal") {
 		base = withoutStructTags(base, "json", "internal")
 		base = appendStructTag(base, "json", "-")
