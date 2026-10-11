@@ -318,3 +318,28 @@ func TestDiscoveryConstCollectionKeepsStrictConversion(t *testing.T) {
 		t.Fatal("scalar const must not use query CSV conversion")
 	}
 }
+
+func TestDiscoveryQueryListDefaultWithOtherInputFields(t *testing.T) {
+	type queryInput struct {
+		IDs   []int `parameter:"IDs,kind=query,in=status"`
+		Debug bool  `parameter:"Debug,kind=query,in=debug"`
+	}
+	literal := "1"
+	component := &spec.Component{Parameters: []*spec.Parameter{
+		{Name: "IDs", TypeExpr: "[]int", Source: spec.BindSource{Kind: "query", Name: "status"}, Value: &literal},
+		{Name: "Debug", TypeExpr: "bool", Source: spec.BindSource{Kind: "query", Name: "debug"}},
+	}}
+	for _, linked := range []bool{false, true} {
+		compiler := &discoveryInputCompiler{component: component}
+		if linked {
+			compiler.source = &Source{PackageComponent: component, LinkedInputType: reflect.TypeFor[queryInput]()}
+		}
+		discovered, err := compiler.compile()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := discovered.Value.FieldByName("IDs").Interface(); !reflect.DeepEqual(got, []int{1}) {
+			t.Fatalf("default=%#v", got)
+		}
+	}
+}

@@ -124,12 +124,15 @@ func (c *discoveryInputCompiler) compile() (*column.TemplateInput, error) {
 			var converted any
 			var convertErr error
 			if strings.EqualFold(param.Source.Kind, "query") && param.Codec == nil {
-				// Compile just this parameter against the authoritative input type
-				// so discovery uses the runtime query-list policy without executing
-				// codecs on unrelated request fields.
+				// Compile just this field through the existing type owner so discovery
+				// uses query-list conversion without unrelated binding tags or codecs.
+				fieldType, fieldErr := (xshape.Runtime{}).Struct([]xshape.RuntimeField{{Name: field.Name, Type: field.Type, Tag: field.Tag}})
+				if fieldErr != nil {
+					return nil, fmt.Errorf("transcribe column: compile default field %s: %w", field.Name, fieldErr)
+				}
 				bindings, bindingErr := runtimecompiler.BuildBindingSpecs(
 					&spec.Component{Parameters: []*spec.Parameter{param}},
-					inputType, nil)
+					fieldType, nil)
 				if bindingErr != nil {
 					return nil, fmt.Errorf("transcribe column: compile default binding for parameter %s: %w", param.Name, bindingErr)
 				}
