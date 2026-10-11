@@ -163,11 +163,11 @@ func (c *sourceComponent) Configure(ctx context.Context, artifact *report.Compon
 		}
 	}
 	if artifact.HasLinkedHandler() && component.Settings != nil && component.Settings.DefaultConnector != "" {
-		db, err := c.source.connections.ResolveDB(ctx, component.Settings.DefaultConnector)
+		connection, err := c.source.connections.SQL.Resolve(ctx, component.Settings.DefaultConnector)
 		if err != nil {
 			return result, err
 		}
-		result.DataSource = dml.Source{DB: db}
+		result.DataSource = dml.Source{DB: connection.DB, Dialect: connection.Dialect}
 	}
 	return result, nil
 }

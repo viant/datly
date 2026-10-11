@@ -20,7 +20,9 @@ type Source struct {
 	SequenceStrategy dialect.PresetIDStrategy
 	Tx               *sql.Tx
 	OnCommit         func(context.Context)
-	resolvedDialect  *info.Dialect
+	// Dialect is immutable metadata resolved by the owner of DB. When absent,
+	// Open retains native SQLX product discovery on this source/caller owner.
+	Dialect *info.Dialect
 }
 
 var (
@@ -45,7 +47,7 @@ func (s Source) Open(ctx context.Context) (xhandler.Data, error) {
 		options = append(options, WithCommitObserver(s.OnCommit))
 	}
 	data := NewData(s.DB, options...)
-	data.dialect = s.resolvedDialect
+	data.dialect = s.Dialect
 	return data, nil
 }
 
@@ -93,6 +95,9 @@ func (s *Source) resolveSequenceStrategy(ctx context.Context) (dialect.PresetIDS
 	if s.DB == nil {
 		return "", fmt.Errorf("DML data source DB is required")
 	}
+	if s.Dialect != nil {
+		return s.Dialect.SequenceStrategy(s.SequenceStrategy), nil
+	}
 	var opts []option.Option
 	if s.Tx != nil {
 		opts = append(opts, s.Tx)
@@ -101,6 +106,6 @@ func (s *Source) resolveSequenceStrategy(ctx context.Context) (dialect.PresetIDS
 	if err != nil {
 		return "", err
 	}
-	s.resolvedDialect = product
+	s.Dialect = product
 	return product.SequenceStrategy(s.SequenceStrategy), nil
 }
