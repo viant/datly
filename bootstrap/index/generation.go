@@ -12,6 +12,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	dexec "github.com/viant/datly/exec"
 	"github.com/viant/datly/runtime/registry"
 	"github.com/viant/datly/spec"
 )
@@ -166,6 +167,26 @@ func (g *Generation) Load(ctx context.Context, key spec.Key) (*Loaded, error) {
 		state = &loadState{done: make(chan struct{})}
 		g.loads[identity] = state
 		g.loadWG.Add(1)
+		if dexec.HasInvocationTransactionLookup(ctx) {
+			// Borrow invocation resources only while their owner remains in Load.
+			// Generation cancellation also stops discovery; no request transaction
+			// is retained on the executable registration or background cache fill.
+			loadCtx, cancel := context.WithCancel(ctx)
+			stop := context.AfterFunc(g.ctx, cancel)
+			loadCtx = context.WithValue(loadCtx, loadStackKey{}, append(append([]string(nil), stack...), identity))
+			g.mu.Unlock()
+			g.materialize(loadCtx, entry, state)
+			stop()
+			cancel()
+			if ctx.Err() != nil && errors.Is(state.err, ctx.Err()) {
+				g.mu.Lock()
+				if g.loads[identity] == state {
+					delete(g.loads, identity)
+				}
+				g.mu.Unlock()
+			}
+			return state.loaded, state.err
+		}
 		loadCtx := context.WithValue(g.ctx, loadStackKey{}, append(append([]string(nil), stack...), identity))
 		go g.materialize(loadCtx, entry, state)
 	}

@@ -57,14 +57,18 @@ func (m *discoveryMetadata) loadTableConstraints(ctx context.Context, db *sql.DB
 	if err != nil {
 		return nil, fmt.Errorf("load SQLX metadata session: %w", err)
 	}
-	columns, err := config.Columns(ctx, session, db, table, product)
+	txOptions, err := discoveryTransactionOptions(ctx, db)
+	if err != nil {
+		return nil, err
+	}
+	columns, err := config.Columns(ctx, session, db, table, append(txOptions, product)...)
 	if err != nil {
 		return nil, fmt.Errorf("load SQLX table metadata for %q: %w", table, err)
 	}
 	result := constraintsFromColumns(columns)
 	keys := make([]sink.Key, 0)
-	err = metadata.New().Info(ctx, db, info.KindForeignKeys, &keys, product,
-		option.NewArgs(session.Catalog, session.Schema, table))
+	err = metadata.New().Info(ctx, db, info.KindForeignKeys, &keys, append(append([]option.Option(nil), txOptions...), product,
+		option.NewArgs(session.Catalog, session.Schema, table))...)
 	if err != nil {
 		// Some SQLX products expose columns but not foreign-key metadata. PK,
 		// nullability, defaults and uniqueness remain authoritative in that case.
