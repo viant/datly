@@ -1,10 +1,14 @@
 package sql
 
 import (
+	"fmt"
+	"reflect"
 	"strings"
 
 	"github.com/viant/sqlparser"
 	"github.com/viant/sqlparser/expr"
+	"github.com/viant/sqlparser/node"
+	"github.com/viant/sqlx"
 )
 
 // LiteralKinds supplies optional defaults for aliased string/integer literals.
@@ -12,7 +16,48 @@ import (
 // sources, and unresolved mappings simply supply no defaults; they never gate
 // an explicit application type. No table schemas or row values are consulted.
 func (p SelectorProjection) LiteralKinds(labels []string) map[int]string {
-	stmt, err := parseProjectionQuery(p.SQL)
+	return projectionValueHints(p.SQL, labels, func(value node.Node) string {
+		literal, ok := value.(*expr.Literal)
+		if ok && (literal.Kind == "string" || literal.Kind == "int") {
+			return literal.Kind
+		}
+		return ""
+	})
+}
+
+// BoundTypes resolves only direct projected placeholders from already bound
+// arguments. SQLX owns placeholder ordinals and protected SQL regions. Values
+// never enter SQL, and expressions, ambiguous labels and opaque sources do not
+// obtain type authority from their arguments.
+func (p SelectorProjection) BoundTypes(labels []string, args []any) map[int]reflect.Type {
+	if len(args) == 0 {
+		return nil
+	}
+	parameters := sqlx.ParseParameters(p.SQL)
+	if parameters.NamedCount() != 0 || parameters.PositionalCount() != len(args) {
+		return nil
+	}
+	prefix := "__datly_bound_projection_"
+	for strings.Contains(p.SQL, prefix) {
+		prefix += "_"
+	}
+	types := make(map[string]reflect.Type, len(args))
+	analysis := parameters.RewritePositional(func(index int) string {
+		name := fmt.Sprintf("%s%d", prefix, index)
+		types[name] = reflect.TypeOf(args[index])
+		return ":" + name
+	})
+	return projectionValueHints(analysis, labels, func(value node.Node) reflect.Type {
+		placeholder, ok := value.(*expr.Placeholder)
+		if !ok {
+			return nil
+		}
+		return types[strings.TrimPrefix(placeholder.Name, ":")]
+	})
+}
+
+func projectionValueHints[T comparable](SQL string, labels []string, resolve func(node.Node) T) map[int]T {
+	stmt, err := parseProjectionQuery(SQL)
 	if err != nil {
 		return nil
 	}
@@ -62,13 +107,14 @@ func (p SelectorProjection) LiteralKinds(labels []string) map[int]string {
 	if firstStar < 0 && len(stmt.List) != len(labels) {
 		return nil
 	}
-	result := map[int]string{}
+	result := map[int]T{}
+	var zero T
 	for i, item := range stmt.List {
 		if item == nil || item.Alias == "" {
 			continue
 		}
-		value, ok := item.Expr.(*expr.Literal)
-		if !ok || (value.Kind != "string" && value.Kind != "int") {
+		value := resolve(item.Expr)
+		if value == zero {
 			continue
 		}
 		parts, e := sqlparser.TableIdentifierParts(item.Alias)
@@ -95,7 +141,7 @@ func (p SelectorProjection) LiteralKinds(labels []string) map[int]string {
 		if matches != 1 {
 			continue
 		}
-		result[index] = value.Kind
+		result[index] = value
 	}
 	return result
 }

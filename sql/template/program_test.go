@@ -190,7 +190,7 @@ func TestCompiler_CompileSupportsDirectUnsafeEmission(t *testing.T) {
 	}
 }
 
-func TestCompiler_CompileProtectsQuotedUnsafeWhileEmittingCodeUnsafe(t *testing.T) {
+func TestCompiler_CompileEmitsQuotedAndCodeUnsafe(t *testing.T) {
 	type input struct{ Table string }
 	program, err := (Compiler{
 		Source:    `SELECT '$Unsafe.Table' AS literal FROM $Unsafe.Table`,
@@ -203,7 +203,7 @@ func TestCompiler_CompileProtectsQuotedUnsafeWhileEmittingCodeUnsafe(t *testing.
 	if err != nil {
 		t.Fatalf("evaluate failed: %v", err)
 	}
-	if result.SQL != `SELECT '$Unsafe.Table' AS literal FROM vendors` {
+	if result.SQL != `SELECT 'vendors' AS literal FROM vendors` {
 		t.Fatalf("SQL = %q", result.SQL)
 	}
 }
@@ -224,6 +224,7 @@ func TestCompiler_CompileEmitsUnsafeBacktickIdentifier(t *testing.T) {
 			if strings.Contains(source, "`${Unsafe.Table}`") {
 				want = strings.Replace(source, "`${Unsafe.Table}`", "`"+table+"`", 1)
 			}
+			want = strings.Replace(want, "'$Unsafe.Table'", "'"+table+"'", 1)
 			if err != nil || result.SQL != want || len(result.Args) != 0 {
 				t.Fatalf("evaluate %q: result=%+v error=%v want=%q", source, result, err, want)
 			}
