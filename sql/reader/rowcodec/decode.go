@@ -146,10 +146,10 @@ func (d *Decoder) Decode(ctx context.Context, row any) (any, error) {
 		} else if !raw.IsNil() {
 			source = raw.Elem().Interface()
 		}
-		var decoded any
+		decoded := source
 		var err error
 		// Original Datly's state.Codec.Transform preserves untyped nil sources.
-		if source != nil {
+		if source != nil && binding.instance != nil {
 			decoded, err = binding.instance.Value(ctx, source, options...)
 		}
 		if err != nil {

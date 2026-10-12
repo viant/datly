@@ -2,6 +2,7 @@
 package rowcodec
 
 import (
+	"database/sql"
 	"fmt"
 	"io/fs"
 	"reflect"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/viant/datly/data"
+	sqlxio "github.com/viant/sqlx/io"
 	xshape "github.com/viant/x/shape"
 	xcodec "github.com/viant/xdatly/codec"
 )
@@ -68,7 +70,7 @@ func Compile(config Config) (*Plan, error) {
 		if err != nil {
 			continue
 		}
-		if target.Type() == timePointer {
+		if target.Type() == timePointer || scalarScanTarget(model, target) {
 			columns = append(columns, column)
 		}
 	}
@@ -94,9 +96,13 @@ func Compile(config Config) (*Plan, error) {
 		}
 		var source reflect.Type
 		var instance xcodec.Instance
-		if column.Codec == nil && target.Type() == timePointer {
-			source = reflect.TypeFor[string]()
-			instance = nullableTimestampCodec{}
+		if column.Codec == nil {
+			if target.Type() == timePointer {
+				source = reflect.TypeFor[string]()
+				instance = nullableTimestampCodec{}
+			} else {
+				source = target.Type()
+			}
 		} else {
 			if config.Factory == nil {
 				return nil, fmt.Errorf("column codec factory is required")
@@ -124,7 +130,7 @@ func Compile(config Config) (*Plan, error) {
 				return nil, fmt.Errorf("compile column codec %s: %w", column.Name, err)
 			}
 		}
-		if instance == nil || reflect.ValueOf(instance).Kind() == reflect.Pointer && reflect.ValueOf(instance).IsNil() {
+		if (column.Codec != nil || target.Type() == timePointer) && (instance == nil || reflect.ValueOf(instance).Kind() == reflect.Pointer && reflect.ValueOf(instance).IsNil()) {
 			return nil, fmt.Errorf("column codec %s returned a nil instance", column.Name)
 		}
 		rawName := fmt.Sprintf("Codec%d", i)
@@ -173,6 +179,36 @@ func Compile(config Config) (*Plan, error) {
 		return nil, err
 	}
 	return plan, nil
+}
+
+// Primitive scan slots retain NULL until the existing decoder assigns the
+// public scalar's zero value. Physical constraints and public types stay intact.
+func scalarScanTarget(model reflect.Type, target *xshape.Accessor) bool {
+	t := target.Type()
+	switch t.Kind() {
+	case reflect.Bool, reflect.String, reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Float32, reflect.Float64:
+	default:
+		return false
+	}
+	scanner := reflect.TypeFor[sql.Scanner]()
+	if t.Implements(scanner) || reflect.PointerTo(t).Implements(scanner) {
+		return false
+	}
+	indexes, err := target.FieldIndex()
+	if err != nil {
+		return false
+	}
+	var field reflect.StructField
+	for _, index := range indexes {
+		for model.Kind() == reflect.Pointer {
+			model = model.Elem()
+		}
+		field = model.Field(index)
+		model = field.Type
+	}
+	metadata := sqlxio.ParseTag(field.Tag)
+	return metadata.Encoding == "" || metadata.Encoding == sqlxio.EncodingRAW
 }
 
 func (p *Plan) ModelType() reflect.Type {
