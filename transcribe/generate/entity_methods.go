@@ -13,11 +13,12 @@ import (
 )
 
 type entityMethodOwnership struct {
-	expected    map[string]EntityMethod
-	claimed     map[string]string
-	generated   map[string]string
-	imports     map[string]string
-	packageName string
+	expected                   map[string]EntityMethod
+	claimed                    map[string]string
+	generated                  map[string]string
+	imports                    map[string]string
+	packageName                string
+	allowAuthoredAccessorTypes bool
 }
 
 func (p *scaffoldPersistence) preserveEntityMethods(target, existing string) error {
@@ -54,7 +55,7 @@ func (p *scaffoldPersistence) preserveEntityMethods(target, existing string) err
 	if err != nil {
 		return err
 	}
-	policy := &entityMethodOwnership{expected: map[string]EntityMethod{}, claimed: map[string]string{}, generated: map[string]string{}, imports: imports, packageName: file.Name.Name}
+	policy := &entityMethodOwnership{expected: map[string]EntityMethod{}, claimed: map[string]string{}, generated: map[string]string{}, imports: imports, packageName: file.Name.Name, allowAuthoredAccessorTypes: p.plan.ExternalHandler != nil && p.plan.ExternalHandler.GeneratedContracts && p.plan.ExternalHandler.Build != nil}
 	for _, method := range p.plan.EntitySupport.Methods {
 		policy.expected[method.Receiver+"."+method.Name] = method
 	}
@@ -237,6 +238,11 @@ func (p *entityMethodOwnership) inspect(file *ast.File, path string) error {
 		} else if !pointer || len(parameters) != 1 || len(results) > 1 {
 			return fmt.Errorf("authored setter %s must have a pointer receiver, one value and optional fluent result", key)
 		}
+		if !expected.Getter {
+			if _, variadic := parameters[0].(*ast.Ellipsis); variadic {
+				return fmt.Errorf("authored setter %s must have a nonvariadic value", key)
+			}
+		}
 		valueType := results
 		if !expected.Getter {
 			valueType = parameters
@@ -253,7 +259,10 @@ func (p *entityMethodOwnership) inspect(file *ast.File, path string) error {
 		if err != nil {
 			return err
 		}
-		if actual != wanted {
+		// Application field accessors may expose domain/convenience types. Only
+		// the factory path has the complete staged Go build needed to validate
+		// their bodies and all actual callers before publishing generated files.
+		if actual != wanted && !(expected.FieldAccessor && p.allowAuthoredAccessorTypes) {
 			return fmt.Errorf("authored accessor %s value type %s differs from %s", key, actual, wanted)
 		}
 		if !expected.Getter && len(results) == 1 {

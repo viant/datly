@@ -463,6 +463,13 @@ func (s *dataScope) enrollBufferedScope(contexts ...context.Context) error {
 }
 
 func withDataScope(ctx context.Context, scope *dataScope) context.Context {
+	root := scope
+	if root != nil && root.root != nil {
+		root = root.root
+	}
+	if root != nil {
+		ctx = drainowner.WithTransactionLifetime(ctx, root.invocationContext)
+	}
 	return context.WithValue(ctx, dataScopeContextKey{}, scope)
 }
 

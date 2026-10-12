@@ -15,6 +15,8 @@ type ProviderSchema string
 const (
 	Native14 ProviderSchema = "native14"
 	Source11 ProviderSchema = "source11"
+	// Basic2 retains the original gmetric error/pending capture contract.
+	Basic2 ProviderSchema = "basic2"
 )
 
 type OperationDescriptor struct {
@@ -76,7 +78,7 @@ func (p *Policy) compile() (*compiledPolicy, error) {
 			if op.Provider == "" {
 				op.Provider = Native14
 			}
-			if strings.TrimSpace(op.Name) == "" || strings.TrimSpace(op.Location) == "" || strings.TrimSpace(op.Description) == "" || op.Provider != Native14 && op.Provider != Source11 {
+			if strings.TrimSpace(op.Name) == "" || strings.TrimSpace(op.Location) == "" || strings.TrimSpace(op.Description) == "" || op.Provider != Native14 && op.Provider != Source11 && op.Provider != Basic2 {
 				return nil, fmt.Errorf("invalid observation operation for %s %s", key, declaration.ViewIdentity)
 			}
 			if previous, exists := r.operations[op.Name]; exists && previous != op {
@@ -95,6 +97,25 @@ func (p *Policy) Validate() error { _, err := p.compile(); return err }
 func WithPolicy(policy *Policy) RecorderOption {
 	frozen := policy.Copy()
 	return func(r *Recorder) { r.policy, r.policyErr = frozen.compile() }
+}
+
+// MetricLocations returns declared reporting locations without registering any
+// counters. HTTP staging uses the same frozen policy as later SQL capture.
+func (r *Recorder) MetricLocations() []string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	locations := map[string]bool{}
+	if r.policy != nil {
+		for _, operation := range r.policy.operations {
+			locations[operation.Location] = true
+		}
+	}
+	result := make([]string, 0, len(locations))
+	for location := range locations {
+		result = append(result, location)
+	}
+	sort.Strings(result)
+	return result
 }
 
 // ViewTarget is emitted by completed reader plans for validation before use.

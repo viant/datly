@@ -36,7 +36,21 @@ func captureMutationInput(contract *registry.RouteInputContract, input any) (any
 	if err := options.Select(contract.Type(), paths...); err != nil {
 		return nil, err
 	}
-	return (xshape.Runtime{}).CloneValue(input, options)
+	captured, err := (xshape.Runtime{}).CloneValue(input, options)
+	if err != nil {
+		return nil, err
+	}
+	// Supplemental values are not captured. Their markers must not turn the
+	// request-only retry clone into a trusted nil/zero component/generator seed.
+	for _, field := range contract.Fields() {
+		if (spec.BindSource{Kind: field.Binding().Location.Kind}).RequestValue() {
+			continue
+		}
+		if err := contract.Plan().SetPresence(captured, field.Path(), false); err != nil {
+			return nil, err
+		}
+	}
+	return captured, nil
 }
 
 // Recovery admission is deliberately narrower than ordinary transaction

@@ -16,8 +16,8 @@ require (
 	github.com/viant/mcp v0.24.1-0.20261008165059-494f36529f6e
 	github.com/viant/mcp-protocol v0.19.1-0.20261008202502-046707df5ed9
 	github.com/viant/parsly v0.3.3
-	github.com/viant/sqlparser v0.13.1-0.20261011113312-d70d5ae3f97c
-	github.com/viant/sqlx v0.26.1-0.20261011195417-cf9663aa8e91
+	github.com/viant/sqlparser v0.13.1-0.20261012001419-edea4bd5d9c1
+	github.com/viant/sqlx v0.26.1-0.20261012000356-69034efb5257
 	github.com/viant/structology v0.10.1-0.20261010052450-67e71257a7da
 	github.com/viant/structql v0.5.5-0.20261008164328-d0b837beaa3a
 	github.com/viant/tagly v0.4.1-0.20261007173811-969600917520
@@ -124,7 +124,7 @@ require (
 	github.com/go-viper/mapstructure/v2 v2.2.1 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/viant/afs v1.30.1-0.20260914155934-90e95d483861
-	github.com/viant/bindly v0.4.1-0.20261009060128-e3a43863d252
+	github.com/viant/bindly v0.4.1-0.20261011212616-2c051ae6bd9e
 	github.com/viant/godiff v0.4.3-0.20260914060527-9f2005ca82e8
 	github.com/viant/jsonrpc v0.25.0
 	github.com/viant/scy v0.35.1-0.20260914041206-699e6c909726

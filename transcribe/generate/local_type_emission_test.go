@@ -864,3 +864,31 @@ func localEmissionCompile(t *testing.T, root string) {
 		t.Fatalf("generated nominal fixture compile: %v\n%s", err, output)
 	}
 }
+
+func TestLocalTypeEmissionSQLDerivedPointerSliceElements(t *testing.T) {
+	const local = "example.com/localtypes/model"
+	context := &spec.TypeContext{DefaultPackage: local, Imports: []spec.ImportSpec{{Alias: "self", Package: local}}}
+	for _, spelling := range []string{"*[]*self.Value", "*[]*Value"} {
+		t.Run(spelling, func(t *testing.T) {
+			SQL := "SELECT r.*, CAST(r.payload AS " + spelling + "), tag(r.payload,'json:\"payload\"') FROM records r"
+			view, err := compile.NewReader().Compile(compile.ReadInput{View: &spec.View{Name: "Records"}, SQL: SQL, TypeContext: context})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(view.Columns) != 1 || view.Columns[0].Type.Package != local || !view.Columns[0].ExplicitType || strings.Contains(strings.ToLower(view.Source.SQL), "cast(") {
+				t.Fatalf("SQL declaration authority lost: %+v", view)
+			}
+			plan := &Plan{Package: local, Imports: context.Imports}
+			fields, err := resolveScalarViewFields(plan, view, false)
+			if err != nil || len(fields) != 1 || fields[0].Type != "*[]*Value" {
+				t.Fatalf("SQL-derived fields = %+v, %v", fields, err)
+			}
+			source := structFileWithImports("model", "// Record is SQL-derived.", "Record", fields, plan.Imports)
+			root := localEmissionModule(t)
+			localEmissionWrite(t, root, "model/authority.go", "package model\ntype Value struct { Label string }\n")
+			localEmissionWrite(t, root, "model/record.go", source)
+			localEmissionAssertSources(t, []EmittedFile{{Path: filepath.Join(root, "model/record.go"), Content: source}})
+			localEmissionCompile(t, root)
+		})
+	}
+}

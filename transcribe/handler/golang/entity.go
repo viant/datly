@@ -14,7 +14,9 @@ import (
 type EntityMethod struct {
 	Receiver, Name, ValueType string
 	Getter                    bool
-	Signature                 string
+	// FieldAccessor distinguishes field accessors from invariant/helper methods.
+	FieldAccessor bool
+	Signature     string
 }
 type EntityAsset struct {
 	identity        *mutationIdentityPolicy

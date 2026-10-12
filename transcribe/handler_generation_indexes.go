@@ -7,6 +7,7 @@ import (
 	gen "github.com/viant/datly/transcribe/generate"
 	plan "github.com/viant/datly/transcribe/handler/ast"
 	"github.com/viant/datly/typecatalog"
+	sqlio "github.com/viant/sqlx/io"
 )
 
 // Application collections include independent auxiliary reads. They share
@@ -60,6 +61,11 @@ func (g *handlerGeneration) readCollections(semantic *plan.Plan, generated *gen.
 			field, err := fields.resolve(column.Name)
 			if err != nil {
 				return err
+			}
+			// Shared-row transients are consumed by the unmapped reader, never
+			// loaded into application fields or eligible for scalar indexes.
+			if sqlio.ParseTag(field.tag).Transient {
+				continue
 			}
 			read.Fields = append(read.Fields, plan.FieldRef{Field: field.name, Source: column.Source, Type: spec.TypeRef{Name: field.expression}})
 			if column.PrimaryKey {

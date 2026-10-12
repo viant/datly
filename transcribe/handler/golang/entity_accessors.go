@@ -29,7 +29,7 @@ func (e *entityEmitter) accessorDeclarations(record *recordLowering) ([]ast.Decl
 			}
 			e.setters[getterSignature] = field.Type.Name
 			result = append(result, &ast.FuncDecl{Name: ast.NewIdent(getterName), Recv: &ast.FieldList{List: []*ast.Field{namedField("entity", record.value.pointerExpr())}}, Type: &ast.FuncType{Params: &ast.FieldList{}, Results: &ast.FieldList{List: []*ast.Field{{Type: parseExpr(field.Type.Name)}}}}, Body: &ast.BlockStmt{List: []ast.Stmt{returnStmt(fieldExpression)}}})
-			e.asset.Methods = append(e.asset.Methods, EntityMethod{Receiver: record.value.base, Name: getterName, ValueType: field.Type.Name, Getter: true})
+			e.asset.Methods = append(e.asset.Methods, EntityMethod{Receiver: record.value.base, Name: getterName, ValueType: field.Type.Name, Getter: true, FieldAccessor: true})
 		}
 		// A delete marker is excluded from physical INSERT/UPDATE columns, but it
 		// is still intentional mutation input. Hooks and callers need the same
@@ -57,7 +57,7 @@ func (e *entityEmitter) accessorDeclarations(record *recordLowering) ([]ast.Decl
 		}
 		body = append(body, assignStmt(selectExpr(marker, field.Name), ast.NewIdent("true")))
 		result = append(result, &ast.FuncDecl{Name: ast.NewIdent(name), Recv: &ast.FieldList{List: []*ast.Field{namedField("entity", record.value.pointerExpr())}}, Type: &ast.FuncType{Params: &ast.FieldList{List: []*ast.Field{namedField("value", parseExpr(field.Type.Name))}}}, Body: &ast.BlockStmt{List: body}})
-		e.asset.Methods = append(e.asset.Methods, EntityMethod{Receiver: record.value.base, Name: name, ValueType: field.Type.Name})
+		e.asset.Methods = append(e.asset.Methods, EntityMethod{Receiver: record.value.base, Name: name, ValueType: field.Type.Name, FieldAccessor: true})
 	}
 	return result, nil
 }

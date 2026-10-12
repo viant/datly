@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/viant/datly/spec"
+	"github.com/viant/sqlparser"
 	sqlio "github.com/viant/sqlx/io"
 )
 
@@ -52,6 +53,10 @@ func (p *viewPlanner) shareBodyRow(current, owner *spec.View, destination string
 			columns[key] = field
 		}
 	}
+	excluded, err := sharedBodyTransientColumns(owner)
+	if err != nil {
+		return err
+	}
 	projected, err := resolveScalarViewFields(p.plan, current, p.velty)
 	if err != nil {
 		return err
@@ -59,6 +64,11 @@ func (p *viewPlanner) shareBodyRow(current, owner *spec.View, destination string
 	for _, field := range projected {
 		mapping := sqlio.ParseTag(reflect.StructTag(field.Tag))
 		actual, ok := columns[strings.ToLower(mapping.Column)]
+		if !mapping.Transient && !ok && excluded[strings.ToLower(mapping.Column)] {
+			// Current consumes this physical value through its existing unmapped
+			// resolver; the owning body deliberately excludes SQLX assignment.
+			continue
+		}
 		if mapping.Transient || !ok {
 			return fmt.Errorf("shared Current %q column %q has no SQLX field in body %q", current.Name, mapping.Column, owner.Name)
 		}
@@ -136,4 +146,34 @@ func samePhysicalColumn(current, owner *spec.View, name string) bool {
 	}
 	a, b := find(current), find(owner)
 	return a != nil && b != nil && a.DatabaseType != "" && strings.EqualFold(a.DatabaseType, b.DatabaseType)
+}
+
+// Only explicit scalar exclusions with physical source identity qualify. Current
+// cannot introduce an owner field or infer an exclusion from a Go field name.
+func sharedBodyTransientColumns(owner *spec.View) (map[string]bool, error) {
+	excluded := map[string]bool{}
+	provenance := map[string]string{}
+	for _, column := range owner.Columns {
+		if column == nil {
+			continue
+		}
+		source := strings.TrimSpace(column.Source)
+		if source == "" || (strings.TrimSpace(column.Expression) != "" && !strings.EqualFold(strings.TrimSpace(column.Expression), source)) {
+			continue
+		}
+		parts, err := sqlparser.TableIdentifierParts(source)
+		if err != nil || len(parts) != 1 {
+			continue
+		}
+		key := strings.ToLower(parts[0])
+		if previous, ok := provenance[key]; ok && previous != column.Name {
+			return nil, fmt.Errorf("ambiguous body physical source %q for shared Current", source)
+		}
+		provenance[key] = column.Name
+		mapping := sqlio.ParseTag(reflect.StructTag(scalarColumnFieldTag(column, source, false)))
+		if mapping.Transient {
+			excluded[key] = true
+		}
+	}
+	return excluded, nil
 }

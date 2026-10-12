@@ -49,7 +49,14 @@ func (d *Data) transaction(ctx context.Context) (result *sql.Tx, retErr error) {
 	if requested {
 		options = &sql.TxOptions{Isolation: isolation}
 	}
-	tx, err := db.BeginTx(ctx, options)
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	lifetime := ctx
+	if owner.invocation {
+		lifetime = drainowner.TransactionLifetime(ctx)
+	}
+	tx, err := db.BeginTx(lifetime, options)
 	if err != nil {
 		return nil, err
 	}

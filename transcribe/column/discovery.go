@@ -36,7 +36,10 @@ func (r *Refiner) detectColumnsWithSources(ctx context.Context, db *sql.DB, view
 			labels[i] = column.Name()
 		}
 		kinds := (dsql.SelectorProjection{SQL: query}).LiteralKinds(labels)
-		result := make(map[int]reflect.Type, len(kinds))
+		result := (dsql.SelectorProjection{SQL: query}).BoundTypes(labels, args)
+		if result == nil {
+			result = make(map[int]reflect.Type, len(kinds))
+		}
 		for i, kind := range kinds {
 			switch kind {
 			case "string":

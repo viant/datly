@@ -44,7 +44,11 @@ func TestInferredForeignKeyRetainsProvenResultAlias(t *testing.T) {
 				t.Fatalf("repeat refinement changed mapping: %q -> %q", first, column.Tag)
 			}
 			parsed := sqlio.ParseTag(reflect.StructTag(column.Tag))
-			if tc.name == "authored alternatives" {
+			if tc.name == "transient" {
+				if raw != "-" || !parsed.Transient {
+					t.Fatalf("FK discovery widened excluded SQLX field: %s", raw)
+				}
+			} else if tc.name == "authored alternatives" {
 				if raw != `CUSTOM|SECOND,required=false,enc=JSON,refDb=authored_db,refTable=authored_table,refColumn=authored_id` {
 					t.Fatalf("authored mapping/options changed: %s", raw)
 				}
@@ -80,7 +84,7 @@ func TestInferredForeignKeyDoesNotInventResultLineage(t *testing.T) {
 	}
 	column := &spec.Column{Name: "PARENT", Source: "PARENT"}
 	applyTableConstraints([]*spec.Column{column}, map[string]tableConstraint{"parent_id": {name: "PARENT_ID", notNull: true}}, lineage)
-	if column.Tag != "" || column.Source != "PARENT_ID" || !column.NotNull {
+	if column.Tag != `sqlx:"PARENT_ID|PARENT"` || column.Source != "PARENT_ID" || !column.NotNull {
 		t.Fatalf("no-FK enrichment changed: %+v", column)
 	}
 }
