@@ -15,6 +15,7 @@ import (
 	sqlio "github.com/viant/sqlx/io"
 	"github.com/viant/sqlx/io/config"
 	"github.com/viant/sqlx/metadata"
+	"github.com/viant/sqlx/metadata/database"
 	"github.com/viant/sqlx/metadata/info"
 	"github.com/viant/sqlx/metadata/sink"
 	"github.com/viant/sqlx/option"
@@ -53,7 +54,8 @@ func (m *discoveryMetadata) loadTableConstraints(ctx context.Context, db *sql.DB
 	if err != nil {
 		return nil, err
 	}
-	session, err := m.session(ctx, db, product)
+	sourceTable := table
+	session, table, err := m.tableSession(ctx, db, product, table)
 	if err != nil {
 		return nil, fmt.Errorf("load SQLX metadata session: %w", err)
 	}
@@ -77,8 +79,36 @@ func (m *discoveryMetadata) loadTableConstraints(ctx context.Context, db *sql.DB
 		}
 		return nil, fmt.Errorf("load SQLX foreign keys for %q: %w", table, err)
 	}
-	applyForeignKeyConstraints(result, keys, session.Schema, table)
+	applyForeignKeyConstraints(result, keys, session.Schema, sourceTable)
 	return result, nil
+}
+
+// A complete BigQuery path already supplies the metadata namespace. Keep it
+// local to this table read; it is not the connection's default session.
+func (m *discoveryMetadata) tableSession(ctx context.Context, db *sql.DB, product *database.Product, table string) (*sink.Session, string, error) {
+	var parts []string
+	if strings.EqualFold(product.Name, "BigQuery") {
+		var err error
+		parts, err = (sqlparser.TableIdentifierParser{Product: product.Name}).Parts(table)
+		if err != nil {
+			return nil, "", fmt.Errorf("parse metadata table: %w", err)
+		}
+		if len(parts) == 3 {
+			return &sink.Session{Catalog: parts[0], Schema: parts[1]}, parts[2], nil
+		}
+	}
+	session, err := m.session(ctx, db, product)
+	if err != nil {
+		return nil, "", err
+	}
+	if len(parts) != 0 {
+		copy := *session
+		if len(parts) == 2 {
+			copy.Schema = parts[0]
+		}
+		return &copy, parts[len(parts)-1], nil
+	}
+	return session, table, nil
 }
 
 func applyForeignKeyConstraints(result map[string]tableConstraint, keys []sink.Key, discoverySchema, sourceTable string) {
