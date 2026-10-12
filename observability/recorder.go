@@ -9,6 +9,8 @@ import (
 
 	"github.com/viant/gmetric"
 	"github.com/viant/gmetric/counter"
+	"github.com/viant/gmetric/provider"
+	"github.com/viant/gmetric/stat"
 	xlogger "github.com/viant/xdatly/logger"
 	"github.com/viant/xdatly/response"
 )
@@ -47,16 +49,20 @@ func (r *Recorder) operation(name string) *gmetric.Operation {
 			descriptor = declared
 		}
 	}
-	o := r.service.MultiOperationCounter(descriptor.Location, name, descriptor.Description, time.Millisecond, time.Minute, 2, viewMetricProvider{source: descriptor.Provider == Source11})
+	var capture counter.Provider = viewMetricProvider{source: descriptor.Provider == Source11}
+	if descriptor.Provider == Basic2 {
+		capture = provider.NewBasic()
+	}
+	o := r.service.MultiOperationCounter(descriptor.Location, name, descriptor.Description, time.Millisecond, time.Minute, 2, capture)
 	r.operations[name] = o
 	return o
 }
 func (r *Recorder) Begin(name string, start time.Time) counter.OnDone {
 	r.mu.Lock()
 	op := r.operation(name)
-	provider, _ := op.Provider.(viewMetricProvider)
+	nativeProvider, native := op.Provider.(viewMetricProvider)
 	var sourceDone counter.OnDone
-	if provider.source {
+	if !native || nativeProvider.source {
 		sourceDone = op.Begin(start)
 	}
 	r.mu.Unlock()
@@ -122,8 +128,21 @@ func (r *Recorder) Values(name string) map[string]int64 {
 func (r *Recorder) Pending(name string, delta int64) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.operation(name).IncrementValueBy("Pending", delta)
+	op := r.operation(name)
+	key := pendingMetric
+	if descriptor, exists := r.policyOperation(name); exists && descriptor.Provider == Basic2 {
+		key = stat.Pending
+	}
+	op.IncrementValueBy(key, delta)
 }
+func (r *Recorder) policyOperation(name string) (OperationDescriptor, bool) {
+	if r.policy != nil {
+		op, exists := r.policy.operations[name]
+		return op, exists
+	}
+	return OperationDescriptor{}, false
+}
+
 func (r *Recorder) Cumulative(name, metric string) int64 {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -144,7 +163,7 @@ func (r *Recorder) Created(name, kind string, entries int) {
 	defer r.mu.Unlock()
 	op := r.operation(name)
 	if r.policy != nil {
-		if descriptor, exists := r.policy.operations[name]; exists && descriptor.Provider == Source11 {
+		if descriptor, exists := r.policy.operations[name]; exists && (descriptor.Provider == Source11 || descriptor.Provider == Basic2) {
 			return
 		}
 	}

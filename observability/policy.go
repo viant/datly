@@ -15,6 +15,8 @@ type ProviderSchema string
 const (
 	Native14 ProviderSchema = "native14"
 	Source11 ProviderSchema = "source11"
+	// Basic2 retains the original gmetric error/pending capture contract.
+	Basic2 ProviderSchema = "basic2"
 )
 
 type OperationDescriptor struct {
@@ -76,7 +78,7 @@ func (p *Policy) compile() (*compiledPolicy, error) {
 			if op.Provider == "" {
 				op.Provider = Native14
 			}
-			if strings.TrimSpace(op.Name) == "" || strings.TrimSpace(op.Location) == "" || strings.TrimSpace(op.Description) == "" || op.Provider != Native14 && op.Provider != Source11 {
+			if strings.TrimSpace(op.Name) == "" || strings.TrimSpace(op.Location) == "" || strings.TrimSpace(op.Description) == "" || op.Provider != Native14 && op.Provider != Source11 && op.Provider != Basic2 {
 				return nil, fmt.Errorf("invalid observation operation for %s %s", key, declaration.ViewIdentity)
 			}
 			if previous, exists := r.operations[op.Name]; exists && previous != op {
