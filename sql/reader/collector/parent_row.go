@@ -2,6 +2,7 @@ package collector
 
 import (
 	"fmt"
+	"sync"
 
 	"github.com/viant/xunsafe"
 )
@@ -18,13 +19,24 @@ func (r *Collector) ParentRow() func(value interface{}) (interface{}, error) {
 	destPtr := xunsafe.AsPointer(dest)
 
 	if len(links) == 1 {
+		// A row visitor resolves children after its parent fetch completes. Keep
+		// that immutable index instead of rebuilding its identity and locking
+		// the shared index owner for every child. Prepare once on first use;
+		// a shared provider also supports simultaneous first lookups.
+		var prepare sync.Once
+		var valuePosition map[interface{}][]int
 		return func(child interface{}) (interface{}, error) {
 			key, err := r.linkKeyAt(child, links[0], r.indexCounter)
 			if err != nil {
 				return nil, err
 			}
-			valuePosition := r.parentValuesPositions(relation.On[0])
-			positions, ok := valuePosition[key]
+			prepare.Do(func() { valuePosition = r.parentValuesPositions(relation.On[0]) })
+			index := valuePosition
+			if index == nil {
+				// Preserve lookup after an initially empty parent was populated.
+				index = r.parentValuesPositions(relation.On[0])
+			}
+			positions, ok := index[key]
 			if !ok {
 				return nil, fmt.Errorf(`key "%v" is not found`, key)
 			}
