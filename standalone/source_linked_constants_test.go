@@ -59,10 +59,24 @@ func TestLinkedReaderDiscoversConstantProjectionsWithoutSources(t *testing.T) {
 }
 
 func TestLinkedReaderDiscoversJSONHiddenComputedColumnsWithoutSources(t *testing.T) {
-	for _, empty := range []bool{false, true} {
-		t.Run(map[bool]string{false: "populated", true: "empty"}[empty], func(t *testing.T) {
+	for _, tc := range []struct {
+		name            string
+		empty, nullDate bool
+	}{{name: "populated"}, {name: "empty", empty: true}, {name: "null-date", nullDate: true}} {
+		t.Run(tc.name, func(t *testing.T) {
+			empty := tc.empty
 			ctx := context.Background()
 			f := fixture.New(t)
+			if err := f.DB.ExecStatements(ctx, "ALTER TABLE records ADD COLUMN created_at TEXT", "UPDATE records SET created_at=\"2026-10-12 07:00:00\""); err != nil {
+				t.Fatal(err)
+			}
+			mode := "frozen"
+			if tc.nullDate {
+				mode = "null"
+				if err := f.DB.ExecStatements(ctx, "UPDATE records SET created_at=NULL"); err != nil {
+					t.Fatal(err)
+				}
+			}
 			if empty {
 				if err := f.DB.ExecStatements(ctx, "DELETE FROM records"); err != nil {
 					t.Fatal(err)
@@ -76,7 +90,7 @@ func TestLinkedReaderDiscoversJSONHiddenComputedColumnsWithoutSources(t *testing
 				t.Fatal(err)
 			}
 			cfg.BaseDir = filepath.Join(t.TempDir(), "missing-source")
-			cfg.Const, err = constant.New(map[string]string{"Constant": "frozen", "Count": "7"})
+			cfg.Const, err = constant.New(map[string]string{"Constant": mode, "Count": "7"})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -105,7 +119,7 @@ func TestLinkedReaderDiscoversJSONHiddenComputedColumnsWithoutSources(t *testing
 				return
 			}
 			row := body.Rows[0]
-			if len(row) != 2 || row["id"] != float64(1) || row["readMode"] != "frozen" {
+			if len(row) != 2 || row["id"] != float64(1) || row["readMode"] != mode {
 				t.Fatalf("hidden columns leaked or result changed: %#v", row)
 			}
 		})

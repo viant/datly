@@ -99,7 +99,7 @@ func (r *outputColumnCompiler) column(field xshape.Field, path string) (*spec.Co
 	if !field.Exported {
 		return nil, false, nil
 	}
-	if field.Tag.Get("setMarker") == "true" || field.Tag.Get("internal") == "true" {
+	if field.Tag.Get("setMarker") == "true" {
 		return nil, true, nil
 	}
 	formatting, err := format.Parse(field.Tag, "json")
@@ -111,10 +111,10 @@ func (r *outputColumnCompiler) column(field xshape.Field, path string) (*spec.Co
 		return nil, false, err
 	}
 	sqlTag := sqlxio.ParseTag(field.Tag)
-	// JSON visibility does not remove explicitly mapped SQL fields from the
+	// Response visibility does not remove explicitly mapped SQL fields from the
 	// scan/discovery contract. Preserve their declared types and JSON tags;
-	// JSON-only fields and excluded embedded holders stay outside the schema.
-	if formatting.Ignore && sqlTag.Name() == "" && metadata.Source == "" {
+	// Unmapped hidden fields and excluded embedded holders stay outside the schema.
+	if (formatting.Ignore || field.Tag.Get("internal") == "true") && sqlTag.Name() == "" && metadata.Source == "" {
 		return nil, true, nil
 	}
 	if sqlTag.Transient || sqlTag.PresenceProvider || metadata.View != nil || metadata.Self != nil || len(metadata.Relation) > 0 {

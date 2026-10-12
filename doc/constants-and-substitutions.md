@@ -197,8 +197,8 @@ Documentation dictionary `docSubstitutes` retains its separate documentation rol
 ### Hidden SQL-backed fields
 
 A linked row field with an explicit `sqlx` or `source` mapping retains its Go
-schema type during SQL discovery even with `json:"-"`. This supports computed
+schema type during SQL discovery even with `internal:"true" json:"-"`. This supports computed
 expressions and nested projections without sampling rows or changing the SQL.
 The JSON tag still hides the field from responses. JSON-only hidden fields,
-`sqlx:"-"` fields, internal fields, presence markers, and excluded embedded
+`sqlx:"-"` fields, unmapped internal fields, presence markers, and excluded embedded
 holders remain excluded from inferred SQL columns.
