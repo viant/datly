@@ -17,6 +17,9 @@ import (
 	"strconv"
 	"strings"
 	"unicode"
+	"unicode/utf8"
+
+	"github.com/google/uuid"
 
 	furl "github.com/viant/afs/url"
 	"github.com/viant/datly/gateway/router/proxy"
@@ -1377,8 +1380,11 @@ func (r *Router) newToolHTTPRequest(ctx context.Context, method, URL string, bod
 func decodeToolResponseBody(responseWriter *proxy.Writer) ([]byte, error) {
 	data := responseWriter.Body.Bytes()
 	encoding := strings.TrimSpace(responseWriter.HeaderMap.Get("Content-Encoding"))
-	if !strings.EqualFold(encoding, "gzip") {
+	if encoding == "" || strings.EqualFold(encoding, "identity") {
 		return data, nil
+	}
+	if !strings.EqualFold(encoding, "gzip") {
+		return nil, fmt.Errorf("unsupported response content encoding")
 	}
 	reader, err := gzip.NewReader(bytes.NewReader(data))
 	if err != nil {
@@ -1392,23 +1398,71 @@ func decodeToolResponseBody(responseWriter *proxy.Writer) ([]byte, error) {
 	return decoded, nil
 }
 
-// buildToolCallResult composes a CallToolResult with text content and structured error info if status is not OK.
-func (r *Router) buildToolCallResult(responseWriter *proxy.Writer, URL, method string) *schema.CallToolResult {
-	var result = &schema.CallToolResult{}
-	mimeType := responseWriter.HeaderMap.Get("Content-Type")
+// mcpResponseMediaType classifies attachments and non-text responses before
+// converting any bytes to strings. Missing MIME types retain the JSON/text
+// default unless the body is not valid UTF-8 or HTTP sniffing identifies binary.
+func mcpResponseMediaType(writer *proxy.Writer, data []byte, fallback string) (string, bool) {
+	mimeType := strings.TrimSpace(writer.HeaderMap.Get("Content-Type"))
 	if mimeType == "" {
-		mimeType = "application/json"
+		sniffed, _, _ := mime.ParseMediaType(http.DetectContentType(data))
+		if !utf8.Valid(data) || !mcpTextMediaType(sniffed) {
+			mimeType = "application/octet-stream"
+		} else if fallback != "" {
+			mimeType = fallback
+		} else {
+			mimeType = "application/json"
+		}
 	}
+	mediaType, _, err := mime.ParseMediaType(mimeType)
+	disposition, _, _ := mime.ParseMediaType(writer.HeaderMap.Get("Content-Disposition"))
+	return mimeType, strings.EqualFold(disposition, "attachment") || !utf8.Valid(data) || err != nil || !mcpTextMediaType(mediaType)
+}
+
+func mcpTextMediaType(mediaType string) bool {
+	mediaType = strings.ToLower(mediaType)
+	return strings.HasPrefix(mediaType, "text/") ||
+		strings.HasSuffix(mediaType, "+json") || strings.HasSuffix(mediaType, "+xml") ||
+		mediaType == "application/json" || mediaType == "application/xml" ||
+		mediaType == "application/javascript" || mediaType == "application/x-javascript" ||
+		mediaType == "application/x-www-form-urlencoded" || mediaType == "application/yaml" ||
+		mediaType == "application/x-yaml"
+}
+
+func mcpBinaryResourceURI() string {
+	// Never derive binary resource identifiers from the request URL, query,
+	// Content-Disposition filename, or private storage location.
+	return "urn:uuid:" + uuid.NewString()
+}
+
+func mcpResponseError(message string, status int) *schema.CallToolResult {
+	isError := true
+	return &schema.CallToolResult{
+		IsError:           &isError,
+		Content:           []schema.CallToolResultContentElem{schema.TextContent{Type: "text", Text: message}},
+		StructuredContent: map[string]interface{}{"status": status, "error": true, "message": message},
+	}
+}
+
+// buildToolCallResult preserves binary responses as standard embedded resources.
+func (r *Router) buildToolCallResult(responseWriter *proxy.Writer, URL, method string) *schema.CallToolResult {
 	data, err := decodeToolResponseBody(responseWriter)
 	if err != nil {
-		data = []byte(err.Error())
+		return mcpResponseError("Unable to decode HTTP response body", responseWriter.Code)
 	}
-	result.Content = append(result.Content, schema.CallToolResultContentElem(
-		schema.TextContent{
-			Type: "text",
-			Text: string(data),
-		},
-	))
+	mimeType, binary := mcpResponseMediaType(responseWriter, data, "application/json")
+	if binary {
+		if responseWriter.Code >= http.StatusBadRequest {
+			return mcpResponseError("HTTP request failed with binary response body", responseWriter.Code)
+		}
+		return &schema.CallToolResult{Content: []schema.CallToolResultContentElem{schema.EmbeddedResource{
+			Type: "resource",
+			Resource: schema.EmbeddedResourceResource{
+				Uri: mcpBinaryResourceURI(), MimeType: &mimeType,
+				Blob: base64.StdEncoding.EncodeToString(data),
+			},
+		}}}
+	}
+	result := &schema.CallToolResult{Content: []schema.CallToolResultContentElem{schema.TextContent{Type: "text", Text: string(data)}}}
 	_ = json.Unmarshal(data, &result.StructuredContent)
 	if responseWriter.Code >= http.StatusBadRequest || toolPayloadReportsError(result.StructuredContent) {
 		isErr := true
@@ -1416,12 +1470,8 @@ func (r *Router) buildToolCallResult(responseWriter *proxy.Writer, URL, method s
 	}
 	if responseWriter.Code >= http.StatusBadRequest {
 		result.StructuredContent = map[string]interface{}{
-			"status":  responseWriter.Code,
-			"error":   true,
-			"message": string(data),
-			"headers": responseWriter.HeaderMap,
-			"uri":     URL,
-			"method":  method,
+			"status": responseWriter.Code, "error": true, "message": string(data),
+			"headers": responseWriter.HeaderMap, "uri": URL, "method": method,
 		}
 	}
 	return result
@@ -1949,17 +1999,24 @@ func (r *Router) handleMcpRead(ctx context.Context, params *schema.ReadResourceR
 	if responseWriter.Code == http.StatusUnauthorized {
 		return nil, r.mcpUnauthorizedError()
 	}
-	var result []schema.ReadResourceResultContentsElem
-	mimeType := ""
-	if template.MimeType != nil {
-		mimeType = *template.MimeType
+	data, err := decodeToolResponseBody(responseWriter)
+	if err != nil {
+		return nil, jsonrpc.NewInternalError("Unable to decode HTTP response body", nil)
 	}
-	result = append(result, schema.ReadResourceResultContentsElem{
-		Uri:      URL,                          // The URI of the resource
-		Text:     responseWriter.Body.String(), // The actual data returned from the request
-		MimeType: &mimeType,                    // The MIME type of the resource
-		Blob:     responseWriter.Body.String(),
-	})
-	return result, nil
-
+	fallback := ""
+	if template.MimeType != nil {
+		fallback = *template.MimeType
+	}
+	mimeType, binary := mcpResponseMediaType(responseWriter, data, fallback)
+	result := schema.ReadResourceResultContentsElem{Uri: URL, MimeType: &mimeType}
+	if binary {
+		if responseWriter.Code >= http.StatusBadRequest {
+			return nil, jsonrpc.NewInternalError("HTTP request failed with binary response body", nil)
+		}
+		result.Uri = mcpBinaryResourceURI()
+		result.Blob = base64.StdEncoding.EncodeToString(data)
+	} else {
+		result.Text = string(data)
+	}
+	return []schema.ReadResourceResultContentsElem{result}, nil
 }
