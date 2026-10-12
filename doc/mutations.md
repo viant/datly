@@ -77,13 +77,18 @@ the Input fields and bind before the handler runs; the handler decides which row
 to delete through scoped DML. The HTTP verb does not infer deletion or create an
 automatic mutation handler.
 
-A factory without a body can also borrow an existing authored Current row in its
-own package or another package. Use its canonical package identity (or a declared
-import alias) in the view parameter, for example `[]*rows.Record`; keep the SQL
+A factory with or without a SQL-derived body can borrow an independent authored
+Current row in its own package or another package. A local row may use its bare
+name, canonical package identity or a declared import alias in the view parameter,
+for example `[]*Record` or `[]*rows.Record`; keep the SQL
 projection in DQL. Transcription links that exact type and preserves its SQLX
 column mappings and presence marker. Fetched rows do not acquire write presence;
 the handler sets the fields it intends to write. Mixed generated `?` read rows
 continue to evolve from their SQL schema independently.
+The fresh body root and its generated descendants remain owned by body SQL;
+borrowing an independent local row does not replace that authority.
+The borrowed row retains its canonical package identity when other imports
+declare a row with the same name.
 
 The explicitly selected factory package owns generated contracts even when the
 DQL is stored elsewhere. Borrowed local rows must be exported authored types in
@@ -92,6 +97,14 @@ Borrowed rows cannot declare generated destinations, change wrappers/cardinality
 or use CAST to redefine their fields. Keep a named type anchor such as
 `var _anchorRecord = reflect.TypeFor[Record]()` when the row needs runtime package
 discovery; an anchor retains the type without registering it.
+
+When a Current read shares the SQL-derived body row, it may select physical
+columns explicitly excluded by the body's `internal_transient(column)` metadata.
+The reader consumes those values, including SQL NULL, without assigning them to
+the body, marking presence or creating scalar read indexes. Those fields remain
+excluded from SQLX writes, JSON and diffs. Current cannot introduce an unrelated
+field or widen the body; physical source identity must be unambiguous. Ordinary
+mapped fields retain their type and CAST checks.
 
 The body SQL is a shape source, not an executable body read or a second persistence
 owner. Independent Current/read parameters retain their normal native bindings.

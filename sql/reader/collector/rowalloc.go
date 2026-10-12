@@ -18,6 +18,15 @@ type Column interface {
 // Resolve returns a per-row allocator for an unmapped column, buffering the
 // scanned values so that the position-index step can use them later.
 func (r *Collector) Resolve(column Column) func(ptr unsafe.Pointer) interface{} {
+	if metadata, ok := column.(interface{ Nullable() (bool, bool) }); ok {
+		nullable, known := metadata.Nullable()
+		if nullable || !known {
+			// Existing SQL-key snapshots preserve driver NULLs and native values.
+			// A discarded scalar must not reject NULL through a nonnullable *string.
+			return func(ptr unsafe.Pointer) interface{} { return r.ReserveSQLKey(column.Name()) }
+		}
+	}
+
 	buffer, ok := r.values[column.Name()]
 	if !ok {
 		localSlice := make([]interface{}, 0)

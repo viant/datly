@@ -93,7 +93,7 @@ func (g *handlerGeneration) applyEntitySetters(asset *handlergo.EntityAsset) err
 	}
 	result := &gen.EntitySupportAsset{File: filtered.File, Role: "entities"}
 	for _, method := range filtered.Methods {
-		result.Methods = append(result.Methods, gen.EntityMethod{Receiver: method.Receiver, Name: method.Name, ValueType: method.ValueType, Getter: method.Getter, Signature: method.Signature})
+		result.Methods = append(result.Methods, gen.EntityMethod{Receiver: method.Receiver, Name: method.Name, ValueType: method.ValueType, Getter: method.Getter, FieldAccessor: method.FieldAccessor, Signature: method.Signature})
 	}
 	for _, invariant := range asset.Invariants {
 		result.Invariants = append(result.Invariants, gen.EntityInvariant{Identity: invariant.Identity, Path: append([]string(nil), invariant.Path...), Group: invariant.Group, BackfillFunction: invariant.BackfillFunction})
@@ -112,7 +112,7 @@ func (g *handlerGeneration) applyEntitySupport(asset *handlergo.EntityAsset) {
 		result.Associations = append(result.Associations, gen.EntityAssociation{Identity: association.Identity, Path: append([]string(nil), association.Path...), Field: association.Field, StateType: association.StateType, KeyType: association.KeyType, KeyAdapterType: association.KeyAdapterType, CurrentKeyFunction: association.CurrentKeyFunction})
 	}
 	for _, method := range asset.Methods {
-		result.Methods = append(result.Methods, gen.EntityMethod{Receiver: method.Receiver, Name: method.Name, ValueType: method.ValueType, Getter: method.Getter, Signature: method.Signature})
+		result.Methods = append(result.Methods, gen.EntityMethod{Receiver: method.Receiver, Name: method.Name, ValueType: method.ValueType, Getter: method.Getter, FieldAccessor: method.FieldAccessor, Signature: method.Signature})
 	}
 	for _, invariant := range asset.Invariants {
 		result.Invariants = append(result.Invariants, gen.EntityInvariant{Identity: invariant.Identity, Path: append([]string(nil), invariant.Path...), Group: invariant.Group, BackfillFunction: invariant.BackfillFunction})

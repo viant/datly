@@ -131,7 +131,8 @@ or hyphens. Values supply fragments, not SQL syntax or enclosing quotes. Authors
 choose the identifier quoting required by their database.
 
 Single-quoted strings, double-quoted text, SQL comments, and dollar-quoted strings
-retain their contents. Velty conditions, calls, loop variables, `$predicate`,
+retain their contents, except for the explicit `$Unsafe` emission described below.
+Velty conditions, calls, loop variables, `$predicate`,
 `$View`, declared query selectors, and normal scalar binds retain their existing
 owners. Replacement is not recursive.
 
@@ -146,10 +147,31 @@ substitutions.
 `$Unsafe.Table` and `${Unsafe.Table}` retain their existing raw SQL-template
 semantics. They can emit an entire trusted table string, including its quoting;
 ordinary SQL parameters remain bound. This is an explicit raw-text escape hatch,
-not the project-fragment mechanism above. Quoted `$Unsafe` text remains quoted
-SQL data. Existing authored constant-table metadata resolution is retained. For a direct
+not the project-fragment mechanism above. Explicit `$Unsafe` references also emit
+inside single-quoted SQL strings and backtick identifiers:
+
+```sql
+SELECT '$Unsafe.Constant' AS label FROM records
+SELECT * FROM `$Unsafe.Table`
+```
+
+The author owns quoting for this raw-text form. `$Unsafe` text inside comments,
+double-quoted text and dollar-quoted strings remains data. Existing authored
+constant-table metadata resolution is retained. For a direct
 table source, discovery reads constraints from the evaluated table target, so an
 instance override of a raw table constant also selects that table's metadata.
+
+## Projected scalar constants
+
+A declared typed constant can be projected as `$Constant AS column`. It remains
+a bound value (`? AS column` with its argument), including during schema discovery.
+When the driver has no result type for that placeholder, discovery uses the bound
+argument's Go type for that exact result ordinal. It does not sample rows, expand
+values into authored SQL, or infer arbitrary expressions from their arguments.
+
+Empty-string and integer literal projections retain their existing string/int
+type hints. An untyped `NULL AS column` still needs an authored application type
+when the driver cannot report one.
 
 ## Resource paths and ownership
 
@@ -171,3 +193,12 @@ SQL and bound arguments. No second resource or row cache is introduced.
 There is no separate substitution-map/profile configuration, global replacement
 pass, reverse replacement, or automatic `constants.yaml` dependency loading.
 Documentation dictionary `docSubstitutes` retains its separate documentation role.
+
+### Hidden SQL-backed fields
+
+A linked row field with an explicit `sqlx` or `source` mapping retains its Go
+schema type during SQL discovery even with `json:"-"`. This supports computed
+expressions and nested projections without sampling rows or changing the SQL.
+The JSON tag still hides the field from responses. JSON-only hidden fields,
+`sqlx:"-"` fields, internal fields, presence markers, and excluded embedded
+holders remain excluded from inferred SQL columns.

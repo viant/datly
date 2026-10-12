@@ -23,18 +23,20 @@ type ColumnBase struct {
 type ColumnHidden struct{ Secret string }
 type ColumnRow struct {
 	ColumnBase
-	ColumnHidden `sqlx:"-"`
-	ID           *int               `sqlx:"account_id,primaryKey=true,autoincrement=true" groupable:"true"`
-	Amount       float64            `sqlx:"total_spend,type=DECIMAL" groupable:"false"`
-	Created      *time.Time         `sqlx:"created_at"`
-	Label        string             `source:"display_label" codec:"label,outputType=string,prefix"`
-	Hidden       string             `sqlx:"-"`
-	JSONHidden   string             `json:"-"`
-	Internal     string             `internal:"true"`
-	Has          *struct{ ID bool } `setMarker:"true"`
-	Children     []*ColumnRow       `on:"ID=ID"`
-	Parent       *ColumnRow         `view:"Parent,table=parents"`
-	private      string
+	ColumnHidden  `sqlx:"-"`
+	ID            *int               `sqlx:"account_id,primaryKey=true,autoincrement=true" groupable:"true"`
+	Amount        float64            `sqlx:"total_spend,type=DECIMAL" groupable:"false"`
+	Created       *time.Time         `sqlx:"created_at"`
+	Label         string             `source:"display_label" codec:"label,outputType=string,prefix"`
+	Hidden        string             `sqlx:"-"`
+	JSONHidden    string             `json:"-"`
+	Internal      string             `internal:"true"`
+	Has           *struct{ ID bool } `setMarker:"true"`
+	Children      []*ColumnRow       `on:"ID=ID"`
+	Parent        *ColumnRow         `view:"Parent,table=parents"`
+	private       string
+	CleanupStatus string  `sqlx:"cleanup_status" json:"-"`
+	CreatedAtRaw  *string `sqlx:"created_at_raw" json:"-"`
 }
 type ColumnOutput struct {
 	Data []*ColumnRow `parameter:"result,kind=output,in=view" view:"Report,groupable=true" sql:"SELECT account_id,total_spend,region_code,created_at,display_label FROM records"`
@@ -58,6 +60,8 @@ type ColumnRow struct {
  Children []*ColumnRow ` + "`on:\"ID=ID\"`" + `
  Parent *ColumnRow ` + "`view:\"Parent,table=parents\"`" + `
  private string
+ CleanupStatus string ` + "`sqlx:\"cleanup_status\" json:\"-\"`" + `
+ CreatedAtRaw *string ` + "`sqlx:\"created_at_raw\" json:\"-\"`" + `
 }
 type InlineOutput struct { Data []struct { ID *int ` + "`sqlx:\"inline_id\"`" + ` } ` + "`parameter:\"view,kind=output,in=view\" view:\"Inline,table=records\"`" + ` }
 type ColumnOutput struct { Data []*ColumnRow ` + "`parameter:\"result,kind=output,in=view\" view:\"Report,groupable=true\" sql:\"SELECT account_id,total_spend,region_code,created_at,display_label FROM records\"`" + ` }
@@ -115,15 +119,18 @@ func TestPackageOutputCanonicalColumns(t *testing.T) {
 					}
 					require.NoError(t, (&outputColumnCompiler{output: xshape.New(tc.output, lookup)}).compile(component.RootView, "Data"))
 					columns := component.RootView.Columns
-					if len(columns) != 5 {
+					if len(columns) != 7 {
 						t.Fatalf("scalar columns=%+v", columns)
 					}
-					wantNames := []string{"Region", "ID", "Amount", "Created", "Label"}
-					wantSources := []string{"region_code", "account_id", "total_spend", "created_at", "display_label"}
+					wantNames := []string{"Region", "ID", "Amount", "Created", "Label", "CleanupStatus", "CreatedAtRaw"}
+					wantSources := []string{"region_code", "account_id", "total_spend", "created_at", "display_label", "cleanup_status", "created_at_raw"}
 					for i, c := range columns {
 						if c.Name != wantNames[i] || c.Source != wantSources[i] {
 							t.Fatalf("column %d=%+v", i, c)
 						}
+					}
+					if columns[5].Type.Name != "string" || columns[6].Type != (spec.TypeRef{Name: "string", Pointer: true}) || !columns[6].Nullable || reflect.StructTag(columns[5].Tag).Get("json") != "-" || reflect.StructTag(columns[6].Tag).Get("json") != "-" {
+						t.Fatalf("JSON-hidden SQL type metadata lost: %+v", columns[5:])
 					}
 					if component.RootView.Key.Scope != "example.com/shared" {
 						t.Fatalf("view scope drift=%s", component.RootView.Key.Scope)

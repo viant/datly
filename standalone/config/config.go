@@ -139,6 +139,9 @@ func (c *Config) Validate() error {
 	if err := c.Config.ValidatePathSemantics(); err != nil {
 		return err
 	}
+	if err := c.Config.ValidateMethodMismatchPolicy(); err != nil {
+		return err
+	}
 	if c.JWTClaims != nil && c.JWTValidator == nil {
 		return fmt.Errorf("JWTClaims requires JWTValidator")
 	}

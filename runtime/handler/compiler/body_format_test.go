@@ -125,7 +125,7 @@ func TestNestedAuthoredBodyFormatsAndPresence(t *testing.T) {
 	}
 }
 
-func TestBodyWithoutAuthoredFormatKeepsOrdinaryDecoder(t *testing.T) {
+func TestBodyWithoutAuthoredFormatKeepsNativeDefaultDateOwner(t *testing.T) {
 	type plain struct{ When *time.Time }
 	type input struct {
 		Rows []*plain `parameter:"Rows,kind=body,in=data"`
@@ -154,8 +154,12 @@ func TestBodyWithoutAuthoredFormatKeepsOrdinaryDecoder(t *testing.T) {
 		t.Fatal(err)
 	}
 	var actual input
-	if err := scope.Bind(t.Context(), &actual, bindly.WithPlan(route.Plan())); err == nil {
-		t.Fatal("unauthored short date must not silently gain parsing behavior")
+	if err := scope.Bind(t.Context(), &actual, bindly.WithPlan(route.Plan())); err != nil {
+		t.Fatal(err)
+	}
+	// The default owner retains the original Taglyeade short-offset behavior.
+	if len(actual.Rows) != 1 || actual.Rows[0].When == nil || actual.Rows[0].When.Format(time.RFC3339Nano) != "2026-10-01T04:20:27Z" {
+		t.Fatalf("native default date result=%+v", actual)
 	}
 }
 

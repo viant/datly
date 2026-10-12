@@ -37,7 +37,7 @@ func (c *Compiler) compileFactoryInputShape(ctx context.Context, source *Source,
 		if len(shapeComponent.Views) != 0 {
 			rows, err := newPackageViewResolver(shapeComponent, resolver).typedInputDescriptors(prepared.TypeContext.PackagePath, bindings, func(name string) (bool, error) {
 				return ownership.authoredCurrent(name)
-			})
+			}, nil)
 			if err != nil {
 				return nil, err
 			}
@@ -242,7 +242,7 @@ func (c *Compiler) compileFactoryInputShape(ctx context.Context, source *Source,
 	}
 	shapeComponent.Parameters = runtime.Clone().Parameters
 	shapeComponent.RootView = root
-	rows, err := newPackageViewResolver(shapeComponent, resolver).externalInputDescriptors(prepared.TypeContext.PackagePath, bindings)
+	rows, err := newPackageViewResolver(shapeComponent, resolver).typedInputDescriptors(prepared.TypeContext.PackagePath, bindings, ownership.authoredCurrent, ownedNames)
 	if err != nil {
 		return nil, err
 	}

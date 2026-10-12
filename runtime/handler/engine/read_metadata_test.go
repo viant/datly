@@ -107,7 +107,7 @@ func TestBoundInputBindsSupplementalReadsAndMetadata(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	plan, err := boundSupplementalPlan(injector, contract)
+	plan, err := boundSupplementalPlan(injector, contract, input)
 	if err != nil || plan == nil {
 		t.Fatalf("supplemental plan=%v err=%v", plan, err)
 	}

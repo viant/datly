@@ -238,3 +238,10 @@ Datly is licensed under the [Apache License 2.0](LICENSE). Preserve [NOTICE](NOT
 and the attribution files described in [third-party notices](THIRD_PARTY_NOTICES.md)
 when redistributing source, binaries or generated authoring bundles. The separate
 xdatly SDK and native dependencies retain their own licenses.
+
+## Credits and Acknowledgements
+
+**Library Authors:**
+
+- Kamil Larysz
+- Adrian Witas

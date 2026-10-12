@@ -83,10 +83,10 @@ func (r *viewRead) done(rows int, err error) {
 		}
 	}
 	r.metric.Rows = rows
-	status := "Success"
+	var status interface{} = "Success"
 	if err != nil {
 		r.metric.Error = err.Error()
-		status = "Error"
+		status = err
 	}
 	r.mu.Unlock()
 	r.counterDone(r.metric.EndTime, status)

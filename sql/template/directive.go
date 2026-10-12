@@ -19,7 +19,7 @@ func protectContextVariables(source string, variables ...string) string {
 			if !isTemplateVariable(source, position, variable, true) {
 				continue
 			}
-			if variable == unsafeVariable && isQuotedUnsafeIdentifier(source, position) {
+			if variable == unsafeVariable && isQuotedUnsafeEmission(source, position) {
 				break
 			}
 			if _, end, kind := sqltext.ProtectedRangeAt(source, position); kind != "" {
@@ -53,7 +53,7 @@ func protectContextVariables(source string, variables ...string) string {
 
 // hasTemplateCode lexes SQL text before invoking Velty. Template-looking text
 // inside SQL literals or comments is data, not code. Explicit $Unsafe input
-// emission also applies inside backtick identifiers, as in authored BigQuery SQL.
+// emission also applies inside SQL strings and backtick identifiers.
 func hasTemplateCode(source string, variables ...string) bool {
 	scanner := sqltext.NewCodeScanner(source, 0)
 	for position, ok := scanner.Next(); ok; position, ok = scanner.Next() {
@@ -76,7 +76,7 @@ func hasTemplateCode(source string, variables ...string) bool {
 			break
 		}
 		offset += relative
-		if isQuotedUnsafeIdentifier(source, offset) {
+		if isQuotedUnsafeEmission(source, offset) {
 			return true
 		}
 		offset++
@@ -84,12 +84,12 @@ func hasTemplateCode(source string, variables ...string) bool {
 	return false
 }
 
-func isQuotedUnsafeIdentifier(source string, position int) bool {
+func isQuotedUnsafeEmission(source string, position int) bool {
 	if !isTemplateVariable(source, position, unsafeVariable, false) {
 		return false
 	}
 	start, _, kind := sqltext.ProtectedRangeAt(source, position)
-	return kind == "SQL quoted text" && source[start] == '`'
+	return kind == "SQL quoted text" && (source[start] == '`' || source[start] == '\'')
 }
 
 func isTemplateVariable(source string, offset int, expected string, fold bool) bool {

@@ -26,7 +26,12 @@ func TestFactoryInputShapeSharedCurrentGeneration(t *testing.T) {
 	testFactoryInputShapeJoinedCurrentGeneration(t, true)
 }
 
-func testFactoryInputShapeJoinedCurrentGeneration(t *testing.T, shared bool) {
+func TestFactoryInputShapeSharedTransientCurrentGeneration(t *testing.T) {
+	testFactoryInputShapeJoinedCurrentGeneration(t, true, true)
+}
+
+func testFactoryInputShapeJoinedCurrentGeneration(t *testing.T, shared bool, transient ...bool) {
+	excluded := len(transient) > 0 && transient[0]
 	t.Helper()
 	root, source := factoryInputShapeFixture(t)
 	source.Text = strings.Replace(source.Text, "#setting($_ = $internal(true))\n", "", 1)
@@ -91,6 +96,10 @@ func testFactoryInputShapeJoinedCurrentGeneration(t *testing.T, shared bool) {
  if bodyRows[len(bodyRows)-1] != current { return fmt.Errorf("Current body pointer identity lost") }
  current.SetTarget("before")
  if current.Has == nil || !current.Has.Target { return fmt.Errorf("shared Current methods unavailable") }`, 1)
+	}
+	if excluded {
+		source.Text = strings.Replace(source.Text, `tag(a.SECRET,'internal:"true" json:"-"')`, `internal_transient(a.SECRET)`, 1)
+		businessSource = strings.Replace(businessSource, `if current.Secret == nil || *current.Secret != "server-only" { return fmt.Errorf("private persisted field was not read") }`, `if current.Secret != nil || in.OtherCurrent[0].Secret != nil || in.OtherCurrent[0].Has != nil { return fmt.Errorf("transient physical Current leaked values or presence") }`, 1)
 	}
 	// MySQL reports the primary key as non-nullable; SQLite's scan metadata
 	// supplies a pointer. Exercise each discovered contract without forcing
@@ -215,6 +224,12 @@ func testFactoryInputShapeJoinedCurrentGeneration(t *testing.T, shared bool) {
 			runtimeSource = strings.Replace(runtimeSource, `\"target\":\"after\"`, `\"target\":\"after\",\"secret\":\"untrusted\",\"logic\":\"untrusted\"`, 1)
 			runtimeSource = strings.ReplaceAll(runtimeSource, "require.Len(t,component.Views,1)", "require.Len(t,component.Views,3)")
 			runtimeSource = strings.ReplaceAll(runtimeSource, "require.Len(t,artifact.ViewDependencies,1)", "require.Len(t,artifact.ViewDependencies,3)")
+		}
+		if excluded {
+			runtimeSource = strings.Replace(runtimeSource, "UPDATE PARENT SET SECRET='server-only'", "UPDATE PARENT SET SECRET='server-only' WHERE ID=1", 1)
+			runtimeSource = strings.Replace(runtimeSource, "var notes int;", `secretField,_:=reflect.TypeFor[Res]().FieldByName("Secret");require.Equal(t,"-",secretField.Tag.Get("sqlx"));require.Equal(t,"-",secretField.Tag.Get("json"));require.Equal(t,"-",secretField.Tag.Get("diff"))
+ var secret string;require.NoError(t,db.DB.QueryRow("SELECT SECRET FROM PARENT WHERE ID=1").Scan(&secret));require.Equal(t,"server-only",secret)
+ var notes int;`, 1)
 		}
 		writeSourceHandlerFile(t, root, "archive/runtime_test.go", runtimeSource)
 		cmd := exec.CommandContext(t.Context(), "go", "test", "-mod=readonly", "-race", "-count=1", "-v", "./archive")
