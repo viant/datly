@@ -65,8 +65,6 @@ Application handler imports:
 import (
     "context"
     "fmt"
-    dexec "github.com/viant/datly/exec"
-    "github.com/viant/datly/spec"
     "github.com/viant/xdatly/handler"
 )
 ~~~~
@@ -89,18 +87,14 @@ Inside the handler, bind invocation capabilities and pass an explicitly construc
 ~~~~go
 deps := struct {
     Authorizer Authorizer `bind:"kind=records.authorizer,required"`
-    Invoker dexec.ComponentInvoker `bind:"kind=component_invoker,required"`
+    Invoker handler.ComponentInvoker `bind:"kind=component_invoker,required"`
 }{}
 if err := session.Binder().Bind(ctx, &deps); err != nil { return err }
 
-value, err := deps.Invoker.InvokeComponent(ctx, dexec.ComponentRequest{
-    Target: dexec.ComponentTarget{
-        Component: spec.Key{
-            Kind: spec.KindComponent,
-            Scope: "example.com/private/records",
-            Name: "Lookup",
-        },
-        Route: spec.RouteRef{Method: "GET", Path: "/internal/records/lookup"},
+value, err := deps.Invoker.Invoke(ctx, handler.ComponentRequest{
+    Target: handler.ComponentTarget{
+        Scope: "example.com/private/records", Name: "Lookup",
+        Method: "GET", Path: "/internal/records/lookup",
     },
     Input: &LookupInput{TenantID: input.TenantID, ID: input.ID},
 })

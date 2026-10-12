@@ -55,6 +55,16 @@ Scoped non-identity numbering is a separate capability. Its optional ledger is n
 - For direct bytes, conditional finalizers, YAML docs, static/MCP resources and operational services, read [output-and-operations.md](references/output-and-operations.md). Separate current APIs from pending authoring/integration contracts.
 - Use [acceptance.md](references/acceptance.md) to verify observable application behavior. Framework maintenance is outside this skill.
 
+## Application-only scalar fields
+
+
+Use `internal_transient(view.column)` for the exact combination `sqlx:"-" diff:"-" internal:"true" json:"-"`. It retains the generated scalar and presence marker while excluding SQL mapping, diffs and JSON. Keep public logical fields public; use `sqlx:"-"` alone when only persistence should be excluded. Place this annotation on the outer projection and retain separate CAST or validation declarations when needed.
+
+## Directive formatting
+
+
+Separate directive groups with one blank line: `#package`, consecutive `#import` declarations, consecutive `#setting`/`#settings` declarations, then `#define` parameters. Keep related declarations together and leave a blank line before the SQL graph. Preserve executable SQL and template expressions while formatting. Follow the original SQL-derived omission defaults instead of repeating `omitempty` on each column or adding a setting to reproduce an inferred default. Keep genuine wire exceptions and validation tags. Global `case_format` supplies ordinary names. Verify omission, explicit zero/null presence, and source response parity after regeneration; a missing inferred default is a framework gap to resolve, not a reason to inflate DQL.
+
 ## Simplify projections
 
 Start with `view.*` for ordinary fields. Add outer declarations only for genuine shape or behavior configuration: type/holder names, actual type conversions, required/optional overrides, codecs, validation, relations or lifecycle policy. Do not enumerate columns beside a wildcard or repeat inferred types through CAST, WithColumnType or per-column JSON tags.
@@ -123,3 +133,7 @@ Use explicit `$file_prefix('orders_')` only when requested or needed for chosen
 same-package destinations. Exact per-file overrides win and are never prefixed.
 Read [filename roles and override syntax](references/dql-grammar.md#generated-filenames-and-destinations)
 for support files, split destinations, collision rules and safe regeneration.
+
+## Application and runtime boundary
+
+Application components, inputs and lifecycle hooks depend on Xdatly public interfaces; Datly supplies their implementations. Inject `handler.ComponentInvoker` from `github.com/viant/xdatly/handler` with `bind:"kind=component_invoker,required"` and call `Invoke` with the exact `Scope`, `Name`, `Method` and `Path`. Use `handler.WithInput` for an explicitly marked reader seed; preserve the distinction from a trusted typed writer `Input`. Provider overlays and completion callbacks retain the caller's canonical binding, authorization, shared buffered writes and transaction owner. Use Xdatly contracts for DML, sequencing, validation, differ, logger and mutation reporting. Do not instantiate Datly runtime implementations inside business hooks or expose runtime-only invocation controls in application contracts. Datly bootstrap/registration adapters may depend on Datly. The older Datly invocation interface remains supported for existing consumers; new application examples use Xdatly.

@@ -28,7 +28,7 @@ separate patch engine or raw transaction facade.
 ## Compose components
 
 Bind a declared component dependency through the existing component provider,
-or explicitly invoke a typed target through the scoped `exec.ComponentInvoker`.
+or explicitly invoke a typed target through the scoped `handler.ComponentInvoker`.
 The [forwarding example](../llm/datly-custom-component/references/custom-examples.md#explicit-typed-forwarding-and-trusted-service-registration)
 shows a public POST forwarding an exact typed input to a private reader. It
 preserves internal visibility, authorization and the root transaction owner.
@@ -50,7 +50,7 @@ Data's transaction; it is not client-bindable or installed by default.
 
 The first endpoint invocation owns transaction completion. Its first generic
 writer starts the transaction. Invoke child readers and writers through the
-scoped `exec.ComponentInvoker`; they share the database unit and buffered DML.
+scoped `handler.ComponentInvoker`; they share the database unit and buffered DML.
 By default, child calls retain their operations in the caller's journal; the
 owning root prepares and completes it. No `component_call_policy` setting is
 needed for buffered calls. Omitted child policies inherit their parent, including
