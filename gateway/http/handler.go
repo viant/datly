@@ -29,6 +29,7 @@ type Handler struct {
 	serviceTimeHeader string
 	metrics           *MetricsConfig
 	metricPrefix      string
+	metricPrefixes    []string
 	async             *asyncRoutes
 	allowedSubnet     []string
 	documents         *documentRoutes

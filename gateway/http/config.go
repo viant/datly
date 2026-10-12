@@ -169,6 +169,10 @@ func (c Config) Build(ctx context.Context, input HandlerInput) (*Handler, error)
 	}
 	h := NewHandler(rt, log, version)
 	h.metricPrefix = metricPrefix
+	h.metricPrefixes, err = metricReportingPrefixes(input, metricPrefix)
+	if err != nil {
+		return nil, err
+	}
 	h.pathSemantics = c.PathSemantics
 	h.serviceTimeHeader = c.ServiceTimeHeader
 	h.authorize = c.Authorize

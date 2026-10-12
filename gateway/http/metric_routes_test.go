@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	dexec "github.com/viant/datly/exec"
@@ -81,6 +82,68 @@ func TestMetricReportingOptionalHTTPPolicySQLite(t *testing.T) {
 		_, err := (Config{Meta: Meta{MetricURI: prefix}}).NewHandler(rt, nil, "")
 		require.Error(t, err, prefix)
 	}
+}
+
+func TestMetricReportingDeclaredLocationSQLite(t *testing.T) {
+	f := newConfigFixture(t)
+	f.component.Settings = nil
+	identity, err := f.component.RootView.Identity()
+	require.NoError(t, err)
+	policy := &observability.Policy{Views: []observability.ViewObservation{{Component: f.component.Key, ViewIdentity: identity, Operation: &observability.OperationDescriptor{Name: "mdp.deal.deal", Location: "mdp/deal", Description: "deal performance", Provider: observability.Basic2}}}}
+	rt := f.runtime(t, druntime.WithObservability(druntime.ObservabilityConfig{Policy: policy}))
+	t.Cleanup(func() { require.NoError(t, rt.Shutdown(context.Background())) })
+	h, err := (Config{Meta: Meta{MetricURI: "/v1/api/meta/metric"}}).NewHandler(rt, nil, "")
+	require.NoError(t, err)
+	send := func(method, path string) *httptest.ResponseRecorder {
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, httptest.NewRequest(method, path, nil))
+		return w
+	}
+	prefix := "/v1/api/meta/metric/mdp/deal/"
+	before := send("GET", prefix+"operations")
+	require.Equal(t, 200, before.Code, before.Body.String())
+	require.JSONEq(t, "null", before.Body.String(), "staging reporting paths must not register counters")
+	require.Equal(t, 200, send("GET", "/api/records?tenant=1").Code)
+	rt.Observability().Recorder.Begin("native/unrelated", time.Now())(time.Now(), "Success")
+	for _, suffix := range []string{"operations", "operation/mdp.deal.deal", "operation/mdp.deal.deal/cumulative/error", "operation/mdp.deal.deal/recent/pending", "operation/mdp.deal.deal/recent", "counters", "counter/unknown"} {
+		w := send("GET", prefix+suffix)
+		require.Equal(t, 200, w.Code, w.Body.String())
+	}
+	var filtered []struct {
+		Name     string
+		Count    int64
+		Counters []struct {
+			Value string
+			Count int64
+		}
+	}
+	require.NoError(t, json.Unmarshal(send("GET", prefix+"operations").Body.Bytes(), &filtered))
+	require.Len(t, filtered, 1)
+	require.Equal(t, "mdp.deal.deal", filtered[0].Name)
+	require.EqualValues(t, 1, filtered[0].Count)
+	require.Len(t, filtered[0].Counters, 2)
+	require.Equal(t, "error", filtered[0].Counters[0].Value)
+	require.Equal(t, "pending", filtered[0].Counters[1].Value)
+	require.Zero(t, filtered[0].Counters[0].Count)
+	require.Zero(t, filtered[0].Counters[1].Count)
+	global := send("GET", "/v1/api/meta/metric/operations")
+	require.Contains(t, global.Body.String(), "native/unrelated")
+	require.Equal(t, 405, send("POST", prefix+"operations").Code)
+	require.Equal(t, 404, send("GET", "/v1/api/meta/metric/not-declared/operations").Code)
+}
+
+func TestMetricReportingDeclaredLocationRejectsTemplateCollisionSQLite(t *testing.T) {
+	f := newConfigFixture(t)
+	f.component.Settings = nil
+	f.component.Routes[0].Path = "/{root}/{module}/{resource}/operations"
+	identity, err := f.component.RootView.Identity()
+	require.NoError(t, err)
+	policy := &observability.Policy{Views: []observability.ViewObservation{{Component: f.component.Key, ViewIdentity: identity, Operation: &observability.OperationDescriptor{Name: "records", Location: "mdp/deal", Description: "records performance", Provider: observability.Basic2}}}}
+	rt := f.runtime(t, druntime.WithObservability(druntime.ObservabilityConfig{Policy: policy}))
+	t.Cleanup(func() { require.NoError(t, rt.Shutdown(context.Background())) })
+	_, err = (Config{Meta: Meta{MetricURI: "/metric"}}).NewHandler(rt, nil, "")
+	require.ErrorContains(t, err, "metric reporting route collides")
+	require.Empty(t, rt.Observability().Recorder.Values("records"))
 }
 
 func TestMetricReportingRejectsNativeTemplateIntersectionSQLite(t *testing.T) {

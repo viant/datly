@@ -99,6 +99,25 @@ func WithPolicy(policy *Policy) RecorderOption {
 	return func(r *Recorder) { r.policy, r.policyErr = frozen.compile() }
 }
 
+// MetricLocations returns declared reporting locations without registering any
+// counters. HTTP staging uses the same frozen policy as later SQL capture.
+func (r *Recorder) MetricLocations() []string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	locations := map[string]bool{}
+	if r.policy != nil {
+		for _, operation := range r.policy.operations {
+			locations[operation.Location] = true
+		}
+	}
+	result := make([]string, 0, len(locations))
+	for location := range locations {
+		result = append(result, location)
+	}
+	sort.Strings(result)
+	return result
+}
+
 // ViewTarget is emitted by completed reader plans for validation before use.
 type ViewTarget struct {
 	Component spec.Key

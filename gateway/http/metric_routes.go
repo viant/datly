@@ -4,6 +4,7 @@ import (
 	"fmt"
 	stdhttp "net/http"
 	"net/url"
+	"sort"
 	"strings"
 
 	rroute "github.com/viant/datly/runtime/route"
@@ -31,12 +32,18 @@ func (c Config) metricPrefix(input HandlerInput) (string, error) {
 		}
 	}
 	var reporting []*rroute.PathTemplate
-	for _, suffix := range []string{"operations", "counters", "operation/{name}", "counter/{name}", "operation/{name}/recent", "operation/{name}/recent/{metric}", "operation/{name}/cumulative/{metric}"} {
-		template, err := rroute.CompilePathTemplate(prefix + "/" + suffix)
-		if err != nil {
-			return "", fmt.Errorf("invalid metric reporting route: %w", err)
+	prefixes, err := metricReportingPrefixes(input, prefix+"/")
+	if err != nil {
+		return "", err
+	}
+	for _, reportPrefix := range prefixes {
+		for _, suffix := range []string{"operations", "counters", "operation/{name}", "counter/{name}", "operation/{name}/recent", "operation/{name}/recent/{metric}", "operation/{name}/cumulative/{metric}"} {
+			template, err := rroute.CompilePathTemplate(reportPrefix + suffix)
+			if err != nil {
+				return "", fmt.Errorf("invalid metric reporting route: %w", err)
+			}
+			reporting = append(reporting, template)
 		}
-		reporting = append(reporting, template)
 	}
 	for _, endpoint := range input.Runtime.Routes() {
 		if overlaps(endpoint.Path) {
@@ -62,6 +69,31 @@ func (c Config) metricPrefix(input HandlerInput) (string, error) {
 		}
 	}
 	return prefix + "/", nil
+}
+
+func metricReportingPrefixes(input HandlerInput, prefix string) ([]string, error) {
+	if prefix == "" {
+		return nil, nil
+	}
+	result := []string{prefix}
+	owner := input.Runtime.Observability()
+	if owner != nil && owner.Recorder != nil {
+		for _, location := range owner.Recorder.MetricLocations() {
+			// A reporting location is a literal relative path. Preserve it rather
+			// than cleaning an invalid declaration into a different namespace.
+			if location != strings.Trim(location, "/") || strings.ContainsAny(location, "{}%*?#\\\r\n \t") {
+				return nil, fmt.Errorf("invalid metric reporting location %q", location)
+			}
+			for _, segment := range strings.Split(location, "/") {
+				if segment == "" || segment == "." || segment == ".." {
+					return nil, fmt.Errorf("invalid metric reporting location %q", location)
+				}
+			}
+			result = append(result, prefix+location+"/")
+		}
+	}
+	sort.Slice(result, func(i, j int) bool { return len(result[i]) > len(result[j]) })
+	return result, nil
 }
 
 // Native templates contain literal or whole-segment nonempty placeholders.
@@ -110,17 +142,23 @@ func (h *Handler) serveMetricReporting(writer stdhttp.ResponseWriter, request *s
 	if h.metricPrefix == "" || !strings.HasPrefix(h.routingPath(request), h.metricPrefix) {
 		return false
 	}
-	path := strings.TrimPrefix(request.URL.EscapedPath(), h.metricPrefix)
-	parts := strings.Split(path, "/")
-	matched := path == "operations" || path == "counters" || len(parts) == 2 && (parts[0] == "counter" || parts[0] == "operation") && parts[1] != "" || len(parts) == 3 && parts[0] == "operation" && parts[1] != "" && parts[2] == "recent" || len(parts) == 4 && parts[0] == "operation" && parts[1] != "" && (parts[2] == "recent" || parts[2] == "cumulative") && parts[3] != ""
-	if !matched {
-		return false
-	}
-	if request.Method != stdhttp.MethodGet {
-		writer.Header().Set("Allow", stdhttp.MethodGet)
-		writer.WriteHeader(stdhttp.StatusMethodNotAllowed)
+	for _, prefix := range h.metricPrefixes {
+		if !strings.HasPrefix(request.URL.EscapedPath(), prefix) {
+			continue
+		}
+		path := strings.TrimPrefix(request.URL.EscapedPath(), prefix)
+		parts := strings.Split(path, "/")
+		matched := path == "operations" || path == "counters" || len(parts) == 2 && (parts[0] == "counter" || parts[0] == "operation") && parts[1] != "" || len(parts) == 3 && parts[0] == "operation" && parts[1] != "" && parts[2] == "recent" || len(parts) == 4 && parts[0] == "operation" && parts[1] != "" && (parts[2] == "recent" || parts[2] == "cumulative") && parts[3] != ""
+		if !matched {
+			continue
+		}
+		if request.Method != stdhttp.MethodGet {
+			writer.Header().Set("Allow", stdhttp.MethodGet)
+			writer.WriteHeader(stdhttp.StatusMethodNotAllowed)
+			return true
+		}
+		h.runtime.Observability().Recorder.ServeMetrics(prefix, writer, request)
 		return true
 	}
-	h.runtime.Observability().Recorder.ServeMetrics(h.metricPrefix, writer, request)
-	return true
+	return false
 }
