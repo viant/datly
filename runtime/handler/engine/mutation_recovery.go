@@ -136,7 +136,17 @@ func recoverMutation(ctx context.Context, request Request, data *dataScope, invo
 	default:
 		return rhandler.RecoveryNone, false, nil
 	}
-	decision, err := recoverer.RecoverMutation(ctx, invocation, data.finalizers[0].result, rhandler.MutationOutcome{Outcome: outcome, Mutation: mutation, Attempt: request.mutationAttempt, RetryLimit: 1})
+	if ctx.Err() != nil {
+		return rhandler.RecoveryNone, false, nil
+	}
+	recoveryContext, closeReads := beginRootRecoveryReads(ctx, data)
+	decision, err := func() (rhandler.Recovery, error) {
+		defer func() { _ = closeReads() }()
+		return recoverer.RecoverMutation(recoveryContext, invocation, data.finalizers[0].result, rhandler.MutationOutcome{Outcome: outcome, Mutation: mutation, Attempt: request.mutationAttempt, RetryLimit: 1})
+	}()
+	if readErr := closeReads(); readErr != nil {
+		return rhandler.RecoveryNone, false, errors.Join(err, readErr)
+	}
 	if err != nil || decision == rhandler.RecoveryNone {
 		return decision, false, err
 	}

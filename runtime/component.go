@@ -60,17 +60,21 @@ func (i *scopedComponentInvoker) InvokeComponent(ctx context.Context, request de
 	if i.authority != nil {
 		ctx = i.authority(ctx)
 	}
+	recoveryRead := handlerengine.IsRootRecoveryRead(ctx)
 	policy := "imperative"
-	if i.buffered {
+	if i.buffered && !recoveryRead {
 		policy = "buffered"
 	}
 	ctx = context.WithValue(ctx, resolvedComponentCallPolicyKey{}, policy)
 	relation := handlerengine.ComponentImperative
-	if i.buffered {
+	if i.buffered && !recoveryRead {
 		if request.IndependentChildTransactions {
 			return nil, fmt.Errorf("buffered component calls cannot use independent child transactions")
 		}
 		relation = handlerengine.ComponentBufferedImperative
+	}
+	if recoveryRead {
+		relation = handlerengine.ComponentBinding
 	}
 	ctx = handlerengine.PrepareComponent(ctx, relation, "")
 	return i.runtime.invokeComponent(ctx, request, i.scope)
