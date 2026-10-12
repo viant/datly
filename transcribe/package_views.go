@@ -87,12 +87,12 @@ func (r *packageViewResolver) inputDescriptorsFromMetadata() ([]linkedInputView,
 // externalInputDescriptors selects authored foreign rows without consulting
 // stale descriptors for local contracts that this invocation will generate.
 func (r *packageViewResolver) externalInputDescriptors(packagePath string, bindings generate.ViewBindings) ([]linkedInputView, error) {
-	return r.typedInputDescriptors(packagePath, bindings, nil)
+	return r.typedInputDescriptors(packagePath, bindings, nil, nil)
 }
 
 // typedInputDescriptors retains foreign linking policy unless a factory proves
 // selected authored ownership for an explicitly borrowed local row.
-func (r *packageViewResolver) typedInputDescriptors(packagePath string, bindings generate.ViewBindings, authoredLocal func(string) (bool, error)) ([]linkedInputView, error) {
+func (r *packageViewResolver) typedInputDescriptors(packagePath string, bindings generate.ViewBindings, authoredLocal func(string) (bool, error), bodyOwnedNames map[string]string) ([]linkedInputView, error) {
 	authority := &generate.Plan{Package: packagePath}
 	if r.component.TypeContext != nil {
 		authority.Imports = r.component.TypeContext.Imports
@@ -131,6 +131,11 @@ func (r *packageViewResolver) typedInputDescriptors(packagePath string, bindings
 			}
 		}
 		if strings.HasPrefix(base, packagePath+".") {
+			// Fresh body rows retain SQL authority. Check the canonical view type
+			// above before excluding them from authored declaration discovery.
+			if bodyOwnedNames[base] != "" {
+				continue
+			}
 			if authoredLocal == nil {
 				continue
 			}

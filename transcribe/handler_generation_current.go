@@ -150,7 +150,16 @@ func (g *handlerGeneration) currentProjectionFields(generated *gen.Plan, express
 	if g.input.TypeResolver == nil {
 		return nil, fmt.Errorf("current projection type %s requires canonical type authority", base)
 	}
-	resolved, err := g.input.TypeResolver.ResolveShape(base)
+	lookup := base
+	if view := generated.ViewByType(base); view != nil && view.Ownership == gen.ViewLinked {
+		// Emitted local names are relative to the generated package; retain the
+		// linked descriptor authority when discovery uses a DQL source package.
+		if strings.TrimSpace(view.DescriptorKey) == "" {
+			return nil, fmt.Errorf("current projection linked type %s requires a canonical descriptor key", base)
+		}
+		lookup = view.DescriptorKey
+	}
+	resolved, err := g.input.TypeResolver.ResolveShape(lookup)
 	if err != nil {
 		return nil, err
 	}
