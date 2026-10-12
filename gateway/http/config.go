@@ -23,6 +23,9 @@ type Config struct {
 	// native escaped segments; "decoded" uses the once-decoded URL.Path boundaries.
 	// Original request URLs remain intact for security checks and observation.
 	PathSemantics string `json:"PathSemantics,omitempty" yaml:"PathSemantics,omitempty"`
+	// MethodMismatchPolicy controls unsupported methods on public component paths.
+	// Empty or "method-not-allowed" returns 405; "not-found" returns 404.
+	MethodMismatchPolicy string `json:"MethodMismatchPolicy,omitempty" yaml:"MethodMismatchPolicy,omitempty"`
 
 	// ServiceTimeHeader opts into execution-duration reporting under this name.
 	// Empty disables generated timing. Use Datly-Service-Time or a dedicated custom
@@ -153,6 +156,9 @@ func (c Config) Build(ctx context.Context, input HandlerInput) (*Handler, error)
 	if err := c.ValidatePathSemantics(); err != nil {
 		return nil, err
 	}
+	if err := c.ValidateMethodMismatchPolicy(); err != nil {
+		return nil, err
+	}
 	c = c.resolved()
 	keys, err := c.APIKeys.Resolve(ctx)
 	if err != nil {
@@ -174,6 +180,7 @@ func (c Config) Build(ctx context.Context, input HandlerInput) (*Handler, error)
 		return nil, err
 	}
 	h.pathSemantics = c.PathSemantics
+	h.methodMismatchPolicy = c.MethodMismatchPolicy
 	h.serviceTimeHeader = c.ServiceTimeHeader
 	h.authorize = c.Authorize
 	h.allowedSubnet = c.Meta.AllowedSubnet
@@ -226,4 +233,14 @@ func (h *Handler) Shutdown(ctx context.Context) error {
 		return nil
 	}
 	return h.warmup.lifetime.Shutdown(ctx)
+}
+
+// ValidateMethodMismatchPolicy rejects unsupported routing policies before activation.
+func (c Config) ValidateMethodMismatchPolicy() error {
+	switch c.MethodMismatchPolicy {
+	case "", "method-not-allowed", "not-found":
+		return nil
+	default:
+		return fmt.Errorf("invalid MethodMismatchPolicy %q", c.MethodMismatchPolicy)
+	}
 }

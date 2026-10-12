@@ -3,6 +3,8 @@ package generate
 import (
 	"encoding/json"
 	"fmt"
+	"go/ast"
+	"go/parser"
 	"path"
 	"reflect"
 	"strings"
@@ -288,6 +290,37 @@ func (m *runtimeInputMaterializer) descriptorType(name string) (reflect.Type, er
 	}
 	m.building[key] = true
 	defer delete(m.building, key)
+	// Source-only named scalars and containers need their underlying type only
+	// for discovery. Generated Go keeps the named identity and its methods.
+	var declaration ast.Expr
+	imports := map[string]string{}
+	if synthetic := descriptor.SynteticType; synthetic != nil && synthetic.TypeSpec != nil {
+		declaration = synthetic.TypeSpec.Type
+		for alias, imported := range synthetic.Imports {
+			if imported != nil {
+				imports[alias] = imported.Path
+			}
+		}
+	} else if strings.TrimSpace(descriptor.Definition) != "" {
+		declaration, err = parser.ParseExpr(descriptor.Definition)
+		if err != nil {
+			return nil, fmt.Errorf("discovery declaration %q: %w", key, err)
+		}
+	}
+	if declaration != nil {
+		if _, isStruct := declaration.(*ast.StructType); !isStruct {
+			canonical, err := (xshape.Resolver{Package: descriptor.PkgPath, Imports: imports}).Canonical(declaration)
+			if err != nil {
+				return nil, fmt.Errorf("discovery declaration %q: %w", key, err)
+			}
+			result, err := m.runtime().Type(canonical)
+			if err != nil {
+				return nil, fmt.Errorf("materialize discovery type %q: %w", key, err)
+			}
+			m.types[key] = result
+			return result, nil
+		}
+	}
 	fields, err := xshape.New(descriptor, m.resolver.Descriptor).Fields()
 	if err != nil {
 		return nil, err

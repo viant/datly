@@ -12,7 +12,9 @@ import (
 type EntityMethod struct {
 	Receiver, Name, ValueType string
 	Getter                    bool
-	Signature                 string
+	// FieldAccessor distinguishes field accessors from invariant/helper methods.
+	FieldAccessor bool
+	Signature     string
 }
 
 // EntitySupportAsset is Go source shared by generated Go and Velty adapters.
