@@ -193,3 +193,12 @@ SQL and bound arguments. No second resource or row cache is introduced.
 There is no separate substitution-map/profile configuration, global replacement
 pass, reverse replacement, or automatic `constants.yaml` dependency loading.
 Documentation dictionary `docSubstitutes` retains its separate documentation role.
+
+### Hidden SQL-backed fields
+
+A linked row field with an explicit `sqlx` or `source` mapping retains its Go
+schema type during SQL discovery even with `json:"-"`. This supports computed
+expressions and nested projections without sampling rows or changing the SQL.
+The JSON tag still hides the field from responses. JSON-only hidden fields,
+`sqlx:"-"` fields, internal fields, presence markers, and excluded embedded
+holders remain excluded from inferred SQL columns.
