@@ -84,7 +84,7 @@ func TestInferredForeignKeyDoesNotInventResultLineage(t *testing.T) {
 	}
 	column := &spec.Column{Name: "PARENT", Source: "PARENT"}
 	applyTableConstraints([]*spec.Column{column}, map[string]tableConstraint{"parent_id": {name: "PARENT_ID", notNull: true}}, lineage)
-	if column.Tag != "" || column.Source != "PARENT_ID" || !column.NotNull {
+	if column.Tag != `sqlx:"PARENT_ID|PARENT"` || column.Source != "PARENT_ID" || !column.NotNull {
 		t.Fatalf("no-FK enrichment changed: %+v", column)
 	}
 }

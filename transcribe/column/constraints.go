@@ -375,11 +375,28 @@ func applyTableConstraints(columns []*spec.Column, constraints map[string]tableC
 			value := *constraint.defaultValue
 			column.Default = &value
 		}
+		// Carry SQL-proven result identity across Go emission. An inferred Go
+		// field name alone cannot supply that provenance at runtime.
+		if normalizedName(column.Source) == sourceName && resultName != "" && !strings.EqualFold(column.Source, resultName) {
+			parsed := tags.NewTags(strings.TrimSpace(column.Tag))
+			if parsed.Lookup(sqlio.TagSqlx) == nil {
+				parsed.Set(sqlio.TagSqlx, physicalResultMapping(column, resultName))
+				column.Tag = parsed.Stringify()
+			}
+		}
 		applyReferenceConstraint(column, constraint.reference, resultName)
 		if constraint.unique && len(sourceTables) != 0 {
 			applyUniqueTableConstraint(column, sourceTables[0], resultName)
 		}
 	}
+}
+
+func physicalResultMapping(column *spec.Column, resultName string) string {
+	mapping := firstValue(column.Source, column.Name)
+	if resultName = strings.TrimSpace(resultName); resultName != "" && !strings.EqualFold(mapping, resultName) {
+		mapping += "|" + resultName
+	}
+	return mapping
 }
 
 // SQLX compiles uniqueness from scalar tags, independently of view metadata.
@@ -410,11 +427,7 @@ func applyUniqueTableConstraint(column *spec.Column, table, resultName string) {
 			return
 		}
 	} else {
-		mapping := firstValue(column.Source, column.Name)
-		if resultName = strings.TrimSpace(resultName); resultName != "" && !strings.EqualFold(mapping, resultName) {
-			mapping += "|" + resultName
-		}
-		parsed.Set(sqlio.TagSqlx, mapping)
+		parsed.Set(sqlio.TagSqlx, physicalResultMapping(column, resultName))
 		sqlxTag = parsed.Lookup(sqlio.TagSqlx)
 	}
 	sqlxTag.Append("table=" + table)
@@ -428,13 +441,7 @@ func applyReferenceConstraint(column *spec.Column, reference *tableReference, re
 	parsed := tags.NewTags(strings.TrimSpace(column.Tag))
 	sqlxTag := parsed.Lookup(sqlio.TagSqlx)
 	if sqlxTag == nil {
-		mapping := firstValue(column.Source, column.Name)
-		// Use the proven vendor result identity captured before Source became a
-		// DML name. Existing authored/compiler mappings remain authoritative.
-		if resultName = strings.TrimSpace(resultName); resultName != "" && !strings.EqualFold(mapping, resultName) {
-			mapping += "|" + resultName
-		}
-		parsed.Set(sqlio.TagSqlx, mapping)
+		parsed.Set(sqlio.TagSqlx, physicalResultMapping(column, resultName))
 		sqlxTag = parsed.Lookup(sqlio.TagSqlx)
 	}
 	if sqlxTag == nil {
