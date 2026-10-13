@@ -3,121 +3,123 @@ package logging
 import (
 	"bytes"
 	"encoding/json"
-	"github.com/viant/sqlx/io/read/cache"
-	"github.com/viant/xdatly/response"
 	"os"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/viant/sqlx/io/read/cache"
+	"github.com/viant/xdatly/response"
 )
 
-// Fixture bytes were captured from Datly 69de0137b44472faf0671525d903bc4a65eb230b.
-// The original oracle and its byte-verified source provenance remain in
-// /var/folders/9q/hhl5ms253kz60h0scsqlnn6h0000gp/T/plan10-sql-cache-oracle-vvusdt0q/datly.
-func TestSQLPinnedOriginalDiagnostics(t *testing.T) {
+// Keep the historical fixture as evidence of legacy display formatting. Server
+// diagnostics now retain the redacted reason and never expand positional binds.
+func TestLegacyDiagnosticSQLExpansionFormatting(t *testing.T) {
 	b, err := os.ReadFile("testdata/original-sql-diagnostics.json")
 	if err != nil {
 		t.Fatal(err)
 	}
 	var golden map[string]string
-	if err = json.Unmarshal(b, &golden); err != nil {
+	if err := json.Unmarshal(b, &golden); err != nil {
 		t.Fatal(err)
 	}
-	type testCase struct {
-		name, sql, err string
-		args           []any
-		stats          *cache.Stats
-	}
-	cases := []testCase{}
-	for _, msg := range []string{"ordinary\nerror", "outer, due to middle, due to  final  ", "outer due to  final  ", "driver failed to run query: select hidden", "failed to run query: select hidden", "outer, due to comma due to plain"} {
-		cases = append(cases, testCase{name: "error_" + msg, sql: "select ?\nfrom x", err: msg, args: []any{"O'Reilly"}})
-	}
+	stamp := time.Date(2020, 1, 2, 3, 4, 5, 0, time.UTC)
 	var sp *string
 	var ip *int
 	var tp *time.Time
-	cases = append(cases, testCase{name: "typed_nil", sql: "select ?, ?, ?", err: "synthetic", args: []any{sp, ip, tp}}, testCase{name: "values", sql: "select ?, ?, ?, ?, ?, ?, ?\nfrom synthetic", err: "synthetic", args: []any{7, int64(8), float64(1.234567), true, time.Date(2020, 1, 2, 3, 4, 5, 0, time.UTC), "O'Reilly\nline", []byte("bytes")}})
-	for _, c := range []struct {
-		name  string
-		stats *cache.Stats
-	}{{"nil", nil}, {"miss", &cache.Stats{}}, {"warmup", &cache.Stats{Type: cache.TypeReadMulti, FoundWarmup: true, WarmupKey: "synthetic-warmup", MarkerKey: "synthetic-marker"}}, {"lazy", &cache.Stats{Type: cache.TypeReadSingle, FoundLazy: true}}, {"write", &cache.Stats{Type: cache.TypeWrite}}, {"error", &cache.Stats{Type: cache.TypeReadMulti, ErrorType: "synthetic"}}, {"warmup_fallback", &cache.Stats{FoundWarmup: true, FoundLazy: true}}, {"lazy_fallback", &cache.Stats{FoundLazy: true}}, {"marker_only", &cache.Stats{MarkerKey: "synthetic-marker"}}} {
-		if c.stats != nil {
-			c.stats.Namespace = "synthetic-ns"
-			c.stats.Dataset = "synthetic-set"
-			c.stats.RecordsCounter = 12
+	for _, tc := range []struct {
+		name, sql string
+		args      []any
+	}{
+		{"typed_nil", "select ?, ?, ?", []any{sp, ip, tp}},
+		{"values", "select ?, ?, ?, ?, ?, ?, ?\nfrom synthetic", []any{7, int64(8), float64(1.234567), true, stamp, "O'Reilly\nline", []byte("bytes")}},
+	} {
+		expanded := strconv.Quote(strings.ReplaceAll(expandDiagnosticSQL(tc.sql, tc.args), "\n", `\n`))
+		if !strings.Contains(golden[tc.name], "sql="+expanded+" params=") {
+			t.Fatalf("%s: legacy expansion changed: %s", tc.name, expanded)
 		}
-		cases = append(cases, testCase{name: "cache_" + c.name, args: []any{7, "synthetic"}, stats: c.stats})
 	}
-	stamp := time.Date(2020, 1, 2, 3, 4, 5, 0, time.UTC)
 	stampPtr := &stamp
 	for name, arg := range map[string]any{"expand_double_time_pointer": &stampPtr, "expand_pointer_to_nil_time": &tp} {
 		if got := expandDiagnosticSQL("select ?", []any{arg}); got != golden[name] {
 			t.Errorf("%s: got %q, want %q", name, got, golden[name])
 		}
 	}
-	fixed := time.Date(2020, 1, 2, 0, 0, 0, 0, time.UTC)
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			want, ok := golden[tc.name]
-			if !ok {
-				t.Fatal("missing pinned golden")
-			}
-			for mask := 0; mask < 8; mask++ {
-				var output bytes.Buffer
-				sink := NewSink(&output, mask&1 != 0, mask&2 != 0, mask&4 != 0)
-				e := &response.SQLExecution{SQL: tc.sql, Args: tc.args, Error: tc.err, Rows: 3, StartTime: fixed, EndTime: fixed.Add(1234567 * time.Nanosecond)}
-				if !LogSQL(NewState(sink), "synthetic-trace", "Synthetic", e, tc.stats) {
-					t.Fatal("configured owner rejected diagnostics")
-				}
-				if output.String() != want {
-					t.Errorf("profile %d differs:\ngot %q\nwant %q", mask, output.String(), want)
-				}
-			}
-		})
-	}
-}
-
-func TestSQLDiagnosticNullAndAbsentEvidence(t *testing.T) {
-	// Original nil-interface behavior panicked. NULL is an intentional safe fix.
 	if got := expandDiagnosticSQL("select ?", []any{nil}); got != "select  NULL " {
 		t.Fatalf("NULL expansion: %q", got)
 	}
-	var output bytes.Buffer
-	s := NewSink(&output, false, false, false)
-	s.sqlRead("", "Synthetic", &response.SQLExecution{SQL: "select ?", Args: []any{nil}, Error: "synthetic"}, nil)
-	want := "[ERROR] datly sql reqTraceId=unknown view=Synthetic error=\"synthetic\" sql=\"select  NULL \" params=[<nil>]\n"
-	if output.String() != want {
-		t.Fatalf("safe NULL diagnostic: %q", output.String())
+}
+
+func TestSQLDiagnosticPolicyAndContext(t *testing.T) {
+	fixed := time.Date(2020, 1, 2, 0, 0, 0, 0, time.UTC)
+	e := &response.SQLExecution{ID: "execution", ParentID: "parent", SQL: "select id from records where id = ?", Args: []any{"private-bind", "Bearer private-token", nil}, Error: "failed to run query: select id from records where id = ?, due to Error 1142 (42000): SELECT command denied to user 'reader' for table 'records'", Rows: 3, StartTime: fixed, EndTime: fixed.Add(2 * time.Millisecond)}
+	stats := &cache.Stats{Type: cache.TypeReadMulti, Namespace: "metadata", Dataset: "records", ErrorType: "TIMEOUT", ErrorCode: 9, WarmupKey: "private-key", MarkerKey: "private-marker", Key: "private-cache-key"}
+	before, _ := json.Marshal([]any{e, stats})
+	for mask := 0; mask < 8; mask++ {
+		var output bytes.Buffer
+		if !LogSQL(NewState(NewSink(&output, mask&1 != 0, mask&2 != 0, mask&4 != 0)), "trace", "records", e, stats) {
+			t.Fatal("configured diagnostics rejected")
+		}
+		got := output.String()
+		for _, want := range []string{"[WARN] datly cache read", "[ERROR] datly sql", "reqTraceId=trace view=records", "executionId=execution parentId=parent", "rows=3 elapsed=2ms", "cache_error_type=\"TIMEOUT\" cache_error_code=9", "namespace=metadata set=records", "Error 1142 (42000): SELECT command denied", "for table 'records'"} {
+			if !strings.Contains(got, want) {
+				t.Errorf("profile %d missing %q in %s", mask, want, got)
+			}
+		}
+		for _, private := range []string{"private-bind", "private-token", "private-key", "private-marker", "private-cache-key", " args=", " params="} {
+			if strings.Contains(got, private) {
+				t.Errorf("profile %d leaked %q", mask, private)
+			}
+		}
+		if sql := strings.Contains(got, ` sql="select id from records where id = ?"`); sql != (mask&4 != 0) {
+			t.Errorf("profile %d SQL policy: %s", mask, got)
+		}
+		if strings.Count(got, "\n") != 2 || strings.Index(got, "datly cache read") > strings.Index(got, "datly sql") {
+			t.Fatalf("invalid record order/count: %s", got)
+		}
 	}
-	output.Reset()
-	s.sqlRead("", "Synthetic", nil, nil)
-	s.sqlRead("", "Synthetic", &response.SQLExecution{SQL: "select ?", Args: []any{7}}, nil)
-	if output.Len() != 0 {
-		t.Fatal("absent/error-free evidence emitted a diagnostic")
-	}
-	if LogSQL(nil, "", "Synthetic", &response.SQLExecution{Error: "synthetic"}, nil) {
-		t.Fatal("unconfigured diagnostics enabled")
-	}
-	if normalizeDatabaseError("") != "" {
-		t.Fatal("nil-error normalization differs")
+	after, _ := json.Marshal([]any{e, stats})
+	if !bytes.Equal(before, after) {
+		t.Fatal("logging mutated evidence")
 	}
 }
 
-func TestSQLCacheBeforeError(t *testing.T) {
-	b, err := os.ReadFile("testdata/original-sql-diagnostics.json")
-	if err != nil {
-		t.Fatal(err)
-	}
-	var g map[string]string
-	if err = json.Unmarshal(b, &g); err != nil {
-		t.Fatal(err)
-	}
+func TestSQLDiagnosticAbsentAndCacheFallback(t *testing.T) {
 	var output bytes.Buffer
-	fixed := time.Date(2020, 1, 2, 0, 0, 0, 0, time.UTC)
-	e := &response.SQLExecution{SQL: "select ?\nfrom x", Args: []any{"O'Reilly"}, Error: "ordinary\nerror", Rows: 3, StartTime: fixed, EndTime: fixed.Add(1234567 * time.Nanosecond)}
-	stats := &cache.Stats{Type: cache.TypeReadMulti, FoundWarmup: true, RecordsCounter: 12, Namespace: "synthetic-ns", Dataset: "synthetic-set", WarmupKey: "synthetic-warmup", MarkerKey: "synthetic-marker"}
-	NewSink(&output, false, false, false).sqlRead("synthetic-trace", "Synthetic", e, stats)
-	// Cache fixture uses different synthetic args; replace only its literal args.
-	cacheLine := bytes.ReplaceAll([]byte(g["cache_warmup"]), []byte("args=[7 synthetic]"), []byte("args=[O'Reilly]"))
-	if want := string(cacheLine) + g["error_ordinary\nerror"]; output.String() != want {
-		t.Fatalf("ordering differs: %q", output.String())
+	s := NewSink(&output, false, false, false)
+	s.sqlRead("", "records", nil, nil)
+	s.sqlRead("", "records", &response.SQLExecution{SQL: "select ?", Args: []any{7}}, nil)
+	if output.Len() != 0 || LogSQL(nil, "", "records", &response.SQLExecution{Error: "synthetic"}, nil) || LogSQL(NewState(nil), "", "records", nil, nil) {
+		t.Fatal("absent evidence/owner emitted diagnostics")
+	}
+	s.sqlRead("", "records", &response.SQLExecution{Error: "context canceled", CacheStats: &response.CacheStats{ErrorType: "TIMEOUT", ErrorCode: 9}}, nil)
+	if got := output.String(); !strings.Contains(got, `error="context canceled"`) || !strings.Contains(got, `cache_error_code=9`) || !strings.Contains(got, "reqTraceId=unknown") {
+		t.Fatalf("missing fallback evidence: %s", got)
+	}
+}
+
+func TestCompatibilityReadPreparationFailure(t *testing.T) {
+	var output bytes.Buffer
+	m := &response.Metric{ID: "metric", View: "records", Error: "prepare: dial tcp 127.0.0.1:3306: connect: connection refused", Rows: 0, Elapsed: "1ms"}
+	NewSink(&output, false, false, false).Read("trace", m)
+	for _, want := range []string{"[ERROR] datly view read", "metricId=metric", "status=error", "prepare: dial tcp 127.0.0.1:3306: connect: connection refused"} {
+		if !strings.Contains(output.String(), want) {
+			t.Fatalf("missing %s: %s", want, output.String())
+		}
+	}
+}
+
+func TestCompatibilityCacheMissIsNotCacheFailure(t *testing.T) {
+	var output bytes.Buffer
+	NewSink(&output, false, false, false).sqlRead("trace", "audience", &response.SQLExecution{Error: "read audience: context canceled"}, &cache.Stats{Type: cache.TypeWrite})
+	got := output.String()
+	for _, want := range []string{"[INFO] datly cache read", "source=miss_write type=write", `cache_error_type="" cache_error_code=0`, `error="read audience: context canceled"`} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("missing %s: %s", want, got)
+		}
+	}
+	if strings.Contains(got, "[WARN]") {
+		t.Fatalf("miss mislabeled as cache failure: %s", got)
 	}
 }

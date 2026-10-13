@@ -7,7 +7,6 @@ import (
 	"github.com/viant/xdatly/response"
 	"io"
 	"strconv"
-	"strings"
 	"sync"
 
 	xexec "github.com/viant/xdatly/exec"
@@ -114,8 +113,8 @@ type auditIdentity struct {
 	Scope    string `json:"scope,omitempty"`
 }
 
-// Read preserves the original unconditional completion within this configured
-// profile. It contains no SQL, arguments or private failure details.
+// Read emits completion within the configured profile, including a redacted
+// reason for preparation/read failures that may not have an SQLExecution.
 func (s *Sink) Read(traceID string, metric *response.Metric) {
 	if s == nil || metric == nil {
 		return
@@ -127,7 +126,24 @@ func (s *Sink) Read(traceID string, metric *response.Metric) {
 	if metric.Error != "" {
 		status = "error"
 	}
-	// Prevent record injection through caller-configured diagnostics/correlation.
-	clean := func(value string) string { return strings.NewReplacer("\r", " ", "\n", " ").Replace(value) }
-	s.diagnostic(fmt.Sprintf("[INFO] datly view read reqTraceId=%s view=%s rows=%d elapsed=%s status=%s", clean(traceID), clean(metric.View), metric.Rows, clean(metric.Elapsed), status))
+	context := ""
+	if metric.ID != "" {
+		context = " metricId=" + SafeText(metric.ID)
+	}
+	level, failure := "INFO", ""
+	if metric.Error != "" {
+		level = "ERROR"
+		queries := make([]string, 0, len(metric.Executions))
+		for _, e := range metric.Executions {
+			if e != nil {
+				queries = append(queries, e.SQL)
+			}
+		}
+		failure = fmt.Sprintf(" error=%q", FailureReason(metric.Error, queries...))
+	}
+	elapsed := metric.Elapsed
+	if elapsed == "" && !metric.StartTime.IsZero() && !metric.EndTime.IsZero() {
+		elapsed = metric.EndTime.Sub(metric.StartTime).String()
+	}
+	s.diagnostic(fmt.Sprintf("[%s] datly view read reqTraceId=%s view=%s rows=%d elapsed=%s%s status=%s%s", level, SafeText(traceID), SafeText(metric.View), metric.Rows, SafeText(elapsed), context, status, failure))
 }
