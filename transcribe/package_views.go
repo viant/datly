@@ -10,6 +10,7 @@ import (
 	"github.com/viant/datly/spec"
 	dtag "github.com/viant/datly/tag"
 	"github.com/viant/datly/transcribe/generate"
+	"github.com/viant/datly/transcribe/internal/link"
 	"github.com/viant/datly/typecatalog"
 	"github.com/viant/x"
 	xshape "github.com/viant/x/shape"
@@ -394,9 +395,8 @@ func (r *packageViewResolver) byIdentity(identity string) *spec.View {
 }
 
 func (r *packageViewResolver) equal(left, right *spec.View) bool {
-	comparison := &contractLinker{}
-	leftJSON, leftErr := json.Marshal(comparison.normalizedOwnershipView(left, "", false))
-	rightJSON, rightErr := json.Marshal(comparison.normalizedOwnershipView(right, "", false))
+	leftJSON, leftErr := json.Marshal(link.NormalizeOwnershipView(left, "", false))
+	rightJSON, rightErr := json.Marshal(link.NormalizeOwnershipView(right, "", false))
 	return leftErr == nil && rightErr == nil && bytes.Equal(leftJSON, rightJSON)
 }
 

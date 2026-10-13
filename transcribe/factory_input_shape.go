@@ -19,6 +19,7 @@ import (
 	"github.com/viant/datly/transcribe/dql/statement"
 	gen "github.com/viant/datly/transcribe/generate"
 	"github.com/viant/datly/transcribe/gobuild"
+	"github.com/viant/datly/transcribe/internal/program"
 	"github.com/viant/datly/typecatalog"
 	xshape "github.com/viant/x/shape"
 )
@@ -113,7 +114,7 @@ func (c *Compiler) compileFactoryInputShape(ctx context.Context, source *Source,
 			if err != nil {
 				return err
 			}
-			pkg, name, err := handlerSymbol(canonical)
+			pkg, name, err := program.Symbol(canonical)
 			if err != nil || view == root && pkg != prepared.TypeContext.PackagePath {
 				return fmt.Errorf("factory input shape type %q must belong to generated destination %q", view.TypeName, prepared.TypeContext.PackagePath)
 			}
@@ -239,7 +240,7 @@ func (c *Compiler) compileFactoryInputShape(ctx context.Context, source *Source,
 		}
 		if local := ownedNames[canonical]; local != "" {
 			view.TypeName = local
-		} else if pkg, _, err := handlerSymbol(canonical); err != nil {
+		} else if pkg, _, err := program.Symbol(canonical); err != nil {
 			return nil, err
 		} else if pkg != prepared.TypeContext.PackagePath {
 			if err := link(view, canonical); err != nil {

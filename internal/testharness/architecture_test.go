@@ -652,6 +652,12 @@ func assertPackageBoundaries(t *testing.T, packages map[string]*productionPackag
 	rules := []packageBoundary{
 		{owner: "data", forbidden: []string{"database/sql", modulePath + "/runtime", "github.com/viant/sqlx", "github.com/viant/xunsafe", "github.com/viant/xdatly/logger"}},
 		{owner: "transcribe/generate", forbidden: []string{modulePath + "/runtime", modulePath + "/transcribe/dql", modulePath + "/transcribe/handler"}},
+		{owner: "transcribe/internal/project", forbidden: []string{"database/sql", modulePath + "/runtime", modulePath + "/transcribe"}},
+		{owner: "transcribe/internal/handlergen", forbidden: []string{"database/sql", modulePath + "/runtime", modulePath + "/transcribe/internal/dependency", modulePath + "/transcribe/internal/project"}},
+		{owner: "transcribe/internal/program", forbidden: []string{"database/sql", modulePath + "/runtime", modulePath + "/transcribe/internal/handlergen", modulePath + "/transcribe/internal/dependency", modulePath + "/transcribe/internal/project"}},
+		{owner: "transcribe/internal/link", forbidden: []string{"database/sql", modulePath + "/runtime", modulePath + "/transcribe/dql", modulePath + "/transcribe/internal/dependency", modulePath + "/transcribe/internal/handlergen", modulePath + "/transcribe/internal/project"}},
+		{owner: "transcribe/internal/dependency", forbidden: []string{"database/sql", modulePath + "/transcribe/internal/handlergen", modulePath + "/transcribe/internal/project"}},
+		{owner: "transcribe/internal/bodygraph", forbidden: []string{"database/sql", modulePath + "/runtime", modulePath + "/transcribe"}},
 		{owner: "runtime", recursive: true, forbidden: []string{modulePath + "/sql", modulePath + "/mcp", modulePath + "/report"}},
 		{owner: "runtime/registry", forbidden: []string{"database/sql", "net/http", "go/ast", "go/parser", modulePath + "/runtime/handler/compiler", modulePath + "/runtime/predicate", modulePath + "/sql", "github.com/viant/sqlx"}},
 		{owner: "runtime/route", forbidden: []string{"database/sql", "net/http", modulePath + "/sql", "github.com/viant/bindly"}},
@@ -676,6 +682,9 @@ func assertPackageBoundaries(t *testing.T, packages map[string]*productionPackag
 	}
 	for relative, pkg := range packages {
 		for imported := range pkg.imports {
+			if strings.HasPrefix(relative, "transcribe/internal/") && imported == modulePath+"/transcribe" {
+				t.Errorf("internal package %q imports the transcribe orchestrator", relative)
+			}
 			// Composite fragments use only native column mapping, value
 			// conversion and dialect metadata, never SQL execution services.
 			if relative == "sql/fragment" && (imported == "database/sql/driver" || imported == "github.com/viant/sqlx/io" || imported == "github.com/viant/sqlx/option" || imported == "github.com/viant/sqlx/metadata/info") {

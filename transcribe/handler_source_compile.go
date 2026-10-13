@@ -15,19 +15,13 @@ import (
 	"github.com/viant/datly/tag"
 	"github.com/viant/datly/transcribe/dql"
 	gen "github.com/viant/datly/transcribe/generate"
+	"github.com/viant/datly/transcribe/internal/link"
+	"github.com/viant/datly/transcribe/internal/program"
 	"github.com/viant/datly/typecatalog"
 	"github.com/viant/x"
 )
 
 const nativeHandlerPackage = "github.com/viant/xdatly/handler"
-
-func handlerSymbol(ref string) (string, string, error) {
-	i := strings.LastIndex(ref, ".")
-	if i <= strings.LastIndex(ref, "/") || i < 1 || !token.IsIdentifier(ref[i+1:]) || !token.IsExported(ref[i+1:]) {
-		return "", "", fmt.Errorf("handler symbol %q must be an exported, package-qualified name", ref)
-	}
-	return ref[:i], ref[i+1:], nil
-}
 
 func (c *Compiler) compileSourceHandler(ctx context.Context, source *Source, header *dql.HandlerHeader, body string) (*Result, error) {
 	if source.PackageComponent != nil || source.GoHandler != nil || source.VeltyHandler != nil {
@@ -47,7 +41,7 @@ func (c *Compiler) compileSourceHandler(ctx context.Context, source *Source, hea
 		return nil, fmt.Errorf("source handler requires an explicit #package destination")
 	}
 	destination := prepared.TypeContext.PackagePath
-	if names, ok := generatedPostFactory(header, prepared); ok {
+	if names, ok := program.FactoryContracts(header, prepared); ok {
 		return c.compileGeneratedPostFactory(ctx, source, header, prepared, settings, names)
 	}
 	var err error
@@ -58,7 +52,7 @@ func (c *Compiler) compileSourceHandler(ctx context.Context, source *Source, hea
 	packages, names := make([]string, 3), make([]string, 3)
 	for i, ref := range refs {
 		var err error
-		packages[i], names[i], err = handlerSymbol(ref)
+		packages[i], names[i], err = program.Symbol(ref)
 		if err != nil {
 			return nil, err
 		}
@@ -484,30 +478,6 @@ func sourceHandlerTags(existing reflect.StructTag, authored string, embedded boo
 	return strings.Join(reconciled, " "), len(seen) != 0
 }
 
-// generatedPostFactory is deliberately narrower than source-backed handler
-// registration: canonical post execution owns both local generated contracts,
-// independently of POST, PATCH, PUT or DELETE transport.
-func generatedPostFactory(header *dql.HandlerHeader, prepared *dql.PreparedSource) ([3]string, bool) {
-	var names [3]string
-	if header == nil || !header.Declarative || (!strings.EqualFold(header.Method, "POST") && !strings.EqualFold(header.Method, "PATCH") && !strings.EqualFold(header.Method, "PUT") && !strings.EqualFold(header.Method, "DELETE")) || prepared == nil || prepared.TypeContext == nil || prepared.TypeContext.PackagePath == "" {
-		return names, false
-	}
-	destination := prepared.TypeContext.PackagePath
-	for i, ref := range []string{header.Factory, header.InputType, header.OutputType} {
-		canonical, err := (&gen.Plan{Imports: prepared.TypeContext.Imports}).CanonicalType(destination, ref)
-		if err != nil {
-			return names, false
-		}
-		pkg, name, err := handlerSymbol(canonical)
-		if err != nil || pkg != destination {
-			return names, false
-		}
-		names[i] = name
-	}
-
-	return names, true
-}
-
 func (c *Compiler) compileGeneratedPostFactory(ctx context.Context, source *Source, header *dql.HandlerHeader, prepared *dql.PreparedSource, settings *spec.Settings, names [3]string) (*Result, error) {
 	destination := prepared.TypeContext.PackagePath
 	build := source.GoBuild.WithContext(ctx)
@@ -588,12 +558,11 @@ func (c *Compiler) compileGeneratedPostFactory(ctx context.Context, source *Sour
 	if err != nil {
 		return nil, err
 	}
-	loader := &componentLoader{}
-	component.Views, err = loader.mergeViews(component.Views, declarations.views)
+	component.Views, err = link.MergeViews(component.Views, declarations.views)
 	if err != nil {
 		return nil, err
 	}
-	viewBindings, err := loader.normalizeIndependentViewParams(component, declarations.viewsByParam)
+	viewBindings, err := link.NormalizeIndependentViewParams(component, declarations.viewsByParam)
 	if err != nil {
 		return nil, err
 	}

@@ -15,6 +15,7 @@ import (
 	"github.com/viant/datly/tag"
 	"github.com/viant/datly/transcribe/column"
 	gen "github.com/viant/datly/transcribe/generate"
+	"github.com/viant/datly/transcribe/internal/link"
 	"github.com/viant/datly/typecatalog"
 	"github.com/viant/sqlx"
 	"github.com/viant/toolbox"
@@ -295,7 +296,7 @@ func (c *discoveryInputCompiler) linkedInputAllowed() bool {
 	if c.source == nil || c.source.PackageComponent == nil {
 		return true
 	}
-	return (&contractLinker{packageComponent: c.source.PackageComponent, compiledComponent: c.component}).equalParams(false)
+	return (&link.Contracts{PackageComponent: c.source.PackageComponent, CompiledComponent: c.component}).EqualParams(false)
 }
 
 func indirectInputType(inputType reflect.Type) reflect.Type {

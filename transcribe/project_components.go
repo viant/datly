@@ -105,7 +105,7 @@ func (r *projectComponentResolver) targets() ([]projectComponentTarget, map[stri
 		if incoming[identity] {
 			continue
 		}
-		output, ok, err := component.output()
+		output, ok, err := persistedComponentOutput(component)
 		if err != nil {
 			return nil, nil, fmt.Errorf("resolve persisted component %q output: %w", identity, err)
 		}
@@ -121,7 +121,7 @@ func (r *projectComponentResolver) targets() ([]projectComponentTarget, map[stri
 	return targets, outputs, nil
 }
 
-func (c ProjectComponent) output() (projectComponentOutput, bool, error) {
+func persistedComponentOutput(c ProjectComponent) (projectComponentOutput, bool, error) {
 	key := strings.TrimSpace(c.OutputType)
 	if key == "" {
 		return projectComponentOutput{}, false, nil

@@ -8,7 +8,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 	readerpredicate "github.com/viant/datly/runtime/predicate/velty"
-	"github.com/viant/datly/transcribe/dql"
 	"github.com/viant/datly/transcribe/testdata/linkedpredicate"
 	"github.com/viant/datly/typecatalog"
 	"github.com/viant/x"
@@ -16,26 +15,6 @@ import (
 
 const predicateTestModule = "github.com/viant/datly/transcribe/testdata"
 const predicateTestPackage = predicateTestModule + "/linkedpredicate"
-
-func TestPredicateDependenciesUseEachDeclarationContext(t *testing.T) {
-	for _, tc := range []struct {
-		name, imports, reference, scope, want string
-	}{
-		{name: "first alias", imports: "#import('security', 'example.com/first')", reference: "security.Check", scope: "example.com/reader", want: "example.com/first"},
-		{name: "second alias", imports: "#import('security', 'example.com/second')", reference: "security.Check", scope: "example.com/reader", want: "example.com/second"},
-		{name: "local declaration", reference: "Check", scope: "example.com/reader", want: "example.com/reader"},
-		{name: "absolute without scope", reference: "example.com/security.Check", want: "example.com/security"},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			packages := map[string]bool{}
-			require.NoError(t, collectPredicatePackages(packages, dql.PrepareSource(predicateDiscoverySource(tc.imports, tc.reference)), tc.scope))
-			require.Equal(t, map[string]bool{tc.want: true}, packages)
-		})
-	}
-	packages := map[string]bool{}
-	require.NoError(t, collectPredicatePackages(packages, dql.PrepareSource("SELECT 1"), ""))
-	require.Empty(t, packages)
-}
 
 func predicateDiscoveryWorkspace(t *testing.T) string {
 	t.Helper()

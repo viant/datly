@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/viant/datly/spec"
+	"github.com/viant/datly/transcribe/internal/program"
 	"github.com/viant/x"
 )
 
@@ -18,7 +19,7 @@ func sourceHandlerWireTypes(loader types.Importer, fields map[string]sourceHandl
 		pkg, name := "", expression
 		if strings.Contains(expression, ".") {
 			var err error
-			pkg, name, err = handlerSymbol(expression)
+			pkg, name, err = program.Symbol(expression)
 			if err != nil {
 				return nil, err
 			}

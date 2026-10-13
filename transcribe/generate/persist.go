@@ -69,72 +69,6 @@ func (l *scaffoldCommitLocks) acquire(target string) func() {
 	}
 }
 
-func (p *scaffoldPersistence) Commit() error {
-	target, err := p.target()
-	if err != nil {
-		return err
-	}
-	release := scaffoldLocks.acquire(target)
-	defer release()
-	return p.commitLocked(target)
-}
-
-// commitLocked retains the existing transactional persistence behavior while
-// EmitScaffold holds the target lock through the preceding preflight.
-func (p *scaffoldPersistence) commitLocked(target string) error {
-	var err error
-	parent := filepath.Dir(target)
-	if err = os.MkdirAll(parent, 0o755); err != nil {
-		return err
-	}
-	stage, err := os.MkdirTemp(parent, "."+filepath.Base(target)+"-stage-")
-	if err != nil {
-		return err
-	}
-	committed := false
-	defer func() {
-		if !committed {
-			_ = os.RemoveAll(stage)
-		}
-	}()
-	// The copy doubles as the original snapshot: each file is read once, and
-	// the fingerprint is taken from the bytes being copied.
-	original, stats, err := p.copyExisting(target, stage)
-	if err != nil {
-		return err
-	}
-	if err = p.prepareCurrent(target); err != nil {
-		return err
-	}
-	if err = p.validateUserFiles(target, stage); err != nil {
-		return err
-	}
-	for name := range p.renames {
-		if err = os.Remove(filepath.Join(stage, name)); err != nil && !os.IsNotExist(err) {
-			return err
-		}
-	}
-	if err = p.writeFiles(target, stage); err != nil {
-		return err
-	}
-	if err = p.writeUserFiles(target, stage); err != nil {
-		return err
-	}
-	if err = os.Remove(filepath.Join(stage, legacyManifestName)); err != nil && !os.IsNotExist(err) {
-		return err
-	}
-	if p.plan != nil && p.plan.ExternalHandler != nil && p.plan.ExternalHandler.Build != nil {
-		if err = p.validateHandlerStage(target, stage); err != nil {
-			return err
-		}
-	}
-	if err = p.swap(target, stage, original, stats); err != nil {
-		return err
-	}
-	committed = true
-	return nil
-}
-
 func (p *scaffoldPersistence) validateHandlerStage(target, stage string) error {
 	files := map[string][]byte{}
 	// Explicit removals are part of the build overlay, not merely absent from
@@ -177,11 +111,6 @@ func (p *scaffoldPersistence) validateHandlerStage(target, stage string) error {
 		return err
 	}
 	p.plan.handlerGoFiles, err = p.plan.ExternalHandler.Build.ValidateFiles(p.plan.Package, files)
-	return err
-}
-
-func (p *scaffoldPersistence) Validate() error {
-	_, err := p.preview()
 	return err
 }
 
@@ -590,8 +519,8 @@ func prepareScaffoldForests(templates []*scaffoldPersistence) (forests []*scaffo
 		if err = p.validateUserFiles(targets[i], projected); err != nil {
 			return
 		}
-		// Each ordinary commit replaces its target with a fresh MkdirTemp root.
-		// Reproduce that root mode, retaining descendant modes from the projection.
+		// Use the staging root mode for each generated package, retaining
+		// descendant modes from the projection.
 		modeInfo, modeErr := os.Stat(forest.stage)
 		if modeErr != nil {
 			err = modeErr
@@ -631,6 +560,9 @@ func cleanupScaffoldForests(forests []*scaffoldForest) {
 	}
 }
 
+// publishScaffoldForests publishes each disjoint destination tree independently.
+// If a later tree fails, earlier published trees remain in place; cleanup only
+// removes unpublished stages. Publication is not a transaction across trees.
 func publishScaffoldForests(forests []*scaffoldForest) error {
 	defer cleanupScaffoldForests(forests)
 	var created []scaffoldCreatedParent

@@ -1,3 +1,4 @@
+// Package codeclookup resolves codec dependencies while preserving optional-input presence.
 package codeclookup
 
 import (

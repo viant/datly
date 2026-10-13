@@ -12,6 +12,7 @@ import (
 	tcompile "github.com/viant/datly/transcribe/compile"
 	gen "github.com/viant/datly/transcribe/generate"
 	handlercompiler "github.com/viant/datly/transcribe/handler/compiler"
+	"github.com/viant/datly/transcribe/internal/handlergen"
 	"github.com/viant/datly/typecatalog"
 )
 
@@ -118,7 +119,7 @@ func (g Generator) generateCompiled(ctx context.Context, root, dir string, compi
 	if err != nil {
 		return nil, err
 	}
-	if err := prepareFactoryCompanions(compiled, &input); err != nil {
+	if err := handlergen.PrepareCompanions(compiled.handlerContext(), &input); err != nil {
 		return nil, err
 	}
 	return NewCompiler().generateInputAt(ctx, root, dir, compiled, input)
@@ -213,21 +214,10 @@ func (g Generator) generate(ctx context.Context, root, dir string, compiled *Res
 		options.Handler.Go.Execution = GoExecutionMutation
 		options.Handler.Hooks.Scaffold = true
 	}
-	handlers := newHandlerGeneration(&copy, &input, options)
-	handlers.directory = filepath.Join(input.ProjectRoot, dir)
-	contractPlan, err := gen.New(input).Plan()
-	if err != nil {
-		return nil, err
-	}
-	semantic, err := handlers.compilePlan()
-	if err != nil {
-		return nil, handlers.diagnostic(err)
-	}
-	if err = handlers.validateContractAssignment(semantic, contractPlan); err != nil {
-		return nil, handlers.diagnostic(err)
-	}
-	if err = handlers.prepare(); err != nil {
-		return nil, handlers.diagnostic(err)
+	handlers := handlergen.New((&copy).handlerContext(), &input, options)
+	handlers.Directory = filepath.Join(input.ProjectRoot, dir)
+	if err = handlers.PrepareDerived(); err != nil {
+		return nil, copy.handlerDiagnostic(err)
 	}
 	return NewCompiler().generateInputAt(ctx, root, dir, &copy, input)
 }

@@ -6,6 +6,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/viant/datly/spec"
 	"github.com/viant/datly/transcribe/dql"
+	"github.com/viant/datly/transcribe/internal/program"
 )
 
 func TestGeneratedFactoryQualifiedOwnershipSelection(t *testing.T) {
@@ -30,7 +31,7 @@ func TestGeneratedFactoryQualifiedOwnershipSelection(t *testing.T) {
 			imports := append([]spec.ImportSpec{{Alias: "rows", Package: destination}}, tc.imports...)
 			prepared := &dql.PreparedSource{TypeContext: &spec.TypeContext{PackagePath: destination, Imports: imports}}
 			header := &dql.HandlerHeader{Declarative: true, Method: "PATCH", Factory: "rows.NewSave", InputType: tc.input, OutputType: destination + ".Output"}
-			names, generated := generatedPostFactory(header, prepared)
+			names, generated := program.FactoryContracts(header, prepared)
 			require.Equal(t, tc.generated, generated)
 			if generated {
 				require.Equal(t, [3]string{"NewSave", "Input", "Output"}, names)

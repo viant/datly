@@ -13,11 +13,10 @@ import (
 
 	"github.com/viant/datly/spec"
 	gen "github.com/viant/datly/transcribe/generate"
+	"github.com/viant/datly/transcribe/internal/project"
 	"github.com/viant/datly/typecatalog"
 	"github.com/viant/tagly/format/text"
 )
-
-const projectManifestVersion = 1
 
 // ProjectGeneration persists a coherent project from already compiled
 // canonical components. Compilation remains owned by Compiler and
@@ -34,43 +33,12 @@ type GeneratedProject struct {
 	Components []*GeneratedPackage
 }
 
-type ProjectManifest struct {
-	Version      int                    `json:"version"`
-	Components   []ProjectComponent     `json:"components"`
-	Dependencies []string               `json:"dependencies,omitempty"`
-	Analysis     ProjectMigrationReport `json:"analysis"`
-}
-
-type ProjectComponent struct {
-	Key          spec.Key               `json:"key"`
-	Source       string                 `json:"source,omitempty"`
-	Package      string                 `json:"package"`
-	OutputType   string                 `json:"outputType,omitempty"`
-	OutputOrigin typecatalog.TypeOrigin `json:"outputOrigin,omitempty"`
-	IR           string                 `json:"ir"`
-	Diagnostics  string                 `json:"diagnostics"`
-	Artifacts    []string               `json:"artifacts"`
-	Routes       []ProjectRoute         `json:"routes,omitempty"`
-	Dependencies []string               `json:"dependencies,omitempty"`
-}
-
-type ProjectRoute struct {
-	Method string `json:"method"`
-	Path   string `json:"path"`
-}
-
-type ProjectMigrationReport struct {
-	Components []ProjectMigrationComponent `json:"components"`
-}
-
-type ProjectMigrationComponent struct {
-	Key             spec.Key `json:"key"`
-	InputOwnership  string   `json:"inputOwnership"`
-	OutputOwnership string   `json:"outputOwnership"`
-	GeneratedViews  int      `json:"generatedViews"`
-	LinkedViews     int      `json:"linkedViews"`
-	Handler         string   `json:"handler"`
-}
+// Project metadata aliases preserve the public transcription API.
+type ProjectMigrationComponent = project.MigrationComponent
+type ProjectMigrationReport = project.MigrationReport
+type ProjectManifest = project.Manifest
+type ProjectComponent = project.Component
+type ProjectRoute = project.Route
 
 type preparedProjectComponent struct {
 	compiled      *Result
@@ -102,27 +70,31 @@ func (g *ProjectGeneration) Generate(ctx context.Context, rootDir string) (*Gene
 	if err != nil {
 		return nil, err
 	}
-	store, err := newProjectMetadataStore(rootDir)
+	store, err := project.NewStore(rootDir)
 	if err != nil {
 		return nil, err
 	}
-	release, err := store.lock(ctx)
+	release, err := store.Lock(ctx)
 	if err != nil {
 		return nil, err
 	}
 	defer release()
-	if err = store.prepare(); err != nil {
+	if err = store.Prepare(); err != nil {
 		return nil, err
 	}
-	existing, err := store.readManifest()
+	existing, err := store.ReadManifest()
 	if err != nil {
 		return nil, err
 	}
-	prepared, err := g.prepareWithManifest(rootDir, existing)
+	prepared, err := g.prepareAtRoots(rootDir, existing, nil)
 	if err != nil {
 		return nil, err
 	}
-	editor, err := newProjectManifestEditor(existing, prepared)
+	incoming := make([]project.Component, len(prepared))
+	for i, component := range prepared {
+		incoming[i] = project.Component{Key: component.key, Package: component.packagePath, Routes: component.routes()}
+	}
+	editor, err := project.NewEditor(existing, incoming)
 	if err != nil {
 		return nil, err
 	}
@@ -143,22 +115,10 @@ func (g *ProjectGeneration) Generate(ctx context.Context, rootDir string) (*Gene
 		metadata[entry.Diagnostics] = component.compiled.Diagnostics
 	}
 	manifest := editor.Finalize()
-	if err = store.persist(manifest, metadata); err != nil {
+	if err = store.Persist(manifest, metadata); err != nil {
 		return nil, err
 	}
 	return &GeneratedProject{Manifest: manifest, Components: generated}, nil
-}
-
-func (g *ProjectGeneration) prepare(rootDir string) ([]preparedProjectComponent, error) {
-	return g.prepareWithValidation(rootDir, nil)
-}
-
-func (g *ProjectGeneration) prepareWithManifest(rootDir string, existing *ProjectManifest) ([]preparedProjectComponent, error) {
-	return g.prepareWithValidation(rootDir, existing)
-}
-
-func (g *ProjectGeneration) prepareWithValidation(rootDir string, existing *ProjectManifest) ([]preparedProjectComponent, error) {
-	return g.prepareAtRoots(rootDir, existing, nil)
 }
 
 // prepareAtRoots retains project-wide dependency and route checks while static
@@ -330,7 +290,7 @@ func (c preparedProjectComponent) manifestEntry(rootDir string, generated *Gener
 		if err != nil {
 			return ProjectComponent{}, fmt.Errorf("index component %q artifact %q: %w", c.identity, file.Path, err)
 		}
-		relative, err = managedProjectPath(relative)
+		relative, err = project.ManagedPath(relative)
 		if err != nil {
 			return ProjectComponent{}, fmt.Errorf("index component %q artifact %q: %w", c.identity, file.Path, err)
 		}
@@ -355,15 +315,6 @@ func (c preparedProjectComponent) routes() []ProjectRoute {
 		result = append(result, ProjectRoute{Method: strings.ToUpper(strings.TrimSpace(route.Method)), Path: strings.TrimSpace(route.Path)})
 	}
 	return result
-}
-
-func projectRouteIdentity(route ProjectRoute) string {
-	method := strings.ToUpper(strings.TrimSpace(route.Method))
-	path := strings.TrimSpace(route.Path)
-	if method == "" || path == "" {
-		return ""
-	}
-	return method + " " + path
 }
 
 func projectDependencies(plan *gen.Plan) []string {

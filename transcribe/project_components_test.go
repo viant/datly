@@ -13,6 +13,7 @@ import (
 	"github.com/viant/datly/internal/testharness"
 	"github.com/viant/datly/spec"
 	dtag "github.com/viant/datly/tag"
+	projectmeta "github.com/viant/datly/transcribe/internal/project"
 	"github.com/viant/datly/transcribe/testdata/linkedcontract"
 )
 
@@ -29,7 +30,7 @@ SELECT 1 AS ID`)
 SELECT 1 AS ID`)
 
 	project := &ProjectGeneration{Components: []*Result{parent, child}}
-	prepared, err := project.prepare(root)
+	prepared, err := project.prepareAtRoots(root, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -115,11 +116,11 @@ SELECT 1 AS ID`)
 	}
 	initial.Manifest.Components[0].OutputType = ""
 	initial.Manifest.Components[0].OutputOrigin = ""
-	store, err := newProjectMetadataStore(root)
+	store, err := projectmeta.NewStore(root)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = store.writeJSON(filepath.Join(root, projectMetadataDir, projectManifestFile), initial.Manifest); err != nil {
+	if err = store.Persist(initial.Manifest, nil); err != nil {
 		t.Fatal(err)
 	}
 	parent := compileProjectComponentAt(t, "Parent", filepath.Join(sourceRoot, "parent.dql"), `
@@ -144,7 +145,7 @@ SELECT 1 AS ID`)
 #setting($_ = $route('/parent', 'GET'))
 #define($_ = $Child<?>(component/child))
 SELECT 1 AS ID`)
-	_, err := (&ProjectGeneration{Components: []*Result{parent, child}}).prepare(root)
+	_, err := (&ProjectGeneration{Components: []*Result{parent, child}}).prepareAtRoots(root, nil, nil)
 	if err == nil || !strings.Contains(err.Error(), `component reference "child" is ambiguous`) {
 		t.Fatalf("prepare() error = %v", err)
 	}
@@ -153,7 +154,7 @@ SELECT 1 AS ID`)
 #setting($_ = $route('/parent', 'GET'))
 #define($_ = $Child<?>(component/POST:child))
 SELECT 1 AS ID`)
-	prepared, err := (&ProjectGeneration{Components: []*Result{parent, child}}).prepare(root)
+	prepared, err := (&ProjectGeneration{Components: []*Result{parent, child}}).prepareAtRoots(root, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -174,7 +175,7 @@ func TestProjectComponentReferenceRejectsMissingAndCycles(t *testing.T) {
 #setting($_ = $route('/missing', 'GET'))
 #define($_ = $Child<?>(component/not_there))
 SELECT 1 AS ID`)
-	if _, err := (&ProjectGeneration{Components: []*Result{missing}}).prepare(root); err == nil || !strings.Contains(err.Error(), `component reference "not_there" was not found`) {
+	if _, err := (&ProjectGeneration{Components: []*Result{missing}}).prepareAtRoots(root, nil, nil); err == nil || !strings.Contains(err.Error(), `component reference "not_there" was not found`) {
 		t.Fatalf("missing prepare() error = %v", err)
 	}
 
@@ -186,7 +187,7 @@ SELECT 1 AS ID`)
 #setting($_ = $route('/right', 'GET'))
 #define($_ = $Left<?>(component/left))
 SELECT 1 AS ID`)
-	if _, err := (&ProjectGeneration{Components: []*Result{left, right}}).prepare(root); err == nil || !strings.Contains(err.Error(), "component dependency cycle") {
+	if _, err := (&ProjectGeneration{Components: []*Result{left, right}}).prepareAtRoots(root, nil, nil); err == nil || !strings.Contains(err.Error(), "component dependency cycle") {
 		t.Fatalf("cycle prepare() error = %v", err)
 	}
 }
@@ -215,7 +216,7 @@ func TestProjectComponentReferenceUsesLinkedOutputAuthority(t *testing.T) {
 #setting($_ = $route('/linked-parent', 'GET'))
 #define($_ = $Child<?>(component/GET:/users))
 SELECT 1 AS ID`)
-	prepared, err := (&ProjectGeneration{Components: []*Result{parent, child}}).prepare(root)
+	prepared, err := (&ProjectGeneration{Components: []*Result{parent, child}}).prepareAtRoots(root, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
