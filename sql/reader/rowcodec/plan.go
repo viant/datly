@@ -17,6 +17,8 @@ import (
 )
 
 type Config struct {
+	// AllowNulls retains the view's native NULL scanning policy for scalar fields.
+	AllowNulls bool
 	RowType    reflect.Type
 	Columns    []*data.Column
 	Factory    xcodec.Factory
@@ -70,7 +72,7 @@ func Compile(config Config) (*Plan, error) {
 		if err != nil {
 			continue
 		}
-		if target.Type() == timePointer || scalarScanTarget(model, target) {
+		if target.Type() == timePointer || (!config.AllowNulls && scalarScanTarget(model, target)) {
 			columns = append(columns, column)
 		}
 	}
