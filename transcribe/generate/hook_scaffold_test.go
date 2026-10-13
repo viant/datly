@@ -210,7 +210,7 @@ func TestRegenerationRejectsStaleUserHookSignatureWithoutFileLoss(t *testing.T) 
 
 func TestRegenerationPreservesSupportedLifecycleForms(t *testing.T) {
 	for _, initArgs := range []string{"ctx context.Context", "ctx context.Context, invoker h.ComponentInvoker"} {
-		for _, finalArgs := range []string{"ctx context.Context", "ctx context.Context, cause error", "ctx context.Context, invoker h.ComponentInvoker", "ctx context.Context, lookup h.InjectorLookup"} {
+		for _, finalArgs := range []string{"ctx context.Context", "ctx context.Context, cause error", "ctx context.Context, invoker h.ComponentInvoker", "ctx context.Context, invoker h.ComponentInvoker, cause error", "ctx context.Context, lookup h.InjectorLookup"} {
 			t.Run(initArgs+"/"+finalArgs, func(t *testing.T) {
 				file, err := parser.ParseFile(token.NewFileSet(), "hooks.go", `package generated
 import ("context"; h "github.com/viant/xdatly/handler")

@@ -177,7 +177,7 @@ func validateHookMethods(file *ast.File, plan *Plan, imports map[string]string) 
 		args     [][]string
 	}{
 		{plan.Input, "Init", [][]string{{"context.Context", "github.com/viant/xdatly/handler.ComponentInvoker"}, {"context.Context"}}},
-		{plan.Output, "Finalize", [][]string{{"context.Context", "github.com/viant/xdatly/handler.ComponentInvoker"}, {"context.Context"}, {"context.Context", "error"}, {"context.Context", "github.com/viant/xdatly/handler.InjectorLookup"}}},
+		{plan.Output, "Finalize", [][]string{{"context.Context", "github.com/viant/xdatly/handler.ComponentInvoker"}, {"context.Context", "github.com/viant/xdatly/handler.ComponentInvoker", "error"}, {"context.Context"}, {"context.Context", "error"}, {"context.Context", "github.com/viant/xdatly/handler.InjectorLookup"}}},
 	} {
 		if role.contract.Type == "" || !plan.localShape(role.contract.Package) {
 			continue

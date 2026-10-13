@@ -617,8 +617,9 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 	completeSelection(result, handlerErr)
 	var compositionPrepareErr error
 	_, invokerAware := result.(xhandler.InvokerFinalizer)
+	_, invokerErrorAware := result.(xhandler.InvokerErrorFinalizer)
 	_, injectorAware := result.(xhandler.InjectorFinalizer)
-	if invokerAware || (injectorAware && !outcomeAware) {
+	if invokerAware || invokerErrorAware || (injectorAware && !outcomeAware) {
 		// Untyped engine adapters can discover the hook only from the result.
 		// Its child calls still need an owner before composition starts.
 		if data == nil {
@@ -636,6 +637,10 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 		}
 		lease := &lifecycleScope{data: data, ctx: ctx, binder: binder, output: result, lookup: request.Injectors}
 		switch finalizer := result.(type) {
+		case xhandler.InvokerErrorFinalizer:
+			lease.phase = "invoker error finalizer"
+			operationErr := handlerErr
+			handlerErr = lease.finish(func(ctx context.Context) error { return finalizer.Finalize(ctx, lease, operationErr) }, operationErr)
 		case xhandler.InvokerFinalizer:
 			lease.phase = "invoker finalizer"
 			handlerErr = lease.finish(func(ctx context.Context) error { return finalizer.Finalize(ctx, lease) }, handlerErr)
@@ -777,7 +782,7 @@ func (r Request) hasCompositionFinalizer() bool {
 	if outputType == nil {
 		return false
 	}
-	for _, contract := range []reflect.Type{reflect.TypeFor[xhandler.InvokerFinalizer](), reflect.TypeFor[xhandler.InjectorFinalizer]()} {
+	for _, contract := range []reflect.Type{reflect.TypeFor[xhandler.InvokerFinalizer](), reflect.TypeFor[xhandler.InvokerErrorFinalizer](), reflect.TypeFor[xhandler.InjectorFinalizer]()} {
 		if outputType.Implements(contract) || (outputType.Kind() != reflect.Pointer && reflect.PointerTo(outputType).Implements(contract)) {
 			return true
 		}

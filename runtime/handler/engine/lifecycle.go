@@ -35,6 +35,9 @@ func (s *lifecycleScope) finish(hook func(context.Context) error, cause error) (
 		defer s.mu.Unlock()
 		s.closed = true
 		s.record(err)
+		// A callback can select its public response while the child's recorded
+		// failure remains a veto in the retained cause chain.
+		projection := (&outcomeErrors{}).publicError(err, cause)
 		err = cause
 		if s.err != nil && !errors.Is(cause, s.err) {
 			if err == nil {
@@ -42,6 +45,9 @@ func (s *lifecycleScope) finish(hook func(context.Context) error, cause error) (
 			} else {
 				err = errors.Join(err, s.err)
 			}
+		}
+		if projection != nil {
+			err = &publicOutcomeError{BodyError: projection, cause: err}
 		}
 	}()
 	return hook(s.ctx)

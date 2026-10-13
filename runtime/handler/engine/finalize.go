@@ -39,7 +39,8 @@ func finalizeBeforeCompletion(ctx context.Context, result any, handlerErr error)
 func finalizeAfterCompletion(ctx context.Context, result any) (any, error) {
 	_, injectorAware := result.(xhandler.InjectorFinalizer)
 	_, invokerAware := result.(xhandler.InvokerFinalizer)
-	if _, errorAware := result.(xhandler.ErrorFinalizer); !errorAware && !injectorAware && !invokerAware {
+	_, invokerErrorAware := result.(xhandler.InvokerErrorFinalizer)
+	if _, errorAware := result.(xhandler.ErrorFinalizer); !errorAware && !injectorAware && !invokerAware && !invokerErrorAware {
 		if finalizer, ok := result.(xhandler.Finalizer); ok {
 			if err := finalizer.Finalize(ctx); err != nil {
 				return result, err

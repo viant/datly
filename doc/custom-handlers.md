@@ -142,6 +142,7 @@ Do not infer a schema by inspecting runtime bytes or executing the handler.
 | Contract | Timing/meaning |
 | --- | --- |
 | `Finalize(ctx, invoker handler.ComponentInvoker) error` | Explicit child composition before transaction completion; returned or child errors prevent owned commit. Also runs before a native writer's separate outcome callback. |
+| `Finalize(ctx, invoker handler.ComponentInvoker, operationErr error) error` | Error-aware child composition in the same pre-completion phase; the current error is retained even when the callback returns nil. |
 | `Finalize(ctx, err) error` | Error-aware output finalization before root completion; returned error can prevent locally owned commit. Original cause errors remain preserved. |
 | `Finalize(ctx) error` | Success-path output finalization after root completion; does not run again when the error-aware contract was selected. |
 | Mutation outcome finalization | Explicit result-aware `handler.Outcome` for confirmed commit versus pending/failed/unknown work. |
@@ -176,6 +177,18 @@ Finalize runs after execution and output binding, before root completion. It
 runs when an output is available even if the handler returned an error; that
 error is preserved. Early binding/initialization failures do not invoke it.
 Native writer outcome finalization remains a separate later phase.
+
+For conditional composition after a successful operation, implement
+`handler.InvokerErrorFinalizer` with
+`Finalize(ctx, invoker, operationErr) error`. Return before child calls when
+`operationErr` is non-nil. The error includes handler, output-binding and any
+preparation failure encountered before this callback. It cannot report future
+drain/commit errors or early failures without an output. Existing two-argument
+finalizers keep their unconditional output-plus-error behavior. Protected roots
+retain their existing preparation order; verify timing before replacing an
+error-aware or post-completion finalizer. Regeneration preserves all these
+supported authored signatures.
+
 
 Call `invoker.Invoke(ctx, handler.ComponentRequest{...})` with an exact trusted
 target and the child's declared input type. The argument uses the same scoped
