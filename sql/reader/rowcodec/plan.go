@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/viant/datly/data"
 	xshape "github.com/viant/x/shape"
@@ -43,22 +44,36 @@ type fieldCopy struct {
 }
 
 func Compile(config Config) (*Plan, error) {
+	owner := xshape.Linked(config.RowType)
+	model := (xshape.Runtime{}).Indirect(config.RowType)
+	if model == nil || model.Kind() != reflect.Struct {
+		for _, column := range config.Columns {
+			if column != nil && column.Codec != nil {
+				return nil, fmt.Errorf("column codecs require a typed struct row")
+			}
+		}
+		return nil, nil
+	}
+	timePointer := reflect.PointerTo(reflect.TypeFor[time.Time]())
 	var columns []*data.Column
 	for _, column := range config.Columns {
-		if column != nil && column.Codec != nil {
+		if column == nil {
+			continue
+		}
+		if column.Codec != nil {
+			columns = append(columns, column)
+			continue
+		}
+		target, err := owner.Accessor(column.Name)
+		if err != nil {
+			continue
+		}
+		if target.Type() == timePointer {
 			columns = append(columns, column)
 		}
 	}
 	if len(columns) == 0 {
 		return nil, nil
-	}
-	if config.Factory == nil {
-		return nil, fmt.Errorf("column codec factory is required")
-	}
-	owner := xshape.Linked(config.RowType)
-	model := (xshape.Runtime{}).Indirect(config.RowType)
-	if model == nil || model.Kind() != reflect.Struct {
-		return nil, fmt.Errorf("column codecs require a typed struct row")
 	}
 	plan := &Plan{modelType: model}
 	runtime := xshape.Runtime{Lookup: config.LookupType}
@@ -77,14 +92,24 @@ func Compile(config Config) (*Plan, error) {
 		if err != nil {
 			return nil, fmt.Errorf("codec column %s: %w", column.Name, err)
 		}
-		if strings.TrimSpace(column.DataType) == "" {
-			return nil, fmt.Errorf("codec column %s requires an explicit source data type", column.Name)
+		var source reflect.Type
+		var instance xcodec.Instance
+		if column.Codec == nil && target.Type() == timePointer {
+			source = reflect.TypeFor[string]()
+			instance = nullableTimestampCodec{}
+		} else {
+			if config.Factory == nil {
+				return nil, fmt.Errorf("column codec factory is required")
+			}
+			if strings.TrimSpace(column.DataType) == "" {
+				return nil, fmt.Errorf("codec column %s requires an explicit source data type", column.Name)
+			}
+			source, err = runtime.Type(column.DataType)
+			if err != nil {
+				return nil, fmt.Errorf("codec column %s source type: %w", column.Name, err)
+			}
 		}
-		source, err := runtime.Type(column.DataType)
-		if err != nil {
-			return nil, fmt.Errorf("codec column %s source type: %w", column.Name, err)
-		}
-		if column.Codec.OutputType != "" {
+		if column.Codec != nil && column.Codec.OutputType != "" {
 			declared, err := runtime.Type(column.Codec.OutputType)
 			if err != nil {
 				return nil, err
@@ -93,9 +118,11 @@ func Compile(config Config) (*Plan, error) {
 				return nil, fmt.Errorf("codec column %s output type %s does not match %s", column.Name, declared, target.Type())
 			}
 		}
-		instance, err := config.Factory.New(&xcodec.Config{Body: column.Codec.Body, SourceType: source, DestinationType: target.Type(), Args: append([]string(nil), column.Codec.Args...), OutputTypeExpression: column.Codec.OutputType}, xcodec.WithTypeLookup(config.LookupType), xcodec.WithResourceFS(config.Resources))
-		if err != nil {
-			return nil, fmt.Errorf("compile column codec %s: %w", column.Name, err)
+		if column.Codec != nil {
+			instance, err = config.Factory.New(&xcodec.Config{Body: column.Codec.Body, SourceType: source, DestinationType: target.Type(), Args: append([]string(nil), column.Codec.Args...), OutputTypeExpression: column.Codec.OutputType}, xcodec.WithTypeLookup(config.LookupType), xcodec.WithResourceFS(config.Resources))
+			if err != nil {
+				return nil, fmt.Errorf("compile column codec %s: %w", column.Name, err)
+			}
 		}
 		if instance == nil || reflect.ValueOf(instance).Kind() == reflect.Pointer && reflect.ValueOf(instance).IsNil() {
 			return nil, fmt.Errorf("column codec %s returned a nil instance", column.Name)

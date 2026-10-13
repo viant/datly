@@ -69,8 +69,16 @@ in the DQL SQL graph, using the real authoring connector so transcription derive
 columns, keys and FK metadata. Regeneration updates that shape after schema changes.
 An optional object binds omitted data and explicit null to nil, preserving its
 presence marker so the application's original validation can distinguish them.
-Codecs, alternate output types, foreign root types and container wrappers cannot
-replace this generated body authority.
+An explicit existing codec may normalize an alternative provider source, provided
+its declared output is exactly the local SQL-derived `*Record` or `[]*Record`.
+For example, `$Data<json.RawMessage,[]*orders.Record>(body/data).WithCodec('orders.RecordJSON')`
+uses an imported `encoding/json` source and a discovered application codec factory.
+Transcription keeps SQL as body-shape authority and derives cardinality from the
+codec destination. The native compiler validates the source type and codec factory.
+Missing, foreign, value or wrapper destinations, extra body parameters and body
+emission remain rejected. Use the existing `.WithStatusCode(400)` parameter option when the
+original contract requires codec input errors to return HTTP 400.
+A codec cannot replace the generated body with an unrelated application type.
 
 A Current-only DELETE factory needs no body graph. Its declared read views generate
 the Input fields and bind before the handler runs; the handler decides which rows

@@ -35,8 +35,8 @@ type ColumnRow struct {
 	Children      []*ColumnRow       `on:"ID=ID"`
 	Parent        *ColumnRow         `view:"Parent,table=parents"`
 	private       string
-	CleanupStatus string  `sqlx:"cleanup_status" json:"-"`
-	CreatedAtRaw  *string `sqlx:"created_at_raw" json:"-"`
+	CleanupStatus string  `sqlx:"cleanup_status" internal:"true" json:"-"`
+	CreatedAtRaw  *string `sqlx:"created_at_raw" internal:"true" json:"-"`
 }
 type ColumnOutput struct {
 	Data []*ColumnRow `parameter:"result,kind=output,in=view" view:"Report,groupable=true" sql:"SELECT account_id,total_spend,region_code,created_at,display_label FROM records"`
@@ -60,8 +60,8 @@ type ColumnRow struct {
  Children []*ColumnRow ` + "`on:\"ID=ID\"`" + `
  Parent *ColumnRow ` + "`view:\"Parent,table=parents\"`" + `
  private string
- CleanupStatus string ` + "`sqlx:\"cleanup_status\" json:\"-\"`" + `
- CreatedAtRaw *string ` + "`sqlx:\"created_at_raw\" json:\"-\"`" + `
+ CleanupStatus string ` + "`sqlx:\"cleanup_status\" internal:\"true\" json:\"-\"`" + `
+ CreatedAtRaw *string ` + "`sqlx:\"created_at_raw\" internal:\"true\" json:\"-\"`" + `
 }
 type InlineOutput struct { Data []struct { ID *int ` + "`sqlx:\"inline_id\"`" + ` } ` + "`parameter:\"view,kind=output,in=view\" view:\"Inline,table=records\"`" + ` }
 type ColumnOutput struct { Data []*ColumnRow ` + "`parameter:\"result,kind=output,in=view\" view:\"Report,groupable=true\" sql:\"SELECT account_id,total_spend,region_code,created_at,display_label FROM records\"`" + ` }
@@ -129,7 +129,7 @@ func TestPackageOutputCanonicalColumns(t *testing.T) {
 							t.Fatalf("column %d=%+v", i, c)
 						}
 					}
-					if columns[5].Type.Name != "string" || columns[6].Type != (spec.TypeRef{Name: "string", Pointer: true}) || !columns[6].Nullable || reflect.StructTag(columns[5].Tag).Get("json") != "-" || reflect.StructTag(columns[6].Tag).Get("json") != "-" {
+					if columns[5].Type.Name != "string" || columns[6].Type != (spec.TypeRef{Name: "string", Pointer: true}) || !columns[6].Nullable || reflect.StructTag(columns[5].Tag).Get("json") != "-" || reflect.StructTag(columns[6].Tag).Get("json") != "-" || reflect.StructTag(columns[5].Tag).Get("internal") != "true" || reflect.StructTag(columns[6].Tag).Get("internal") != "true" {
 						t.Fatalf("JSON-hidden SQL type metadata lost: %+v", columns[5:])
 					}
 					if component.RootView.Key.Scope != "example.com/shared" {

@@ -170,11 +170,18 @@ func (c *Compiler) compileFactoryInputShape(ctx context.Context, source *Source,
 		if p == nil || !strings.EqualFold(p.Source.Kind, "body") {
 			continue
 		}
-		// The generated field must bind directly to the local SQL-derived type.
-		// Output type, codec and emission controls cannot override or omit it.
-		bodyType, typeErr := authority.CanonicalType(prepared.TypeContext.PackagePath, p.TypeExpr)
+		// The field destination remains the local SQL-derived type. An explicit
+		// codec may use a different provider source, but must declare that exact
+		// destination; native codec compilation validates its source and factory.
+		destination := p.TypeExpr
+		invalidOverride := strings.TrimSpace(p.OutputTypeExpr) != ""
+		if p.Codec != nil {
+			destination = p.OutputTypeExpr
+			invalidOverride = strings.TrimSpace(destination) == ""
+		}
+		bodyType, typeErr := authority.CanonicalType(prepared.TypeContext.PackagePath, destination)
 		rowType := prepared.TypeContext.PackagePath + "." + root.TypeName
-		if typeErr != nil || (bodyType != "[]*"+rowType && bodyType != "*"+rowType) || strings.TrimSpace(p.OutputTypeExpr) != "" || p.Codec != nil || p.EmitOutput {
+		if typeErr != nil || (bodyType != "[]*"+rowType && bodyType != "*"+rowType) || invalidOverride || p.EmitOutput {
 			return nil, fmt.Errorf("factory input shape body %s must directly reference generated *%s or []*%s", p.Name, root.TypeName, root.TypeName)
 		}
 		cardinality := spec.CardinalityMany
