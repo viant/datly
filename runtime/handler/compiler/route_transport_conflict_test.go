@@ -15,7 +15,10 @@ func TestEffectiveRouteTransportDestinations(t *testing.T) {
 		conflict                                             bool
 	}{
 		{name: "duplicate query", kindA: "query", kindB: "query", sourceA: "q", sourceB: "q", conflict: true},
-		{name: "header folding", kindA: "header", kindB: "header", sourceA: "X-Name", sourceB: "x-name", conflict: true},
+		{name: "duplicate cookie", kindA: "cookie", kindB: "cookie", sourceA: "session", sourceB: "session", conflict: true},
+		{name: "duplicate path", kindA: "path", kindB: "path", sourceA: "id", sourceB: "id", conflict: true},
+		{name: "duplicate form", kindA: "form", kindB: "form", sourceA: "value", sourceB: "value", conflict: true},
+		{name: "shared immutable header", kindA: "header", kindB: "header", sourceA: "X-Name", sourceB: "x-name"},
 		{name: "distinct sources", kindA: "query", kindB: "form", sourceA: "value", sourceB: "value"},
 		{name: "query case preserved", kindA: "query", kindB: "query", sourceA: "Name", sourceB: "name"},
 		{name: "distinct routes", kindA: "query", kindB: "query", sourceA: "q", sourceB: "q", routeA: "/a", routeB: "/b"},
