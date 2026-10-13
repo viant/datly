@@ -572,7 +572,45 @@ func projectMCPMarkedValue(value reflect.Value) (interface{}, bool) {
 	}
 	marker := value.FieldByName("Has")
 	if !marker.IsValid() || marker.Kind() != reflect.Ptr || marker.IsNil() || marker.Elem().Kind() != reflect.Struct {
-		return mcpJSONValue(value), false
+		// A discriminated wrapper can contain marked patches without owning
+		// a marker itself. Preserve the wrapper's JSON shape while projecting
+		// its marked children before omitempty can erase explicit clears.
+		if implementsMCPJSONMarshaler(value.Interface()) {
+			return mcpJSONValue(value), false
+		}
+		normalized, ok := mcpJSONValue(value).(map[string]interface{})
+		if !ok {
+			return mcpJSONValue(value), false
+		}
+		marked := false
+		for index := 0; index < value.NumField(); index++ {
+			field := value.Type().Field(index)
+			if !field.IsExported() {
+				continue
+			}
+			name := strings.Split(field.Tag.Get("json"), ",")[0]
+			if name == "-" {
+				continue
+			}
+			projected, childMarked := projectMCPMarkedValue(value.Field(index))
+			if !childMarked {
+				continue
+			}
+			if field.Anonymous && name == "" {
+				if embedded, ok := projected.(map[string]interface{}); ok {
+					for key, item := range embedded {
+						normalized[key] = item
+					}
+				}
+			} else {
+				if name == "" {
+					name = field.Name
+				}
+				normalized[name] = projected
+			}
+			marked = true
+		}
+		return normalized, marked
 	}
 	marker = marker.Elem()
 	return projectMCPMarkedStruct(value, marker), true
