@@ -83,10 +83,6 @@ func (s *Condition) Generate(builder *Builder) (err error) {
 		}
 
 		bodyBlockBuilder := builder.IncIndent("  ")
-		if err = bodyBlockBuilder.WriteIndentedString("\n"); err != nil {
-			return err
-		}
-
 		if err = s.IFBlock.Generate(bodyBlockBuilder); err != nil {
 			return err
 		}
@@ -108,10 +104,6 @@ func (s *Condition) Generate(builder *Builder) (err error) {
 				return err
 			}
 
-			if err = bodyBlockBuilder.WriteIndentedString("\n"); err != nil {
-				return err
-			}
-
 			if err = block.Block.Generate(bodyBlockBuilder); err != nil {
 				return err
 			}
@@ -127,10 +119,6 @@ func (s *Condition) Generate(builder *Builder) (err error) {
 			}
 
 			if err = builder.WriteString(" { "); err != nil {
-				return err
-			}
-
-			if err = bodyBlockBuilder.WriteIndentedString("\n"); err != nil {
 				return err
 			}
 

@@ -20,6 +20,7 @@ func (c *orderBy) Apply(args []string, column *sqlparser.Column, resource *view.
 	}
 	aView.Selector.Constraints.OrderBy = true
 	aView.Selector.OrderBy = values[0].(string)
+
 	return nil
 }
 

@@ -7,7 +7,7 @@ func CombineErrors(header string, errors []error) error {
 		return nil
 	}
 
-	outputErr := fmt.Errorf(header)
+	outputErr := fmt.Errorf("%s", header)
 	for _, err := range errors {
 		outputErr = fmt.Errorf("%w; %v", outputErr, err.Error())
 	}

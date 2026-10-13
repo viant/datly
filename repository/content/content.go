@@ -2,6 +2,9 @@ package content
 
 import (
 	"fmt"
+	"reflect"
+	"strings"
+
 	"github.com/viant/datly/gateway/router/marshal"
 	"github.com/viant/datly/gateway/router/marshal/config"
 	"github.com/viant/datly/gateway/router/marshal/json"
@@ -12,8 +15,6 @@ import (
 	"github.com/viant/xlsy"
 	"github.com/viant/xmlify"
 	"github.com/viant/xreflect"
-	"reflect"
-	"strings"
 )
 
 const (
@@ -39,9 +40,10 @@ type (
 
 	TabularJSONConfig struct {
 		FloatPrecision   string
+		Engine           string `json:",omitempty" yaml:",omitempty"`
 		_config          *tabjson.Config
-		InputMarhsaller  *tabjson.Marshaller
-		OutputMarshaller *tabjson.Marshaller
+		InputMarhsaller  TabularJSONUnmarshallerEngine `json:"-" yaml:"-"`
+		OutputMarshaller TabularJSONMarshallerEngine   `json:"-" yaml:"-"`
 	}
 
 	XMLConfig struct {
@@ -59,8 +61,14 @@ type (
 	}
 
 	JSON struct {
-		Codec
-		JsonMarshaller *json.Marshaller
+		Engine              string                 `json:",omitempty" yaml:",omitempty"`
+		MarshalTypeName     string                 `json:",omitempty" yaml:",omitempty"`
+		UnmarshalTypeName   string                 `json:",omitempty" yaml:",omitempty"`
+		marshalCodec        Codec                  `json:"-" yaml:"-"`
+		unmarshalCodec      Codec                  `json:"-" yaml:"-"`
+		JsonMarshaller      *json.Marshaller       `json:"-" yaml:"-"`
+		RuntimeMarshaller   JSONMarshallerEngine   `json:"-" yaml:"-"`
+		RuntimeUnmarshaller JSONUnmarshallerEngine `json:"-" yaml:"-"`
 	}
 
 	XLS struct {
@@ -85,6 +93,14 @@ type (
 
 	Marshaller interface {
 		Marshal(src interface{}) ([]byte, error)
+	}
+
+	JSONMarshallerEngine interface {
+		Marshal(src interface{}, options ...interface{}) ([]byte, error)
+	}
+
+	JSONUnmarshallerEngine interface {
+		Unmarshal(bytes []byte, dest interface{}, options ...interface{}) error
 	}
 )
 
@@ -117,7 +133,7 @@ func (m *Marshallers) Init(lookupType xreflect.LookupType) error {
 	if err := m.JSON.Init(lookupType); err != nil {
 		return err
 	}
-	if err := m.XML.Init(lookupType); err != nil {
+	if err := m.XML.init(lookupType, false, true); err != nil {
 		return err
 	}
 	if err := m.CSV.Init(lookupType); err != nil {
@@ -127,6 +143,10 @@ func (m *Marshallers) Init(lookupType xreflect.LookupType) error {
 }
 
 func (u *Codec) Init(lookupType xreflect.LookupType) error {
+	return u.init(lookupType, true, true)
+}
+
+func (u *Codec) init(lookupType xreflect.LookupType, requireMarshal, requireUnmarshal bool) error {
 	if u.TypeName == "" {
 		return nil
 	}
@@ -144,10 +164,55 @@ func (u *Codec) Init(lookupType xreflect.LookupType) error {
 	if ok {
 		u.marshal = marshaller.Marshal
 	}
-	if u.marshal == nil && u.unmarshal == nil {
-		return fmt.Errorf("invalid type %s:  unmarshaller/marshaller were not initialized", u.TypeName)
+	if requireMarshal && u.marshal == nil {
+		return fmt.Errorf("invalid type %s: marshaller was not initialized", u.TypeName)
+	}
+	if requireUnmarshal && u.unmarshal == nil {
+		return fmt.Errorf("invalid type %s: unmarshaller was not initialized", u.TypeName)
 	}
 	return nil
+}
+
+func (j *JSON) Init(lookupType xreflect.LookupType) error {
+	j.marshalCodec = Codec{TypeName: j.MarshalTypeName}
+	j.unmarshalCodec = Codec{TypeName: j.UnmarshalTypeName}
+	if err := j.marshalCodec.init(lookupType, true, false); err != nil {
+		return err
+	}
+	if err := j.unmarshalCodec.init(lookupType, false, true); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (j *JSON) CanMarshal() bool {
+	return j.marshalCodec.CanMarshal()
+}
+
+func (j *JSON) CanUnmarshal() bool {
+	return j.unmarshalCodec.CanUnmarshal()
+}
+
+func (j *JSON) Marshal(src interface{}) ([]byte, error) {
+	return j.marshalCodec.Marshal(src)
+}
+
+func (j *JSON) Unmarshal(bytes []byte, dest interface{}) error {
+	return j.unmarshalCodec.Unmarshal(bytes, dest)
+}
+
+func (j *JSON) RuntimeMarshallerEngine() JSONMarshallerEngine {
+	if j.RuntimeMarshaller != nil {
+		return j.RuntimeMarshaller
+	}
+	return j.JsonMarshaller
+}
+
+func (j *JSON) RuntimeUnmarshallerEngine() JSONUnmarshallerEngine {
+	if j.RuntimeUnmarshaller != nil {
+		return j.RuntimeUnmarshaller
+	}
+	return j.JsonMarshaller
 }
 
 func (c *Content) UnmarshallerInterceptors() marshal.Transforms {
@@ -176,15 +241,25 @@ func (x *XLSConfig) Options() []xlsy.Option {
 	return options
 }
 
-func (c *Content) InitMarshaller(config *config.IOConfig, exclude []string, inputType, outputType reflect.Type) error {
+func (c *Content) InitMarshaller(config *config.IOConfig, exclude []string, inputType, outputType reflect.Type, lookupType xreflect.LookupType) error {
 	c.unmarshallerInterceptors = c.Transforms.FilterByKind(marshal.TransformKindUnmarshal)
-	c.Marshaller.JSON.JsonMarshaller = json.New(config)
+	if err := c.Marshaller.Init(lookupType); err != nil {
+		return err
+	}
+	legacyMarshaller := json.New(config)
+	c.Marshaller.JSON.JsonMarshaller = legacyMarshaller
+	runtimeMarshaller, runtimeUnmarshaller, err := newJSONMarshaller(config, c.Marshaller.JSON.Engine, legacyMarshaller, lookupType)
+	if err != nil {
+		return err
+	}
+	c.Marshaller.JSON.RuntimeMarshaller = runtimeMarshaller
+	c.Marshaller.JSON.RuntimeUnmarshaller = runtimeUnmarshaller
 	c.Marshaller.XLS.XlsMarshaller = xlsy.NewMarshaller(c.XLS.Options()...)
 
 	if err := c.initCSVIfNeeded(inputType, outputType); err != nil {
 		return err
 	}
-	if err := c.initTabJSONIfNeeded(exclude, inputType, outputType); err != nil {
+	if err := c.initTabJSONIfNeeded(exclude, inputType, outputType, lookupType); err != nil {
 		return err
 	}
 	if err := c.initXMLIfNeeded(exclude, inputType, outputType); err != nil {
@@ -233,50 +308,18 @@ func (c *Content) ensureCSV() {
 	c.CSV = &CSVConfig{Separator: ","}
 }
 
-func (c *Content) initTabJSONIfNeeded(excludedPaths []string, inputType reflect.Type, outputType reflect.Type) error {
-
-	if c.TabularJSON == nil {
-		c.TabularJSON = &TabularJSONConfig{}
-	}
-
-	if c.TabularJSON._config == nil {
-		c.TabularJSON._config = &tabjson.Config{}
-	}
-
-	if c.TabularJSON._config.FieldSeparator == "" {
-		c.TabularJSON._config.FieldSeparator = ","
-	}
-
+func (c *Content) initTabJSONIfNeeded(excludedPaths []string, inputType reflect.Type, outputType reflect.Type, lookupType xreflect.LookupType) error {
+	c.TabularJSON = ensureTabularJSONConfig(c.TabularJSON, excludedPaths)
 	if len(c.TabularJSON._config.FieldSeparator) != 1 {
 		return fmt.Errorf("separator has to be a single char, but was %v", c.TabularJSON._config.FieldSeparator)
 	}
-
-	if c.TabularJSON._config.NullValue == "" {
-		c.TabularJSON._config.NullValue = "null"
-	}
-
-	if c.TabularJSON.FloatPrecision != "" {
-		c.TabularJSON._config.StringifierConfig.StringifierFloat32Config.Precision = c.TabularJSON.FloatPrecision
-		c.TabularJSON._config.StringifierConfig.StringifierFloat64Config.Precision = c.TabularJSON.FloatPrecision
-	}
-
-	c.TabularJSON._config.ExcludedPaths = excludedPaths
-
-	if outputType.Kind() == reflect.Ptr {
-		outputType = outputType.Elem()
-	}
-
-	var err error
-	c.TabularJSON.OutputMarshaller, err = tabjson.NewMarshaller(outputType, c.TabularJSON._config)
+	outputMarshaller, inputMarshaller, err := newTabularJSONMarshaller(c.TabularJSON, inputType, outputType, excludedPaths, lookupType)
 	if err != nil {
 		return err
 	}
-
-	if outputType == nil {
-		return nil
-	}
-	c.TabularJSON.InputMarhsaller, err = tabjson.NewMarshaller(inputType, nil)
-	return err
+	c.TabularJSON.OutputMarshaller = outputMarshaller
+	c.TabularJSON.InputMarhsaller = inputMarshaller
+	return nil
 }
 
 // func (c *Content) initXMLIfNeeded(excludedPaths []string, outputType reflect.Type, inputType reflect.Type) error {
@@ -439,14 +482,14 @@ func (c *Content) Marshal(format string, field string, response interface{}, opt
 		if field != "" {
 			responseData := ensureSliceValue(response)
 			tabJSONInterceptors := c.tabJSONInterceptors(field, responseData)
-			return c.Marshaller.JSON.JsonMarshaller.Marshal(response, tabJSONInterceptors)
+			return c.Marshaller.JSON.RuntimeMarshallerEngine().Marshal(response, tabJSONInterceptors)
 		}
 		return c.TabularJSON.OutputMarshaller.Marshal(response, options...)
 	case JSONFormat:
 		if c.Marshaller.JSON.CanMarshal() {
 			return c.Marshaller.JSON.Marshal(response)
 		}
-		return c.Marshaller.JSON.JsonMarshaller.Marshal(response, options...)
+		return c.Marshaller.JSON.RuntimeMarshallerEngine().Marshal(response, options...)
 	default:
 		return nil, fmt.Errorf("unsupproted readerData format: %s", format)
 	}

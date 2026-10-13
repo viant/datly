@@ -1,0 +1,32 @@
+[
+  {
+    "id": 1,
+    "name": "district - 1",
+    "cities": [
+      {
+        "id": 1,
+        "name": "district - 1 / city - 1",
+        "zipCode": "12-345",
+        "districtId": 1
+      },
+      {
+        "id": 3,
+        "name": "district - 1 / city - 2",
+        "zipCode": "34-567",
+        "districtId": 1
+      }
+    ]
+  },
+  {
+    "id": 2,
+    "name": "district - 2",
+    "cities": [
+      {
+        "id": 2,
+        "name": "district - 2 / city - 1",
+        "zipCode": "23-456",
+        "districtId": 2
+      }
+    ]
+  }
+]

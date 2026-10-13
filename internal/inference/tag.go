@@ -100,6 +100,38 @@ func (t *Tags) buildSqlxTag(source *Spec, field *Field) {
 		tagValue.Append("table=" + source.Table)
 	}
 	field.Tags.Set("sqlx", tagValue)
+	if _, ok := t.tags["source"]; !ok {
+		if sourceName := sourceColumnName(column); sourceName != "" {
+			field.Tags.Set("source", TagValue{sourceName})
+		}
+	}
+}
+
+func sourceColumnName(column *sqlparser.Column) string {
+	if column == nil {
+		return ""
+	}
+	if column.Alias != "" && column.Name != "" && !strings.EqualFold(column.Alias, column.Name) {
+		return column.Name
+	}
+	expression := strings.TrimSpace(column.Expression)
+	if expression == "" {
+		return ""
+	}
+	if index := strings.LastIndex(expression, "."); index != -1 {
+		expression = expression[index+1:]
+	}
+	expression = strings.Trim(expression, "` ")
+	if expression == "" {
+		return ""
+	}
+	if column.Alias != "" && strings.EqualFold(expression, column.Alias) {
+		return ""
+	}
+	if column.Name != "" && strings.EqualFold(expression, column.Name) {
+		return ""
+	}
+	return expression
 }
 
 func (t *Tags) buildJSONTag(field *Field) {
@@ -148,19 +180,29 @@ func (t *Tags) buildRelation(spec *Spec, relation *Relation) {
 		Table: spec.Table,
 	}
 	joinTag := tags.LinkOn{}
-
-	parentColumn := relation.ParentField.Column.Name
-	if ns := relation.ParentField.Column.Namespace; ns != "" {
-		parentColumn = ns + "." + parentColumn
+	if len(relation.Pairs) == 0 {
+		relation.Pairs = []*RelationPair{{
+			ParentField: relation.ParentField,
+			KeyField:    relation.KeyField,
+		}}
 	}
-	keyColumn := relation.KeyField.Column.Name
-	if ns := relation.KeyField.Column.Namespace; ns != "" {
-		keyColumn = ns + "." + keyColumn
+	for _, pair := range relation.Pairs {
+		if pair == nil || pair.ParentField == nil || pair.KeyField == nil {
+			continue
+		}
+		parentColumn := relationColumnName(pair.ParentField.Column)
+		if ns := pair.ParentField.Column.Namespace; ns != "" {
+			parentColumn = ns + "." + parentColumn
+		}
+		keyColumn := relationColumnName(pair.KeyField.Column)
+		if ns := pair.KeyField.Column.Namespace; ns != "" {
+			keyColumn = ns + "." + keyColumn
+		}
+		joinTag = joinTag.Append(
+			tags.WithRelLink(pair.ParentField.Name, parentColumn, nil),
+			tags.WithRefLink(pair.KeyField.Name, keyColumn),
+		)
 	}
-	joinTag = joinTag.Append(
-		tags.WithRelLink(relation.ParentField.Name, parentColumn, nil),
-		tags.WithRefLink(relation.KeyField.Name, keyColumn),
-	)
 	sqlTag := TagValue{}
 	if rawSQL := strings.Trim(sqlparser.Stringify(join.With), " )("); rawSQL != "" {
 		rawSQL = strings.Replace(rawSQL, "("+spec.Table+")", spec.Table, 1)
@@ -171,6 +213,16 @@ func (t *Tags) buildRelation(spec *Spec, relation *Relation) {
 
 	t.Set(tags.ViewTag, []string{string(viewTag.Tag().Values)})
 	t.Set(tags.SQLTag, sqlTag)
+}
+
+func relationColumnName(column *sqlparser.Column) string {
+	if column == nil {
+		return ""
+	}
+	if column.Name != "" {
+		return column.Name
+	}
+	return column.Alias
 }
 
 // Stringify return text representation of struct tag

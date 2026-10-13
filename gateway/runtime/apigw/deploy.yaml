@@ -25,7 +25,7 @@ pipeline:
   set_sdk:
     action: sdk.set
     target: $target
-    sdk: go:1.21
+    sdk: go:1.25.1
 
   build:
     package:
