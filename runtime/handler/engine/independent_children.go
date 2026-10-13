@@ -23,8 +23,11 @@ func validateIndependentChildren(ctx context.Context, request Request) error {
 	if _, ok := request.Handler.(rhandler.OutcomeFinalizer); ok {
 		return reject("root owns outcome finalization")
 	}
-	if request.hasInjectorFinalizer() {
-		return reject("root owns injector finalization")
+	if request.hasCompositionFinalizer() {
+		return reject("root owns composition finalization")
+	}
+	if request.hasInvokerInitializer() {
+		return reject("root owns invoker initialization")
 	}
 	if request.Completion != nil {
 		return reject("root owns completion observation")

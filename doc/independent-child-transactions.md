@@ -25,7 +25,9 @@ Its independent failure does not roll back an already committed child.
 
 The policy is rejected before binding/effects unless the handler is the native
 custom contract adapter and the root has no DataSource, sequence strategy,
-outcome finalizer, injector finalizer or Completion callback. Any inherited
+outcome finalizer, composition finalizer, invoker-aware input initializer or
+Completion callback. The explicit invoker lifecycle contracts share a root
+transaction owner and therefore cannot opt into this independent policy. Any inherited
 managed unit is rejected, including a caller-owned pending transaction. No
 context detachment, early commit of someone else's unit or transaction override
 occurs. `exec.IndependentChildTransactionError` exposes a typed ownership reason.

@@ -39,8 +39,19 @@ type bufferedCallOutput struct {
 }
 
 func TestInjectedBufferedNativeWriterCallSiteOrder(t *testing.T) {
+	testInjectedBufferedNativeWriterCallSiteOrder(t, false)
+}
+
+func TestXdatlyInjectedBufferedNativeWriterCallSiteOrder(t *testing.T) {
+	testInjectedBufferedNativeWriterCallSiteOrder(t, true)
+}
+
+func testInjectedBufferedNativeWriterCallSiteOrder(t *testing.T, public bool) {
 	for _, mode := range []string{"buffered", "default buffered", "empty buffered", "buffered failure", "default buffered failure", "ordinary", "nested replaced context", "binding nested replaced context", "overlapping buffered children", "request independent", "caller transaction", "caller failure", "source-less caller", "callee imperative", "callee independent", "root independent"} {
 		t.Run(mode, func(t *testing.T) {
+			if public && mode == "request independent" {
+				t.Skip("runtime-only independent policy remains on the legacy request")
+			}
 			ctx := context.Background()
 			imperative := strings.HasPrefix(mode, "ordinary")
 			db := sqlite.New(t)
@@ -111,7 +122,7 @@ func TestInjectedBufferedNativeWriterCallSiteOrder(t *testing.T) {
 					if err != nil || !found {
 						return nil, fmt.Errorf("nested invoker: %v", err)
 					}
-					return value.(dexec.ComponentInvoker).InvokeComponent(context.Background(), dexec.ComponentRequest{Target: childTarget, Input: &bufferedCallInput{Rows: []*bufferedCallRow{{ID: 2, Label: "child"}}}})
+					return bufferedTestInvoker(t, value, public).InvokeComponent(context.Background(), dexec.ComponentRequest{Target: childTarget, Input: &bufferedCallInput{Rows: []*bufferedCallRow{{ID: 2, Label: "child"}}}})
 				})}
 			}
 			parent := &registry.RegisteredComponent{Component: parentArtifact.Component, Input: parentArtifact.Input, OutputType: reflect.TypeFor[bufferedCallOutput](), DataSource: dml.Source{DB: db.DB}, Handler: rh.HandlerFunc(func(ctx context.Context, inv rh.Invocation) (any, error) {
@@ -130,7 +141,7 @@ func TestInjectedBufferedNativeWriterCallSiteOrder(t *testing.T) {
 				if err != nil || !found {
 					return nil, fmt.Errorf("parent invoker: %v", err)
 				}
-				invoker := value.(dexec.ComponentInvoker)
+				invoker := bufferedTestInvoker(t, value, public)
 				retained = invoker
 				if mode == "overlapping buffered children" {
 					callCtx := ctx
@@ -867,4 +878,34 @@ func (h *bufferedInjectorFaultNative) Execute(ctx context.Context, inv rh.Invoca
 		return result, err
 	}
 	return result, h.cause
+}
+
+// The same buffered-call matrix exercises both DI interfaces. This adapter is
+// test-only; it makes existing assertions observe calls through public Invoke.
+type publicBufferedTestInvoker struct{ public xh.ComponentInvoker }
+
+func (i publicBufferedTestInvoker) InvokeComponent(ctx context.Context, request dexec.ComponentRequest) (any, error) {
+	var seed *xh.InputSeed
+	if request.ExtraInput != nil {
+		seed = xh.WithInput(request.ExtraInput.Value())
+	}
+	return i.public.Invoke(ctx, xh.ComponentRequest{
+		Target: xh.ComponentTarget{Scope: request.Target.Component.Scope, Name: request.Target.Component.Name, Method: request.Target.Route.Method, Path: request.Target.Route.Path},
+		Input:  request.Input, ExtraInput: seed, Providers: request.Providers, Completion: request.Completion,
+	})
+}
+func bufferedTestInvoker(t *testing.T, value any, public bool) dexec.ComponentInvoker {
+	t.Helper()
+	old, ok := value.(dexec.ComponentInvoker)
+	if !ok {
+		t.Fatal("legacy DI interface missing")
+	}
+	current, ok := value.(xh.ComponentInvoker)
+	if !ok {
+		t.Fatal("Xdatly DI interface missing")
+	}
+	if public {
+		return publicBufferedTestInvoker{public: current}
+	}
+	return old
 }

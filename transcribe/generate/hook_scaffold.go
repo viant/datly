@@ -174,10 +174,10 @@ func validateHookMethods(file *ast.File, plan *Plan, imports map[string]string) 
 	for _, role := range []struct {
 		contract ContractPlan
 		method   string
-		args     []string
+		args     [][]string
 	}{
-		{plan.Input, "Init", []string{"context.Context"}},
-		{plan.Output, "Finalize", []string{"context.Context", "error"}},
+		{plan.Input, "Init", [][]string{{"context.Context", "github.com/viant/xdatly/handler.ComponentInvoker"}, {"context.Context"}}},
+		{plan.Output, "Finalize", [][]string{{"context.Context", "github.com/viant/xdatly/handler.ComponentInvoker"}, {"context.Context"}, {"context.Context", "error"}, {"context.Context", "github.com/viant/xdatly/handler.InjectorLookup"}}},
 	} {
 		if role.contract.Type == "" || !plan.localShape(role.contract.Package) {
 			continue
@@ -186,7 +186,13 @@ func validateHookMethods(file *ast.File, plan *Plan, imports map[string]string) 
 		if err != nil {
 			return err
 		}
-		if err = validateHookSignature(method, imports, role.args); err != nil {
+		for _, args := range role.args {
+			err = validateHookSignature(method, imports, args)
+			if err == nil {
+				break
+			}
+		}
+		if err != nil {
 			label := "input"
 			if role.method == "Finalize" {
 				label = "output"

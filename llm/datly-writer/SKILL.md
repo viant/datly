@@ -168,4 +168,18 @@ for support files, split destinations, collision rules and safe regeneration.
 
 ## Application and runtime boundary
 
-Application components, inputs and lifecycle hooks depend on Xdatly public interfaces; Datly supplies their implementations. Inject `handler.ComponentInvoker` from `github.com/viant/xdatly/handler` with `bind:"kind=component_invoker,required"` and call `Invoke` with the exact `Scope`, `Name`, `Method` and `Path`. Use `handler.WithInput` for an explicitly marked reader seed; preserve the distinction from a trusted typed writer `Input`. Provider overlays and completion callbacks retain the caller's canonical binding, authorization, shared buffered writes and transaction owner. Use Xdatly contracts for DML, sequencing, validation, differ, logger and mutation reporting. Do not instantiate Datly runtime implementations inside business hooks or expose runtime-only invocation controls in application contracts. Datly bootstrap/registration adapters may depend on Datly. The older Datly invocation interface remains supported for existing consumers; new application examples use Xdatly.
+Application components, inputs and lifecycle hooks depend on Xdatly public interfaces; Datly supplies their implementations. Use `handler.ComponentInvoker` from `github.com/viant/xdatly/handler`; prefer the explicit lifecycle arguments described below for prerequisite and dependent work. Use `handler.WithInput` for an explicitly marked reader seed; preserve the distinction from a trusted typed writer `Input`. Provider overlays and completion callbacks retain the caller's canonical binding, authorization, shared buffered writes and transaction owner. Use Xdatly contracts for DML, sequencing, validation, differ, logger and mutation reporting. Do not instantiate Datly runtime implementations inside business hooks or expose runtime-only invocation controls in application contracts. Datly bootstrap/registration adapters may depend on Datly. The older Datly invocation interface remains supported for existing consumers; new application examples use Xdatly.
+
+## Lifecycle composition
+
+Prefer `Init(ctx context.Context, invoker handler.ComponentInvoker) error` for
+input prerequisites and `Finalize(ctx context.Context, invoker handler.ComponentInvoker) error`
+for output composition. These implement separate `handler.InvokerInitializer`
+and `handler.InvokerFinalizer` interfaces; new input/output scaffolds use them.
+Avoid adding an invoker field to Input solely for lifecycle calls. Existing plain
+hooks, error/lookup finalizers and input injection remain supported; do not
+rewrite existing hooks just to match the new scaffold. When migrating, remove a
+field only after checking all its callers. Invoker-aware Finalize runs before
+transaction completion, unlike plain success Finalize; keep commit-dependent
+publication in outcome finalization. Await calls and never retain the supplied
+invoker after its callback. See [contracts and lifecycle interfaces](references/tags-and-interfaces.md).

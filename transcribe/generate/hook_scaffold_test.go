@@ -93,7 +93,7 @@ func TestGeneratorRejectsMalformedHookScaffoldLifecycle(t *testing.T) {
 	for _, declaration := range hooks.File.Decls {
 		method, ok := declaration.(*ast.FuncDecl)
 		if ok && method.Name.Name == "Finalize" {
-			method.Type.Params.List = method.Type.Params.List[:1]
+			method.Type.Params.List = nil
 		}
 	}
 	_, err := New(Input{
@@ -124,7 +124,7 @@ func TestDirectEmissionRevalidatesHookScaffoldPlan(t *testing.T) {
 				for _, declaration := range plan.HookScaffold.File.Decls {
 					method, ok := declaration.(*ast.FuncDecl)
 					if ok && method.Name.Name == "Finalize" {
-						method.Type.Params.List = method.Type.Params.List[:1]
+						method.Type.Params.List = nil
 					}
 				}
 			},
@@ -170,7 +170,7 @@ func TestRegenerationRejectsStaleUserHookSignatureWithoutFileLoss(t *testing.T) 
 	}
 	staleSource := strings.Replace(string(hookSource),
 		"Finalize(ctx context.Context, handlerErr error)",
-		"Finalize(ctx context.Context)", 1)
+		"Finalize(ctx context.Context, value string)", 1)
 	if staleSource == string(hookSource) {
 		t.Fatal("expected generated Finalize signature")
 	}
@@ -205,5 +205,42 @@ func TestRegenerationRejectsStaleUserHookSignatureWithoutFileLoss(t *testing.T) 
 	}
 	if routerErr != nil || string(routerAfter) != string(routerBefore) {
 		t.Fatalf("managed package changed after stale hook failure: err=%v\n%s", routerErr, routerAfter)
+	}
+}
+
+func TestRegenerationPreservesSupportedLifecycleForms(t *testing.T) {
+	for _, initArgs := range []string{"ctx context.Context", "ctx context.Context, invoker h.ComponentInvoker"} {
+		for _, finalArgs := range []string{"ctx context.Context", "ctx context.Context, cause error", "ctx context.Context, invoker h.ComponentInvoker", "ctx context.Context, lookup h.InjectorLookup"} {
+			t.Run(initArgs+"/"+finalArgs, func(t *testing.T) {
+				file, err := parser.ParseFile(token.NewFileSet(), "hooks.go", `package generated
+import ("context"; h "github.com/viant/xdatly/handler")
+func (*OrdersInput) Init(`+initArgs+`) error { return nil }
+func (*OrdersOutput) Finalize(`+finalArgs+`) error { return nil }
+`, parser.ParseComments)
+				if err != nil {
+					t.Fatal(err)
+				}
+				input := Input{Component: customHandlerComponent(), TargetPackage: "example.com/generated/orders", ContractHandler: parseContractHandlerAsset(t, "NewOrdersHandler", validContractHandlerSource()), HookScaffold: &HookScaffoldAsset{File: file}}
+				dir := t.TempDir()
+				if _, err = New(input).Generate(dir); err != nil {
+					t.Fatal(err)
+				}
+				hookPath := filepath.Join(dir, "lifecycle.go")
+				before, err := os.ReadFile(hookPath)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if _, err = New(input).Generate(dir); err != nil {
+					t.Fatal(err)
+				}
+				after, err := os.ReadFile(hookPath)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if string(before) != string(after) {
+					t.Fatal("regeneration rewrote authored lifecycle")
+				}
+			})
+		}
 	}
 }

@@ -7,14 +7,17 @@ import (
 	"sync"
 
 	dexec "github.com/viant/datly/exec"
+	xbind "github.com/viant/xdatly/bind"
 	xhandler "github.com/viant/xdatly/handler"
 )
 
-// finalizerInjectors limits route capabilities to the pre-completion callback.
+// lifecycleScope limits composition capabilities to one lifecycle callback.
 // Serial admission also makes close wait for in-flight child work before the
 // engine can seal the component or complete its root transaction.
-type finalizerInjectors struct {
+type lifecycleScope struct {
 	data   *dataScope
+	binder xhandler.Binder
+	phase  string
 	mu     sync.Mutex
 	ctx    context.Context
 	output any
@@ -23,10 +26,10 @@ type finalizerInjectors struct {
 	err    error
 }
 
-func (s *finalizerInjectors) finalize(finalizer xhandler.InjectorFinalizer, cause error) (err error) {
+func (s *lifecycleScope) finish(hook func(context.Context) error, cause error) (err error) {
 	defer func() {
 		if value := recover(); value != nil {
-			err = dexec.NewPanicError("injector finalizer", value)
+			err = dexec.NewPanicError(s.phase, value)
 		}
 		s.mu.Lock()
 		defer s.mu.Unlock()
@@ -41,17 +44,17 @@ func (s *finalizerInjectors) finalize(finalizer xhandler.InjectorFinalizer, caus
 			}
 		}
 	}()
-	return finalizer.Finalize(s.ctx, s.get)
+	return hook(s.ctx)
 }
 
-func (s *finalizerInjectors) run(call context.Context, fn func(context.Context) error) error {
+func (s *lifecycleScope) run(call context.Context, fn func(context.Context) error) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.closed {
-		return fmt.Errorf("injector finalizer scope is closed")
+		return fmt.Errorf("%s scope is closed", s.phase)
 	}
 	if call == nil {
-		s.record(fmt.Errorf("injector call context is required"))
+		s.record(fmt.Errorf("%s call context is required", s.phase))
 		return s.err
 	}
 	ctx, cancel := context.WithCancel(s.ctx)
@@ -79,7 +82,7 @@ func (s *finalizerInjectors) run(call context.Context, fn func(context.Context) 
 	return err
 }
 
-func (s *finalizerInjectors) get(ctx context.Context, route xhandler.Route) (xhandler.Binder, error) {
+func (s *lifecycleScope) get(ctx context.Context, route xhandler.Route) (xhandler.Binder, error) {
 	var binder xhandler.Binder
 	err := s.run(ctx, func(ctx context.Context) error {
 		if s.lookup == nil {
@@ -95,18 +98,18 @@ func (s *finalizerInjectors) get(ctx context.Context, route xhandler.Route) (xha
 	if err != nil {
 		return nil, err
 	}
-	return &finalizerBinder{scope: s, delegate: binder}, nil
+	return &lifecycleBinder{scope: s, delegate: binder}, nil
 }
 
-type finalizerBinder struct {
-	scope    *finalizerInjectors
+type lifecycleBinder struct {
+	scope    *lifecycleScope
 	delegate xhandler.Binder
 }
 
-func (b *finalizerBinder) Bind(ctx context.Context, target any) error {
+func (b *lifecycleBinder) Bind(ctx context.Context, target any) error {
 	return b.scope.run(ctx, func(ctx context.Context) error { return b.delegate.Bind(ctx, target) })
 }
-func (b *finalizerBinder) Lookup(ctx context.Context, key xhandler.ValueKey) (value any, found bool, err error) {
+func (b *lifecycleBinder) Lookup(ctx context.Context, key xhandler.ValueKey) (value any, found bool, err error) {
 	err = b.scope.run(ctx, func(ctx context.Context) error {
 		var err error
 		value, found, err = b.delegate.Lookup(ctx, key)
@@ -115,7 +118,7 @@ func (b *finalizerBinder) Lookup(ctx context.Context, key xhandler.ValueKey) (va
 	return
 }
 
-func (s *finalizerInjectors) record(err error) {
+func (s *lifecycleScope) record(err error) {
 	if err == nil || errors.Is(s.err, err) {
 		return
 	}
@@ -124,4 +127,22 @@ func (s *finalizerInjectors) record(err error) {
 	} else {
 		s.err = errors.Join(s.err, err)
 	}
+}
+
+// Invoke uses the same runtime-owned provider as field injection. Resolution is
+// lazy so a hook that does not compose children needs no invoker provider.
+func (s *lifecycleScope) Invoke(ctx context.Context, request xhandler.ComponentRequest) (any, error) {
+	var result any
+	err := s.run(ctx, func(ctx context.Context) error {
+		invoker, err := xbind.MustLookup[xhandler.ComponentInvoker](ctx, s.binder, xhandler.ComponentInvokerKey)
+		if err != nil {
+			return err
+		}
+		if invoker == nil {
+			return fmt.Errorf("component invoker is not configured")
+		}
+		result, err = invoker.Invoke(ctx, request)
+		return err
+	})
+	return result, err
 }

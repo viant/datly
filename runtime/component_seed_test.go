@@ -263,3 +263,44 @@ func TestReaderSeedRejectsHiddenSliceCapability(t *testing.T) {
 		})
 	}
 }
+
+func TestXdatlyInvokerSeedProviderIdentityAndCompletion(t *testing.T) {
+	rt, target, calls := readerSeedFixture(t)
+	invoker := &scopedComponentInvoker{runtime: rt}
+	exact := xhandler.ComponentTarget{Scope: target.Component.Scope, Name: target.Component.Name, Method: target.Route.Method, Path: target.Route.Path}
+	extra := &readerSeedInput{Jwt: "verified-by-application", Auth: &readerSeedAuth{Status: "ok", Context: map[string]int{"account": 10}}, Has: &readerSeedMarkers{Jwt: true, Auth: true}}
+	completed := 0
+	request := xhandler.ComponentRequest{Target: exact, ExtraInput: xhandler.WithInput(extra), Providers: []locator.Provider{
+		handlerprovider.Named("query", func(_ context.Context, _ reflect.Type, name string) (any, bool, error) {
+			return "fresh-" + name, true, nil
+		}),
+	}, Completion: func(xhandler.Outcome) { completed++ }}
+	value, err := invoker.Invoke(context.Background(), request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	in := value.(*readerSeedResult).Input
+	if *calls != 0 || in.Jwt != extra.Jwt || in.Auth.Context["account"] != 10 || in.Name != "fresh-name" || completed != 1 {
+		t.Fatalf("seed/provider/completion mismatch: %+v calls=%d completion=%d", in, *calls, completed)
+	}
+	for _, field := range []string{"scope", "name", "method", "path"} {
+		wrong := request
+		wrong.Completion = nil
+		switch field {
+		case "scope":
+			wrong.Target.Scope += "/wrong"
+		case "name":
+			wrong.Target.Name += "wrong"
+		case "method":
+			wrong.Target.Method = "PATCH"
+		case "path":
+			wrong.Target.Path = "/wrong"
+		}
+		if _, err := invoker.Invoke(context.Background(), wrong); err == nil {
+			t.Fatalf("mismatched %s accepted", field)
+		}
+	}
+	if *calls != 0 {
+		t.Fatal("rejected identity replayed authorization component")
+	}
+}

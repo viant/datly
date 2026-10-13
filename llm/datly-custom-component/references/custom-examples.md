@@ -148,6 +148,46 @@ return &response.Error{
 
 The empty message is intentional. A wrapper's private error text must not replace it. This emits the public body `{"message":"","error":{"code":"DENIED"},"violations":[{"field":"id","message":"not allowed"}]}`; a typed payload with no `omitempty` on Message is equally valid. Import `response` from `github.com/viant/xdatly/response`. Set `privateCause` to the private application cause, or nil; never put that cause into the public payload.
 
+## Prefer lifecycle arguments for composition
+
+When prerequisite or dependent work belongs in the lifecycle, use the supplied
+invoker directly. Do not add an invoker field to Input solely for these calls.
+For example, with registered exact child components:
+
+```go
+// Imports: "context" and "github.com/viant/xdatly/handler".
+type Input struct { ID int }
+type Output struct { ID int }
+type ChildInput struct { ID int }
+
+func (i *Input) Init(ctx context.Context, invoker handler.ComponentInvoker) error {
+    _, err := invoker.Invoke(ctx, handler.ComponentRequest{
+        Target: handler.ComponentTarget{Scope: "example.com/app/records", Name: "Prepare", Method: "POST", Path: "/records/prepare"},
+        Input: &ChildInput{ID: i.ID},
+    })
+    return err
+}
+
+func (o *Output) Finalize(ctx context.Context, invoker handler.ComponentInvoker) error {
+    _, err := invoker.Invoke(ctx, handler.ComponentRequest{
+        Target: handler.ComponentTarget{Scope: "example.com/app/records", Name: "FollowUp", Method: "POST", Path: "/records/follow-up"},
+        Input: &ChildInput{ID: o.ID},
+    })
+    return err
+}
+
+var _ handler.InvokerInitializer = (*Input)(nil)
+var _ handler.InvokerFinalizer = (*Output)(nil)
+```
+
+Each child must register the exact `ChildInput` type used here; map into the
+child's actual declared input in application code. The handler populates Output.
+These hooks share the caller's transaction owner, and Finalize runs before
+completion. Await all calls; do not save the invoker on Input, Output, or a shared
+handler. Existing field injection and plain lifecycle signatures remain valid.
+The earlier Exec example uses a local dependency struct because execution also
+needs the scoped Authorizer; static handler binding remains unchanged.
+
 ## Writes and completion
 
 Request Data or narrow DML/Sequencer capabilities per invocation. Validate before mutation; keep original presence separate from resolved identity and classify against authorized Previous according to the chosen policy. Do not allocate every current zero ID. Flush of caller-owned work is not a commit.
