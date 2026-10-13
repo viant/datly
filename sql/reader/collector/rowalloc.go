@@ -56,8 +56,9 @@ func (r *Collector) Resolve(column Column) func(ptr unsafe.Pointer) interface{} 
 			value := 0.0
 			valuePtr = &value
 		case reflect.Bool:
-			value := false
-			valuePtr = &value
+			// Preserve named boolean scanners such as SQLX BitBool. Reducing
+			// their destination to *bool loses decoding of MySQL BIT bytes.
+			valuePtr = reflect.New(scanType).Interface()
 		case reflect.String:
 			value := ""
 			valuePtr = &value
