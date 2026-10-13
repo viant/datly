@@ -116,6 +116,48 @@ request. Native body metrics, HTTP metric headers and OTel remain separately
 configured. SQL diagnostic formatting is being reconciled independently; enabling
 this profile is not a claim of complete legacy observability parity.
 
+### Server-side read failure diagnostics
+
+The native invocation logger emits `datly SQL read failed` at ERROR with a
+redacted `error` reason, `reqTraceId`, `view`, `rows`, and, when present,
+`executionId`, `parentId`, and `elapsed`. View completion (`datly view read`)
+also uses ERROR for failures and includes the redacted reason and `metricId`.
+This covers preparation failures that have no SQL execution record. Successful
+view completions remain INFO. An absent invocation logger does not emit these
+native diagnostics or introduce a stdout fallback.
+
+Available cache evidence is attached to the SQL failure itself:
+`cache_type`, `cache_namespace`, `cache_set`, `cache_records`, `found_warmup`,
+`found_lazy`, `cache_error_type`, and `cache_error_code`. Cache reads with an
+error type or code also emit `datly cache read` at WARN. These fields describe
+the captured evidence; a cache error or a cancellation does not by itself prove
+the primary failure. Cache records do not currently carry a separate error
+message. No cache keys, HTTP headers/bodies, or bound arguments are added to
+these diagnostics.
+
+For example (illustrative, not a production diagnosis):
+
+```json
+{"level":"ERROR","msg":"datly SQL read failed","reqTraceId":"example-trace","view":"campaign_flight","executionId":"example-execution","parentId":"example-parent","rows":0,"elapsed":"3ms","error":"failed to run query: [REDACTED], due to Error 1142 (42000): SELECT command denied to user 'reader' for table 'campaign_flight'"}
+```
+
+The optional compatibility `Logging` sink retains its stdout destination and
+record prefixes, with the same redacted reasons and correlation/timing fields.
+This intentionally changes legacy SQL diagnostic formatting: `IncludeSQL`
+now controls SQL on the error line, and only parameterized text is emitted.
+Expanded SQL, positional parameters, and cache keys are no longer printed on
+these lines, including when `IncludeSQL` is true. The native invocation logger
+always omits SQL. Audit/trace SQL selection, metric-header policy, OTel export,
+and public HTTP/MCP error sanitization remain separately controlled.
+
+Redaction removes known SQLX query/scan wrappers and query text, labelled
+SQL/argument/HTTP payloads, credential assignments, bearer/basic tokens, JWTs,
+URL credentials and MySQL DSN credentials. CR/LF are escaped in diagnostic
+values to prevent extra records. Original metrics, arguments and cache evidence
+are not modified. Redaction cannot infer an arbitrary unlabelled secret in a
+custom error or SQL literal; keep custom error messages free of request
+payloads and credentials, and enable SQL only for trusted operator diagnostics.
+
 
 ### Optional HTTP execution duration
 
