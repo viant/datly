@@ -4,10 +4,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
+	"reflect"
 	"strings"
 	"testing"
 
+	"github.com/viant/bindly"
 	"github.com/viant/bindly/state"
+	"github.com/viant/datly/internal/testharness"
+	"github.com/viant/datly/runtime/handler/provider"
+	"github.com/viant/datly/spec"
 	xcodec "github.com/viant/xdatly/codec"
 )
 
@@ -23,6 +29,103 @@ func (invocationLookupCodec) Value(ctx context.Context, raw any, opts ...xcodec.
 		return nil, err
 	}
 	return raw.(string) + suffix.(string), nil
+}
+
+type optionalLookupCodec struct{}
+
+type optionalLookupFactory struct{}
+
+func (optionalLookupFactory) New(*xcodec.Config, ...xcodec.Option) (xcodec.Instance, error) {
+	return optionalLookupCodec{}, nil
+}
+
+func TestOptionalCodecDependencyPreservesPresence(t *testing.T) {
+	type presence struct{ Value, Delimiter bool }
+	type input struct {
+		Delimiter string
+		Value     string
+		Has       *presence `setMarker:"true" json:"-"`
+	}
+	optional := false
+	component := &spec.Component{Routes: []*spec.Route{{Method: "GET", Path: "/items"}}, Parameters: []*spec.Parameter{
+		{Name: "Value", Source: spec.BindSource{Kind: "query", Name: "value"}, TypeExpr: "string", Codec: &spec.Codec{Body: "optionalLookup"}},
+		{Name: "Delimiter", Source: spec.BindSource{Kind: "query", Name: "delimiter"}, TypeExpr: "string", Required: &optional},
+	}}
+	compiled, err := New(Input{Component: component, InputType: reflect.TypeFor[input](), CodecFactory: optionalLookupFactory{}}).Compile()
+	if err != nil {
+		t.Fatal(err)
+	}
+	route, ok := compiled.Input.ForRoute(spec.RouteRef{Method: "GET", Path: "/items"})
+	if !ok {
+		t.Fatal("input route missing")
+	}
+	for _, tc := range []struct {
+		name    string
+		query   url.Values
+		present bool
+		want    string
+	}{
+		// This direct source-state provider returns the field's zero value;
+		// its lookup must not change the transport suppliedness marker.
+		{"omitted", url.Values{"value": {"url"}}, false, "url"},
+		{"explicit_empty", url.Values{"value": {"url"}, "delimiter": {""}}, true, "url"},
+		{"explicit_value", url.Values{"value": {"url"}, "delimiter": {"|"}}, true, "url|"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			injector, err := bindly.NewInjector(bindly.WithProviders(provider.Parameter()))
+			if err != nil {
+				t.Fatal(err)
+			}
+			scope, err := injector.ForScope(testharness.Request{}.WithQuery(tc.query).Providers()...)
+			if err != nil {
+				t.Fatal(err)
+			}
+			actual := &input{}
+			if err := scope.Bind(t.Context(), actual, bindly.WithPlan(route.Plan()), bindly.WithSource(actual)); err != nil {
+				t.Fatal(err)
+			}
+			if actual.Value != tc.want || actual.Has == nil || actual.Has.Delimiter != tc.present || !actual.Has.Value {
+				t.Fatalf("presence/output = %+v", actual)
+			}
+		})
+	}
+}
+
+func (optionalLookupCodec) Value(ctx context.Context, raw any, opts ...xcodec.Option) (any, error) {
+	value, err := xcodec.NewOptions(opts).LookupValue(ctx, "Delimiter")
+	if err != nil {
+		return nil, err
+	}
+	if value == nil {
+		return raw.(string) + "default", nil
+	}
+	return raw.(string) + value.(string), nil
+}
+
+func TestBindingCompilationMarksOptionalCodecDependencies(t *testing.T) {
+	type input struct {
+		Value     string `parameter:"Value,kind=query,in=value"`
+		Delimiter string `parameter:"Delimiter,kind=query,in=delimiter,required=false"`
+	}
+	component := &spec.Component{Parameters: []*spec.Parameter{
+		{Name: "Value", Source: spec.BindSource{Kind: "query", Name: "value"}},
+	}}
+	bindings, err := BuildBindingSpecs(component, reflect.TypeFor[input](), map[string]ParamCodec{"Value": {Instance: optionalLookupCodec{}, SourceType: reflect.TypeFor[string]()}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	for _, binding := range bindings {
+		if binding.Name != "Value" {
+			continue
+		}
+		got, err := binding.Transformer.Transform(ctx, valueResolver{wantContext: ctx}, "url")
+		if err != nil || got != "urldefault" {
+			t.Fatalf("optional lookup = %v, %v", got, err)
+		}
+		return
+	}
+	t.Fatal("codec binding missing")
 }
 
 type valueResolver struct {

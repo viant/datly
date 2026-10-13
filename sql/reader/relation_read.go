@@ -163,7 +163,9 @@ func (r *relationRead) readBatch(placeholders []interface{}, composite [][]inter
 		rsql.WithBuilderDialect(r.connection.Dialect), rsql.WithBuilderTransactionActive(r.connection.Tx != nil),
 		rsql.WithBuilderSkipRelationFilter(r.readAll),
 	}
-	if r.readAll || r.parentCount > 1 {
+	// Composite selection and pagination share one tuple matcher for SQL,
+	// lazy replay and scalar warmed groups, including a single parent.
+	if r.readAll || r.parentCount > 1 || len(composite) > 0 {
 		options = append(options, rsql.WithBuilderExcludePagination(true))
 	}
 	if len(composite) > 0 {
@@ -188,7 +190,7 @@ func (r *relationRead) readBatch(placeholders []interface{}, composite [][]inter
 	if err := r.applyWarmupMatcher(r.ctx, query, matcher, columns); err != nil {
 		return fmt.Errorf("build relation warmup matcher for %s: %w", view.Spec.Name, err)
 	}
-	if !r.readAll && r.parentCount <= 1 {
+	if !r.readAll && r.parentCount <= 1 && len(composite) == 0 {
 		matcher.Offset = 0
 		matcher.Limit = 0
 	}
@@ -221,7 +223,7 @@ func (r *relationRead) applyWarmupMatcher(ctx context.Context, query, matcher *c
 		return nil
 	}
 	selector := r.selector.forView(view).Clone()
-	projection := viewProjection(view, selector)
+	projection := relationProjection(view, selector, r.child.Relation())
 	if selector == nil {
 		selector = &xstate.Selector{}
 	}
