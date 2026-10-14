@@ -16,10 +16,12 @@ type routeDirective struct {
 	APIKeyValue     string
 	start           int
 	end             int
+	routes          []*routeDirective
 }
 
 func parseRouteDirective(blocks []directiveBlock) (ret *routeDirective, err error) {
 	var active directiveBlock
+	seen := map[string]bool{}
 	defer func() { err = wrapDirectiveError(err, active) }()
 	for _, block := range blocks {
 		if block.kind != directiveKindSetting {
@@ -32,9 +34,6 @@ func parseRouteDirective(blocks []directiveBlock) (ret *routeDirective, err erro
 		}
 		switch {
 		case strings.EqualFold(name, "route"):
-			if ret != nil && ret.URI != "" {
-				return nil, fmt.Errorf("invalid route directive: multiple routes are not supported; declare methods in one route")
-			}
 			if len(args) == 0 {
 				return nil, fmt.Errorf("invalid route directive: missing uri")
 			}
@@ -53,11 +52,20 @@ func parseRouteDirective(blocks []directiveBlock) (ret *routeDirective, err erro
 			if ret == nil {
 				ret = &routeDirective{}
 			}
-			ret.URI = strings.TrimSpace(uri)
-			ret.Methods = methods
-			ret.PathParams = pathParams
-			ret.start = block.start
-			ret.end = block.end
+			path := strings.TrimSpace(uri)
+			for _, method := range methods {
+				identity := method + " " + path
+				if seen[identity] {
+					return nil, fmt.Errorf("route %q is declared more than once", identity)
+				}
+				seen[identity] = true
+			}
+			ret.routes = append(ret.routes, &routeDirective{URI: path, Methods: methods, PathParams: pathParams, start: block.start, end: block.end})
+			if ret.URI == "" {
+				ret.URI, ret.Methods = path, methods
+				ret.start, ret.end = block.start, block.end
+			}
+			ret.PathParams = append(ret.PathParams, pathParams...)
 		case strings.EqualFold(name, "request_body_mode"):
 			if ret == nil {
 				ret = &routeDirective{}
@@ -74,11 +82,14 @@ func parseRouteDirective(blocks []directiveBlock) (ret *routeDirective, err erro
 			}
 			ret.RequestBodyMode = mode
 		case strings.EqualFold(name, "api_key"):
-			if len(args) < 2 {
+			if len(args) != 2 || tail != "" {
 				return nil, fmt.Errorf("invalid api_key directive: expected header and value")
 			}
 			if ret == nil {
 				ret = &routeDirective{}
+			}
+			if ret.APIKeyHeader != "" {
+				return nil, fmt.Errorf("api_key must be declared once")
 			}
 			ret.APIKeyHeader = trimQuote(args[0])
 			ret.APIKeyValue = trimQuote(args[1])

@@ -11,6 +11,7 @@ import (
 
 	"github.com/viant/bindly"
 	"github.com/viant/datly/bootstrap"
+	"github.com/viant/datly/bootstrap/routes"
 	"github.com/viant/datly/spec"
 	"github.com/viant/datly/tag"
 	"github.com/viant/datly/transcribe/dql"
@@ -179,15 +180,15 @@ func (c *Compiler) compileSourceHandler(ctx context.Context, source *Source, hea
 	}
 	if header.Declarative {
 		component.Documentation = d.Documentation.Clone()
-		component.Routes[0].Internal = d.Internal || d.MCPOnly
-		component.Routes[0].APIKeyHeader = d.Route.APIKeyHeader
-		component.Routes[0].APIKeyValue = d.Route.APIKeyValue
-		if d.MCP != nil {
-			component.Routes[0].MCP = []*spec.MCPExposure{d.MCP.Clone()}
-		}
+		component.Routes = d.ComponentRoutes(header.Name, packages[0]+"."+names[0])
 	}
 	if header.MCPTool {
 		component.Routes[0].MCP = []*spec.MCPExposure{{Kind: "tool", Name: header.Name}}
+	}
+	if header.Declarative {
+		if err := (routes.Compiler{Component: component}).Compile(); err != nil {
+			return nil, err
+		}
 	}
 	copy := *source
 	copy.GoBuild = build.WithContext(nil)
@@ -514,15 +515,15 @@ func (c *Compiler) compileGeneratedPostFactory(ctx context.Context, source *Sour
 	d := prepared.Directives
 	component := &spec.Component{Key: spec.Key{Kind: spec.KindComponent, Scope: source.Scope, Name: header.Name}, Name: header.Name,
 		Description: header.Description, Documentation: d.Documentation.Clone(), TypeContext: prepared.TypeContext, Settings: settings, Parameters: d.Params, Views: d.Views,
-		Routes: []*spec.Route{{Name: header.Name, Path: header.URI, Method: header.Method, Internal: d.Internal || d.MCPOnly, Handler: destination + "." + names[0], RequestBodyMode: d.Route.RequestBodyMode, APIKeyHeader: d.Route.APIKeyHeader, APIKeyValue: d.Route.APIKeyValue}}}
+		Routes: d.ComponentRoutes(header.Name, destination+"."+names[0])}
 	for index, view := range component.Views {
 		if view != nil {
 			component.Views[index] = view.Clone()
 			component.Views[index].Key.Scope = source.Scope
 		}
 	}
-	if d.MCP != nil {
-		component.Routes[0].MCP = []*spec.MCPExposure{d.MCP.Clone()}
+	if err := (routes.Compiler{Component: component}).Compile(); err != nil {
+		return nil, err
 	}
 	copy := *source
 	copy.GoBuild = build.WithContext(nil)

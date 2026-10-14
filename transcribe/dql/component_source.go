@@ -45,6 +45,9 @@ func ParsePreparedComponentSource(scope, name string, prepared *PreparedSource) 
 		return nil, fmt.Errorf("missing route metadata in source")
 	}
 	if static := prepared.Directives.Static; static != nil {
+		if len(prepared.Directives.Routes) > 1 {
+			return nil, fmt.Errorf("static declarations do not support multiple route paths")
+		}
 		runtimeSettings := prepared.Directives.Settings.Clone()
 		if runtimeSettings != nil {
 			runtimeSettings.Generation = nil
@@ -85,21 +88,7 @@ func ParsePreparedComponentSource(scope, name string, prepared *PreparedSource) 
 			},
 		},
 	}
-	for _, method := range methods {
-		routeSpec := &spec.Route{
-			RequestBodyMode: route.RequestBodyMode,
-			Method:          strings.TrimSpace(method),
-			Path:            path,
-			Name:            name,
-			APIKeyHeader:    route.APIKeyHeader,
-			APIKeyValue:     route.APIKeyValue,
-			Internal:        prepared.Directives.Internal || prepared.Directives.MCPOnly,
-		}
-		if prepared.Directives.MCP != nil {
-			routeSpec.MCP = []*spec.MCPExposure{prepared.Directives.MCP.Clone()}
-		}
-		component.Routes = append(component.Routes, routeSpec)
-	}
+	component.Routes = prepared.Directives.ComponentRoutes(name, "")
 	return component, nil
 }
 

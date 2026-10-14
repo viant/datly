@@ -260,16 +260,16 @@ SELECT 1`
 	}
 }
 
-func TestPrepareSourceRejectsMultipleRoutes(t *testing.T) {
+func TestPrepareSourceRejectsDuplicateRoutes(t *testing.T) {
 	source := `#setting($_ = $route('/a'))
-#setting($_ = $route('/b'))
+#setting($_ = $route('/a'))
 SELECT 1`
 	prepared := PrepareSource(source)
 	if len(prepared.Diagnostics) != 1 {
 		t.Fatalf("expected one diagnostic, got %#v", prepared.Diagnostics)
 	}
 	diagnostic := prepared.Diagnostics[0]
-	if diagnostic.Offset != strings.Index(source, "#setting($_ = $route('/b'))") || !strings.Contains(diagnostic.Message, "multiple routes") {
+	if diagnostic.Offset != strings.LastIndex(source, "#setting($_ = $route('/a'))") || !strings.Contains(diagnostic.Message, "declared more than once") {
 		t.Fatalf("unexpected duplicate-route diagnostic: %#v", diagnostic)
 	}
 }
