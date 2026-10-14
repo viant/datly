@@ -325,9 +325,15 @@ func (m *runtimeInputMaterializer) descriptorType(name string) (reflect.Type, er
 	if err != nil {
 		return nil, err
 	}
+	retainedAnonymousRoots := map[int]bool{}
+	for _, field := range fields {
+		if field.Exported && field.Anonymous && len(field.Index) == 1 {
+			retainedAnonymousRoots[field.Index[0]] = true
+		}
+	}
 	temporary := make([]xshape.RuntimeField, 0, len(fields))
 	for _, field := range fields {
-		if !field.Exported {
+		if !field.Exported || (len(field.Index) > 1 && retainedAnonymousRoots[field.Index[0]]) {
 			continue
 		}
 		canonical, err := field.CanonicalType()
