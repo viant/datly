@@ -34,7 +34,7 @@ type LinkedInputDiscoveryOutput struct {
 func TestLinkedInputDiscoveryRetainsDeclaredConditionType(t *testing.T) {
 	ctx := context.Background()
 	h := testharness.NewSQLiteHarness(t)
-	if err := h.ExecStatements(ctx, "CREATE TABLE run(id TEXT PRIMARY KEY,status TEXT)", "INSERT INTO run VALUES('probe',NULL)"); err != nil {
+	if err := h.ExecStatements(ctx, "CREATE TABLE run(id TEXT PRIMARY KEY,status TEXT)", "INSERT INTO run VALUES('probe',NULL)", "INSERT INTO run VALUES('populated','ready')"); err != nil {
 		t.Fatal(err)
 	}
 	in, out := reflect.TypeFor[LinkedInputDiscoveryInput](), reflect.TypeFor[LinkedInputDiscoveryOutput]()
@@ -44,8 +44,8 @@ func TestLinkedInputDiscoveryRetainsDeclaredConditionType(t *testing.T) {
 		t.Fatal(err)
 	}
 	view := result.Component.Views[0]
-	if len(view.Columns) != 2 {
-		t.Fatalf("hidden input field widened view projection: %+v", view.Columns)
+	if len(view.Columns) != 3 {
+		t.Fatalf("input SQL scan contract lost fields: %+v", view.Columns)
 	}
 	found := false
 	for _, col := range view.Columns {
@@ -55,8 +55,8 @@ func TestLinkedInputDiscoveryRetainsDeclaredConditionType(t *testing.T) {
 				t.Fatalf("linked condition authority lost: %+v", col)
 			}
 		}
-		if col.Source == "hidden" {
-			t.Fatal("hidden column widened input view")
+		if col.Source == "hidden" && (reflect.StructTag(col.Tag).Get("json") != "-" || col.Type.Name != "string" || !col.Type.Pointer || !col.Nullable) {
+			t.Fatalf("hidden SQL type or visibility changed: %+v", col)
 		}
 	}
 	if !found {
@@ -84,8 +84,18 @@ func TestLinkedInputDiscoveryRetainsDeclaredConditionType(t *testing.T) {
 		t.Fatal(err)
 	}
 	rows := value.([]*LinkedInputDiscoveryRow)
-	if len(rows) != 1 || rows[0].ID != "probe" || rows[0].Condition != nil {
+	if len(rows) != 2 {
 		t.Fatalf("NULL linked condition failed: %+v", rows)
+	}
+	byID := map[string]*LinkedInputDiscoveryRow{}
+	for _, row := range rows {
+		byID[row.ID] = row
+	}
+	if row := byID["probe"]; row == nil || row.Condition != nil || row.Hidden != nil {
+		t.Fatalf("NULL linked fields changed: %+v", row)
+	}
+	if row := byID["populated"]; row == nil || row.Condition != nil || row.Hidden == nil || *row.Hidden != "ready" {
+		t.Fatalf("hidden SQL field was not scanned: %+v", row)
 	}
 	encoded, err := json.Marshal(rows)
 	if err != nil {

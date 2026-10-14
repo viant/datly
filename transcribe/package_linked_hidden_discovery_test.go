@@ -54,7 +54,7 @@ func TestLinkedHiddenDiscoveryPreservesSQLMappedTypeAuthority(t *testing.T) {
 			t.Fatalf("linked hidden declaration missing: %s", name)
 		}
 	}
-	if err = h.ExecStatements(ctx, "INSERT INTO conversation(id) VALUES('nullable')"); err != nil {
+	if err = h.ExecStatements(ctx, "INSERT INTO conversation(id) VALUES('nullable')", "INSERT INTO conversation(id,created_at) VALUES('populated','2026-01-02 03:04:05')"); err != nil {
 		t.Fatal(err)
 	}
 	artifact, err := bootstrap.BuildArtifact(bootstrap.ArtifactInput{Component: result.Component, InputType: in, OutputType: out, Types: result.Source.Types})
@@ -70,8 +70,18 @@ func TestLinkedHiddenDiscoveryPreservesSQLMappedTypeAuthority(t *testing.T) {
 		t.Fatal(err)
 	}
 	rows := value.(*LinkedHiddenDiscoveryOutput).Data
-	if len(rows) != 1 || rows[0].ID != "nullable" || rows[0].CreatedAtRaw != nil || rows[0].ActivityRaw != nil {
-		t.Fatalf("nullable linked row failed: %+v", rows)
+	if len(rows) != 2 {
+		t.Fatalf("linked rows failed: %+v", rows)
+	}
+	byID := map[string]*LinkedHiddenDiscoveryRow{}
+	for _, row := range rows {
+		byID[row.ID] = row
+	}
+	if row := byID["nullable"]; row == nil || row.CreatedAtRaw != nil || row.ActivityRaw != nil {
+		t.Fatalf("nullable hidden SQL fields changed: %+v", row)
+	}
+	if row := byID["populated"]; row == nil || row.CreatedAtRaw == nil || row.ActivityRaw == nil || !strings.Contains(*row.CreatedAtRaw, "2026-01-02") || *row.ActivityRaw != *row.CreatedAtRaw {
+		t.Fatalf("hidden SQL fields were not scanned: %+v", row)
 	}
 	encoded, err := json.Marshal(value)
 	if err != nil {
@@ -83,7 +93,14 @@ func TestLinkedHiddenDiscoveryPreservesSQLMappedTypeAuthority(t *testing.T) {
 	if result.Component.RootView.Source.SQL != reflect.TypeFor[LinkedHiddenDiscoveryOutput]().Field(0).Tag.Get("sql") {
 		t.Fatal("authored SQL changed")
 	}
-	if len(result.Component.RootView.Columns) != 1 || result.Component.RootView.Columns[0].Source != "id" {
-		t.Fatalf("hidden fields widened projection: %+v", result.Component.RootView.Columns)
+	// SQL-mapped hidden fields are part of the scan contract. Their JSON tags,
+	// rather than removing physical columns, keep them out of the response.
+	if len(result.Component.RootView.Columns) != 3 {
+		t.Fatalf("SQL scan contract lost fields: %+v", result.Component.RootView.Columns)
+	}
+	for _, col := range result.Component.RootView.Columns {
+		if col.Source != "id" && reflect.StructTag(col.Tag).Get("json") != "-" {
+			t.Fatalf("hidden SQL visibility lost: %+v", col)
+		}
 	}
 }

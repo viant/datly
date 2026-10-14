@@ -17,9 +17,8 @@ import (
 // Declaration resolution remains source authority for transcribe's ownership
 // comparison; inferred columns must not change that authored contract.
 type outputColumnCompiler struct {
-	output    *xshape.Type
-	lookup    xshape.Lookup
-	discovery bool
+	output *xshape.Type
+	lookup xshape.Lookup
 }
 
 func (c *artifactCompiler) compileOutputColumns(component *spec.Component) error {
@@ -29,7 +28,7 @@ func (c *artifactCompiler) compileOutputColumns(component *spec.Component) error
 // CompileOutputColumns resolves the existing linked row projection before SQL
 // metadata discovery, as well as before runtime artifact compilation.
 func CompileOutputColumns(component *spec.Component, outputType reflect.Type) error {
-	return compileOutputColumns(component, outputType, false)
+	return compileOutputColumns(component, outputType)
 }
 
 // DiscoveryOutputColumns retains linked SQL-mapped hidden fields as type
@@ -40,13 +39,13 @@ func DiscoveryOutputColumns(component *spec.Component, outputType reflect.Type) 
 		return nil, nil
 	}
 	copy.RootView.Columns = nil
-	if err := compileOutputColumns(copy, outputType, true); err != nil {
+	if err := compileOutputColumns(copy, outputType); err != nil {
 		return nil, err
 	}
 	return copy.RootView.Columns, nil
 }
 
-func compileOutputColumns(component *spec.Component, outputType reflect.Type, discovery bool) error {
+func compileOutputColumns(component *spec.Component, outputType reflect.Type) error {
 	if component.RootView == nil || component.RootView.Columns != nil {
 		return nil
 	}
@@ -65,7 +64,7 @@ func compileOutputColumns(component *spec.Component, outputType reflect.Type, di
 		if !ok {
 			return fmt.Errorf("output view holder %s is missing", param.Name)
 		}
-		return (&outputColumnCompiler{output: xshape.Linked(outputType), discovery: discovery}).compile(component.RootView, field.Name)
+		return (&outputColumnCompiler{output: xshape.Linked(outputType)}).compile(component.RootView, field.Name)
 	}
 	return nil
 }
@@ -81,7 +80,7 @@ func CompileLinkedViewColumns(view *spec.View, rowType reflect.Type) error {
 func DiscoveryLinkedViewColumns(view *spec.View, rowType reflect.Type) ([]*spec.Column, error) {
 	copy := view.Clone()
 	copy.Columns = nil
-	if err := (&outputColumnCompiler{output: xshape.Linked(rowType), discovery: true}).compile(copy, ""); err != nil {
+	if err := (&outputColumnCompiler{output: xshape.Linked(rowType)}).compile(copy, ""); err != nil {
 		return nil, err
 	}
 	return copy.Columns, nil
