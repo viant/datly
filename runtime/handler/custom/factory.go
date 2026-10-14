@@ -19,6 +19,10 @@ func Factory[I, O any](create func() xhandler.Contract[I, O]) func() (rhandler.T
 		if (xshape.Runtime{}).IsNil(contract) {
 			return nil, fmt.Errorf("custom contract factory returned nil")
 		}
-		return New(contract), nil
+		adapter := New(contract)
+		if _, err := ScopedInputBinding(adapter); err != nil {
+			return nil, err
+		}
+		return adapter, nil
 	}
 }

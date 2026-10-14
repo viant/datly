@@ -2050,3 +2050,7 @@ sourcegraph.com/sourcegraph/go-diff v0.5.0/go.mod h1:kuch7UrkMzY0X+p9CRK03kfuPQ2
 sourcegraph.com/sqs/pbtypes v0.0.0-20180604144634-d3ebe8f20ae4/go.mod h1:ketZ/q3QxT9HOBeFhu6RdvsftgpsbFHBF5Cas6cDKZ0=
 github.com/viant/structology v0.10.1-0.20261014122805-e37281ec0f50 h1:BlcLBwxvvGnlyWIJhQ9guw7owpEoJXKGzPXG9xe2HlA=
 github.com/viant/structology v0.10.1-0.20261014122805-e37281ec0f50/go.mod h1:sNNuCH9Zt+QUNeV1slf/QKBdOdUIj0AVdhDFR09+8Ig=
+github.com/viant/xdatly v1.0.1-0.20261014220053-69eb20c7d1a8 h1:8qupMnH+MeZ5TZJPruEvG6DQES6E2VfUDx1l6M70Ayg=
+github.com/viant/xdatly v1.0.1-0.20261014220053-69eb20c7d1a8/go.mod h1:t085YqeJeRWQzuzio1Th4Jkfcb6E35n/XSw3ltCAkrI=
+github.com/viant/sqlx v0.26.1-0.20261013061633-ba8bc02ca651 h1:1ivKroIIZuDr3jC030Smx94VFktdhyXl2QjLpXnaOO4=
+github.com/viant/sqlx v0.26.1-0.20261013061633-ba8bc02ca651/go.mod h1:/qyxibjy9VpDiYZwHVwSNHnPXI4476LqYtDty8V0Rg4=

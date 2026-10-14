@@ -10,6 +10,7 @@ import (
 
 	dexec "github.com/viant/datly/exec"
 	"github.com/viant/datly/runtime/handler/compiler"
+	"github.com/viant/datly/runtime/handler/custom"
 	"github.com/viant/datly/runtime/registry"
 	"github.com/viant/datly/spec"
 	xshape "github.com/viant/x/shape"
@@ -25,8 +26,19 @@ func validateSeedAdmission(request dexec.ComponentRequest, component *Registered
 	if request.Input != nil || request.Replay != nil {
 		return fmt.Errorf("extra reader input cannot combine with Input or Replay")
 	}
-	if component == nil || component.Handler != nil || component.Reader == nil {
-		return fmt.Errorf("extra input requires an ordinary registered native reader")
+	if component == nil {
+		return fmt.Errorf("extra input requires an ordinary registered native reader or scoped typed custom handler")
+	}
+	if component.Handler != nil {
+		scoped, err := custom.ScopedInputBinding(component.Handler)
+		if err != nil {
+			return err
+		}
+		if !scoped || component.Reader != nil || component.DataSource != nil {
+			return fmt.Errorf("extra input requires an ordinary registered native reader or source-less scoped typed custom handler")
+		}
+	} else if component.Reader == nil {
+		return fmt.Errorf("extra input requires an ordinary registered native reader or scoped typed custom handler")
 	}
 	if request.Warmup != nil || request.PrepareQuery || request.DryRun || len(request.WarmupOmitInput) > 0 || request.IndependentChildTransactions {
 		return fmt.Errorf("extra reader input cannot combine with operational preparation or independent transactions")
