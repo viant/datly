@@ -21,9 +21,6 @@ func (s *Service) AuthorizeCatalogTool(ctx context.Context, name, action string)
 	if s.authorizeCatalogTool == nil {
 		return nil
 	}
-	if name == SkillListTool || name == SkillGetTool {
-		return nil
-	}
 	plan, ok := s.catalog.Tool(name)
 	if !ok {
 		return fmt.Errorf("unknown MCP tool")

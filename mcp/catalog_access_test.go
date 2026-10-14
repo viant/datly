@@ -16,7 +16,7 @@ import (
 
 type catalogAccessKey struct{}
 
-func TestCatalogAccessProtectsNativeAndCompatibilitySkillPaths(t *testing.T) {
+func TestCatalogAccessProtectsNativeSkillMethods(t *testing.T) {
 	ctx := context.Background()
 	store := bindresource.New()
 	if err := store.Register("skills", fstest.MapFS{"SKILL.md": {Data: []byte("---\nname: private\ndescription: Protected source.\n---\nprivate bytes")}}); err != nil {
@@ -31,6 +31,11 @@ func TestCatalogAccessProtectsNativeAndCompatibilitySkillPaths(t *testing.T) {
 	service, err := New(Config{Invoker: &serviceInvoker{}, Resources: store, Folders: []mcpresource.Folder{{Namespace: "skills", Root: ".", URIPrefix: "skill://private/", Skills: []string{"."}}}, AuthorizeCatalogResource: guard, AuthorizeResource: func(ctx context.Context, uri string) error { return guard(ctx, uri, "retrieve") }})
 	if err != nil {
 		t.Fatal(err)
+	}
+	for _, name := range []string{schema.MethodSkillsList, schema.MethodSkillsGet} {
+		if _, exists := service.Registry().ToolRegistry.Get(name); exists {
+			t.Fatalf("native skill method %q was also published as an ordinary tool", name)
+		}
 	}
 	factory, err := native.NewHandler(service)
 	if err != nil {
@@ -66,27 +71,6 @@ func TestCatalogAccessProtectsNativeAndCompatibilitySkillPaths(t *testing.T) {
 		read, e := handler.ReadResource(requestCtx, &jsonrpc.TypedRequest[*schema.ReadResourceRequest]{Request: &schema.ReadResourceRequest{Params: schema.ReadResourceRequestParams{Uri: uri}}})
 		if (e == nil) != allowed {
 			t.Fatalf("allowed=%v static read=%+v err=%v", allowed, read, e)
-		}
-		for _, name := range []string{SkillListTool, SkillGetTool} {
-			tool, _ := service.Registry().ToolRegistry.Get(name)
-			args := map[string]interface{}{}
-			if name == SkillGetTool {
-				args["uri"] = uri
-			}
-			result, e := tool.Handler(requestCtx, &schema.CallToolRequest{Params: schema.CallToolRequestParams{Name: name, Arguments: args}})
-			if name == SkillGetTool {
-				if (e == nil) != allowed {
-					t.Fatalf("allowed=%v bridge get error=%v", allowed, e)
-				}
-			} else {
-				if e != nil {
-					t.Fatal(e)
-				}
-				entries := result.StructuredContent.(map[string]interface{})["skills"].([]interface{})
-				if len(entries) != expected {
-					t.Fatalf("allowed=%v bridge skills=%d", allowed, len(entries))
-				}
-			}
 		}
 	}
 }
