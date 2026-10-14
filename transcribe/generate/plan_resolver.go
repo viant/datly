@@ -120,10 +120,10 @@ func (r *planResolver) resolve() (*Plan, error) {
 	if err = r.applySetMarkerViews(); err != nil {
 		return nil, err
 	}
-	if err = r.concretizeFields(r.plan.Input.Fields); err != nil {
+	if err = r.concretizeFields(r.plan.Input.Fields, false); err != nil {
 		return nil, err
 	}
-	if err = r.concretizeFields(r.plan.Output.Fields); err != nil {
+	if err = r.concretizeFields(r.plan.Output.Fields, true); err != nil {
 		return nil, err
 	}
 	r.resolveUniversalOutputs()
