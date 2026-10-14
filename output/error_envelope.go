@@ -141,6 +141,13 @@ func (p *Plan) ErrorEnvelopeWithCause(message string, statusCode int, cause erro
 	if projectedMessage != "" {
 		message = projectedMessage
 	}
+	if view := p.errorEnvelope.readerView; view != "" {
+		for _, detail := range details {
+			if detail != nil && detail.View == "" {
+				detail.View = view
+			}
+		}
+	}
 	value, err := p.errorEnvelope.fresh(message, details)
 	return value, true, err
 }
