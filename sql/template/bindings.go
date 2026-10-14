@@ -178,3 +178,29 @@ func expressionUsesVariable(expression ast.Expression, name string) bool {
 	}
 	return false
 }
+
+// Dynamic evaluation inherits the parent selectors, and loop initializer/post
+// expressions are not covered by usesVariable. Retain existing full declarations
+// for these constructs instead of guessing which roots they may need.
+func requiresFullInputDeclarations(statements []ast.Statement) bool {
+	for _, statement := range statements {
+		switch actual := statement.(type) {
+		case *stmt.Evaluate, *stmt.ForLoop:
+			return true
+		case *stmt.If:
+			if requiresFullInputDeclarations(actual.Body.Statements()) {
+				return true
+			}
+			for branch := actual.Else; branch != nil; branch = branch.Else {
+				if requiresFullInputDeclarations(branch.Body.Statements()) {
+					return true
+				}
+			}
+		case *stmt.ForEach:
+			if requiresFullInputDeclarations(actual.Statements()) {
+				return true
+			}
+		}
+	}
+	return false
+}
