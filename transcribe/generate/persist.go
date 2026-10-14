@@ -22,6 +22,9 @@ type scaffoldPersistence struct {
 	removals  []string
 	plan      *Plan
 	renames   map[string]bool
+	// Pristine current render stays distinct from retained publication bytes.
+	contractProposals map[string]contractArtifactProposal
+	retainedContracts map[string]string
 }
 
 // detached preserves pristine rendered artifacts separately from the preview's
@@ -426,12 +429,13 @@ func managedRelativePath(path string) (string, error) {
 // scaffoldForest keeps original disk conflict evidence separate from projected
 // mutations. A published forest is never included in cleanup.
 type scaffoldForest struct {
-	borrowed  []*BorrowedRowAuthority
-	target    string
-	stage     string
-	original  scaffoldSnapshot
-	stats     scaffoldStats
-	published bool
+	retainedContracts map[string]string
+	borrowed          []*BorrowedRowAuthority
+	target            string
+	stage             string
+	original          scaffoldSnapshot
+	stats             scaffoldStats
+	published         bool
 }
 
 func withinScaffoldTree(root, path string) bool {
@@ -557,6 +561,12 @@ func prepareScaffoldForests(templates []*scaffoldPersistence) (forests []*scaffo
 			return
 		}
 		err = nil
+		for name, content := range p.retainedContracts {
+			if forest.retainedContracts == nil {
+				forest.retainedContracts = map[string]string{}
+			}
+			forest.retainedContracts[filepath.Join(relative, name)] = content
+		}
 		result = append(result, p.files...)
 	}
 	return
@@ -578,6 +588,15 @@ func publishScaffoldForests(forests []*scaffoldForest) error {
 	var created []scaffoldCreatedParent
 	defer func() { cleanupScaffoldParents(created) }()
 	for _, forest := range forests {
+		for name, expected := range forest.retainedContracts {
+			actual, err := os.ReadFile(filepath.Join(forest.stage, name))
+			if err != nil {
+				return err
+			}
+			if string(actual) != expected {
+				return fmt.Errorf("retained generated contract %s changed during staging", name)
+			}
+		}
 		for _, authority := range forest.borrowed {
 			if err := authority.ValidateProtectedFiles(func(path string) string { return path }); err != nil {
 				return err

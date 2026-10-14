@@ -493,7 +493,7 @@ func (c *Compiler) compileGeneratedPostFactory(ctx context.Context, source *Sour
 	// Protect selected authored declarations before discovery or publication.
 	for i, role := range []string{"input", "output"} {
 		file := settings.Generation.File(role, role+".go")
-		if err := ownership.validateShape(header.Name, &spec.View{TypeName: names[i+1], Dest: file}); err != nil {
+		if err := ownership.validateGeneratedContract(header.Name, names[i+1], file); err != nil {
 			return nil, fmt.Errorf("handler authored contracts must be separate from destination %q: %w", destination, err)
 		}
 	}

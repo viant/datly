@@ -47,6 +47,10 @@ func (p *scaffoldPersistence) prepareCurrent(target string) error {
 // current projected tree. The ordinary wrapper uses the destination itself.
 func (p *scaffoldPersistence) prepareCurrentAt(target, readRoot string) error {
 	p.renames = map[string]bool{}
+	p.retainedContracts = map[string]string{}
+	if err := p.prepareContractProposals(target); err != nil {
+		return err
+	}
 	if p.plan != nil && p.plan.Resources.authoredSource() {
 		resource := p.plan.Resources
 		current, err := os.ReadFile(filepath.Join(readRoot, resource.Destination))
@@ -133,7 +137,9 @@ func (p *scaffoldPersistence) prepareCurrentAt(target, readRoot string) error {
 		}
 
 		if keep[entry.Name()] && owner != "" && owner != p.owner {
-			return fmt.Errorf("generated destination %s belongs to component %s", entry.Name(), owner)
+			if err := p.retainEquivalentContract(target, entry.Name(), content); err != nil {
+				return fmt.Errorf("generated destination %s belongs to component %s: %w", entry.Name(), owner, err)
+			}
 		}
 		if owner == p.owner && !keep[entry.Name()] && !p.linkedDestination(entry.Name()) && !p.linkedSource(content) {
 			p.renames[entry.Name()] = true
@@ -159,6 +165,9 @@ func (p *scaffoldPersistence) prepareCurrentAt(target, readRoot string) error {
 		if generatedOwner(content) == p.owner {
 			p.renames[relative] = true
 		}
+	}
+	if err := p.validateRetainedContractSelection(target, readRoot); err != nil {
+		return err
 	}
 	return p.preserveEntityMethods(target, readRoot)
 }
