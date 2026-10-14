@@ -12,10 +12,11 @@ import (
 
 // errorEnvelope retains only immutable, checked output-member authority.
 type errorEnvelope struct {
-	root    reflect.Type
-	status  *shape.Accessor
-	message *shape.Accessor
-	errors  *shape.Accessor
+	root       reflect.Type
+	status     *shape.Accessor
+	message    *shape.Accessor
+	errors     *shape.Accessor
+	readerView string
 }
 
 func compileErrorEnvelope(input CompileInput) (*errorEnvelope, error) {
@@ -65,12 +66,34 @@ func compileErrorEnvelope(input CompileInput) (*errorEnvelope, error) {
 	if err != nil {
 		return nil, fmt.Errorf("compile legacy error details %s: %w", name, err)
 	}
-	result := &errorEnvelope{root: input.Type, status: status, message: message, errors: errors}
+	result := &errorEnvelope{root: input.Type, status: status, message: message, errors: errors, readerView: errorReaderView(input.Component)}
 	// Check writable authority once; this value is discarded, never retained.
 	if _, err = result.fresh("", []*legacyresponse.Error{{}}); err != nil {
 		return nil, fmt.Errorf("compile legacy error output: %w", err)
 	}
 	return result, nil
+}
+
+// errorReaderView caches only declared executable read metadata. A runtime
+// handler attached without a Handler declaration cannot be distinguished here.
+func errorReaderView(component *spec.Component) string {
+	if component == nil || component.RootView == nil || (component.Settings != nil && component.Settings.Mutation != "") {
+		return ""
+	}
+	root := component.RootView
+	if strings.TrimSpace(root.Name) == "" || root.InMemory || root.Auxiliary {
+		return ""
+	}
+	source := root.RuntimeSource()
+	if source == nil || (strings.TrimSpace(source.SQL) == "" && strings.TrimSpace(source.URI) == "" && strings.TrimSpace(source.Table) == "") {
+		return ""
+	}
+	for _, route := range component.Routes {
+		if route != nil && route.Handler != "" {
+			return ""
+		}
+	}
+	return root.Name
 }
 
 func (e *errorEnvelope) fresh(message string, details []*legacyresponse.Error) (any, error) {
@@ -111,9 +134,12 @@ func (p *Plan) ErrorEnvelopeWithCause(message string, statusCode int, cause erro
 	if p == nil || p.errorEnvelope == nil {
 		return nil, false, nil
 	}
-	details, ok := projectBindingErrors(cause, statusCode)
+	details, projectedMessage, ok := projectBindingErrors(cause, statusCode, p.errorEnvelope.readerView)
 	if !ok {
 		return p.ErrorEnvelope(message)
+	}
+	if projectedMessage != "" {
+		message = projectedMessage
 	}
 	value, err := p.errorEnvelope.fresh(message, details)
 	return value, true, err

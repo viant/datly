@@ -16,26 +16,33 @@ import (
 // bindingBranch is bounded invocation-local provenance, never output discovery.
 // Wrapper text is intentionally not part of owner or public-message authority.
 type bindingBranch struct {
-	owner    *bindly.BindingError
-	input    *bindinput.Error
-	children []*bindingBranch
-	group    bool
+	owner      *bindly.BindingError
+	input      *bindinput.Error
+	children   []*bindingBranch
+	group      bool
+	nominal    *legacy.Error
+	hasNominal bool
 }
 
-func projectBindingErrors(cause error, status int) (result []*legacy.Error, ok bool) {
+func projectBindingErrors(cause error, status int, readerView string) (result []*legacy.Error, message string, ok bool) {
 	// Foreign Unwrap implementations are not trusted to be well behaved.
 	defer func() {
 		if recover() != nil {
 			result = nil
+			message = ""
 			ok = false
 		}
 	}()
 	remaining := 128
 	branch, valid := readBindingBranch(cause, &remaining)
 	if !valid {
-		return nil, false
+		return nil, "", false
 	}
-	return branch.project(status)
+	if branch.hasNominal {
+		return branch.projectNominal(status, readerView)
+	}
+	result, ok = branch.project(status)
+	return result, "", ok
 }
 
 func readBindingBranch(err error, remaining *int) (*bindingBranch, bool) {
@@ -66,8 +73,16 @@ func readBindingBranch(err error, remaining *int) (*bindingBranch, bool) {
 				return nil, false
 			}
 			n.children = append(n.children, child)
+			n.hasNominal = n.hasNominal || child.hasNominal
 		}
 		return n, len(n.children) > 0
+	case *legacy.Error:
+		// Only these public fields are authority. Err and Object are never traversed.
+		if e == nil || e.Code < 400 || e.Code > 499 || strings.TrimSpace(e.Message) == "" || e.View != "" || e.Parameter != "" || e.Object != nil {
+			return nil, false
+		}
+		n.nominal, n.hasNominal = e, true
+		return n, true
 	case *bindinput.Error:
 		if e == nil {
 			return nil, false
@@ -98,6 +113,7 @@ func readBindingBranch(err error, remaining *int) (*bindingBranch, bool) {
 				return nil, false
 			}
 			n.children = append(n.children, child)
+			n.hasNominal = n.hasNominal || child.hasNominal
 		}
 		return n, len(n.children) > 0
 	}
@@ -109,9 +125,53 @@ func readBindingBranch(err error, remaining *int) (*bindingBranch, bool) {
 				return nil, false
 			}
 			n.children = []*bindingBranch{child}
+			n.hasNominal = child.hasNominal
 		}
 	}
 	return n, true
+}
+
+// projectNominal admits only one already-read linear owner chain ending in the
+// exact nominal public business record. No diagnostic method or private cause
+// is called here; all other shapes retain the original plain envelope.
+func (n *bindingBranch) projectNominal(status int, readerView string) ([]*legacy.Error, string, bool) {
+	if readerView == "" {
+		return nil, "", false
+	}
+	var owners []*bindly.BindingError
+	for n != nil {
+		if n.group || n.input != nil {
+			return nil, "", false
+		}
+		if n.owner != nil {
+			if n.owner.Message != "" || (n.owner.Code != 0 && n.owner.Code != status) {
+				return nil, "", false
+			}
+			owners = append(owners, n.owner)
+		}
+		if n.nominal != nil {
+			if len(owners) == 0 || n.nominal.Code != status {
+				return nil, "", false
+			}
+			message := n.nominal.Message
+			var details []*legacy.Error
+			for i := len(owners) - 1; i >= 0; i-- {
+				owner := owners[i]
+				entry := &legacy.Error{Parameter: owner.Name, Code: status, Message: message, Err: owner.Unwrap()}
+				if owner.Code == 0 && len(details) > 0 {
+					entry.Object = details
+				}
+				details = []*legacy.Error{entry}
+			}
+			details[0].View = readerView
+			return details, message, true
+		}
+		if len(n.children) != 1 {
+			return nil, "", false
+		}
+		n = n.children[0]
+	}
+	return nil, "", false
 }
 
 // A joined/group branch must carry complete owner authority even when an
