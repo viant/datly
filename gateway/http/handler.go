@@ -254,10 +254,19 @@ func (h *Handler) serveHTTP(writer stdhttp.ResponseWriter, req *stdhttp.Request)
 	}
 	if execErr != nil && !hasPublicBody {
 		message := dexec.ErrorMessage(execErr, statusCode)
-		actual = xresponse.Status{
-			Status:  "error",
-			Message: message,
-			Error:   message,
+		legacy, applicable, err := contract.ErrorEnvelope(message)
+		if err != nil {
+			h.writeOutputError(ctx, writer, err)
+			return
+		}
+		if applicable {
+			actual = legacy
+		} else {
+			actual = xresponse.Status{
+				Status:  "error",
+				Message: message,
+				Error:   message,
+			}
 		}
 	}
 	if h.serviceTimeHeader != "" {
