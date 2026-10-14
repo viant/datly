@@ -45,10 +45,19 @@ func (p *Parameter) Identity() string {
 	if p == nil {
 		return ""
 	}
-	key := strings.ToLower(strings.TrimSpace(p.Name)) + "|" +
-		strings.ToLower(strings.TrimSpace(p.Source.Kind)) + "|" +
-		strings.ToLower(strings.TrimSpace(p.Source.Name))
-	if p.EmitOutput {
+	kind := strings.ToLower(strings.TrimSpace(p.Source.Kind))
+	name := strings.ToLower(strings.TrimSpace(p.Source.Name))
+	if p.IsDerivedOutput() {
+		name = "derived"
+	}
+	if p.EmitOutput && kind != "logger" && kind != "const" {
+		kind = "output"
+		if name == "" {
+			name = "body"
+		}
+	}
+	key := strings.ToLower(strings.TrimSpace(p.Name)) + "|" + kind + "|" + name
+	if p.EmitOutput && (kind == "logger" || kind == "const") {
 		key += "|output"
 	}
 	return key
