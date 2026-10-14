@@ -86,7 +86,9 @@ or external-side-effect sandbox.
   YAML sections are `Columns`, `Filter`, `Parameters`, `Paths` and `Responses`.
 - [Custom output/finalizers](../../../../output-and-operations.md): candidate SDK
   direct HTTP bytes have independently authored media/schema documentation. Current
-  SDK/runtime injector finalizer uses `handler.InjectorFinalizer`,
+  SDK/runtime recommends `Init(ctx, invoker)` / `Finalize(ctx, invoker)` with
+  the separate `handler.InvokerInitializer` / `handler.InvokerFinalizer` interfaces.
+  The existing injector finalizer remains supported with `handler.InjectorFinalizer`,
   `handler.InjectorLookup`, `kind=caller_output` child inputs and destination
   `bind` tags. Static serving requires explicit root/resource authority and policy; a
   `ContentURL` string cannot grant filesystem authority.

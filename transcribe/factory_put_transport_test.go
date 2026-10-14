@@ -14,6 +14,7 @@ import (
 	"github.com/viant/datly/spec"
 	"github.com/viant/datly/transcribe/column"
 	"github.com/viant/datly/transcribe/dql"
+	"github.com/viant/datly/transcribe/internal/program"
 )
 
 func TestGeneratedFactoryPutTransport(t *testing.T) {
@@ -155,12 +156,12 @@ func TestGeneratedFactoryTransportEligibility(t *testing.T) {
 	prepared := &dql.PreparedSource{TypeContext: &spec.TypeContext{PackagePath: destination, Imports: []spec.ImportSpec{{Alias: "rows", Package: destination}}}}
 	for _, method := range []string{"POST", "PATCH", "PUT", "put", "DELETE", "delete", "GET", "HEAD", "OPTIONS"} {
 		header := &dql.HandlerHeader{Declarative: true, Method: method, Factory: "rows.NewSave", InputType: "rows.Input", OutputType: "rows.Output"}
-		_, ok := generatedPostFactory(header, prepared)
+		_, ok := program.FactoryContracts(header, prepared)
 		require.Equal(t, method == "POST" || method == "PATCH" || strings.EqualFold(method, "PUT") || strings.EqualFold(method, "DELETE"), ok, method)
 	}
 	for _, ref := range []string{"example.com/foreign.Input", "*rows.Input", "[]rows.Input", "rows.Input[string]", "rows.input", "unknown.Input"} {
 		header := &dql.HandlerHeader{Declarative: true, Method: "PUT", Factory: "rows.NewSave", InputType: ref, OutputType: "rows.Output"}
-		_, ok := generatedPostFactory(header, prepared)
+		_, ok := program.FactoryContracts(header, prepared)
 		require.False(t, ok, "foreign or malformed ownership %s", ref)
 	}
 }

@@ -14,7 +14,7 @@ import (
 
 func Configured(o owner) bool { return o != nil && o.loggingSink() != nil }
 
-// LogSQL emits the original diagnostics independently of audit/trace SQL policy.
+// LogSQL emits compatibility diagnostics under the sink's SQL policy.
 // The raw cache evidence remains query-local and is never added to public metrics.
 func LogSQL(o owner, traceID, view string, execution *response.SQLExecution, stats *cache.Stats) bool {
 	if !Configured(o) {
@@ -36,20 +36,47 @@ func (s *Sink) sqlRead(traceID, view string, e *response.SQLExecution, stats *ca
 	if traceID == "" {
 		traceID = "unknown"
 	}
-	var records strings.Builder
+	traceID, view = SafeText(traceID), SafeText(view)
+	context := ""
+	if e.ID != "" {
+		context += " executionId=" + SafeText(e.ID)
+	}
+	if e.ParentID != "" {
+		context += " parentId=" + SafeText(e.ParentID)
+	}
+	timing := ""
+	if !e.StartTime.IsZero() && !e.EndTime.IsZero() {
+		timing = " elapsed=" + e.EndTime.Sub(e.StartTime).String()
+	}
+	errorCode := 0
 	if stats != nil {
-		suffix := ""
-		if stats.WarmupKey != "" {
-			suffix += " warmup_key=" + stats.WarmupKey
+		errorCode = int(stats.ErrorCode)
+	} else if e.CacheStats != nil {
+		c := e.CacheStats
+		errorCode = c.ErrorCode
+		stats = &cache.Stats{Type: cache.Type(c.Type), RecordsCounter: c.RecordsCounter, Namespace: c.Namespace, Dataset: c.Dataset, FoundWarmup: c.FoundWarmup, FoundLazy: c.FoundLazy, ErrorType: c.ErrorType}
+	}
+	var records strings.Builder
+	cacheContext := ""
+	if stats != nil {
+		source := cacheSource(stats)
+		if errorCode != 0 {
+			source = "error"
 		}
-		if stats.MarkerKey != "" {
-			suffix += " marker_key=" + stats.MarkerKey
+		cacheContext = fmt.Sprintf(" source=%s type=%s found_warmup=%t found_lazy=%t records=%d namespace=%s set=%s cache_error_type=%q cache_error_code=%d", source, SafeText(string(stats.Type)), stats.FoundWarmup, stats.FoundLazy, stats.RecordsCounter, SafeText(stats.Namespace), SafeText(stats.Dataset), SafeText(stats.ErrorType), errorCode)
+		level := "INFO"
+		if stats.ErrorType != "" || errorCode != 0 {
+			level = "WARN"
 		}
-		fmt.Fprintf(&records, "[INFO] datly cache read reqTraceId=%s view=%s source=%s type=%s found_warmup=%t found_lazy=%t records=%d rows=%d namespace=%s set=%s elapsed=%s args=%v%s\n", traceID, view, cacheSource(stats), stats.Type, stats.FoundWarmup, stats.FoundLazy, stats.RecordsCounter, e.Rows, stats.Namespace, stats.Dataset, e.EndTime.Sub(e.StartTime), e.Args, suffix)
+		fmt.Fprintf(&records, "[%s] datly cache read reqTraceId=%s view=%s%s%s rows=%d%s\n", level, traceID, view, context, cacheContext, e.Rows, timing)
 	}
 	if e.Error != "" {
-		expanded := expandDiagnosticSQL(e.SQL, e.Args)
-		fmt.Fprintf(&records, "[ERROR] datly sql reqTraceId=%s view=%s error=%q sql=%q params=%v\n", traceID, view, normalizeDatabaseError(e.Error), strings.ReplaceAll(expanded, "\n", `\n`), e.Args)
+		sql := ""
+		if s.sql {
+			// Parameterized text only: positional values have no sensitivity labels.
+			sql = fmt.Sprintf(" sql=%q", SafeText(e.SQL))
+		}
+		fmt.Fprintf(&records, "[ERROR] datly sql reqTraceId=%s view=%s error=%q%s rows=%d%s%s%s\n", traceID, view, FailureReason(e.Error, e.SQL), context, e.Rows, timing, cacheContext, sql)
 	}
 	if records.Len() == 0 {
 		return

@@ -9,6 +9,7 @@ import (
 
 	"github.com/viant/bindly/resource"
 	"github.com/viant/datly/internal/packageasset"
+	"github.com/viant/datly/transcribe/internal/dependency"
 )
 
 // compilePackages includes selected Go-only contracts after DQL overlays have
@@ -40,7 +41,7 @@ func (c *discoveryCompilation) compilePackages(ctx context.Context, project *Pro
 		if err != nil {
 			return fmt.Errorf("compile package component %q: %w", identity, err)
 		}
-		if err := (&dqlPackageDiscovery{workspace: c.workspace, catalog: result.Source.Types, registry: c.discovery.Registry}).loadCodecDependencies(ctx, result.Component, result.TypeContext, result.Source.LinkedInputType, result.Source.LinkedOutputType); err != nil {
+		if err := (&dependency.Loader{Workspace: c.workspace, Catalog: result.Source.Types, Registry: c.discovery.Registry}).LoadCodecs(ctx, result.Component, result.TypeContext, result.Source.LinkedInputType, result.Source.LinkedOutputType); err != nil {
 			return err
 		}
 		project.Components = append(project.Components, result)

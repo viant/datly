@@ -80,3 +80,8 @@ when regenerating readers, writers and multi-view selectors. Test
 `datly init/build` discovery after adding/removing a package without changing
 registration code, and preserve source-backed deployment inputs. Verify canonical
 skill-root links and reproducible declared product imports before bundling.
+
+## Lifecycle composition compatibility
+
+- For lifecycle composition, prefer `Init(ctx, handler.ComponentInvoker)` / `Finalize(ctx, handler.ComponentInvoker)` over an Input invoker field. Verify prerequisite ordering, child failure rollback and output composition before root completion. Existing field injection/plain hooks remain supported; commit-dependent publication stays in outcome finalization.
+- Compile and exercise existing `Init(ctx)`, `Finalize(ctx)`, `Finalize(ctx,error)` and lookup finalizers without changing their timing. Regeneration must preserve authored lifecycle files. Do not treat migrating a post-completion hook into a pre-completion invoker hook as a signature-only edit.

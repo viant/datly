@@ -28,7 +28,7 @@ separate patch engine or raw transaction facade.
 ## Compose components
 
 Bind a declared component dependency through the existing component provider,
-or explicitly invoke a typed target through the scoped `exec.ComponentInvoker`.
+or explicitly invoke a typed target through the scoped `handler.ComponentInvoker`.
 The [forwarding example](../llm/datly-custom-component/references/custom-examples.md#explicit-typed-forwarding-and-trusted-service-registration)
 shows a public POST forwarding an exact typed input to a private reader. It
 preserves internal visibility, authorization and the root transaction owner.
@@ -50,7 +50,7 @@ Data's transaction; it is not client-bindable or installed by default.
 
 The first endpoint invocation owns transaction completion. Its first generic
 writer starts the transaction. Invoke child readers and writers through the
-scoped `exec.ComponentInvoker`; they share the database unit and buffered DML.
+scoped `handler.ComponentInvoker`; they share the database unit and buffered DML.
 By default, child calls retain their operations in the caller's journal; the
 owning root prepares and completes it. No `component_call_policy` setting is
 needed for buffered calls. Omitted child policies inherit their parent, including
@@ -139,8 +139,10 @@ Do not infer a schema by inspecting runtime bytes or executing the handler.
 
 ## Finalization and commit evidence
 
-| Existing contract | Timing/meaning |
+| Contract | Timing/meaning |
 | --- | --- |
+| `Finalize(ctx, invoker handler.ComponentInvoker) error` | Explicit child composition before transaction completion; returned or child errors prevent owned commit. Also runs before a native writer's separate outcome callback. |
+| `Finalize(ctx, invoker handler.ComponentInvoker, operationErr error) error` | Error-aware child composition in the same pre-completion phase; the current error is retained even when the callback returns nil. |
 | `Finalize(ctx, err) error` | Error-aware output finalization before root completion; returned error can prevent locally owned commit. Original cause errors remain preserved. |
 | `Finalize(ctx) error` | Success-path output finalization after root completion; does not run again when the error-aware contract was selected. |
 | Mutation outcome finalization | Explicit result-aware `handler.Outcome` for confirmed commit versus pending/failed/unknown work. |
@@ -159,7 +161,52 @@ Use outcome evidence for commit-dependent messages. A post-commit finalizer
 failure cannot undo completed database work. Do not finalize twice or retain an
 invocation Data capability for use after its scope completes.
 
-## Injector-aware finalization
+## Explicit invoker lifecycle arguments
+
+Prefer separate `handler.InvokerInitializer` and `handler.InvokerFinalizer`
+contracts for component composition:
+
+```go
+func (i *Input) Init(ctx context.Context, invoker handler.ComponentInvoker) error
+func (o *Output) Finalize(ctx context.Context, invoker handler.ComponentInvoker) error
+```
+
+Each is a single-method interface; implement either independently. Input Init
+runs after binding and snapshot capture, before handler execution. Output
+Finalize runs after execution and output binding, before root completion. It
+runs when an output is available even if the handler returned an error; that
+error is preserved. Early binding/initialization failures do not invoke it.
+Native writer outcome finalization remains a separate later phase.
+
+For conditional composition after a successful operation, implement
+`handler.InvokerErrorFinalizer` with
+`Finalize(ctx, invoker, operationErr) error`. Return before child calls when
+`operationErr` is non-nil. The error includes handler, output-binding and any
+preparation failure encountered before this callback. It cannot report future
+drain/commit errors or early failures without an output. Existing two-argument
+finalizers keep their unconditional output-plus-error behavior. Protected roots
+retain their existing preparation order; verify timing before replacing an
+error-aware or post-completion finalizer. Regeneration preserves all these
+supported authored signatures.
+
+
+Call `invoker.Invoke(ctx, handler.ComponentRequest{...})` with an exact trusted
+target and the child's declared input type. The argument uses the same scoped
+runtime authority as field injection. Await child calls and do not retain it
+after the callback. Child failures cannot be swallowed to permit owned commit.
+For commit-dependent publication, use actual outcome evidence.
+
+New Go input/output lifecycle scaffolds use the invoker-aware signatures.
+Regeneration preserves user-owned lifecycle files and accepts the old forms.
+Existing `Init(ctx)`, output finalizers, and invoker injection into Input remain
+supported. New authoring should prefer the explicit arguments instead of storing
+an invocation capability in request data. Static handler binding is unchanged.
+This is additive: existing applications do not have to migrate. Go does not
+allow method overloading, so each input/output chooses one signature per method.
+Do not migrate post-completion publication from `Finalize(ctx)` into the new
+pre-completion hook without preserving its transaction semantics.
+
+## Existing injector-aware finalization
 
 The candidate supports the public SDK injector finalizer contract:
 
@@ -167,7 +214,8 @@ The candidate supports the public SDK injector finalizer contract:
 func (o *OrderOutput) Finalize(ctx context.Context, lookup handler.InjectorLookup) error
 ```
 
-Use it when an output conditionally needs another registered component. The
+This form remains supported for existing output-to-input binding workflows.
+For new explicit child composition, prefer `Finalize(ctx, invoker)` above. The
 lookup receives a `handler.Route` with a local path, optional query string, scope
 and name, then returns a binder. A child input can declare
 `parameter:"ID,kind=caller_output,in=ID,required"`, and the caller output uses

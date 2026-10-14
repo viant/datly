@@ -46,6 +46,8 @@ package authority, not a request to generate a foreign package. No registration
 list or second source registry is needed.
 
 Direct execution retains its separate `ScaffoldHooks` input `Init` / output
-`Finalize` contract. Generic hooks use the existing mutation lifecycle and
+`Finalize` contracts, now scaffolded with explicit `handler.ComponentInvoker`
+arguments and separate `InvokerInitializer` / `InvokerFinalizer` assertions.
+Existing plain lifecycle files remain supported and are never rewritten. Generic hooks use the existing mutation lifecycle and
 outcome semantics. In particular, `AfterQueue` is not a commit notification;
 publication belongs in outcome-aware finalization after confirmed commit.

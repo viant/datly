@@ -23,6 +23,9 @@ import (
 	"github.com/viant/datly/transcribe/column"
 	gen "github.com/viant/datly/transcribe/generate"
 	handlercompiler "github.com/viant/datly/transcribe/handler/compiler"
+	"github.com/viant/datly/transcribe/internal/bodygraph"
+	"github.com/viant/datly/transcribe/internal/dependency"
+	"github.com/viant/datly/transcribe/internal/handlergen"
 	"github.com/viant/datly/typecatalog"
 	sqlio "github.com/viant/sqlx/io"
 	xmodule "github.com/viant/x/module"
@@ -33,65 +36,6 @@ func authoredBorrowedSQLRows(c *spec.Component) []spec.BorrowedSQLRow {
 		return nil
 	}
 	return append([]spec.BorrowedSQLRow(nil), c.Settings.Generation.BorrowedSQLRows...)
-}
-
-// resolveBorrowedBodySlot resolves exact generated holder names. If the writer
-// body is implicit, its existing canonical default is the component's name.
-func resolveBorrowedBodySlot(c *spec.Component, path string) (*spec.View, []string, error) {
-	if c == nil || c.RootView == nil {
-		return nil, nil, fmt.Errorf("borrow_sql_row requires a canonical body graph")
-	}
-	parts := strings.Split(path, "/")
-	rootName := typecatalog.FieldName(c.Name)
-	bodyCount := 0
-	for _, p := range spec.EffectiveParameters(c.Parameters) {
-		if p != nil && strings.EqualFold(p.Source.Kind, "body") {
-			bodyCount++
-			rootName = typecatalog.FieldName(p.Name)
-		}
-	}
-	if bodyCount > 1 || parts[0] != rootName {
-		return nil, nil, fmt.Errorf("borrow_sql_row body path %q does not select the exact canonical body holder %q", path, rootName)
-	}
-	view := c.RootView
-	id, err := view.Identity()
-	if err != nil {
-		return nil, nil, err
-	}
-	graph := []string{id}
-	seen := map[*spec.View]bool{view: true}
-	for _, holder := range parts[1:] {
-		var found *spec.View
-		for _, relation := range view.Relations {
-			if relation == nil || relation.View == nil {
-				return nil, nil, fmt.Errorf("borrow_sql_row body relation is incomplete")
-			}
-			name := relation.Holder
-			if name == "" {
-				name = relation.Name
-			}
-			if typecatalog.FieldName(name) == holder {
-				if found != nil {
-					return nil, nil, fmt.Errorf("borrow_sql_row holder %q is ambiguous", holder)
-				}
-				found = relation.View
-			}
-		}
-		if found == nil || seen[found] {
-			return nil, nil, fmt.Errorf("borrow_sql_row holder %q is missing or cyclic", holder)
-		}
-		view = found
-		seen[view] = true
-		id, err = view.Identity()
-		if err != nil {
-			return nil, nil, err
-		}
-		graph = append(graph, id)
-	}
-	if len(view.Relations) != 0 || view.SelfReference != nil {
-		return nil, nil, fmt.Errorf("borrow_sql_row target is not a leaf")
-	}
-	return view, graph, nil
 }
 
 func borrowedLeafContract(ctx context.Context, result *Result, view *spec.View, declaration spec.BorrowedSQLRow) (gen.BorrowedLeafContract, error) {
@@ -332,18 +276,18 @@ func (c *Compiler) admitBorrowedSQLRows(ctx context.Context, result *Result) err
 		if freshOwner.Component.TypeContext == nil || freshOwner.Component.TypeContext.PackagePath != declaration.Package {
 			return fmt.Errorf("borrow_sql_row owner canonical package differs")
 		}
-		owner, ownerGraph, err := resolveBorrowedBodySlot(freshOwner.Component, declaration.OwnerBodyPath)
+		owner, ownerGraph, err := bodygraph.ResolveBorrowed(freshOwner.Component, declaration.OwnerBodyPath)
 		if err != nil {
 			return err
 		}
 		if owner.Auxiliary {
 			return fmt.Errorf("borrow_sql_row initial authority requires a physical SQL-generated leaf owner")
 		}
-		borrower, borrowerGraph, err := resolveBorrowedBodySlot(freshBorrower.Component, declaration.BodyPath)
+		borrower, borrowerGraph, err := bodygraph.ResolveBorrowed(freshBorrower.Component, declaration.BodyPath)
 		if err != nil {
 			return err
 		}
-		actualSlot, actualGraph, err := resolveBorrowedBodySlot(result.Component, declaration.BodyPath)
+		actualSlot, actualGraph, err := bodygraph.ResolveBorrowed(result.Component, declaration.BodyPath)
 		if err != nil {
 			return err
 		}
@@ -373,7 +317,7 @@ func (c *Compiler) admitBorrowedSQLRows(ctx context.Context, result *Result) err
 		if err := gen.CompareBorrowedLeafContracts(expected, wanted); err != nil {
 			return err
 		}
-		pkg, err := loadAvailablePackage(ctx, workspace, declaration.Package)
+		pkg, err := dependency.LoadPackage(ctx, workspace, declaration.Package)
 		if err != nil {
 			return fmt.Errorf("borrow_sql_row owner descriptor unavailable; generate owner first: %w", err)
 		}
@@ -485,9 +429,9 @@ func (c *Compiler) admitBorrowedSQLRows(ctx context.Context, result *Result) err
 		helperInput.Declarations = helperDeclarations.generation
 		helperInput.Component, helperInput.ViewBindings = derivedHelpers.Component, derivedHelpers.ViewBindings
 		helperOptions := Options{Contracts: ContractsAuto, Handler: HandlerOptions{Target: HandlerGo, Operation: WriteOperation(ownerMutation), Input: derivedHelpers.Input, Output: derivedHelpers.Output, Currents: derivedHelpers.Currents, Go: GoHandlerOptions{Execution: GoExecutionMutation}}}
-		helperGeneration := newHandlerGeneration(&helperCopy, &helperInput, helperOptions)
-		helperGeneration.directory = location.Dir
-		if err := helperGeneration.prepare(); err != nil {
+		helperGeneration := handlergen.New((&helperCopy).handlerContext(), &helperInput, helperOptions)
+		helperGeneration.Directory = location.Dir
+		if err := helperGeneration.Prepare(); err != nil {
 			return fmt.Errorf("borrow_sql_row native owner helper derivation: %w", err)
 		}
 		proof.Helpers, err = gen.BorrowedNativeHelpers(helperInput.EntitySupport, declaration.Type)
@@ -518,11 +462,11 @@ func (c *Compiler) admitBorrowedSQLRows(ctx context.Context, result *Result) err
 			if err != nil {
 				return err
 			}
-			o, _, err := resolveBorrowedBodySlot(currentOwner.Component, declaration.OwnerBodyPath)
+			o, _, err := bodygraph.ResolveBorrowed(currentOwner.Component, declaration.OwnerBodyPath)
 			if err != nil {
 				return err
 			}
-			b, _, err := resolveBorrowedBodySlot(currentBorrower.Component, declaration.BodyPath)
+			b, _, err := bodygraph.ResolveBorrowed(currentBorrower.Component, declaration.BodyPath)
 			if err != nil {
 				return err
 			}

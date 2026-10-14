@@ -9,6 +9,7 @@ import (
 // It replaces output Finalizer/ErrorFinalizer/FinalizeMCP for that adapter only,
 // and runs once after the owning root completes every database unit. Invocation
 // may have a nil Binder and result may be nil after an early binding/init error.
+// InvokerFinalizer remains a separate pre-completion composition hook.
 // No MCP sampling hook is invoked. Publication must check CommitConfirmed().
 type OutcomeFinalizer interface {
 	FinalizeOutcome(context.Context, Invocation, any, xhandler.Outcome) error

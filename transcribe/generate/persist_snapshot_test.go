@@ -22,7 +22,12 @@ func (f *snapshotFixture) init(t *testing.T) {
 		{Path: filepath.Join(f.dir, "router.go"), Content: "package records\nconst Route = \"old\"\n"},
 	}
 	f.userFiles = []EmittedFile{{Path: filepath.Join(f.dir, "hooks.go"), Content: "package records\nfunc Hook(){}\n"}}
-	if err := f.persistence().Commit(); err != nil {
+	forests, _, _, err := prepareScaffoldForests([]*scaffoldPersistence{f.persistence()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanupScaffoldForests(forests)
+	if err := publishScaffoldForests(forests); err != nil {
 		t.Fatal(err)
 	}
 }

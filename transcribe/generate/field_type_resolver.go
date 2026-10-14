@@ -21,15 +21,24 @@ type fieldTypeResolver struct {
 	lookup        func(string) (*x.Type, error)
 }
 
-func (p *planResolver) concretizeFields(fields []Field) error {
+func (p *planResolver) concretizeFields(fields []Field, output bool) error {
 	if len(fields) == 0 || p.input.Component == nil {
 		return nil
 	}
 	params := map[string]*spec.Parameter{}
 	for _, param := range preferDefinedParams(p.input.Component.Parameters) {
-		if param != nil {
-			params[generatedParameterName(param)] = param
+		if param == nil {
+			continue
 		}
+		// Input and output may deliberately share an exported name (for example
+		// Data: request IDs vs response rows). Resolve within the same contract
+		// direction as resolveInputFields/resolveOutputFields; a name-only map
+		// across both contracts silently replaces the type by declaration order.
+		isOutput := param.EmitOutput || strings.EqualFold(strings.TrimSpace(param.Source.Kind), "output")
+		if isOutput != output {
+			continue
+		}
+		params[generatedParameterName(param)] = param
 	}
 	resolver := fieldTypeResolver{
 		plan: p.plan, context: p.input.Component.TypeContext, targetPackage: p.input.TargetPackage, lookup: p.lookup(),

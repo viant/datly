@@ -4,6 +4,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io/fs"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"testing/fstest"
+
 	"github.com/stretchr/testify/require"
 	"github.com/viant/bindly/resource"
 	"github.com/viant/datly/constant"
@@ -12,13 +19,8 @@ import (
 	"github.com/viant/datly/spec"
 	"github.com/viant/datly/transcribe/column"
 	gen "github.com/viant/datly/transcribe/generate"
+	"github.com/viant/datly/transcribe/internal/bodygraph"
 	"github.com/viant/datly/typecatalog"
-	"io/fs"
-	"os"
-	"path/filepath"
-	"strings"
-	"testing"
-	"testing/fstest"
 )
 
 func borrowedAuxiliaryNullComparisonFixture(t *testing.T) (*Result, *spec.View, spec.BorrowedSQLRow) {
@@ -341,7 +343,7 @@ func TestBorrowedSQLRowExactBodyGraphSlot(t *testing.T) {
 	leaf := &spec.View{Key: spec.Key{Kind: spec.KindView, Scope: "example.com/source", Name: "Public"}, Namespace: "Records", Name: "Records", Auxiliary: true, Source: &spec.ViewSource{Table: "records"}}
 	root := &spec.View{Key: spec.Key{Kind: spec.KindView, Scope: "example.com/source", Name: "Public"}, Name: "Public", Relations: []*spec.Relation{{Name: "Records", Holder: "Records", View: leaf}}}
 	c := &spec.Component{Name: "Public", RootView: root, Parameters: []*spec.Parameter{{Name: "Rows", Source: spec.BindSource{Kind: "body", Name: "data"}}}}
-	got, graph, err := resolveBorrowedBodySlot(c, "Rows/Records")
+	got, graph, err := bodygraph.ResolveBorrowed(c, "Rows/Records")
 	if err != nil || got != leaf || len(graph) != 2 {
 		t.Fatal("canonical nested slot", graph, err)
 	}
@@ -349,17 +351,17 @@ func TestBorrowedSQLRowExactBodyGraphSlot(t *testing.T) {
 		t.Fatal("semantic role mutated")
 	}
 	for _, path := range []string{"Public/Records", "Rows", "Rows/records", "Rows/Records/Unknown"} {
-		if _, _, err := resolveBorrowedBodySlot(c, path); err == nil {
+		if _, _, err := bodygraph.ResolveBorrowed(c, path); err == nil {
 			t.Fatal("nonexact/parent slot accepted", path)
 		}
 	}
 	root.Relations = append(root.Relations, &spec.Relation{Name: "Other", Holder: "Records", View: leaf.Clone()})
-	if _, _, err := resolveBorrowedBodySlot(c, "Rows/Records"); err == nil {
+	if _, _, err := bodygraph.ResolveBorrowed(c, "Rows/Records"); err == nil {
 		t.Fatal("ambiguous holder accepted")
 	}
 	root.Relations = root.Relations[:1]
 	root.Relations[0].View = root
-	if _, _, err := resolveBorrowedBodySlot(c, "Rows/Records"); err == nil {
+	if _, _, err := bodygraph.ResolveBorrowed(c, "Rows/Records"); err == nil {
 		t.Fatal("cyclic body accepted")
 	}
 }
@@ -638,34 +640,38 @@ SELECT p.*,Records.*,type(p,'PublicView'),type(Records,'Row'),nested_null_policy
 	snapshot := func() map[string]struct {
 		Mode  fs.FileMode
 		Bytes string
-	} { result := map[string]struct {
-		Mode  fs.FileMode
-		Bytes string
-	}{}; require.NoError(t, filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		info, err := entry.Info()
-		if err != nil {
-			return err
-		}
-		var data []byte
-		if !entry.IsDir() {
-			data, err = os.ReadFile(path)
+	} {
+		result := map[string]struct {
+			Mode  fs.FileMode
+			Bytes string
+		}{}
+		require.NoError(t, filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
 			if err != nil {
 				return err
 			}
-		}
-		rel, err := filepath.Rel(root, path)
-		if err != nil {
-			return err
-		}
-		result[rel] = struct {
-			Mode  fs.FileMode
-			Bytes string
-		}{info.Mode(), string(data)}
-		return nil
-	})); return result }
+			info, err := entry.Info()
+			if err != nil {
+				return err
+			}
+			var data []byte
+			if !entry.IsDir() {
+				data, err = os.ReadFile(path)
+				if err != nil {
+					return err
+				}
+			}
+			rel, err := filepath.Rel(root, path)
+			if err != nil {
+				return err
+			}
+			result[rel] = struct {
+				Mode  fs.FileMode
+				Bytes string
+			}{info.Mode(), string(data)}
+			return nil
+		}))
+		return result
+	}
 	before := snapshot()
 	_, err = (Generator{Operation: "patch"}).Generate(ctx, GenerationRequest{Source: &changedSource, Destination: root})
 	require.ErrorContains(t, err, "nested_null_policy")

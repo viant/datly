@@ -14,6 +14,7 @@ import (
 	"github.com/viant/datly/bootstrap"
 	"github.com/viant/datly/internal/testharness"
 	dtag "github.com/viant/datly/tag"
+	projectmeta "github.com/viant/datly/transcribe/internal/project"
 )
 
 func TestProjectGenerationEmitsAuditableMultiComponentProject(t *testing.T) {
@@ -35,7 +36,7 @@ func TestProjectGenerationEmitsAuditableMultiComponentProject(t *testing.T) {
 		if component.Package == "" || component.IR == "" || component.Diagnostics == "" || len(component.Artifacts) < 4 || len(component.Routes) != 1 {
 			t.Fatalf("project component = %+v", component)
 		}
-		for _, relative := range append([]string{filepath.Join(projectMetadataDir, component.IR), filepath.Join(projectMetadataDir, component.Diagnostics)}, component.Artifacts...) {
+		for _, relative := range append([]string{filepath.Join(projectmeta.MetadataDir, component.IR), filepath.Join(projectmeta.MetadataDir, component.Diagnostics)}, component.Artifacts...) {
 			if _, err = os.Stat(filepath.Join(root, filepath.FromSlash(relative))); err != nil {
 				t.Fatalf("project artifact %q: %v", relative, err)
 			}
@@ -45,7 +46,7 @@ func TestProjectGenerationEmitsAuditableMultiComponentProject(t *testing.T) {
 	if len(manifest.Analysis.Components) != 2 || manifest.Analysis.Components[0].Handler != "reader" || manifest.Analysis.Components[1].Handler != "reader" {
 		t.Fatalf("migration analysis = %+v", manifest.Analysis)
 	}
-	if _, err = os.Stat(filepath.Join(root, projectMetadataDir, "migration.json")); err != nil {
+	if _, err = os.Stat(filepath.Join(root, projectmeta.MetadataDir, "migration.json")); err != nil {
 		t.Fatalf("migration report: %v", err)
 	}
 	command := exec.Command("go", "vet", "./...")
@@ -151,7 +152,7 @@ func TestProjectGenerationSerializesConcurrentPartialRuns(t *testing.T) {
 func TestProjectGenerationRejectsMetadataSymlinkBeforeEmission(t *testing.T) {
 	root := t.TempDir()
 	testharness.WriteGeneratedGoMod(t, root)
-	metadata := filepath.Join(root, projectMetadataDir)
+	metadata := filepath.Join(root, projectmeta.MetadataDir)
 	if err := os.Mkdir(metadata, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -172,10 +173,10 @@ func TestProjectGenerationRejectsMetadataRootSymlinkBeforeRead(t *testing.T) {
 	root := t.TempDir()
 	testharness.WriteGeneratedGoMod(t, root)
 	outside := t.TempDir()
-	if err := os.WriteFile(filepath.Join(outside, projectManifestFile), []byte(`{"version":1}`), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(outside, projectmeta.ManifestFile), []byte(`{"version":1}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Symlink(outside, filepath.Join(root, projectMetadataDir)); err != nil {
+	if err := os.Symlink(outside, filepath.Join(root, projectmeta.MetadataDir)); err != nil {
 		t.Fatal(err)
 	}
 	users := compileProjectSource(t, "Users", "/users", "SELECT id FROM users")
@@ -334,7 +335,7 @@ func compileProjectSource(t *testing.T, name, route, sqlText string) *Result {
 
 func readPersistedProjectManifest(t *testing.T, root string) *ProjectManifest {
 	t.Helper()
-	data, err := os.ReadFile(filepath.Join(root, projectMetadataDir, projectManifestFile))
+	data, err := os.ReadFile(filepath.Join(root, projectmeta.MetadataDir, projectmeta.ManifestFile))
 	if err != nil {
 		t.Fatal(err)
 	}

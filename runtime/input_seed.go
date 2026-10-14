@@ -17,7 +17,7 @@ type seedReference struct {
 }
 
 var seedCapabilityTypes = []reflect.Type{
-	reflect.TypeFor[dexec.Reader](), reflect.TypeFor[dexec.DataSource](), reflect.TypeFor[dexec.ProviderScope](), reflect.TypeFor[dexec.ComponentInvoker](),
+	reflect.TypeFor[dexec.Reader](), reflect.TypeFor[dexec.DataSource](), reflect.TypeFor[dexec.ProviderScope](), reflect.TypeFor[dexec.ComponentInvoker](), reflect.TypeFor[xhandler.ComponentInvoker](),
 	reflect.TypeFor[locator.Provider](), reflect.TypeFor[rhandler.Handler](), reflect.TypeFor[xhandler.Data](), reflect.TypeFor[xhandler.Binder](), reflect.TypeFor[context.Context](),
 }
 

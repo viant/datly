@@ -6,6 +6,7 @@ import (
 
 	"github.com/viant/bindly/resource"
 	packageresources "github.com/viant/datly/bootstrap/resources"
+	"github.com/viant/datly/transcribe/internal/dependency"
 	"github.com/viant/datly/typecatalog"
 	"github.com/viant/x"
 	xmodule "github.com/viant/x/module"
@@ -55,7 +56,7 @@ func (d *Discovery) CompileSource(ctx context.Context, source *Source) (*Result,
 			return nil, err
 		}
 	}
-	imports, err := (&dqlPackageDiscovery{workspace: workspace, catalog: catalog, registry: staged.Registry}).loadSource(ctx, source.Text, source.Scope)
+	imports, err := (&dependency.Loader{Workspace: workspace, Catalog: catalog, Registry: staged.Registry}).LoadSource(ctx, source.Text, source.Scope)
 	if err != nil {
 		return nil, err
 	}
@@ -81,7 +82,7 @@ func (d *Discovery) CompileSource(ctx context.Context, source *Source) (*Result,
 	if err != nil {
 		return nil, err
 	}
-	if err := (&dqlPackageDiscovery{workspace: workspace, catalog: result.Source.Types, registry: staged.Registry}).loadCodecDependencies(ctx, result.Component, result.TypeContext); err != nil {
+	if err := (&dependency.Loader{Workspace: workspace, Catalog: result.Source.Types, Registry: staged.Registry}).LoadCodecs(ctx, result.Component, result.TypeContext); err != nil {
 		return nil, err
 	}
 	return result, nil

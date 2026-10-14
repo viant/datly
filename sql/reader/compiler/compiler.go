@@ -131,7 +131,7 @@ func (b *planCompiler) Compile() (*sqlreader.Plan, error) {
 	}
 	codecs := map[*data.View]*rowcodec.Plan{}
 	for view, rowType := range views.rowTypes {
-		codec, err := rowcodec.Compile(rowcodec.Config{RowType: rowType, Columns: view.Columns, Factory: b.input.CodecFactory, LookupType: b.input.TypeLookup, Resources: b.input.Resources})
+		codec, err := rowcodec.Compile(rowcodec.Config{RowType: rowType, Columns: view.Columns, AllowNulls: view.NullsAllowed(), Factory: b.input.CodecFactory, LookupType: b.input.TypeLookup, Resources: b.input.Resources})
 		if err != nil {
 			return nil, fmt.Errorf("compile view %s column codecs: %w", view.Spec.Name, err)
 		}

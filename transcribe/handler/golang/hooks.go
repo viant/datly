@@ -33,10 +33,10 @@ func ScaffoldHooks(config Config) (*ast.File, error) {
 			&ast.ImportSpec{Name: ast.NewIdent(contextAlias), Path: &ast.BasicLit{Kind: token.STRING, Value: strconv.Quote("context")}},
 			&ast.ImportSpec{Name: ast.NewIdent(handlerAlias), Path: &ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(handlerPackage)}},
 		}},
-		hookAssertion(handlerAlias, "Initializer", input),
-		hookAssertion(handlerAlias, "ErrorFinalizer", output),
-		initializerMethod(contextAlias, input),
-		errorFinalizerMethod(contextAlias, output),
+		hookAssertion(handlerAlias, "InvokerInitializer", input),
+		hookAssertion(handlerAlias, "InvokerFinalizer", output),
+		invokerLifecycleMethod(contextAlias, handlerAlias, "Init", "input", input),
+		invokerLifecycleMethod(contextAlias, handlerAlias, "Finalize", "output", output),
 	}
 	return &ast.File{Name: ast.NewIdent(packageName), Decls: declarations}, nil
 }
@@ -75,26 +75,14 @@ func hookAssertion(handlerAlias, interfaceName string, contract *ast.Ident) ast.
 	}}}
 }
 
-func initializerMethod(contextAlias string, contract *ast.Ident) ast.Decl {
+func invokerLifecycleMethod(contextAlias, handlerAlias, method, receiver string, contract *ast.Ident) ast.Decl {
 	return &ast.FuncDecl{
-		Recv: &ast.FieldList{List: []*ast.Field{{Names: []*ast.Ident{ast.NewIdent("input")}, Type: &ast.StarExpr{X: ast.NewIdent(contract.Name)}}}},
-		Name: ast.NewIdent("Init"),
-		Type: &ast.FuncType{
-			Params:  &ast.FieldList{List: []*ast.Field{{Names: []*ast.Ident{ast.NewIdent("ctx")}, Type: selectExpr(ast.NewIdent(contextAlias), "Context")}}},
-			Results: &ast.FieldList{List: []*ast.Field{{Type: ast.NewIdent("error")}}},
-		},
-		Body: &ast.BlockStmt{List: []ast.Stmt{returnStmt(ast.NewIdent("nil"))}},
-	}
-}
-
-func errorFinalizerMethod(contextAlias string, contract *ast.Ident) ast.Decl {
-	return &ast.FuncDecl{
-		Recv: &ast.FieldList{List: []*ast.Field{{Names: []*ast.Ident{ast.NewIdent("output")}, Type: &ast.StarExpr{X: ast.NewIdent(contract.Name)}}}},
-		Name: ast.NewIdent("Finalize"),
+		Recv: &ast.FieldList{List: []*ast.Field{{Names: []*ast.Ident{ast.NewIdent(receiver)}, Type: &ast.StarExpr{X: ast.NewIdent(contract.Name)}}}},
+		Name: ast.NewIdent(method),
 		Type: &ast.FuncType{
 			Params: &ast.FieldList{List: []*ast.Field{
 				{Names: []*ast.Ident{ast.NewIdent("ctx")}, Type: selectExpr(ast.NewIdent(contextAlias), "Context")},
-				{Names: []*ast.Ident{ast.NewIdent("handlerErr")}, Type: ast.NewIdent("error")},
+				{Names: []*ast.Ident{ast.NewIdent("invoker")}, Type: selectExpr(ast.NewIdent(handlerAlias), "ComponentInvoker")},
 			}},
 			Results: &ast.FieldList{List: []*ast.Field{{Type: ast.NewIdent("error")}}},
 		},

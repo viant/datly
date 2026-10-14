@@ -178,7 +178,7 @@ type Finalizer[I, O any] interface {
 
 A prepared root hook can implement it once per component. An explicit definition finalizer can override it and handle earlier failures; a shared definition finalizer must be concurrency-safe. Input/output may be absent on early failure. Cancellation does not mean completion should be skipped. Only Outcome.CommitConfirmed() permits commit-dependent publication.
 
-Ordinary custom outputs also have their own supported Finalize(ctx) or Finalize(ctx,error) contracts. Do not confuse these with the generic writer's outcome-aware completion. InitMCP remains relevant; do not add deprecated sampling behavior.
+Input/output composition uses the independent `handler.InvokerInitializer` and `handler.InvokerFinalizer` contracts: `Init(ctx, invoker)` and `Finalize(ctx, invoker)`. Prefer these arguments over invoker fields on Input. Invoker-aware output finalization runs before transaction completion, including for native writers whose outcome callback remains separate. Ordinary outputs retain `Finalize(ctx)` and `Finalize(ctx,error)` with their existing timing. Do not confuse these with the generic writer's outcome-aware completion. InitMCP remains relevant; do not add deprecated sampling behavior.
 
 ## Focused capabilities
 

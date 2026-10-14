@@ -53,6 +53,16 @@ the project-owned `internal/dependencylink` package, whose only job is to blank-
 component packages so their linked types are present in the executable. No
 component registration function or registry side effect is generated.
 
+Linked-only runtime materialization uses the generated Go input/output contracts
+and the component's embedded SQL resources directly. It does not run package
+transcription again or query database column metadata to reconstruct those
+contracts. Authoring-time transcription still uses database discovery when
+requested. Ordinary runtime template and execution-plan compilation remains.
+Nullable primitive scan slots preserve SQL NULL until assignment to the public
+scalar's zero value; pointer fields, custom SQL scanners and encoded fields
+retain their existing scan contracts. This does not change writer constraints
+or the generated public types.
+
 Run `datly link sync -dir .` when desired. This explicit command scans selected
 project Go source for tagged component holders and predicate/codec interface
 implementations, then adds only missing blank imports to

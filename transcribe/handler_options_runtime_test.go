@@ -13,6 +13,7 @@ import (
 	"github.com/viant/datly/spec"
 	tcolumn "github.com/viant/datly/transcribe/column"
 	gen "github.com/viant/datly/transcribe/generate"
+	"github.com/viant/datly/transcribe/internal/handlertest"
 	"github.com/viant/datly/typecatalog"
 	_ "github.com/viant/sqlx/metadata/product/sqlite"
 )
@@ -209,7 +210,7 @@ func TestGenerateRunsPatchWithUnsignedPointerKey(t *testing.T) {
 	t.Parallel()
 	root := t.TempDir()
 	testharness.WriteGeneratedGoMod(t, root)
-	component := writeGenerationComponent()
+	component := handlertest.Component()
 	component.Key = spec.Key{Kind: spec.KindComponent, Scope: "example.com/generated/events", Name: "Events"}
 	component.RootView.Columns[0].Type.Name = "uint64"
 	component.RootView.Columns[0].Type.Pointer = true
@@ -218,7 +219,7 @@ func TestGenerateRunsPatchWithUnsignedPointerKey(t *testing.T) {
 	component.Parameters[3].TypeExpr = ""
 	component.Views[0].TypeName = "CurrentEventsView"
 	component.Routes = []*spec.Route{{Method: "PATCH", Path: "/events"}}
-	asset, err := generateVeltyTarget(component, generatedViewBindings(t, component, generatedViewBinding{param: 3, view: 0}), &HandlerOptions{Operation: WritePatch, Current: "CurrentEvents"})
+	asset, err := generateVeltyTarget(component, handlertest.Bindings(t, component, handlertest.Binding{Param: 3, View: 0}), &HandlerOptions{Operation: WritePatch, Current: "CurrentEvents"})
 	if err != nil {
 		t.Fatalf("generateVeltyTarget() error = %v", err)
 	}
@@ -246,7 +247,7 @@ func TestGenerateRunsCompoundVeltyPatchThroughUnifiedEngine(t *testing.T) {
 	t.Parallel()
 	root := t.TempDir()
 	testharness.WriteGeneratedGoMod(t, root)
-	component := writeGenerationComponent()
+	component := handlertest.Component()
 	component.Key = spec.Key{Kind: spec.KindComponent, Scope: "example.com/generated/events", Name: "Events"}
 	component.Routes = []*spec.Route{{Method: "PATCH", Path: "/events"}}
 	component.Parameters[3].TypeExpr = ""
@@ -254,7 +255,7 @@ func TestGenerateRunsCompoundVeltyPatchThroughUnifiedEngine(t *testing.T) {
 	tenant := &spec.Column{Name: "TENANT_ID", Source: "TENANT_ID", Type: spec.TypeRef{Name: "int64"}, PrimaryKey: true}
 	component.RootView.Columns = append(component.RootView.Columns, tenant)
 	component.Views[0].Columns = append(component.Views[0].Columns, tenant.Clone())
-	asset, err := generateVeltyTarget(component, generatedViewBindings(t, component, generatedViewBinding{param: 3, view: 0}), &HandlerOptions{Operation: WritePatch, Current: "CurrentEvents"})
+	asset, err := generateVeltyTarget(component, handlertest.Bindings(t, component, handlertest.Binding{Param: 3, View: 0}), &HandlerOptions{Operation: WritePatch, Current: "CurrentEvents"})
 	if err != nil {
 		t.Fatalf("generateVeltyTarget() error = %v", err)
 	}
@@ -288,7 +289,7 @@ func TestGenerateRunsRecursivePatchThroughUnifiedEngine(t *testing.T) {
 	t.Parallel()
 	root := t.TempDir()
 	testharness.WriteGeneratedGoMod(t, root)
-	component, child, detail := recursiveWriteGenerationComponent()
+	component, child, detail := handlertest.RecursiveComponent()
 	component.Key = spec.Key{Kind: spec.KindComponent, Scope: "example.com/generated/orders", Name: "Orders"}
 	component.Routes = []*spec.Route{{Method: "PATCH", Path: "/orders"}}
 	component.Views[0].Source = &spec.ViewSource{SQL: "SELECT ID, NAME FROM ORDERS WHERE ID = 1"}
@@ -306,10 +307,10 @@ func TestGenerateRunsRecursivePatchThroughUnifiedEngine(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	asset, err := generateVeltyTarget(component, generatedViewBindings(t, component,
-		generatedViewBinding{param: 2, view: 0},
-		generatedViewBinding{param: 3, view: 1},
-		generatedViewBinding{param: 4, view: 2}), &HandlerOptions{
+	asset, err := generateVeltyTarget(component, handlertest.Bindings(t, component,
+		handlertest.Binding{Param: 2, View: 0},
+		handlertest.Binding{Param: 3, View: 1},
+		handlertest.Binding{Param: 4, View: 2}), &HandlerOptions{
 		Operation: WritePatch, Current: "CurrentOrders",
 		Currents: []CurrentBinding{
 			{ViewIdentity: childIdentity, Param: "CurrentItems"},

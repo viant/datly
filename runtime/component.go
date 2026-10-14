@@ -80,6 +80,26 @@ func (i *scopedComponentInvoker) InvokeComponent(ctx context.Context, request de
 	return i.runtime.invokeComponent(ctx, request, i.scope)
 }
 
+// Invoke adapts the public application contract to the existing scoped call.
+// Both interfaces share this invoker's authority, providers and buffered owner.
+func (i *scopedComponentInvoker) Invoke(ctx context.Context, request xhandler.ComponentRequest) (any, error) {
+	var seed *dexec.InputSeed
+	if request.ExtraInput != nil {
+		seed = dexec.WithInput(request.ExtraInput.Value())
+	}
+	return i.InvokeComponent(ctx, dexec.ComponentRequest{
+		Target: dexec.ComponentTarget{
+			Component: spec.Key{Kind: spec.KindComponent, Scope: request.Target.Scope, Name: request.Target.Name},
+			Route:     spec.RouteRef{Method: request.Target.Method, Path: request.Target.Path},
+		},
+		Input: request.Input, ExtraInput: seed,
+		Providers: request.Providers, Completion: request.Completion,
+	})
+}
+
+var _ xhandler.ComponentInvoker = (*scopedComponentInvoker)(nil)
+var _ dexec.ComponentInvoker = (*scopedComponentInvoker)(nil)
+
 func (r *Runtime) componentInvokerProvider(scope dexec.ProviderScope, buffered bool) locator.Provider {
 	scope = componentDependencyScope(scope)
 	return handlerprovider.New(dexec.ComponentInvokerKey, func(ctx context.Context) (any, bool, error) {

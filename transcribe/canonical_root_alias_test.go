@@ -7,6 +7,7 @@ import (
 	"github.com/viant/datly/internal/testharness/sqlite"
 	dtag "github.com/viant/datly/tag"
 	tcolumn "github.com/viant/datly/transcribe/column"
+	projectmeta "github.com/viant/datly/transcribe/internal/project"
 	"github.com/viant/datly/typecatalog"
 	"os"
 	"path/filepath"
@@ -150,7 +151,7 @@ func TestCanonicalRootMissingDestinationRejectsBeforeEmission(t *testing.T) {
 			t.Fatal("project empty destination acquired current-directory authority", err)
 		}
 	}
-	for _, path := range []string{"generated", projectMetadataDir} {
+	for _, path := range []string{"generated", projectmeta.MetadataDir} {
 		if _, err := os.Lstat(filepath.Join(root, path)); !os.IsNotExist(err) {
 			t.Fatal("missing destination emitted into current directory", path, err)
 		}

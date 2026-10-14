@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/viant/datly/constant"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -14,9 +13,11 @@ import (
 	"github.com/viant/bindly/resource"
 	"github.com/viant/datly/bootstrap"
 	packageresources "github.com/viant/datly/bootstrap/resources"
+	"github.com/viant/datly/constant"
 	"github.com/viant/datly/transcribe/column"
 	"github.com/viant/datly/transcribe/dql"
 	"github.com/viant/datly/transcribe/gobuild"
+	"github.com/viant/datly/transcribe/internal/dependency"
 	"github.com/viant/datly/typecatalog"
 	"github.com/viant/x"
 	xmodule "github.com/viant/x/module"
@@ -122,7 +123,7 @@ func (d *Discovery) Compile(ctx context.Context) (*ProjectGeneration, error) {
 	if err != nil {
 		return nil, err
 	}
-	dqlImports, err := (&dqlPackageDiscovery{workspace: workspace, catalog: catalog, registry: d.Registry}).load(ctx, files)
+	dqlImports, err := (&dependency.Loader{Workspace: workspace, Catalog: catalog, Registry: d.Registry}).Load(ctx, files)
 	if err != nil {
 		return nil, err
 	}
@@ -211,7 +212,7 @@ func (c *discoveryCompilation) compileFile(ctx context.Context, file xmodule.Fil
 	if err != nil {
 		return nil, fmt.Errorf("compile component source %q: %w", file.Path, err)
 	}
-	if err := (&dqlPackageDiscovery{workspace: c.workspace, catalog: result.Source.Types, registry: c.discovery.Registry}).loadCodecDependencies(ctx, result.Component, result.TypeContext, result.Source.LinkedInputType, result.Source.LinkedOutputType); err != nil {
+	if err := (&dependency.Loader{Workspace: c.workspace, Catalog: result.Source.Types, Registry: c.discovery.Registry}).LoadCodecs(ctx, result.Component, result.TypeContext, result.Source.LinkedInputType, result.Source.LinkedOutputType); err != nil {
 		return nil, err
 	}
 	return result, nil
@@ -228,7 +229,7 @@ func (d *Discovery) loadTypeIncludes(ctx context.Context, catalog *typecatalog.C
 			imports[packagePath] = true
 		}
 	}
-	return (&dqlPackageDiscovery{workspace: workspace, catalog: catalog, registry: d.Registry}).loadImports(ctx, imports)
+	return (&dependency.Loader{Workspace: workspace, Catalog: catalog, Registry: d.Registry}).LoadImports(ctx, imports)
 }
 
 func (d *Discovery) packageSources(ctx context.Context, catalog *typecatalog.Catalog, workspace *xmodule.Workspace) (map[string]*bootstrap.PackageComponentSource, []string, error) {
@@ -243,7 +244,7 @@ func (d *Discovery) packageSources(ctx context.Context, catalog *typecatalog.Cat
 	for _, route := range routes {
 		imports = append(imports, route.PackagePath)
 	}
-	module, err := loadScopedPackageAuthority(ctx, workspace, routes)
+	module, err := dependency.LoadAuthority(ctx, workspace, routes)
 	if err != nil {
 		return nil, nil, fmt.Errorf("load package authority: %w", err)
 	}
@@ -342,10 +343,10 @@ func (d *Discovery) packageSources(ctx context.Context, catalog *typecatalog.Cat
 			if err != nil {
 				return nil, nil, err
 			}
-			if err := d.loadComponentPredicateDependencies(ctx, workspace, catalog, resolved, resolutionContext); err != nil {
+			if err := (&dependency.Loader{Workspace: workspace, Catalog: catalog, Registry: d.Registry}).LoadPredicates(ctx, resolved, resolutionContext); err != nil {
 				return nil, nil, err
 			}
-			if err := (&dqlPackageDiscovery{workspace: workspace, catalog: catalog, registry: d.Registry}).loadCodecDependencies(ctx, resolved, resolutionContext); err != nil {
+			if err := (&dependency.Loader{Workspace: workspace, Catalog: catalog, Registry: d.Registry}).LoadCodecs(ctx, resolved, resolutionContext); err != nil {
 				return nil, nil, err
 			}
 			identity := packageSourceIdentity(packagePath, component.ComponentName())

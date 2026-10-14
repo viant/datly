@@ -43,18 +43,16 @@ func (c routeContractCompiler) compile(projection *bindly.Projection) (*registry
 		if bindingErr != nil {
 			return nil, bindingErr
 		}
-		// A transport name may be shared across source kinds or inactive routes,
-		// but one effective source cannot identify two input destinations.
+		// Request headers are immutable transport metadata and can bind distinct
+		// canonical destinations, such as verified claims and an outbound token.
+		// Client argument sources must retain unambiguous destinations.
 		transport := make(map[string]string)
 		for _, binding := range routeBindings {
 			kind, name := binding.Location.Kind, binding.Location.In
 			switch kind {
-			case "query", "header", "cookie", "path", "form":
+			case "query", "cookie", "path", "form":
 			default:
 				continue
-			}
-			if kind == "header" {
-				name = strings.ToLower(name)
 			}
 			key := kind + "\x00" + name
 			if previous, exists := transport[key]; exists && previous != binding.Path {

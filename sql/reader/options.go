@@ -3,8 +3,9 @@ package reader
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	"github.com/viant/datly/data"
+	"github.com/viant/datly/internal/codeclookup"
+	"github.com/viant/datly/spec"
 	"github.com/viant/datly/sql/reader/readmeta"
 	"github.com/viant/datly/sql/reader/rowcodec"
 	"github.com/viant/sqlx"
@@ -16,15 +17,16 @@ import (
 )
 
 type readerOptions struct {
-	retry             sqlxread.RetryPolicy
-	readCache         cache.Cache
-	refreshCache      bool
-	cacheOnly         bool
-	queryScope        *sqlxread.QueryScope
-	codec             *rowcodec.Plan
-	parameters        sqlx.ParameterResolver
-	rowType           reflect.Type
-	collectProjection bool
+	retry               sqlxread.RetryPolicy
+	readCache           cache.Cache
+	refreshCache        bool
+	cacheOnly           bool
+	queryScope          *sqlxread.QueryScope
+	codec               *rowcodec.Plan
+	parameters          sqlx.ParameterResolver
+	rowType             reflect.Type
+	collectProjection   bool
+	optionalCodecInputs map[string]bool
 }
 
 func newReaderOptions(session *Session, view *data.View, tx *sql.Tx) readerOptions {
@@ -32,6 +34,14 @@ func newReaderOptions(session *Session, view *data.View, tx *sql.Tx) readerOptio
 		return readerOptions{}
 	}
 	result := readerOptions{parameters: session.Parameters}
+	if session.Component != nil {
+		result.optionalCodecInputs = map[string]bool{}
+		for _, param := range spec.EffectiveParameters(session.Component.Parameters) {
+			if param != nil && !param.EmitOutput && (param.Required == nil || !*param.Required) {
+				result.optionalCodecInputs[param.Name] = true
+			}
+		}
+	}
 	// A transaction reads its own snapshot and writes. Never read or populate
 	// shared caches, and never mutate the session's shared cache configuration.
 	if tx == nil {
@@ -70,19 +80,7 @@ func (o readerOptions) rows(newRow func() any, resolve sqlxio.Resolve, matchers 
 		result.stats = &cache.Stats{}
 		result.options = append(result.options, sqlxread.WithCacheStats(result.stats))
 	}
-	result.decoder = o.codec.NewDecoder(newRow, xcodec.WithValueLookup(func(_ context.Context, name string) (any, error) {
-		if o.parameters == nil {
-			return nil, fmt.Errorf("codec input parameter %s is unavailable", name)
-		}
-		value, found, err := o.parameters(name)
-		if err != nil {
-			return nil, err
-		}
-		if !found {
-			return nil, fmt.Errorf("codec input parameter %s is unavailable", name)
-		}
-		return value, nil
-	}))
+	result.decoder = o.codec.NewDecoder(newRow, xcodec.WithValueLookup(o.codecValue))
 	if result.decoder != nil {
 		result.newRow = result.decoder.NewRow
 	}
@@ -108,6 +106,15 @@ func (o readerOptions) rows(newRow func() any, resolve sqlxio.Resolve, matchers 
 		}))
 	}
 	return result
+}
+
+func (o readerOptions) codecValue(ctx context.Context, name string) (any, error) {
+	if o.parameters == nil {
+		return codeclookup.Value(ctx, name, o.optionalCodecInputs, nil)
+	}
+	return codeclookup.Value(ctx, name, o.optionalCodecInputs, func(_ context.Context, name string) (any, bool, error) {
+		return o.parameters(name)
+	})
 }
 
 func (o readerOptions) withResolver(resolve sqlxio.Resolve, matchers ...*cache.ParmetrizedQuery) []sqlxread.Option {

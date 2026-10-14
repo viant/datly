@@ -38,7 +38,9 @@ func finalizeBeforeCompletion(ctx context.Context, result any, handlerErr error)
 // scope has flushed and completed its locally owned transactions.
 func finalizeAfterCompletion(ctx context.Context, result any) (any, error) {
 	_, injectorAware := result.(xhandler.InjectorFinalizer)
-	if _, errorAware := result.(xhandler.ErrorFinalizer); !errorAware && !injectorAware {
+	_, invokerAware := result.(xhandler.InvokerFinalizer)
+	_, invokerErrorAware := result.(xhandler.InvokerErrorFinalizer)
+	if _, errorAware := result.(xhandler.ErrorFinalizer); !errorAware && !injectorAware && !invokerAware && !invokerErrorAware {
 		if finalizer, ok := result.(xhandler.Finalizer); ok {
 			if err := finalizer.Finalize(ctx); err != nil {
 				return result, err

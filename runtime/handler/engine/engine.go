@@ -150,9 +150,9 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 		return nil, fmt.Errorf("sequence_strategy requires a data source")
 	}
 	outcomeFinalizer, outcomeAware := request.Handler.(rhandler.OutcomeFinalizer)
-	// Opted-in outputs need a neutral root even when their handler has no DB.
+	// Composition lifecycle hooks need a neutral root even without a root DB.
 	// Ordinary source-less handlers retain their existing child ownership.
-	if data == nil && (outcomeAware || request.Completion != nil || request.hasInjectorFinalizer() || request.BufferedComponentCalls) {
+	if data == nil && (outcomeAware || request.Completion != nil || request.hasCompositionFinalizer() || request.hasInvokerInitializer() || request.BufferedComponentCalls) {
 		data, ownsData = neutralDataScope(ctx), true
 	}
 	if data == nil && request.Capabilities.Connector != nil && !request.IndependentChildTransactions {
@@ -600,11 +600,17 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 	}
 	snapshotReady = true
 	if err := phases.Run(ctx, xhandler.PhaseInputInitialization, func() error {
-		if initializer, ok := input.(xhandler.Initializer); ok {
-			if err := initializer.Init(ctx); err != nil {
-				initializationErrorReturned = true
-				return fmt.Errorf("initialize handler input: %w", err)
-			}
+		var initErr error
+		switch initializer := input.(type) {
+		case xhandler.InvokerInitializer:
+			lease := &lifecycleScope{data: data, ctx: ctx, binder: binder, phase: "invoker initializer"}
+			initErr = lease.finish(func(ctx context.Context) error { return initializer.Init(ctx, lease) }, nil)
+		case xhandler.Initializer:
+			initErr = initializer.Init(ctx)
+		}
+		if initErr != nil {
+			initializationErrorReturned = true
+			return fmt.Errorf("initialize handler input: %w", initErr)
 		}
 		if mcpContext, ok := xmcp.LookupContext(ctx); ok {
 			if initializer, ok := input.(xmcp.Initializer); ok {
@@ -630,13 +636,13 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 		}
 	}
 	completeSelection(result, handlerErr)
-	if outcomeAware {
-		return finish(result, handlerErr)
-	}
-	var injectorPrepareErr error
-	if finalizer, ok := result.(xhandler.InjectorFinalizer); ok {
+	var compositionPrepareErr error
+	_, invokerAware := result.(xhandler.InvokerFinalizer)
+	_, invokerErrorAware := result.(xhandler.InvokerErrorFinalizer)
+	_, injectorAware := result.(xhandler.InjectorFinalizer)
+	if invokerAware || invokerErrorAware || (injectorAware && !outcomeAware) {
 		// Untyped engine adapters can discover the hook only from the result.
-		// Its conditional child calls still need an owner before lookup starts.
+		// Its child calls still need an owner before composition starts.
 		if data == nil {
 			data, ownsData = neutralDataScope(ctx), true
 			activity, err = data.admitActivity(ctx)
@@ -647,11 +653,25 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 			ctx = withDataScope(ctx, data)
 		}
 		if handlerErr == nil && ownsData && !data.protectedLifetime() {
-			injectorPrepareErr = data.prepare(ctx)
-			handlerErr = injectorPrepareErr
+			compositionPrepareErr = data.prepare(ctx)
+			handlerErr = compositionPrepareErr
 		}
-		lease := &finalizerInjectors{data: data, ctx: ctx, output: result, lookup: request.Injectors}
-		handlerErr = lease.finalize(finalizer, handlerErr)
+		lease := &lifecycleScope{data: data, ctx: ctx, binder: binder, output: result, lookup: request.Injectors}
+		switch finalizer := result.(type) {
+		case xhandler.InvokerErrorFinalizer:
+			lease.phase = "invoker error finalizer"
+			operationErr := handlerErr
+			handlerErr = lease.finish(func(ctx context.Context) error { return finalizer.Finalize(ctx, lease, operationErr) }, operationErr)
+		case xhandler.InvokerFinalizer:
+			lease.phase = "invoker finalizer"
+			handlerErr = lease.finish(func(ctx context.Context) error { return finalizer.Finalize(ctx, lease) }, handlerErr)
+		case xhandler.InjectorFinalizer:
+			lease.phase = "injector finalizer"
+			handlerErr = lease.finish(func(ctx context.Context) error { return finalizer.Finalize(ctx, lease.get) }, handlerErr)
+		}
+	}
+	if outcomeAware {
+		return finish(result, handlerErr)
 	}
 	// A transactional prepare can fail before commit. Let the single
 	// error-aware finalizer observe that failure while it can still veto the
@@ -678,7 +698,7 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 		}
 	}
 	result, handlerErr = finish(result, handlerErr)
-	if prepareErr != nil || injectorPrepareErr != nil {
+	if prepareErr != nil || compositionPrepareErr != nil {
 		result = nil
 	}
 	if handlerErr != nil {
@@ -769,7 +789,11 @@ func boundSupplementalPlan(injector *bindly.Injector, input *registry.RouteInput
 	return plan, nil
 }
 
-func (r Request) hasInjectorFinalizer() bool {
+func (r Request) hasInvokerInitializer() bool {
+	return r.Input != nil && reflect.PointerTo(r.Input.Type()).Implements(reflect.TypeFor[xhandler.InvokerInitializer]())
+}
+
+func (r Request) hasCompositionFinalizer() bool {
 	outputType := r.OutputType
 	if outputType == nil {
 		if typed, ok := r.Handler.(rhandler.TypedHandler); ok {
@@ -779,8 +803,12 @@ func (r Request) hasInjectorFinalizer() bool {
 	if outputType == nil {
 		return false
 	}
-	contract := reflect.TypeFor[xhandler.InjectorFinalizer]()
-	return outputType.Implements(contract) || (outputType.Kind() != reflect.Pointer && reflect.PointerTo(outputType).Implements(contract))
+	for _, contract := range []reflect.Type{reflect.TypeFor[xhandler.InvokerFinalizer](), reflect.TypeFor[xhandler.InvokerErrorFinalizer](), reflect.TypeFor[xhandler.InjectorFinalizer]()} {
+		if outputType.Implements(contract) || (outputType.Kind() != reflect.Pointer && reflect.PointerTo(outputType).Implements(contract)) {
+			return true
+		}
+	}
+	return false
 }
 
 func errorAwareOutput(outputType reflect.Type) any {
