@@ -69,13 +69,14 @@ type Compiler struct {
 }
 
 type compiled struct {
-	constants       *constantBindings
-	allowEmptyInput bool
-	exec            *est.Execution
-	newState        func() *est.State
-	inputType       reflect.Type
-	variables       []variableBinding
-	predicate       dexec.PredicateEvaluator
+	constants        *constantBindings
+	allowEmptyInput  bool
+	unsafeRegistered bool
+	exec             *est.Execution
+	newState         func() *est.State
+	inputType        reflect.Type
+	variables        []variableBinding
+	predicate        dexec.PredicateEvaluator
 }
 
 type variableBinding struct {
@@ -85,6 +86,7 @@ type variableBinding struct {
 	valueType       reflect.Type
 	key             xhandler.ValueKey
 	required        bool
+	registered      bool
 }
 
 // Compile returns nil for plain SQL and a reusable evaluator when the parsed
@@ -117,6 +119,11 @@ func (c Compiler) Compile() (Evaluator, error) {
 	predicateUsed := usesVariable(root.Statements(), dexec.PredicateVariable)
 	viewUsed := usesVariable(root.Statements(), viewVariable)
 	unsafeUsed := usesVariable(root.Statements(), unsafeVariable)
+	// Reuse this parsed AST to declare only referenced input roots. Expanding an
+	// unused Auth-like reply can collide on embedded fields even though the SQL
+	// only reads a different root. Dynamic scripts/loops keep full declarations;
+	// binding validation and per-evaluation resolution still cover every variable.
+	fullInput := requiresFullInputDeclarations(root.Statements())
 	criteriaUsed := usesVariable(root.Statements(), criteriaVariable)
 	declaredVariableUsed := false
 	for _, variable := range c.Variables {
@@ -145,8 +152,10 @@ func (c Compiler) Compile() (Evaluator, error) {
 			return nil, fmt.Errorf("define SQL constant slots: %w", err)
 		}
 	}
-	if err := planner.DefineVariable(unsafeVariable, reflect.New(inputType).Interface()); err != nil {
-		return nil, fmt.Errorf("define $%s SQL template input: %w", unsafeVariable, err)
+	if unsafeUsed || fullInput {
+		if err := planner.DefineVariable(unsafeVariable, reflect.New(inputType).Interface()); err != nil {
+			return nil, fmt.Errorf("define $%s SQL template input: %w", unsafeVariable, err)
+		}
 	}
 	if err := planner.DefineVariable(bindingVariable, &fragment.Bindings{}); err != nil {
 		return nil, fmt.Errorf("define $%s SQL template binding collector: %w", bindingVariable, err)
@@ -166,7 +175,7 @@ func (c Compiler) Compile() (Evaluator, error) {
 			return nil, fmt.Errorf("define $%s SQL template context: %w", dexec.PredicateVariable, err)
 		}
 	}
-	bindings, err := c.defineVariables(planner, inputType)
+	bindings, err := c.defineVariables(planner, inputType, func(name string) bool { return fullInput || usesVariable(root.Statements(), name) })
 	if err != nil {
 		return nil, err
 	}
@@ -182,7 +191,7 @@ func (c Compiler) Compile() (Evaluator, error) {
 	if predicateUsed {
 		predicateProgram = c.Predicate
 	}
-	return &compiled{constants: constants, allowEmptyInput: allowEmptyInput,
+	return &compiled{constants: constants, allowEmptyInput: allowEmptyInput, unsafeRegistered: unsafeUsed || fullInput,
 		exec:      exec,
 		newState:  newState,
 		inputType: inputType,
@@ -191,7 +200,7 @@ func (c Compiler) Compile() (Evaluator, error) {
 	}, nil
 }
 
-func (c Compiler) defineVariables(planner *velty.Planner, inputType reflect.Type) ([]variableBinding, error) {
+func (c Compiler) defineVariables(planner *velty.Planner, inputType reflect.Type, used func(string) bool) ([]variableBinding, error) {
 	seen := map[string]bool{constantVariable: true, unsafeVariable: true, bindingVariable: true, viewVariable: true, criteriaVariable: true, dexec.PredicateVariable: true}
 	variables := make([]Variable, 0, inputType.NumField()+len(c.Variables))
 	for i := 0; i < inputType.NumField(); i++ {
@@ -224,8 +233,11 @@ func (c Compiler) defineVariables(planner *velty.Planner, inputType reflect.Type
 		if len(variable.FieldIndex) == 0 && variable.Key == "" {
 			return nil, fmt.Errorf("define SQL template variable $%s: binder key is required", name)
 		}
-		if err := planner.DefineVariable(name, variableDeclaration(valueType)); err != nil {
-			return nil, fmt.Errorf("define SQL template variable $%s: %w", name, err)
+		registered := used(name)
+		if registered {
+			if err := planner.DefineVariable(name, variableDeclaration(valueType)); err != nil {
+				return nil, fmt.Errorf("define SQL template variable $%s: %w", name, err)
+			}
 		}
 		seen[name] = true
 		result = append(result, variableBinding{
@@ -235,6 +247,7 @@ func (c Compiler) defineVariables(planner *velty.Planner, inputType reflect.Type
 			valueType:       valueType,
 			key:             variable.Key,
 			required:        variable.Required,
+			registered:      registered,
 		})
 	}
 	return result, nil
@@ -255,8 +268,10 @@ func (c *compiled) Evaluate(ctx context.Context, invocation Invocation) (Result,
 			return Result{}, fmt.Errorf("set SQL constant slots: %w", err)
 		}
 	}
-	if err := state.SetValue(unsafeVariable, inputPtr.Interface()); err != nil {
-		return Result{}, fmt.Errorf("set $%s SQL template input: %w", unsafeVariable, err)
+	if c.unsafeRegistered {
+		if err := state.SetValue(unsafeVariable, inputPtr.Interface()); err != nil {
+			return Result{}, fmt.Errorf("set $%s SQL template input: %w", unsafeVariable, err)
+		}
 	}
 	bindings := &fragment.Bindings{}
 	if err := state.SetValue(bindingVariable, bindings); err != nil {
@@ -282,6 +297,9 @@ func (c *compiled) Evaluate(ctx context.Context, invocation Invocation) (Result,
 		value, err := variable.resolve(ctx, input, invocation.Binder)
 		if err != nil {
 			return Result{}, err
+		}
+		if !variable.registered {
+			continue
 		}
 		// Each evaluation has fresh zero-initialized state. Keep an absent
 		// interface nil; the template setter cannot accept untyped nil.
