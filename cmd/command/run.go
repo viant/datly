@@ -6,9 +6,11 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"net/http"
 
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/viant/bindly/locator"
+	"github.com/viant/datly/exec"
 	"github.com/viant/datly/standalone"
 	"github.com/viant/datly/standalone/config"
 	"github.com/viant/x"
@@ -19,6 +21,12 @@ import (
 )
 
 type Service struct {
+	// HTTPMiddleware and LinkedArtifact are trusted process-owned bindings.
+	HTTPMiddleware func(http.Handler) http.Handler
+	LinkedArtifact *exec.LinkedArtifact
+	// Deprecated: passed through to the runtime, which rejects mandatory MCP
+	// component wire binding. Use server-owned resource resolution instead.
+	RequireComponentBinding bool
 	// InvocationDiffer is statically injected by the trusted application host.
 	InvocationDiffer xdiffer.Differ
 	// InvocationLogger is statically injected by the trusted application host.
@@ -67,7 +75,7 @@ func (s Service) Run(ctx context.Context, args []string, stdout, stderr io.Write
 		fmt.Fprintln(stderr, err)
 		return 1
 	}
-	server, err := standalone.New(ctx, standalone.Options{Config: cfg, Registry: s.Registry, Workspace: s.Workspace, Holders: s.Holders, Providers: s.Providers, InvocationLogger: s.InvocationLogger, InvocationDiffer: s.InvocationDiffer, DefaultAuthenticator: s.DefaultAuthenticator, RequireLinked: true, Diagnostics: stderr})
+	server, err := standalone.New(ctx, standalone.Options{HTTPMiddleware: s.HTTPMiddleware, LinkedArtifact: s.LinkedArtifact, RequireComponentBinding: s.RequireComponentBinding, Config: cfg, Registry: s.Registry, Workspace: s.Workspace, Holders: s.Holders, Providers: s.Providers, InvocationLogger: s.InvocationLogger, InvocationDiffer: s.InvocationDiffer, DefaultAuthenticator: s.DefaultAuthenticator, RequireLinked: true, Diagnostics: stderr})
 	if err != nil {
 		fmt.Fprintln(stderr, err)
 		return 1
