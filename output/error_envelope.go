@@ -15,6 +15,7 @@ type errorEnvelope struct {
 	root    reflect.Type
 	status  *shape.Accessor
 	message *shape.Accessor
+	errors  *shape.Accessor
 }
 
 func compileErrorEnvelope(input CompileInput) (*errorEnvelope, error) {
@@ -60,15 +61,19 @@ func compileErrorEnvelope(input CompileInput) (*errorEnvelope, error) {
 	if err != nil {
 		return nil, fmt.Errorf("compile legacy error message %s: %w", name, err)
 	}
-	result := &errorEnvelope{root: input.Type, status: status, message: message}
+	errors, err := owner.Accessor(name + ".Errors")
+	if err != nil {
+		return nil, fmt.Errorf("compile legacy error details %s: %w", name, err)
+	}
+	result := &errorEnvelope{root: input.Type, status: status, message: message, errors: errors}
 	// Check writable authority once; this value is discarded, never retained.
-	if _, err = result.fresh(""); err != nil {
+	if _, err = result.fresh("", []*legacyresponse.Error{{}}); err != nil {
 		return nil, fmt.Errorf("compile legacy error output: %w", err)
 	}
 	return result, nil
 }
 
-func (e *errorEnvelope) fresh(message string) (any, error) {
+func (e *errorEnvelope) fresh(message string, details []*legacyresponse.Error) (any, error) {
 	root := e.root
 	if root.Kind() == reflect.Pointer {
 		root = root.Elem()
@@ -78,6 +83,9 @@ func (e *errorEnvelope) fresh(message string) (any, error) {
 		return nil, err
 	}
 	if err := e.message.Set(value.Interface(), message); err != nil {
+		return nil, err
+	}
+	if err := e.errors.Set(value.Interface(), detailsValue(details)); err != nil {
 		return nil, err
 	}
 	if e.root.Kind() == reflect.Pointer {
@@ -92,6 +100,27 @@ func (p *Plan) ErrorEnvelope(message string) (any, bool, error) {
 	if p == nil || p.errorEnvelope == nil {
 		return nil, false, nil
 	}
-	value, err := p.errorEnvelope.fresh(message)
+	value, err := p.errorEnvelope.fresh(message, nil)
 	return value, true, err
+}
+
+// ErrorEnvelopeWithCause adds source-owned binding details to the existing
+// declared legacy output. message and statusCode are already selected public
+// values; unsupported cause graphs retain the plain ErrorEnvelope behavior.
+func (p *Plan) ErrorEnvelopeWithCause(message string, statusCode int, cause error) (any, bool, error) {
+	if p == nil || p.errorEnvelope == nil {
+		return nil, false, nil
+	}
+	details, ok := projectBindingErrors(cause, statusCode)
+	if !ok {
+		return p.ErrorEnvelope(message)
+	}
+	value, err := p.errorEnvelope.fresh(message, details)
+	return value, true, err
+}
+func detailsValue(details []*legacyresponse.Error) any {
+	if details == nil {
+		return nil
+	}
+	return details
 }
