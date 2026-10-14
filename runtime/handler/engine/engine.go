@@ -30,6 +30,8 @@ type Request struct {
 	phaseInvocationID uint64
 	// BufferedComponentCalls is dispatcher-owned canonical caller metadata.
 	BufferedComponentCalls bool
+	// CanonicalReader is runtime dispatcher metadata, never application input.
+	CanonicalReader bool
 	// ProtectedFlushTables is canonical component-local metadata, never inherited.
 	ProtectedFlushTables []string
 	// IndependentChildTransactions retains all invocation capabilities/context but
@@ -71,6 +73,15 @@ func New() *Engine { return &Engine{} }
 
 func (e *Engine) Execute(ctx context.Context, request Request) (actual any, failure error) {
 	callContext := ctx
+	readerCall := claimReaderCall(ctx)
+	readerResult := false
+	readerRetired := false
+	var readerRetiredCause error
+	defer func() {
+		if readerCall != nil && readerRetired && ctx.Err() == nil && sameReaderError(failure, readerRetiredCause) {
+			readerCall.publish(failure)
+		}
+	}()
 	ctx, _ = rhandler.WithPhaseObserver(ctx, nil, 0, 0)
 	var phases *rhandler.PhaseScope
 	phaseEnded := false
@@ -166,6 +177,12 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 			return nil
 		}
 		activityActive = false
+		if request.CanonicalReader && readerResult && !ownsData && componentFromContext(ctx).relation == ComponentBufferedImperative && !drainowner.BindingGroupContext(ctx) && ordinaryReaderCause(cause) {
+			retired, err := data.finishNeutralReaderActivity(ctx, activity, cause)
+			readerRetired = retired
+			readerRetiredCause = cause
+			return err
+		}
 		return data.finishActivity(activity, cause)
 	}
 	// This covers roots established up front and dynamically discovered output roots.
@@ -236,13 +253,18 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 	bindOutput := func(value any) (err error) {
 		defer func() {
 			if value := recover(); value != nil {
+				readerResult = false
 				err = dexec.NewPanicError("output capability binding", value)
 			}
 		}()
 		if request.OutputCapabilities == nil || value == nil || scope == nil {
 			return nil
 		}
-		return scope.Bind(ctx, value, bindly.WithPlan(request.OutputCapabilities), bindly.WithSource(input))
+		err = scope.Bind(ctx, value, bindly.WithPlan(request.OutputCapabilities), bindly.WithSource(input))
+		if err != nil {
+			readerResult = false
+		}
+		return err
 	}
 	notifyCompletion := func(completionErr error) error {
 		if !ownsData || data == nil || request.Completion == nil {
@@ -604,6 +626,7 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 		return finish(nil, err)
 	}
 
+	readerResult = request.CanonicalReader
 	dexec.BeginOutputSelection(ctx)
 	result, handlerErr := request.Handler.Execute(ctx, invocation)
 	if result == nil && handlerErr != nil && !outcomeAware {
@@ -657,6 +680,12 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 	// locally owned transaction. Plain success finalizers remain post-commit.
 	// Protected roots finish output composition before closure/preparation and
 	// terminal observation. Nested components retain their existing callbacks.
+	if request.CanonicalReader && readerResult && request.BufferedComponentCalls && handlerErr == nil && ownsData && data.neutralReaderComposition() {
+		if _, errorAware := result.(xhandler.ErrorFinalizer); errorAware {
+			outputFinalized = true
+			result, handlerErr = finalizeBeforeCompletion(ctx, result, handlerErr)
+		}
+	}
 	protected := ownsData && data.protectedLifetime()
 	var prepareErr error
 	if _, errorAware := result.(xhandler.ErrorFinalizer); errorAware && !protected && handlerErr == nil && ownsData && data != nil {
@@ -665,7 +694,7 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 			handlerErr = prepareErr
 		}
 	}
-	if !protected {
+	if !protected && !outputFinalized {
 		outputFinalized = true
 		result, handlerErr = finalizeBeforeCompletion(ctx, result, handlerErr)
 	}
@@ -673,6 +702,7 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 		var registerErr error
 		completionFrame, registerErr = data.registerOutcome(ctx, request.Input.Route().String(), outputCompletion{})
 		if registerErr != nil {
+			readerResult = false
 			handlerErr = errors.Join(handlerErr, registerErr)
 		}
 	}

@@ -369,6 +369,7 @@ func (r *Runtime) invokeComponent(ctx context.Context, request dexec.ComponentRe
 		IndependentChildTransactions: request.IndependentChildTransactions || (registered.Component.Settings != nil && registered.Component.Settings.IndependentChildTransactions),
 		SequenceStrategy:             sequenceStrategy,
 		BufferedComponentCalls:       buffered,
+		CanonicalReader:              registered.Handler == nil && registered.Reader != nil && request.Warmup == nil && !request.DryRun && !request.PrepareQuery && (request.Replay == nil || !request.Replay.Only),
 		ProtectedFlushTables:         protectedFlushTables,
 		Injector:                     r.injector,
 		Input:                        inputRoute,

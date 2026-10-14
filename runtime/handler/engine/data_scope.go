@@ -383,6 +383,57 @@ func invocationDataScope(ctx context.Context, source dexec.DataSource) (*dataSco
 	return created, created != nil
 }
 
+// neutralReaderComposition inspects the existing owner, including published
+// source-bearing units that have not opened their database yet.
+func (s *dataScope) neutralReaderComposition() bool {
+	if s == nil {
+		return false
+	}
+	root := s
+	if s.root != nil {
+		root = s.root
+	}
+	root.mu.Lock()
+	defer root.mu.Unlock()
+	return root.neutralReaderCompositionLocked()
+}
+func (root *dataScope) neutralReaderCompositionLocked() bool {
+	if root.completionStarted || root.guardedExecution || root.guardedFailure != nil || root.err != nil || root.source != nil || root.data != nil {
+		return false
+	}
+	for _, unit := range root.units {
+		if unit.source != nil || unit.data != nil || unit.guardedExecution || unit.guardedFailure != nil || unit.err != nil || unit.completionStarted {
+			return false
+		}
+	}
+	return root.writeEligibility.capturedExecutionFailure() == nil && drainowner.ProtectedFailure(root.nativeInvocation) == nil
+}
+
+// The ownership mutex is also the databaseUnit publication boundary. A writer
+// published before retirement wins; no previously recorded failure is cleared.
+func (s *dataScope) finishNeutralReaderActivity(ctx context.Context, token drainowner.Activity, cause error) (bool, error) {
+	root := s
+	if s.root != nil {
+		root = s.root
+	}
+	root.mu.Lock()
+	defer root.mu.Unlock()
+	issuer := root.nativeIssuerLocked()
+	eligible := ctx.Err() == nil && s.source == nil && root.neutralReaderCompositionLocked()
+	retirementCause := cause
+	if eligible {
+		retirementCause = nil
+	}
+	if canceled := ctx.Err(); canceled != nil {
+		eligible = false
+		retirementCause = errors.Join(cause, canceled)
+	}
+	err := drainowner.FinishActivity(issuer, token, retirementCause)
+	// FinishActivity can itself latch a concurrent protected failure while still
+	// returning nil. The receipt exists only after a successful retirement.
+	return eligible && err == nil && drainowner.ProtectedFailure(issuer) == nil, err
+}
+
 // bufferedLifetimeClosed is an owner lifetime check, not a caller policy switch.
 func (s *dataScope) bufferedLifetimeClosed() bool {
 	if s == nil {

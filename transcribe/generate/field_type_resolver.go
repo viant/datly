@@ -34,6 +34,9 @@ func (p *planResolver) concretizeFields(fields []Field, output bool) error {
 		// Data: request IDs vs response rows). Resolve within the same contract
 		// direction as resolveInputFields/resolveOutputFields; a name-only map
 		// across both contracts silently replaces the type by declaration order.
+		// .Output() (EmitOutput) or an output source identifies the output
+		// contract; the same name without that marker remains an input field.
+		// Keep both names intact rather than requiring callers to rename Data.
 		isOutput := param.EmitOutput || strings.EqualFold(strings.TrimSpace(param.Source.Kind), "output")
 		if isOutput != output {
 			continue

@@ -54,6 +54,10 @@ func (s *lifecycleScope) finish(hook func(context.Context) error, cause error) (
 }
 
 func (s *lifecycleScope) run(call context.Context, fn func(context.Context) error) error {
+	return s.runInvocation(call, fn, nil)
+}
+
+func (s *lifecycleScope) runInvocation(call context.Context, fn func(context.Context) error, readerCall *readerInvocation) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.closed {
@@ -63,7 +67,16 @@ func (s *lifecycleScope) run(call context.Context, fn func(context.Context) erro
 		s.record(fmt.Errorf("%s call context is required", s.phase))
 		return s.err
 	}
-	ctx, cancel := context.WithCancel(s.ctx)
+	// Preserve per-call business markers so child and parent conversions do not
+	// both run. Lease cancellation and trusted ownership remain authoritative.
+	values := RetainMutationAuthority(s.ctx)(lifecycleCallContext{Context: s.ctx, call: call})
+	var ctx context.Context
+	var cancel context.CancelFunc
+	if deadline, ok := call.Deadline(); ok {
+		ctx, cancel = context.WithDeadline(values, deadline)
+	} else {
+		ctx, cancel = context.WithCancel(values)
+	}
 	stop := context.AfterFunc(call, cancel)
 	defer stop()
 	s.data.retainContext(cancel)
@@ -72,6 +85,9 @@ func (s *lifecycleScope) run(call context.Context, fn func(context.Context) erro
 	}
 	err := ctx.Err()
 	if err == nil {
+		if readerCall != nil {
+			ctx = context.WithValue(ctx, readerInvocationKey{}, readerCall)
+		}
 		err = fn(ctx)
 	}
 	if canceled := call.Err(); canceled != nil {
@@ -84,7 +100,14 @@ func (s *lifecycleScope) run(call context.Context, fn func(context.Context) erro
 	if err == nil {
 		err = ctx.Err()
 	}
-	s.record(err)
+	if readerCall != nil {
+		if canceled := ctx.Err(); canceled != nil && !errors.Is(err, canceled) {
+			err = errors.Join(err, canceled)
+		}
+	}
+	if readerCall == nil || !readerCall.handled(err) {
+		s.record(err)
+	}
 	return err
 }
 
@@ -139,7 +162,12 @@ func (s *lifecycleScope) record(err error) {
 // lazy so a hook that does not compose children needs no invoker provider.
 func (s *lifecycleScope) Invoke(ctx context.Context, request xhandler.ComponentRequest) (any, error) {
 	var result any
-	err := s.run(ctx, func(ctx context.Context) error {
+	owner := s.data
+	if owner != nil && owner.root != nil {
+		owner = owner.root
+	}
+	receipt := &readerInvocation{owner: owner}
+	err := s.runInvocation(ctx, func(ctx context.Context) error {
 		invoker, err := xbind.MustLookup[xhandler.ComponentInvoker](ctx, s.binder, xhandler.ComponentInvokerKey)
 		if err != nil {
 			return err
@@ -149,6 +177,24 @@ func (s *lifecycleScope) Invoke(ctx context.Context, request xhandler.ComponentR
 		}
 		result, err = invoker.Invoke(ctx, request)
 		return err
-	})
+	}, receipt)
 	return result, err
+}
+
+// Lifecycle calls retain lexical call-value overrides for ordinary markers.
+// Private engine ownership and receipts come only from the original lease.
+type lifecycleCallContext struct {
+	context.Context
+	call context.Context
+}
+
+func (c lifecycleCallContext) Value(key any) any {
+	switch key.(type) {
+	case dataScopeContextKey, componentScopeKey, readerInvocationKey:
+		return c.Context.Value(key)
+	}
+	if value := c.call.Value(key); value != nil {
+		return value
+	}
+	return c.Context.Value(key)
 }
