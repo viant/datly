@@ -107,8 +107,8 @@ SELECT id,name FROM records`
 			for _, tool := range tools.Tools {
 				byName[tool.Name] = tool
 			}
-			if len(tools.Tools) != 3 || len(byName) != 3 || byName["records.read"].Name == "" || byName["skills/get"].Name == "" || byName["skills/list"].Name == "" {
-				t.Fatalf("business and standard skills tools: %+v", tools.Tools)
+			if len(tools.Tools) != 1 || len(byName) != 1 || byName["records.read"].Name == "" {
+				t.Fatalf("native skills must not be duplicated as ordinary tools: %+v", tools.Tools)
 			}
 			business := byName["records.read"]
 			if documented && (business.Description == nil || *business.Description != "Jointly embedded records") {
