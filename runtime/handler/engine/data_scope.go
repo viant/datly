@@ -29,6 +29,7 @@ type dataScope struct {
 	orderedCompletion        bool
 	nativeHandle             drainowner.Handle
 	nativeCleanup            bool
+	ownerResolved            bool // published under root.mu after Open and native attachment finish
 	writeEligibility         mutationGuard
 	sequenceOnce             sync.Once
 	sequenceSource           dexec.DataSource
@@ -589,6 +590,14 @@ func (s *dataScope) resolve(ctx context.Context) (xhandler.Data, error) {
 	root.mu.Unlock()
 	defer root.resolving.Done()
 	s.once.Do(func() {
+		// Admission can inspect other units while this one opens. Publish the
+		// completed ownership state only after attachment and frame binding;
+		// non-nil data alone does not mean ownership has been established.
+		defer func() {
+			root.mu.Lock()
+			s.ownerResolved = true
+			root.mu.Unlock()
+		}()
 		defer func() {
 			if s.err == nil && s.data != nil {
 				unit := s.unit
