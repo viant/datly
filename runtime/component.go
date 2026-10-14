@@ -15,6 +15,7 @@ import (
 	requestprovider "github.com/viant/bindly/provider/request"
 	dexec "github.com/viant/datly/exec"
 	rhandler "github.com/viant/datly/runtime/handler"
+	"github.com/viant/datly/runtime/handler/custom"
 	handlerengine "github.com/viant/datly/runtime/handler/engine"
 	handlerprovider "github.com/viant/datly/runtime/handler/provider"
 	rreader "github.com/viant/datly/runtime/handler/reader"
@@ -255,6 +256,22 @@ func (r *Runtime) invokeComponent(ctx context.Context, request dexec.ComponentRe
 	inputRoute, ok := registered.Input.ForRoute(route)
 	if !ok {
 		return nil, fmt.Errorf("registered route input contract not found: %s", route.String())
+	}
+
+	scoped, policyErr := custom.ScopedInputBinding(registered.Handler)
+	if policyErr != nil {
+		return nil, policyErr
+	}
+	if scoped {
+		if request.Input != nil || request.Replay != nil || request.Warmup != nil || len(request.WarmupOmitInput) != 0 || request.PrepareQuery || request.DryRun || request.ReaderOptions != nil {
+			return nil, fmt.Errorf("scoped input binding does not accept prepared or reader-only invocation")
+		}
+		if registered.DataSource != nil || independent {
+			return nil, fmt.Errorf("scoped input binding requires a source-less ordinary custom invocation")
+		}
+		if err := inputRoute.PrepareScopePlans(); err != nil {
+			return nil, err
+		}
 	}
 	var resolvedInput any
 	var resolvedPaths []string

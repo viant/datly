@@ -254,7 +254,7 @@ func (h *Handler) serveHTTP(writer stdhttp.ResponseWriter, req *stdhttp.Request)
 	}
 	if execErr != nil && !hasPublicBody {
 		message := dexec.ErrorMessage(execErr, statusCode)
-		legacy, applicable, err := contract.ErrorEnvelope(message)
+		legacy, applicable, err := contract.ErrorEnvelopeWithCause(message, statusCode, execErr)
 		if err != nil {
 			h.writeOutputError(ctx, writer, err)
 			return

@@ -17,13 +17,13 @@ require (
 	github.com/viant/mcp-protocol v0.19.1-0.20261008202502-046707df5ed9
 	github.com/viant/parsly v0.3.3
 	github.com/viant/sqlparser v0.13.1-0.20261012001419-edea4bd5d9c1
-	github.com/viant/sqlx v0.26.1-0.20261013010041-718390a26adf
+	github.com/viant/sqlx v0.26.1-0.20261013061633-ba8bc02ca651
 	github.com/viant/structology v0.10.1-0.20261014122805-e37281ec0f50
 	github.com/viant/structql v0.5.5-0.20261012183420-6a47e96ff5b5
 	github.com/viant/tagly v0.4.1-0.20261007173811-969600917520
 	github.com/viant/velty v0.4.1-0.20260915052314-fca47c0595f8
 	github.com/viant/x v0.5.1-0.20260915043005-1bc42b9eef47
-	github.com/viant/xdatly v1.0.1-0.20261014174705-58addd0dc42d
+	github.com/viant/xdatly v1.0.1-0.20261014220053-69eb20c7d1a8
 	github.com/viant/xreflect v0.7.5-0.20260314170600-13f09f37d46e
 	github.com/viant/xunsafe v0.11.0
 	github.com/xeipuuv/gojsonschema v1.2.0

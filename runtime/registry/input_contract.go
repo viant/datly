@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/viant/bindly"
 	docs "github.com/viant/datly/documentation"
@@ -42,13 +43,16 @@ type InputField struct {
 
 // RouteInputContract is the exact binding contract for one component route.
 type RouteInputContract struct {
-	route     spec.RouteRef
-	inputType reflect.Type
-	plan      *bindly.Plan
-	contract  *InputContract
-	fields    []InputField
-	replay    *bindly.ReplayPlan
-	replayErr error
+	route      spec.RouteRef
+	inputType  reflect.Type
+	plan       *bindly.Plan
+	contract   *InputContract
+	fields     []InputField
+	replay     *bindly.ReplayPlan
+	replayErr  error
+	scopeOnce  sync.Once
+	scopePlans map[string]*bindly.Plan
+	scopeErr   error
 }
 
 // InputContract owns the canonical component input type and its route-effective
@@ -467,4 +471,49 @@ func (c *RouteInputContract) ReplayPlan() (*bindly.ReplayPlan, error) {
 		return nil, fmt.Errorf("route input contract is required")
 	}
 	return c.replay, c.replayErr
+}
+
+// PrepareScopePlans compiles copied canonical metadata once for scope-selecting
+// custom handlers. The complete plan remains the route authority.
+func (c *RouteInputContract) PrepareScopePlans() error {
+	if c == nil {
+		return fmt.Errorf("route input contract is required")
+	}
+	c.scopeOnce.Do(func() {
+		groups := map[string][]bindly.BindingSpec{"": make([]bindly.BindingSpec, 0)}
+		for _, field := range c.fields {
+			binding := cloneBindingSpec(field.binding)
+			if binding.Location.Kind == "view" || binding.ResolutionGroup != nil {
+				c.scopeErr = fmt.Errorf("scoped input binding does not support view or grouped input %s", field.path)
+				return
+			}
+			if _, ok := groups[binding.Scope]; !ok {
+				groups[binding.Scope] = make([]bindly.BindingSpec, 0)
+			}
+			groups[binding.Scope] = append(groups[binding.Scope], binding)
+		}
+		injector, err := bindly.NewInjector()
+		if err != nil {
+			c.scopeErr = err
+			return
+		}
+		plans := make(map[string]*bindly.Plan, len(groups))
+		for scope, bindings := range groups {
+			plan, err := injector.CompilePlan(c.inputType, bindings...)
+			if err != nil {
+				c.scopeErr = fmt.Errorf("compile input scope %q: %w", scope, err)
+				return
+			}
+			plans[scope] = plan
+		}
+		c.scopePlans = plans
+	})
+	return c.scopeErr
+}
+func (c *RouteInputContract) ScopePlan(scope string) (*bindly.Plan, bool) {
+	if c == nil || c.PrepareScopePlans() != nil {
+		return nil, false
+	}
+	plan, ok := c.scopePlans[scope]
+	return plan, ok
 }

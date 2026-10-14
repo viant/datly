@@ -37,7 +37,7 @@ func (s *dataScope) orderedAdmissionLocked() error {
 	units := append([]*dataScope{s}, s.units...)
 	count := 0
 	for _, unit := range units {
-		if unit.source != nil || unit.data != nil {
+		if unit.source != nil || (unit.ownerResolved && unit.data != nil) {
 			count++
 		}
 	}
@@ -45,10 +45,12 @@ func (s *dataScope) orderedAdmissionLocked() error {
 		return nil
 	}
 	for _, unit := range units {
-		if unit.source == nil && unit.data == nil {
+		if unit.source == nil && (!unit.ownerResolved || unit.data == nil) {
 			continue
 		}
-		if sourceTransactionKey(unit.source) != nil || (unit.data != nil && !unit.nativeCleanup) {
+		// Open and native attachment run outside the root lock. Until their
+		// result is published, this owner is unresolved, not unsupported.
+		if sourceTransactionKey(unit.source) != nil || (unit.ownerResolved && unit.data != nil && !unit.nativeCleanup) {
 			s.guardedFailure = errors.Join(s.guardedFailure, drainowner.ErrOrderedComposition)
 			drainowner.FailProtected(s.nativeInvocation, drainowner.ErrOrderedComposition)
 			return drainowner.ErrOrderedComposition

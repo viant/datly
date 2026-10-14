@@ -13,6 +13,7 @@ import (
 	dexec "github.com/viant/datly/exec"
 	"github.com/viant/datly/internal/drainowner"
 	rhandler "github.com/viant/datly/runtime/handler"
+	"github.com/viant/datly/runtime/handler/custom"
 	handlerprovider "github.com/viant/datly/runtime/handler/provider"
 	"github.com/viant/datly/runtime/registry"
 	"github.com/viant/datly/spec"
@@ -107,6 +108,15 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 	if request.Input == nil {
 		return nil, fmt.Errorf("route input contract is required")
 	}
+	scoped, policyErr := custom.ScopedInputBinding(request.Handler)
+	if policyErr != nil {
+		return nil, policyErr
+	}
+	if scoped {
+		if err := validateScopedRequest(request); err != nil {
+			return nil, err
+		}
+	}
 	ctx, completeSelection := dexec.ScopeOutputSelection(ctx)
 	inputType := request.Input.Type()
 	if inputType == nil || inputType.Kind() != reflect.Struct {
@@ -115,6 +125,9 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 	inputPlan := request.Input.Plan()
 	if inputPlan == nil {
 		return nil, fmt.Errorf("route input contract %s requires a Bindly plan", request.Input.Route().String())
+	}
+	if scoped {
+		inputPlan, _ = request.Input.ScopePlan("")
 	}
 	root := request.Injector
 	if root == nil {
@@ -567,7 +580,13 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 			return finish(nil, fmt.Errorf("capture handler input: %w", err))
 		}
 	}
-	binder := rhandler.NewBinder(scope, input)
+	var binder xhandler.Binder = rhandler.NewBinder(scope, input)
+	var scopedLease *scopedBinder
+	if scoped {
+		scopedLease = newScopedBinder(ctx, scope, input, request.Input, data, phases)
+		binder = scopedLease
+		defer scopedLease.close()
+	}
 	invocation.Binder = binder
 	if guarded, ok := request.Handler.(rhandler.CapturedExecutionGuard); ok {
 		check, guardErr := guarded.CapturedExecutionGuard(invocation)
@@ -629,6 +648,11 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 	readerResult = request.CanonicalReader
 	dexec.BeginOutputSelection(ctx)
 	result, handlerErr := request.Handler.Execute(ctx, invocation)
+	if scopedLease != nil {
+		if leaseErr := scopedLease.close(); leaseErr != nil {
+			handlerErr = errors.Join(handlerErr, leaseErr)
+		}
+	}
 	if result == nil && handlerErr != nil && !outcomeAware {
 		result = errorAwareOutput(request.OutputType)
 	}

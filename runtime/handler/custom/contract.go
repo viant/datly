@@ -15,9 +15,11 @@ import (
 )
 
 type contractHandler[I any, O any] struct {
-	contract xhandler.Contract[I, O]
-	bindOnce sync.Once
-	bindErr  error
+	contract  xhandler.Contract[I, O]
+	bindOnce  sync.Once
+	bindErr   error
+	scoped    bool
+	policyErr error
 }
 
 // outcomeContractHandler retains the ordinary adapter surface while opting
@@ -37,6 +39,9 @@ func (h *outcomeContractHandler[I, O]) FinalizeOutcome(ctx context.Context, invo
 func (h *contractHandler[I, O]) BindStatic(ctx context.Context, injector *bindly.Injector) error {
 	if h == nil || h.contract == nil {
 		return fmt.Errorf("custom handler contract is required")
+	}
+	if h.policyErr != nil {
+		return h.policyErr
 	}
 	h.bindOnce.Do(func() {
 		h.bindErr = h.bindStaticOnce(ctx, injector)
@@ -94,9 +99,11 @@ func invocationBindingKind(kind string) bool {
 }
 
 // New adapts the public binder-aware custom Go contract to the unified runtime
-// handler. The engine has already bound and initialized input before Execute.
+// handler. The engine binds and initializes input before Execute; opted-in
+// contracts automatically bind the default scope and select named scopes later.
 func New[I any, O any](contract xhandler.Contract[I, O]) rhandler.TypedHandler {
 	adapter := &contractHandler[I, O]{contract: contract}
+	adapter.scoped, adapter.policyErr = scopedPolicy[I, O](contract)
 	if finalizer, ok := contract.(rhandler.OutcomeFinalizer); ok {
 		return &outcomeContractHandler[I, O]{contractHandler: adapter, finalizer: finalizer}
 	}
@@ -118,6 +125,9 @@ func (h *contractHandler[I, O]) OutputType() reflect.Type {
 }
 
 func (h *contractHandler[I, O]) Execute(ctx context.Context, invocation rhandler.Invocation) (any, error) {
+	if h != nil && h.policyErr != nil {
+		return nil, h.policyErr
+	}
 	if h == nil || h.contract == nil {
 		return nil, fmt.Errorf("custom handler contract is required")
 	}
