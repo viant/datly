@@ -121,7 +121,7 @@ func TestOuterViewExclusionsAndUnsupportedProjection(t *testing.T) {
 		cause error
 	}{
 		{"nil", nil}, {"unowned", errors.New("private diagnostic")},
-		{"verifier", &bindly.BindingError{Name: "Credential", Code: 401, Cause: verifier}},
+		{"verifier without explicit authority", &bindly.BindingError{Name: "Credential", Code: 0, Cause: verifier}},
 		{"wrapped verifier", &bindly.BindingError{Name: "Access", Cause: &bindly.BindingError{Name: "Credential", Code: 401, Cause: verifier}}},
 		{"opaque coder", &bindly.BindingError{Name: "Credential", Cause: opaque}},
 		{"custom As", &bindly.BindingError{Name: "Credential", Cause: customAs}},

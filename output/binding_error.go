@@ -16,12 +16,13 @@ import (
 // bindingBranch is bounded invocation-local provenance, never output discovery.
 // Wrapper text is intentionally not part of owner or public-message authority.
 type bindingBranch struct {
-	owner      *bindly.BindingError
-	input      *bindinput.Error
-	children   []*bindingBranch
-	group      bool
-	nominal    *legacy.Error
-	hasNominal bool
+	owner                 *bindly.BindingError
+	input                 *bindinput.Error
+	children              []*bindingBranch
+	group                 bool
+	nominal               *legacy.Error
+	hasNominal            bool
+	verifier, hasVerifier bool
 }
 
 func projectBindingErrors(cause error, status int, readerView string) (result []*legacy.Error, message string, ok bool) {
@@ -37,6 +38,9 @@ func projectBindingErrors(cause error, status int, readerView string) (result []
 	branch, valid := readBindingBranch(cause, &remaining)
 	if !valid {
 		return nil, "", false
+	}
+	if branch.hasVerifier {
+		return branch.projectOpaqueVerifier(status, readerView)
 	}
 	if branch.hasNominal {
 		return branch.projectNominal(status, readerView)
@@ -74,6 +78,7 @@ func readBindingBranch(err error, remaining *int) (*bindingBranch, bool) {
 			}
 			n.children = append(n.children, child)
 			n.hasNominal = n.hasNominal || child.hasNominal
+			n.hasVerifier = n.hasVerifier || child.hasVerifier
 		}
 		return n, len(n.children) > 0
 	case *legacy.Error:
@@ -89,9 +94,12 @@ func readBindingBranch(err error, remaining *int) (*bindingBranch, bool) {
 		}
 		n.input = e
 	case *dauth.VerificationFailure:
-		// The opaque verifier may carry private diagnostics and inherited status
-		// authority. Never unwrap, classify or format it for new Errors.
-		return nil, false
+		// Retain only the exact opaque boundary; never inspect private authority.
+		if e == nil {
+			return nil, false
+		}
+		n.verifier, n.hasVerifier = true, true
+		return n, true
 	default:
 		// Unknown status-coder authority can alter native classification. Do not
 		// invoke it or replace its inherited code with a diagnostic default.
@@ -114,6 +122,7 @@ func readBindingBranch(err error, remaining *int) (*bindingBranch, bool) {
 			}
 			n.children = append(n.children, child)
 			n.hasNominal = n.hasNominal || child.hasNominal
+			n.hasVerifier = n.hasVerifier || child.hasVerifier
 		}
 		return n, len(n.children) > 0
 	}
@@ -126,9 +135,50 @@ func readBindingBranch(err error, remaining *int) (*bindingBranch, bool) {
 			}
 			n.children = []*bindingBranch{child}
 			n.hasNominal = child.hasNominal
+			n.hasVerifier = child.hasVerifier
 		}
 	}
 	return n, true
+}
+
+// projectOpaqueVerifier uses only one explicit transport owner directly above
+// the terminal recorded by the same bounded parse. No inherited diagnostic
+// status, text, nested owner or verifier method is authority for this exception.
+func (n *bindingBranch) projectOpaqueVerifier(status int, readerView string) ([]*legacy.Error, string, bool) {
+	if readerView == "" {
+		return nil, "", false
+	}
+	for n != nil {
+		if n.group || n.input != nil || n.hasNominal || n.verifier || len(n.children) != 1 {
+			return nil, "", false
+		}
+		if n.owner == nil {
+			n = n.children[0] // transparent wrappers above the actual owner only.
+			continue
+		}
+		owner := n.owner
+		if !n.children[0].verifier || owner.Code < 400 || owner.Code > 499 || owner.Code != status || strings.Contains(owner.Message, "${") {
+			return nil, "", false
+		}
+		switch owner.Kind {
+		case "header", "query", "path", "cookie", "form", "body":
+		default:
+			return nil, "", false
+		}
+		message := http.StatusText(owner.Code)
+		if strings.TrimSpace(owner.Message) != "" {
+			message = owner.Message
+		}
+		if strings.TrimSpace(message) == "" {
+			return nil, "", false
+		}
+		cause := owner.Cause
+		if cause == nil {
+			cause = owner.Err
+		}
+		return []*legacy.Error{{Parameter: owner.Name, View: readerView, Code: owner.Code, Message: message, Err: cause}}, message, true
+	}
+	return nil, "", false
 }
 
 // projectNominal admits only one already-read linear owner chain ending in the
