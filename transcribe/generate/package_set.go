@@ -110,6 +110,9 @@ func (s *packageSet) validate() error {
 		if err != nil {
 			return err
 		}
+		if err = s.validateAccessorDestinations(p); err != nil {
+			return err
+		}
 		s.previews[i] = preview
 		s.files[i] = preview.files
 		s.removals[i] = preview.renames
@@ -120,7 +123,7 @@ func (s *packageSet) validate() error {
 				return err
 			}
 		}
-		if p.ExternalHandler != nil && p.ExternalHandler.Build != nil {
+		if p.stagedBuild() != nil {
 			if err = s.validateSourceHandler(i); err != nil {
 				return err
 			}
@@ -130,7 +133,7 @@ func (s *packageSet) validate() error {
 			}
 		}
 	}
-	if len(s.plans) == 1 && s.plans[0].ExternalHandler != nil && s.plans[0].ExternalHandler.Build != nil {
+	if len(s.plans) == 1 && s.plans[0].stagedBuild() != nil {
 		return nil // Go's build-selected graph, not an unfiltered AST graph, is authoritative.
 	}
 	return s.validateImports()
@@ -165,7 +168,7 @@ func (s *packageSet) validateSourceHandler(index int) error {
 			files[file.Path] = []byte(file.Content)
 		}
 	}
-	return s.plans[index].ExternalHandler.Build.Validate(s.plans[index].Package, files)
+	return s.plans[index].stagedBuild().Validate(s.plans[index].Package, files)
 }
 
 func (s *packageSet) sources(index int) (map[string]string, error) {
@@ -412,7 +415,10 @@ func (p Packages) Validate() error {
 
 func (s *packageSet) validateProjected() error {
 	for i, p := range s.plans {
-		if p.ExternalHandler != nil && p.ExternalHandler.Build != nil {
+		if err := s.validateAccessorDestinations(p); err != nil {
+			return err
+		}
+		if p.stagedBuild() != nil {
 			persistence := s.templates[i].detached()
 			target, err := persistence.target()
 			if err != nil {
@@ -427,8 +433,20 @@ func (s *packageSet) validateProjected() error {
 			}
 		}
 	}
-	if len(s.plans) == 1 && s.plans[0].ExternalHandler != nil && s.plans[0].ExternalHandler.Build != nil {
+	if len(s.plans) == 1 && s.plans[0].stagedBuild() != nil {
 		return nil
 	}
 	return s.validateImports()
+}
+
+// Stage preparation can discover a new authored accessor after preflight.
+// Both boundaries must reject validation against old sibling-package artifacts.
+func (s *packageSet) validateAccessorDestinations(p *Plan) error {
+	if (p.accessorValidationNeeded || p.accessorSourceValidationNeeded) && p.accessorBuild != nil && p.ExternalHandler == nil && len(s.plans) > 1 {
+		if p.accessorValidationNeeded {
+			return fmt.Errorf("native authored convenience accessors require a single generated destination package")
+		}
+		return fmt.Errorf("native accessor source selection requires a single generated destination package")
+	}
+	return nil
 }

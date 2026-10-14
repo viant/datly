@@ -1,8 +1,10 @@
 package generate
 
 import (
+	"github.com/viant/datly/transcribe/gobuild"
 	"go/parser"
 	"go/token"
+	"strings"
 	"testing"
 )
 
@@ -48,5 +50,18 @@ func TestAuthoredFieldAccessorOwnership(t *testing.T) {
 				t.Fatal("authored declaration did not claim accessor")
 			}
 		})
+	}
+}
+
+func TestNativeAccessorSplitValidationBoundaries(t *testing.T) {
+	p := &Plan{accessorBuild: &gobuild.Context{}}
+	s := &packageSet{plans: []*Plan{p, {}}}
+	if err := s.validateAccessorDestinations(p); err != nil {
+		t.Fatal(err)
+	}
+	// The locked stage may observe a fresh convenience method after preview.
+	p.accessorValidationNeeded = true
+	if err := s.validateProjected(); err == nil || !strings.Contains(err.Error(), "single generated destination") {
+		t.Fatalf("new staged claim not rejected: %v", err)
 	}
 }

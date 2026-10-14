@@ -7,6 +7,7 @@ import (
 	"go/format"
 	"go/parser"
 	"go/token"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -19,12 +20,16 @@ type entityMethodOwnership struct {
 	imports                    map[string]string
 	packageName                string
 	allowAuthoredAccessorTypes bool
+	convenienceAccessor        bool
 }
 
 func (p *scaffoldPersistence) preserveEntityMethods(target, existing string) error {
 	if p.plan == nil || p.plan.EntitySupport == nil || len(p.plan.EntitySupport.Methods) == 0 {
 		return nil
 	}
+	p.plan.accessorValidationNeeded = false
+	p.plan.accessorSourceValidationNeeded = false
+	p.plan.handlerGoFiles = nil
 	proposed := map[string]bool{}
 	for _, file := range p.files {
 		relative, err := managedPath(target, file.Path)
@@ -55,7 +60,7 @@ func (p *scaffoldPersistence) preserveEntityMethods(target, existing string) err
 	if err != nil {
 		return err
 	}
-	policy := &entityMethodOwnership{expected: map[string]EntityMethod{}, claimed: map[string]string{}, generated: map[string]string{}, imports: imports, packageName: file.Name.Name, allowAuthoredAccessorTypes: p.plan.ExternalHandler != nil && p.plan.ExternalHandler.GeneratedContracts && p.plan.ExternalHandler.Build != nil}
+	policy := &entityMethodOwnership{expected: map[string]EntityMethod{}, claimed: map[string]string{}, generated: map[string]string{}, imports: imports, packageName: file.Name.Name, allowAuthoredAccessorTypes: (p.plan.ExternalHandler != nil && p.plan.ExternalHandler.GeneratedContracts && p.plan.ExternalHandler.Build != nil) || p.plan.accessorBuild != nil}
 	for _, method := range p.plan.EntitySupport.Methods {
 		policy.expected[method.Receiver+"."+method.Name] = method
 	}
@@ -69,11 +74,89 @@ func (p *scaffoldPersistence) preserveEntityMethods(target, existing string) err
 		}
 	}
 	entries, err := os.ReadDir(existing)
-	if os.IsNotExist(err) {
-		return nil
+	existingMissing := os.IsNotExist(err)
+	if existingMissing {
+		err = nil
 	}
 	if err != nil {
 		return err
+	}
+	build := p.plan.accessorBuild
+	if p.plan.ExternalHandler != nil && p.plan.ExternalHandler.Build != nil {
+		build = p.plan.ExternalHandler.Build
+	}
+	if existingMissing && build == nil {
+		return nil
+	}
+	if existingMissing && filepath.Clean(target) != filepath.Clean(existing) {
+		if _, err := os.Stat(target); err == nil {
+			return fmt.Errorf("accessor projection %q is missing", existing)
+		} else if !os.IsNotExist(err) {
+			return err
+		}
+	}
+	if existingMissing && p.plan.HookScaffold == nil && len(p.userFiles) == 0 {
+		return nil // An empty initial projection has no authored ownership to select.
+	}
+	selected := map[string]bool{}
+	var projection map[string][]byte
+	if build != nil {
+		projection = map[string][]byte{}
+		if !existingMissing {
+			projection, err = scaffoldBuildFiles(target, existing)
+			if err != nil {
+				return err
+			}
+		}
+		for _, artifact := range append(append([]EmittedFile(nil), p.files...), p.userFiles...) {
+			relative, err := managedPath(target, artifact.Path)
+			if err != nil {
+				return err
+			}
+			if projection[filepath.Join(target, relative)] != nil && !proposed[relative] {
+				continue // Create-once source retains the current projected bytes.
+			}
+			projection[filepath.Join(target, relative)] = []byte(artifact.Content)
+		}
+		for relative := range p.renames {
+			projection[filepath.Join(target, relative)] = nil
+		}
+		goFiles, err := build.GoFiles(p.plan.Package, projection)
+		if err != nil {
+			return err
+		}
+		for _, name := range goFiles {
+			if projection[filepath.Join(target, name)] == nil {
+				return fmt.Errorf("selected accessor source %q has no projected package content", name)
+			}
+			selected[name] = true
+		}
+		// Selecting generated source alone must retain ordinary split-package
+		// generation. Authored method candidates (including excluded or invalid
+		// source) still require the final compiler gate.
+		validationNeeded := false
+		for path, content := range projection {
+			name := filepath.Base(path)
+			if content == nil || filepath.Clean(filepath.Dir(path)) != filepath.Clean(target) || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") || proposed[name] || p.renames[name] || generatedOwner(content) != "" {
+				continue
+			}
+			if policy.hasCandidateSource(path, content) {
+				validationNeeded = true
+				break
+			}
+		}
+		if p.plan.HookScaffold != nil && policy.hasCandidate(p.plan.HookScaffold.File) {
+			validationNeeded = true
+		}
+		selection := *p.plan
+		selection.handlerGoFiles = goFiles
+		if len(entries) > 0 {
+			entries, err = fs.ReadDir(selection.PackageFS(existing, "."), ".")
+			if err != nil {
+				return err
+			}
+		}
+		p.plan.accessorSourceValidationNeeded = validationNeeded
 	}
 	for _, entry := range entries {
 		name := entry.Name()
@@ -84,14 +167,17 @@ func (p *scaffoldPersistence) preserveEntityMethods(target, existing string) err
 		if proposed[name] || p.renames[name] {
 			continue
 		}
-		content, err := os.ReadFile(path)
-		if err != nil {
-			return err
+		content := projection[filepath.Join(target, name)]
+		if build == nil {
+			content, err = os.ReadFile(path)
+			if err != nil {
+				return err
+			}
 		}
 		if generatedOwner(content) != "" {
 			continue
 		}
-		source, err := parser.ParseFile(token.NewFileSet(), path, nil, parser.ParseComments)
+		source, err := parser.ParseFile(token.NewFileSet(), path, content, parser.ParseComments)
 		if err != nil {
 			return err
 		}
@@ -99,12 +185,15 @@ func (p *scaffoldPersistence) preserveEntityMethods(target, existing string) err
 			return err
 		}
 	}
-	if p.plan.HookScaffold != nil {
+	if p.plan.HookScaffold != nil && (build == nil || selected[p.plan.HookScaffold.Destination]) {
 		if _, err := os.Stat(filepath.Join(existing, p.plan.HookScaffold.Destination)); os.IsNotExist(err) {
 			if err = policy.inspect(p.plan.HookScaffold.File, p.plan.HookScaffold.Destination); err != nil {
 				return err
 			}
 		}
+	}
+	if policy.convenienceAccessor && p.plan.accessorBuild != nil {
+		p.plan.accessorValidationNeeded = true
 	}
 	if len(policy.claimed) == 0 {
 		return nil
@@ -167,6 +256,28 @@ func (p *entityMethodOwnership) methodKey(method *ast.FuncDecl) (string, bool) {
 		return "", pointer
 	}
 	return name.Name + "." + method.Name.Name, pointer
+}
+
+func (p *entityMethodOwnership) hasCandidateSource(path string, content []byte) bool {
+	source, err := parser.ParseFile(token.NewFileSet(), path, content, parser.AllErrors)
+	return err != nil || p.hasCandidate(source)
+}
+
+func (p *entityMethodOwnership) hasCandidate(file *ast.File) bool {
+	if file == nil {
+		return false
+	}
+	for _, declaration := range file.Decls {
+		method, ok := declaration.(*ast.FuncDecl)
+		if !ok {
+			continue
+		}
+		key, _ := p.methodKey(method)
+		if _, ok := p.expected[key]; ok {
+			return true
+		}
+	}
+	return false
 }
 
 func (p *entityMethodOwnership) inspect(file *ast.File, path string) error {
@@ -260,10 +371,13 @@ func (p *entityMethodOwnership) inspect(file *ast.File, path string) error {
 			return err
 		}
 		// Application field accessors may expose domain/convenience types. Only
-		// the factory path has the complete staged Go build needed to validate
-		// their bodies and all actual callers before publishing generated files.
+		// a path armed with the staged Go build can validate their bodies and
+		// target-package callers before publishing generated files.
 		if actual != wanted && !(expected.FieldAccessor && p.allowAuthoredAccessorTypes) {
 			return fmt.Errorf("authored accessor %s value type %s differs from %s", key, actual, wanted)
+		}
+		if actual != wanted {
+			p.convenienceAccessor = true
 		}
 		if !expected.Getter && len(results) == 1 {
 			actual, err = canonicalType(results[0], imports, p.packageName)

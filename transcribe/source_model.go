@@ -50,8 +50,10 @@ type Source struct {
 	// HandlerBindings supplies explicit legacy-to-native factory authority for
 	// SQL-free handler declarations. It is not runtime handler construction.
 	HandlerBindings []*HandlerBinding
-	// GoBuild selects source-authored handler factories. Nil uses the source
-	// directory and inherited Go environment, without compiled-registry fallback.
+	// GoBuild selects source-authored handler factories and validates native
+	// authored convenience accessors before artifact publication. Native generation
+	// without it retains strict accessor-type checks. Factories with nil context
+	// use the source directory/environment, without compiled-registry fallback.
 	GoBuild *gobuild.Context
 }
 

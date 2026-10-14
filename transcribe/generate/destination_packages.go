@@ -69,7 +69,7 @@ func (d *shapeDestinations) partition(p *Plan) error {
 		if result := groups[pkg]; result != nil {
 			return result
 		}
-		result := &Plan{Generation: p.Generation.Clone(), ComponentName: p.ComponentName, Package: pkg, GoPackage: filepath.Base(pkg), ProjectRoot: p.ProjectRoot, ShapesOnly: true, RouterDest: p.RouterDest, ViewDest: p.ViewDest, Imports: append([]spec.ImportSpec(nil), p.Imports...)}
+		result := &Plan{Generation: p.Generation.Clone(), ComponentName: p.ComponentName, Package: pkg, GoPackage: filepath.Base(pkg), ProjectRoot: p.ProjectRoot, ShapesOnly: true, accessorBuild: p.accessorBuild.Clone(), RouterDest: p.RouterDest, ViewDest: p.ViewDest, Imports: append([]spec.ImportSpec(nil), p.Imports...)}
 		groups[pkg] = result
 		return result
 	}

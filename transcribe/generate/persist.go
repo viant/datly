@@ -70,6 +70,17 @@ func (l *scaffoldCommitLocks) acquire(target string) func() {
 }
 
 func (p *scaffoldPersistence) validateHandlerStage(target, stage string) error {
+	files, err := scaffoldBuildFiles(target, stage)
+	if err != nil {
+		return err
+	}
+	p.plan.handlerGoFiles, err = p.plan.stagedBuild().ValidateFiles(p.plan.Package, files)
+	return err
+}
+
+// scaffoldBuildFiles projects current source at its final destination. Explicit
+// staged bytes and deletions have the same precedence at selection and validation.
+func scaffoldBuildFiles(target, stage string) (map[string][]byte, error) {
 	files := map[string][]byte{}
 	// Explicit removals are part of the build overlay, not merely absent from
 	// the proposal. Otherwise stale generated files can mask an invalid update.
@@ -87,7 +98,7 @@ func (p *scaffoldPersistence) validateHandlerStage(target, stage string) error {
 		return nil
 	})
 	if err != nil {
-		return err
+		return nil, err
 	}
 	err = filepath.WalkDir(stage, func(name string, entry fs.DirEntry, err error) error {
 		if err != nil {
@@ -108,10 +119,9 @@ func (p *scaffoldPersistence) validateHandlerStage(target, stage string) error {
 		return nil
 	})
 	if err != nil {
-		return err
+		return nil, err
 	}
-	p.plan.handlerGoFiles, err = p.plan.ExternalHandler.Build.ValidateFiles(p.plan.Package, files)
-	return err
+	return files, nil
 }
 
 // preview exposes the exact current proposal to package/import validation.

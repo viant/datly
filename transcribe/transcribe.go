@@ -99,6 +99,9 @@ func (c *Compiler) generateInputAt(ctx context.Context, rootDir, packageDir stri
 	if err != nil {
 		return nil, err
 	}
+	if input.GoBuild != nil {
+		input.GoBuild = input.GoBuild.WithContext(ctx)
+	}
 	if h := input.ExternalHandler; h != nil && h.Build != nil {
 		input.ExternalHandler = h.Clone()
 		input.ExternalHandler.Build = h.Build.WithContext(ctx)
@@ -224,6 +227,7 @@ func generationInput(rootDir, packageDir string, compiled *Result) (gen.Input, s
 		GeneratedTypes:  compiled.GeneratedTypes,
 		GoHandler:       compiled.GoHandler,
 		ExternalHandler: compiled.ExternalHandler.Clone(),
+		GoBuild:         compiled.Source.GoBuild.Clone(),
 		VeltyHandler:    compiled.VeltyHandler,
 	}
 	if strings.TrimSpace(authored) != "" {

@@ -134,19 +134,32 @@ func (c *Context) Validate(pkg string, files map[string][]byte) error {
 // ValidateFiles also returns the build-selected source filenames so metadata
 // loading cannot accidentally reintroduce excluded files after publication.
 func (c *Context) ValidateFiles(pkg string, files map[string][]byte) ([]string, error) {
+	return c.sourceFiles(pkg, files, true)
+}
+
+// GoFiles selects staged source using the same build context as ValidateFiles.
+// It does not type-check; publication must still pass ValidateFiles.
+func (c *Context) GoFiles(pkg string, files map[string][]byte) ([]string, error) {
+	return c.sourceFiles(pkg, files, false)
+}
+
+func (c *Context) sourceFiles(pkg string, files map[string][]byte, validate bool) ([]string, error) {
 	dir, err := os.MkdirTemp("", "datly-handler-build-")
 	if err != nil {
 		return nil, err
 	}
 	defer os.RemoveAll(dir)
-	replace := map[string]string{}
+	replace, err := c.inheritedOverlay()
+	if err != nil {
+		return nil, err
+	}
 	i := 0
 	for name, content := range files {
-		logical, err := filepath.Abs(name)
+		logical, err := c.absolutePath(name)
 		if err != nil {
 			return nil, err
 		}
-		physical, err := physicalPath(name)
+		physical, err := physicalPath(logical)
 		if err != nil {
 			return nil, err
 		}
@@ -197,7 +210,11 @@ func (c *Context) ValidateFiles(pkg string, files map[string][]byte) ([]string, 
 		return nil, err
 	}
 	for name := range files {
-		file, err := physicalPath(name)
+		logical, err := c.absolutePath(name)
+		if err != nil {
+			return nil, err
+		}
+		file, err := physicalPath(logical)
 		if err != nil {
 			return nil, err
 		}
@@ -206,11 +223,13 @@ func (c *Context) ValidateFiles(pkg string, files map[string][]byte) ([]string, 
 			return nil, fmt.Errorf("staged handler file %s is outside selected build package %s; use the destination module's Go build context", name, packageDir)
 		}
 	}
-	args := append([]string{"build"}, flags...)
-	args = append(args, "-overlay", overlay, "-o", filepath.Join(dir, "package.a"), "--", pkg)
-	_, err = c.run(args...)
-	if err != nil {
-		return nil, err
+	if validate {
+		args := append([]string{"build"}, flags...)
+		args = append(args, "-overlay", overlay, "-o", filepath.Join(dir, "package.a"), "--", pkg)
+		_, err = c.run(args...)
+		if err != nil {
+			return nil, err
+		}
 	}
 	return append(target.GoFiles, target.CgoFiles...), nil
 }

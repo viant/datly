@@ -7,6 +7,7 @@ import (
 
 	"github.com/viant/datly/spec"
 	dtag "github.com/viant/datly/tag"
+	"github.com/viant/datly/transcribe/gobuild"
 	xdocs "github.com/viant/xdatly/docs"
 )
 
@@ -17,8 +18,12 @@ type Plan struct {
 	// Retain exact resolved local descriptor identity after Go alias normalization.
 	knownLocalTypes map[string]string
 	// Canonical descriptor proof retained when a reference moves to its owner.
-	resolvedNamedTypes map[string]bool
-	handlerGoFiles     []string
+	resolvedNamedTypes       map[string]bool
+	handlerGoFiles           []string
+	accessorBuild            *gobuild.Context
+	accessorValidationNeeded bool
+	// Source selection also requires compilation when no convenience claim remains.
+	accessorSourceValidationNeeded bool
 	// Retain source dispatch requirements across intermediate shape planning.
 	lifecycleTargetError error
 	Generation           *spec.GenerationSettings
@@ -272,6 +277,9 @@ func (r *planResolver) resolveBase() (*Plan, error) {
 		HelperTypes:    resolveHelperTypes(component, declarations),
 		LifecycleTypes: lifecycleTypes(component.RootView),
 	}
+	if r.input.nativeMutationTargetSelected {
+		plan.accessorBuild = r.input.GoBuild.Clone()
+	}
 	if r.input.PackageName != "" {
 		plan.Holder = upperCamel(name) + "Component"
 	}
@@ -479,4 +487,16 @@ func upperCamel(input string) string {
 		return "Component"
 	}
 	return ret
+}
+
+// stagedBuild keeps native accessor ownership under Go typechecking, including
+// selections that retain the generated accessor because authored source is excluded.
+func (p *Plan) stagedBuild() *gobuild.Context {
+	if p.ExternalHandler != nil && p.ExternalHandler.Build != nil {
+		return p.ExternalHandler.Build
+	}
+	if p.accessorValidationNeeded || p.accessorSourceValidationNeeded {
+		return p.accessorBuild
+	}
+	return nil
 }
