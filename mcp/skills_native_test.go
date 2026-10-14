@@ -52,6 +52,15 @@ func TestNativeSkillsPrivateReload(t *testing.T) {
 			if err != nil || len(list.Skills) != 1 {
 				t.Fatalf("authorized skills %+v %v", list, err)
 			}
+			tools, err := native.ListTools(ctx, nil, client.WithAuthToken("operator-verified"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, tool := range tools.Tools {
+				if tool.Name == "skills/list" || tool.Name == "skills/get" {
+					t.Fatalf("native skill method also advertised as an ordinary tool: %s", tool.Name)
+				}
+			}
 			files["SKILL.md"].Data = []byte("---\nname: private\ndescription: Updated.\n---\nsecond")
 			if err = manager.Reload(ctx, application.Request{Revision: 2, Compile: compile}); err != nil {
 				t.Fatal(err)
