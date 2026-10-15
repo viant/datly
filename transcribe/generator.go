@@ -189,6 +189,9 @@ func (g Generator) generate(ctx context.Context, root, dir string, compiled *Res
 	if err != nil {
 		return nil, err
 	}
+	if err := input.ValidateLifecycleTarget(operation != "get" && language == HandlerGo); err != nil {
+		return nil, err
+	}
 	initial, err := gen.New(input).Plan()
 	if err != nil {
 		return nil, err
@@ -207,6 +210,9 @@ func (g Generator) generate(ctx context.Context, root, dir string, compiled *Res
 	copy.Declarations = declarations.generation
 	input, dir, err = generationInput(root, dir, &copy)
 	if err != nil {
+		return nil, err
+	}
+	if err := input.ValidateLifecycleTarget(operation != "get" && language == HandlerGo); err != nil {
 		return nil, err
 	}
 	options := Options{Contracts: ContractsAuto, Handler: HandlerOptions{Target: language, Operation: derived.Operation, Input: derived.Input, Output: derived.Output, Currents: derived.Currents}}
