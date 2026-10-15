@@ -52,6 +52,8 @@ type Session struct {
 	ForUpdate         []string
 	outputSlots       map[string][]*readmeta.Record
 	outputAccessors   *outputAccessors
+	selectorFailure   error
+	selectorOwned     bool
 	Output
 }
 
@@ -95,6 +97,7 @@ func (s *Session) Init() error {
 		if err != nil {
 			return err
 		}
+		s.outputAccessors.selectorOwner = s.compileSelectorOwner()
 	}
 	return nil
 }

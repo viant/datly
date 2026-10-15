@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/viant/datly/data"
+	"github.com/viant/datly/internal/selectorerror"
 	"github.com/viant/datly/spec"
 	dsql "github.com/viant/datly/sql"
 	"github.com/viant/datly/sql/criteria"
@@ -127,7 +128,15 @@ func (b *Builder) QueryMatcher(ctx context.Context, query *cache.ParmetrizedQuer
 	return result, nil
 }
 
-func (b *Builder) Build(ctx context.Context, opts ...BuilderOption) (*cache.ParmetrizedQuery, error) {
+func (b *Builder) Build(ctx context.Context, opts ...BuilderOption) (_ *cache.ParmetrizedQuery, failure error) {
+	var nativeProjection *selectorerror.Projection
+	defer func() {
+		// A callback can return a genuine inner Build failure. Only the marker
+		// created at this invocation's own Prepare stage carries its authority.
+		if marker, ok := failure.(*selectorerror.Projection); ok && marker != nil && marker != nativeProjection {
+			failure = marker.Cause
+		}
+	}()
 	options := newBuilderOptions(opts...)
 	applyReportOrdering(ctx, options)
 	if options.template != nil {
@@ -231,6 +240,10 @@ func (b *Builder) Build(ctx context.Context, opts ...BuilderOption) (*cache.Parm
 	}
 	projection, err := (dsql.SelectorProjection{SQL: sourceSQL, View: options.view, Dialect: options.dialect}).Prepare(options.projection)
 	if err != nil {
+		if unknown, ok := err.(*dsql.UnknownProjectionColumnError); ok && unknown != nil {
+			nativeProjection = &selectorerror.Projection{View: options.view, Cause: unknown}
+			return nil, nativeProjection
+		}
 		return nil, err
 	}
 	controls, err = projection.OutputControls(controls)

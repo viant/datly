@@ -10,6 +10,7 @@ import (
 
 	"github.com/viant/datly/data"
 	dexec "github.com/viant/datly/exec"
+	"github.com/viant/datly/internal/selectorerror"
 	"github.com/viant/datly/observability"
 	dsql "github.com/viant/datly/sql"
 	rsql "github.com/viant/datly/sql/builder"
@@ -52,6 +53,8 @@ func (s *Service) Read(ctx context.Context, session *Session, input any, binder 
 	if session != nil {
 		session.Projection = nil
 		session.outputSlots = nil
+		session.selectorFailure = nil
+		session.selectorOwned = false
 	}
 	if err := session.Init(); err != nil {
 		return nil, err
@@ -71,7 +74,7 @@ func (s *Service) Read(ctx context.Context, session *Session, input any, binder 
 	}
 	actual, err := s.readBound(ctx, session, value, binder, selectors)
 	var unknown *dsql.UnknownProjectionColumnError
-	if errors.As(err, &unknown) {
+	if err != session.selectorFailure && errors.As(err, &unknown) {
 		name := unknown.RequestedColumn
 		if name == "" {
 			name = unknown.Column
@@ -121,6 +124,13 @@ func (s *Service) readBound(ctx context.Context, session *Session, input reflect
 	}
 	query, err := rsql.NewBuilder().Build(ctx, rootBuilderOptions...)
 	if err != nil {
+		// Only this Build's direct native projection failure can use the
+		// declared root selector. Callback/child/SQL/hook errors lack that origin.
+		if marker, ok := err.(*selectorerror.Projection); ok && marker != nil && marker.View == root.View && marker.Cause != nil {
+			if owned := session.selectorError(root.View, marker.Cause, session.selectorOwned); owned != nil {
+				return nil, owned
+			}
+		}
 		return nil, err
 	}
 	if session.DryRun {

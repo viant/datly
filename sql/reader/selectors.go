@@ -31,6 +31,10 @@ func resolveInvocationSelectors(ctx context.Context, session *Session, input ref
 		if err := applySelectorBinding(selector, binding, field); err != nil {
 			return nil, err
 		}
+		if session.outputAccessors != nil && session.outputAccessors.selectorOwner != nil &&
+			binding.View == session.outputAccessors.selectorOwner.view && binding.Property == spec.SelectorPropertyFields && field.Len() > 0 {
+			session.selectorOwned = true
+		}
 	}
 	selectors, err := lookupSelectors(ctx, binder)
 	if err != nil {
@@ -45,6 +49,9 @@ func resolveInvocationSelectors(ctx context.Context, session *Session, input ref
 			return nil, fmt.Errorf("query selector: %w", err)
 		}
 		result[view] = named.Selector.Clone()
+		if session.outputAccessors != nil && session.outputAccessors.selectorOwner != nil && view == session.outputAccessors.selectorOwner.view {
+			session.selectorOwned = false
+		}
 	}
 	if len(result) == 0 {
 		return nil, nil
@@ -61,7 +68,11 @@ func resolveInvocationSelectors(ctx context.Context, session *Session, input ref
 						continue
 					}
 					if resolved != nil && resolved.GoName != field.GoName {
-						return nil, invalidSelectorField(name, "ambiguous public field")
+						failure := invalidSelectorField(name, "ambiguous public field").(*xresponse.Error)
+						if owned := session.selectorError(view, failure.Cause, session.selectorOwned); owned != nil {
+							return nil, owned
+						}
+						return nil, failure
 					}
 					resolved = field
 				}
@@ -71,7 +82,11 @@ func resolveInvocationSelectors(ctx context.Context, session *Session, input ref
 			}
 		}
 		if (len(selector.Fields) > 0 || len(selector.Columns) > 0) && view.Spec.Selector != nil && !view.Spec.Selector.AllowFields {
-			return nil, invalidSelectorField(strings.Join(selector.Fields, ","), "projection is not allowed")
+			failure := invalidSelectorField(strings.Join(selector.Fields, ","), "projection is not allowed").(*xresponse.Error)
+			if owned := session.selectorError(view, failure.Cause, session.selectorOwned); owned != nil {
+				return nil, owned
+			}
+			return nil, failure
 		}
 	}
 	return result, nil

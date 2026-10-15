@@ -11,10 +11,11 @@ import (
 // outputAccessors belongs to one prepared output container. It points at the
 // existing relation plans; it is not an alternate view graph or field mapper.
 type outputAccessors struct {
-	fields  map[*RelationPlan]*xshape.Accessor
-	metrics *xshape.Accessor
-	status  *xshape.Accessor
-	success any
+	fields        map[*RelationPlan]*xshape.Accessor
+	metrics       *xshape.Accessor
+	status        *xshape.Accessor
+	success       any
+	selectorOwner *selectorOwner
 }
 
 func (p *Plan) compileOutputAccessors(outputType reflect.Type) (*outputAccessors, error) {
