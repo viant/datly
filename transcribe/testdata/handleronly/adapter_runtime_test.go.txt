@@ -1,0 +1,159 @@
+package registration
+
+import (
+	"context"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"reflect"
+	"strings"
+	"testing"
+
+	"github.com/stretchr/testify/require"
+	"github.com/viant/datly/bootstrap"
+	adapter "github.com/viant/datly/handlerfixture/adapter"
+	business "github.com/viant/datly/handlerfixture/business"
+	rhandler "github.com/viant/datly/runtime/handler"
+	"github.com/viant/datly/spec"
+	"github.com/viant/datly/standalone"
+	"github.com/viant/datly/standalone/config"
+	"github.com/viant/x"
+)
+
+const factoryIdentity = "github.com/viant/datly/handlerfixture/business.NewConvert"
+
+func TestAdapterLinkage(t *testing.T) {
+	for _, registry := range []bool{false, true} {
+		t.Run(map[bool]string{false: "holder", true: "registry"}[registry], func(t *testing.T) {
+			before := adapter.Constructions.Load()
+			contractBefore := business.Constructions.Load()
+			var handler rhandler.TypedHandler
+			if registry {
+				exports := x.NewRegistry()
+				require.NoError(t, RegisterConvertFactories(exports))
+				require.Equal(t, before, adapter.Constructions.Load())
+				_, found := exports.LookupFunction(factoryIdentity)
+				require.True(t, found)
+				_, found = exports.LookupFunction("github.com/viant/datly/handlerfixture/adapter.LinkedHandler")
+				require.False(t, found, "adapter must retain the route's canonical identity")
+				builder, err := bootstrap.NewArtifactBuilder(exports)
+				require.NoError(t, err)
+				artifact, err := builder.Build(artifactInput())
+				require.NoError(t, err)
+				handler = artifact.Handler
+			} else {
+				factory := ConvertDatly.DatlyHandler(factoryIdentity)
+				require.NotNil(t, factory)
+				require.Nil(t, ConvertDatly.DatlyHandler("unknown"))
+				require.Equal(t, before, adapter.Constructions.Load())
+				var err error
+				handler, err = factory()
+				require.NoError(t, err)
+			}
+			require.Equal(t, before+1, adapter.Constructions.Load())
+			require.Equal(t, contractBefore, business.Constructions.Load(), "override must not construct generic contract")
+			for _, value := range []string{"success", "error", "nil", "panic"} {
+				recovered := adapter.Recovered.Load()
+				result, err := handler.Execute(context.Background(), rhandler.Invocation{Input: &business.Input{Inclusion: value}})
+				if value == "error" {
+					require.ErrorIs(t, err, adapter.ExecutionError)
+				} else {
+					require.NoError(t, err)
+				}
+				if value == "success" {
+					require.Equal(t, "adapter:success", result.(*business.Output).Value)
+				} else {
+					require.Nil(t, result)
+				}
+				if value == "panic" {
+					require.Equal(t, recovered+1, adapter.Recovered.Load())
+				}
+			}
+		})
+	}
+}
+
+func artifactInput() bootstrap.ArtifactInput {
+	return bootstrap.ArtifactInput{
+		Component: &spec.Component{Key: spec.Key{Kind: spec.KindComponent, Scope: "github.com/viant/datly/handlerfixture/registration", Name: "Convert"}, Name: "Convert", Routes: []*spec.Route{{Method: "POST", Path: "/convert", Handler: factoryIdentity}}},
+		InputType: reflect.TypeFor[business.Input](), OutputType: reflect.TypeFor[business.Output](), HandlerOwnedOutput: true,
+	}
+}
+
+func TestAdapterRuntimeRejection(t *testing.T) {
+	for _, mode := range []string{"constructor error", "nil", "typed nil", "mismatch"} {
+		t.Run(mode, func(t *testing.T) {
+			adapter.Mode = mode
+			defer func() { adapter.Mode = "" }()
+			exports := x.NewRegistry()
+			require.NoError(t, RegisterConvertFactories(exports))
+			builder, err := bootstrap.NewArtifactBuilder(exports)
+			require.NoError(t, err)
+			artifact, err := builder.Build(artifactInput())
+			require.Error(t, err)
+			require.Nil(t, artifact)
+			switch mode {
+			case "constructor error":
+				require.ErrorIs(t, err, adapter.ConstructorError)
+			case "mismatch":
+				require.ErrorContains(t, err, "contract mismatch")
+			default:
+				require.ErrorContains(t, err, "returned nil")
+			}
+		})
+	}
+}
+
+func TestAdapterHolderRuntimeRejection(t *testing.T) {
+	cwd, err := os.Getwd()
+	require.NoError(t, err)
+	for _, mode := range []string{"constructor error", "nil", "typed nil", "mismatch"} {
+		for _, eager := range []bool{false, true} {
+			t.Run(mode+map[bool]string{false: "/lazy", true: "/eager"}[eager], func(t *testing.T) {
+				adapter.Mode = mode
+				defer func() { adapter.Mode = "" }()
+				before := adapter.Constructions.Load()
+				cfg := &config.Config{BaseDir: filepath.Dir(cwd), GoBootstrap: &config.Packages{Packages: []string{"github.com/viant/datly/handlerfixture/registration"}, EagerComponents: eager, LinkedOnly: !eager}}
+				server, err := standalone.New(t.Context(), standalone.Options{Config: cfg, Holders: []any{ConvertDatly}})
+				if err == nil {
+					defer server.Shutdown(context.Background())
+					err = server.Reload(t.Context(), 1)
+				}
+				if err == nil {
+					request := httptest.NewRequest("POST", "/convert", strings.NewReader(`{"inclusion":"success"}`))
+					request.Header.Set("Content-Type", "application/json")
+					response := httptest.NewRecorder()
+					server.ServeHTTP(response, request)
+					require.Equal(t, 500, response.Code, response.Body.String())
+				}
+				require.Greater(t, adapter.Constructions.Load(), before)
+			})
+		}
+	}
+}
+
+func TestAdapterHTTP(t *testing.T) {
+	cwd, err := os.Getwd()
+	require.NoError(t, err)
+	for _, mode := range []string{"eager", "indexed", "linked"} {
+		t.Run(mode, func(t *testing.T) {
+			cfg := &config.Config{BaseDir: filepath.Dir(cwd), GoBootstrap: &config.Packages{Packages: []string{"github.com/viant/datly/handlerfixture/registration"}, EagerComponents: mode == "eager", LinkedOnly: mode == "linked"}}
+			server, err := standalone.New(t.Context(), standalone.Options{Config: cfg, Holders: []any{ConvertDatly}})
+			require.NoError(t, err)
+			defer server.Shutdown(context.Background())
+			require.NoError(t, server.Reload(t.Context(), 1))
+			for _, value := range []string{"success", "nil", "panic"} {
+				request := httptest.NewRequest("POST", "/convert", strings.NewReader(`{"inclusion":"`+value+`"}`))
+				request.Header.Set("Content-Type", "application/json")
+				response := httptest.NewRecorder()
+				server.ServeHTTP(response, request)
+				require.Equal(t, 200, response.Code, response.Body.String())
+				if value == "success" {
+					require.JSONEq(t, `{"converted":"adapter:success"}`, response.Body.String())
+				} else {
+					require.Empty(t, response.Body.String())
+				}
+			}
+		})
+	}
+}

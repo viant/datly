@@ -11,6 +11,7 @@ import (
 type HandlerHeader struct {
 	URI, Method, Name, Description       string
 	Type, Factory, InputType, OutputType string
+	AdapterFactory                       string
 	Connector                            string
 	MCPTool, Internal                    bool
 	Declarative                          bool
@@ -93,10 +94,25 @@ func ParseHandlerSource(source string) (*HandlerHeader, string, error) {
 		if hasFactory {
 			return nil, "", fmt.Errorf("handler_factory cannot be combined with a legacy handler header")
 		}
+		if err := prepared.Err(); err != nil {
+			return nil, "", err
+		}
+		if adapter := prepared.Directives.HandlerAdapter; adapter != "" {
+			if legacy.AdapterFactory != "" {
+				return nil, "", fmt.Errorf("handler adapter is declared in both header and directive")
+			}
+			legacy.AdapterFactory = adapter
+		}
+		if legacy.AdapterFactory != "" && legacy.Factory == "" {
+			return nil, "", fmt.Errorf("handler adapter requires an explicit contract Factory")
+		}
 		return legacy, body, nil
 	}
 	d := prepared.Directives
 	if !hasFactory {
+		if d.HandlerAdapter != "" {
+			return nil, "", fmt.Errorf("handler_adapter requires handler_factory")
+		}
 		return nil, source, nil
 	}
 	if err := prepared.Err(); err != nil {
@@ -108,7 +124,7 @@ func ParseHandlerSource(source string) (*HandlerHeader, string, error) {
 	if d.Settings.InputType == "" || d.Settings.OutputType == "" {
 		return nil, "", fmt.Errorf("handler_factory requires explicit input_type and output_type")
 	}
-	return &HandlerHeader{URI: d.Route.URI, Method: d.Route.Methods[0], Name: d.HandlerName, Factory: d.HandlerFactory, InputType: d.Settings.InputType, OutputType: d.Settings.OutputType, Connector: d.Settings.DefaultConnector, Internal: d.Internal, Declarative: true}, source, nil
+	return &HandlerHeader{URI: d.Route.URI, Method: d.Route.Methods[0], Name: d.HandlerName, Factory: d.HandlerFactory, AdapterFactory: d.HandlerAdapter, InputType: d.Settings.InputType, OutputType: d.Settings.OutputType, Connector: d.Settings.DefaultConnector, Internal: d.Internal, Declarative: true}, source, nil
 }
 
 // ParseReaderRouteName preserves an existing reader header's observability name.

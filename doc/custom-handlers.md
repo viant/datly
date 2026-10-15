@@ -25,6 +25,46 @@ Shared static services must be concurrency-safe. Velty programs use the same
 validation, StructQL, sequence and buffered-DML services; they do not gain a
 separate patch engine or raw transaction facade.
 
+## Transcribe a specialized runtime adapter
+
+Source-authored handler registration normally adapts the declared contract
+factory with `custom.Factory[I, O]`. When the application already supplies a
+specialized adapter, name it explicitly alongside the contract factory:
+
+```dql
+#package('example.com/app/normalize/endpoint')
+#import('normalize', 'example.com/app/normalize')
+#setting($_ = $handler_factory('normalize.NewHandler', 'NormalizeText'))
+#setting($_ = $handler_adapter('normalize.LinkedHandler'))
+#setting($_ = $route('/normalize', 'POST'))
+#setting($_ = $input_type('normalize.Input'))
+#setting($_ = $output_type('normalize.Output'))
+```
+
+The legacy JSON handler header accepts the equivalent
+`"AdapterFactory":"example.com/app/normalize.LinkedHandler"` alongside `Factory`.
+Declare the adapter once, in either the header or a directive. Contracts remain
+in their authored package, separate from the generated endpoint package.
+
+The contract factory still has signature `func() handler.Contract[Input, Output]`.
+The override must be an exported function with the exact signature
+`func() (runtime/handler.TypedHandler, error)`, using Datly's runtime handler
+interface. Genuine Go type aliases are accepted. Transcription validates both
+factories from the selected Go build without calling them or opening connectors.
+Invalid declarations fail before generated files or manifests are published.
+
+Generated `DatlyHandler` and function-registry wiring both select the override
+directly, retaining the contract factory's canonical route registration identity.
+Without an override, the existing generic adapter is generated. This does not
+restrict the factory forms accepted by the existing runtime registry linker.
+
+At runtime, construction errors, nil handlers and input/output contract mismatches
+are rejected by the existing loading and execution checks. The factory's static
+signature cannot prove the contracts returned by its implementation.
+For example, an authored adapter using `custom.NewFunc` can preserve nil output;
+the generic `custom.New` adapter allocates an output before invoking `Exec`.
+Panic recovery and other execution policy remain in the authored implementation.
+
 ## Compose components
 
 Bind a declared component dependency through the existing component provider,

@@ -65,6 +65,7 @@ type Plan struct {
 	GoHandler         *GoHandlerPlan
 	ExternalHandler   *ExternalHandler
 	FactoryExpression string
+	AdapterExpression string
 	ContractHandler   *ContractHandlerPlan
 	MutationHandler   *MutationHandlerPlan
 	ReadIndexes       *ReadIndexSource

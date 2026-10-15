@@ -43,6 +43,9 @@ func (c *Compiler) compileSourceHandler(ctx context.Context, source *Source, hea
 	}
 	destination := prepared.TypeContext.PackagePath
 	if names, ok := program.FactoryContracts(header, prepared); ok {
+		if header.AdapterFactory != "" {
+			return nil, fmt.Errorf("handler adapter requires source-authored contracts separate from the generated destination")
+		}
 		return c.compileGeneratedPostFactory(ctx, source, header, prepared, settings, names)
 	}
 	var err error
@@ -50,7 +53,10 @@ func (c *Compiler) compileSourceHandler(ctx context.Context, source *Source, hea
 		return nil, err
 	}
 	refs := []string{header.Factory, header.InputType, header.OutputType}
-	packages, names := make([]string, 3), make([]string, 3)
+	if header.AdapterFactory != "" {
+		refs = append(refs, header.AdapterFactory)
+	}
+	packages, names := make([]string, len(refs)), make([]string, len(refs))
 	for i, ref := range refs {
 		var err error
 		packages[i], names[i], err = program.Symbol(ref)
@@ -75,6 +81,9 @@ func (c *Compiler) compileSourceHandler(ctx context.Context, source *Source, hea
 	}
 	dependencies := append([]string(nil), packages...)
 	dependencies = append(dependencies, nativeHandlerPackage)
+	if header.AdapterFactory != "" {
+		dependencies = append(dependencies, "github.com/viant/datly/runtime/handler")
+	}
 	for _, imp := range prepared.TypeContext.Imports {
 		dependencies = append(dependencies, imp.Package)
 	}
@@ -82,7 +91,7 @@ func (c *Compiler) compileSourceHandler(ctx context.Context, source *Source, hea
 	if err != nil {
 		return nil, err
 	}
-	objects := make([]types.Object, 3)
+	objects := make([]types.Object, len(refs))
 	for i := range packages {
 		pkg, err := loader.Import(packages[i])
 		if err != nil {
@@ -123,6 +132,13 @@ func (c *Compiler) compileSourceHandler(ctx context.Context, source *Source, hea
 	}
 	if sig.Recv() != nil || sig.TypeParams().Len() != 0 || sig.Params().Len() != 0 || sig.Results().Len() != 1 || !types.Identical(sig.Results().At(0).Type(), want) {
 		return nil, fmt.Errorf("handler factory %s must have exact signature func() handler.Contract[%s, %s]", header.Factory, header.InputType, header.OutputType)
+	}
+	var adapterPackage, adapterName string
+	if header.AdapterFactory != "" {
+		if err := validateSourceHandlerAdapter(loader, objects[3], header.AdapterFactory); err != nil {
+			return nil, err
+		}
+		adapterPackage, adapterName = packages[3], names[3]
 	}
 	matchedMapping := false
 	for _, binding := range source.HandlerBindings {
@@ -240,7 +256,28 @@ func (c *Compiler) compileSourceHandler(ctx context.Context, source *Source, hea
 	}
 	return &Result{Source: &copy, Component: component, TypeContext: typeContext, TypeResolver: resolver, TypeAuthority: typecatalog.TranscribeAuthority,
 		Contracts:       gen.ContractReferences{Input: &gen.ContractReference{Expression: input.Name, DescriptorKey: input.Key()}, Output: &gen.ContractReference{Expression: output.Name, DescriptorKey: output.Key()}},
-		ExternalHandler: &gen.ExternalHandler{Package: packages[0], Name: names[0], Build: build.WithContext(nil), WireTypes: wireReferences}}, nil
+		ExternalHandler: &gen.ExternalHandler{Package: packages[0], Name: names[0], AdapterPackage: adapterPackage, AdapterName: adapterName, Build: build.WithContext(nil), WireTypes: wireReferences}}, nil
+}
+
+func validateSourceHandlerAdapter(loader types.Importer, object types.Object, reference string) error {
+	factory, ok := object.(*types.Func)
+	if !ok {
+		return fmt.Errorf("handler adapter %s must be a declared function", reference)
+	}
+	pkg, err := loader.Import("github.com/viant/datly/runtime/handler")
+	if err != nil {
+		return err
+	}
+	handler := pkg.Scope().Lookup("TypedHandler")
+	if handler == nil {
+		return fmt.Errorf("runtime handler package does not declare TypedHandler")
+	}
+	sig := factory.Type().(*types.Signature)
+	if sig.Recv() != nil || sig.TypeParams().Len() != 0 || sig.Variadic() || sig.Params().Len() != 0 || sig.Results().Len() != 2 ||
+		!types.Identical(sig.Results().At(0).Type(), handler.Type()) || !types.Identical(sig.Results().At(1).Type(), types.Universe.Lookup("error").Type()) {
+		return fmt.Errorf("handler adapter %s must have exact signature func() (runtime/handler.TypedHandler, error)", reference)
+	}
+	return nil
 }
 
 type sourceHandlerField struct {

@@ -44,6 +44,7 @@ type PreparedSource struct {
 // original source for routes, settings, or declarations.
 type DirectivePlan struct {
 	HandlerFactory string
+	HandlerAdapter string
 	HandlerName    string
 	Static         *spec.StaticContent
 	Documentation  xdocs.Source
@@ -233,6 +234,7 @@ func normalizeDirectivePlan(blocks []directiveBlock) (*DirectivePlan, error) {
 	result := &DirectivePlan{Settings: toSpecSettings(settings), Params: params, ParamSpans: paramSpans, viewOptions: viewOptions}
 	if settings != nil {
 		result.HandlerFactory = settings.HandlerFactory
+		result.HandlerAdapter = settings.HandlerAdapter
 		result.HandlerName = settings.HandlerName
 		result.MCP = settings.MCP.Clone()
 		result.MCPOnly = settings.MCPOnly
