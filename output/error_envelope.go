@@ -17,6 +17,8 @@ type errorEnvelope struct {
 	message    *shape.Accessor
 	errors     *shape.Accessor
 	readerView string
+	data       *shape.Accessor
+	dataType   reflect.Type
 }
 
 func compileErrorEnvelope(input CompileInput) (*errorEnvelope, error) {
@@ -67,6 +69,7 @@ func compileErrorEnvelope(input CompileInput) (*errorEnvelope, error) {
 		return nil, fmt.Errorf("compile legacy error details %s: %w", name, err)
 	}
 	result := &errorEnvelope{root: input.Type, status: status, message: message, errors: errors, readerView: errorReaderView(input.Component)}
+	result.data, result.dataType = compileErrorData(input, root, owner, result.readerView)
 	// Check writable authority once; this value is discarded, never retained.
 	if _, err = result.fresh("", []*legacyresponse.Error{{}}); err != nil {
 		return nil, fmt.Errorf("compile legacy error output: %w", err)
@@ -96,12 +99,114 @@ func errorReaderView(component *spec.Component) string {
 	return root.Name
 }
 
+// compileErrorData retains only one direct, declared executable reader slot.
+// Allocation always uses its checked linked type, never a parsed approximation.
+func compileErrorData(input CompileInput, root reflect.Type, owner *shape.Type, readerView string) (*shape.Accessor, reflect.Type) {
+	if readerView == "" ||
+		(&Plan{typeOf: input.Type}).JSONOnly() ||
+		(input.Component.Settings != nil && strings.TrimSpace(input.Component.Settings.JSONMarshalType) != "") {
+		return nil, nil
+	}
+	cardinality, err := spec.NormalizeCardinality(input.Component.RootView.Cardinality)
+	if err != nil || cardinality == spec.CardinalityOne {
+		return nil, nil
+	}
+	var declared *spec.Parameter
+	for _, parameter := range spec.EffectiveParameters(input.Component.Parameters) {
+		if parameter == nil || !(parameter.EmitOutput || strings.EqualFold(strings.TrimSpace(parameter.Source.Kind), "output")) ||
+			!strings.EqualFold(strings.TrimSpace(parameter.Source.Name), "view") {
+			continue
+		}
+		if declared != nil {
+			return nil, nil
+		}
+		declared = parameter
+	}
+	if declared == nil {
+		return nil, nil
+	}
+	name := strings.TrimSpace(declared.Name)
+	if name == "" || (input.DataField != "" && input.DataField != name) {
+		return nil, nil
+	}
+	field, ok := root.FieldByName(name)
+	if !ok || field.Name != name || len(field.Index) != 1 || field.PkgPath != "" || field.Type.Kind() != reflect.Slice ||
+		field.Type.Elem().Kind() == reflect.Uint8 || (&Plan{typeOf: field.Type}).JSONOnly() {
+		return nil, nil
+	}
+	if declared.Cardinality != "" && !strings.EqualFold(strings.TrimSpace(declared.Cardinality), "many") {
+		return nil, nil
+	}
+	for _, expression := range []string{declared.TypeExpr, declared.OutputTypeExpr} {
+		expression = strings.TrimSpace(expression)
+		if expression == "" {
+			continue
+		}
+		reference, err := (shape.Resolver{}).Reference(expression)
+		if err != nil {
+			return nil, nil
+		}
+		actual := field.Type
+		for _, wrapper := range reference.Wrappers {
+			// A declared structural wrapper cannot erase a named linked container.
+			if actual.Name() != "" {
+				return nil, nil
+			}
+			switch wrapper.Kind {
+			case shape.WrapperSlice:
+				if actual.Kind() != reflect.Slice {
+					return nil, nil
+				}
+			case shape.WrapperPointer:
+				if actual.Kind() != reflect.Pointer {
+					return nil, nil
+				}
+			default:
+				return nil, nil
+			}
+			actual = actual.Elem()
+		}
+		packages := shape.Packages{Default: root.PkgPath(), Imports: map[string]string{}}
+		if context := input.Component.TypeContext; context != nil {
+			if context.PackagePath != "" {
+				packages.Default = context.PackagePath
+			}
+			for _, item := range context.Imports {
+				packages.Imports[item.Alias] = item.Package
+			}
+		}
+		// Unqualified builtins have no package. Named application types continue to
+		// require the declared/root package identity, including named slices.
+		if reference.Qualifier == "" && actual.PkgPath() == "" {
+			packages.Default = ""
+		}
+		if err := (shape.Contract{Packages: packages}).ValidateLinked(expression, field.Type); err != nil {
+			return nil, nil
+		}
+	}
+	accessor, err := owner.Accessor(name)
+	if err != nil {
+		return nil, nil
+	}
+	// Retain the actual exact slice type only after the checked writable proof.
+	probe := reflect.New(root)
+	if err := accessor.Set(probe.Interface(), reflect.MakeSlice(field.Type, 0, 0).Interface()); err != nil {
+		return nil, nil
+	}
+	return accessor, field.Type
+}
+
 func (e *errorEnvelope) fresh(message string, details []*legacyresponse.Error) (any, error) {
 	root := e.root
 	if root.Kind() == reflect.Pointer {
 		root = root.Elem()
 	}
 	value := reflect.New(root)
+	if e.data != nil {
+		if err := e.data.Set(value.Interface(), reflect.MakeSlice(e.dataType, 0, 0).Interface()); err != nil {
+			return nil, err
+		}
+	}
 	if err := e.status.Set(value.Interface(), "error"); err != nil {
 		return nil, err
 	}
