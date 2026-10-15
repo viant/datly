@@ -22,9 +22,10 @@ GOWORK=off go run ./internal/cmd/skillpack -source llm -products /path/to/worksp
 
 The workspace contains sibling `datly` and `xdatly` source trees. Canonical
 release skills are distributed inside the Datly repository at `datly/llm`; no
-sibling `llm` checkout is required. The imported xdatly files must match the
-`v1.0.1-0.20261013185201-c8dd9b6df7e7` SDK commit
-`c8dd9b6df7e775ace797ecde6802ba663ba3c01f` pinned in Datly.
+sibling `llm` checkout is required. Before packaging, verify that the imported xdatly
+files match the dependency selected by Datly
+(`GOWORK=off go list -mod=readonly -m -json github.com/viant/xdatly`), including
+any replacement directory. Use that exact source for the product imports.
 Canonical `llm/` imports are always resolved from `-source`. The output contains
 three complete skill folders, usable without any source checkout. Use this
 materialized output for filesystem skill installation; raw source folders have

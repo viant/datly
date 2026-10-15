@@ -116,7 +116,8 @@ lookup). A custom handler does not turn a separate raw SQL store or another
 runtime into the endpoint's managed transaction.
 
 For exact execution counts from invoked generated writers, bind the read-only
-`exec.MutationReporter` capability with `bind:"kind=mutationReporter,required"`.
+`handler.MutationReporter` capability from `github.com/viant/xdatly/handler`
+with `bind:"kind=mutationReporter,required"`.
 Its detached report distinguishes affected rows from queued or intended writes,
 including a zero-row update suppressed by a database trigger. Compare the
 executed result list before and after an imperative component call; validate

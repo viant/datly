@@ -38,3 +38,7 @@ must use fixed, authorized internal targets; callers cannot choose a target,
 provider or transaction policy through JSON. This mode permits deliberate partial
 commit behavior, so the application's publication, compensation and public error
 policy must be explicit. Default shared behavior is unchanged.
+
+The `exec` request options in this guide are Datly runtime-adapter controls.
+Application DI ordinarily uses `github.com/viant/xdatly/handler.ComponentInvoker`;
+these controls are not fields of its public request contract.

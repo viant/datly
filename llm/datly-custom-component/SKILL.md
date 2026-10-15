@@ -92,6 +92,33 @@ Keep necessary aggregates, computed expressions and intentionally restricted pro
 - If writing, explicitly follow the appropriate identity/presence/transaction safety contract; custom code is not implicitly protected by every generated writer phase.
 - Verify the actual orchestration with SQLite and HTTP/native MCP tests, including errors, cancellation, pending transactions, and side effects.
 
+## Focused lifecycle methods
+
+Keep application lifecycle callbacks small and readable: each callback should show
+its phase's business-rule order through calls to named private helpers. Split
+distinct rules (authorization, normalization, validation, identity/link handling,
+queue preparation or completion) into focused helpers in the existing phase files.
+Apply this structure to existing large callbacks in the affected component as
+well as new hooks; a wrapper alone does not improve the underlying method. Do
+not expand a component change into unrelated lifecycle refactors.
+
+Refactor within the current package and file layout. Preserve exported APIs,
+callback signatures and order, sparse markers, identity authority, error/violation
+order and payloads, and the native DML/transaction owner. Keep generated code
+under canonical regeneration. Retire a no-op lifecycle declaration only after
+proving native behavior and public Go callers remain compatible; preserve an
+exported method when it is part of the source API. Retain hooks that implement an
+actual business rule.
+
+Add extensive unit tests for the affected component at its actual input/entity
+callback or custom-handler boundaries, with scoped public-service fakes as needed;
+helper-only tests are insufficient. Reuse the original business expectations and fixtures. Follow the
+[lifecycle unit-test coverage](references/acceptance.md#lifecycle-unit-tests)
+for applicable phases, then retain canonical generation, native execution with
+hydrated runtime inputs, and the selected original Endly cases as separate gates.
+Run the component and directly affected dependency tests; broaden only when the
+change requires it or the user requests a wider suite.
+
 ## Non-obvious rules
 
 - DQL plus Go-shape metadata is the component contract. HTTP method alone does not decide handler policy.
@@ -137,6 +164,25 @@ for support files, split destinations, collision rules and safe regeneration.
 ## Application and runtime boundary
 
 Application components, inputs and lifecycle hooks depend on Xdatly public interfaces; Datly supplies their implementations. Use `handler.ComponentInvoker` from `github.com/viant/xdatly/handler`; prefer the explicit lifecycle arguments described below for prerequisite and dependent work. Use `handler.WithInput` for an explicitly marked reader seed; preserve the distinction from a trusted typed writer `Input`. Provider overlays and completion callbacks retain the caller's canonical binding, authorization, shared buffered writes and transaction owner. Use Xdatly contracts for DML, sequencing, validation, differ, logger and mutation reporting. Do not instantiate Datly runtime implementations inside business hooks or expose runtime-only invocation controls in application contracts. Datly bootstrap/registration adapters may depend on Datly. The older Datly invocation interface remains supported for existing consumers; new application examples use Xdatly.
+
+For binding reviews, check application DI fields and imports against Xdatly contracts, including `handler.MutationReporter` and `differ.Differ`. Preserve binding kinds and scoped behavior; regenerate generated Inputs/setters from DQL rather than replacing their Go imports by hand. Treat Datly-specific request options as runtime-adapter controls, not public Xdatly request fields.
+
+## Generated Go compatibility
+
+Minimize generated shape changes. Preserve existing exported type names, field
+names and types, pointer/value semantics, setters, package paths and file
+destinations unless the authoritative source contract requires a change. Do not
+introduce naming, alias, wrapper or field-type churn as incidental cleanup.
+Capture the current generated API before transcription, regenerate only affected
+components and their genuine dependencies, and review the API diff separately
+from tag/resource changes. Use existing DQL/native generation controls to retain
+compatible shapes; never hand-edit generated Go. Check existing DQL controls,
+public APIs and source-backed examples before proposing a framework change.
+Compile affected consuming packages and relevant reverse dependents without
+temporary overlays before integration, and retain relevant legacy consumer
+compilation when changing an SDK binding interface. Record any necessary
+incompatibility explicitly before publication; a successful generator package
+check alone does not prove downstream compilation.
 
 ## Lifecycle composition
 

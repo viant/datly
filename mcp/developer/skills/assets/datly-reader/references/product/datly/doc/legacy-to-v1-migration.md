@@ -143,7 +143,10 @@ aggregate.
 
 ### Mark presence in internal component calls
 
-An internal `InvokeComponent` call supplies a typed **bound input**, not an
+Import `handler` from `github.com/viant/xdatly/handler` for application DI and
+requests; Datly supplies the implementation. Preserve the exact target identity.
+
+An internal Xdatly `ComponentInvoker.Invoke` call supplies a typed **bound input**, not an
 HTTP query that Datly can parse for presence. Current v1 validates every
 required request field against the transcribed input's generated `Has` marker.
 Populating a struct literal alone does not mark the field present:
@@ -154,7 +157,7 @@ input.SetTenantID(tenantID) // generated setter marks Has.TenantID
 if fields != nil {
     input.SetFields(fields) // omit this call when the selector is absent
 }
-value, err := invoker.InvokeComponent(ctx, dexec.ComponentRequest{
+value, err := invoker.Invoke(ctx, handler.ComponentRequest{
     Target: target,
     Input:  input,
 })

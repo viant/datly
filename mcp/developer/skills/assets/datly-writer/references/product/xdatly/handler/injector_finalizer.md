@@ -9,6 +9,19 @@ Invoker-aware finalization runs before transaction completion; outcome observers
 remain separate. The lookup/binder form below and existing input injection remain
 supported for existing applications.
 
+Outputs that must gate composition on the current operation error can implement
+`InvokerErrorFinalizer` with `Finalize(ctx, invoker, operationErr) error`. It uses
+the same callback-scoped invoker and pre-completion phase. `operationErr` contains
+handler, output-binding, and preparation failures encountered before the hook;
+it is nil on success. Returning nil does not discard an existing error. A hook
+can return immediately on a non-nil error without acquiring a provider or
+composing children. Early failures with no output do not synthesize this hook.
+Future drain/commit failures are observed by the separate outcome callback.
+Protected roots retain their existing later preparation order, so this hook
+does not promise the timing of `ErrorFinalizer`. Go permits only one `Finalize`
+signature per output; the existing two-argument `InvokerFinalizer` remains
+unconditional when a handler returns an output plus an error.
+
 Use `handler.InjectorFinalizer` when an output conditionally needs another
 component. The public SDK depends only on `context`; route authority, provider
 composition, binding plans and transaction ownership remain in the runtime.

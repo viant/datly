@@ -53,3 +53,7 @@ pools. The MySQL contender waits for the owner to commit and receives the new
 row despite an earlier repeatable-read snapshot; an unrelated row remains
 available. Set `SQLX_SCOPED_MYSQL_DSN` only in the test process to enable that
 optional live fixture.
+
+The `exec` request options in this guide are Datly runtime-adapter controls.
+Application DI ordinarily uses `github.com/viant/xdatly/handler.ComponentInvoker`;
+these controls are not fields of its public request contract.

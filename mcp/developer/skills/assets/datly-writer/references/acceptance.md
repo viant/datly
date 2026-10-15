@@ -62,6 +62,41 @@ Use at least: update existing, insert missing, mixed insert/update, supplied zer
 
 Test narrow capability injection, typed input access, dependent-component binding, missing providers, handler-returned errors and intentional output/status. A custom handler does not automatically acquire generated mutation safeguards: prove its own identity, validation, sequencing and commit rules.
 
+## Lifecycle unit tests
+
+Exercise the real input/entity callbacks and custom-handler entry points, not
+only extracted helpers. Use the existing application's business expectations and
+fixtures, asserting observable outputs, mutations, calls and typed failures.
+Select cases for the affected component and exercise every applicable phase and
+meaningful branch, including:
+
+- Input initialization and authorization: permitted and denied scope, initialized
+  values and read evidence, and stopping later work after failure.
+- Sparse presence: omitted versus explicit null/false/zero/empty, marker
+  preservation during normalization/backfill, and full insert versus sparse update.
+- Validation: the existing framework and business-rule order, typed violations,
+  aggregation and stable error/violation ordering and public payloads.
+- Previous and identity: authorized Previous values and missing loaded evidence,
+  supplied versus allocated IDs (including supplied zero), frozen classification,
+  parent links and AfterSequence behavior.
+- Queue: exact batch content and order, preserved insert/update intent, and
+  AfterQueue observations without treating buffered work as committed.
+- Failure propagation: initialization, validation, sequencing, queue, dependency
+  and completion failures/cancellation stop the appropriate later work and retain
+  their original errors and rollback/transaction ownership behavior.
+- Finalization: once-only execution for confirmed commit, rollback, caller-pending
+  and unknown outcomes, output/status parity and commit-dependent side effects.
+- Invocation isolation: sequential and concurrent invocations do not leak cached
+  values, markers, batches, output or completion state through shared hook objects.
+
+For a focused-helper refactor, assert the same expectations before and after it;
+no-op hook removal must also preserve native behavior. Unit coverage supplements
+canonical transcription/regeneration, native execution with hydrated runtime
+inputs and the original Endly acceptance suite; it does not replace those gates
+or authorize adapting original cases to conceal a regression. Keep execution
+scoped to the component and directly affected dependencies unless broader
+coverage is justified by the change or explicitly requested.
+
 ## Transport and realistic execution
 
 Use SQLite through shared project fixture utilities, not mocks alone. For MCP use viant/mcp client/server integration where the project supplies it. Inspect actual tool lists/calls and structured errors, not just generated schemas. HTTP tests assert both status and body. Never reinterpret an MCP tool error as an HTTP transport-authentication failure.
