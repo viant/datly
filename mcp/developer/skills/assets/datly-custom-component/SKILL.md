@@ -88,6 +88,7 @@ Keep necessary aggregates, computed expressions and intentionally restricted pro
 - Request narrow capabilities (Validator, DML, Sequencer, logger, message bus, component binding) or the Data aggregate. Do not assume a raw DB/transaction or an ambient global session.
 - Run framework/schema/database checks with complete versus sparse mode before custom business validation. Preserve typed violations and explicit public error payloads.
 - Compose other components through supported scoped binding/invocation, preserving canonical input and shared transaction ownership. Private dependencies do not need public endpoints.
+- For a dependency in another Go module, link its component package into the host binary and invoke its exact package-scoped identity with a typed input. Keep its SQL and reader graph in the dependency; do not copy them into an external view or start a second runtime. See [custom-contract.md](references/custom-contract.md#component-dependencies).
 - For hook messaging or async work, use the injected-service and original-job-schema requirements in [custom-contract.md](references/custom-contract.md); dry-run reads do not prove mutation side-effect isolation.
 - If writing, explicitly follow the appropriate identity/presence/transaction safety contract; custom code is not implicitly protected by every generated writer phase.
 - Verify the actual orchestration with SQLite and HTTP/native MCP tests, including errors, cancellation, pending transactions, and side effects.

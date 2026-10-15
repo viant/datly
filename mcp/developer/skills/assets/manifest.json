@@ -1,7 +1,7 @@
 {
   "Source": "canonical skill sources plus exact packaging.json product imports",
   "Files": {
-    "datly-custom-component/SKILL.md": "95a829406671192b0a24ecbf90d99b305247173e49ed0d9969ea5c6396e8447d",
+    "datly-custom-component/SKILL.md": "fbfc593bee04c53d118a1034f023413848d224997c96e3ee248fedc5c98f5fd6",
     "datly-custom-component/agents/openai.yaml": "c2b8d83d361124dd04b0a8d8df4c51444ffadc7de78ed2a278d31c78d727d457",
     "datly-custom-component/references/acceptance.md": "b77e0f994bffc03557cf9d85713e066a541645299e8c11c4ce19f0b259b12ce6",
     "datly-custom-component/references/concepts.md": "be4487cdee988feebebc8c7b34dafc7c1e82c6efb58a8796f0977165e7b491db",
