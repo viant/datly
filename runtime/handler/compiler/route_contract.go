@@ -6,11 +6,13 @@ import (
 	"strings"
 
 	"github.com/viant/bindly"
+	"github.com/viant/datly/internal/selectorcompanion"
 	"github.com/viant/datly/runtime/registry"
 	"github.com/viant/datly/spec"
 )
 
 type routeContractCompiler struct {
+	selectors     *selectorcompanion.BindingPlan
 	component     *spec.Component
 	inputType     reflect.Type
 	bindings      []bindly.BindingSpec
@@ -68,7 +70,7 @@ func (c routeContractCompiler) compile(projection *bindly.Projection) (*registry
 				return nil, fmt.Errorf("compile input binding plan for %s: %w", ref.String(), planErr)
 			}
 		}
-		compiled = append(compiled, registry.RouteInput{Route: ref, Plan: plan, Bindings: routeBindings, WireTypes: c.wireTypes})
+		compiled = append(compiled, registry.RouteInput{Route: ref, Plan: plan, Bindings: routeBindings, WireTypes: c.wireTypes, Selectors: c.selectors})
 	}
 	contract, err := registry.NewInputContract(c.inputType, projection, compiled...)
 	if err != nil {

@@ -167,7 +167,7 @@ func (c *artifactCompiler) compile() (*Artifact, error) {
 			readerPlan, err = readercompiler.Compile(readercompiler.Input{
 				CodecFactory: factory,
 				Component:    input.Component, InputType: input.InputType, OutputType: input.OutputType,
-				Bindings:  compiledInput.Bindings,
+				Bindings: compiledInput.Bindings, SelectorCompanion: compiledInput.SelectorPlan,
 				Predicate: predicate, TypeLookup: c.lookupType,
 				Const: input.Const, DirectViewField: input.DirectViewField, Resources: input.Resources,
 			})

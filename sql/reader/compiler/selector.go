@@ -6,11 +6,13 @@ import (
 
 	"github.com/viant/bindly"
 	"github.com/viant/datly/data"
+	"github.com/viant/datly/internal/selectorcompanion"
 	"github.com/viant/datly/spec"
 	sqlreader "github.com/viant/datly/sql/reader"
 )
 
 type selectorCompiler struct {
+	companion *selectorcompanion.BindingPlan
 	component *spec.Component
 	inputType reflect.Type
 	views     *sqlreader.ViewIndex
@@ -21,7 +23,17 @@ func CompileSelectorBindings(component *spec.Component, inputType reflect.Type, 
 	return compileSelectorBindings(component, inputType, sqlreader.NewViewIndex(component, root), bindings)
 }
 
-func compileSelectorBindings(component *spec.Component, inputType reflect.Type, views *sqlreader.ViewIndex, bindings []bindly.BindingSpec) ([]sqlreader.SelectorBindingPlan, error) {
+func compileSelectorBindings(component *spec.Component, inputType reflect.Type, views *sqlreader.ViewIndex, bindings []bindly.BindingSpec, companions ...*selectorcompanion.BindingPlan) ([]sqlreader.SelectorBindingPlan, error) {
+	var companion *selectorcompanion.BindingPlan
+	if len(companions) > 0 {
+		companion = companions[0]
+	}
+	if companion != nil {
+		if !companion.Matches(component) || companion.InputType() != inputType {
+			return nil, fmt.Errorf("selector companion component mismatch")
+		}
+		bindings = append(append([]bindly.BindingSpec(nil), bindings...), companion.Bindings()...)
+	}
 	byParam := make(map[*spec.Parameter]bindly.BindingSpec, len(bindings))
 	for _, binding := range bindings {
 		if param, ok := binding.Extension.(*spec.Parameter); ok && param != nil {
@@ -29,6 +41,7 @@ func compileSelectorBindings(component *spec.Component, inputType reflect.Type, 
 		}
 	}
 	compiler := &selectorCompiler{
+		companion: companion,
 		component: component,
 		inputType: inputType,
 		views:     views,
@@ -57,6 +70,9 @@ func (c *selectorCompiler) compile() ([]sqlreader.SelectorBindingPlan, error) {
 			return nil, fmt.Errorf("query selector %s is not bound by Bindly", param.Name)
 		}
 		field, ok := c.inputType.FieldByName(binding.Path)
+		if !ok && c.companion != nil {
+			field, ok = c.companion.Field(param)
+		}
 		if !ok {
 			return nil, fmt.Errorf("query selector Bindly field %s for param %s not found", binding.Path, param.Name)
 		}

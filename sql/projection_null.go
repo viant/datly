@@ -47,13 +47,20 @@ func prepareStarProjectionWithOutputs(sqlText string, selected []string, view *d
 	if err != nil || selectStmt == nil || !selectStmt.List.IsStarExpr() {
 		return nil, false, nil
 	}
-	allowNulls := view.NullsAllowed()
 	if outputs == nil {
 		outputs, _, err = (SelectorProjection{SQL: source, View: view}).columns()
 		if err != nil {
 			return nil, true, err
 		}
 	}
+	return renderStarProjection(source, selected, view, dialect, outputs)
+}
+
+// renderStarProjection consumes already checked complete outputs. It shares the
+// native null/outer renderer with retained static selections without reparsing.
+func renderStarProjection(source string, selected []string, view *data.View, dialect *info.Dialect, outputs []ProjectionColumn) (*Projection, bool, error) {
+	allowNulls := view.NullsAllowed()
+	var err error
 	columns := make([]*data.Column, 0, len(outputs))
 	for _, output := range outputs {
 		columns = append(columns, output.outputColumn(view))

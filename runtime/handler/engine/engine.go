@@ -129,6 +129,19 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 	if scoped {
 		inputPlan, _ = request.Input.ScopePlan("")
 	}
+	selectors := request.Input.SelectorPlan()
+	if selectors != nil && (!request.CanonicalReader || scoped || request.BoundInput != nil || request.ResolvedInput != nil || request.Replay != nil || len(request.ResolvedPaths) != 0 || selectors.PublicPlan() != inputPlan) {
+		return nil, fmt.Errorf("selector companion requires ordinary canonical reader binding without prepared input")
+	}
+	if selectors != nil && selectors.DeferredPage() {
+		if _, ok := request.Handler.(rhandler.InputCapturer); ok {
+			return nil, fmt.Errorf("deferred companion Page does not support input capture callbacks")
+		}
+		if _, ok := request.Handler.(rhandler.CapturedExecutionGuard); ok {
+			return nil, fmt.Errorf("deferred companion Page does not support pre-reader execution callbacks")
+		}
+	}
+	var selectorValue any
 	root := request.Injector
 	if root == nil {
 		var err error
@@ -413,6 +426,9 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 		return result, notifyCompletion(completionErr)
 	}
 	if request.BufferedComponentCalls && data != nil && (data.source != nil || data.parent != nil) {
+		if selectors != nil {
+			return finish(nil, fmt.Errorf("selector companion does not support buffered parent data preparation"))
+		}
 		if _, err := data.resolve(ctx); err != nil {
 			return finish(nil, err)
 		}
@@ -455,6 +471,9 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 		return snapshot, snapshot != nil, nil
 	}))
 	runtimeProviders = append(runtimeProviders, handlerprovider.Static(dexec.ReaderInputPreparerKey, dexec.ReaderInputPreparer(func(ctx context.Context, names ...string) (*dexec.ReaderInput, error) {
+		if selectors != nil {
+			return nil, fmt.Errorf("selector companion does not support prepared reader inputs")
+		}
 		prepared, err := request.Input.Without(input, names...)
 		if err != nil {
 			return nil, err
@@ -467,6 +486,11 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 	})
 	if err != nil {
 		return finish(nil, err)
+	}
+	if selectors != nil {
+		if err := selectors.ValidateProviders(providers); err != nil {
+			return finish(nil, err)
+		}
 	}
 	providers = withDefaultGenerator(root, providers)
 	scope, err = root.ForScope(providers...)
@@ -541,6 +565,12 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 				return err
 			}
 		}
+		if selectors != nil {
+			selectorValue, err = selectors.Bind(ctx, scope, input)
+			if err != nil {
+				return err
+			}
+		}
 		if bound {
 			if err := validateRequiredBoundInputs(request.Input, input); err != nil {
 				return err
@@ -586,6 +616,16 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 		scopedLease = newScopedBinder(ctx, scope, input, request.Input, data, phases)
 		binder = scopedLease
 		defer scopedLease.close()
+	}
+	if selectors != nil {
+		if selectors.DeferredPage() {
+			binder, err = selectors.CarryPage(binder, input, selectorValue, providers)
+		} else {
+			binder, err = selectors.Carry(binder, input, selectorValue)
+		}
+		if err != nil {
+			return finish(nil, err)
+		}
 	}
 	invocation.Binder = binder
 	if guarded, ok := request.Handler.(rhandler.CapturedExecutionGuard); ok {

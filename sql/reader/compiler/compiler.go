@@ -11,6 +11,7 @@ import (
 	"github.com/viant/bindly"
 	"github.com/viant/datly/data"
 	dexec "github.com/viant/datly/exec"
+	"github.com/viant/datly/internal/selectorcompanion"
 	"github.com/viant/datly/spec"
 	sqlmacro "github.com/viant/datly/sql/macro"
 	sqlreader "github.com/viant/datly/sql/reader"
@@ -25,17 +26,18 @@ import (
 )
 
 type Input struct {
-	Const           *constant.Values
-	CodecFactory    xcodec.Factory
-	Component       *spec.Component
-	InputType       reflect.Type
-	OutputType      reflect.Type
-	Bindings        []bindly.BindingSpec
-	Predicate       dexec.PredicateEvaluator
-	TypeLookup      func(name string) (reflect.Type, error)
-	DirectViewField string
-	DirectViewType  reflect.Type
-	Resources       fs.FS
+	SelectorCompanion *selectorcompanion.BindingPlan
+	Const             *constant.Values
+	CodecFactory      xcodec.Factory
+	Component         *spec.Component
+	InputType         reflect.Type
+	OutputType        reflect.Type
+	Bindings          []bindly.BindingSpec
+	Predicate         dexec.PredicateEvaluator
+	TypeLookup        func(name string) (reflect.Type, error)
+	DirectViewField   string
+	DirectViewType    reflect.Type
+	Resources         fs.FS
 }
 
 func Compile(input Input) (*sqlreader.Plan, error) {
@@ -109,7 +111,7 @@ func (b *planCompiler) Compile() (*sqlreader.Plan, error) {
 		return nil, err
 	}
 	viewIndex := sqlreader.NewViewIndex(b.input.Component, view)
-	selectorBindings, err := compileSelectorBindings(b.input.Component, b.input.InputType, viewIndex, b.input.Bindings)
+	selectorBindings, err := compileSelectorBindings(b.input.Component, b.input.InputType, viewIndex, b.input.Bindings, b.input.SelectorCompanion)
 	if err != nil {
 		return nil, err
 	}
@@ -141,6 +143,7 @@ func (b *planCompiler) Compile() (*sqlreader.Plan, error) {
 	}
 	return sqlreader.NewPlan(sqlreader.PlanConfig{
 		SelectorBindings:   selectorBindings,
+		SelectorCompanion:  b.input.SelectorCompanion,
 		ViewIndex:          viewIndex,
 		OutputViewField:    directViewField,
 		OutputMetricsField: ResolveOutputField(b.input.Component, b.input.OutputType, MetricsSlot),

@@ -233,15 +233,25 @@ func (p SelectorProjection) columns() ([]ProjectionColumn, bool, error) {
 	if err != nil || parsed == nil || len(parsed.List) == 0 {
 		return nil, false, &UnresolvedProjectionError{Cause: err}
 	}
+	return p.columnsFromParsed(parsed, parts, ok, false)
+}
+
+// columnsFromParsed shares the native output/mapping owner with static plans.
+// complete is true only for a full checked AST, never projection-only parsing.
+func (p SelectorProjection) columnsFromParsed(parsed *query.Select, parts selectProjectionSource, ok, complete bool) ([]ProjectionColumn, bool, error) {
 	var columns []ProjectionColumn
 	for i, item := range parsed.List {
 		if item == nil || item.Expr == nil {
 			return nil, false, &UnresolvedProjectionError{}
 		}
 		if projectionStar(item) != nil {
-			full, err := parseProjectionQuery(strings.TrimSuffix(strings.TrimSpace(p.SQL), ";"))
-			if err != nil || full == nil {
-				return nil, false, &UnresolvedProjectionError{Cause: err}
+			full := parsed
+			if !complete {
+				var err error
+				full, err = parseProjectionQuery(strings.TrimSuffix(strings.TrimSpace(p.SQL), ";"))
+				if err != nil || full == nil {
+					return nil, false, &UnresolvedProjectionError{Cause: err}
+				}
 			}
 			resolved, err := p.wildcardColumns(full, item, 0)
 			if err != nil {

@@ -18,8 +18,23 @@ type invocationSelectors map[*data.View]*xstate.Selector
 
 func resolveInvocationSelectors(ctx context.Context, session *Session, input reflect.Value, binder xhandler.Binder) (invocationSelectors, error) {
 	result := invocationSelectors{}
-	for _, binding := range session.Artifact.SelectorBindings {
-		field, ok := selectorField(input, binding.FieldIndex)
+	var companion reflect.Value
+	if plan := session.Artifact.selectorCompanion; plan != nil {
+		var err error
+		companion, err = plan.Value(binder, input.Interface())
+		if err != nil {
+			return nil, err
+		}
+	}
+	for index, binding := range session.Artifact.SelectorBindings {
+		source := input
+		if session.Artifact.companionSelectors[index] {
+			source = companion
+			if session.Artifact.selectorCompanion.DeferredPage() && binding.Property == spec.SelectorPropertyPage {
+				continue
+			}
+		}
+		field, ok := selectorField(source, binding.FieldIndex)
 		if !ok {
 			continue
 		}
@@ -28,7 +43,14 @@ func resolveInvocationSelectors(ctx context.Context, session *Session, input ref
 			selector = &xstate.Selector{}
 			result[binding.View] = selector
 		}
-		if err := applySelectorBinding(selector, binding, field); err != nil {
+		if session.Artifact.selectorCompanion != nil && session.Artifact.selectorCompanion.DeferredPage() && binding.Property == spec.SelectorPropertyFields {
+			// Validate only the final merged Fields; an explicit root selector can
+			// replace this query list before its names acquire execution authority.
+			selector.Fields = make([]string, field.Len())
+			for i := range selector.Fields {
+				selector.Fields[i] = field.Index(i).String()
+			}
+		} else if err := applySelectorBinding(selector, binding, field); err != nil {
 			return nil, err
 		}
 		if session.outputAccessors != nil && session.outputAccessors.selectorOwner != nil &&
@@ -40,6 +62,7 @@ func resolveInvocationSelectors(ctx context.Context, session *Session, input ref
 	if err != nil {
 		return nil, err
 	}
+	rootOverride := false
 	for _, named := range selectors {
 		if named == nil {
 			continue
@@ -49,14 +72,29 @@ func resolveInvocationSelectors(ctx context.Context, session *Session, input ref
 			return nil, fmt.Errorf("query selector: %w", err)
 		}
 		result[view] = named.Selector.Clone()
+		if session.Artifact.Root != nil && view == session.Artifact.Root.View {
+			rootOverride = true
+		}
 		if session.outputAccessors != nil && session.outputAccessors.selectorOwner != nil && view == session.outputAccessors.selectorOwner.view {
 			session.selectorOwned = false
 		}
 	}
-	if len(result) == 0 {
+	if len(result) == 0 && (session.Artifact.selectorCompanion == nil || !session.Artifact.selectorCompanion.DeferredPage()) {
 		return nil, nil
 	}
 	for view, selector := range result {
+		if session.Artifact.selectorCompanion != nil && session.Artifact.selectorCompanion.DeferredPage() {
+			for _, name := range append(append([]string(nil), selector.Fields...), selector.Columns...) {
+				if strings.TrimSpace(name) != "" {
+					continue
+				}
+				cause := &dsql.UnknownProjectionColumnError{Column: name, RequestedColumn: name}
+				if owned := session.selectorError(view, cause, session.selectorOwned); owned != nil {
+					return nil, owned
+				}
+				return nil, invalidSelectorFieldCause(name, "empty field name", cause)
+			}
+		}
 		selector.Fields = append([]string(nil), selector.Fields...)
 		selector.Columns = append([]string(nil), selector.Columns...)
 		for _, names := range [][]string{selector.Fields, selector.Columns} {
@@ -87,6 +125,32 @@ func resolveInvocationSelectors(ctx context.Context, session *Session, input ref
 				return nil, owned
 			}
 			return nil, failure
+		}
+	}
+	if plan := session.Artifact.selectorCompanion; plan != nil && plan.DeferredPage() {
+		root := session.Artifact.Root.View
+		finalFields := viewProjection(root, result[root])
+		selection, err := session.Artifact.staticProjection.Select(finalFields)
+		if err != nil {
+			if owned := session.selectorError(root, err, session.selectorOwned); owned != nil {
+				return nil, owned
+			}
+			return nil, invalidSelectorFieldCause("Fields", "unknown field in the declared source projection", err)
+		}
+		session.staticSelection = selection
+		session.staticFields = finalFields
+		if !rootOverride {
+			page, err := plan.ResolvePage(ctx, binder, input.Interface())
+			if err != nil {
+				session.selectorFailure = err
+				return nil, err
+			}
+			selector := result[root]
+			if selector == nil {
+				selector = &xstate.Selector{}
+				result[root] = selector
+			}
+			selector.Page = page
 		}
 	}
 	return result, nil

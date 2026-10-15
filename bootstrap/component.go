@@ -62,6 +62,13 @@ func (r ContractResolver) Resolve() (*spec.Component, error) {
 			{role: outputContract, fields: outputFields, descriptor: r.OutputType},
 		},
 	}
+	if component.SelectorCompanion != nil {
+		companion, err := checkedSelectorContract(component, r.InputType, r.OutputType, r.Types)
+		if err != nil {
+			return nil, err
+		}
+		resolver.contracts = append(resolver.contracts, packageContract{role: inputContract, fields: companion.Fields, descriptor: companion.Descriptor})
+	}
 	resolver.indexCanonicalMetadata()
 	resolved, err := resolver.resolve()
 	if err != nil {
@@ -77,6 +84,10 @@ func (r ContractResolver) Resolve() (*spec.Component, error) {
 // holder and its linked input contract.
 func (s *RouteSource) Resolve(inputType, outputType reflect.Type) (*spec.Component, error) {
 	component, err := s.canonicalComponent()
+	if err != nil {
+		return nil, err
+	}
+	component.SelectorCompanion, err = s.selectorAssociation(nil)
 	if err != nil {
 		return nil, err
 	}

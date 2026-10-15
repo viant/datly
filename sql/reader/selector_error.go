@@ -70,6 +70,7 @@ func (s *Session) compileSelectorOwner() *selectorOwner {
 		return nil
 	}
 	var selected *SelectorBindingPlan
+	selectedIndex := -1
 	for i := range s.Artifact.SelectorBindings {
 		b := &s.Artifact.SelectorBindings[i]
 		if b.Property != spec.SelectorPropertyFields {
@@ -79,6 +80,7 @@ func (s *Session) compileSelectorOwner() *selectorOwner {
 			return nil
 		}
 		selected = b
+		selectedIndex = i
 	}
 	if selected == nil {
 		return nil
@@ -96,6 +98,12 @@ func (s *Session) compileSelectorOwner() *selectorOwner {
 			return nil
 		}
 		f, ok := typecatalog.FieldByName(s.InputType, p.Name)
+		if s.Artifact.companionSelectors[selectedIndex] {
+			if s.Artifact.selectorCompanion == nil || s.Artifact.selectorCompanion.InputType() != s.InputType || !s.Artifact.selectorCompanion.Matches(s.Component) {
+				return nil
+			}
+			f, ok = s.Artifact.selectorCompanion.Field(p)
+		}
 		if !ok || !f.IsExported() || !slices.Equal(f.Index, selected.FieldIndex) {
 			return nil
 		}

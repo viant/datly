@@ -52,6 +52,8 @@ type Session struct {
 	ForUpdate         []string
 	outputSlots       map[string][]*readmeta.Record
 	outputAccessors   *outputAccessors
+	staticSelection   *dsql.StaticProjectionSelection
+	staticFields      []string
 	selectorFailure   error
 	selectorOwned     bool
 	Output

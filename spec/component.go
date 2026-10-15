@@ -1,19 +1,25 @@
 package spec
 
-import xdocs "github.com/viant/xdatly/docs"
+import (
+	selectorModel "github.com/viant/datly/internal/selectorcompanion/model"
+	xdocs "github.com/viant/xdatly/docs"
+)
 
 type Component struct {
-	Static        *StaticContent `json:"static,omitempty"`
-	Documentation xdocs.Source   `json:"documentation,omitempty"`
-	Key           Key            `json:"key"`
-	Name          string         `json:"name,omitempty"`
-	Description   string         `json:"description,omitempty"`
-	Example       string         `json:"example,omitempty"`
-	Settings      *Settings      `json:"settings,omitempty"`
-	TypeContext   *TypeContext   `json:"typeContext,omitempty"`
-	Routes        []*Route       `json:"routes,omitempty"`
-	Parameters    []*Parameter   `json:"params,omitempty"`
-	RootView      *View          `json:"rootView,omitempty"`
+	// SelectorCompanion is transient immutable checked holder metadata. The native
+	// generated holder method, never JSON or a runtime option, supplies it.
+	SelectorCompanion *selectorModel.Association `json:"-"`
+	Static            *StaticContent             `json:"static,omitempty"`
+	Documentation     xdocs.Source               `json:"documentation,omitempty"`
+	Key               Key                        `json:"key"`
+	Name              string                     `json:"name,omitempty"`
+	Description       string                     `json:"description,omitempty"`
+	Example           string                     `json:"example,omitempty"`
+	Settings          *Settings                  `json:"settings,omitempty"`
+	TypeContext       *TypeContext               `json:"typeContext,omitempty"`
+	Routes            []*Route                   `json:"routes,omitempty"`
+	Parameters        []*Parameter               `json:"params,omitempty"`
+	RootView          *View                      `json:"rootView,omitempty"`
 	// Views contains independent DI-backed reads declared as view data points.
 	// They are not root relations unless an authored relation explicitly links them.
 	Views []*View `json:"views,omitempty"`
