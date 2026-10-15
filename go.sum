@@ -2056,3 +2056,5 @@ github.com/viant/sqlx v0.26.1-0.20261013061633-ba8bc02ca651 h1:1ivKroIIZuDr3jC03
 github.com/viant/sqlx v0.26.1-0.20261013061633-ba8bc02ca651/go.mod h1:/qyxibjy9VpDiYZwHVwSNHnPXI4476LqYtDty8V0Rg4=
 github.com/viant/xdatly v1.0.1-0.20261015024232-6f50a2ffac2c h1:Yueul4NRPjWu+UZWjryqOCC3s11Sk7EUzkGT2i8I6H0=
 github.com/viant/xdatly v1.0.1-0.20261015024232-6f50a2ffac2c/go.mod h1:t085YqeJeRWQzuzio1Th4Jkfcb6E35n/XSw3ltCAkrI=
+github.com/viant/structology v0.10.1-0.20261015025741-5750986d416b h1:zhC5trcDODkp2n7qr8OnP1/VFvH1XGnNEel6J0QXluM=
+github.com/viant/structology v0.10.1-0.20261015025741-5750986d416b/go.mod h1:sNNuCH9Zt+QUNeV1slf/QKBdOdUIj0AVdhDFR09+8Ig=
