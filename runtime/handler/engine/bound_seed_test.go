@@ -130,7 +130,11 @@ func TestBoundSeedAbsentMarkersAndTransportStillBind(t *testing.T) {
 				actualAuth = value.(*boundSeedInput).Auth
 				actualClock = value.(*boundSeedInput).Clock
 			}
-			if actualAuth != fresh || actualClock.IsZero() || actualClock == stamp || calls != 1 {
+			if mode == "markerless" {
+				if actualAuth != seed || actualClock != stamp || calls != 0 {
+					t.Fatalf("markerless canonical seeds changed: %v %v calls=%d", actualAuth, actualClock, calls)
+				}
+			} else if actualAuth != fresh || actualClock.IsZero() || actualClock == stamp || calls != 1 {
 				t.Fatalf("absent seed suppressed binding: %v %v calls=%d", actualAuth, actualClock, calls)
 			}
 		})

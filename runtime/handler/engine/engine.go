@@ -819,18 +819,52 @@ func validateRequiredBoundInputs(contract *registry.RouteInputContract, input an
 }
 
 func boundSupplementalPlan(injector *bindly.Injector, input *registry.RouteInputContract, supplied any) (*bindly.Plan, error) {
+	// A partial or nil marker contract must retain explicit-presence semantics.
+	markerContract := false
+	for _, field := range reflect.VisibleFields(input.Type()) {
+		if field.Tag.Get("setMarker") == "true" {
+			markerContract = true
+			break
+		}
+	}
+	for _, field := range input.Fields() {
+		if field.Binding().MarkerField != "" {
+			markerContract = true
+			break
+		}
+	}
 	var bindings []bindly.BindingSpec
 	for _, field := range input.Fields() {
 		binding := field.Binding()
 		if (spec.BindSource{Kind: binding.Location.Kind}).RequestValue() {
 			continue
 		}
-		// Trusted canonical scalar/dependency seeds need a real compiled marker.
+		// Canonical seeds retain explicit markers, or markerless nonzero values.
 		// Current, derived parameters and scoped/noncacheable values always bind.
 		if (binding.Location.Kind == "component" || binding.Location.Kind == "generator") && binding.Scope == "" && (binding.Cacheable == nil || *binding.Cacheable) {
 			present, marker, err := input.Plan().ExplicitPresence(supplied, field.Path())
 			if err != nil {
 				return nil, err
+			}
+			if !markerContract && !marker {
+				// Explicit markerless callers may retain nonzero canonical seeds.
+				// A pointer is supplied even when its pointee is the zero value.
+				accessor, err := xshape.Linked(input.Type()).Accessor(field.Path())
+				if err != nil {
+					return nil, err
+				}
+				value, found, err := accessor.GetOptional(supplied)
+				if err != nil {
+					return nil, err
+				}
+				if found && !(xshape.Runtime{}).IsNil(value.Interface()) {
+					for value.Kind() == reflect.Interface {
+						value = value.Elem()
+					}
+					if !value.IsZero() {
+						continue
+					}
+				}
 			}
 			if marker && present {
 				if binding.Required != nil && *binding.Required {
