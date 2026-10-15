@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"strings"
 
 	"github.com/viant/bindly/resource"
 	"github.com/viant/datly/bootstrap"
@@ -124,6 +125,16 @@ func (c *sourceComponent) artifactInput(compiled *transcribe.Result) (bootstrap.
 	if input == nil || output == nil || input.Kind() != reflect.Struct || output.Kind() != reflect.Struct {
 		return bootstrap.ArtifactInput{}, fmt.Errorf("component %s input/output contracts must be linked structs", compiled.Component.Key.String())
 	}
+	resources := compiled.Source.Resources
+	// An authored DQL or same-package contract keeps its current source files;
+	// an imported Input supplies its own embedded default when needed.
+	_, hasDefault := resources.Lookup("")
+	if !hasDefault || (strings.TrimSpace(compiled.Source.Text) == "" && input.PkgPath() != compiled.Component.Key.Scope) {
+		resources, err = linkedDefaultResources(resources, input)
+		if err != nil {
+			return bootstrap.ArtifactInput{}, err
+		}
+	}
 	if settings.Mutation != "" {
 		if _, err = c.source.config.Const.For(compiled.Component); err != nil {
 			return bootstrap.ArtifactInput{}, err
@@ -133,7 +144,7 @@ func (c *sourceComponent) artifactInput(compiled *transcribe.Result) (bootstrap.
 			return bootstrap.ArtifactInput{}, err
 		}
 	}
-	return bootstrap.ArtifactInput{Const: c.source.config.Const, Component: compiled.Component, Types: compiled.Source.Types, InputType: input, OutputType: output, Handler: handler, HandlerOwnedOutput: handler != nil, Resources: compiled.Source.Resources, CodecFactory: c.source.codecs}, nil
+	return bootstrap.ArtifactInput{Const: c.source.config.Const, Component: compiled.Component, Types: compiled.Source.Types, InputType: input, OutputType: output, Handler: handler, HandlerOwnedOutput: handler != nil, Resources: resources, CodecFactory: c.source.codecs}, nil
 }
 
 func (c *sourceComponent) Configure(ctx context.Context, artifact *report.ComponentArtifact) (report.RuntimeCapabilities, error) {

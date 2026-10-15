@@ -7,6 +7,11 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"testing/fstest"
+
+	inputa "github.com/viant/datly/standalone/testdata/eager_overlap_a"
+	inputb "github.com/viant/datly/standalone/testdata/eager_overlap_b"
+	"github.com/viant/datly/transcribe"
 
 	"github.com/viant/bindly/resource"
 	"github.com/viant/datly/bootstrap"
@@ -213,5 +218,89 @@ func TestReflectedArtifactInputScopesDefaultFSByExactHolder(t *testing.T) {
 	}
 	if _, err = fs.ReadFile(input.Resources, "testdata/eager_overlap_b/query.sql"); err == nil {
 		t.Fatal("holder bypassed authored input resource capability")
+	}
+}
+
+func testSourceArtifactInput(component *spec.Component, inputType, outputType reflect.Type, resources *resource.Store) (bootstrap.ArtifactInput, error) {
+	component.Settings = &spec.Settings{InputType: inputType.Name(), OutputType: outputType.Name()}
+	source := &sourceComponent{source: &source{config: &config.Config{}}}
+	return source.artifactInput(&transcribe.Result{Component: component, Source: &transcribe.Source{LinkedInputType: inputType, LinkedOutputType: outputType, Resources: resources, Types: typecatalog.NewCatalog()}})
+}
+
+func TestSourceArtifactInputUsesInputEmbedFSForRootAndChildSQL(t *testing.T) {
+	component := testResourceComponent("Users", "testdata/eager_resources/root.sql")
+	input, err := testSourceArtifactInput(component, reflect.TypeFor[eagerResourceInput](), reflect.TypeFor[eagerResourceOutput](), resource.New())
+	if err != nil {
+		t.Fatal(err)
+	}
+	artifact, err := bootstrap.BuildArtifact(input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.TrimSpace(artifact.Reader.Root.View.Spec.Source.SQL); got != "SELECT id FROM users" {
+		t.Fatalf("root SQL=%q", got)
+	}
+	if len(artifact.Reader.Root.View.Relations) != 1 || artifact.Reader.Root.View.Relations[0].Of == nil {
+		t.Fatalf("relations=%#v", artifact.Reader.Root.View.Relations)
+	}
+	if got := strings.TrimSpace(artifact.Reader.Root.View.Relations[0].Of.View.Spec.Source.SQL); got != "SELECT id, user_id FROM user_children" {
+		t.Fatalf("child SQL=%q", got)
+	}
+}
+
+func TestSourceArtifactInputScopesSameRelativeAssetAndPreservesNamedResources(t *testing.T) {
+	global := resource.New()
+	named := fstest.MapFS{"query.sql": {Data: []byte("SELECT id FROM named")}, "missing.sql": {Data: []byte("named-only")}}
+	if err := global.Register("named", named); err != nil {
+		t.Fatal(err)
+	}
+	a, err := testSourceArtifactInput(testResourceComponent("A", "query.sql"), reflect.TypeFor[inputa.Input](), reflect.TypeFor[eagerOverlapOutput](), global)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := testSourceArtifactInput(testResourceComponent("B", "query.sql"), reflect.TypeFor[inputb.Input](), reflect.TypeFor[eagerOverlapOutput](), global)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertResolvedRootSQL(t, a, "SELECT id FROM component_a")
+	assertResolvedRootSQL(t, b, "SELECT id FROM component_b")
+	for _, input := range []bootstrap.ArtifactInput{a, b} {
+		if input.Resources == global {
+			t.Fatal("component default mutated or reused global store")
+		}
+		if got, err := fs.ReadFile(input.Resources, "named:query.sql"); err != nil || string(got) != "SELECT id FROM named" {
+			t.Fatalf("named SQL=%q err=%v", got, err)
+		}
+		if _, err := fs.ReadFile(input.Resources, "missing.sql"); err == nil {
+			t.Fatal("missing selected input asset fell back to another default or named source")
+		}
+		if _, err := fs.ReadFile(input.Resources, "unknown:query.sql"); err == nil {
+			t.Fatal("unknown named namespace fell back to input default")
+		}
+	}
+	if _, exists := global.Lookup(""); exists {
+		t.Fatal("component input mutated the global resource default")
+	}
+}
+
+func TestSourceArtifactInputCreatesOnlyLocalDefaultWhenResourcesNil(t *testing.T) {
+	input, err := testSourceArtifactInput(testResourceComponent("A", "query.sql"), reflect.TypeFor[inputa.Input](), reflect.TypeFor[eagerOverlapOutput](), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertResolvedRootSQL(t, input, "SELECT id FROM component_a")
+}
+
+func TestSourceArtifactInputWithoutEmbedFSPreservesResources(t *testing.T) {
+	global := resource.New()
+	input, err := testSourceArtifactInput(testResourceComponent("NoEmbed", "unused.sql"), reflect.TypeFor[resourceHolderInput](), reflect.TypeFor[eagerOverlapOutput](), global)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if input.Resources != global {
+		t.Fatal("input without EmbedFS changed resource authority")
+	}
+	if _, ok := global.Lookup(""); ok {
+		t.Fatal("input without EmbedFS created a default")
 	}
 }

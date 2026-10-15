@@ -169,6 +169,13 @@ func (a *packageAuthority) compile(ctx context.Context) (*Result, error) {
 	compileSource.LinkedInputType = a.input.Type
 	compileSource.LinkedOutputType = a.output.Type
 	compileSource.LinkedHandler = a.route.LinkedHandler
+	if strings.TrimSpace(a.source.Text) == "" {
+		resources, err := packageInputDefaultResources(compileSource.Resources, compileSource.LinkedInputType, a.route.PackagePath)
+		if err != nil {
+			return nil, err
+		}
+		compileSource.Resources = resources
+	}
 	result, err := NewCompiler().Compile(ctx, &compileSource)
 	if err != nil {
 		return nil, err
