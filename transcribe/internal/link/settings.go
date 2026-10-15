@@ -36,6 +36,18 @@ func (l *settingsLoader) Load() *spec.Settings {
 	if l.authored.ProtectedFlushTables != nil {
 		result.ProtectedFlushTables = slices.Clone(l.authored.ProtectedFlushTables)
 	}
+	if l.authored.ResponseCompression != nil {
+		result.ResponseCompression = l.authored.ResponseCompression.Clone()
+	}
+	if l.authored.IndependentChildTransactions {
+		result.IndependentChildTransactions = true
+	}
+	l.setString(&result.ComponentCallPolicy, l.authored.ComponentCallPolicy)
+	l.setString(&result.SequenceStrategy, l.authored.SequenceStrategy)
+	if l.authored.IgnoreEmptyQueryParameters != nil {
+		value := *l.authored.IgnoreEmptyQueryParameters
+		result.IgnoreEmptyQueryParameters = &value
+	}
 	if len(l.authored.MCPFolders) > 0 {
 		result.MCPFolders = append([]spec.ResourceFolder(nil), l.authored.MCPFolders...)
 		for i := range result.MCPFolders {

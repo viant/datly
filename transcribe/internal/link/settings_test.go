@@ -19,6 +19,40 @@ func TestSettingsLoaderDropsGeneratedCubeCompanionMetadata(t *testing.T) {
 	}
 }
 
+func TestSettingsLoaderPreservesExplicitDQLPolicyOverrides(t *testing.T) {
+	ignoreEmpty := true
+	base := &spec.Settings{
+		IgnoreEmptyQueryParameters: &ignoreEmpty,
+		ResponseCompression:        &spec.ResponseCompression{Encoding: "gzip", MinSizeBytes: 1024},
+		ComponentCallPolicy:        "buffered",
+		SequenceStrategy:           "package",
+	}
+	falseValue := false
+	for _, authored := range []*spec.Settings{
+		{IgnoreEmptyQueryParameters: &falseValue, ResponseCompression: &spec.ResponseCompression{Encoding: "gzip", MinSizeBytes: 2048}, ComponentCallPolicy: "imperative", SequenceStrategy: "dql", IndependentChildTransactions: true},
+		{IgnoreEmptyQueryParameters: &ignoreEmpty},
+	} {
+		actual := (&settingsLoader{base: base, authored: authored}).Load()
+		if actual.IgnoreEmptyQueryParameters == nil || *actual.IgnoreEmptyQueryParameters != *authored.IgnoreEmptyQueryParameters {
+			t.Fatalf("DQL query policy lost: %+v", actual)
+		}
+		if authored.ResponseCompression != nil {
+			if actual.ResponseCompression == nil || actual.ResponseCompression.MinSizeBytes != 2048 || actual.ComponentCallPolicy != "imperative" || actual.SequenceStrategy != "dql" || !actual.IndependentChildTransactions {
+				t.Fatalf("DQL policies lost: %+v", actual)
+			}
+			actual.ResponseCompression.MinSizeBytes = 1
+			if authored.ResponseCompression.MinSizeBytes != 2048 {
+				t.Fatal("merged compression aliases authored settings")
+			}
+		} else if actual.ResponseCompression.MinSizeBytes != 1024 || actual.ComponentCallPolicy != "buffered" || actual.SequenceStrategy != "package" {
+			t.Fatalf("package policies were not inherited: %+v", actual)
+		}
+	}
+	if !*base.IgnoreEmptyQueryParameters || base.ResponseCompression.MinSizeBytes != 1024 {
+		t.Fatal("merged settings mutated the package policy")
+	}
+}
+
 func TestSettingsLoaderOverlaysNestedSettingsWithoutAliasing(t *testing.T) {
 	base := &spec.Settings{
 		Generation: &spec.GenerationSettings{Template: "reader", ViewFile: "package.go", InputFile: "package_input.go", FilePrefix: "base_", SupportFiles: map[string]string{"frames": "base_frames.go", "entities": "base_entities.go"}},
