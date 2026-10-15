@@ -34,6 +34,7 @@ type activityCell struct {
 	group       *bindingGroupCell
 	member      string
 	observation uint64
+	ticket      *bindingTicket
 }
 
 // Activity copies share one private cell and therefore one retirement. This
@@ -117,15 +118,19 @@ func FinishActivity(invocation *Invocation, activity Activity, cause error) erro
 	if ledger.prefix != nil {
 		cause = errors.Join(cause, prefixDeniedLocked(ledger))
 	}
+	var retirementErr error
+	if activity.cell.group != nil {
+		if activity.cell.ticket == nil {
+			return ErrActivity
+		}
+		cause, retirementErr = bindingTicketRetirementLocked(ledger, activity.cell.ticket, cause)
+	}
 	if ledger.enrolled && cause != nil {
-		appendFailureLocked(ledger, cause, activity.cell.group, activity.cell.member, terminalBindingFailure(cause), activity.cell.observation)
+		appendFailureLocked(ledger, cause, activity.cell.group, activity.cell.member, terminalBindingFailure(cause) || errors.Is(retirementErr, ErrActivityUnfinished), activity.cell.observation)
 	}
 	activity.cell.finished = true
-	if activity.cell.group != nil {
-		activity.cell.group.tickets[activity.cell.member].finished = true
-	}
 	delete(ledger.active, activity.cell)
-	return nil
+	return retirementErr
 }
 func EnrollActivities(invocation *Invocation) error {
 	ledger, err := invocationLedger(invocation)

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/viant/bindly"
+	"github.com/viant/datly/internal/drainowner"
 	rhandler "github.com/viant/datly/runtime/handler"
 	"github.com/viant/datly/runtime/registry"
 	xhandler "github.com/viant/xdatly/handler"
@@ -123,7 +124,16 @@ func (b *scopedBinder) BindScope(ctx context.Context, target any, scope string) 
 	if !ok {
 		return fmt.Errorf("input scope %q is not declared", scope)
 	}
-	return b.run(ctx, func(ctx context.Context) error {
+	return b.run(ctx, func(ctx context.Context) (err error) {
+		ctx, lease, err := drainowner.EnterBindingGroupScope(ctx, scope)
+		if err != nil {
+			return err
+		}
+		defer func() {
+			if closed := lease.Close(); closed != nil {
+				err = errors.Join(err, closed)
+			}
+		}()
 		return b.phases.Run(ctx, xhandler.PhaseBinding, func() error { return b.injector.Bind(ctx, b.input, bindly.WithPlan(plan), bindly.WithSource(b.input)) })
 	})
 }
