@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/viant/datly/constant"
 	"github.com/viant/datly/internal/testharness/sqlite"
 	"github.com/viant/datly/spec"
 	sqltemplate "github.com/viant/datly/sql/template"
@@ -18,6 +19,7 @@ func TestNamedWildcardRawTableConstantPreservesSourceAndIdentity(t *testing.T) {
 		t.Fatal(err)
 	}
 	input := &TemplateInput{Value: reflect.ValueOf(struct{ Table string }{"actual_records"}), Variables: []sqltemplate.Variable{{Name: "Table", FieldIndex: []int{0}}}}
+	input.Const, _ = constant.New(map[string]string{"Table": "actual_records"})
 	for _, tc := range []struct {
 		name, inner string
 		key         bool

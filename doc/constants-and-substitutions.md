@@ -172,6 +172,21 @@ the authored identifier expressions, including `$Unsafe.Table`,
 nullability, and other discovered schema facts still come from the real database.
 Literal identifiers remain literal even when equal to a configured constant.
 
+Identifier dependencies are classified by their declared bindings, not their
+discovery values. A request-bound `$Unsafe.RegionTable` remains invocation-time
+SQL even when it has a default. Its default supplies output-column discovery,
+but Datly does not infer view `table` metadata, table constraints, or hidden
+identity columns from that temporary target. The same applies to mixed
+expressions such as `${schema}.$Unsafe.RegionTable`: every dependency must be
+immutable for inferred instance-time metadata. Selected tables must provide a
+compatible output schema for the generated reader contract.
+
+This suppression applies only to inference for that source. Other views retain
+their metadata, and authored keys, columns, and constraint tags are preserved.
+Explicit table or SQLX identifier metadata referencing request bindings is
+rejected with a diagnostic rather than removed. Unknown identifier bindings
+also fail; a default never silently promotes a request binding to a constant.
+
 Foreign-key targets require provenance: unambiguous self-references and explicit relation
 joins can identify an authored symbolic target. If several symbolic views resolve
 to the same physical table, Datly uses the actual join rather than choosing a

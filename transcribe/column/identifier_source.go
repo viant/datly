@@ -21,6 +21,7 @@ import (
 type identifierOrigin struct {
 	view                          *spec.View
 	connector, authored, resolved string
+	dynamic                       bool
 }
 
 // identifierAnalysis assigns source-position markers, never discovery values.
@@ -88,6 +89,10 @@ func authoredDiscoveryTable(source *spec.ViewSource, input *TemplateInput, auxil
 }
 
 func (r *Compilation) captureIdentifierOrigins(component *spec.Component, resources fs.FS, input *TemplateInput) error {
+	if err := normalizeIdentifierMetadata(component, input); err != nil {
+		return err
+	}
+	bindings := newIdentifierBindings(component, input)
 	if r.identifiers == nil {
 		r.identifiers = map[*spec.View]identifierOrigin{}
 	}
@@ -117,6 +122,15 @@ func (r *Compilation) captureIdentifierOrigins(component *spec.Component, resour
 			if origin.authored == "" {
 				// Discovery will report unsupported/dynamic source shapes itself.
 				origin.authored, _ = authoredDiscoveryTable(source, input, false)
+			}
+			primary, _ := authoredDiscoveryTable(source, input, false)
+			if primary == "" {
+				primary = origin.authored
+			}
+			var err error
+			origin.dynamic, err = bindings.dynamic(primary)
+			if err != nil {
+				return fmt.Errorf("view %s source identifier: %w", view.CanonicalName(), err)
 			}
 			renderer := identifier.Renderer{}
 			if input != nil {
@@ -162,7 +176,7 @@ func (r *Compilation) preserveConstraintTargets(view *spec.View, constraints map
 		constraint.reference = &ref
 		var candidates []identifierOrigin
 		for other, origin := range r.identifiers {
-			if other == view || origin.connector != owner.connector || !strings.Contains(origin.authored, "$") || !referenceMatchesOrigin(physicalRef, origin, product) {
+			if other == view || origin.dynamic || origin.connector != owner.connector || !strings.Contains(origin.authored, "$") || !referenceMatchesOrigin(physicalRef, origin, product) {
 				continue
 			}
 			candidates = append(candidates, origin)

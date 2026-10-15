@@ -359,6 +359,9 @@ func (c *componentCompilation) compileViews(ctx context.Context) error {
 func (c *componentCompilation) refine(ctx context.Context) error {
 	source, component, compiledTypeContext := c.result.Source, c.result.Component, c.result.TypeContext
 	applySourceDefaults(component, source)
+	if err := column.NormalizeIdentifierMetadata(component); err != nil {
+		return err
+	}
 	if err := refineComponentColumns(ctx, component, source, c.result.Declarations, c.result.ViewBindings, c.result.TypeResolver, gen.Input{Views: c.result.Views}); err != nil {
 		return err
 	}

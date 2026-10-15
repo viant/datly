@@ -207,6 +207,7 @@ func (r *Compilation) discover(ctx context.Context, view *spec.View, connector s
 		return nil, err
 	}
 	authoredSource := source.Clone()
+	dynamicTable := r.identifiers[view].dynamic
 	if strings.TrimSpace(source.SQL) == "" && strings.TrimSpace(source.Table) == "" {
 		return &expandedQuery{}, nil
 	}
@@ -288,7 +289,9 @@ func (r *Compilation) discover(ctx context.Context, view *spec.View, connector s
 			if err != nil {
 				return nil, err
 			}
-			view.Source.Table = authored
+			if !dynamicTable {
+				view.Source.Table, view.Source.TableInferred = authored, true
+			}
 			view.Auxiliary = true
 		}
 	}
@@ -304,7 +307,9 @@ func (r *Compilation) discover(ctx context.Context, view *spec.View, connector s
 			if err != nil {
 				return nil, err
 			}
-			view.Source.Table = authoredTable
+			if !dynamicTable {
+				view.Source.Table, view.Source.TableInferred = authoredTable, true
+			}
 		}
 	}
 	// Metadata reads follow the table actually selected by the evaluated query.
@@ -324,7 +329,7 @@ func (r *Compilation) discover(ctx context.Context, view *spec.View, connector s
 	if parts, parseErr := sqlparser.TableIdentifierParts(source.Table); parseErr == nil && len(parts) == 1 {
 		source.Table = parts[0]
 	}
-	if table := strings.TrimSpace(source.Table); table != "" && !strings.Contains(table, "$") {
+	if table := strings.TrimSpace(source.Table); !dynamicTable && table != "" && !strings.Contains(table, "$") {
 		constraints, err = r.metadata.loadTableConstraints(ctx, db, table)
 		if err != nil {
 			return nil, err
@@ -389,7 +394,7 @@ func (r *Compilation) discover(ctx context.Context, view *spec.View, connector s
 	// would make portable resources depend on the schema fixture. Runtime
 	// selector lowering uses the actual execution dialect instead.
 	view.Columns = mergeColumnsWithSources(view.Columns, columns, identities)
-	if table := strings.TrimSpace(source.Table); table != "" && !strings.Contains(table, "$") {
+	if table := strings.TrimSpace(source.Table); !dynamicTable && table != "" && !strings.Contains(table, "$") {
 		lineage, err := directProjectionLineage(source)
 		if err != nil {
 			return nil, fmt.Errorf("resolve table projection lineage: %w", err)

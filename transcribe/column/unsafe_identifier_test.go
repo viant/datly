@@ -18,6 +18,7 @@ func TestRefinerUnsafeQuotedIdentifierPreservesAuthoredSQL(t *testing.T) {
 	type input struct{ HistoryTable string }
 	authored := "SELECT history.* FROM (SELECT campaignId, frequencyTargetProportion FROM `$Unsafe.HistoryTable`) history"
 	component := &spec.Component{Settings: &spec.Settings{DefaultConnector: "main"}, RootView: &spec.View{Name: "History", Source: &spec.ViewSource{SQL: authored}}}
+	component.Parameters = []*spec.Parameter{{Name: "HistoryTable", Source: spec.BindSource{Kind: "query", Name: "table"}, TypeExpr: "string"}}
 	if err := New(Connections{"main": h.DB}).Refine(ctx, component, nil, &TemplateInput{Value: reflect.ValueOf(input{HistoryTable: "project.history"})}); err != nil {
 		t.Fatal(err)
 	}
@@ -27,5 +28,8 @@ func TestRefinerUnsafeQuotedIdentifierPreservesAuthoredSQL(t *testing.T) {
 	}
 	if component.RootView.Source.SQL != authored {
 		t.Fatalf("authored SQL changed: %q", component.RootView.Source.SQL)
+	}
+	if component.RootView.Source.Table != "" {
+		t.Fatal("request-bound table was promoted into instance metadata")
 	}
 }
