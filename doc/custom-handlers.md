@@ -35,6 +35,13 @@ preserves internal visibility, authorization and the root transaction owner.
 Supplied zero remains supplied, and arbitrary body fields cannot replace a
 registered service.
 
+This also works across Go modules. Link the dependency's component package into
+the host binary so discovery can find its full package-scoped identity, then
+invoke that component with the exact scope, name, method and route and its typed
+input. A caller does not need to copy the dependency's SQL into an external view
+or create a second runtime. Keep private dependency packages available to the
+runtime while selecting only intended public packages for HTTP and MCP exposure.
+
 To call an external HTTP endpoint or MCP tool without writing transport code,
 declare a `remote.Config` constant and use the ordinary
 [remote handlers](remote-handlers.md). They use the same handler DI injection
