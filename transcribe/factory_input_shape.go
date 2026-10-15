@@ -372,6 +372,8 @@ type factoryDeclarations struct {
 	pkg       string
 	types     map[string][]factoryDeclaration
 	functions map[string]bool
+	files     map[string]string
+	directory string
 }
 
 type factoryDeclaration struct {
@@ -379,6 +381,8 @@ type factoryDeclaration struct {
 	source         string
 	generated      bool
 	concreteStruct bool
+	typeSpec       *ast.TypeSpec
+	imports        []*ast.ImportSpec
 }
 
 func (d *factoryDeclarations) load() error {
@@ -391,6 +395,7 @@ func (d *factoryDeclarations) load() error {
 	}
 	types := map[string][]factoryDeclaration{}
 	functions := map[string]bool{}
+	files := map[string]string{}
 	for _, file := range append(selected.GoFiles, selected.CgoFiles...) {
 		data, err := os.ReadFile(filepath.Join(selected.Dir, file))
 		if err != nil {
@@ -400,7 +405,8 @@ func (d *factoryDeclarations) load() error {
 		if err != nil {
 			return err
 		}
-		record := factoryDeclaration{file: file, source: string(data), generated: ast.IsGenerated(tree)}
+		files[file] = string(data)
+		record := factoryDeclaration{file: file, source: string(data), generated: ast.IsGenerated(tree), imports: tree.Imports}
 		for _, declaration := range tree.Decls {
 			if fn, ok := declaration.(*ast.FuncDecl); ok && fn.Recv == nil {
 				functions[fn.Name.Name] = true
@@ -413,6 +419,7 @@ func (d *factoryDeclarations) load() error {
 				typ, ok := declaration.(*ast.TypeSpec)
 				if ok {
 					declarationRecord := record
+					declarationRecord.typeSpec = typ
 					_, structure := typ.Type.(*ast.StructType)
 					declarationRecord.concreteStruct = structure && !typ.Assign.IsValid()
 					types[typ.Name.Name] = append(types[typ.Name.Name], declarationRecord)
@@ -420,7 +427,7 @@ func (d *factoryDeclarations) load() error {
 			}
 		}
 	}
-	d.types, d.functions = types, functions
+	d.types, d.functions, d.files, d.directory = types, functions, files, selected.Dir
 	return nil
 }
 

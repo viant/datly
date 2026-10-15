@@ -98,7 +98,7 @@ func (c *Compiler) Compile(ctx context.Context, source *Source) (*Result, error)
 	if err := compilation.loadMetadata(c.comparisonOnly); err != nil {
 		return nil, err
 	}
-	if err := compilation.compileViews(); err != nil {
+	if err := compilation.compileViews(ctx); err != nil {
 		return nil, err
 	}
 	if err := compilation.refine(ctx); err != nil {
@@ -110,6 +110,9 @@ func (c *Compiler) Compile(ctx context.Context, source *Source) (*Result, error)
 	if err := compilation.linkTypes(); err != nil {
 		return nil, err
 	}
+	if err := compilation.authoredInputs.validate(ctx); err != nil {
+		return nil, err
+	}
 	if err := c.admitBorrowedSQLRows(ctx, result); err != nil {
 		return nil, err
 	}
@@ -119,10 +122,11 @@ func (c *Compiler) Compile(ctx context.Context, source *Source) (*Result, error)
 // componentCompilation holds only the products shared by successive compiler
 // stages. Public Result remains the boundary used by planning and generation.
 type componentCompilation struct {
-	result   *Result
-	authored *spec.Component
-	prepared *dql.PreparedSource
-	rows     *generatedRowAuthority
+	result         *Result
+	authored       *spec.Component
+	prepared       *dql.PreparedSource
+	rows           *generatedRowAuthority
+	authoredInputs *authoredInputProof
 }
 
 func prepareCompilation(ctx context.Context, source *Source) (*componentCompilation, error) {
@@ -259,7 +263,7 @@ func (c *componentCompilation) loadMetadata(comparisonOnly bool) error {
 	return nil
 }
 
-func (c *componentCompilation) compileViews() error {
+func (c *componentCompilation) compileViews(ctx context.Context) error {
 	source, component, prepared := c.result.Source, c.result.Component, c.prepared
 	sourceMap, compiledTypeContext, typeResolver := c.result.SourceMap, c.result.TypeContext, c.result.TypeResolver
 	declarationFailure := func(err error) error {
@@ -334,6 +338,20 @@ func (c *componentCompilation) compileViews() error {
 	}
 	c.result.Declarations = declarations.generation
 	c.result.ViewBindings, c.result.Views = gen.ViewBindings(viewBindings), packageViews
+	authoredViews, proof, err := authoredInputViewReferences(ctx, c.result)
+	if err != nil {
+		return err
+	}
+	for identity, reference := range authoredViews {
+		if c.result.Views == nil {
+			c.result.Views = gen.ViewReferences{}
+		}
+		if prior := c.result.Views[identity]; prior != nil && prior.DescriptorKey != reference.DescriptorKey {
+			return fmt.Errorf("independent view %q has conflicting authored ownership", identity)
+		}
+		c.result.Views[identity] = reference
+	}
+	c.authoredInputs = proof
 	c.rows = generatedRows
 	return nil
 }
@@ -341,7 +359,7 @@ func (c *componentCompilation) compileViews() error {
 func (c *componentCompilation) refine(ctx context.Context) error {
 	source, component, compiledTypeContext := c.result.Source, c.result.Component, c.result.TypeContext
 	applySourceDefaults(component, source)
-	if err := refineComponentColumns(ctx, component, source, c.result.Declarations, c.result.ViewBindings, c.result.TypeResolver); err != nil {
+	if err := refineComponentColumns(ctx, component, source, c.result.Declarations, c.result.ViewBindings, c.result.TypeResolver, gen.Input{Views: c.result.Views}); err != nil {
 		return err
 	}
 
