@@ -125,14 +125,14 @@ func TestFrameworkCheckOnlyRejectsMutationPoliciesBeforeConnection(t *testing.T)
 			}
 		})
 	}
-	for _, policies := range [][]xhandler.ValidationOptions{{checkPolicy(fields{})}, {checkPolicy(fields{}), {Action: xhandler.WriteInsert, Shallow: true}}} {
+	for _, policies := range [][]xhandler.ValidationOptions{{checkPolicy(fields{}), {Action: xhandler.WriteInsert, Shallow: true}}} {
 		source := &checkConnection{}
 		rows := make([]*checkAssociation, len(policies))
 		for i := range rows {
 			rows[i] = &checkAssociation{}
 		}
 		_, err := validation.New(source).Validate(context.Background(), rows, policies)
-		if err == nil || !strings.Contains(err.Error(), "not supported in batches") || source.calls != 0 {
+		if err == nil || !strings.Contains(err.Error(), "cannot mix check-only") || source.calls != 0 {
 			t.Fatalf("batch admitted: %v", err)
 		}
 	}

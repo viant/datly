@@ -26,9 +26,9 @@ type validationBatch struct {
 }
 
 func (s *Service) batch(value any, policies []xhandler.ValidationOptions) (*validationBatch, error) {
-	for _, policy := range policies {
-		if policy.CheckOnly {
-			return nil, fmt.Errorf("check-only validation is not supported in batches")
+	for i, policy := range policies {
+		if i > 0 && policy.CheckOnly != policies[0].CheckOnly {
+			return nil, fmt.Errorf("validation batch cannot mix check-only and mutation policies")
 		}
 	}
 	typ := reflect.TypeOf(value)
@@ -126,6 +126,10 @@ func (s *Service) validateBatch(ctx context.Context, value any, policies []xhand
 	}
 	sqlResult, err := s.sqlValidator.Validate(ctx, connection.DB, batch.values, nativeOptions...)
 	if err != nil {
+		if batch.policies[0].CheckOnly {
+			result.Failed = len(result.Violations) > 0
+			return result, fmt.Errorf("SQL validation: %w", err)
+		}
 		return nil, fmt.Errorf("SQL validation: %w", err)
 	}
 	for _, violation := range sqlResult.Violations {

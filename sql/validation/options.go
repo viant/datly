@@ -21,6 +21,12 @@ func (s *Service) options(value any, options []any) (xhandler.ValidationOptions,
 	policy.CheckUnique = snapshotCheck(policy.CheckUnique)
 	policy.CheckRef = snapshotCheck(policy.CheckRef)
 	shape := xshape.Runtime{}
+	if shape.IsNil(policy.GoFields) {
+		policy.GoFields = nil
+	}
+	if !policy.CheckOnly && policy.GoFields != nil {
+		return policy, fmt.Errorf("GoFields requires check-only validation")
+	}
 	if shape.IsNil(policy.DeferredFields) {
 		policy.DeferredFields = nil
 	}
