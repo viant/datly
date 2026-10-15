@@ -14,8 +14,14 @@ type SelectorField struct {
 	GoName     string
 	PublicName string
 	Column     string
-	Holder     bool
-	Index      []int
+	// ColumnAliases retain SQLX result alternatives, not extra public selector names.
+	// Column remains the primary physical mapping used by SQLX and DML.
+	ColumnAliases []string
+	// VerifiedColumnAliases scan into this exact Go field using SQLX's matcher.
+	// Keep unverified alternatives above so projection ambiguity stays visible.
+	VerifiedColumnAliases []string
+	Holder                bool
+	Index                 []int
 }
 
 type View struct {

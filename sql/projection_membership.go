@@ -335,10 +335,63 @@ func (p SelectorProjection) applyMappings(columns []ProjectionColumn) {
 			add(mapping.Name, mapping.Source)
 		}
 	}
+	// A newly admitted secondary result name must have one visible Go
+	// destination. Include primary claims so fallback cannot steal their output.
+	owners := make(map[int]int)
 	for _, field := range p.View.SelectorFields {
-		if !field.Holder {
-			add(field.PublicName, field.Column)
-			add(field.GoName, field.Column)
+		if field.Holder {
+			continue
+		}
+		seen := make(map[int]bool)
+		claim := func(source string) {
+			if index, exists := targets[canonicalProjectionName(source)]; exists && index >= 0 && !seen[index] {
+				seen[index] = true
+				owners[index]++
+			}
+		}
+		claim(field.Column)
+		for _, source := range field.ColumnAliases {
+			claim(source)
+		}
+	}
+	for _, field := range p.View.SelectorFields {
+		if field.Holder {
+			continue
+		}
+		// Preserve the existing primary mapping, including SQLX's behavior
+		// when another alternative is also projected. An ambiguous primary
+		// must not fall through to an otherwise unique secondary result.
+		found, primaryExists := targets[canonicalProjectionName(field.Column)]
+		if !primaryExists {
+			found = -1
+			for _, source := range field.ColumnAliases {
+				index, exists := targets[canonicalProjectionName(source)]
+				if !exists {
+					continue
+				}
+				if index < 0 || found >= 0 && found != index {
+					found = -1
+					break
+				}
+				found = index
+			}
+			if found >= 0 {
+				// Prove the actual SQL result spelling, not an underlying source
+				// name: SQLX may assign those names to different Go destinations.
+				verified := false
+				for _, name := range field.VerifiedColumnAliases {
+					if name == columns[found].output {
+						verified = true
+						break
+					}
+				}
+				if owners[found] != 1 || !verified {
+					found = -1
+				}
+			}
+		}
+		if found >= 0 {
+			aliases[found] = append(aliases[found], field.PublicName, field.GoName)
 		}
 	}
 	for i := range columns {
