@@ -2054,3 +2054,5 @@ github.com/viant/xdatly v1.0.1-0.20261014220053-69eb20c7d1a8 h1:8qupMnH+MeZ5TZJP
 github.com/viant/xdatly v1.0.1-0.20261014220053-69eb20c7d1a8/go.mod h1:t085YqeJeRWQzuzio1Th4Jkfcb6E35n/XSw3ltCAkrI=
 github.com/viant/sqlx v0.26.1-0.20261013061633-ba8bc02ca651 h1:1ivKroIIZuDr3jC030Smx94VFktdhyXl2QjLpXnaOO4=
 github.com/viant/sqlx v0.26.1-0.20261013061633-ba8bc02ca651/go.mod h1:/qyxibjy9VpDiYZwHVwSNHnPXI4476LqYtDty8V0Rg4=
+github.com/viant/xdatly v1.0.1-0.20261015024232-6f50a2ffac2c h1:Yueul4NRPjWu+UZWjryqOCC3s11Sk7EUzkGT2i8I6H0=
+github.com/viant/xdatly v1.0.1-0.20261015024232-6f50a2ffac2c/go.mod h1:t085YqeJeRWQzuzio1Th4Jkfcb6E35n/XSw3ltCAkrI=
