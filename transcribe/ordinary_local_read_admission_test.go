@@ -21,7 +21,11 @@ func ordinaryReadFixture(t *testing.T, generated, mismatch bool) string {
 	t.Helper()
 	root := t.TempDir()
 	for _, name := range []string{"go.mod", "rows/readrow.go", "dql/probe.dql"} {
-		data, err := os.ReadFile(filepath.Join("testdata/ordinary_local_read_ownership", name))
+		sourceName := name
+		if name == "go.mod" {
+			sourceName += ".txt"
+		}
+		data, err := os.ReadFile(filepath.Join("testdata/ordinary_local_read_ownership", sourceName))
 		if err != nil {
 			t.Fatal(err)
 		}
