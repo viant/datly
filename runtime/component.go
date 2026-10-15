@@ -308,8 +308,8 @@ func (r *Runtime) invokeComponent(ctx context.Context, request dexec.ComponentRe
 		if request.Input != nil || request.Replay != nil || request.Warmup != nil || len(request.WarmupOmitInput) != 0 || request.PrepareQuery || request.DryRun || request.ReaderOptions != nil {
 			return nil, fmt.Errorf("scoped input binding does not accept prepared or reader-only invocation")
 		}
-		if registered.DataSource != nil || independent {
-			return nil, fmt.Errorf("scoped input binding requires a source-less ordinary custom invocation")
+		if independent {
+			return nil, fmt.Errorf("scoped input binding requires an ordinary custom invocation")
 		}
 		if err := inputRoute.PrepareScopePlans(); err != nil {
 			return nil, err

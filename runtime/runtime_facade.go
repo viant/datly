@@ -351,9 +351,10 @@ func bindStaticHandler(ctx context.Context, injector *bindly.Injector, entry *Re
 		if entry.Component == nil {
 			return fmt.Errorf("scoped component metadata is required")
 		}
+		// A DataSource supplies the existing buffer/transaction; it does not imply automatic writer ownership.
 		settings := entry.Component.Settings
-		if entry.DataSource != nil || entry.Reader != nil || settings != nil && (settings.SequenceStrategy != "" || len(settings.ProtectedFlushTables) != 0 || settings.IndependentChildTransactions) {
-			return fmt.Errorf("scoped input binding requires a source-less custom component without mutation ownership")
+		if entry.Reader != nil || settings != nil && (settings.SequenceStrategy != "" || len(settings.ProtectedFlushTables) != 0 || settings.IndependentChildTransactions) {
+			return fmt.Errorf("scoped input binding requires a custom component without mutation ownership")
 		}
 		if entry.Input == nil || entry.Component == nil {
 			return fmt.Errorf("scoped input binding requires canonical routes")

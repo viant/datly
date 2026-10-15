@@ -203,7 +203,7 @@ type groupPathInput struct {
 }
 
 func TestScopedGroupGenuineNativeJWTLeafAndEffects(t *testing.T) {
-	for _, mode := range []string{"success", "repeat", "reload failure", "registration mismatch", "missing", "malformed", "denied", "body missing", "child failure", "catch", "imperative", "effect:Insert", "effect:Update", "effect:Delete", "effect:Execute", "effect:Allocate", "effect:Reserve", "effect:Flush", "transaction start", "sql:Exec", "sql:Query", "sql:QueryRow"} {
+	for _, mode := range []string{"success", "repeat", "reload failure", "registration mismatch", "missing", "malformed", "denied", "body missing", "child failure", "catch", "imperative", "effect:Insert", "effect:Update", "effect:Delete", "effect:Execute", "effect:Allocate", "effect:Reserve", "effect:Flush", "transaction start", "sql:Exec", "sql:Query", "sql:QueryRow", "own view"} {
 		t.Run(mode, func(t *testing.T) {
 			h := testharness.NewSQLiteHarness(t)
 			if e := h.ExecStatements(t.Context(), "CREATE TABLE records(value TEXT)", "INSERT INTO records VALUES('native child')", "CREATE TABLE audit(id INTEGER PRIMARY KEY,name TEXT)"); e != nil {
@@ -220,11 +220,29 @@ func TestScopedGroupGenuineNativeJWTLeafAndEffects(t *testing.T) {
 				t.Fatal(e)
 			}
 			contract := &groupScopedContract{mode: mode}
-			auth, e := bootstrap.BuildArtifact(bootstrap.ArtifactInput{Component: componentSpec("GroupScoped", "GET", "/group-scoped", nil), InputType: reflect.TypeFor[groupScopedInput](), OutputType: reflect.TypeFor[scopedNativeOutput](), Handler: custom.New[groupScopedInput, scopedNativeOutput](contract), CodecFactory: service})
+			inputType := reflect.TypeFor[groupScopedInput]()
+			var handler rh.TypedHandler = custom.New[groupScopedInput, scopedNativeOutput](contract)
+			ownView := &groupOwnViewContract{}
+			if mode == "own view" {
+				inputType = reflect.TypeFor[groupOwnViewInput]()
+				handler = custom.New[groupOwnViewInput, scopedNativeOutput](ownView)
+			}
+			auth, e := bootstrap.BuildArtifact(bootstrap.ArtifactInput{Component: componentSpec("GroupScoped", "GET", "/group-scoped", nil), InputType: inputType, OutputType: reflect.TypeFor[scopedNativeOutput](), Handler: handler, CodecFactory: service})
 			if e != nil {
 				t.Fatal(e)
 			}
-			ar, e := auth.Registration(registry.RegisteredComponent{Capabilities: rh.InvocationCapabilities{Connector: connectors}})
+			var providers []locator.Provider
+			if mode == "own view" {
+				views, e := auth.NewViewProvider(bootstrap.ViewRuntimeConfig{SQL: &dsql.SQLComponent{DB: h.DB}})
+				if e != nil {
+					t.Fatal(e)
+				}
+				if views == nil {
+					t.Fatal("native view provider missing")
+				}
+				providers = []locator.Provider{views}
+			}
+			ar, e := auth.Registration(registry.RegisteredComponent{Capabilities: rh.InvocationCapabilities{Connector: connectors}, Providers: providers})
 			if e != nil {
 				t.Fatal(e)
 			}
@@ -321,10 +339,13 @@ func TestScopedGroupGenuineNativeJWTLeafAndEffects(t *testing.T) {
 					t.Fatal("retained binder admitted")
 				}
 			}
+			if mode == "own view" && (ownView.calls.Load() != 0 || !errors.Is(e, drainowner.ErrBindingGroup)) {
+				t.Fatalf("custom SQL view acquired grouped read authority calls=%d err=%v", ownView.calls.Load(), e)
+			}
 			if source.opens.Load() != 1 {
 				t.Fatalf("native owner opened %d times", source.opens.Load())
 			}
-			if mode != "missing" && mode != "malformed" && mode != "body missing" && contract.calls.Load() != 1 {
+			if mode != "missing" && mode != "malformed" && mode != "body missing" && mode != "own view" && contract.calls.Load() != 1 {
 				t.Fatalf("custom invocation never reached: %v", e)
 			}
 			var count int
@@ -403,4 +424,18 @@ func TestScopedGroupDescriptorRegistrationAndOptionGuards(t *testing.T) {
 			}
 		})
 	}
+}
+
+type groupOwnViewInput struct {
+	Jwt     *jwt.Claims                         `parameter:",kind=header,in=Authorization,dataType=string,required=true,errorCode=401" codec:"JwtClaim"`
+	Child   *groupLeafOutput                    `parameter:",kind=component,in=GET:/group-leaf,scope=lazy,cacheable=true"`
+	Current []*groupLeafRow                     `parameter:",kind=view,in=Current" view:"Current,table=records" sql:"SELECT value FROM records"`
+	Has     *struct{ Jwt, Child, Current bool } `setMarker:"true"`
+}
+type groupOwnViewContract struct{ calls atomic.Int32 }
+
+func (*groupOwnViewContract) BindsInputByScope() bool { return true }
+func (c *groupOwnViewContract) Exec(context.Context, xhandler.Session, *groupOwnViewInput, *scopedNativeOutput) error {
+	c.calls.Add(1)
+	return nil
 }

@@ -161,12 +161,14 @@ func TestScopedAdmissionRejectsBeforeProvider(t *testing.T) {
 	for name, change := range cases {
 		t.Run(name, func(t *testing.T) {
 			r := scopedRequest(t, c, "allowed", &order, nil)
+			source := &staticDataSource{}
+			r.DataSource = source
 			change(&r)
 			if _, err := New().Execute(t.Context(), r); err == nil {
 				t.Fatal("admitted")
 			}
-			if len(order) != 0 {
-				t.Fatal(order)
+			if len(order) != 0 || source.opens != 0 {
+				t.Fatalf("order=%v opens=%d", order, source.opens)
 			}
 		})
 	}
@@ -328,8 +330,8 @@ func TestScopedBindingPreservesExistingNativeCallerQueueWithoutDatabase(t *testi
 	}
 }
 
-func TestScopedScopeAdmissionRejectsViewsAndGroups(t *testing.T) {
-	for _, kind := range []string{"view", "group"} {
+func TestScopedScopeAdmissionRejectsGroups(t *testing.T) {
+	for _, kind := range []string{"view", "component"} {
 		t.Run(kind, func(t *testing.T) {
 			var order []string
 			c := &scopedContract{run: func(context.Context, xhandler.Session, *scopedInput, *scopedOutput) error {
@@ -337,11 +339,22 @@ func TestScopedScopeAdmissionRejectsViewsAndGroups(t *testing.T) {
 				return nil
 			}}
 			r := scopedRequest(t, c, "allowed", &order, nil)
-			binding := bindly.BindingSpec{Path: "Child", Scope: "lazy", Location: bindstate.Location{Kind: "view"}}
-			if kind == "group" {
+			binding := bindly.BindingSpec{Path: "Child", Scope: "lazy", Location: bindstate.Location{Kind: "view"}, ResolutionGroup: &bindly.ResolutionGroupSpec{Name: "selected", After: []string{"Credential"}}}
+			if kind == "component" {
 				binding.Location.Kind = "component"
 				binding.Location.In = "GET:/records"
 				binding.ResolutionGroup = &bindly.ResolutionGroupSpec{Name: "selected", After: []string{"Credential"}}
+			}
+			if kind == "view" {
+				// Native Bindly rejects grouped views before any route scope or provider exists.
+				injector, err := bindly.NewInjector()
+				if err != nil {
+					t.Fatal(err)
+				}
+				if _, err = injector.CompilePlan(reflect.TypeFor[scopedInput](), binding); err == nil || !strings.Contains(err.Error(), "requires a path or native component") {
+					t.Fatalf("grouped view admitted: %v", err)
+				}
+				return
 			}
 			r.Input = testRouteInput(t, reflect.TypeFor[scopedInput](), bindly.BindingSpec{Path: "Credential", Location: bindstate.Location{Kind: "credential"}}, binding)
 			if _, err := New().Execute(t.Context(), r); err == nil {

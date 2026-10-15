@@ -15,8 +15,8 @@ import (
 )
 
 func validateScopedRequest(r Request) error {
-	if r.BoundInput != nil || (r.ResolvedInput == nil && len(r.ResolvedPaths) != 0) || r.Replay != nil || r.CanonicalReader || r.DataSource != nil || r.SequenceStrategy != "" || len(r.ProtectedFlushTables) != 0 || r.Completion != nil || r.IndependentChildTransactions || r.hasCompositionFinalizer() || r.hasInvokerInitializer() {
-		return fmt.Errorf("scoped input binding requires a source-less custom invocation without prepared input or completion orchestration")
+	if r.BoundInput != nil || (r.ResolvedInput == nil && len(r.ResolvedPaths) != 0) || r.Replay != nil || r.CanonicalReader || r.SequenceStrategy != "" || len(r.ProtectedFlushTables) != 0 || r.Completion != nil || r.IndependentChildTransactions || r.hasCompositionFinalizer() || r.hasInvokerInitializer() {
+		return fmt.Errorf("scoped input binding requires a custom invocation without prepared input or completion orchestration")
 	}
 	return r.Input.PrepareScopePlans()
 }

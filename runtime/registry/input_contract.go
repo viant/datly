@@ -483,8 +483,8 @@ func (c *RouteInputContract) PrepareScopePlans() error {
 		groups := map[string][]bindly.BindingSpec{"": make([]bindly.BindingSpec, 0)}
 		for _, field := range c.fields {
 			binding := cloneBindingSpec(field.binding)
-			if binding.Location.Kind == "view" || binding.ResolutionGroup != nil {
-				c.scopeErr = fmt.Errorf("scoped input binding does not support view or grouped input %s", field.path)
+			if binding.ResolutionGroup != nil {
+				c.scopeErr = fmt.Errorf("scoped input binding does not support grouped input %s", field.path)
 				return
 			}
 			if _, ok := groups[binding.Scope]; !ok {

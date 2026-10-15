@@ -142,7 +142,8 @@ func TestScopedNativeComposedBindingAndDispatcherAdmission(t *testing.T) {
 func TestScopedDispatcherRejectsSeedReplayBeforeProviders(t *testing.T) {
 	parent := componentArtifact(t, componentSpec("ScopedAdmission", "GET", "/scope-admission", nil), reflect.TypeFor[scopedNativeInput](), reflect.TypeFor[scopedNativeOutput]())
 	parent.Handler = custom.New[scopedNativeInput, scopedNativeOutput](scopedNativeContract{})
-	registered, err := parent.Registration(registry.RegisteredComponent{})
+	source := &scopedAdmissionSource{}
+	registered, err := parent.Registration(registry.RegisteredComponent{DataSource: source})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -166,6 +167,48 @@ func TestScopedDispatcherRejectsSeedReplayBeforeProviders(t *testing.T) {
 			change(&r)
 			if _, err := rt.InvokeComponent(t.Context(), r); err == nil {
 				t.Fatal("admitted")
+			}
+			if source.opens != 0 {
+				t.Fatalf("source opened %d times", source.opens)
+			}
+		})
+	}
+}
+
+type scopedAdmissionSource struct{ opens int }
+
+func (s *scopedAdmissionSource) Open(context.Context) (xhandler.Data, error) {
+	s.opens++
+	return nil, errors.New("unexpected source Open")
+}
+
+func TestScopedSourcedRegistrationRetainsOwnershipRejections(t *testing.T) {
+	for _, mode := range []string{"reader", "sequence", "protected", "independent"} {
+		t.Run(mode, func(t *testing.T) {
+			parent := componentArtifact(t, componentSpec("ScopedRestricted", "GET", "/scope-restricted", nil), reflect.TypeFor[scopedNativeInput](), reflect.TypeFor[scopedNativeOutput]())
+			parent.Handler = custom.New[scopedNativeInput, scopedNativeOutput](scopedNativeContract{})
+			source := &scopedAdmissionSource{}
+			registered, err := parent.Registration(registry.RegisteredComponent{DataSource: source})
+			if err != nil {
+				t.Fatal(err)
+			}
+			registered.Component.Settings = &spec.Settings{}
+			reads := 0
+			switch mode {
+			case "reader":
+				registered.Reader = groupedSeedReader{&reads}
+			case "sequence":
+				registered.Component.Settings.SequenceStrategy = "native"
+			case "protected":
+				registered.Component.Settings.ProtectedFlushTables = []string{"audit"}
+			case "independent":
+				registered.Component.Settings.IndependentChildTransactions = true
+			}
+			if _, err := NewRuntime([]*registry.RegisteredComponent{registered}); err == nil {
+				t.Fatal("ownership restriction admitted")
+			}
+			if source.opens != 0 || reads != 0 {
+				t.Fatalf("opens=%d reads=%d", source.opens, reads)
 			}
 		})
 	}
