@@ -119,7 +119,7 @@ func RetainMutationAuthority(ctx context.Context) func(context.Context) context.
 func CheckComponentMutation(ctx context.Context, canonicalReader bool) error {
 	scope, _ := ctx.Value(dataScopeContextKey{}).(*dataScope)
 	if drainowner.BindingGroupContext(ctx) {
-		if !canonicalReader || scope == nil {
+		if scope == nil {
 			return drainowner.ErrBindingGroup
 		}
 		root := scope
@@ -133,7 +133,7 @@ func CheckComponentMutation(ctx context.Context, canonicalReader bool) error {
 		if failure != nil {
 			return failure
 		}
-		return drainowner.BindingGroupAdmission(ctx, issuer)
+		return drainowner.BindingGroupTargetAdmission(ctx, issuer, canonicalReader)
 	}
 	if failure := scope.protectedAdmissionFailure(); failure != nil {
 		return failure

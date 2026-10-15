@@ -24,22 +24,55 @@ import (
 
 type componentStackKey struct{}
 
-func (r *Runtime) componentProvider(scope dexec.ProviderScope, parent *spec.Component) locator.Provider {
+func (r *Runtime) componentProvider(scope dexec.ProviderScope, parent *spec.Component, owners ...*RegisteredComponent) locator.Provider {
 	scope = componentDependencyScope(scope)
-	return drainowner.SealBindingGroupProvider(handlerprovider.Named(string(spec.KindComponent), func(ctx context.Context, _ reflect.Type, name string) (any, bool, error) {
+	return drainowner.SealBindingGroupProvider(handlerprovider.Named(string(spec.KindComponent), func(ctx context.Context, typ reflect.Type, name string) (value any, found bool, failure error) {
 		ctx = handlerengine.PrepareComponent(ctx, handlerengine.ComponentBinding, componentBindingOrder(parent, name))
 		ref, err := spec.ParseRouteRef(name)
 		if err != nil {
 			return nil, false, err
 		}
+		var dispatch drainowner.BindingGroupDispatch
+		reserved := false
+		if drainowner.ScopedBindingGroupMember(ctx) {
+			if len(owners) != 1 || owners[0] == nil {
+				return nil, false, drainowner.ErrBindingGroup
+			}
+			ctx, dispatch, err = drainowner.PrepareBindingGroupDispatch(ctx, groupRegistration(owners[0]), ref.String(), typ)
+			if err != nil {
+				return nil, false, err
+			}
+			reserved = true
+			defer func() {
+				if panicked := recover(); panicked != nil {
+					_ = dispatch.Complete(dexec.NewPanicError("component binding dispatch", panicked))
+					panic(panicked)
+				}
+				if closeErr := dispatch.Complete(failure); closeErr != nil && failure == nil {
+					failure = closeErr
+					value, found = nil, false
+				}
+			}()
+		}
 		component, _, ok := r.bundle.ComponentByRouteWithParams(ref.Method, ref.Path)
 		if !ok || component == nil {
 			return nil, false, fmt.Errorf("component route not found: %s", ref.String())
 		}
-		value, err := r.invokeComponent(ctx, dexec.ComponentRequest{
+		// A reserved descendant carries its own reader ticket here. Actual
+		// registration and managed-provider restrictions precede binding.
+		if reserved {
+			child, loadErr := r.registeredComponent(ctx, component.Key)
+			if loadErr != nil {
+				return nil, false, loadErr
+			}
+			if _, err = groupReaderLeaf(child, ref); err != nil {
+				return nil, false, err
+			}
+		}
+		result, err := r.invokeComponent(ctx, dexec.ComponentRequest{
 			Target: dexec.ComponentTarget{Component: component.Key, Route: ref},
 		}, scope)
-		return value, err == nil, err
+		return result, err == nil, err
 	}))
 }
 
@@ -243,7 +276,16 @@ func (r *Runtime) invokeComponent(ctx context.Context, request dexec.ComponentRe
 			binding := field.Binding()
 			inputs = append(inputs, drainowner.BindingGroupInput{Kind: binding.Location.Kind, In: binding.Location.In, Type: field.DestinationType(), Adapted: binding.Transformer != nil || (binding.SourceType != nil && binding.SourceType != field.DestinationType())})
 		}
-		if err := drainowner.ValidateBindingGroupTarget(ctx, route.String(), registered.Handler == nil && registered.Reader != nil, inputs...); err != nil {
+		if registered.Handler == nil && registered.Reader != nil {
+			err = drainowner.ValidateRegisteredBindingGroupReader(ctx, route.String(), groupRegistration(registered), inputs...)
+		} else {
+			var descriptor drainowner.ScopedGroupTarget
+			descriptor, err = r.scopedGroupDescriptor(ctx, registered, route, request, buffered)
+			if err == nil {
+				err = drainowner.ValidateScopedBindingGroupTarget(ctx, route.String(), groupRegistration(registered), descriptor, inputs...)
+			}
+		}
+		if err != nil {
 			return nil, err
 		}
 	}
@@ -402,7 +444,7 @@ func (r *Runtime) invokeComponent(ctx context.Context, request dexec.ComponentRe
 		Capabilities:                 registered.Capabilities,
 		Providers:                    registered.Providers,
 		Constants:                    constants,
-		Components:                   r.componentProvider(effectiveScope, registered.Component),
+		Components:                   r.componentProvider(effectiveScope, registered.Component, registered),
 		ComponentInvoker:             r.componentInvokerProvider(effectiveScope, buffered),
 		DataSource:                   dataSource,
 		Handler:                      handler,
