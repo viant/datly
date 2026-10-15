@@ -201,11 +201,33 @@ func validateAnalysisPredicates(parsed *query.Select, markers map[string]string,
 					conditions(child, clause)
 				}
 				return false
+			case *expr.Binary:
+				// Traverse stops a binary sibling when its left visitor returns
+				// false. Visit both operands explicitly across CASE boundaries.
+				conditions(actual.X, clause)
+				conditions(actual.Y, clause)
+				return false
+			case *expr.Switch:
+				// Only searched WHEN expressions are predicate conditions. A
+				// simple CASE selector/values and all results remain operands.
+				simple := len(actual.Cases) > 0 && actual.Cases[0] != nil && actual.Cases[0].Y == nil
+				for _, branch := range actual.Cases {
+					if branch == nil {
+						continue
+					}
+					scope := "CASE"
+					if !simple && branch.Y != nil {
+						scope = "WHEN"
+					}
+					conditions(branch.X.X, scope)
+					conditions(branch.Y, "CASE")
+				}
+				return false
 			case *query.Select, *expr.Raw:
 				// A subquery has its own clause boundaries.
 				return false
 			case *expr.Ident:
-				if keyword, ok := markers[actual.Name]; ok && (clause == "WHERE" || clause == "HAVING" || clause == "ON") && (keyword != "WHERE" && keyword != "HAVING" || keyword == clause) {
+				if keyword, ok := markers[actual.Name]; ok && (clause == "WHERE" || clause == "HAVING" || clause == "ON" || clause == "WHEN") && (keyword != "WHERE" && keyword != "HAVING" || keyword == clause) {
 					seen[actual.Name] = true
 				}
 			case *expr.Placeholder:
@@ -294,7 +316,7 @@ func validateAnalysisPredicates(parsed *query.Select, markers map[string]string,
 	}
 	for marker := range markers {
 		if !seen[marker] {
-			return fmt.Errorf("unsupported dynamic SQL structure: predicate template must occur in a WHERE, HAVING or JOIN ON condition")
+			return fmt.Errorf("unsupported dynamic SQL structure: predicate template must occur in a WHERE, HAVING, JOIN ON or searched CASE WHEN condition")
 		}
 	}
 	for marker, path := range values {
