@@ -92,7 +92,7 @@ func (c *readPlanCompiler) compile(component *spec.Component, prepared *dql.Prep
 	})
 	if err == nil {
 		if component.Settings != nil {
-			if err = resolveConstantViewTables(result, component.Settings.Const); err != nil {
+			if err = validateConstantViewTables(result, component.Settings.Const); err != nil {
 				span := pointSpan(prepared.Original, 0)
 				if authored, ok := constantDiagnosticSpan(prepared, err); ok {
 					span = Span{Start: positionAt(prepared.Original, authored.Start), End: positionAt(prepared.Original, authored.End)}

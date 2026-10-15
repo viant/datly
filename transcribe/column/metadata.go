@@ -104,8 +104,9 @@ func (r *Refiner) PhysicalSourceIdentity(ctx context.Context, connector, unquali
 // concurrent compilations. A Refiner may be shared if its resolver is safe for
 // concurrent use.
 type Compilation struct {
-	refiner  *Refiner
-	metadata discoveryMetadata
+	refiner     *Refiner
+	metadata    discoveryMetadata
+	identifiers map[*spec.View]identifierOrigin
 }
 
 // BeginCompilation starts isolated metadata reuse without retaining state on r.

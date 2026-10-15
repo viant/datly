@@ -37,7 +37,7 @@ func (s *Service) MatchReference(ctx context.Context, child, parent any, expecte
 	if connection.Tx == nil {
 		return nil, fmt.Errorf("reference matching requires the active mutation transaction")
 	}
-	childPlan, err := s.referencePlan(child)
+	childPlan, err := s.referencePlan(ctx, child)
 	if err != nil {
 		return nil, err
 	}
@@ -59,7 +59,7 @@ func (s *Service) MatchReference(ctx context.Context, child, parent any, expecte
 	if matched == nil {
 		return nil, nil
 	}
-	parentPlan, err := s.referencePlan(parent)
+	parentPlan, err := s.referencePlan(ctx, parent)
 	if err != nil {
 		return nil, err
 	}
@@ -80,7 +80,7 @@ func (s *Service) MatchReference(ctx context.Context, child, parent any, expecte
 	return matched, nil
 }
 
-func (s *Service) referencePlan(value any) (*plan, error) {
+func (s *Service) referencePlan(ctx context.Context, value any) (*plan, error) {
 	if _, err := s.options(value, []any{xhandler.ValidationOptions{Action: xhandler.WriteInsert, Shallow: true}}); err != nil {
 		return nil, err
 	}
@@ -88,7 +88,7 @@ func (s *Service) referencePlan(value any) (*plan, error) {
 	if typ.Kind() == reflect.Pointer {
 		typ = typ.Elem()
 	}
-	return s.plan(typ)
+	return s.plan(ctx, typ)
 }
 
 func (p *plan) referenceValue(entity any, name string, fieldName bool) (driver.Value, error) {

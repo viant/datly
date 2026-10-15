@@ -22,7 +22,7 @@ func resolvedWriterTable(component *spec.Component, table string) (string, error
 	if err != nil {
 		return "", err
 	}
-	table, err = (identifier.Renderer{Values: values}).Identifier(table)
+	table, err = (identifier.Renderer{Values: values}).Metadata(table)
 	if err != nil {
 		return "", err
 	}
@@ -33,4 +33,15 @@ func resolvedWriterTable(component *spec.Component, table string) (string, error
 		table = parts[0]
 	}
 	return table, nil
+}
+
+func resolveFieldReferences(component *spec.Component, field *Field) error {
+	var err error
+	if field.RefDB, err = resolvedWriterTable(component, field.RefDB); err != nil {
+		return fmt.Errorf("field %s reference schema: %w", field.Name, err)
+	}
+	if field.RefTable, err = resolvedWriterTable(component, field.RefTable); err != nil {
+		return fmt.Errorf("field %s reference table: %w", field.Name, err)
+	}
+	return nil
 }

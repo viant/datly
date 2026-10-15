@@ -115,6 +115,9 @@ func (r *Compilation) RefineRoot(ctx context.Context, component *spec.Component,
 		staged.Value = reflect.ValueOf(struct{}{})
 	}
 	input = &staged
+	if err := r.captureIdentifierOrigins(component, resources, input); err != nil {
+		return err
+	}
 	visited := map[*spec.View]bool{}
 	return r.refineView(ctx, component, component.RootView, connector, resources, input, nil, nil, visited)
 }
@@ -144,6 +147,9 @@ func (r *Compilation) RefineViews(ctx context.Context, component *spec.Component
 		staged.Value = reflect.ValueOf(struct{}{})
 	}
 	input = &staged
+	if err := r.captureIdentifierOrigins(component, resources, input); err != nil {
+		return err
+	}
 	visited := map[*spec.View]bool{}
 	for _, view := range component.Views {
 		if err := r.refineView(ctx, component, view, connector, resources, input, nil, nil, visited); err != nil {
@@ -278,7 +284,11 @@ func (r *Compilation) discover(ctx context.Context, view *spec.View, connector s
 	if strings.TrimSpace(source.Table) == "" {
 		if table := explicitAuxiliarySource(evaluated.SQL); table != "" {
 			source.Table = table
-			view.Source.Table = table
+			authored, err := authoredDiscoveryTable(authoredSource, input, true)
+			if err != nil {
+				return nil, err
+			}
+			view.Source.Table = authored
 			view.Auxiliary = true
 		}
 	}
@@ -290,11 +300,11 @@ func (r *Compilation) discover(ctx context.Context, view *spec.View, connector s
 			// fact for writer planning; readers do not depend on it.
 			// Keep the authored identifier when expansion revealed an instance
 			// constant. The evaluated table is only the discovery DB target.
-			if authoredTable := directSourceTable(authoredSource.SQL); authoredTable != "" {
-				view.Source.Table = authoredTable
-			} else {
-				view.Source.Table = table
+			authoredTable, err := authoredDiscoveryTable(authoredSource, input, false)
+			if err != nil {
+				return nil, err
 			}
+			view.Source.Table = authoredTable
 		}
 	}
 	// Metadata reads follow the table actually selected by the evaluated query.
@@ -384,7 +394,11 @@ func (r *Compilation) discover(ctx context.Context, view *spec.View, connector s
 		if err != nil {
 			return nil, fmt.Errorf("resolve table projection lineage: %w", err)
 		}
-		applyTableConstraints(view.Columns, constraints, lineage, source.Table)
+		constraints, err = r.preserveConstraintTargets(view, constraints, lineage, product.Name)
+		if err != nil {
+			return nil, err
+		}
+		applyTableConstraints(view.Columns, constraints, lineage, view.Source.Table)
 	}
 	return evaluated, nil
 }

@@ -93,7 +93,7 @@ func synthesizeConstantParams(component *spec.Component) error {
 	return nil
 }
 
-func resolveConstantViewTables(view *spec.View, constants map[string]string) error {
+func validateConstantViewTables(view *spec.View, constants map[string]string) error {
 	visited := map[*spec.View]bool{}
 	var resolve func(*spec.View) error
 	resolve = func(current *spec.View) error {
@@ -107,7 +107,6 @@ func resolveConstantViewTables(view *spec.View, constants map[string]string) err
 					if value == "" {
 						return &constantTableError{name: name, cause: fmt.Errorf("constant table %q resolves to an empty identifier", name)}
 					}
-					current.Source.Table = value
 				}
 			}
 		}

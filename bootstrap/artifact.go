@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/viant/datly/constant"
+	"github.com/viant/datly/constant/identifier"
 	documentation "github.com/viant/datly/documentation"
 	xdocs "github.com/viant/xdatly/docs"
 	"reflect"
@@ -116,6 +117,14 @@ func (c *artifactCompiler) compile() (*Artifact, error) {
 	// Apply the frozen instance once, after their declarations are validated.
 	if input.Const != nil {
 		component = input.Const.Apply(component)
+	}
+	values, err := input.Const.For(component)
+	if err != nil {
+		return nil, err
+	}
+	component, err = (identifier.Renderer{Values: values}).Component(component)
+	if err != nil {
+		return nil, fmt.Errorf("resolve runtime identifiers: %w", err)
 	}
 	if err = c.compileOutputColumns(component); err != nil {
 		return nil, err

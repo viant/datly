@@ -14,6 +14,8 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/viant/datly/constant"
+	"github.com/viant/datly/constant/identifier"
 	dexec "github.com/viant/datly/exec"
 	"github.com/viant/datly/internal/dialectcontext"
 	rhandler "github.com/viant/datly/runtime/handler"
@@ -2491,6 +2493,14 @@ func Compile(component *spec.Component, inputType, outputType reflect.Type, oper
 	if component == nil || component.RootView == nil || component.Settings == nil {
 		return nil, fmt.Errorf("writer component metadata is incomplete")
 	}
+	values, err := (*constant.Values)(nil).For(component)
+	if err != nil {
+		return nil, err
+	}
+	component, err = (identifier.Renderer{Values: values}).Component(component)
+	if err != nil {
+		return nil, fmt.Errorf("writer identifiers: %w", err)
+	}
 	operation = strings.ToLower(strings.TrimSpace(operation))
 	if operation != "patch" && operation != "post" && operation != "put" {
 		return nil, fmt.Errorf("generic writer requires patch, post, or put metadata, got %q", operation)
@@ -2586,6 +2596,9 @@ func Compile(component *spec.Component, inputType, outputType reflect.Type, oper
 			continue
 		}
 		compiled := Field{Name: field.Name, Column: columnName, Index: field.Index, RefDB: tagOption(sqlx, "refDb"), RefTable: tagOption(sqlx, "refTable"), RefColumn: tagOption(sqlx, "refColumn")}
+		if err := resolveFieldReferences(component, &compiled); err != nil {
+			return nil, err
+		}
 		if has.Type != nil {
 			markerType := dereference(has.Type)
 			if marker, ok := markerType.FieldByName(field.Name); ok {
@@ -2904,6 +2917,9 @@ func compileRecord(component *spec.Component, inputType reflect.Type, name, path
 		}
 		column := columns[strings.ToLower(columnName)]
 		compiled := Field{Name: field.Name, Column: columnName, Index: field.Index, RefDB: tagOption(sqlx, "refDb"), RefTable: tagOption(sqlx, "refTable"), RefColumn: tagOption(sqlx, "refColumn")}
+		if err := resolveFieldReferences(component, &compiled); err != nil {
+			return nil, err
+		}
 		if has.Type != nil {
 			markerType := dereference(has.Type)
 			if marker, ok := markerType.FieldByName(field.Name); ok {
