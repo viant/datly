@@ -63,6 +63,56 @@ func TestGeneratedIdentifiersSurviveRegenerationAndInstanceChanges(t *testing.T)
 	}
 }
 
+func TestGeneratedBigQueryIdentifiersUseRuntimeProduct(t *testing.T) {
+	h := testharness.NewSQLiteHarness(t)
+	// SQLite's quoted table name provides a database-independent execution probe
+	// for the exact BigQuery path. Product authority is supplied at bootstrap.
+	if err := h.ExecStatements(t.Context(), "CREATE TABLE `viant-soak.scope3.emissions_data`(id INTEGER PRIMARY KEY,name TEXT)"); err != nil {
+		t.Fatal(err)
+	}
+	root := t.TempDir()
+	(testharness.GeneratedModule{Path: "github.com/viant/datly/identifierfixture"}).Write(t, root)
+	values, err := constant.New(map[string]string{"project": "viant-soak"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	const authored = "#package('pkg/records')\n#setting($_ = $route('/records','GET'))\n#setting($_ = $const('project','authored-project'))\nSELECT id,name FROM `${project}.scope3.emissions_data`"
+	request := GenerationRequest{Destination: root, Source: &Source{
+		Name: "Records", Scope: "github.com/viant/datly/identifierfixture/pkg/records", Text: authored,
+		Connector: "main", Const: values, ColumnRefiner: column.New(column.Connections{"main": h.DB}),
+	}}
+	generator := Generator{Operation: "get"}
+	result, err := generator.Generate(t.Context(), request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pkg := filepath.Join(root, "pkg/records")
+	before := sourceHandlerSnapshot(t, pkg)
+	for name, content := range before {
+		if strings.Contains(content, "viant-soak") {
+			t.Fatalf("discovery environment frozen in %s", name)
+		}
+	}
+	for i := 0; i < 2; i++ {
+		if _, err := generator.Generate(t.Context(), request); err != nil {
+			t.Fatal(err)
+		}
+		if !reflect.DeepEqual(before, sourceHandlerSnapshot(t, pkg)) {
+			t.Fatal("regeneration changed generated artifacts")
+		}
+	}
+	runtimeTest := strings.NewReplacer("INPUT_TYPE", result.Result.Plan.Input.Type, "OUTPUT_TYPE", result.Result.Plan.Output.Type).Replace(identifierBigQueryRuntimeTest)
+	if err := os.WriteFile(filepath.Join(pkg, "identifiers_runtime_test.go"), []byte(runtimeTest), 0600); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command("go", "test", "-mod=mod", "-race", "-count=1", "./...")
+	cmd.Dir = root
+	cmd.Env = append(os.Environ(), "GOWORK=off", "GO111MODULE=on")
+	if output, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("generated BigQuery identifier execution: %v\n%s", err, output)
+	}
+}
+
 func TestGeneratedWriterIdentifiersUseInstanceConstraints(t *testing.T) {
 	ctx := context.Background()
 	h := testharness.NewSQLiteHarness(t)
@@ -199,5 +249,43 @@ func TestOneGeneratedBuildTwoInstances(t *testing.T) {
   }
  })}
  if strings.Contains(component.RootView.Source.Table,"SOAK")||strings.Contains(component.RootView.Source.Table,"PROD"){t.Fatal("shared metadata mutated")}
+}
+`
+
+const identifierBigQueryRuntimeTest = `package records
+import (
+ "reflect"
+ "strings"
+ "testing"
+ "github.com/viant/bindly/resource"
+ "github.com/viant/datly/bootstrap"
+ "github.com/viant/datly/constant"
+ "github.com/viant/datly/internal/testharness/sqlite"
+ dsql "github.com/viant/datly/sql"
+ dtag "github.com/viant/datly/tag"
+)
+func TestOneBuildTwoBigQueryProjects(t *testing.T) {
+ holder:=reflect.TypeFor[RecordsComponent]();field,_:=holder.FieldByName("Contract")
+ tag,_,err:=dtag.ParseComponent(field.Tag);if err!=nil{t.Fatal(err)}
+ component,err:=(&bootstrap.RouteSource{HolderType:holder.Name(),FieldName:field.Name,PackageName:"records",PackagePath:holder.PkgPath(),Tag:tag}).Resolve(reflect.TypeFor[INPUT_TYPE](),reflect.TypeFor[OUTPUT_TYPE]());if err!=nil{t.Fatal(err)}
+ resources:=resource.New();if err:=resources.Register(RecordsDatlyResourceNamespace,RecordsDatlyResources);err!=nil{t.Fatal(err)}
+ for _,project:=range []string{"viant-soak","viant-prod"}{t.Run(project,func(t *testing.T){t.Parallel()
+  db:=sqlite.New(t);table:=project+".scope3.emissions_data"
+  if err:=db.ExecStatements(t.Context(),"CREATE TABLE ` + "`" + `"+table+"` + "`" + `(id INTEGER PRIMARY KEY,name TEXT)","INSERT INTO ` + "`" + `"+table+"` + "`" + ` VALUES(1,'"+project+"')");err!=nil{t.Fatal(err)}
+  values,err:=constant.New(map[string]string{"project":project});if err!=nil{t.Fatal(err)}
+  input:=bootstrap.ArtifactInput{Component:component,Const:values,InputType:reflect.TypeFor[INPUT_TYPE](),OutputType:reflect.TypeFor[OUTPUT_TYPE](),Resources:resources,
+    IdentifierProducts:func(connector string)(string,error){if connector!="main"{t.Fatalf("connector: %q",connector)};return "BigQuery",nil}}
+  artifact,err:=bootstrap.BuildArtifact(input);if err!=nil{t.Fatal(err)}
+  if strings.Trim(artifact.Component.RootView.Source.Table,"` + "`" + `")!=table{t.Fatalf("metadata: %q",artifact.Component.RootView.Source.Table)}
+  execution,err:=artifact.ReaderCompilation().NewExecution(bootstrap.ReaderRuntimeConfig{SQL:&dsql.SQLComponent{DB:db.DB}});if err!=nil{t.Fatal(err)}
+  for i:=0;i<2;i++{
+   result,err:=execution.Read(t.Context(),new(INPUT_TYPE),nil,nil);if err!=nil{t.Fatal(err)}
+   rows:=reflect.ValueOf(result).Elem().FieldByName("Data");if rows.Len()!=1{t.Fatalf("rows: %v",result)}
+   row:=rows.Index(0);for row.Kind()==reflect.Pointer{row=row.Elem()}
+   name:=row.FieldByName("Name");for name.Kind()==reflect.Pointer{name=name.Elem()}
+   if name.String()!=project{t.Fatalf("wrong environment row: %v",result)}
+  }
+ })}
+ if !strings.Contains(component.RootView.Source.Table,"${project}"){t.Fatalf("symbolic metadata changed: %q",component.RootView.Source.Table)}
 }
 `

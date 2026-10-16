@@ -35,6 +35,8 @@ type ArtifactInput struct {
 	Handler       rhandler.TypedHandler
 	CodecFactory  xcodec.Factory
 	Types         *typecatalog.Catalog
+	// IdentifierProducts supplies connector product metadata without database I/O.
+	IdentifierProducts func(string) (string, error)
 	// HandlerOwnedOutput preserves the output type/schema without importing its
 	// reader declarations into a component whose handler produces that output.
 	// Enabled reports resolve those declarations into separate metadata only.
@@ -122,7 +124,7 @@ func (c *artifactCompiler) compile() (*Artifact, error) {
 	if err != nil {
 		return nil, err
 	}
-	component, err = (identifier.Renderer{Values: values}).Component(component)
+	component, err = (identifier.Renderer{Values: values, Products: input.IdentifierProducts}).Component(component)
 	if err != nil {
 		return nil, fmt.Errorf("resolve runtime identifiers: %w", err)
 	}

@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/viant/datly/constant"
 	"github.com/viant/datly/constant/identifier"
 	"github.com/viant/datly/spec"
 	dsql "github.com/viant/datly/sql"
@@ -22,6 +23,7 @@ type identifierOrigin struct {
 	view                          *spec.View
 	connector, authored, resolved string
 	dynamic                       bool
+	values                        *constant.Values
 }
 
 // identifierAnalysis assigns source-position markers, never discovery values.
@@ -135,6 +137,7 @@ func (r *Compilation) captureIdentifierOrigins(component *spec.Component, resour
 			renderer := identifier.Renderer{}
 			if input != nil {
 				renderer.Values = input.Const
+				origin.values = input.Const
 			}
 			origin.resolved, _ = renderer.Metadata(origin.authored)
 			r.identifiers[view] = origin
@@ -164,6 +167,19 @@ func (r *Compilation) captureIdentifierOrigins(component *spec.Component, resour
 }
 
 func (r *Compilation) preserveConstraintTargets(view *spec.View, constraints map[string]tableConstraint, lineage *projectionLineage, product string) (map[string]tableConstraint, error) {
+	// Resolve symbolic provenance only after this connector's product is known.
+	// Other connectors may require different identifier grammar.
+	for target, origin := range r.identifiers {
+		if origin.dynamic || origin.values == nil || origin.connector != r.identifiers[view].connector {
+			continue
+		}
+		resolved, err := (identifier.Renderer{Values: origin.values, Product: product}).Metadata(origin.authored)
+		if err != nil {
+			return nil, fmt.Errorf("view %s constraint source identifier: %w", target.CanonicalName(), err)
+		}
+		origin.resolved = resolved
+		r.identifiers[target] = origin
+	}
 	owner := r.identifiers[view]
 	result := make(map[string]tableConstraint, len(constraints))
 	for name, constraint := range constraints {

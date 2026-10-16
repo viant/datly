@@ -21,6 +21,13 @@ import (
 // Report handlers and registration metadata remain owned by report/bootstrap.
 type sourceComponent struct{ source *source }
 
+func (c *sourceComponent) identifierProducts() func(string) (string, error) {
+	if c.source.connections == nil || c.source.connections.SQL == nil {
+		return nil
+	}
+	return c.source.connections.SQL.IdentifierProduct
+}
+
 func (c *sourceComponent) reflectedArtifactInput(component *spec.Component, source *bootstrap.RouteSource, types *typecatalog.Catalog, resources *resource.Store) (bootstrap.ArtifactInput, error) {
 	if component == nil || source == nil || source.LinkedInputType == nil || source.LinkedOutputType == nil {
 		return bootstrap.ArtifactInput{}, fmt.Errorf("reflected component contract is incomplete")
@@ -50,12 +57,12 @@ func (c *sourceComponent) reflectedArtifactInput(component *spec.Component, sour
 		if _, err = c.source.config.Const.For(component); err != nil {
 			return bootstrap.ArtifactInput{}, err
 		}
-		handler, err = writerhandler.New(c.source.config.Const.Apply(component), source.LinkedInputType, source.LinkedOutputType, component.Settings.Mutation)
+		handler, err = writerhandler.NewWithIdentifierProducts(c.source.config.Const.Apply(component), source.LinkedInputType, source.LinkedOutputType, component.Settings.Mutation, c.identifierProducts())
 		if err != nil {
 			return bootstrap.ArtifactInput{}, err
 		}
 	}
-	return bootstrap.ArtifactInput{Const: c.source.config.Const, Component: component, Types: types, InputType: source.LinkedInputType, OutputType: source.LinkedOutputType, Handler: handler, HandlerOwnedOutput: handler != nil, Resources: resources, CodecFactory: c.source.codecs}, nil
+	return bootstrap.ArtifactInput{IdentifierProducts: c.identifierProducts(), Const: c.source.config.Const, Component: component, Types: types, InputType: source.LinkedInputType, OutputType: source.LinkedOutputType, Handler: handler, HandlerOwnedOutput: handler != nil, Resources: resources, CodecFactory: c.source.codecs}, nil
 }
 
 func linkedDefaultResources(resources *resource.Store, inputType reflect.Type) (*resource.Store, error) {
@@ -139,12 +146,12 @@ func (c *sourceComponent) artifactInput(compiled *transcribe.Result) (bootstrap.
 		if _, err = c.source.config.Const.For(compiled.Component); err != nil {
 			return bootstrap.ArtifactInput{}, err
 		}
-		handler, err = writerhandler.New(c.source.config.Const.Apply(compiled.Component), input, output, settings.Mutation)
+		handler, err = writerhandler.NewWithIdentifierProducts(c.source.config.Const.Apply(compiled.Component), input, output, settings.Mutation, c.identifierProducts())
 		if err != nil {
 			return bootstrap.ArtifactInput{}, err
 		}
 	}
-	return bootstrap.ArtifactInput{Const: c.source.config.Const, Component: compiled.Component, Types: compiled.Source.Types, InputType: input, OutputType: output, Handler: handler, HandlerOwnedOutput: handler != nil, Resources: resources, CodecFactory: c.source.codecs}, nil
+	return bootstrap.ArtifactInput{IdentifierProducts: c.identifierProducts(), Const: c.source.config.Const, Component: compiled.Component, Types: compiled.Source.Types, InputType: input, OutputType: output, Handler: handler, HandlerOwnedOutput: handler != nil, Resources: resources, CodecFactory: c.source.codecs}, nil
 }
 
 func (c *sourceComponent) Configure(ctx context.Context, artifact *report.ComponentArtifact) (report.RuntimeCapabilities, error) {

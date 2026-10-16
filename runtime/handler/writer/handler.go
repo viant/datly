@@ -276,7 +276,12 @@ type Handler struct {
 }
 
 func New(component *spec.Component, inputType, outputType reflect.Type, operation string) (*Handler, error) {
-	metadata, err := Compile(component, inputType, outputType, operation)
+	return NewWithIdentifierProducts(component, inputType, outputType, operation, nil)
+}
+
+// NewWithIdentifierProducts uses static connector authority for identifier validation.
+func NewWithIdentifierProducts(component *spec.Component, inputType, outputType reflect.Type, operation string, products func(string) (string, error)) (*Handler, error) {
+	metadata, err := CompileWithIdentifierProducts(component, inputType, outputType, operation, products)
 	if err != nil {
 		return nil, err
 	}
@@ -2490,6 +2495,11 @@ func concurrencyTokenEqual(expected, actual any) bool {
 }
 
 func Compile(component *spec.Component, inputType, outputType reflect.Type, operation string) (*Metadata, error) {
+	return CompileWithIdentifierProducts(component, inputType, outputType, operation, nil)
+}
+
+// CompileWithIdentifierProducts never opens connections or evaluates factories.
+func CompileWithIdentifierProducts(component *spec.Component, inputType, outputType reflect.Type, operation string, products func(string) (string, error)) (*Metadata, error) {
 	if component == nil || component.RootView == nil || component.Settings == nil {
 		return nil, fmt.Errorf("writer component metadata is incomplete")
 	}
@@ -2497,10 +2507,12 @@ func Compile(component *spec.Component, inputType, outputType reflect.Type, oper
 	if err != nil {
 		return nil, err
 	}
-	component, err = (identifier.Renderer{Values: values}).Component(component)
+	renderer := identifier.Renderer{Values: values, Products: products, Connector: component.Settings.DefaultConnector}
+	component, err = renderer.Component(component)
 	if err != nil {
 		return nil, fmt.Errorf("writer identifiers: %w", err)
 	}
+	renderer = renderer.ForView(component.RootView)
 	operation = strings.ToLower(strings.TrimSpace(operation))
 	if operation != "patch" && operation != "post" && operation != "put" {
 		return nil, fmt.Errorf("generic writer requires patch, post, or put metadata, got %q", operation)
@@ -2563,7 +2575,7 @@ func Compile(component *spec.Component, inputType, outputType reflect.Type, oper
 	if metadata.Table == "" {
 		return nil, fmt.Errorf("writer root table is required")
 	}
-	if table, err := resolvedWriterTable(component, metadata.Table); err != nil {
+	if table, err := resolvedWriterTable(component, metadata.Table, renderer); err != nil {
 		return nil, fmt.Errorf("writer root table: %w", err)
 	} else {
 		metadata.Table = table
@@ -2596,7 +2608,7 @@ func Compile(component *spec.Component, inputType, outputType reflect.Type, oper
 			continue
 		}
 		compiled := Field{Name: field.Name, Column: columnName, Index: field.Index, RefDB: tagOption(sqlx, "refDb"), RefTable: tagOption(sqlx, "refTable"), RefColumn: tagOption(sqlx, "refColumn")}
-		if err := resolveFieldReferences(component, &compiled); err != nil {
+		if err := resolveFieldReferences(component, &compiled, renderer); err != nil {
 			return nil, err
 		}
 		if has.Type != nil {
@@ -2653,7 +2665,7 @@ func Compile(component *spec.Component, inputType, outputType reflect.Type, oper
 	if metadata.Sequence != nil {
 		root.Selector = metadata.Sequence.Name
 	}
-	if err := compileRelations(component, inputType, root, component.RootView); err != nil {
+	if err := compileRelations(component, inputType, root, component.RootView, renderer); err != nil {
 		return nil, err
 	}
 	if root.Auxiliary && len(root.Relations) == 0 && hookName != "" {
@@ -2758,7 +2770,7 @@ func describeFields(typeOf reflect.Type) string {
 	return strings.Join(parts, ";")
 }
 
-func compileRelations(component *spec.Component, inputType reflect.Type, parent *Record, view *spec.View) error {
+func compileRelations(component *spec.Component, inputType reflect.Type, parent *Record, view *spec.View, renderer identifier.Renderer) error {
 	for i := 0; i < parent.EntityType.NumField(); i++ {
 		structField := parent.EntityType.Field(i)
 		viewTag := structField.Tag.Get("view")
@@ -2774,7 +2786,7 @@ func compileRelations(component *spec.Component, inputType reflect.Type, parent 
 			name = structField.Name
 		}
 		childView := relationView(view, structField.Name, name)
-		child, err := compileRecord(component, inputType, name, parent.Path+"/"+structField.Name, childType, childView, viewTag)
+		child, err := compileRecord(component, inputType, name, parent.Path+"/"+structField.Name, childType, childView, viewTag, renderer)
 		if err != nil {
 			return err
 		}
@@ -2859,7 +2871,12 @@ func unqualifiedIdentity(name string) bool {
 	return true
 }
 
-func compileRecord(component *spec.Component, inputType reflect.Type, name, path string, entityType reflect.Type, view *spec.View, viewTag string) (*Record, error) {
+func compileRecord(component *spec.Component, inputType reflect.Type, name, path string, entityType reflect.Type, view *spec.View, viewTag string, renderers ...identifier.Renderer) (*Record, error) {
+	renderer := identifier.Renderer{}
+	if len(renderers) != 0 {
+		renderer = renderers[0]
+	}
+	renderer = renderer.ForView(view)
 	record := &Record{Name: name, Path: path, EntityType: entityType, CurrentField: -1, Table: tagOption(viewTag, "table"), Auxiliary: strings.EqualFold(tagOption(viewTag, "auxiliary"), "true"), Invariants: map[string][]Field{}}
 	record.RootNullPolicy = tagOption(viewTag, "rootNullPolicy")
 	record.NestedNullPolicy = tagOption(viewTag, "nestedNullPolicy")
@@ -2888,7 +2905,7 @@ func compileRecord(component *spec.Component, inputType reflect.Type, name, path
 	if record.Table == "" {
 		return nil, fmt.Errorf("writer relation %s requires a table", path)
 	}
-	if table, err := resolvedWriterTable(component, record.Table); err != nil {
+	if table, err := resolvedWriterTable(component, record.Table, renderer); err != nil {
 		return nil, fmt.Errorf("writer relation %s table: %w", path, err)
 	} else {
 		record.Table = table
@@ -2917,7 +2934,7 @@ func compileRecord(component *spec.Component, inputType reflect.Type, name, path
 		}
 		column := columns[strings.ToLower(columnName)]
 		compiled := Field{Name: field.Name, Column: columnName, Index: field.Index, RefDB: tagOption(sqlx, "refDb"), RefTable: tagOption(sqlx, "refTable"), RefColumn: tagOption(sqlx, "refColumn")}
-		if err := resolveFieldReferences(component, &compiled); err != nil {
+		if err := resolveFieldReferences(component, &compiled, renderer); err != nil {
 			return nil, err
 		}
 		if has.Type != nil {
@@ -2970,7 +2987,7 @@ func compileRecord(component *spec.Component, inputType reflect.Type, name, path
 		}
 		record.Selector += record.Sequence.Name
 	}
-	if err := compileRelations(component, inputType, record, view); err != nil {
+	if err := compileRelations(component, inputType, record, view, renderer); err != nil {
 		return nil, err
 	}
 	return record, nil

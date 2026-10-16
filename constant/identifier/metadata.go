@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/viant/datly/spec"
-	"github.com/viant/sqlparser"
 	"github.com/viant/tagly/tags"
 )
 
@@ -30,7 +29,7 @@ func (r Renderer) Metadata(source string) (string, error) {
 	if strings.Contains(resolved, "$") {
 		return "", fmt.Errorf("unresolved identifier %q: declare an immutable constant", source)
 	}
-	parts, err := sqlparser.TableIdentifierParts(resolved)
+	parts, err := r.parts(resolved)
 	if err != nil {
 		return "", fmt.Errorf("identifier %q: %w", source, err)
 	}
@@ -75,12 +74,13 @@ func (r Renderer) Tag(source reflect.StructTag) (reflect.StructTag, error) {
 func (r Renderer) Component(source *spec.Component) (*spec.Component, error) {
 	result := source.Clone()
 	seen := map[*spec.View]bool{}
-	var visit func(*spec.View) error
-	visit = func(view *spec.View) error {
+	var visit func(*spec.View, Renderer) error
+	visit = func(view *spec.View, inherited Renderer) error {
 		if view == nil || seen[view] {
 			return nil
 		}
 		seen[view] = true
+		r := inherited.ForView(view)
 		if view.Source != nil {
 			var err error
 			view.Source.Table, err = r.Metadata(view.Source.Table)
@@ -100,7 +100,7 @@ func (r Renderer) Component(source *spec.Component) (*spec.Component, error) {
 		}
 		for _, relation := range view.Relations {
 			if relation != nil {
-				if err := visit(relation.View); err != nil {
+				if err := visit(relation.View, r); err != nil {
 					return err
 				}
 			}
@@ -108,11 +108,14 @@ func (r Renderer) Component(source *spec.Component) (*spec.Component, error) {
 		return nil
 	}
 	if result != nil {
-		if err := visit(result.RootView); err != nil {
+		if result.Settings != nil && strings.TrimSpace(result.Settings.DefaultConnector) != "" {
+			r.Connector = strings.TrimSpace(result.Settings.DefaultConnector)
+		}
+		if err := visit(result.RootView, r); err != nil {
 			return nil, err
 		}
 		for _, view := range result.Views {
-			if err := visit(view); err != nil {
+			if err := visit(view, r); err != nil {
 				return nil, err
 			}
 		}

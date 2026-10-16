@@ -160,3 +160,21 @@ func TestForeignKeySchemaPreservesComposedSourceIdentity(t *testing.T) {
 	require.Equal(t, "`${project}.${dataset}.records`", result["parent_id"].reference.table)
 	require.Equal(t, "soak_ds", constraints["owner_id"].reference.schema)
 }
+
+func TestForeignKeyHyphenatedProjectUsesSourceProduct(t *testing.T) {
+	values, err := constant.New(map[string]string{"project": "viant-e2e", "Table": "viant-e2e.scope3.emissions_data"})
+	require.NoError(t, err)
+	for _, table := range []string{"${project}.scope3.emissions_data", "$Unsafe.Table", "`${project}.scope3.emissions_data`"} {
+		t.Run(table, func(t *testing.T) {
+			view := &spec.View{Name: "Emissions", Source: &spec.ViewSource{Table: table}}
+			compilation := New(nil).BeginCompilation()
+			require.NoError(t, compilation.captureIdentifierOrigins(&spec.Component{RootView: view}, nil, &TemplateInput{Const: values}))
+			constraints := map[string]tableConstraint{"parent_id": {reference: &tableReference{schema: "scope3", table: "emissions_data", column: "id"}}}
+			resolved, err := compilation.preserveConstraintTargets(view, constraints, nil, "BigQuery")
+			require.NoError(t, err)
+			require.Equal(t, table, resolved["parent_id"].reference.table)
+			require.Empty(t, resolved["parent_id"].reference.schema)
+			require.Equal(t, table, view.Source.Table)
+		})
+	}
+}

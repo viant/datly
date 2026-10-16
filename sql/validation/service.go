@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"reflect"
 	"sort"
+	"strings"
 	"sync"
 
 	"github.com/viant/datly/constant"
@@ -16,6 +17,7 @@ import (
 	"github.com/viant/sqlx/io"
 	sqlvalidator "github.com/viant/sqlx/io/validator"
 	"github.com/viant/sqlx/metadata/info"
+	"github.com/viant/sqlx/metadata/registry"
 	xshape "github.com/viant/x/shape"
 	xhandler "github.com/viant/xdatly/handler"
 )
@@ -36,6 +38,7 @@ type Service struct {
 	source       Source
 	sqlValidator *sqlvalidator.Service
 	plans        sync.Map
+	mappings     sync.Map
 }
 type plan struct {
 	sqlType      reflect.Type
@@ -71,7 +74,7 @@ func (s *Service) Validate(ctx context.Context, value any, options ...any) (*xha
 	if typ.Kind() == reflect.Ptr {
 		typ = typ.Elem()
 	}
-	compiled, err := s.plan(ctx, typ)
+	compiled, err := s.plan(ctx, typ, policy.Connector)
 	if err != nil {
 		return nil, err
 	}
@@ -149,22 +152,41 @@ func (p *plan) appendSQL(result *xhandler.Validation, sqlResult *sqlvalidator.Va
 	}
 }
 
-func (s *Service) plan(ctx context.Context, typ reflect.Type) (*plan, error) {
+func (s *Service) plan(ctx context.Context, typ reflect.Type, connectors ...string) (*plan, error) {
 	values := constant.FromContext(ctx)
-	key := planKey{typ: typ, constants: values.Identity()}
-	if existing, ok := s.plans.Load(key); ok {
-		return existing.(*plan), nil
-	}
-	columns, bind, err := io.StructColumnMapper(typ)
+	mapping, err := s.mapping(typ)
 	if err != nil {
 		return nil, err
+	}
+	product := ""
+	if mapping.identifiers {
+		if (xshape.Runtime{}).IsNil(s.source) {
+			return nil, fmt.Errorf("framework validation source is required")
+		}
+		connector := ""
+		if len(connectors) != 0 {
+			connector = connectors[0]
+		}
+		connection, err := s.source.ValidationConnection(ctx, connector)
+		if err != nil {
+			return nil, err
+		}
+		if connection.Dialect != nil {
+			product = connection.Dialect.Product.Name
+		} else if matched := registry.MatchProduct(connection.DB); matched != nil {
+			product = matched.Name
+		}
+	}
+	key := planKey{typ: typ, constants: values.Identity(), product: product}
+	if existing, ok := s.plans.Load(key); ok {
+		return existing.(*plan), nil
 	}
 	goChecks, err := govalidator.NewChecks(typ)
 	if err != nil {
 		return nil, fmt.Errorf("Go validation plan: %w", err)
 	}
-	compiled := &plan{columns: columns, bind: bind, goChecks: goChecks}
-	if err := compiled.resolveSQLShape(typ, values); err != nil {
+	compiled := &plan{columns: mapping.columns, bind: mapping.bind, goChecks: goChecks}
+	if err := compiled.resolveSQLShape(typ, values, product); err != nil {
 		return nil, err
 	}
 	nativeChecks, err := sqlvalidator.NewChecks(compiled.sqlType, nil)
@@ -176,7 +198,7 @@ func (s *Service) plan(ctx context.Context, typ reflect.Type) (*plan, error) {
 	for _, name := range goChecks.InputFields() {
 		names[name] = true
 	}
-	for _, column := range columns {
+	for _, column := range mapping.columns {
 		fields := column.(io.Fielder).Fields()
 		names[fields[len(fields)-1].Name] = true
 	}
@@ -186,6 +208,33 @@ func (s *Service) plan(ctx context.Context, typ reflect.Type) (*plan, error) {
 	sort.Strings(compiled.fields)
 	actual, _ := s.plans.LoadOrStore(key, compiled)
 	return actual.(*plan), nil
+}
+
+type columnMapping struct {
+	columns     []io.Column
+	bind        io.PlaceholderBinder
+	identifiers bool
+}
+
+// Column mappings contain only source-type metadata, independent of instance
+// constants and dialect. Keep them immutable and reuse them across native plans.
+func (s *Service) mapping(typ reflect.Type) (*columnMapping, error) {
+	if existing, ok := s.mappings.Load(typ); ok {
+		return existing.(*columnMapping), nil
+	}
+	columns, bind, err := io.StructColumnMapper(typ)
+	if err != nil {
+		return nil, err
+	}
+	mapping := &columnMapping{columns: columns, bind: bind}
+	for _, column := range columns {
+		if tag := column.Tag(); tag != nil && strings.Contains(tag.Table+tag.Db+tag.RefTable+tag.RefDb, "$") {
+			mapping.identifiers = true
+			break
+		}
+	}
+	actual, _ := s.mappings.LoadOrStore(typ, mapping)
+	return actual.(*columnMapping), nil
 }
 
 func (s *Service) validateGo(ctx context.Context, value any, prepared *govalidator.Prepared) (result *govalidator.Validation, err error) {

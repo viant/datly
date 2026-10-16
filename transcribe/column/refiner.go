@@ -238,12 +238,6 @@ func (r *Compilation) discover(ctx context.Context, view *spec.View, connector s
 	if db == nil {
 		return nil, fmt.Errorf("connector %q returned a nil DB", connector)
 	}
-	if input != nil {
-		source.Table, err = (sqltemplate.ConstantRenderer{Values: input.Const}).Identifier(source.Table)
-		if err != nil {
-			return nil, err
-		}
-	}
 	tx, err := exec.InvocationTransaction(ctx, db)
 	if err != nil {
 		return nil, err
@@ -264,6 +258,12 @@ func (r *Compilation) discover(ctx context.Context, view *spec.View, connector s
 	dialect, err := config.Dialect(ctx, db, append(txOptions, product)...)
 	if err != nil {
 		return nil, fmt.Errorf("resolve SQL dialect: %w", err)
+	}
+	if input != nil {
+		source.Table, err = (sqltemplate.ConstantRenderer{Values: input.Const, Product: product.Name}).Identifier(source.Table)
+		if err != nil {
+			return nil, err
+		}
 	}
 	evaluationSource := source.Clone()
 	evaluationSource.SQL, err = schemaDiscoverySQL(evaluationSource.SQL)
