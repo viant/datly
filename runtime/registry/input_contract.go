@@ -228,9 +228,6 @@ func (c *RouteInputContract) WithOptionalBindings(names ...string) (*RouteInputC
 	if c == nil || c.contract == nil {
 		return nil, fmt.Errorf("input contract is required")
 	}
-	if c.selectors != nil {
-		return nil, fmt.Errorf("selector companion does not support optional prepared input contracts")
-	}
 	optional := map[string]bool{}
 	for _, name := range names {
 		if normalized := normalizeInputName(name); normalized != "" {
@@ -238,6 +235,27 @@ func (c *RouteInputContract) WithOptionalBindings(names ...string) (*RouteInputC
 		}
 	}
 	if len(optional) == 0 {
+		return c, nil
+	}
+	if c.selectors != nil {
+		for name := range optional {
+			matched := 0
+			for _, field := range c.fields {
+				for _, key := range inputFieldMatchKeys(field) {
+					if key != name {
+						continue
+					}
+					matched++
+					if field.binding.Required == nil || *field.binding.Required {
+						return nil, fmt.Errorf("selector companion requires explicitly optional prepared input %q", name)
+					}
+					break
+				}
+			}
+			if matched != 1 {
+				return nil, fmt.Errorf("optional input binding %q requires exactly one canonical field", name)
+			}
+		}
 		return c, nil
 	}
 	bindings := make([]bindly.BindingSpec, 0, len(c.fields))

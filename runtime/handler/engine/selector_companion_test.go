@@ -86,7 +86,7 @@ func TestSelectorCompanionEngineRejectsUnsupportedModesBeforeBinding(t *testing.
 		})
 	}
 }
-func TestSelectorCompanionEngineBindsBeforeHandlerAndRejectsPreparer(t *testing.T) {
+func TestSelectorCompanionEngineBindsBeforeHandlerAndCarriesCanonicalPreparation(t *testing.T) {
 	route := companionRoute(t)
 	query := provider.Named("query", func(_ context.Context, _ reflect.Type, name string) (any, bool, error) {
 		switch name {
@@ -117,12 +117,42 @@ func TestSelectorCompanionEngineBindsBeforeHandlerAndRejectsPreparer(t *testing.
 		if err != nil || !ok {
 			t.Fatal("existing preparer missing")
 		}
-		if _, err = raw.(dexec.ReaderInputPreparer)(ctx); err == nil || !strings.Contains(err.Error(), "selector companion") {
-			t.Fatal("prepared pointer mode admitted")
+		prepared, err := raw.(dexec.ReaderInputPreparer)(ctx, "ID")
+		if err != nil {
+			t.Fatal(err)
+		}
+		clone, ok := prepared.Input.(*fixture.Input)
+		if !ok || clone == input || clone.ID != 0 || input.ID != 9 || !input.Has.ID {
+			t.Fatal("canonical Without/original preservation failed")
+		}
+		carried, err := route.SelectorPlan().Value(prepared.Binder, clone)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if carried.Pointer() == value.Pointer() || carried.Elem().FieldByName("Page").Int() != 1 {
+			t.Fatal("prepared companion was not detached")
+		}
+		fields := carried.Elem().FieldByName("Fields")
+		fields.Index(0).SetString("changed")
+		if value.Elem().FieldByName("Fields").Index(0).String() != "id" {
+			t.Fatal("prepared selector mutation reached original")
 		}
 		return nil, nil
 	})})
 	if err != nil || entries != 1 {
 		t.Fatalf("engine invocation failed: %v entries=%d", err, entries)
+	}
+}
+
+func TestSelectorCompanionOptionalPreparationPreservesExactRoute(t *testing.T) {
+	route := companionRoute(t)
+	for _, name := range []string{"ID", "id"} {
+		got, err := route.WithOptionalBindings(name)
+		if err != nil || got != route || got.Plan() != route.Plan() {
+			t.Fatalf("optional no-op changed canonical contract: %v", err)
+		}
+	}
+	if _, err := route.WithOptionalBindings("missing"); err == nil {
+		t.Fatal("unknown alias admitted")
 	}
 }

@@ -471,14 +471,18 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 		return snapshot, snapshot != nil, nil
 	}))
 	runtimeProviders = append(runtimeProviders, handlerprovider.Static(dexec.ReaderInputPreparerKey, dexec.ReaderInputPreparer(func(ctx context.Context, names ...string) (*dexec.ReaderInput, error) {
-		if selectors != nil {
-			return nil, fmt.Errorf("selector companion does not support prepared reader inputs")
-		}
 		prepared, err := request.Input.Without(input, names...)
 		if err != nil {
 			return nil, err
 		}
-		return &dexec.ReaderInput{Input: prepared, Binder: rhandler.NewBinder(scope, prepared), Parameters: sqlx.ParameterResolver(request.Input.Resolver(prepared))}, nil
+		var preparedBinder xhandler.Binder = rhandler.NewBinder(scope, prepared)
+		if selectors != nil {
+			preparedBinder, err = selectors.CarryPrepared(invocation.Binder, input, prepared, preparedBinder)
+			if err != nil {
+				return nil, err
+			}
+		}
+		return &dexec.ReaderInput{Input: prepared, Binder: preparedBinder, Parameters: sqlx.ParameterResolver(request.Input.Resolver(prepared))}, nil
 	})))
 	providers, err := (providerComposer{}).compose(providerComposition{
 		component: request.Providers, protocol: protocolProviders,

@@ -20,7 +20,9 @@ import (
 	handlerengine "github.com/viant/datly/runtime/handler/engine"
 	handlerprovider "github.com/viant/datly/runtime/handler/provider"
 	rreader "github.com/viant/datly/runtime/handler/reader"
+	"github.com/viant/datly/runtime/registry"
 	"github.com/viant/datly/spec"
+	handlerexec "github.com/viant/xdatly/handler/exec"
 )
 
 type componentStackKey struct{}
@@ -327,6 +329,7 @@ func (r *Runtime) invokeComponent(ctx context.Context, request dexec.ComponentRe
 			return nil, err
 		}
 	}
+	canonicalInputRoute := inputRoute
 	if len(request.WarmupOmitInput) > 0 {
 		inputRoute, err = inputRoute.WithOptionalBindings(request.WarmupOmitInput...)
 		if err != nil {
@@ -434,7 +437,7 @@ func (r *Runtime) invokeComponent(ctx context.Context, request dexec.ComponentRe
 		IndependentChildTransactions: request.IndependentChildTransactions || (registered.Component.Settings != nil && registered.Component.Settings.IndependentChildTransactions),
 		SequenceStrategy:             sequenceStrategy,
 		BufferedComponentCalls:       buffered,
-		CanonicalReader:              registered.Handler == nil && registered.Reader != nil && request.Warmup == nil && !request.DryRun && !request.PrepareQuery && (request.Replay == nil || !request.Replay.Only),
+		CanonicalReader:              registered.Handler == nil && registered.Reader != nil && (inputRoute.SelectorPlan() == nil || len(request.WarmupOmitInput) == 0) && request.Warmup == nil && !request.DryRun && !request.PrepareQuery && (request.Replay == nil || !request.Replay.Only) || canonicalCompanionWarmup(ctx, registered, request, canonicalInputRoute, inputRoute),
 		ProtectedFlushTables:         protectedFlushTables,
 		Injector:                     r.injector,
 		Input:                        inputRoute,
@@ -497,4 +500,47 @@ func enterComponent(ctx context.Context, target dexec.ComponentTarget) (context.
 	}
 	path := append(append([]dexec.ComponentTarget(nil), stack...), target)
 	return context.WithValue(ctx, componentStackKey{}, path), nil
+}
+
+// canonicalCompanionWarmup admits only unchanged optional root-index contracts.
+// Relation inventories are excluded even during preparation, which clears Warmup.
+func canonicalCompanionWarmup(ctx context.Context, registered *RegisteredComponent, request dexec.ComponentRequest, original, current *registry.RouteInputContract) bool {
+	if registered == nil || registered.Handler != nil || registered.Reader == nil || original == nil || current != original || current.SelectorPlan() == nil || request.Input != nil || request.ExtraInput != nil || request.Replay != nil || request.DryRun || request.ReaderOptions != nil || request.BindingOutput != nil || len(request.WarmupOmitInput) != 1 {
+		return false
+	}
+	info := handlerexec.InvocationFromContext(ctx)
+	if !info.MayBypassRowAuthorization() {
+		return false
+	}
+	switch info.WarmupPhase() {
+	case handlerexec.WarmupPhasePrepare:
+		if request.Warmup != nil || !request.PrepareQuery {
+			return false
+		}
+	case handlerexec.WarmupPhaseFill:
+		if request.Warmup == nil || request.PrepareQuery || request.Warmup.View != "" || request.Warmup.Settings == nil {
+			return false
+		}
+	default:
+		return false
+	}
+	targets, err := warmupTargets(registered)
+	if err != nil {
+		return false
+	}
+	matched := 0
+	for _, target := range targets {
+		if target.View != "" {
+			return false
+		}
+		settings := target.Settings
+		if settings == nil || settings.IndexColumn == "" || settings.IndexParameter != request.WarmupOmitInput[0] {
+			continue
+		}
+		if request.Warmup != nil && (request.Warmup.Settings.IndexColumn != settings.IndexColumn || request.Warmup.Settings.IndexParameter != settings.IndexParameter) {
+			continue
+		}
+		matched++
+	}
+	return matched == 1
 }

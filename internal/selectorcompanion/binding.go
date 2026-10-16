@@ -289,6 +289,39 @@ func (p *BindingPlan) Carry(binder xhandler.Binder, input, value any) (xhandler.
 	}
 	return &carrier{Binder: binder, plan: p, input: input, value: value}, nil
 }
+
+// CarryPrepared transfers invocation-only selector state after canonical Without.
+// It performs no binding, initialization, or deferred Page evaluation.
+func (p *BindingPlan) CarryPrepared(source xhandler.Binder, original, prepared any, binder xhandler.Binder) (xhandler.Binder, error) {
+	value, err := p.Value(source, original)
+	if err != nil {
+		return nil, err
+	}
+	if binder == nil || reflect.TypeOf(prepared) != reflect.PointerTo(p.input) || reflect.ValueOf(prepared).IsNil() || prepared == original || !value.IsValid() || value.Type() != reflect.PointerTo(p.companion) || value.IsNil() {
+		return nil, fmt.Errorf("selector companion prepared input identity mismatch")
+	}
+	copyValue := reflect.New(p.companion)
+	copyValue.Elem().Set(value.Elem())
+	for i := 0; i < copyValue.Elem().NumField(); i++ {
+		field := copyValue.Elem().Field(i)
+		switch field.Kind() {
+		case reflect.Slice:
+			if field.Type() != reflect.TypeFor[[]string]() {
+				return nil, fmt.Errorf("unsupported prepared companion field")
+			}
+			if !field.IsNil() {
+				detached := reflect.MakeSlice(field.Type(), field.Len(), field.Len())
+				reflect.Copy(detached, field)
+				field.Set(detached)
+			}
+		case reflect.Int:
+		default:
+			return nil, fmt.Errorf("unsupported prepared companion field")
+		}
+	}
+	return &carrier{Binder: binder, plan: p, input: prepared, value: copyValue.Interface(), page: source.(*carrier).page}, nil
+}
+
 func (p *BindingPlan) Value(binder xhandler.Binder, input any) (reflect.Value, error) {
 	c, ok := binder.(*carrier)
 	if !ok || c.plan != p || c.plan.association != p.association || c.input != input {

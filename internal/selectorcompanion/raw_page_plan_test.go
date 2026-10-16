@@ -104,6 +104,15 @@ func TestDeferredPagePlanRetainsCanonicalOwnerButOmitsOnlyExecution(t *testing.T
 		if err != nil || !reflect.DeepEqual(resolved.Elem().FieldByName("Fields").Interface(), []string{"id"}) {
 			t.Fatal("native Fields binding lost")
 		}
+		prepared := &pagefixture.Input{}
+		transferred, err := plan.CarryPrepared(carried, input, prepared, &delegatingBinder{})
+		if err != nil {
+			t.Fatalf("deferred transfer evaluated Page or rejected canonical clone: %v", err)
+		}
+		preparedPage, err := plan.ResolvePage(t.Context(), transferred, prepared)
+		if err != nil || preparedPage != 3 {
+			t.Fatalf("deferred source lost after preparation: %d %v", preparedPage, err)
+		}
 		got, err := plan.ResolvePage(t.Context(), carried, input)
 		if err != nil || got != 3 {
 			t.Fatalf("late value=%d err=%v", got, err)
