@@ -88,8 +88,12 @@ func (r *Reader) Compile(input ReadInput) (*spec.View, error) {
 		return nil, err
 	}
 	root.Source.Table = sourceTable
+	root.Source.TableInferred = view.Source == nil || view.Source.Table == "" || view.Source.TableInferred
 	if root.Source.Table == "" && !referencesCTE(parsed.From.X, parsed.WithSelects) {
 		root.Source.Table = table
+	}
+	if view.Source != nil && view.Source.Table != "" && !view.Source.TableInferred {
+		root.Source.Table = view.Source.Table
 	}
 	root.Auxiliary = root.Auxiliary || auxiliary
 	if directAuxiliary {
@@ -226,6 +230,7 @@ func (r *Reader) compileRelation(join *query.Join, index int, withs query.WithSe
 		Source: childSource,
 	}
 	child.Source.Table, child.Auxiliary, err = readSourceTable(join.With, withs, 0)
+	child.Source.TableInferred = true
 	if err != nil {
 		return nil, relationError(CodeRelationUnsupported, err, join.Span)
 	}

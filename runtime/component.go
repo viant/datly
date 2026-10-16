@@ -3,6 +3,7 @@ package runtime
 import (
 	"context"
 	"fmt"
+	"github.com/viant/datly/constant"
 	"github.com/viant/datly/internal/drainowner"
 	"github.com/viant/datly/observability/otel"
 	xexec "github.com/viant/xdatly/exec"
@@ -424,6 +425,11 @@ func (r *Runtime) invokeComponent(ctx context.Context, request dexec.ComponentRe
 	if err != nil {
 		return nil, err
 	}
+	values, err := (*constant.Values)(nil).For(registered.Component)
+	if err != nil {
+		return nil, err
+	}
+	ctx = constant.WithContext(ctx, values)
 	return r.invoker.Execute(ctx, handlerengine.Request{
 		IndependentChildTransactions: request.IndependentChildTransactions || (registered.Component.Settings != nil && registered.Component.Settings.IndependentChildTransactions),
 		SequenceStrategy:             sequenceStrategy,

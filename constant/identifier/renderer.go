@@ -90,7 +90,8 @@ func (r Renderer) References(source string) ([]Reference, error) {
 					prefix++
 				}
 				qualified := prefix < len(source) && source[prefix] == '.'
-				if !quoted && !qualified {
+				fragment := span.Start > 0 && identifierByte(source[span.Start-1])
+				if !quoted && !qualified && !fragment {
 					continue
 				}
 				if quoted && prefix >= end {
@@ -110,15 +111,17 @@ func (r Renderer) References(source string) ([]Reference, error) {
 					return fmt.Errorf("unknown identifier constant %q", node.ID)
 				}
 				if value == "" {
-					// An empty environment suffix is valid only when the remaining
-					// quoted identifier is complete without another template value.
-					if !quoted {
+					// An empty suffix cannot supply an entire identifier. An
+					// unquoted fragment already has a literal identifier prefix.
+					if !quoted && !fragment {
 						return fmt.Errorf("identifier constant %q is empty", node.ID)
 					}
-					remainder := source[start+1:span.Start] + source[prefix:end-1]
-					parts, err := sqlparser.TableIdentifierParts(remainder)
-					if err != nil || len(parts) != 1 || strings.ContainsAny(remainder, "$.") {
-						return fmt.Errorf("empty identifier constant %q leaves an incomplete identifier", node.ID)
+					if quoted {
+						remainder := source[start+1:span.Start] + source[prefix:end-1]
+						parts, err := sqlparser.TableIdentifierParts(remainder)
+						if err != nil || len(parts) != 1 || strings.ContainsAny(remainder, "$.") {
+							return fmt.Errorf("empty identifier constant %q leaves an incomplete identifier", node.ID)
+						}
 					}
 				}
 				// Identifier fragments cannot introduce SQL syntax or an enclosing quote.
@@ -154,6 +157,10 @@ func (r Renderer) References(source string) ([]Reference, error) {
 		return nil, err
 	}
 	return replacements, nil
+}
+
+func identifierByte(ch byte) bool {
+	return ch >= 'a' && ch <= 'z' || ch >= 'A' && ch <= 'Z' || ch >= '0' && ch <= '9' || ch == '_'
 }
 
 func (r Renderer) Render(source string) (string, error) {

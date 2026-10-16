@@ -10,6 +10,7 @@ import (
 	"sort"
 	"sync"
 
+	"github.com/viant/datly/constant"
 	dexec "github.com/viant/datly/exec"
 	"github.com/viant/govalidator"
 	"github.com/viant/sqlx/io"
@@ -37,6 +38,8 @@ type Service struct {
 	plans        sync.Map
 }
 type plan struct {
+	sqlType      reflect.Type
+	sqlIndexes   [][]int
 	columns      []io.Column
 	bind         io.PlaceholderBinder
 	nativeChecks *sqlvalidator.Checks
@@ -68,7 +71,7 @@ func (s *Service) Validate(ctx context.Context, value any, options ...any) (*xha
 	if typ.Kind() == reflect.Ptr {
 		typ = typ.Elem()
 	}
-	compiled, err := s.plan(typ)
+	compiled, err := s.plan(ctx, typ)
 	if err != nil {
 		return nil, err
 	}
@@ -103,7 +106,7 @@ func (s *Service) Validate(ctx context.Context, value any, options ...any) (*xha
 	if connection.Tx != nil {
 		native = append(native, sqlvalidator.WithTransaction(connection.Tx))
 	}
-	sqlResult, err := s.sqlValidator.Validate(ctx, connection.DB, value, native...)
+	sqlResult, err := s.sqlValidator.Validate(ctx, connection.DB, compiled.sqlValue(value), native...)
 	if err != nil {
 		return nil, fmt.Errorf("SQL validation: %w", err)
 	}
@@ -146,8 +149,10 @@ func (p *plan) appendSQL(result *xhandler.Validation, sqlResult *sqlvalidator.Va
 	}
 }
 
-func (s *Service) plan(typ reflect.Type) (*plan, error) {
-	if existing, ok := s.plans.Load(typ); ok {
+func (s *Service) plan(ctx context.Context, typ reflect.Type) (*plan, error) {
+	values := constant.FromContext(ctx)
+	key := planKey{typ: typ, constants: values.Identity()}
+	if existing, ok := s.plans.Load(key); ok {
 		return existing.(*plan), nil
 	}
 	columns, bind, err := io.StructColumnMapper(typ)
@@ -158,11 +163,15 @@ func (s *Service) plan(typ reflect.Type) (*plan, error) {
 	if err != nil {
 		return nil, fmt.Errorf("Go validation plan: %w", err)
 	}
-	nativeChecks, err := sqlvalidator.NewChecks(typ, nil)
+	compiled := &plan{columns: columns, bind: bind, goChecks: goChecks}
+	if err := compiled.resolveSQLShape(typ, values); err != nil {
+		return nil, err
+	}
+	nativeChecks, err := sqlvalidator.NewChecks(compiled.sqlType, nil)
 	if err != nil {
 		return nil, fmt.Errorf("SQL validation plan: %w", err)
 	}
-	compiled := &plan{columns: columns, bind: bind, nativeChecks: nativeChecks, goChecks: goChecks}
+	compiled.nativeChecks = nativeChecks
 	names := map[string]bool{}
 	for _, name := range goChecks.InputFields() {
 		names[name] = true
@@ -175,7 +184,7 @@ func (s *Service) plan(typ reflect.Type) (*plan, error) {
 		compiled.fields = append(compiled.fields, name)
 	}
 	sort.Strings(compiled.fields)
-	actual, _ := s.plans.LoadOrStore(typ, compiled)
+	actual, _ := s.plans.LoadOrStore(key, compiled)
 	return actual.(*plan), nil
 }
 

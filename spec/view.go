@@ -152,7 +152,10 @@ type EmbeddedSQLRef struct {
 
 type ViewSource struct {
 	Table string `json:"table,omitempty"`
-	SQL   string `json:"sql,omitempty"`
+	// TableInferred distinguishes parser/discovery inference from authored
+	// metadata during transcription. It is not part of the runtime contract.
+	TableInferred bool   `json:"-" yaml:"-"`
+	SQL           string `json:"sql,omitempty"`
 	// URI preserves the source resource identity independently of available
 	// SQL. Embeds contains only inline substitutions within SQL.
 	URI      string            `json:"uri,omitempty"`
@@ -166,9 +169,10 @@ func (s *ViewSource) Clone() *ViewSource {
 		return nil
 	}
 	result := &ViewSource{
-		Table: s.Table,
-		SQL:   s.SQL,
-		URI:   s.URI,
+		Table:         s.Table,
+		TableInferred: s.TableInferred,
+		SQL:           s.SQL,
+		URI:           s.URI,
 	}
 	if len(s.Embeds) > 0 {
 		result.Embeds = make([]*EmbeddedSQLRef, 0, len(s.Embeds))

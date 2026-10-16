@@ -25,7 +25,7 @@ type validationBatch struct {
 	references     bool
 }
 
-func (s *Service) batch(value any, policies []xhandler.ValidationOptions) (*validationBatch, error) {
+func (s *Service) batch(ctx context.Context, value any, policies []xhandler.ValidationOptions) (*validationBatch, error) {
 	for i, policy := range policies {
 		if i > 0 && policy.CheckOnly != policies[0].CheckOnly {
 			return nil, fmt.Errorf("validation batch cannot mix check-only and mutation policies")
@@ -68,7 +68,7 @@ func (s *Service) batch(value any, policies []xhandler.ValidationOptions) (*vali
 	if count == 0 {
 		return batch, nil
 	}
-	if batch.compiled, err = s.plan(typ); err != nil {
+	if batch.compiled, err = s.plan(ctx, typ); err != nil {
 		return nil, err
 	}
 	batch.nativePolicies = make([]sqlvalidator.CandidatePolicy, count)
@@ -95,7 +95,7 @@ func (s *Service) batch(value any, policies []xhandler.ValidationOptions) (*vali
 }
 
 func (s *Service) validateBatch(ctx context.Context, value any, policies []xhandler.ValidationOptions) (*xhandler.Validation, error) {
-	batch, err := s.batch(value, policies)
+	batch, err := s.batch(ctx, value, policies)
 	if err != nil {
 		return nil, err
 	}
@@ -124,7 +124,7 @@ func (s *Service) validateBatch(ctx context.Context, value any, policies []xhand
 	if connection.Tx != nil {
 		nativeOptions = append(nativeOptions, sqlvalidator.WithTransaction(connection.Tx))
 	}
-	sqlResult, err := s.sqlValidator.Validate(ctx, connection.DB, batch.values, nativeOptions...)
+	sqlResult, err := s.sqlValidator.Validate(ctx, connection.DB, batch.compiled.sqlBatch(batch.at, len(batch.policies), batch.values), nativeOptions...)
 	if err != nil {
 		if batch.policies[0].CheckOnly {
 			result.Failed = len(result.Violations) > 0

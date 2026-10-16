@@ -50,7 +50,7 @@ SELECT * FROM events`,
 	}
 }
 
-func TestCompilerCompileSynthesizesConstantsAndResolvesReadTables(t *testing.T) {
+func TestCompilerCompileSynthesizesConstantsAndPreservesReadTables(t *testing.T) {
 	result, err := NewCompiler().Compile(context.Background(), &Source{
 		Name: "Vendors",
 		Text: `#setting($_ = $route('/vendors', 'GET'))
@@ -61,7 +61,7 @@ SELECT vendor.* FROM $Unsafe.Vendor vendor`,
 		t.Fatalf("Compile() error = %v", err)
 	}
 	component := result.Component
-	if component == nil || component.RootView == nil || component.RootView.Source == nil || component.RootView.Source.Table != "VENDOR" {
+	if component == nil || component.RootView == nil || component.RootView.Source == nil || component.RootView.Source.Table != "$Unsafe.Vendor" {
 		t.Fatalf("component root = %+v", component)
 	}
 	if len(component.Parameters) != 1 {
@@ -155,7 +155,7 @@ SELECT * FROM $Unsafe.vendor`,
 	}
 	component := result.Component
 	if len(component.Settings.Const) != 2 || component.Settings.Const["vendor"] != "dql_vendors" ||
-		component.Settings.Const["PackageOnly"] != "kept" || component.RootView.Source.Table != "dql_vendors" {
+		component.Settings.Const["PackageOnly"] != "kept" || component.RootView.Source.Table != "$Unsafe.vendor" {
 		t.Fatalf("component = %+v", component)
 	}
 	if len(component.Parameters) != 2 || component.Parameters[1].Name != "vendor" || component.Parameters[1].Value == nil || *component.Parameters[1].Value != "dql_vendors" {
