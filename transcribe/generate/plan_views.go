@@ -773,7 +773,7 @@ func resolveScalarViewFieldsWithOmission(plan *Plan, view *spec.View, includeVel
 		if typeName == "" {
 			typeName = "any"
 		}
-		if strings.HasPrefix(typeName, "map[") {
+		if strings.HasPrefix(typeName, "map[") || strings.HasPrefix(typeName, "[]") {
 			var err error
 			typeName, err = emittedMapColumnType(plan, typeName)
 			if err != nil {

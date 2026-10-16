@@ -37,7 +37,7 @@ func TestColumnTypePointerSliceOrder(t *testing.T) {
 			require.Equal(t, actual, decoded)
 		})
 	}
-	for _, expression := range []string{"**model.T", "[][]model.T", "*[]**model.T", "[]**model.T", "[3]model.T", "missing.T"} {
+	for _, expression := range []string{"**model.T", "*[]**model.T", "[]**model.T", "[3]model.T", "missing.T"} {
 		t.Run("reject "+expression, func(t *testing.T) {
 			_, err := ColumnType(expression, context)
 			require.Error(t, err)
@@ -103,4 +103,25 @@ SELECT 1`)
 	require.False(t, columns[0].Type.SlicePointer)
 	require.False(t, columns[1].Type.Pointer)
 	require.True(t, columns[1].Type.SlicePointer)
+}
+
+func TestColumnTypeNestedStructuredValues(t *testing.T) {
+	ctx := &spec.TypeContext{Imports: []spec.ImportSpec{{Alias: "model", Package: "example.com/types"}}}
+	for expression, expected := range map[string]string{
+		"[][]int":                 "[][]int",
+		"[][]*model.T":            "[][]*example.com/types.T",
+		"[]*[]model.T":            "[]*[]example.com/types.T",
+		"*[]*[]*model.T":          "*[]*[]*example.com/types.T",
+		"map[int][][]*model.T":    "map[int][][]*example.com/types.T",
+		"[][]map[string]*model.T": "[][]map[string]*example.com/types.T",
+	} {
+		t.Run(expression, func(t *testing.T) {
+			ref, err := ColumnType(expression, ctx)
+			require.NoError(t, err)
+			require.Equal(t, expected, columnTypeExpression(ref))
+		})
+	}
+	for _, expression := range []string{"[][]**model.T", "[]*[]**model.T", "[][2]model.T", "[][]missing.T", "map[[][]int]model.T", "[][]chan int"} {
+		t.Run("reject "+expression, func(t *testing.T) { _, err := ColumnType(expression, ctx); require.Error(t, err) })
+	}
 }

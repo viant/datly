@@ -145,7 +145,15 @@ func declarationColumnTypeNode(expression ast.Expr, context *spec.TypeContext, r
 			return spec.TypeRef{}, fmt.Errorf("fixed arrays are not supported")
 		}
 		if result.Cardinality != "" {
-			return spec.TypeRef{}, fmt.Errorf("nested slices are not supported")
+			// Keep the nested element expression intact, as maps already do for
+			// independently named branches. The outer TypeRef retains its wrappers.
+			element, err := declarationColumnTypeNode(actual.Elt, context, spec.TypeRef{})
+			if err != nil {
+				return spec.TypeRef{}, err
+			}
+			result.Name = "[]" + columnTypeExpression(element)
+			result.Package = ""
+			return result, nil
 		}
 		result.Cardinality = spec.CardinalityMany
 		result.SlicePointer = result.Pointer
