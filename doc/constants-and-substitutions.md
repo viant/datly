@@ -212,6 +212,16 @@ a connection or querying schema metadata. Low-level bootstrap callers can supply
 the generic SQLParser rules. Executable SQL and generated symbolic tags remain
 unchanged.
 
+A full-table `$Unsafe.HistoryTable` reference can also use a declared input
+binding such as `HistoryTable` with `const/frequencyTargetHistoryTable`. Metadata
+follows that external constant key, honoring instance overrides and the authored
+default. Backtick-quoted references retain their authored quoting. The binding
+does not add a `HistoryTable` alias to the external constant map or reinterpret
+ordinary literal table names. Request-bound inputs remain ineligible for
+instance-time metadata, including when a same-named instance constant exists.
+Executable SQL continues to read the normally bound input field; `$Unsafe` alone
+neither grants nor removes immutable authority.
+
 ## Projected scalar constants
 
 A declared typed constant can be projected as `$Constant AS column`. It remains

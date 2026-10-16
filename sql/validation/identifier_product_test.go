@@ -7,6 +7,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"github.com/viant/datly/constant"
+	"github.com/viant/datly/spec"
 	"github.com/viant/sqlx/metadata/database"
 	"github.com/viant/sqlx/metadata/info"
 )
@@ -15,6 +16,32 @@ type productValidationRow struct {
 	ID    int    `sqlx:"id,primaryKey"`
 	Owner int    `sqlx:"owner_id,refTable=${project}.automation.owners,refDb=${project},refColumn=id"`
 	Code  string `sqlx:"code,unique,table=${project}.scope3.emissions_data"`
+}
+
+type boundReferenceRow struct {
+	ID    int `sqlx:"id,primaryKey"`
+	Owner int `sqlx:"owner_id,refTable=$Unsafe.HistoryTable,refColumn=id"`
+}
+
+func TestConstraintPlansSeparateConstantBindings(t *testing.T) {
+	service := New(productValidationSource{})
+	values, err := constant.New(map[string]string{"firstTable": "viant-first.mdp.history", "secondTable": "viant-second.mdp.history"})
+	require.NoError(t, err)
+	for _, key := range []string{"firstTable", "secondTable"} {
+		t.Run(key, func(t *testing.T) {
+			t.Parallel()
+			effective, err := values.For(&spec.Component{Parameters: []*spec.Parameter{{Name: "HistoryTable", Source: spec.BindSource{Kind: "const", Name: key}}}})
+			require.NoError(t, err)
+			for i := 0; i < 2; i++ {
+				plan, err := service.plan(constant.WithContext(t.Context(), effective), reflect.TypeFor[boundReferenceRow](), "metrics")
+				require.NoError(t, err)
+				field, ok := plan.sqlType.FieldByName("Owner")
+				require.True(t, ok)
+				want, _ := values.Lookup(key)
+				require.Contains(t, string(field.Tag), "refTable="+want)
+			}
+		})
+	}
 }
 
 type productValidationSource struct{}

@@ -5,6 +5,7 @@ package identifier
 
 import (
 	"fmt"
+	"go/token"
 	"sort"
 	"strings"
 
@@ -208,12 +209,33 @@ func (r Renderer) Validate(source string) error { _, err := r.References(source)
 
 // Identifier renders transient table metadata through the SQL rendering owner.
 func (r Renderer) Identifier(table string) (string, error) {
-	if name := constant.TableName(table); name != "" {
-		if value, found := r.Values.Lookup(name); found {
-			if _, err := r.parts(value); err != nil {
+	reference := strings.TrimSpace(table)
+	open, close := "", ""
+	if len(reference) >= 2 {
+		switch {
+		case reference[0] == '`' && reference[len(reference)-1] == '`', reference[0] == '"' && reference[len(reference)-1] == '"':
+			open, close = reference[:1], reference[len(reference)-1:]
+		case reference[0] == '[' && reference[len(reference)-1] == ']':
+			open, close = "[", "]"
+		}
+		if open != "" {
+			reference = reference[1 : len(reference)-1]
+		}
+	}
+	if name := constant.TableName(reference); token.IsIdentifier(name) {
+		if open != "" && reference != "$Unsafe."+name && reference != "${Unsafe."+name+"}" {
+			return table, nil // Literal prefixes/suffixes inside quotes are identity.
+		}
+		_, declared := r.Values.Binding(name)
+		if open != "" && !declared {
+			return table, nil // A quoted literal is not a declaration of authority.
+		}
+		if value, found := r.Values.LookupBound(name); found {
+			resolved := open + value + close
+			if _, err := r.parts(resolved); err != nil {
 				return "", fmt.Errorf("identifier constant %q: %w", name, err)
 			}
-			return value, nil
+			return resolved, nil
 		}
 	}
 	const prefix = "SELECT * FROM "

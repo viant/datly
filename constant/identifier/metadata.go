@@ -72,6 +72,11 @@ func (r Renderer) Tag(source reflect.StructTag) (reflect.StructTag, error) {
 // Component resolves runtime metadata on a private copy. SQL and resources
 // retain their template expressions for the normal SQL compiler.
 func (r Renderer) Component(source *spec.Component) (*spec.Component, error) {
+	values, err := r.Values.For(source)
+	if err != nil {
+		return nil, err
+	}
+	r.Values = values
 	result := source.Clone()
 	seen := map[*spec.View]bool{}
 	var visit func(*spec.View, Renderer) error
