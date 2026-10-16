@@ -118,6 +118,13 @@ principal. MCP accepts Port or Address plus the native Authorization policy and
 uses `mcp/server` with Manager as its generation source. Old MCP OAuth/BFF option
 conversion is not implemented.
 
+`MCP.ToolsListTtlMs` controls the producer's private tool catalog lease in
+milliseconds. Omitted defaults to 300000 (five minutes); explicit zero disables
+client reuse. Tools are still filtered for the caller on the server, and tool
+execution retains its authorization. Catalog publication changes the next
+server response; clients may retain earlier metadata until its lease expires.
+No tools/list_changed publication notification is currently wired here.
+
 Endpoint.Port zero or absent retains the original 8080 default. Explicit
 Endpoint.Address is an extension (including `127.0.0.1:0`). MCP.Port is a pointer,
 and explicit zero remains an allocated port. Nonpositive original HTTP and SQL

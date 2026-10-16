@@ -31,17 +31,17 @@ func startWireServer(t *testing.T, service ServerService) *wireServer {
 }
 
 func startConfiguredWireServer(t *testing.T, service ServerService, transport TransportConfig, configure ...func(*http.Server)) *wireServer {
+	return startWireServerConfig(t, Config{Service: service, Implementation: schema.Implementation{Name: "datly-test", Version: "1.0"}, Transport: transport}, configure...)
+}
+
+func startWireServerConfig(t *testing.T, config Config, configure ...func(*http.Server)) *wireServer {
 	t.Helper()
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
-	transport.Address = listener.Addr().String()
-	instance, err := New(Config{
-		Service:        service,
-		Implementation: schema.Implementation{Name: "datly-test", Version: "1.0"},
-		Transport:      transport,
-	})
+	config.Transport.Address = listener.Addr().String()
+	instance, err := New(config)
 	if err != nil {
 		listener.Close()
 		t.Fatal(err)

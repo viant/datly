@@ -326,7 +326,7 @@ func (s *Server) prepare(ctx context.Context) error {
 	s.servers = []*http.Server{{Addr: address, Handler: s.httpHandler, ReadHeaderTimeout: time.Duration(endpoint.ReadHeaderTimeoutMs) * time.Millisecond, IdleTimeout: time.Duration(endpoint.IdleTimeoutMs) * time.Millisecond, ReadTimeout: time.Duration(endpoint.ReadTimeoutMs) * time.Millisecond, WriteTimeout: time.Duration(endpoint.WriteTimeoutMs) * time.Millisecond, MaxHeaderBytes: endpoint.MaxHeaderBytes}}
 	if policy := s.source.config.MCP; policy != nil {
 		address, _ := policy.ListenAddress()
-		protocol, createErr := mcpserver.New(mcpserver.Config{Source: s.manager, ResourceAuthorizer: s.mcpResourceAuthorizer, Transport: mcpserver.TransportConfig{Kind: mcpserver.TransportStreamable, Address: address, ReadHeaderTimeout: time.Duration(endpoint.ReadHeaderTimeoutMs) * time.Millisecond, IdleTimeout: time.Duration(endpoint.IdleTimeoutMs) * time.Millisecond}})
+		protocol, createErr := mcpserver.New(mcpserver.Config{Source: s.manager, ToolsListTtlMs: policy.ToolsListTtlMs, ResourceAuthorizer: s.mcpResourceAuthorizer, Transport: mcpserver.TransportConfig{Kind: mcpserver.TransportStreamable, Address: address, ReadHeaderTimeout: time.Duration(endpoint.ReadHeaderTimeoutMs) * time.Millisecond, IdleTimeout: time.Duration(endpoint.IdleTimeoutMs) * time.Millisecond}})
 		if createErr != nil {
 			return createErr
 		}
