@@ -118,7 +118,9 @@ func (r *planResolver) resolve() (*Plan, error) {
 					view.Fields[i].Tag = withoutStructTags(view.Fields[i].Tag, tag.ViewName, tag.SQLName, tag.RelationName)
 					// SQLX treats on-tagged relations as transient. Preserve
 					// that exclusion when body-only shapes omit read tags.
-					view.Fields[i].Tag = replaceStructTag(view.Fields[i].Tag, "sqlx", "-")
+					if _, logical := h.CompositionViews[view.Identity]; !logical {
+						view.Fields[i].Tag = replaceStructTag(view.Fields[i].Tag, "sqlx", "-")
+					}
 				}
 			}
 		}

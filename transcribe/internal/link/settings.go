@@ -99,6 +99,10 @@ func (l *settingsLoader) mergeGeneration(base, authored *spec.GenerationSettings
 	} else {
 		base = base.Clone()
 	}
+	if len(authored.SourceMembers) > 0 {
+		base.SourceMembers = append([]spec.SourceMember(nil), authored.SourceMembers...)
+	}
+	l.setString(&base.SourceInput, authored.SourceInput)
 	l.setString(&base.Template, authored.Template)
 	l.setString(&base.DescriptionResource, authored.DescriptionResource)
 	l.setString(&base.ViewFile, authored.ViewFile)

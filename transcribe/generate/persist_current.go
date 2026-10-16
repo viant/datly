@@ -46,6 +46,19 @@ func (p *scaffoldPersistence) prepareCurrent(target string) error {
 // prepareCurrentAt keeps destination ownership nominal while inspecting the
 // current projected tree. The ordinary wrapper uses the destination itself.
 func (p *scaffoldPersistence) prepareCurrentAt(target, readRoot string) error {
+	if p.plan != nil && p.plan.ExternalHandler != nil && p.plan.ExternalHandler.ValidateOwnerSources != nil {
+		if err := p.plan.ExternalHandler.ValidateOwnerSources(func(path string) string {
+			if withinScaffoldTree(target, path) {
+				relative, err := filepath.Rel(target, path)
+				if err == nil {
+					return filepath.Join(readRoot, relative)
+				}
+			}
+			return path
+		}); err != nil {
+			return err
+		}
+	}
 	p.renames = map[string]bool{}
 	p.retainedContracts = map[string]string{}
 	if err := p.prepareContractProposals(target); err != nil {
@@ -88,6 +101,10 @@ func (p *scaffoldPersistence) prepareCurrentAt(target, readRoot string) error {
 				}
 			}
 		}
+	}
+	sourceMembers, err := p.prepareSourceMembers(target, readRoot)
+	if err != nil {
+		return err
 	}
 	desired, err := p.desiredFiles(target)
 	if err != nil {
@@ -160,7 +177,7 @@ func (p *scaffoldPersistence) prepareCurrentAt(target, readRoot string) error {
 		if keep[entry.Name()] && p.linkedSource(content) {
 			return fmt.Errorf("generated destination %q contains a linked Go type; link the remaining row types or choose a separate generated destination", entry.Name())
 		}
-		if keep[entry.Name()] && owner == "" && !(legacyComponent && p.matchesCurrentDeclarations(entry.Name(), content)) {
+		if keep[entry.Name()] && owner == "" && !sourceMembers[entry.Name()] && !(legacyComponent && p.matchesCurrentDeclarations(entry.Name(), content)) {
 			return fmt.Errorf("generated file %q collides with an unowned package file", entry.Name())
 		}
 

@@ -3,9 +3,11 @@ package transcribe
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 
 	"github.com/viant/bindly/resource"
 	packageresources "github.com/viant/datly/bootstrap/resources"
+	"github.com/viant/datly/transcribe/dql"
 	"github.com/viant/datly/transcribe/internal/dependency"
 	"github.com/viant/datly/typecatalog"
 	"github.com/viant/x"
@@ -56,7 +58,29 @@ func (d *Discovery) CompileSource(ctx context.Context, source *Source) (*Result,
 			return nil, err
 		}
 	}
-	imports, err := (&dependency.Loader{Workspace: workspace, Catalog: catalog, Registry: staged.Registry}).LoadSource(ctx, source.Text, source.Scope)
+	if source.dependencySnapshot == nil {
+		prepared := dql.PrepareSource(source.Text)
+		if prepared.Directives.Settings != nil && prepared.Directives.Settings.Generation != nil && len(prepared.Directives.Settings.Generation.BorrowedSQLRows) != 0 {
+			source.dependencySnapshot = &dependency.Snapshot{}
+		}
+	}
+	if source.dependencySnapshot != nil && source.dependencySnapshot.Select == nil {
+		build := source.GoBuild.WithContext(ctx)
+		if build.Dir == "" {
+			build.Dir = staged.BaseDir
+		}
+		source.dependencySnapshot.Select = func(call context.Context, pkg, dir string) ([]string, error) {
+			selected, err := selectedFactoryPackage(call, build.WithContext(call), pkg)
+			if err != nil {
+				return nil, err
+			}
+			if filepath.Clean(selected.Dir) != filepath.Clean(dir) {
+				return nil, fmt.Errorf("dependency build selection directory mismatch for %s", pkg)
+			}
+			return append(append([]string(nil), selected.GoFiles...), selected.CgoFiles...), nil
+		}
+	}
+	imports, err := (&dependency.Loader{Workspace: workspace, Catalog: catalog, Registry: staged.Registry, Snapshot: source.dependencySnapshot}).LoadSource(ctx, source.Text, source.Scope)
 	if err != nil {
 		return nil, err
 	}

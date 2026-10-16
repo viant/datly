@@ -12,6 +12,20 @@ import (
 // ResolveBorrowed resolves exact generated holder names. An implicit writer body
 // uses the component's name as its canonical default.
 func ResolveBorrowed(c *spec.Component, path string) (*spec.View, []string, error) {
+	view, graph, err := ResolveOccurrence(c, path)
+	if err != nil {
+		return nil, nil, err
+	}
+	if len(view.Relations) != 0 || view.SelfReference != nil {
+		return nil, nil, fmt.Errorf("borrow_sql_row target is not a leaf")
+	}
+	return view, graph, nil
+}
+
+// ResolveOccurrence resolves the existing canonical body holders without granting
+// generated-row ownership. Reference-only factory validation retains the complete
+// graph; the generated borrower entry above continues to require a leaf.
+func ResolveOccurrence(c *spec.Component, path string) (*spec.View, []string, error) {
 	if c == nil || c.RootView == nil {
 		return nil, nil, fmt.Errorf("borrow_sql_row requires a canonical body graph")
 	}
@@ -61,9 +75,6 @@ func ResolveBorrowed(c *spec.Component, path string) (*spec.View, []string, erro
 			return nil, nil, err
 		}
 		graph = append(graph, id)
-	}
-	if len(view.Relations) != 0 || view.SelfReference != nil {
-		return nil, nil, fmt.Errorf("borrow_sql_row target is not a leaf")
 	}
 	return view, graph, nil
 }

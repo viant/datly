@@ -332,6 +332,19 @@ func (p *scaffoldPersistence) copyExisting(target, stage string) (scaffoldSnapsh
 }
 
 func (p *scaffoldPersistence) swap(target, stage string, original scaffoldSnapshot, stats scaffoldStats) error {
+	if p.plan != nil && p.plan.ExternalHandler != nil && p.plan.ExternalHandler.ValidateOwnerSources != nil {
+		if err := p.plan.ExternalHandler.ValidateOwnerSources(func(path string) string {
+			if withinScaffoldTree(target, path) {
+				relative, err := filepath.Rel(target, path)
+				if err == nil {
+					return filepath.Join(stage, relative)
+				}
+			}
+			return path
+		}); err != nil {
+			return err
+		}
+	}
 	info, err := os.Lstat(target)
 	if os.IsNotExist(err) {
 		if len(original) != 0 {
@@ -429,6 +442,7 @@ func managedRelativePath(path string) (string, error) {
 // scaffoldForest keeps original disk conflict evidence separate from projected
 // mutations. A published forest is never included in cleanup.
 type scaffoldForest struct {
+	ownerValidators   []func(func(string) string) error
 	retainedContracts map[string]string
 	borrowed          []*BorrowedRowAuthority
 	target            string
@@ -527,6 +541,9 @@ func prepareScaffoldForests(templates []*scaffoldPersistence) (forests []*scaffo
 		projected := filepath.Join(forest.stage, relative)
 		readRoots[i] = projected
 		p := template.detached()
+		if p.plan != nil && p.plan.ExternalHandler != nil && p.plan.ExternalHandler.ValidateOwnerSources != nil {
+			forest.ownerValidators = append(forest.ownerValidators, p.plan.ExternalHandler.ValidateOwnerSources)
+		}
 		if err = p.prepareCurrentAt(targets[i], projected); err != nil {
 			return
 		}
@@ -588,6 +605,24 @@ func publishScaffoldForests(forests []*scaffoldForest) error {
 	var created []scaffoldCreatedParent
 	defer func() { cleanupScaffoldParents(created) }()
 	for _, forest := range forests {
+		for _, validate := range forest.ownerValidators {
+			if err := validate(func(path string) string {
+				for _, candidate := range forests {
+					if withinScaffoldTree(candidate.target, path) {
+						if candidate.published {
+							return path
+						}
+						relative, err := filepath.Rel(candidate.target, path)
+						if err == nil {
+							return filepath.Join(candidate.stage, relative)
+						}
+					}
+				}
+				return path
+			}); err != nil {
+				return err
+			}
+		}
 		for name, expected := range forest.retainedContracts {
 			actual, err := os.ReadFile(filepath.Join(forest.stage, name))
 			if err != nil {

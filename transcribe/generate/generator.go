@@ -132,6 +132,9 @@ func New(input Input) *Generator {
 	}
 	input.VeltyHandler = input.VeltyHandler.Clone()
 	input.ExternalHandler = input.ExternalHandler.Clone()
+	if err := input.ExternalHandler.validateCompositionOccurrences(); err != nil && cloneErr == nil {
+		cloneErr = err
+	}
 	input.GoBuild = input.GoBuild.Clone()
 	if input.ExternalHandler != nil && input.ExternalHandler.GeneratedContracts && input.ExternalHandler.InputShape != nil {
 		if input.SetMarkerViews == nil {
@@ -145,7 +148,9 @@ func New(input Input) *Generator {
 			}
 			visited[view] = true
 			if identity, err := view.Identity(); err == nil {
-				input.SetMarkerViews[identity] = true
+				if !input.ExternalHandler.compositionOccurrence(view) {
+					input.SetMarkerViews[identity] = true
+				}
 			}
 			for _, relation := range view.Relations {
 				if relation != nil {

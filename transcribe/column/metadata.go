@@ -183,6 +183,7 @@ type PhysicalSourceConstraints struct {
 	Indexes                         []PhysicalIndexFact
 	Projection                      []PhysicalProjectionFact
 }
+
 type PhysicalColumnFact struct {
 	Name                        string
 	Position                    int
@@ -216,6 +217,18 @@ type PhysicalIndexMemberFact struct {
 type PhysicalProjectionFact struct{ Physical, Projected, Result, Mapping string }
 
 func (r *Refiner) PhysicalSourceConstraints(ctx context.Context, connector string, view *spec.View) (PhysicalSourceConstraints, error) {
+	return r.physicalSourceConstraints(ctx, connector, view, true)
+}
+
+// PhysicalTableConstraints obtains only current native table facts. It does not
+// establish projection, Go contract, relation or ownership authority. Factory
+// linked-owner admission must independently close those proofs for the complete
+// owner graph; generated borrowing continues through PhysicalSourceConstraints.
+func (r *Refiner) PhysicalTableConstraints(ctx context.Context, connector, table string) (PhysicalSourceConstraints, error) {
+	return r.physicalSourceConstraints(ctx, connector, &spec.View{Source: &spec.ViewSource{Table: table}}, false)
+}
+
+func (r *Refiner) physicalSourceConstraints(ctx context.Context, connector string, view *spec.View, projectionRequired bool) (PhysicalSourceConstraints, error) {
 	fail := func(err error) (PhysicalSourceConstraints, error) { return PhysicalSourceConstraints{}, err }
 	if ctx == nil {
 		return fail(fmt.Errorf("physical constraint context is required"))
@@ -230,7 +243,7 @@ func (r *Refiner) PhysicalSourceConstraints(ctx context.Context, connector strin
 		return fail(fmt.Errorf("physical constraints require resolved SQL resource references"))
 	}
 	table := view.Source.Table
-	if connector == "" || strings.TrimSpace(connector) != connector || strings.ContainsAny(connector, "$\n\r") || !token.IsIdentifier(table) || table == "_" || len(view.Relations) != 0 || view.SelfReference != nil {
+	if connector == "" || strings.TrimSpace(connector) != connector || strings.ContainsAny(connector, "$\n\r") || !token.IsIdentifier(table) || table == "_" || (projectionRequired && (len(view.Relations) != 0 || view.SelfReference != nil)) {
 		return fail(fmt.Errorf("physical constraints require exact connector and unqualified SQL leaf"))
 	}
 	db, err := r.resolver.ResolveDB(ctx, connector)
@@ -276,6 +289,7 @@ func (r *Refiner) PhysicalSourceConstraints(ctx context.Context, connector strin
 		return fail(fmt.Errorf("physical constraint table columns are absent"))
 	}
 	result := PhysicalSourceConstraints{Identity: PhysicalSourceIdentity{Connector: connector, Catalog: session.Catalog, Schema: session.Schema, Table: table}, Product: product.Name, ProductVersion: fmt.Sprintf("%d.%d.%d", product.Major, product.Minor, product.Release)}
+
 	exact := map[string]sink.Column{}
 	folded := map[string]string{}
 	for _, c := range columns {
@@ -424,8 +438,12 @@ func (r *Refiner) PhysicalSourceConstraints(ctx context.Context, connector strin
 				return fail(fmt.Errorf("physical index member identity/collation unavailable"))
 			}
 			if product.Name == "MySQL" {
-				if member.IndexPrefixLength == nil || *member.IndexPrefixLength != 0 || (*member.Collation != "A" && *member.Collation != "D") {
-					return fail(fmt.Errorf("physical index prefix/direction unsupported"))
+				// Complete owner sealing records known nonunique prefixes without
+				// granting projection or full-column uniqueness authority.
+				prefixAllowed := member.IndexPrefixLength != nil && *member.IndexPrefixLength >= 0 &&
+					(*member.IndexPrefixLength == 0 || (!projectionRequired && idx.Unique == "1" && !unique && !strings.EqualFold(idx.Name, "PRIMARY")))
+				if !prefixAllowed || (*member.Collation != "A" && *member.Collation != "D") {
+					return fail(fmt.Errorf("physical index prefix/direction unsupported: table %s index %s column %s prefix %v direction %s", table, idx.Name, member.Name, physicalIndexPrefixDiagnostic(member.IndexPrefixLength), *member.Collation))
 				}
 			} else if member.Descending != "0" && member.Descending != "1" {
 				return fail(fmt.Errorf("SQLite index direction unavailable"))
@@ -448,21 +466,23 @@ func (r *Refiner) PhysicalSourceConstraints(ctx context.Context, connector strin
 		}
 		result.Indexes = append(result.Indexes, fact)
 	}
-	result.Projection, err = physicalProjection(view, exact, folded)
-	if err != nil {
-		return fail(err)
-	}
-	projectedPK := 0
-	for _, c := range view.Columns {
-		if c.PrimaryKey {
-			projectedPK++
-			if c.Source != pk[0].Column {
-				return fail(fmt.Errorf("projected primary key conflicts with physical key"))
+	if projectionRequired {
+		result.Projection, err = physicalProjection(view, exact, folded)
+		if err != nil {
+			return fail(err)
+		}
+		projectedPK := 0
+		for _, c := range view.Columns {
+			if c.PrimaryKey {
+				projectedPK++
+				if c.Source != pk[0].Column {
+					return fail(fmt.Errorf("projected primary key conflicts with physical key"))
+				}
 			}
 		}
-	}
-	if projectedPK != 1 {
-		return fail(fmt.Errorf("one projected physical primary key is required"))
+		if projectedPK != 1 {
+			return fail(fmt.Errorf("one projected physical primary key is required"))
+		}
 	}
 	sort.Slice(result.NativeColumns, func(i, j int) bool { return result.NativeColumns[i].Name < result.NativeColumns[j].Name })
 	sort.Slice(result.ForeignKeys, func(i, j int) bool {
@@ -593,4 +613,11 @@ func discoveryTransactionOptions(ctx context.Context, db *sql.DB) ([]option.Opti
 		return nil, nil
 	}
 	return []option.Option{tx}, nil
+}
+
+func physicalIndexPrefixDiagnostic(value *int64) interface{} {
+	if value == nil {
+		return nil
+	}
+	return *value
 }

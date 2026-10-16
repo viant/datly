@@ -236,7 +236,7 @@ func containsSQLCall(source node.Node, matches func(string) bool) bool {
 	case *query.From:
 		return containsSQLCall(actual.X, matches)
 	case *query.Join:
-		return containsSQLCall(actual.With, matches) || containsSQLCall(actual.On, matches)
+		return actual != nil && (containsSQLCall(actual.With, matches) || (actual.On != nil && containsSQLCall(actual.On, matches)))
 	case *expr.Qualify:
 		return containsSQLCall(actual.X, matches)
 	case *expr.Call:

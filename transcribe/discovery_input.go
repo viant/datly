@@ -293,6 +293,9 @@ func (c *discoveryInputCompiler) inputType() (reflect.Type, error) {
 }
 
 func (c *discoveryInputCompiler) linkedInputAllowed() bool {
+	if c.factoryShape != nil && c.factoryShape.GeneratedContracts {
+		return false
+	}
 	if c.source == nil || c.source.PackageComponent == nil {
 		return true
 	}

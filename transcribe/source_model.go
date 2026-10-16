@@ -2,6 +2,7 @@ package transcribe
 
 import (
 	"github.com/viant/datly/constant"
+	"github.com/viant/datly/transcribe/internal/dependency"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -19,12 +20,13 @@ import (
 // Source is the transcribe-owned authored source/config model used to assemble
 // canonical components and generated package artifacts for package bootstrap.
 type Source struct {
-	Const     *constant.Values
-	Scope     string
-	Name      string
-	Path      string
-	Text      string
-	Connector string
+	dependencySnapshot *dependency.Snapshot
+	Const              *constant.Values
+	Scope              string
+	Name               string
+	Path               string
+	Text               string
+	Connector          string
 	// Resources is the Bindly-owned resource authority shared by source
 	// expansion, column discovery, and generated-package planning.
 	Resources *resource.Store

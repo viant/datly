@@ -22,6 +22,7 @@ import (
 	"github.com/viant/datly/transcribe/internal/program"
 	"github.com/viant/datly/typecatalog"
 	xshape "github.com/viant/x/shape"
+	smodel "github.com/viant/x/syntetic/model"
 )
 
 // compileFactoryInputShape uses the existing reader parser and column-discovery
@@ -30,10 +31,8 @@ import (
 // Independently declared input reads retain their ordinary runtime bindings.
 func (c *Compiler) compileFactoryInputShape(ctx context.Context, source *Source, prepared *dql.PreparedSource, runtime *spec.Component, connector string, resolver *typecatalog.Resolver, declarations gen.Declarations, bindings gen.ViewBindings, linkedViews gen.ViewReferences, ownership *factoryDeclarations) (*spec.View, error) {
 	shapeComponent := runtime.Clone()
-	// These contracts are generated from the current declarations. Discovery
-	// must not resolve a same-named imported or previously generated Input.
-	// Keep the executable component's contract settings intact.
-	shapeComponent.Settings.InputType = ""
+	// Preserve the authored generated contract name/destination. Factory discovery
+	// plans current declarations instead of resolving a stale package Input.
 	if strings.TrimSpace(prepared.SQL) == "" {
 		if len(shapeComponent.Views) != 0 {
 			rows, err := newPackageViewResolver(shapeComponent, resolver).typedInputDescriptors(prepared.TypeContext.PackagePath, bindings, func(name string) (bool, error) {
@@ -74,14 +73,18 @@ func (c *Compiler) compileFactoryInputShape(ctx context.Context, source *Source,
 	resolved.TypeContext = prepared.TypeContext
 	shapeComponent.Settings.DefaultConnector = connector
 	shapeComponent.RootView = &spec.View{Key: spec.Key{Kind: spec.KindView, Scope: source.Scope, Name: runtime.Name}, Name: runtime.Name, Source: sqlSource}
+	composition, err := factoryComposition(shapeComponent, resolved, ownership, resolver)
+	if err != nil {
+		return nil, err
+	}
 	shapeSourceMap := newSourceMap(len(sqlSource.SQL), nil, resolved.TrimPrefix, sqlSource.SQL)
-	generatedRows, err := collectGeneratedRowAuthority(shapeComponent, resolved, &declarationProducts{views: shapeComponent.Views}, resolver, source.Path, shapeSourceMap)
+	generatedRows, err := collectGeneratedRowAuthority(shapeComponent, resolved, &declarationProducts{views: shapeComponent.Views}, resolver, source.Path, shapeSourceMap, composition)
 	if err != nil {
 		return nil, err
 	}
 	root := generatedRows.root
 	if generatedRows.plan == nil {
-		root, err = (&readPlanCompiler{sourceMap: shapeSourceMap, path: source.Path, types: resolver}).compile(shapeComponent, resolved)
+		root, err = (&readPlanCompiler{composition: composition, sourceMap: shapeSourceMap, path: source.Path, types: resolver}).compile(shapeComponent, resolved)
 		if err != nil {
 			return nil, err
 		}
@@ -259,8 +262,15 @@ func (c *Compiler) compileFactoryInputShape(ctx context.Context, source *Source,
 			return nil, err
 		}
 	}
-	factory := &gen.ExternalHandler{Package: prepared.TypeContext.PackagePath, Name: strings.TrimPrefix(runtime.Routes[0].Handler, prepared.TypeContext.PackagePath+"."), GeneratedContracts: true, InputShape: root}
-	if err = refineComponentColumns(ctx, shapeComponent, source, declarations, bindings, resolver, gen.Input{ExternalHandler: factory, Views: linkedViews}); err != nil {
+	ownership.compositionViews, err = factoryCompositionOccurrences(composition, root)
+	if err != nil {
+		return nil, err
+	}
+	factory := &gen.ExternalHandler{Package: prepared.TypeContext.PackagePath, Name: strings.TrimPrefix(runtime.Routes[0].Handler, prepared.TypeContext.PackagePath+"."), GeneratedContracts: true, InputShape: root, CompositionViews: ownership.compositionViews}
+	if err = c.prepareFactoryOwnerReferences(ctx, source, shapeComponent, resolver, linkedViews); err != nil {
+		return nil, err
+	}
+	if err = c.refineFactoryOwnerColumns(ctx, shapeComponent, source, declarations, bindings, resolver, composition, gen.Input{ExternalHandler: factory, Views: linkedViews}); err != nil {
 		return nil, err
 	}
 	if err = authoring.BackfillRelationMetadata(shapeComponent, source.Resources); err != nil {
@@ -276,7 +286,7 @@ func (c *Compiler) compileFactoryInputShape(ctx context.Context, source *Source,
 	// Resolve generated names and inherited destinations through the same planner
 	// used for publication, including children without an explicit type/dest.
 	factoryName := strings.TrimPrefix(runtime.Routes[0].Handler, prepared.TypeContext.PackagePath+".")
-	plan, err := gen.New(gen.Input{Component: runtime, Declarations: declarations, Views: linkedViews, ViewBindings: bindings, TypeResolver: resolver, Resources: source.Resources, TargetPackage: prepared.TypeContext.PackagePath, ExternalHandler: &gen.ExternalHandler{Package: prepared.TypeContext.PackagePath, Name: factoryName, GeneratedContracts: true, InputShape: shapeComponent.RootView}}).Plan()
+	plan, err := gen.New(gen.Input{Component: runtime, Declarations: declarations, Views: linkedViews, ViewBindings: bindings, TypeResolver: resolver, Resources: source.Resources, TargetPackage: prepared.TypeContext.PackagePath, ExternalHandler: &gen.ExternalHandler{Package: prepared.TypeContext.PackagePath, Name: factoryName, GeneratedContracts: true, InputShape: shapeComponent.RootView, CompositionViews: ownership.compositionViews}}).Plan()
 	if err != nil {
 		return nil, err
 	}
@@ -345,35 +355,58 @@ func validateFactoryShape(view *spec.View) error {
 	return nil
 }
 
-func validateFactoryDiscoveredShape(view *spec.View) error {
-	if len(view.Columns) == 0 {
-		return fmt.Errorf("factory input shape has no discovered columns")
-	}
-	for _, column := range view.Columns {
-		if column == nil || column.EffectiveType().IsZero() {
-			return fmt.Errorf("factory input shape requires discovered column types")
+func validateFactoryDiscoveredShape(root *spec.View) error {
+	visiting := map[*spec.View]bool{}
+	var validate func(*spec.View, bool) error
+	validate = func(view *spec.View, envelope bool) error {
+		if view == nil || view.Source == nil {
+			return fmt.Errorf("factory input shape requires a SQL-derived graph")
 		}
-	}
-	for _, relation := range view.Relations {
-		if relation != nil && relation.View != nil {
-			if err := validateFactoryDiscoveredShape(relation.View); err != nil {
+		if visiting[view] {
+			return fmt.Errorf("factory input shape contains a relation cycle")
+		}
+		visiting[view] = true
+		defer delete(visiting, view)
+		// A local composition root may consist solely of relations. It owns no
+		// physical row; each descendant still requires its own discovered columns.
+		// This does not admit an empty physical row or an external linked envelope.
+		if len(view.Columns) == 0 {
+			if !envelope || view.Source.Table != "" || view.TypeName == "" || strings.Contains(view.TypeName, ".") || len(view.Relations) == 0 {
+				return fmt.Errorf("factory input shape has no discovered columns")
+			}
+		}
+		for _, column := range view.Columns {
+			if column == nil || column.EffectiveType().IsZero() {
+				return fmt.Errorf("factory input shape requires discovered column types")
+			}
+		}
+		for _, relation := range view.Relations {
+			if relation == nil || relation.View == nil {
+				return fmt.Errorf("factory input shape contains an unresolved relation")
+			}
+			if err := validate(relation.View, false); err != nil {
 				return err
 			}
 		}
+		return nil
 	}
-	return nil
+	return validate(root, true)
 }
 
 // One compilation uses one build-selected declaration snapshot for both generated
 // contracts and borrowed Current rows. It never survives into another compilation.
 type factoryDeclarations struct {
-	ctx       context.Context
-	build     *gobuild.Context
-	pkg       string
-	types     map[string][]factoryDeclaration
-	functions map[string]bool
-	files     map[string]string
-	directory string
+	ownerPackage     *smodel.Package
+	ownerFiles       []gen.BorrowedAuthorityFile
+	sourceMembers    []spec.SourceMember
+	compositionViews map[string]gen.CompositionOccurrence
+	ctx              context.Context
+	build            *gobuild.Context
+	pkg              string
+	types            map[string][]factoryDeclaration
+	functions        map[string]bool
+	files            map[string]string
+	directory        string
 }
 
 type factoryDeclaration struct {
@@ -383,9 +416,13 @@ type factoryDeclaration struct {
 	concreteStruct bool
 	typeSpec       *ast.TypeSpec
 	imports        []*ast.ImportSpec
+	syntax         *ast.File
 }
 
 func (d *factoryDeclarations) load() error {
+	if d.ownerPackage != nil && d.types == nil {
+		return d.loadOwnerSnapshot()
+	}
 	if d.types != nil {
 		return nil
 	}
@@ -406,7 +443,7 @@ func (d *factoryDeclarations) load() error {
 			return err
 		}
 		files[file] = string(data)
-		record := factoryDeclaration{file: file, source: string(data), generated: ast.IsGenerated(tree), imports: tree.Imports}
+		record := factoryDeclaration{file: file, source: string(data), generated: ast.IsGenerated(tree), imports: tree.Imports, syntax: tree}
 		for _, declaration := range tree.Decls {
 			if fn, ok := declaration.(*ast.FuncDecl); ok && fn.Recv == nil {
 				functions[fn.Name.Name] = true
@@ -449,7 +486,13 @@ func (d *factoryDeclarations) validateShape(owner string, shape *spec.View, inhe
 	if err := d.load(); err != nil {
 		return err
 	}
+	if len(d.types[shape.TypeName]) > 1 {
+		return fmt.Errorf("factory input shape %s has selected duplicate declarations", shape.TypeName)
+	}
 	for _, declaration := range d.types[shape.TypeName] {
+		if d.selectedSourceDeclaration(shape.TypeName, destination, declaration) {
+			continue
+		}
 		if filepath.Clean(declaration.file) != filepath.Clean(destination) || !strings.HasPrefix(declaration.source, "// Code generated by Datly for "+owner+"; DO NOT EDIT.\n") {
 			return fmt.Errorf("factory input shape %s conflicts with authored or imported authority in %s", shape.TypeName, declaration.file)
 		}
@@ -468,6 +511,9 @@ func (d *factoryDeclarations) validateGeneratedContract(owner, name, destination
 		return fmt.Errorf("factory contract %s has selected duplicate declarations", name)
 	}
 	for _, declaration := range declarations {
+		if d.selectedSourceDeclaration(name, destination, declaration) {
+			continue
+		}
 		prefix, _, ok := strings.Cut(declaration.source, "\n")
 		foreign := ok && declaration.generated && strings.HasPrefix(prefix, "// Code generated by Datly for ") && strings.HasSuffix(prefix, "; DO NOT EDIT.") && strings.TrimSuffix(strings.TrimPrefix(prefix, "// Code generated by Datly for "), "; DO NOT EDIT.") != ""
 		sameOwner := strings.HasPrefix(declaration.source, "// Code generated by Datly for "+owner+"; DO NOT EDIT.\n")
@@ -555,4 +601,36 @@ func (d *factoryDeclarations) requireFunction(name string) error {
 		return nil
 	}
 	return fmt.Errorf("handler factory %s.%s must be a declared function in the selected build", d.pkg, name)
+}
+
+// Initial selected source structs are provisional until publication compares all
+// nonselected fields with the independent generated artifact. No graph guard is
+// relaxed by this declaration admission.
+func (d *factoryDeclarations) selectedSourceDeclaration(name, destination string, declaration factoryDeclaration) bool {
+	if !declaration.concreteStruct || filepath.Clean(declaration.file) != filepath.Clean(destination) {
+		return false
+	}
+	for _, selection := range d.sourceMembers {
+		if selection.Owner == name {
+			return true
+		}
+	}
+	return false
+}
+
+func (d *factoryDeclarations) sourceMemberFiles(resolver *typecatalog.Resolver) (map[string]gen.SourceMemberFile, error) {
+	result := map[string]gen.SourceMemberFile{}
+	lookup, err := factorySourceLookup(d, resolver)
+	if err != nil {
+		return nil, err
+	}
+	for _, selection := range d.sourceMembers {
+		declarations := d.types[selection.Owner]
+		if len(declarations) != 1 || !declarations[0].concreteStruct {
+			return nil, fmt.Errorf("source member owner %s requires one build-selected local struct", selection.Owner)
+		}
+		declaration := declarations[0]
+		result[declaration.file] = gen.SourceMemberFile{Source: declaration.source, File: declaration.syntax, CanonicalType: func(expression string) (string, error) { return factoryCanonicalIdentity(expression, lookup) }}
+	}
+	return result, nil
 }

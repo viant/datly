@@ -13,6 +13,7 @@ import (
 )
 
 type readPlanCompiler struct {
+	composition   *tcompile.FactoryComposition
 	sourceMap     *SourceMap
 	path          string
 	types         *typecatalog.Resolver
@@ -87,7 +88,7 @@ func (c *readPlanCompiler) compile(component *spec.Component, prepared *dql.Prep
 		copyView.Source = &copySource
 		view = &copyView
 	}
-	result, err := tcompile.NewReader().Compile(tcompile.ReadInput{
+	result, err := tcompile.NewReader().Compile(tcompile.ReadInput{FactoryComposition: c.composition,
 		View: view, SQL: prepared.SQL[item.SQLStart:item.SQLEnd], Template: frame, Types: c.types, TypeContext: component.TypeContext, GeneratedType: c.generatedType,
 	})
 	if err == nil {

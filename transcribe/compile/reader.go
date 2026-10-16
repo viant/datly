@@ -33,11 +33,12 @@ type TemplateFrame struct {
 
 // ReadInput is the normalized parser product consumed by read compilation.
 type ReadInput struct {
-	View        *spec.View
-	SQL         string
-	Template    TemplateFrame
-	Types       *typecatalog.Resolver
-	TypeContext *spec.TypeContext
+	FactoryComposition *FactoryComposition
+	View               *spec.View
+	SQL                string
+	Template           TemplateFrame
+	Types              *typecatalog.Resolver
+	TypeContext        *spec.TypeContext
 	// GeneratedType admits only an exact SQL-owned local declaration collected
 	// by the caller before concrete schema discovery. It supplies no descriptor.
 	GeneratedType func(string) (bool, error)
@@ -70,37 +71,46 @@ func (r *Reader) Compile(input ReadInput) (*spec.View, error) {
 	if root.Source == nil {
 		root.Source = &spec.ViewSource{}
 	}
-	table, directAuxiliary, err := sqlparser.SourceTable(parsed.From.X)
-	if err != nil {
-		return nil, err
-	}
-	if table == "" {
-		// Bare DQL table constants remain unresolved canonical table metadata
-		// until the constant owner substitutes/validates them. Wrapped template
-		// sources are not identifiers and must never enter this path.
-		switch parsed.From.X.(type) {
-		case *expr.Ident, *expr.Selector:
-			table = strings.TrimSpace(sqlparser.Stringify(parsed.From.X))
+	var table string
+	var directAuxiliary bool
+	if input.FactoryComposition != nil {
+		if err := input.FactoryComposition.start(parsed, root); err != nil {
+			return nil, err
 		}
-	}
-	sourceTable, auxiliary, err := readSourceTable(parsed.From.X, parsed.WithSelects, 0)
-	if err != nil {
-		return nil, err
-	}
-	root.Source.Table = sourceTable
-	root.Source.TableInferred = view.Source == nil || view.Source.Table == "" || view.Source.TableInferred
-	if root.Source.Table == "" && !referencesCTE(parsed.From.X, parsed.WithSelects) {
-		root.Source.Table = table
-	}
-	if view.Source != nil && view.Source.Table != "" && !view.Source.TableInferred {
-		root.Source.Table = view.Source.Table
-	}
-	root.Auxiliary = root.Auxiliary || auxiliary
-	if directAuxiliary {
-		// Mutation intent is retained on canonical metadata; executable SQL
-		// uses the underlying table, avoiding a synthetic empty subquery.
-		parsed.From.X = expr.NewSelector(table)
-		root.Namespace = queryNamespace(parsed)
+	} else {
+		table, directAuxiliary, err = sqlparser.SourceTable(parsed.From.X)
+		if err != nil {
+			return nil, err
+		}
+		if table == "" {
+			// Bare DQL table constants remain unresolved canonical table metadata
+			// until the constant owner substitutes/validates them. Wrapped template
+			// sources are not identifiers and must never enter this path.
+			switch parsed.From.X.(type) {
+			case *expr.Ident, *expr.Selector:
+				table = strings.TrimSpace(sqlparser.Stringify(parsed.From.X))
+			}
+		}
+		sourceTable, auxiliary, err := readSourceTable(parsed.From.X, parsed.WithSelects, 0)
+		if err != nil {
+			return nil, err
+		}
+		root.Source.Table = sourceTable
+		root.Source.TableInferred = view.Source == nil || view.Source.Table == "" || view.Source.TableInferred
+		if root.Source.Table == "" && !referencesCTE(parsed.From.X, parsed.WithSelects) {
+			root.Source.Table = table
+		}
+		if view.Source != nil && view.Source.Table != "" && !view.Source.TableInferred {
+			root.Source.Table = view.Source.Table
+		}
+		root.Auxiliary = root.Auxiliary || auxiliary
+		if directAuxiliary {
+			// Mutation intent is retained on canonical metadata; executable SQL
+			// uses the underlying table, avoiding a synthetic empty subquery.
+			parsed.From.X = expr.NewSelector(table)
+			root.Namespace = queryNamespace(parsed)
+		}
+
 	}
 	if err := validateNestedViewSQL(parsed); err != nil {
 		return nil, err
@@ -109,11 +119,23 @@ func (r *Reader) Compile(input ReadInput) (*spec.View, error) {
 	if err != nil {
 		return nil, err
 	}
-	relations, err := r.compileRelations(parsed, root, input.Template)
+
+	if input.FactoryComposition != nil {
+		for _, item := range parsed.List {
+			if star, ok := projectionStar(item); ok {
+				namespace := starNamespace(star)
+				if namespace == "" || namespace == "*" || strings.EqualFold(namespace, root.Namespace) {
+					return nil, fmt.Errorf("factory logical root cannot own wildcard projections")
+				}
+			}
+		}
+	}
+	relations, err := r.compileRelations(parsed, root, input.Template, input.FactoryComposition)
 	if err != nil {
 		return nil, err
 	}
 	root.Relations = relations
+
 	if err := validateViewNamespaces(root); err != nil {
 		return nil, err
 	}
@@ -132,29 +154,41 @@ func (r *Reader) Compile(input ReadInput) (*spec.View, error) {
 	if err := lowerLinkedHookKeys(root, directives, input.Types); err != nil {
 		return nil, err
 	}
-	sourceDecomposed, err := decomposeReadSources(parsed, root, input.Template)
+	if input.FactoryComposition != nil {
+		projection, err := readViewProjection(parsed, root, root)
+		if err != nil {
+			return nil, err
+		}
+		if len(projection) != 0 {
+			return nil, fmt.Errorf("factory logical root cannot own scalar or wildcard projections")
+		}
+	}
+	sourceDecomposed, err := decomposeReadSources(parsed, root, input.Template, input.FactoryComposition)
 	if err != nil {
 		return nil, err
 	}
 	if err := applyViewDirectives(root, directives); err != nil {
 		return nil, err
 	}
-	if !sourceDecomposed && (locksRewritten || projectionRewritten || columnsRewritten || len(directives) > 0 || directAuxiliary || root.Source.SQL == "" && (table == "" || referencesCTE(parsed.From.X, parsed.WithSelects))) {
+	if input.FactoryComposition == nil && !sourceDecomposed && (locksRewritten || projectionRewritten || columnsRewritten || len(directives) > 0 || directAuxiliary || root.Source.SQL == "" && (table == "" || referencesCTE(parsed.From.X, parsed.WithSelects))) {
 		root.Source.SQL = wrapReadProgram(input.Template, strings.TrimSpace((sqlparser.Stringifier{PreserveWindow: true}).String(parsed)))
 		// Lowered SQL may already contain materialized resources. Keep its typed
 		// resource references aligned with the executable source, as decomposition does.
 		root.Source.Embeds = dql.EmbeddedSQLRefs(root.Source.SQL)
 	}
-	if err := validateView(root, map[*spec.View]bool{}); err != nil {
+	if err := validateView(root, map[*spec.View]bool{}, input.FactoryComposition); err != nil {
 		return nil, err
 	}
 	if err := templates.restore(root, parsed, input.Template); err != nil {
 		return nil, err
 	}
+	if err := input.FactoryComposition.validate(root); err != nil {
+		return nil, err
+	}
 	return root, nil
 }
 
-func (r *Reader) compileRelations(parsed *query.Select, root *spec.View, frame TemplateFrame) ([]*spec.Relation, error) {
+func (r *Reader) compileRelations(parsed *query.Select, root *spec.View, frame TemplateFrame, proof *FactoryComposition) ([]*spec.Relation, error) {
 	if parsed == nil || len(parsed.Joins) == 0 {
 		return nil, nil
 	}
@@ -166,7 +200,13 @@ func (r *Reader) compileRelations(parsed *query.Select, root *spec.View, frame T
 	root.Relations = nil
 	views[rootNamespace] = root
 	for index, join := range parsed.Joins {
-		relation, err := r.compileRelation(join, index, parsed.WithSelects, parsed.WithRecursive, frame)
+		var relation *spec.Relation
+		var err error
+		if proof != nil {
+			relation, err = proof.compileJoin(join, index, frame, parsed)
+		} else {
+			relation, err = r.compileRelation(join, index, parsed.WithSelects, parsed.WithRecursive, frame)
+		}
 		if err != nil {
 			return nil, err
 		}

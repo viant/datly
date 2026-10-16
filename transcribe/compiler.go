@@ -59,7 +59,11 @@ type ContractTypeOverrides = handlergen.ContractTypeOverrides
 
 // Compiler orchestrates source preparation, metadata linking, read planning,
 // column discovery, and handler compilation.
-type Compiler struct{ comparisonOnly bool }
+type Compiler struct {
+	comparisonOnly    bool
+	factoryOwner      *factoryOwnerReference
+	factoryReferences []*factoryOwnerReference
+}
 
 func NewCompiler() *Compiler {
 	return &Compiler{}
@@ -72,6 +76,9 @@ func (c *Compiler) Compile(ctx context.Context, source *Source) (*Result, error)
 	if source == nil {
 		return nil, ErrNilSource
 	}
+	// Source-owner evidence belongs to this compilation; reusable compilers must
+	// not attach a previous source's closure to another generated component.
+	c.factoryReferences = nil
 	if header, body, err := dql.ParseHandlerSource(source.Text); err != nil {
 		return nil, err
 	} else if header != nil {
@@ -459,6 +466,14 @@ func applySourceDefaults(component *spec.Component, source *Source) {
 // refineComponentColumns shares the reader discovery order with generated
 // custom contracts: body columns first, then typed dependent input reads.
 func refineComponentColumns(ctx context.Context, component *spec.Component, source *Source, declarations gen.Declarations, viewBindings gen.ViewBindings, typeResolver *typecatalog.Resolver, factoryInputs ...gen.Input) error {
+	return refineComponentColumnsWithOwnerProof(ctx, component, source, declarations, viewBindings, typeResolver, nil, factoryInputs...)
+}
+
+func refineComponentColumnsWithOwnerProof(ctx context.Context, component *spec.Component, source *Source, declarations gen.Declarations, viewBindings gen.ViewBindings, typeResolver *typecatalog.Resolver, ownerProof func(*spec.Component) error, factoryInputs ...gen.Input) error {
+	return refineComponentColumnsWithFactoryProof(ctx, component, source, declarations, viewBindings, typeResolver, ownerProof, nil, factoryInputs...)
+}
+
+func refineComponentColumnsWithFactoryProof(ctx context.Context, component *spec.Component, source *Source, declarations gen.Declarations, viewBindings gen.ViewBindings, typeResolver *typecatalog.Resolver, ownerProof func(*spec.Component) error, composition *authoring.FactoryComposition, factoryInputs ...gen.Input) error {
 	var factoryShape *gen.ExternalHandler
 	var linkedViews gen.ViewReferences
 	if len(factoryInputs) != 0 {
@@ -493,8 +508,15 @@ func refineComponentColumns(ctx context.Context, component *spec.Component, sour
 				rootDiscovery.RootView = nil
 			}
 		}
+		rootDiscovery, transfer := composition.Discovery(rootDiscovery)
 		if err := columnCompilation.RefineRoot(ctx, rootDiscovery, source.Resources, templateInput); err != nil {
 			return err
+		}
+		transfer()
+		if ownerProof != nil {
+			if err := ownerProof(component); err != nil {
+				return err
+			}
 		}
 		templateInput, compileErr = (&discoveryInputCompiler{
 			component: component, declarations: declarations,

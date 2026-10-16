@@ -196,7 +196,7 @@ func (plan *Plan) validateGeneratedNames() error {
 }
 
 func (plan *Plan) inputMarkerType() string {
-	if plan == nil || plan.Input.Ownership != ContractGenerated || !hasBodyFields(plan.Input.Fields) {
+	if plan == nil || plan.exactSourceInput() || plan.Input.Ownership != ContractGenerated || !hasBodyFields(plan.Input.Fields) {
 		return ""
 	}
 	name := localTypeName(plan.Input.Type)
@@ -251,6 +251,9 @@ func (plan *Plan) validateGeneratedDestinations() error {
 			return fmt.Errorf("%s destination is required", owner)
 		}
 		if previous := owners[destination]; previous != "" {
+			if plan.sharedSourceMemberDestination(destination, previous, owner) {
+				return nil
+			}
 			if shareViews && strings.HasPrefix(previous, "view ") {
 				return nil
 			}

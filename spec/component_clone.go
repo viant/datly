@@ -92,6 +92,7 @@ func (s *GenerationSettings) Clone() *GenerationSettings {
 		return nil
 	}
 	result := *s
+	result.SourceMembers = append([]SourceMember(nil), s.SourceMembers...)
 	result.BorrowedSQLRows = append([]BorrowedSQLRow(nil), s.BorrowedSQLRows...)
 	if s.SupportFiles != nil {
 		result.SupportFiles = map[string]string{}

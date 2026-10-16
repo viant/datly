@@ -15,7 +15,7 @@ import (
 // decomposeReadSources removes the outer DQL relation declaration from the
 // root executable source. Each canonical relation already owns its parser-
 // derived child table or subquery and is read independently by the reader.
-func decomposeReadSources(parsed *query.Select, root *spec.View, frame TemplateFrame) (bool, error) {
+func decomposeReadSources(parsed *query.Select, root *spec.View, frame TemplateFrame, proofs ...*FactoryComposition) (bool, error) {
 	if parsed == nil || root == nil {
 		return false, nil
 	}
@@ -41,18 +41,24 @@ func decomposeReadSources(parsed *query.Select, root *spec.View, frame TemplateF
 	if parsed.Union != nil || strings.EqualFold(strings.TrimSpace(parsed.Kind), "DISTINCT") {
 		return false, &Error{Code: CodeRelationUnsupported, Cause: fmt.Errorf("multi-view read declarations cannot use an outer UNION or DISTINCT")}
 	}
-	source, err := canonicalRootSource(parsed, root, frame)
-	if err != nil {
-		return false, err
+	var proof *FactoryComposition
+	if len(proofs) != 0 {
+		proof = proofs[0]
 	}
-	if source == nil || (strings.TrimSpace(source.Table) == "" && strings.TrimSpace(source.SQL) == "") {
-		return false, &Error{Code: CodeRelationUnsupported, Cause: fmt.Errorf("multi-view root source is not independently executable")}
+	if !proof.Logical(root) {
+		source, err := canonicalRootSource(parsed, root, frame)
+		if err != nil {
+			return false, err
+		}
+		if source == nil || (strings.TrimSpace(source.Table) == "" && strings.TrimSpace(source.SQL) == "") {
+			return false, &Error{Code: CodeRelationUnsupported, Cause: fmt.Errorf("multi-view root source is not independently executable")}
+		}
+		if source.Table != "" && (root.Source.Table == "" || root.Source.TableInferred) {
+			root.Source.Table = source.Table
+		}
+		root.Source.SQL = source.SQL
+		root.Source.Embeds = source.Embeds
 	}
-	if source.Table != "" && (root.Source.Table == "" || root.Source.TableInferred) {
-		root.Source.Table = source.Table
-	}
-	root.Source.SQL = source.SQL
-	root.Source.Embeds = source.Embeds
 	views := canonicalViews(root)
 	for _, join := range parsed.Joins {
 		if join == nil {
@@ -63,6 +69,9 @@ func decomposeReadSources(parsed *query.Select, root *spec.View, frame TemplateF
 			alias = terminalName(join.With)
 		}
 		child := views[strings.ToLower(alias)]
+		if proof.Logical(child) {
+			continue
+		}
 		projection, err := readViewProjection(parsed, root, child)
 		if err != nil {
 			return false, err
