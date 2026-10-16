@@ -15,8 +15,9 @@ import (
 )
 
 type viewDeriver struct {
-	rowTypes map[*data.View]reflect.Type
-	active   map[reflect.Type]string
+	authoritative bool
+	rowTypes      map[*data.View]reflect.Type
+	active        map[reflect.Type]string
 }
 
 func newViewDeriver(rowTypes map[*data.View]reflect.Type) *viewDeriver {
@@ -41,18 +42,28 @@ func (d *viewDeriver) enrich(view *data.View, outputType reflect.Type) error {
 	if err != nil {
 		return err
 	}
-	view.Columns = reconcileColumns(columns, view.Columns)
+	if d.authoritative {
+		view.Columns, err = reconcileReaderGraphColumns(columns, view.Columns)
+		if err != nil {
+			return err
+		}
+	} else {
+		view.Columns = reconcileColumns(columns, view.Columns)
+	}
 	selfReference, err := selfReferenceFromType(outputType)
 	if err != nil {
 		return err
 	}
-	if selfReference != nil {
+	if selfReference != nil && !d.authoritative {
 		view.Spec.SelfReference = selfReference
 	}
 	if err := d.enrichPlannedRelations(view, outputType); err != nil {
 		return err
 	}
 	for _, field := range reflect.VisibleFields(outputType) {
+		if d.authoritative {
+			break
+		}
 		if !field.IsExported() {
 			continue
 		}

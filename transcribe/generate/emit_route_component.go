@@ -239,6 +239,7 @@ func externalLifecycleAnchors(plan *Plan) []lifecycleAnchor {
 
 func (p *Plan) componentTag(route RoutePlan) dtag.Component {
 	result := dtag.Component{
+		ReaderMetadata:  p.ReaderMetadata,
 		RequestBodyMode: route.RequestBodyMode,
 		Documentation:   p.Documentation.Clone(), Name: p.ComponentName, RouteName: route.Name, Path: route.Path, Method: route.Method,
 		Marshaller: route.Marshaller, Handler: p.Handler,

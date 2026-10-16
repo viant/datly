@@ -48,12 +48,14 @@ type Plan struct {
 	LifecycleTypes       []string
 	WireTypes            []string
 
-	ViewDest     string
-	RouterDest   string
-	RootViewName string
-	RootViewType string
-	RootSource   string
-	Views        []ViewPlan
+	ViewDest               string
+	RouterDest             string
+	RootViewName           string
+	RootViewType           string
+	readerMetadataPrevious map[string][32]byte
+	ReaderMetadata         string
+	RootSource             string
+	Views                  []ViewPlan
 
 	// ClientInput is an opt-in generation-only transport projection.
 	ClientInput *ContractPlan

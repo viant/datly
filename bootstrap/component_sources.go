@@ -118,6 +118,16 @@ func (s *PackageComponentSource) ResolveDescriptors(types *typecatalog.Resolver)
 	// Assemble every authored holder before route expansion. An emitted
 	// alternate must already be visible when WithURI checks existing routes.
 	combined := authority.Clone()
+	if s.Routes[0].Tag.ReaderMetadata != "" {
+		if len(s.Routes) != 1 {
+			return nil, fmt.Errorf("reader metadata requires one exact route holder")
+		}
+		var err error
+		combined, err = s.Routes[0].resolveReaderMetadata(s.InputType, s.OutputType, types)
+		if err != nil {
+			return nil, err
+		}
+	}
 	for _, route := range s.Routes[1:] {
 		component, err := route.canonicalComponent()
 		if err != nil {
@@ -129,6 +139,9 @@ func (s *PackageComponentSource) ResolveDescriptors(types *typecatalog.Resolver)
 		combined.Routes = append(combined.Routes, component.Routes...)
 	}
 	for _, route := range s.Routes {
+		if combined.ReaderGraph != nil {
+			continue
+		}
 		association, err := route.selectorAssociation(types)
 		if err != nil {
 			return nil, err

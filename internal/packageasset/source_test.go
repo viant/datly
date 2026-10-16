@@ -48,3 +48,40 @@ var TwoDatlyResources embed.FS
 	_, err := DiscoverSourceResources(dir)
 	require.ErrorContains(t, err, "duplicate resource namespace")
 }
+
+func TestConfinedResourceDeclarationDiscovery(t *testing.T) {
+	root := t.TempDir()
+	outside := t.TempDir()
+	declaration := `package reader
+ import "embed"
+ const RecordsDatlyResourceNamespace="records"
+ //go:embed sql/root.sql
+ var RecordsDatlyResources embed.FS
+ `
+	if err := os.WriteFile(filepath.Join(outside, "outside.go"), []byte(declaration), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(outside, "outside.go"), filepath.Join(root, "escape.go")); err != nil {
+		t.Fatal(err)
+	}
+	confined, err := os.OpenRoot(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer confined.Close()
+	if _, err = DiscoverSourceResourcesFS(confined.FS()); err == nil {
+		t.Fatal("declaration symlink escape accepted")
+	}
+	if err = os.Remove(filepath.Join(root, "escape.go")); err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(filepath.Join(root, "one.go"), []byte(declaration), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(filepath.Join(root, "two.go"), []byte(declaration), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = DiscoverSourceResourcesFS(confined.FS()); err == nil {
+		t.Fatal("duplicate declarations overwritten")
+	}
+}

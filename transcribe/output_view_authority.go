@@ -262,7 +262,16 @@ func linkDeclaredOutputContract(result *Result, authored *spec.Component) error 
 	if result == nil || result.TypeResolver == nil || authored == nil || authored.Settings == nil || result.Source != nil && result.Source.PackageComponent != nil {
 		return nil
 	}
-	expression := strings.TrimSpace(authored.Settings.OutputType)
+	return linkExplicitOutputContract(result, authored.Settings.OutputType)
+}
+
+// linkExplicitOutputContract checks only an expression retained from the current
+// authored DQL. Package defaults and implicit role linkage remain separate.
+func linkExplicitOutputContract(result *Result, expression string) error {
+	if result == nil || result.TypeResolver == nil {
+		return nil
+	}
+	expression = strings.TrimSpace(expression)
 	if !strings.Contains(expression, ".") {
 		return nil
 	}

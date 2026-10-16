@@ -10,6 +10,7 @@ import (
 	dtag "github.com/viant/datly/tag"
 	sqlxio "github.com/viant/sqlx/io"
 	"github.com/viant/tagly/format"
+	"github.com/viant/x"
 	xshape "github.com/viant/x/shape"
 )
 
@@ -28,6 +29,9 @@ func (c *artifactCompiler) compileOutputColumns(component *spec.Component) error
 // CompileOutputColumns resolves the existing linked row projection before SQL
 // metadata discovery, as well as before runtime artifact compilation.
 func CompileOutputColumns(component *spec.Component, outputType reflect.Type) error {
+	if component.ReaderGraph != nil {
+		return nil
+	}
 	if component.RootView == nil || component.RootView.Columns != nil {
 		return nil
 	}
@@ -80,7 +84,11 @@ fieldsLoop:
 				continue fieldsLoop
 			}
 		}
-		column, suppress, err := r.column(field, holder+"."+field.Name)
+		fieldPath := field.Name
+		if holder != "" {
+			fieldPath = holder + "." + field.Name
+		}
+		column, suppress, err := r.column(field, fieldPath)
 		if err != nil {
 			return fmt.Errorf("view %s column %s: %w", view.Name, field.Name, err)
 		}
@@ -179,4 +187,95 @@ func (r *outputColumnCompiler) column(field xshape.Field, path string) (*spec.Co
 		result.Codec = &spec.Codec{Body: metadata.Codec.Body, Args: append([]string(nil), metadata.Codec.Arguments...), OutputType: metadata.Codec.OutputType}
 	}
 	return result, field.Anonymous, nil
+}
+
+// CompileReaderGraphColumns snapshots existing nil-projection inference before
+// native metadata admission. Supplied projections and canonical edges stay owned.
+func CompileReaderGraphColumns(component *spec.Component, input, output *x.Type, lookup xshape.Lookup) error {
+	if component == nil || component.ReaderGraph != nil {
+		return fmt.Errorf("reader graph normalization requires an unadmitted component")
+	}
+	seen := map[*spec.View]string{}
+	active := map[*spec.View]bool{}
+	var visit func(*spec.View, *x.Type) error
+	visit = func(view *spec.View, row *x.Type) error {
+		if view == nil || row == nil {
+			return fmt.Errorf("reader graph exact row descriptor required")
+		}
+		if active[view] {
+			return fmt.Errorf("reader graph cycle")
+		}
+		if prior, ok := seen[view]; ok {
+			if prior != row.Key() {
+				return fmt.Errorf("reader graph has conflicting row authority")
+			}
+			return nil
+		}
+		seen[view] = row.Key()
+		active[view] = true
+		defer delete(active, view)
+		compiler := outputColumnCompiler{output: xshape.New(row, lookup), lookup: lookup}
+		if err := compiler.compile(view, ""); err != nil {
+			return err
+		}
+		for _, relation := range view.Relations {
+			if relation == nil || relation.View == nil || relation.Kind == spec.RelationKindDerived {
+				return fmt.Errorf("reader graph unsupported relation ownership")
+			}
+			field, err := compiler.output.ResolveField(relation.Holder)
+			if err != nil {
+				return err
+			}
+			if err = visit(relation.View, field.Descriptor); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	rootFound := false
+	independent := map[*spec.View]bool{}
+	for _, param := range spec.EffectiveParameters(component.Parameters) {
+		if param == nil {
+			continue
+		}
+		var view *spec.View
+		var contract *x.Type
+		if param.Source.Kind == "output" && param.Source.Name == "view" {
+			if rootFound {
+				return fmt.Errorf("reader graph ambiguous output holder")
+			}
+			rootFound = true
+			view = component.RootView
+			contract = output
+		} else if param.Source.Kind == "view" {
+			contract = input
+			for _, candidate := range component.Views {
+				if candidate.Name == param.Source.Name || candidate.Key.Name == param.Source.Name {
+					if view != nil {
+						return fmt.Errorf("reader graph ambiguous independent holder")
+					}
+					view = candidate
+				}
+			}
+			if view != nil {
+				independent[view] = true
+			}
+		} else {
+			continue
+		}
+		if view == nil || contract == nil {
+			return fmt.Errorf("reader graph exact holder required")
+		}
+		field, err := xshape.New(contract, lookup).ResolveField(param.Name)
+		if err != nil {
+			return err
+		}
+		if err = visit(view, field.Descriptor); err != nil {
+			return err
+		}
+	}
+	if !rootFound || len(independent) != len(component.Views) {
+		return fmt.Errorf("reader graph missing exact view holders")
+	}
+	return nil
 }

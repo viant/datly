@@ -37,9 +37,11 @@ type Source struct {
 	// the base for DQL+package transcription. Authored DQL overlays this graph;
 	// ordinary package-only bootstrap does not enter transcribe.
 	PackageComponent *spec.Component
-	LinkedInputType  reflect.Type
-	LinkedOutputType reflect.Type
-	LinkedHandler    func() (rhandler.TypedHandler, error)
+	// ReaderMetadataURI locates the original admitted holder document; never authority alone.
+	ReaderMetadataURI string
+	LinkedInputType   reflect.Type
+	LinkedOutputType  reflect.Type
+	LinkedHandler     func() (rhandler.TypedHandler, error)
 	// GoHandler is an explicitly accepted custom handler source asset. It is
 	// generation input only; canonical metadata retains just its handler name.
 	GoHandler *gen.GoHandlerAsset

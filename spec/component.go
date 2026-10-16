@@ -1,11 +1,14 @@
 package spec
 
 import (
+	graphModel "github.com/viant/datly/internal/readergraph/model"
 	selectorModel "github.com/viant/datly/internal/selectorcompanion/model"
 	xdocs "github.com/viant/xdatly/docs"
 )
 
 type Component struct {
+	// ReaderGraph is immutable checked native holder/resource authority, never a wire option.
+	ReaderGraph *graphModel.Authority `json:"-"`
 	// SelectorCompanion is transient immutable checked holder metadata. The native
 	// generated holder method, never JSON or a runtime option, supplies it.
 	SelectorCompanion *selectorModel.Association `json:"-"`

@@ -61,6 +61,34 @@ func (p *scaffoldPersistence) prepareCurrentAt(target, readRoot string) error {
 			return fmt.Errorf("linked authored resource declaration %q changed after planning", resource.Destination)
 		}
 	}
+	if p.plan != nil && p.plan.Resources != nil {
+		root, openErr := os.OpenRoot(readRoot)
+		if openErr != nil && !os.IsNotExist(openErr) {
+			return openErr
+		}
+		if openErr == nil {
+			defer root.Close()
+			for filename, want := range p.plan.readerMetadataPrevious {
+				body, err := readerMetadataOwned(root.FS(), p.plan, p.plan.Resources, p.plan.Resources.Namespace+":"+filename)
+				if err != nil {
+					return err
+				}
+				if sha256.Sum256(body) != want {
+					return fmt.Errorf("reader metadata changed after planning")
+				}
+			}
+			if p.plan.ReaderMetadata != "" {
+				_, filename, _ := strings.Cut(p.plan.ReaderMetadata, ":")
+				if _, err := root.Stat(filename); err == nil {
+					if _, owned := p.plan.readerMetadataPrevious[filename]; !owned {
+						return fmt.Errorf("reader metadata destination lacks current generated ownership")
+					}
+				} else if !os.IsNotExist(err) {
+					return err
+				}
+			}
+		}
+	}
 	desired, err := p.desiredFiles(target)
 	if err != nil {
 		return err

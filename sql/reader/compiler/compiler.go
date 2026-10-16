@@ -11,6 +11,7 @@ import (
 	"github.com/viant/bindly"
 	"github.com/viant/datly/data"
 	dexec "github.com/viant/datly/exec"
+	"github.com/viant/datly/internal/readergraph"
 	"github.com/viant/datly/internal/selectorcompanion"
 	"github.com/viant/datly/spec"
 	sqlmacro "github.com/viant/datly/sql/macro"
@@ -59,6 +60,9 @@ func CompileViewMetadata(input Input) (*data.View, error) {
 }
 
 func (b *planCompiler) prepareViews() (*viewSet, string, error) {
+	if err := readergraph.Validate(b.input.Component, xshape.Linked(b.input.InputType).Descriptor(), xshape.Linked(b.input.OutputType).Descriptor(), b.input.Resources); err != nil {
+		return nil, "", err
+	}
 	constants, err := b.input.Const.For(b.input.Component)
 	if err != nil {
 		return nil, "", err

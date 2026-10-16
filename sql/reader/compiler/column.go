@@ -1,6 +1,7 @@
 package compiler
 
 import (
+	"fmt"
 	"reflect"
 	"strings"
 
@@ -126,4 +127,39 @@ func matchingColumn(columns []*data.Column, candidate *data.Column) *data.Column
 		}
 	}
 	return nil
+}
+
+// Canonical membership and query policy remain complete for a checked graph.
+// Go columns only validate the existing scanner layout and pointer capability.
+func reconcileReaderGraphColumns(typed, canonical []*data.Column) ([]*data.Column, error) {
+	if len(canonical) == 0 {
+		return nil, fmt.Errorf("reader metadata unsupported absent column projection")
+	}
+	result := make([]*data.Column, 0, len(canonical))
+	seen := map[string]bool{}
+	for _, column := range canonical {
+		if column == nil {
+			return nil, fmt.Errorf("nil reader metadata column")
+		}
+		var match *data.Column
+		for _, candidate := range typed {
+			if matchingColumn([]*data.Column{column}, candidate) != nil {
+				if match != nil {
+					return nil, fmt.Errorf("ambiguous reader metadata column %s", column.Name)
+				}
+				match = candidate
+			}
+		}
+		if match == nil || seen[match.Name] {
+			return nil, fmt.Errorf("reader metadata column %s has no unique Go layout", column.Name)
+		}
+		seen[match.Name] = true
+		copy := *column
+		copy.Tag = match.Tag
+		if match.Nullable {
+			copy.Nullable = true
+		}
+		result = append(result, &copy)
+	}
+	return result, nil
 }

@@ -29,6 +29,9 @@ type DeclarationProjection struct {
 type Declarations map[string]Declaration
 
 type Input struct {
+	// ReaderMetadataSource retains the admitted source baseline independently from an explicit DQL result.
+	ReaderMetadataSource *spec.Component
+	ReaderMetadataURI    string
 	// Only ColumnDiscoveryInputType may plan not-yet-discovered inferred columns.
 	columnDiscovery bool
 	// Records the explicit trusted in-process Go/universal mutation selection.
@@ -96,6 +99,7 @@ type typeResolver interface {
 
 func New(input Input) *Generator {
 	input.Component = input.Component.Clone()
+	input.ReaderMetadataSource = input.ReaderMetadataSource.Clone()
 	input.Declarations = cloneDeclarations(input.Declarations)
 	input.Views = cloneViewReferences(input.Views)
 	input.ViewBindings = cloneViewBindings(input.ViewBindings)

@@ -24,6 +24,7 @@ const (
 
 // Component is the metadata carried by a component holder field.
 type Component struct {
+	ReaderMetadata        string
 	RequestBodyMode       string
 	Documentation         xdocs.Source
 	Name                  string
@@ -84,6 +85,7 @@ func (c Component) value() string {
 	appendNonEmpty(builder, "output", c.Output)
 	appendNonEmpty(builder, "view", c.View)
 	appendNonEmpty(builder, "source", c.Source)
+	appendNonEmpty(builder, "readerMetadata", c.ReaderMetadata)
 	if c.Report {
 		appendNonEmpty(builder, "report", "true")
 	}
@@ -256,6 +258,8 @@ func ParseComponentValue(value string) (Component, error) {
 			result.View = value
 		case "source":
 			result.Source = value
+		case "readermetadata":
+			result.ReaderMetadata = value
 		case "report":
 			parsed, err := parseBool("report", value)
 			result.Report = parsed
