@@ -7,10 +7,9 @@ import (
 	"github.com/viant/datly/constant"
 	"github.com/viant/datly/constant/identifier"
 	"github.com/viant/datly/spec"
-	"github.com/viant/sqlparser"
 )
 
-func resolvedWriterTable(component *spec.Component, table string) (string, error) {
+func resolvedWriterTable(component *spec.Component, table string, renderers ...identifier.Renderer) (string, error) {
 	if !strings.Contains(table, "$") {
 		return table, nil
 	}
@@ -22,15 +21,28 @@ func resolvedWriterTable(component *spec.Component, table string) (string, error
 	if err != nil {
 		return "", err
 	}
-	table, err = (identifier.Renderer{Values: values}).Identifier(table)
+	renderer := identifier.Renderer{Values: values}
+	if len(renderers) != 0 {
+		renderer = renderers[0]
+		renderer.Values = values
+	}
+	table, err = renderer.Metadata(table)
 	if err != nil {
 		return "", err
 	}
 	if strings.Contains(table, "$") {
 		return "", fmt.Errorf("unresolved table identifier")
 	}
-	if parts, parseErr := sqlparser.TableIdentifierParts(table); parseErr == nil && len(parts) == 1 {
-		table = parts[0]
-	}
 	return table, nil
+}
+
+func resolveFieldReferences(component *spec.Component, field *Field, renderers ...identifier.Renderer) error {
+	var err error
+	if field.RefDB, err = resolvedWriterTable(component, field.RefDB, renderers...); err != nil {
+		return fmt.Errorf("field %s reference schema: %w", field.Name, err)
+	}
+	if field.RefTable, err = resolvedWriterTable(component, field.RefTable, renderers...); err != nil {
+		return fmt.Errorf("field %s reference table: %w", field.Name, err)
+	}
+	return nil
 }

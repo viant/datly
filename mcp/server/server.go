@@ -26,7 +26,7 @@ func New(config Config) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	newHandler, err := newHandler(config.Service, config.binding)
+	newHandler, err := newHandler(config.Service, config.binding, *config.ToolsListTtlMs)
 	if err != nil {
 		return nil, err
 	}

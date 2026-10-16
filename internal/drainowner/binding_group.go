@@ -33,15 +33,22 @@ type bindingGroupCell struct {
 	tickets  map[string]*bindingTicket
 }
 type bindingTicket struct {
-	group           *bindingGroupCell
-	member          string
-	target          string
-	inputs          []BindingGroupInput
-	entered         bool
-	targetValidated bool
-	activityUsed    bool
-	observation     uint64
-	finished        bool
+	group                              *bindingGroupCell
+	member                             string
+	target                             string
+	inputs                             []BindingGroupInput
+	entered                            bool
+	targetValidated                    bool
+	activityUsed                       bool
+	observation                        uint64
+	finished                           bool
+	kind                               bindingTargetKind
+	registration, expectedRegistration any
+	scoped                             *scopedGroupTarget
+	parent, child                      *bindingTicket
+	scopeLease                         *bindingScopeLease
+	dispatchClosed                     bool
+	failure                            error
 }
 
 // BindingGroup and its context tickets are private single-invocation grants.
@@ -195,6 +202,11 @@ func (g BindingGroup) Close() error {
 	g.cell.cancel()
 	ledger.group = nil
 	for _, ticket := range g.cell.tickets {
+		if ticket.child != nil && !ticket.child.finished {
+			err := fmt.Errorf("%w: group descendant %s", ErrActivityUnfinished, ticket.member)
+			appendFailureLocked(ledger, err, nil, "", true, 0)
+			return err
+		}
 		if ticket.activityUsed && !ticket.finished {
 			err := fmt.Errorf("%w: group member %s", ErrActivityUnfinished, ticket.member)
 			appendFailureLocked(ledger, err, nil, "", true, 0)
@@ -237,34 +249,13 @@ func BindingGroupAdmission(ctx context.Context, invocation *Invocation) error {
 // ValidateBindingGroupTarget runs at the actual runtime route/reader boundary.
 // It cannot be enabled by a public context marker or by a claimed provider.
 func ValidateBindingGroupTarget(ctx context.Context, target string, canonicalReader bool, inputs ...BindingGroupInput) error {
-	ticket := bindingContext(ctx)
-	if ticket == nil {
+	if bindingContext(ctx) == nil {
 		return nil
 	}
-	ledger := &ticket.group.identity.activities
-	ledger.mu.Lock()
-	defer ledger.mu.Unlock()
-	if ledger.group != ticket.group || !ticket.group.open || !ticket.entered || ticket.target == "" || ticket.target != target || !canonicalReader || ticket.targetValidated || ticket.activityUsed {
+	if !canonicalReader {
 		return ErrBindingGroup
 	}
-	if err := groupFailureLocked(ledger, ticket.group); err != nil {
-		return err
-	}
-	for _, required := range ticket.inputs {
-		matched := false
-		for _, actual := range inputs {
-			if actual.Kind == required.Kind && actual.In == required.In && actual.Type == required.Type && !actual.Adapted {
-				matched = true
-				break
-			}
-		}
-		if !matched {
-			appendFailureLocked(ledger, ErrBindingGroup, nil, "", true, 0)
-			return ErrBindingGroup
-		}
-	}
-	ticket.targetValidated = true
-	return nil
+	return ValidateRegisteredBindingGroupReader(ctx, target, nil, inputs...)
 }
 func BindingGroupReadAdmission(ctx context.Context) (bool, error) {
 	ticket := bindingContext(ctx)
@@ -274,7 +265,7 @@ func BindingGroupReadAdmission(ctx context.Context) (bool, error) {
 	ledger := &ticket.group.identity.activities
 	ledger.mu.Lock()
 	defer ledger.mu.Unlock()
-	if ledger.group != ticket.group || !ticket.group.open || ledger.closed || !ticket.entered || !ticket.targetValidated {
+	if !bindingTicketLiveLocked(ledger, ticket) || ticket.kind != bindingTargetReader || ticket.finished {
 		return false, ErrBindingGroup
 	}
 	if err := ctx.Err(); err != nil {
@@ -293,7 +284,7 @@ func AdmitBindingGroupActivity(ctx context.Context, invocation *Invocation) (Act
 	}
 	ledger.mu.Lock()
 	defer ledger.mu.Unlock()
-	if ticket == nil || ticket.group.identity != invocation.identity || ledger.group != ticket.group || !ticket.group.open || !ticket.entered || !ticket.targetValidated || ticket.activityUsed || ledger.closed {
+	if ticket == nil || ticket.group.identity != invocation.identity || !bindingTicketLiveLocked(ledger, ticket) || ticket.activityUsed {
 		return Activity{}, ErrBindingGroup
 	}
 	if err := ctx.Err(); err != nil {
@@ -305,7 +296,7 @@ func AdmitBindingGroupActivity(ctx context.Context, invocation *Invocation) (Act
 	ticket.activityUsed = true
 	ledger.observation++
 	ticket.observation = ledger.observation
-	cell := &activityCell{identity: invocation.identity, group: ticket.group, member: ticket.member, observation: ticket.observation}
+	cell := &activityCell{identity: invocation.identity, group: ticket.group, member: ticket.member, observation: ticket.observation, ticket: ticket}
 	if ledger.active == nil {
 		ledger.active = map[*activityCell]struct{}{}
 	}

@@ -147,7 +147,6 @@ project, err := (&transcribe.Discovery{
 
 generated, err := (transcribe.Generator{
     Operation: "handler",
-    GenerationPolicy: generate.GenerationPolicyOverwrite,
 }).Generate(ctx, transcribe.GenerationRequest{
     Compiled: project.Components[0], Destination: root,
 })

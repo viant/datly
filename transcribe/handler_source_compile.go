@@ -11,23 +11,18 @@ import (
 
 	"github.com/viant/bindly"
 	"github.com/viant/datly/bootstrap"
+	"github.com/viant/datly/bootstrap/routes"
 	"github.com/viant/datly/spec"
 	"github.com/viant/datly/tag"
 	"github.com/viant/datly/transcribe/dql"
 	gen "github.com/viant/datly/transcribe/generate"
+	"github.com/viant/datly/transcribe/internal/link"
+	"github.com/viant/datly/transcribe/internal/program"
 	"github.com/viant/datly/typecatalog"
 	"github.com/viant/x"
 )
 
 const nativeHandlerPackage = "github.com/viant/xdatly/handler"
-
-func handlerSymbol(ref string) (string, string, error) {
-	i := strings.LastIndex(ref, ".")
-	if i <= strings.LastIndex(ref, "/") || i < 1 || !token.IsIdentifier(ref[i+1:]) || !token.IsExported(ref[i+1:]) {
-		return "", "", fmt.Errorf("handler symbol %q must be an exported, package-qualified name", ref)
-	}
-	return ref[:i], ref[i+1:], nil
-}
 
 func (c *Compiler) compileSourceHandler(ctx context.Context, source *Source, header *dql.HandlerHeader, body string) (*Result, error) {
 	if source.PackageComponent != nil || source.GoHandler != nil || source.VeltyHandler != nil {
@@ -47,7 +42,10 @@ func (c *Compiler) compileSourceHandler(ctx context.Context, source *Source, hea
 		return nil, fmt.Errorf("source handler requires an explicit #package destination")
 	}
 	destination := prepared.TypeContext.PackagePath
-	if names, ok := generatedPostFactory(header, prepared); ok {
+	if names, ok := program.FactoryContracts(header, prepared); ok {
+		if header.AdapterFactory != "" {
+			return nil, fmt.Errorf("handler adapter requires source-authored contracts separate from the generated destination")
+		}
 		return c.compileGeneratedPostFactory(ctx, source, header, prepared, settings, names)
 	}
 	var err error
@@ -55,10 +53,13 @@ func (c *Compiler) compileSourceHandler(ctx context.Context, source *Source, hea
 		return nil, err
 	}
 	refs := []string{header.Factory, header.InputType, header.OutputType}
-	packages, names := make([]string, 3), make([]string, 3)
+	if header.AdapterFactory != "" {
+		refs = append(refs, header.AdapterFactory)
+	}
+	packages, names := make([]string, len(refs)), make([]string, len(refs))
 	for i, ref := range refs {
 		var err error
-		packages[i], names[i], err = handlerSymbol(ref)
+		packages[i], names[i], err = program.Symbol(ref)
 		if err != nil {
 			return nil, err
 		}
@@ -80,6 +81,9 @@ func (c *Compiler) compileSourceHandler(ctx context.Context, source *Source, hea
 	}
 	dependencies := append([]string(nil), packages...)
 	dependencies = append(dependencies, nativeHandlerPackage)
+	if header.AdapterFactory != "" {
+		dependencies = append(dependencies, "github.com/viant/datly/runtime/handler")
+	}
 	for _, imp := range prepared.TypeContext.Imports {
 		dependencies = append(dependencies, imp.Package)
 	}
@@ -87,7 +91,7 @@ func (c *Compiler) compileSourceHandler(ctx context.Context, source *Source, hea
 	if err != nil {
 		return nil, err
 	}
-	objects := make([]types.Object, 3)
+	objects := make([]types.Object, len(refs))
 	for i := range packages {
 		pkg, err := loader.Import(packages[i])
 		if err != nil {
@@ -128,6 +132,13 @@ func (c *Compiler) compileSourceHandler(ctx context.Context, source *Source, hea
 	}
 	if sig.Recv() != nil || sig.TypeParams().Len() != 0 || sig.Params().Len() != 0 || sig.Results().Len() != 1 || !types.Identical(sig.Results().At(0).Type(), want) {
 		return nil, fmt.Errorf("handler factory %s must have exact signature func() handler.Contract[%s, %s]", header.Factory, header.InputType, header.OutputType)
+	}
+	var adapterPackage, adapterName string
+	if header.AdapterFactory != "" {
+		if err := validateSourceHandlerAdapter(loader, objects[3], header.AdapterFactory); err != nil {
+			return nil, err
+		}
+		adapterPackage, adapterName = packages[3], names[3]
 	}
 	matchedMapping := false
 	for _, binding := range source.HandlerBindings {
@@ -185,15 +196,15 @@ func (c *Compiler) compileSourceHandler(ctx context.Context, source *Source, hea
 	}
 	if header.Declarative {
 		component.Documentation = d.Documentation.Clone()
-		component.Routes[0].Internal = d.Internal || d.MCPOnly
-		component.Routes[0].APIKeyHeader = d.Route.APIKeyHeader
-		component.Routes[0].APIKeyValue = d.Route.APIKeyValue
-		if d.MCP != nil {
-			component.Routes[0].MCP = []*spec.MCPExposure{d.MCP.Clone()}
-		}
+		component.Routes = d.ComponentRoutes(header.Name, packages[0]+"."+names[0])
 	}
 	if header.MCPTool {
 		component.Routes[0].MCP = []*spec.MCPExposure{{Kind: "tool", Name: header.Name}}
+	}
+	if header.Declarative {
+		if err := (routes.Compiler{Component: component}).Compile(); err != nil {
+			return nil, err
+		}
 	}
 	copy := *source
 	copy.GoBuild = build.WithContext(nil)
@@ -245,7 +256,28 @@ func (c *Compiler) compileSourceHandler(ctx context.Context, source *Source, hea
 	}
 	return &Result{Source: &copy, Component: component, TypeContext: typeContext, TypeResolver: resolver, TypeAuthority: typecatalog.TranscribeAuthority,
 		Contracts:       gen.ContractReferences{Input: &gen.ContractReference{Expression: input.Name, DescriptorKey: input.Key()}, Output: &gen.ContractReference{Expression: output.Name, DescriptorKey: output.Key()}},
-		ExternalHandler: &gen.ExternalHandler{Package: packages[0], Name: names[0], Build: build.WithContext(nil), WireTypes: wireReferences}}, nil
+		ExternalHandler: &gen.ExternalHandler{Package: packages[0], Name: names[0], AdapterPackage: adapterPackage, AdapterName: adapterName, Build: build.WithContext(nil), WireTypes: wireReferences}}, nil
+}
+
+func validateSourceHandlerAdapter(loader types.Importer, object types.Object, reference string) error {
+	factory, ok := object.(*types.Func)
+	if !ok {
+		return fmt.Errorf("handler adapter %s must be a declared function", reference)
+	}
+	pkg, err := loader.Import("github.com/viant/datly/runtime/handler")
+	if err != nil {
+		return err
+	}
+	handler := pkg.Scope().Lookup("TypedHandler")
+	if handler == nil {
+		return fmt.Errorf("runtime handler package does not declare TypedHandler")
+	}
+	sig := factory.Type().(*types.Signature)
+	if sig.Recv() != nil || sig.TypeParams().Len() != 0 || sig.Variadic() || sig.Params().Len() != 0 || sig.Results().Len() != 2 ||
+		!types.Identical(sig.Results().At(0).Type(), handler.Type()) || !types.Identical(sig.Results().At(1).Type(), types.Universe.Lookup("error").Type()) {
+		return fmt.Errorf("handler adapter %s must have exact signature func() (runtime/handler.TypedHandler, error)", reference)
+	}
+	return nil
 }
 
 type sourceHandlerField struct {
@@ -484,30 +516,6 @@ func sourceHandlerTags(existing reflect.StructTag, authored string, embedded boo
 	return strings.Join(reconciled, " "), len(seen) != 0
 }
 
-// generatedPostFactory is deliberately narrower than source-backed handler
-// registration: canonical post execution owns both local generated contracts,
-// independently of POST, PATCH, PUT or DELETE transport.
-func generatedPostFactory(header *dql.HandlerHeader, prepared *dql.PreparedSource) ([3]string, bool) {
-	var names [3]string
-	if header == nil || !header.Declarative || (!strings.EqualFold(header.Method, "POST") && !strings.EqualFold(header.Method, "PATCH") && !strings.EqualFold(header.Method, "PUT") && !strings.EqualFold(header.Method, "DELETE")) || prepared == nil || prepared.TypeContext == nil || prepared.TypeContext.PackagePath == "" {
-		return names, false
-	}
-	destination := prepared.TypeContext.PackagePath
-	for i, ref := range []string{header.Factory, header.InputType, header.OutputType} {
-		canonical, err := (&gen.Plan{Imports: prepared.TypeContext.Imports}).CanonicalType(destination, ref)
-		if err != nil {
-			return names, false
-		}
-		pkg, name, err := handlerSymbol(canonical)
-		if err != nil || pkg != destination {
-			return names, false
-		}
-		names[i] = name
-	}
-
-	return names, true
-}
-
 func (c *Compiler) compileGeneratedPostFactory(ctx context.Context, source *Source, header *dql.HandlerHeader, prepared *dql.PreparedSource, settings *spec.Settings, names [3]string) (*Result, error) {
 	destination := prepared.TypeContext.PackagePath
 	build := source.GoBuild.WithContext(ctx)
@@ -522,7 +530,7 @@ func (c *Compiler) compileGeneratedPostFactory(ctx context.Context, source *Sour
 	// Protect selected authored declarations before discovery or publication.
 	for i, role := range []string{"input", "output"} {
 		file := settings.Generation.File(role, role+".go")
-		if err := ownership.validateShape(header.Name, &spec.View{TypeName: names[i+1], Dest: file}); err != nil {
+		if err := ownership.validateGeneratedContract(header.Name, names[i+1], file); err != nil {
 			return nil, fmt.Errorf("handler authored contracts must be separate from destination %q: %w", destination, err)
 		}
 	}
@@ -544,15 +552,15 @@ func (c *Compiler) compileGeneratedPostFactory(ctx context.Context, source *Sour
 	d := prepared.Directives
 	component := &spec.Component{Key: spec.Key{Kind: spec.KindComponent, Scope: source.Scope, Name: header.Name}, Name: header.Name,
 		Description: header.Description, Documentation: d.Documentation.Clone(), TypeContext: prepared.TypeContext, Settings: settings, Parameters: d.Params, Views: d.Views,
-		Routes: []*spec.Route{{Name: header.Name, Path: header.URI, Method: header.Method, Internal: d.Internal || d.MCPOnly, Handler: destination + "." + names[0], RequestBodyMode: d.Route.RequestBodyMode, APIKeyHeader: d.Route.APIKeyHeader, APIKeyValue: d.Route.APIKeyValue}}}
+		Routes: d.ComponentRoutes(header.Name, destination+"."+names[0])}
 	for index, view := range component.Views {
 		if view != nil {
 			component.Views[index] = view.Clone()
 			component.Views[index].Key.Scope = source.Scope
 		}
 	}
-	if d.MCP != nil {
-		component.Routes[0].MCP = []*spec.MCPExposure{d.MCP.Clone()}
+	if err := (routes.Compiler{Component: component}).Compile(); err != nil {
+		return nil, err
 	}
 	copy := *source
 	copy.GoBuild = build.WithContext(nil)
@@ -588,12 +596,11 @@ func (c *Compiler) compileGeneratedPostFactory(ctx context.Context, source *Sour
 	if err != nil {
 		return nil, err
 	}
-	loader := &componentLoader{}
-	component.Views, err = loader.mergeViews(component.Views, declarations.views)
+	component.Views, err = link.MergeViews(component.Views, declarations.views)
 	if err != nil {
 		return nil, err
 	}
-	viewBindings, err := loader.normalizeIndependentViewParams(component, declarations.viewsByParam)
+	viewBindings, err := link.NormalizeIndependentViewParams(component, declarations.viewsByParam)
 	if err != nil {
 		return nil, err
 	}

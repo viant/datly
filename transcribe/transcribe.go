@@ -5,12 +5,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-
-	"github.com/viant/bindly/resource"
-
 	"strings"
 
+	"github.com/viant/bindly/resource"
 	gen "github.com/viant/datly/transcribe/generate"
+	"github.com/viant/datly/transcribe/internal/handlergen"
 	"github.com/viant/datly/typecatalog"
 	loaderast "github.com/viant/x/loader/ast"
 	xmodule "github.com/viant/x/module"
@@ -41,7 +40,7 @@ func (c *Compiler) Transcribe(ctx context.Context, request Request) (*GeneratedP
 		}
 		return (&PackageCompilation{Source: request.Source, Component: request.Component, InputType: request.InputType, OutputType: request.OutputType, Options: request.Options, Types: types}).Transcribe(ctx, request.Destination)
 	}
-	options, err := normalizeOptions(request.Options)
+	options, err := handlergen.Normalize(request.Options)
 	if err != nil {
 		return nil, err
 	}
@@ -68,10 +67,10 @@ func (c *Compiler) Transcribe(ctx context.Context, request Request) (*GeneratedP
 		}
 		return c.generateInputAt(ctx, request.Destination, packageDir, compiled, input)
 	}
-	handlers := newHandlerGeneration(compiled, &input, options)
-	handlers.directory = filepath.Join(input.ProjectRoot, packageDir)
-	if err = handlers.prepare(); err != nil {
-		return nil, handlers.diagnostic(err)
+	handlers := handlergen.New(compiled.handlerContext(), &input, options)
+	handlers.Directory = filepath.Join(input.ProjectRoot, packageDir)
+	if err = handlers.Prepare(); err != nil {
+		return nil, compiled.handlerDiagnostic(err)
 	}
 	return c.generateInputAt(ctx, request.Destination, packageDir, compiled, input)
 }
@@ -99,6 +98,9 @@ func (c *Compiler) generateInputAt(ctx context.Context, rootDir, packageDir stri
 	rootDir, err = filepath.EvalSymlinks(rootDir)
 	if err != nil {
 		return nil, err
+	}
+	if input.GoBuild != nil {
+		input.GoBuild = input.GoBuild.WithContext(ctx)
 	}
 	if h := input.ExternalHandler; h != nil && h.Build != nil {
 		input.ExternalHandler = h.Clone()
@@ -225,6 +227,7 @@ func generationInput(rootDir, packageDir string, compiled *Result) (gen.Input, s
 		GeneratedTypes:  compiled.GeneratedTypes,
 		GoHandler:       compiled.GoHandler,
 		ExternalHandler: compiled.ExternalHandler.Clone(),
+		GoBuild:         compiled.Source.GoBuild.Clone(),
 		VeltyHandler:    compiled.VeltyHandler,
 	}
 	if strings.TrimSpace(authored) != "" {

@@ -66,6 +66,7 @@ func TestPackageCompilationJoinsLinkedTypesAndDQLAuthority(t *testing.T) {
 		Scope: packagePath,
 		Name:  "Users",
 		Text: `#setting($_ = $route('/v2/users/{tenantID}', 'GET'))
+#setting($_ = $ignoreEmptyQueryParameters(false))
 #define($_ = $TenantID<int>(path/tenantID).Required())
 SELECT id FROM users WHERE tenant_id = :TenantID`,
 	}
@@ -89,6 +90,9 @@ SELECT id FROM users WHERE tenant_id = :TenantID`,
 	if result.Component.Settings == nil || result.Component.Settings.InputType != "PackageCompileInput" ||
 		result.Component.Settings.OutputType != "" || result.Component.Settings.DefaultConnector != "db" {
 		t.Fatalf("package contract settings = %+v", result.Component.Settings)
+	}
+	if result.Component.Settings.IgnoreEmptyQueryParameters == nil || *result.Component.Settings.IgnoreEmptyQueryParameters {
+		t.Fatalf("DQL query policy was lost when linked to the package: %+v", result.Component.Settings)
 	}
 	input, err := result.TypeResolver.Descriptor("PackageCompileInput")
 	if err != nil || input == nil || input.Type != reflect.TypeOf(PackageCompileInput{}) {

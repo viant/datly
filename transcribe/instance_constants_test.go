@@ -138,4 +138,7 @@ func TestInstanceUnsafeTableDiscoveryUsesEvaluatedTarget(t *testing.T) {
 	if compiled.Component.Settings.Const["Table"] != "absent_default_table" {
 		t.Fatal("instance value replaced authored metadata")
 	}
+	if compiled.Component.RootView.Source.Table != "$Unsafe.Table" {
+		t.Fatalf("authored table identity lost: %q", compiled.Component.RootView.Source.Table)
+	}
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/viant/datly/constant"
+	"github.com/viant/datly/constant/identifier"
 	documentation "github.com/viant/datly/documentation"
 	xdocs "github.com/viant/xdatly/docs"
 	"reflect"
@@ -34,6 +35,8 @@ type ArtifactInput struct {
 	Handler       rhandler.TypedHandler
 	CodecFactory  xcodec.Factory
 	Types         *typecatalog.Catalog
+	// IdentifierProducts supplies connector product metadata without database I/O.
+	IdentifierProducts func(string) (string, error)
 	// HandlerOwnedOutput preserves the output type/schema without importing its
 	// reader declarations into a component whose handler produces that output.
 	// Enabled reports resolve those declarations into separate metadata only.
@@ -117,6 +120,14 @@ func (c *artifactCompiler) compile() (*Artifact, error) {
 	if input.Const != nil {
 		component = input.Const.Apply(component)
 	}
+	values, err := input.Const.For(component)
+	if err != nil {
+		return nil, err
+	}
+	component, err = (identifier.Renderer{Values: values, Products: input.IdentifierProducts}).Component(component)
+	if err != nil {
+		return nil, fmt.Errorf("resolve runtime identifiers: %w", err)
+	}
 	if err = c.compileOutputColumns(component); err != nil {
 		return nil, err
 	}
@@ -167,7 +178,7 @@ func (c *artifactCompiler) compile() (*Artifact, error) {
 			readerPlan, err = readercompiler.Compile(readercompiler.Input{
 				CodecFactory: factory,
 				Component:    input.Component, InputType: input.InputType, OutputType: input.OutputType,
-				Bindings:  compiledInput.Bindings,
+				Bindings: compiledInput.Bindings, SelectorCompanion: compiledInput.SelectorPlan,
 				Predicate: predicate, TypeLookup: c.lookupType,
 				Const: input.Const, DirectViewField: input.DirectViewField, Resources: input.Resources,
 			})

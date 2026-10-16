@@ -19,6 +19,7 @@ import (
 	"github.com/viant/datly/transcribe/dql/statement"
 	gen "github.com/viant/datly/transcribe/generate"
 	"github.com/viant/datly/transcribe/gobuild"
+	"github.com/viant/datly/transcribe/internal/program"
 	"github.com/viant/datly/typecatalog"
 	xshape "github.com/viant/x/shape"
 )
@@ -113,7 +114,7 @@ func (c *Compiler) compileFactoryInputShape(ctx context.Context, source *Source,
 			if err != nil {
 				return err
 			}
-			pkg, name, err := handlerSymbol(canonical)
+			pkg, name, err := program.Symbol(canonical)
 			if err != nil || view == root && pkg != prepared.TypeContext.PackagePath {
 				return fmt.Errorf("factory input shape type %q must belong to generated destination %q", view.TypeName, prepared.TypeContext.PackagePath)
 			}
@@ -170,11 +171,18 @@ func (c *Compiler) compileFactoryInputShape(ctx context.Context, source *Source,
 		if p == nil || !strings.EqualFold(p.Source.Kind, "body") {
 			continue
 		}
-		// The generated field must bind directly to the local SQL-derived type.
-		// Output type, codec and emission controls cannot override or omit it.
-		bodyType, typeErr := authority.CanonicalType(prepared.TypeContext.PackagePath, p.TypeExpr)
+		// The field destination remains the local SQL-derived type. An explicit
+		// codec may use a different provider source, but must declare that exact
+		// destination; native codec compilation validates its source and factory.
+		destination := p.TypeExpr
+		invalidOverride := strings.TrimSpace(p.OutputTypeExpr) != ""
+		if p.Codec != nil {
+			destination = p.OutputTypeExpr
+			invalidOverride = strings.TrimSpace(destination) == ""
+		}
+		bodyType, typeErr := authority.CanonicalType(prepared.TypeContext.PackagePath, destination)
 		rowType := prepared.TypeContext.PackagePath + "." + root.TypeName
-		if typeErr != nil || (bodyType != "[]*"+rowType && bodyType != "*"+rowType) || strings.TrimSpace(p.OutputTypeExpr) != "" || p.Codec != nil || p.EmitOutput {
+		if typeErr != nil || (bodyType != "[]*"+rowType && bodyType != "*"+rowType) || invalidOverride || p.EmitOutput {
 			return nil, fmt.Errorf("factory input shape body %s must directly reference generated *%s or []*%s", p.Name, root.TypeName, root.TypeName)
 		}
 		cardinality := spec.CardinalityMany
@@ -232,7 +240,7 @@ func (c *Compiler) compileFactoryInputShape(ctx context.Context, source *Source,
 		}
 		if local := ownedNames[canonical]; local != "" {
 			view.TypeName = local
-		} else if pkg, _, err := handlerSymbol(canonical); err != nil {
+		} else if pkg, _, err := program.Symbol(canonical); err != nil {
 			return nil, err
 		} else if pkg != prepared.TypeContext.PackagePath {
 			if err := link(view, canonical); err != nil {
@@ -364,12 +372,17 @@ type factoryDeclarations struct {
 	pkg       string
 	types     map[string][]factoryDeclaration
 	functions map[string]bool
+	files     map[string]string
+	directory string
 }
 
 type factoryDeclaration struct {
-	file      string
-	source    string
-	generated bool
+	file           string
+	source         string
+	generated      bool
+	concreteStruct bool
+	typeSpec       *ast.TypeSpec
+	imports        []*ast.ImportSpec
 }
 
 func (d *factoryDeclarations) load() error {
@@ -382,6 +395,7 @@ func (d *factoryDeclarations) load() error {
 	}
 	types := map[string][]factoryDeclaration{}
 	functions := map[string]bool{}
+	files := map[string]string{}
 	for _, file := range append(selected.GoFiles, selected.CgoFiles...) {
 		data, err := os.ReadFile(filepath.Join(selected.Dir, file))
 		if err != nil {
@@ -391,7 +405,8 @@ func (d *factoryDeclarations) load() error {
 		if err != nil {
 			return err
 		}
-		record := factoryDeclaration{file: file, source: string(data), generated: ast.IsGenerated(tree)}
+		files[file] = string(data)
+		record := factoryDeclaration{file: file, source: string(data), generated: ast.IsGenerated(tree), imports: tree.Imports}
 		for _, declaration := range tree.Decls {
 			if fn, ok := declaration.(*ast.FuncDecl); ok && fn.Recv == nil {
 				functions[fn.Name.Name] = true
@@ -403,12 +418,16 @@ func (d *factoryDeclarations) load() error {
 			for _, declaration := range group.Specs {
 				typ, ok := declaration.(*ast.TypeSpec)
 				if ok {
-					types[typ.Name.Name] = append(types[typ.Name.Name], record)
+					declarationRecord := record
+					declarationRecord.typeSpec = typ
+					_, structure := typ.Type.(*ast.StructType)
+					declarationRecord.concreteStruct = structure && !typ.Assign.IsValid()
+					types[typ.Name.Name] = append(types[typ.Name.Name], declarationRecord)
 				}
 			}
 		}
 	}
-	d.types, d.functions = types, functions
+	d.types, d.functions, d.files, d.directory = types, functions, files, selected.Dir
 	return nil
 }
 
@@ -433,6 +452,32 @@ func (d *factoryDeclarations) validateShape(owner string, shape *spec.View, inhe
 	for _, declaration := range d.types[shape.TypeName] {
 		if filepath.Clean(declaration.file) != filepath.Clean(destination) || !strings.HasPrefix(declaration.source, "// Code generated by Datly for "+owner+"; DO NOT EDIT.\n") {
 			return fmt.Errorf("factory input shape %s conflicts with authored or imported authority in %s", shape.TypeName, declaration.file)
+		}
+	}
+	return nil
+}
+
+// Generated contract siblings are provisional only. Publication must compare the
+// independently rendered Input/Output/setter files before retaining foreign bytes.
+func (d *factoryDeclarations) validateGeneratedContract(owner, name, destination string) error {
+	if err := d.load(); err != nil {
+		return err
+	}
+	declarations := d.types[name]
+	if len(declarations) > 1 {
+		return fmt.Errorf("factory contract %s has selected duplicate declarations", name)
+	}
+	for _, declaration := range declarations {
+		prefix, _, ok := strings.Cut(declaration.source, "\n")
+		foreign := ok && declaration.generated && strings.HasPrefix(prefix, "// Code generated by Datly for ") && strings.HasSuffix(prefix, "; DO NOT EDIT.") && strings.TrimSuffix(strings.TrimPrefix(prefix, "// Code generated by Datly for "), "; DO NOT EDIT.") != ""
+		sameOwner := strings.HasPrefix(declaration.source, "// Code generated by Datly for "+owner+"; DO NOT EDIT.\n")
+		if filepath.Clean(declaration.file) != filepath.Clean(destination) || (!sameOwner && !foreign) {
+			return fmt.Errorf("factory input shape %s conflicts with authored or imported authority in %s", name, declaration.file)
+		}
+		// Foreign aliases are linked authority. Same-owner generated artifacts
+		// remain disposable under the existing regeneration/repair policy.
+		if !sameOwner && !declaration.concreteStruct {
+			return fmt.Errorf("factory contract %s must be a generated struct", name)
 		}
 	}
 	return nil

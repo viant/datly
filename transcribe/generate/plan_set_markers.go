@@ -97,6 +97,9 @@ func (r *planResolver) applySetMarkerViews() error {
 			}
 		}
 	}
+	if err := r.addNativeBodyPresenceEdges(planned, linked, borrowedEdges); err != nil {
+		return err
+	}
 	selected, err := r.generatedReferenceMarkerViews(planned)
 	if err != nil {
 		return err
@@ -134,6 +137,68 @@ func (r *planResolver) applySetMarkerViews() error {
 		}
 	}
 	return nil
+}
+
+// Body presence does not grant writer intent. Only ordinary generated relations
+// in the selected native body graph can extend auxiliary holder markers.
+func (r *planResolver) addNativeBodyPresenceEdges(planned map[string]*ViewPlan, linked map[string]bool, edges map[borrowedPresenceEdge]bool) error {
+	if !r.input.nativeMutationTargetSelected || r.input.Component == nil {
+		return nil
+	}
+	var body *spec.Parameter
+	for _, parameter := range spec.EffectiveParameters(r.input.Component.Parameters) {
+		if !parameter.IsMutationInput() {
+			continue
+		}
+		if body != nil {
+			return fmt.Errorf("native body presence input is ambiguous")
+		}
+		body = parameter
+	}
+	if body == nil || !strings.EqualFold(strings.TrimSpace(body.Source.Kind), "body") {
+		return nil
+	}
+	generated := func(identity string) bool {
+		view := planned[identity]
+		return view != nil && view.Ownership == ViewGenerated && !linked[identity] && r.input.Views[identity] == nil
+	}
+	visited := map[*spec.View]bool{}
+	var visit func(*spec.View) error
+	visit = func(view *spec.View) error {
+		if view == nil || visited[view] {
+			return nil
+		}
+		visited[view] = true
+		parent, err := view.Identity()
+		if err != nil {
+			return err
+		}
+		if !generated(parent) {
+			return nil
+		}
+		for _, relation := range view.Relations {
+			if relation == nil || relation.View == nil || relation.Kind == spec.RelationKindDerived {
+				continue
+			}
+			child, err := relation.View.Identity()
+			if err != nil {
+				return err
+			}
+			if !generated(child) {
+				continue
+			}
+			holder := relation.Holder
+			if holder == "" {
+				holder = relation.Name
+			}
+			edges[borrowedPresenceEdge{parent: parent, holder: typecatalog.FieldName(holder), child: child}] = true
+			if err := visit(relation.View); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	return visit(r.input.Component.RootView)
 }
 
 // A scalar reference consumes the same generated row as an independent read.

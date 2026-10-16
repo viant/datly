@@ -48,7 +48,7 @@ func decomposeReadSources(parsed *query.Select, root *spec.View, frame TemplateF
 	if source == nil || (strings.TrimSpace(source.Table) == "" && strings.TrimSpace(source.SQL) == "") {
 		return false, &Error{Code: CodeRelationUnsupported, Cause: fmt.Errorf("multi-view root source is not independently executable")}
 	}
-	if source.Table != "" {
+	if source.Table != "" && (root.Source.Table == "" || root.Source.TableInferred) {
 		root.Source.Table = source.Table
 	}
 	root.Source.SQL = source.SQL

@@ -34,6 +34,9 @@ import (
 )
 
 type Options struct {
+	// HTTPMiddleware is statically supplied by the embedding process. It wraps
+	// every HTTP and MCP listener without changing component schemas or claims.
+	HTTPMiddleware func(http.Handler) http.Handler
 	// LinkedArtifact is trusted immutable executable provenance, supplied by the
 	// deployment build. It is independent of Config.Version and reload counters.
 	LinkedArtifact *dexec.LinkedArtifact
@@ -79,6 +82,8 @@ type Options struct {
 }
 
 type Server struct {
+	httpMiddleware        func(http.Handler) http.Handler
+	httpHandler           http.Handler
 	mcpResourceAuthorizer auth.ResourceAuthorizer
 	ready                 chan struct{}
 	addresses             []string
@@ -142,7 +147,7 @@ func New(ctx context.Context, options Options) (_ *Server, err error) {
 		}
 		options.LinkedArtifact = &artifact
 	}
-	s := &Server{source: &source{Workspace: options.Workspace, config: options.Config, resources: options.Resources, holders: append([]any(nil), options.Holders...), invocationLogger: options.InvocationLogger, invocationDiffer: options.InvocationDiffer, providers: providers, requireLinked: options.RequireLinked || options.Holders != nil,
+	s := &Server{httpMiddleware: options.HTTPMiddleware, source: &source{Workspace: options.Workspace, config: options.Config, resources: options.Resources, holders: append([]any(nil), options.Holders...), invocationLogger: options.InvocationLogger, invocationDiffer: options.InvocationDiffer, providers: providers, requireLinked: options.RequireLinked || options.Holders != nil,
 		linkedArtifact: options.LinkedArtifact, requireComponentBinding: options.RequireComponentBinding, toolMetadata: options.ToolMetadata}, done: make(chan struct{}), ready: make(chan struct{}), mcpResourceAuthorizer: options.MCPResourceAuthorizer}
 	s.source.codecFactories, err = normalizeCodecs(options.Codecs)
 	if err != nil {
@@ -195,6 +200,13 @@ func New(ctx context.Context, options Options) (_ *Server, err error) {
 			_ = observation.OTel.Exporter.Shutdown(cleanup)
 		}
 		return nil, err
+	}
+	s.httpHandler = s.manager
+	if s.httpMiddleware != nil {
+		s.httpHandler = s.httpMiddleware(s.httpHandler)
+		if s.httpHandler == nil {
+			return nil, fmt.Errorf("standalone HTTP middleware returned a nil handler")
+		}
 	}
 	return s, nil
 }
@@ -311,10 +323,10 @@ func (s *Server) prepare(ctx context.Context) error {
 	s.cancel = cancel
 	endpoint := s.source.config.Endpoint
 	address, _ := endpoint.ListenAddress()
-	s.servers = []*http.Server{{Addr: address, Handler: s.manager, ReadHeaderTimeout: time.Duration(endpoint.ReadHeaderTimeoutMs) * time.Millisecond, IdleTimeout: time.Duration(endpoint.IdleTimeoutMs) * time.Millisecond, ReadTimeout: time.Duration(endpoint.ReadTimeoutMs) * time.Millisecond, WriteTimeout: time.Duration(endpoint.WriteTimeoutMs) * time.Millisecond, MaxHeaderBytes: endpoint.MaxHeaderBytes}}
+	s.servers = []*http.Server{{Addr: address, Handler: s.httpHandler, ReadHeaderTimeout: time.Duration(endpoint.ReadHeaderTimeoutMs) * time.Millisecond, IdleTimeout: time.Duration(endpoint.IdleTimeoutMs) * time.Millisecond, ReadTimeout: time.Duration(endpoint.ReadTimeoutMs) * time.Millisecond, WriteTimeout: time.Duration(endpoint.WriteTimeoutMs) * time.Millisecond, MaxHeaderBytes: endpoint.MaxHeaderBytes}}
 	if policy := s.source.config.MCP; policy != nil {
 		address, _ := policy.ListenAddress()
-		protocol, createErr := mcpserver.New(mcpserver.Config{Source: s.manager, ResourceAuthorizer: s.mcpResourceAuthorizer, Transport: mcpserver.TransportConfig{Kind: mcpserver.TransportStreamable, Address: address, ReadHeaderTimeout: time.Duration(endpoint.ReadHeaderTimeoutMs) * time.Millisecond, IdleTimeout: time.Duration(endpoint.IdleTimeoutMs) * time.Millisecond}})
+		protocol, createErr := mcpserver.New(mcpserver.Config{Source: s.manager, ToolsListTtlMs: policy.ToolsListTtlMs, ResourceAuthorizer: s.mcpResourceAuthorizer, Transport: mcpserver.TransportConfig{Kind: mcpserver.TransportStreamable, Address: address, ReadHeaderTimeout: time.Duration(endpoint.ReadHeaderTimeoutMs) * time.Millisecond, IdleTimeout: time.Duration(endpoint.IdleTimeoutMs) * time.Millisecond}})
 		if createErr != nil {
 			return createErr
 		}
@@ -324,9 +336,15 @@ func (s *Server) prepare(ctx context.Context) error {
 		}
 		s.servers = append(s.servers, server)
 	}
-	for _, server := range s.servers {
+	for index, server := range s.servers {
 		httpserver.Defaults(server)
 		server.BaseContext = func(net.Listener) context.Context { return requestCtx }
+		if index > 0 && s.httpMiddleware != nil {
+			server.Handler = s.httpMiddleware(server.Handler)
+			if server.Handler == nil {
+				return fmt.Errorf("standalone HTTP middleware returned a nil handler")
+			}
+		}
 		server.Handler = s.track(server.Handler)
 		listener, listenErr := (&net.ListenConfig{}).Listen(ctx, "tcp", server.Addr)
 		if listenErr != nil {
@@ -412,5 +430,5 @@ func (s *Server) Shutdown(ctx context.Context) error {
 
 // ServeHTTP serves the published generation. Reload must succeed before serving.
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	s.track(s.manager).ServeHTTP(w, r)
+	s.track(s.httpHandler).ServeHTTP(w, r)
 }

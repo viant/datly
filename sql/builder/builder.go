@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/viant/datly/data"
+	"github.com/viant/datly/internal/selectorerror"
 	"github.com/viant/datly/spec"
 	dsql "github.com/viant/datly/sql"
 	"github.com/viant/datly/sql/criteria"
@@ -30,6 +31,9 @@ func NewBuilder() *Builder {
 
 func (b *Builder) CacheSQL(ctx context.Context, opts ...BuilderOption) (*cache.ParmetrizedQuery, error) {
 	options := newBuilderOptions(opts...)
+	if options.staticProjection != nil {
+		return nil, fmt.Errorf("static companion projection does not support cache SQL")
+	}
 	applyReportOrdering(ctx, options)
 	window, err := b.resolveControls(options, false)
 	if err != nil {
@@ -127,8 +131,25 @@ func (b *Builder) QueryMatcher(ctx context.Context, query *cache.ParmetrizedQuer
 	return result, nil
 }
 
-func (b *Builder) Build(ctx context.Context, opts ...BuilderOption) (*cache.ParmetrizedQuery, error) {
+func (b *Builder) Build(ctx context.Context, opts ...BuilderOption) (_ *cache.ParmetrizedQuery, failure error) {
+	var nativeProjection *selectorerror.Projection
+	defer func() {
+		// A callback can return a genuine inner Build failure. Only the marker
+		// created at this invocation's own Prepare stage carries its authority.
+		if marker, ok := failure.(*selectorerror.Projection); ok && marker != nil && marker != nativeProjection {
+			failure = marker.Cause
+		}
+	}()
 	options := newBuilderOptions(opts...)
+	if options.staticProjection != nil {
+		if options.sqlOverride || options.view == nil || options.source == nil || options.source != options.view.Spec.Source || options.source.SQL != options.sqlText || !sameStaticEvaluator(options.template, options.staticEvaluator) {
+			return nil, fmt.Errorf("static projection execution owner mismatch")
+		}
+		if err := options.staticProjection.Validate(options.sqlText, options.view, options.projection); err != nil {
+			return nil, err
+		}
+	}
+
 	applyReportOrdering(ctx, options)
 	if options.template != nil {
 		viewInput := sqltemplate.ViewInput{
@@ -223,14 +244,23 @@ func (b *Builder) Build(ctx context.Context, opts ...BuilderOption) (*cache.Parm
 		bindingPositionalArgs = nil
 	}
 	sourceSQL, paginationConsumed := prepareSourcePagination(sourceSQL, controls)
-	if options.selector != nil && strings.TrimSpace(options.selector.OrderBy) != "" && len(options.projection) == 0 {
+	if options.staticProjection == nil && options.selector != nil && strings.TrimSpace(options.selector.OrderBy) != "" && len(options.projection) == 0 {
 		sourceSQL, err = (dsql.SelectorProjection{SQL: sourceSQL, View: options.view, Dialect: options.dialect}).Expand()
 		if err != nil {
 			return nil, err
 		}
 	}
-	projection, err := (dsql.SelectorProjection{SQL: sourceSQL, View: options.view, Dialect: options.dialect}).Prepare(options.projection)
+	var projection *dsql.Projection
+	if options.staticProjection != nil {
+		projection, err = options.staticProjection.Prepare(options.source.SQL, options.view, sourceSQL, options.dialect)
+	} else {
+		projection, err = (dsql.SelectorProjection{SQL: sourceSQL, View: options.view, Dialect: options.dialect}).Prepare(options.projection)
+	}
 	if err != nil {
+		if unknown, ok := err.(*dsql.UnknownProjectionColumnError); ok && unknown != nil {
+			nativeProjection = &selectorerror.Projection{View: options.view, Cause: unknown}
+			return nil, nativeProjection
+		}
 		return nil, err
 	}
 	controls, err = projection.OutputControls(controls)
@@ -405,6 +435,9 @@ type builderOptions struct {
 	source                 *spec.ViewSource
 	view                   *data.View
 	sqlText                string
+	sqlOverride            bool
+	staticProjection       *dsql.StaticProjectionSelection
+	staticEvaluator        sqltemplate.Evaluator
 	tableProjection        bool
 	controls               *spec.ViewControls
 	selector               *xstate.Selector
@@ -445,6 +478,7 @@ func newBuilderOptions(options ...BuilderOption) *builderOptions {
 
 func WithBuilderSQL(sqlText string) BuilderOption {
 	return func(o *builderOptions) {
+		o.sqlOverride = true
 		o.sqlText = sqlText
 	}
 }
@@ -638,4 +672,24 @@ func WithBuilderPartition(partition *PartitionInput) BuilderOption {
 // The builder validates its target, dialect and caller-owned transaction.
 func WithBuilderForUpdate(enabled bool) BuilderOption {
 	return func(o *builderOptions) { o.forUpdate = enabled }
+}
+
+// WithBuilderStaticProjection supplies the invocation's already checked Fields
+// selection and exact compiled evaluator owner. Ordinary projections are unchanged.
+func WithBuilderStaticProjection(selection *dsql.StaticProjectionSelection, evaluator sqltemplate.Evaluator) BuilderOption {
+	return func(o *builderOptions) { o.staticProjection = selection; o.staticEvaluator = evaluator }
+}
+
+func sameStaticEvaluator(actual, expected sqltemplate.Evaluator) bool {
+	if actual == nil || expected == nil {
+		return actual == nil && expected == nil
+	}
+	value := reflect.ValueOf(actual)
+	if !value.Comparable() || reflect.TypeOf(actual) != reflect.TypeOf(expected) {
+		return false
+	}
+	if value.Kind() == reflect.Pointer && value.IsNil() {
+		return false
+	}
+	return actual == expected
 }

@@ -438,3 +438,16 @@ func testRouteContractWithProjection(t *testing.T, inputType reflect.Type, bindi
 	}
 	return result
 }
+
+func TestHierarchicalCatalogToolNames(t *testing.T) {
+	for _, name := range []string{"namespace/list", "namespace/get", "resource/get", "skills/list", "skills/get", "studio.sdk.namespaces.list", "app/v1.query"} {
+		if err := validateToolName(name); err != nil {
+			t.Fatalf("valid tool %s: %v", name, err)
+		}
+	}
+	for _, name := range []string{"/namespace/list", "namespace/", "namespace//list", "namespace/../list", "namespace/./get", "namespace/get?name=x", "namespace get"} {
+		if err := validateToolName(name); err == nil {
+			t.Fatalf("invalid tool accepted: %s", name)
+		}
+	}
+}

@@ -73,7 +73,7 @@ func TestNilSlicePolicyTypedErrorJSON(t *testing.T) {
 						if policy == "empty_array" {
 							require.JSONEq(t, `{"items":[]}`, string(raw))
 						} else {
-							require.JSONEq(t, `{"items":null,"secret":"visible on original error path"}`, string(raw))
+							require.JSONEq(t, `{"items":null}`, string(raw))
 						}
 					default:
 						require.JSONEq(t, `{"items":null,"secret":"unrelated"}`, string(raw))

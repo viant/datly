@@ -13,6 +13,7 @@ import (
 	dexec "github.com/viant/datly/exec"
 	"github.com/viant/datly/internal/drainowner"
 	rhandler "github.com/viant/datly/runtime/handler"
+	"github.com/viant/datly/runtime/handler/custom"
 	handlerprovider "github.com/viant/datly/runtime/handler/provider"
 	"github.com/viant/datly/runtime/registry"
 	"github.com/viant/datly/spec"
@@ -30,6 +31,8 @@ type Request struct {
 	phaseInvocationID uint64
 	// BufferedComponentCalls is dispatcher-owned canonical caller metadata.
 	BufferedComponentCalls bool
+	// CanonicalReader is runtime dispatcher metadata, never application input.
+	CanonicalReader bool
 	// ProtectedFlushTables is canonical component-local metadata, never inherited.
 	ProtectedFlushTables []string
 	// IndependentChildTransactions retains all invocation capabilities/context but
@@ -71,6 +74,15 @@ func New() *Engine { return &Engine{} }
 
 func (e *Engine) Execute(ctx context.Context, request Request) (actual any, failure error) {
 	callContext := ctx
+	readerCall := claimReaderCall(ctx)
+	readerResult := false
+	readerRetired := false
+	var readerRetiredCause error
+	defer func() {
+		if readerCall != nil && readerRetired && ctx.Err() == nil && sameReaderError(failure, readerRetiredCause) {
+			readerCall.publish(failure)
+		}
+	}()
 	ctx, _ = rhandler.WithPhaseObserver(ctx, nil, 0, 0)
 	var phases *rhandler.PhaseScope
 	phaseEnded := false
@@ -96,6 +108,15 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 	if request.Input == nil {
 		return nil, fmt.Errorf("route input contract is required")
 	}
+	scoped, policyErr := custom.ScopedInputBinding(request.Handler)
+	if policyErr != nil {
+		return nil, policyErr
+	}
+	if scoped {
+		if err := validateScopedRequest(request); err != nil {
+			return nil, err
+		}
+	}
 	ctx, completeSelection := dexec.ScopeOutputSelection(ctx)
 	inputType := request.Input.Type()
 	if inputType == nil || inputType.Kind() != reflect.Struct {
@@ -105,6 +126,22 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 	if inputPlan == nil {
 		return nil, fmt.Errorf("route input contract %s requires a Bindly plan", request.Input.Route().String())
 	}
+	if scoped {
+		inputPlan, _ = request.Input.ScopePlan("")
+	}
+	selectors := request.Input.SelectorPlan()
+	if selectors != nil && (!request.CanonicalReader || scoped || request.BoundInput != nil || request.ResolvedInput != nil || request.Replay != nil || len(request.ResolvedPaths) != 0 || selectors.PublicPlan() != inputPlan) {
+		return nil, fmt.Errorf("selector companion requires ordinary canonical reader binding without prepared input")
+	}
+	if selectors != nil && selectors.DeferredPage() {
+		if _, ok := request.Handler.(rhandler.InputCapturer); ok {
+			return nil, fmt.Errorf("deferred companion Page does not support input capture callbacks")
+		}
+		if _, ok := request.Handler.(rhandler.CapturedExecutionGuard); ok {
+			return nil, fmt.Errorf("deferred companion Page does not support pre-reader execution callbacks")
+		}
+	}
+	var selectorValue any
 	root := request.Injector
 	if root == nil {
 		var err error
@@ -149,9 +186,9 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 		return nil, fmt.Errorf("sequence_strategy requires a data source")
 	}
 	outcomeFinalizer, outcomeAware := request.Handler.(rhandler.OutcomeFinalizer)
-	// Opted-in outputs need a neutral root even when their handler has no DB.
+	// Composition lifecycle hooks need a neutral root even without a root DB.
 	// Ordinary source-less handlers retain their existing child ownership.
-	if data == nil && (outcomeAware || request.Completion != nil || request.hasInjectorFinalizer() || request.BufferedComponentCalls) {
+	if data == nil && (outcomeAware || request.Completion != nil || request.hasCompositionFinalizer() || request.hasInvokerInitializer() || request.BufferedComponentCalls) {
 		data, ownsData = neutralDataScope(ctx), true
 	}
 	if data == nil && request.Capabilities.Connector != nil && !request.IndependentChildTransactions {
@@ -166,6 +203,12 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 			return nil
 		}
 		activityActive = false
+		if request.CanonicalReader && readerResult && !ownsData && componentFromContext(ctx).relation == ComponentBufferedImperative && !drainowner.BindingGroupContext(ctx) && ordinaryReaderCause(cause) {
+			retired, err := data.finishNeutralReaderActivity(ctx, activity, cause)
+			readerRetired = retired
+			readerRetiredCause = cause
+			return err
+		}
 		return data.finishActivity(activity, cause)
 	}
 	// This covers roots established up front and dynamically discovered output roots.
@@ -236,13 +279,18 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 	bindOutput := func(value any) (err error) {
 		defer func() {
 			if value := recover(); value != nil {
+				readerResult = false
 				err = dexec.NewPanicError("output capability binding", value)
 			}
 		}()
 		if request.OutputCapabilities == nil || value == nil || scope == nil {
 			return nil
 		}
-		return scope.Bind(ctx, value, bindly.WithPlan(request.OutputCapabilities), bindly.WithSource(input))
+		err = scope.Bind(ctx, value, bindly.WithPlan(request.OutputCapabilities), bindly.WithSource(input))
+		if err != nil {
+			readerResult = false
+		}
+		return err
 	}
 	notifyCompletion := func(completionErr error) error {
 		if !ownsData || data == nil || request.Completion == nil {
@@ -378,6 +426,9 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 		return result, notifyCompletion(completionErr)
 	}
 	if request.BufferedComponentCalls && data != nil && (data.source != nil || data.parent != nil) {
+		if selectors != nil {
+			return finish(nil, fmt.Errorf("selector companion does not support buffered parent data preparation"))
+		}
 		if _, err := data.resolve(ctx); err != nil {
 			return finish(nil, err)
 		}
@@ -420,6 +471,9 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 		return snapshot, snapshot != nil, nil
 	}))
 	runtimeProviders = append(runtimeProviders, handlerprovider.Static(dexec.ReaderInputPreparerKey, dexec.ReaderInputPreparer(func(ctx context.Context, names ...string) (*dexec.ReaderInput, error) {
+		if selectors != nil {
+			return nil, fmt.Errorf("selector companion does not support prepared reader inputs")
+		}
 		prepared, err := request.Input.Without(input, names...)
 		if err != nil {
 			return nil, err
@@ -432,6 +486,11 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 	})
 	if err != nil {
 		return finish(nil, err)
+	}
+	if selectors != nil {
+		if err := selectors.ValidateProviders(providers); err != nil {
+			return finish(nil, err)
+		}
 	}
 	providers = withDefaultGenerator(root, providers)
 	scope, err = root.ForScope(providers...)
@@ -506,6 +565,12 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 				return err
 			}
 		}
+		if selectors != nil {
+			selectorValue, err = selectors.Bind(ctx, scope, input)
+			if err != nil {
+				return err
+			}
+		}
 		if bound {
 			if err := validateRequiredBoundInputs(request.Input, input); err != nil {
 				return err
@@ -545,7 +610,23 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 			return finish(nil, fmt.Errorf("capture handler input: %w", err))
 		}
 	}
-	binder := rhandler.NewBinder(scope, input)
+	var binder xhandler.Binder = rhandler.NewBinder(scope, input)
+	var scopedLease *scopedBinder
+	if scoped {
+		scopedLease = newScopedBinder(ctx, scope, input, request.Input, data, phases)
+		binder = scopedLease
+		defer scopedLease.close()
+	}
+	if selectors != nil {
+		if selectors.DeferredPage() {
+			binder, err = selectors.CarryPage(binder, input, selectorValue, providers)
+		} else {
+			binder, err = selectors.Carry(binder, input, selectorValue)
+		}
+		if err != nil {
+			return finish(nil, err)
+		}
+	}
 	invocation.Binder = binder
 	if guarded, ok := request.Handler.(rhandler.CapturedExecutionGuard); ok {
 		check, guardErr := guarded.CapturedExecutionGuard(invocation)
@@ -579,11 +660,17 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 	}
 	snapshotReady = true
 	if err := phases.Run(ctx, xhandler.PhaseInputInitialization, func() error {
-		if initializer, ok := input.(xhandler.Initializer); ok {
-			if err := initializer.Init(ctx); err != nil {
-				initializationErrorReturned = true
-				return fmt.Errorf("initialize handler input: %w", err)
-			}
+		var initErr error
+		switch initializer := input.(type) {
+		case xhandler.InvokerInitializer:
+			lease := &lifecycleScope{data: data, ctx: ctx, binder: binder, phase: "invoker initializer"}
+			initErr = lease.finish(func(ctx context.Context) error { return initializer.Init(ctx, lease) }, nil)
+		case xhandler.Initializer:
+			initErr = initializer.Init(ctx)
+		}
+		if initErr != nil {
+			initializationErrorReturned = true
+			return fmt.Errorf("initialize handler input: %w", initErr)
 		}
 		if mcpContext, ok := xmcp.LookupContext(ctx); ok {
 			if initializer, ok := input.(xmcp.Initializer); ok {
@@ -598,8 +685,14 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 		return finish(nil, err)
 	}
 
+	readerResult = request.CanonicalReader
 	dexec.BeginOutputSelection(ctx)
 	result, handlerErr := request.Handler.Execute(ctx, invocation)
+	if scopedLease != nil {
+		if leaseErr := scopedLease.close(); leaseErr != nil {
+			handlerErr = errors.Join(handlerErr, leaseErr)
+		}
+	}
 	if result == nil && handlerErr != nil && !outcomeAware {
 		result = errorAwareOutput(request.OutputType)
 	}
@@ -609,13 +702,13 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 		}
 	}
 	completeSelection(result, handlerErr)
-	if outcomeAware {
-		return finish(result, handlerErr)
-	}
-	var injectorPrepareErr error
-	if finalizer, ok := result.(xhandler.InjectorFinalizer); ok {
+	var compositionPrepareErr error
+	_, invokerAware := result.(xhandler.InvokerFinalizer)
+	_, invokerErrorAware := result.(xhandler.InvokerErrorFinalizer)
+	_, injectorAware := result.(xhandler.InjectorFinalizer)
+	if invokerAware || invokerErrorAware || (injectorAware && !outcomeAware) {
 		// Untyped engine adapters can discover the hook only from the result.
-		// Its conditional child calls still need an owner before lookup starts.
+		// Its child calls still need an owner before composition starts.
 		if data == nil {
 			data, ownsData = neutralDataScope(ctx), true
 			activity, err = data.admitActivity(ctx)
@@ -626,17 +719,37 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 			ctx = withDataScope(ctx, data)
 		}
 		if handlerErr == nil && ownsData && !data.protectedLifetime() {
-			injectorPrepareErr = data.prepare(ctx)
-			handlerErr = injectorPrepareErr
+			compositionPrepareErr = data.prepare(ctx)
+			handlerErr = compositionPrepareErr
 		}
-		lease := &finalizerInjectors{data: data, ctx: ctx, output: result, lookup: request.Injectors}
-		handlerErr = lease.finalize(finalizer, handlerErr)
+		lease := &lifecycleScope{data: data, ctx: ctx, binder: binder, output: result, lookup: request.Injectors}
+		switch finalizer := result.(type) {
+		case xhandler.InvokerErrorFinalizer:
+			lease.phase = "invoker error finalizer"
+			operationErr := handlerErr
+			handlerErr = lease.finish(func(ctx context.Context) error { return finalizer.Finalize(ctx, lease, operationErr) }, operationErr)
+		case xhandler.InvokerFinalizer:
+			lease.phase = "invoker finalizer"
+			handlerErr = lease.finish(func(ctx context.Context) error { return finalizer.Finalize(ctx, lease) }, handlerErr)
+		case xhandler.InjectorFinalizer:
+			lease.phase = "injector finalizer"
+			handlerErr = lease.finish(func(ctx context.Context) error { return finalizer.Finalize(ctx, lease.get) }, handlerErr)
+		}
+	}
+	if outcomeAware {
+		return finish(result, handlerErr)
 	}
 	// A transactional prepare can fail before commit. Let the single
 	// error-aware finalizer observe that failure while it can still veto the
 	// locally owned transaction. Plain success finalizers remain post-commit.
 	// Protected roots finish output composition before closure/preparation and
 	// terminal observation. Nested components retain their existing callbacks.
+	if request.CanonicalReader && readerResult && request.BufferedComponentCalls && handlerErr == nil && ownsData && data.neutralReaderComposition() {
+		if _, errorAware := result.(xhandler.ErrorFinalizer); errorAware {
+			outputFinalized = true
+			result, handlerErr = finalizeBeforeCompletion(ctx, result, handlerErr)
+		}
+	}
 	protected := ownsData && data.protectedLifetime()
 	var prepareErr error
 	if _, errorAware := result.(xhandler.ErrorFinalizer); errorAware && !protected && handlerErr == nil && ownsData && data != nil {
@@ -645,7 +758,7 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 			handlerErr = prepareErr
 		}
 	}
-	if !protected {
+	if !protected && !outputFinalized {
 		outputFinalized = true
 		result, handlerErr = finalizeBeforeCompletion(ctx, result, handlerErr)
 	}
@@ -653,11 +766,12 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 		var registerErr error
 		completionFrame, registerErr = data.registerOutcome(ctx, request.Input.Route().String(), outputCompletion{})
 		if registerErr != nil {
+			readerResult = false
 			handlerErr = errors.Join(handlerErr, registerErr)
 		}
 	}
 	result, handlerErr = finish(result, handlerErr)
-	if prepareErr != nil || injectorPrepareErr != nil {
+	if prepareErr != nil || compositionPrepareErr != nil {
 		result = nil
 	}
 	if handlerErr != nil {
@@ -705,18 +819,52 @@ func validateRequiredBoundInputs(contract *registry.RouteInputContract, input an
 }
 
 func boundSupplementalPlan(injector *bindly.Injector, input *registry.RouteInputContract, supplied any) (*bindly.Plan, error) {
+	// A partial or nil marker contract must retain explicit-presence semantics.
+	markerContract := false
+	for _, field := range reflect.VisibleFields(input.Type()) {
+		if field.Tag.Get("setMarker") == "true" {
+			markerContract = true
+			break
+		}
+	}
+	for _, field := range input.Fields() {
+		if field.Binding().MarkerField != "" {
+			markerContract = true
+			break
+		}
+	}
 	var bindings []bindly.BindingSpec
 	for _, field := range input.Fields() {
 		binding := field.Binding()
 		if (spec.BindSource{Kind: binding.Location.Kind}).RequestValue() {
 			continue
 		}
-		// Trusted canonical scalar/dependency seeds need a real compiled marker.
+		// Canonical seeds retain explicit markers, or markerless nonzero values.
 		// Current, derived parameters and scoped/noncacheable values always bind.
 		if (binding.Location.Kind == "component" || binding.Location.Kind == "generator") && binding.Scope == "" && (binding.Cacheable == nil || *binding.Cacheable) {
 			present, marker, err := input.Plan().ExplicitPresence(supplied, field.Path())
 			if err != nil {
 				return nil, err
+			}
+			if !markerContract && !marker {
+				// Explicit markerless callers may retain nonzero canonical seeds.
+				// A pointer is supplied even when its pointee is the zero value.
+				accessor, err := xshape.Linked(input.Type()).Accessor(field.Path())
+				if err != nil {
+					return nil, err
+				}
+				value, found, err := accessor.GetOptional(supplied)
+				if err != nil {
+					return nil, err
+				}
+				if found && !(xshape.Runtime{}).IsNil(value.Interface()) {
+					for value.Kind() == reflect.Interface {
+						value = value.Elem()
+					}
+					if !value.IsZero() {
+						continue
+					}
+				}
 			}
 			if marker && present {
 				if binding.Required != nil && *binding.Required {
@@ -748,7 +896,11 @@ func boundSupplementalPlan(injector *bindly.Injector, input *registry.RouteInput
 	return plan, nil
 }
 
-func (r Request) hasInjectorFinalizer() bool {
+func (r Request) hasInvokerInitializer() bool {
+	return r.Input != nil && reflect.PointerTo(r.Input.Type()).Implements(reflect.TypeFor[xhandler.InvokerInitializer]())
+}
+
+func (r Request) hasCompositionFinalizer() bool {
 	outputType := r.OutputType
 	if outputType == nil {
 		if typed, ok := r.Handler.(rhandler.TypedHandler); ok {
@@ -758,8 +910,12 @@ func (r Request) hasInjectorFinalizer() bool {
 	if outputType == nil {
 		return false
 	}
-	contract := reflect.TypeFor[xhandler.InjectorFinalizer]()
-	return outputType.Implements(contract) || (outputType.Kind() != reflect.Pointer && reflect.PointerTo(outputType).Implements(contract))
+	for _, contract := range []reflect.Type{reflect.TypeFor[xhandler.InvokerFinalizer](), reflect.TypeFor[xhandler.InvokerErrorFinalizer](), reflect.TypeFor[xhandler.InjectorFinalizer]()} {
+		if outputType.Implements(contract) || (outputType.Kind() != reflect.Pointer && reflect.PointerTo(outputType).Implements(contract)) {
+			return true
+		}
+	}
+	return false
 }
 
 func errorAwareOutput(outputType reflect.Type) any {

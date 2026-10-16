@@ -62,6 +62,37 @@ Use at least: update existing, insert missing, mixed insert/update, supplied zer
 
 Test narrow capability injection, typed input access, dependent-component binding, missing providers, handler-returned errors and intentional output/status. A custom handler does not automatically acquire generated mutation safeguards: prove its own identity, validation, sequencing and commit rules.
 
+## Reader lifecycle unit tests
+
+Exercise actual input/view initialization, OnFetch, OnRelation and the existing
+supported output finalization callbacks. Preserve their signatures rather than
+adding writer lifecycle APIs. Reuse original business expectations and fixtures,
+covering the affected component's applicable phases and meaningful branches:
+
+- Input initialization and authorization: permitted/denied scope, binding and
+  initialized values, presence, MCP initialization where used, and failure stopping
+  subsequent reads or callbacks.
+- Existing view initialization and OnFetch: empty/single/multiple rows, NULL versus
+  zero/false/empty, loaded-field evidence, intentional row/presence mutations,
+  transformations before indexing/relating, and error/cancellation propagation.
+- OnRelation: complete relation population across batches, missing/to-one/to-many
+  children, null versus empty collections, identity and intended ordering, and
+  intentional collection mutations. Assert callback order/count and cache/retry
+  behavior; do not invent an error return for OnRelation.
+- Output finalization: existing output/status/error behavior, supported success
+  and failure paths, callback count and failure propagation where its contract
+  permits it, without introducing writer outcome signatures.
+- Invocation isolation: sequential and concurrent requests do not leak cached
+  rows, relation collections, markers, scoped state or output across invocations.
+
+For focused-helper refactors and no-op hook removal, assert the same observable
+behavior before and after. Unit tests supplement canonical transcription and
+regeneration, native execution with hydrated runtime inputs, and the original
+Endly acceptance suite; they do not replace these gates or authorize changing
+original expectations to conceal a regression. Keep execution scoped to the
+component and directly affected dependencies unless broader coverage is justified
+by the change or explicitly requested.
+
 ## Transport and realistic execution
 
 Use SQLite through shared project fixture utilities, not mocks alone. For MCP use viant/mcp client/server integration where the project supplies it. Inspect actual tool lists/calls and structured errors, not just generated schemas. HTTP tests assert both status and body. Never reinterpret an MCP tool error as an HTTP transport-authentication failure.
@@ -80,3 +111,8 @@ when regenerating readers, writers and multi-view selectors. Test
 `datly init/build` discovery after adding/removing a package without changing
 registration code, and preserve source-backed deployment inputs. Verify canonical
 skill-root links and reproducible declared product imports before bundling.
+
+## Lifecycle composition compatibility
+
+- For lifecycle composition, prefer `Init(ctx, handler.ComponentInvoker)` / `Finalize(ctx, handler.ComponentInvoker)` over an Input invoker field. Verify prerequisite ordering, child failure rollback and output composition before root completion. Existing field injection/plain hooks remain supported; commit-dependent publication stays in outcome finalization.
+- Compile and exercise existing `Init(ctx)`, `Finalize(ctx)`, `Finalize(ctx,error)` and lookup finalizers without changing their timing. Regeneration must preserve authored lifecycle files. Do not treat migrating a post-completion hook into a pre-completion invoker hook as a signature-only edit.

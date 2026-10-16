@@ -113,6 +113,16 @@ this proves Go shape authority, not current database schema compatibility. An
 unqualified output row name continues to declare a generated shape. Select each
 existing derived row explicitly too when it shares a source file with linked rows.
 
+Linked Go row relations declared with `on` and `sql:"uri=..."` retain their SQL
+files, including nested relations loaded through an independent `Current` view.
+Transcription bundles those files automatically; no duplicate DQL relation is
+needed. Keep each relative file beside the package that declares its containing
+row, within the same project module. The row's Go tags and file bytes remain
+unchanged. A missing local file or conflicting destination fails generation.
+Namespace-qualified references retain their namespace; foreign namespace files
+must be supplied separately. Unqualified files from another module and relation
+assets inherited through Go aliases or named wrappers are outside this support.
+
 ### Qualified generated factory contracts
 
 A local factory can use package-qualified names for SQL-generated contracts:

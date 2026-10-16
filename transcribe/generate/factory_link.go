@@ -13,7 +13,10 @@ import (
 
 // FactoryLinkPlan is compiled-Go registration wiring, separate from the
 // runtime-free public policy source. It registers only in a supplied x.Registry.
-type FactoryLinkPlan struct{ Name, Destination, PackagePath, Factory, Adapter, Expression string }
+type FactoryLinkPlan struct {
+	Name, Destination, PackagePath, Factory, Adapter, Expression string
+	Direct                                                       bool
+}
 
 func (r *planResolver) resolveFactoryLink() {
 	factory, adapter := "", ""
@@ -28,6 +31,10 @@ func (r *planResolver) resolveFactoryLink() {
 	if factory == "" {
 		if h := r.plan.ExternalHandler; h != nil {
 			r.plan.FactoryLink = &FactoryLinkPlan{Name: "Register" + exportedName(r.plan.ComponentName) + "Factories", Destination: r.plan.Generation.File("links", "links.go"), PackagePath: h.Package, Factory: h.Name, Adapter: "custom", Expression: r.plan.FactoryExpression}
+			if r.plan.AdapterExpression != "" {
+				r.plan.FactoryLink.Expression = r.plan.AdapterExpression
+				r.plan.FactoryLink.Direct = true
+			}
 		}
 		return
 	}
@@ -36,11 +43,17 @@ func (r *planResolver) resolveFactoryLink() {
 
 func (p *FactoryLinkPlan) source(packageName string, plan *Plan) (string, error) {
 	imports := importsForFields([]Field{{Type: plan.Input.Type}, {Type: plan.Output.Type}, {Type: p.Expression}}, plan.Imports)
+	if p.Direct {
+		imports = importsForFields([]Field{{Type: p.Expression}}, plan.Imports)
+	}
 	xAlias, adapterAlias := "", ""
 	for _, target := range []struct {
 		path, preferred string
 		alias           *string
 	}{{"github.com/viant/x", "x", &xAlias}, {"github.com/viant/datly/runtime/handler/" + p.Adapter, "handleradapter", &adapterAlias}} {
+		if p.Direct && target.alias == &adapterAlias {
+			continue
+		}
 		for _, item := range imports {
 			if item.Package == target.path {
 				*target.alias = item.Alias
@@ -81,7 +94,10 @@ func (p *FactoryLinkPlan) source(packageName string, plan *Plan) (string, error)
 	if err != nil {
 		return "", err
 	}
-	bridge := &ast.CallExpr{Fun: &ast.IndexListExpr{X: &ast.SelectorExpr{X: ast.NewIdent(adapterAlias), Sel: ast.NewIdent("Factory")}, Indices: []ast.Expr{input, output}}, Args: []ast.Expr{factory}}
+	var bridge ast.Expr = factory
+	if !p.Direct {
+		bridge = &ast.CallExpr{Fun: &ast.IndexListExpr{X: &ast.SelectorExpr{X: ast.NewIdent(adapterAlias), Sel: ast.NewIdent("Factory")}, Indices: []ast.Expr{input, output}}, Args: []ast.Expr{factory}}
+	}
 	function := &ast.FuncDecl{Name: ast.NewIdent(p.Name), Type: &ast.FuncType{
 		Params:  &ast.FieldList{List: []*ast.Field{{Names: []*ast.Ident{ast.NewIdent(registryName)}, Type: &ast.StarExpr{X: &ast.SelectorExpr{X: ast.NewIdent(xAlias), Sel: ast.NewIdent("Registry")}}}}},
 		Results: &ast.FieldList{List: []*ast.Field{{Type: ast.NewIdent("error")}}},

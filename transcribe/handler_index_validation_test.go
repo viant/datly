@@ -1,5 +1,9 @@
 package transcribe
 
+import (
+	"github.com/viant/datly/transcribe/internal/program"
+)
+
 import "testing"
 
 func TestVeltyHandlerIndexedSelectorValidation(t *testing.T) {
@@ -13,7 +17,7 @@ func TestVeltyHandlerIndexedSelectorValidation(t *testing.T) {
 		{"loop metadata outside scope", `$dml.Insert("ROWS", $Input.Rows[$foreach.Index])`, false},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			_, err := validateVeltyHandlerTemplate(test.template, nil)
+			_, err := program.Validate(test.template, nil)
 			if (err == nil) != test.valid {
 				t.Fatalf("validation error = %v, valid = %v", err, test.valid)
 			}

@@ -5,6 +5,7 @@ import (
 	"reflect"
 
 	"github.com/viant/x/shape"
+	legacyresponse "github.com/viant/xdatly/handler/response"
 	"github.com/viant/xdatly/response"
 )
 
@@ -18,7 +19,8 @@ func (a *outputAccessors) compileStatus(name string, output reflect.Type) error 
 		return err
 	}
 	typ := field.Type()
-	if typ == reflect.TypeFor[response.Status]() || typ == reflect.TypeFor[*response.Status]() {
+	if typ == reflect.TypeFor[response.Status]() || typ == reflect.TypeFor[*response.Status]() ||
+		typ == reflect.TypeFor[legacyresponse.Status]() || typ == reflect.TypeFor[*legacyresponse.Status]() {
 		// Set only the status member, preserving messages and other metadata.
 		field, err = owner.Accessor(name + ".Status")
 		if err != nil {

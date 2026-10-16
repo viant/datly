@@ -126,9 +126,11 @@ SELECT * FROM [${project}.ds.records]
 The SQL template and column-discovery paths use the same renderer. Registration
 compiles immutable constant slots; evaluation emits their values into DB-bound
 SQL. No expanded SQL template is stored during registration. Each replaced
-fragment must be nonempty and contain only ASCII letters, digits, underscores,
-or hyphens. Values supply fragments, not SQL syntax or enclosing quotes. Authors
-choose the identifier quoting required by their database.
+fragment must contain only ASCII letters, digits, underscores,
+or hyphens. An empty suffix is allowed when a literal identifier prefix remains,
+for example `CI_TARGETING_RULE${suffix}`. Values supply fragments, not SQL syntax
+or enclosing quotes. Authors choose the identifier quoting required by their
+database.
 
 Single-quoted strings, double-quoted text, SQL comments, and dollar-quoted strings
 retain their contents, except for the explicit `$Unsafe` emission described below.
@@ -160,6 +162,65 @@ double-quoted text and dollar-quoted strings remains data. Existing authored
 constant-table metadata resolution is retained. For a direct
 table source, discovery reads constraints from the evaluated table target, so an
 instance override of a raw table constant also selects that table's metadata.
+
+## Generated schema metadata
+
+Column discovery resolves a private copy of the SQL to inspect the configured
+database. Generated SQL, view `table` metadata, and SQLX constraint tags retain
+the authored identifier expressions, including `$Unsafe.Table`,
+`${project}.${dataset}.table`, and `CI_TARGETING_RULE${suffix}`. Primary-key,
+nullability, and other discovered schema facts still come from the real database.
+Literal identifiers remain literal even when equal to a configured constant.
+
+Identifier dependencies are classified by their declared bindings, not their
+discovery values. A request-bound `$Unsafe.RegionTable` remains invocation-time
+SQL even when it has a default. Its default supplies output-column discovery,
+but Datly does not infer view `table` metadata, table constraints, or hidden
+identity columns from that temporary target. The same applies to mixed
+expressions such as `${schema}.$Unsafe.RegionTable`: every dependency must be
+immutable for inferred instance-time metadata. Selected tables must provide a
+compatible output schema for the generated reader contract.
+
+This suppression applies only to inference for that source. Other views retain
+their metadata, and authored keys, columns, and constraint tags are preserved.
+Explicit table or SQLX identifier metadata referencing request bindings is
+rejected with a diagnostic rather than removed. Unknown identifier bindings
+also fail; a default never silently promotes a request binding to a constant.
+
+Foreign-key targets require provenance: unambiguous self-references and explicit relation
+joins can identify an authored symbolic target. If several symbolic views resolve
+to the same physical table, Datly uses the actual join rather than choosing a
+constant by its value. A known symbolic target without an unambiguous association
+requires explicit `sqlx` `refTable`/`refDb` metadata. Ordinary literal foreign-key
+targets remain valid; matching a configured schema name alone does not turn a
+literal target into a symbolic one.
+
+At runtime, bootstrap resolves table and constraint identifiers on an
+instance-local component copy. Writers and SQL reference/unique validation use
+the same immutable component constants; public Go types and their tags are not
+modified. Separate instances can therefore use one generated build with different
+table names concurrently. The runtime cannot recover expressions already frozen
+by an older generator: regenerate those artifacts first.
+
+Identifier metadata validation uses the effective source connector's database
+product, including parent inheritance and child overrides. BigQuery project IDs
+such as `viant-e2e-mediator` are therefore valid in symbolic qualified paths and
+whole-path backticks. Other products retain their existing identifier grammar.
+Standalone obtains this authority from the registered SQL driver without opening
+a connection or querying schema metadata. Low-level bootstrap callers can supply
+`ArtifactInput.IdentifierProducts`; without product authority, validation retains
+the generic SQLParser rules. Executable SQL and generated symbolic tags remain
+unchanged.
+
+A full-table `$Unsafe.HistoryTable` reference can also use a declared input
+binding such as `HistoryTable` with `const/frequencyTargetHistoryTable`. Metadata
+follows that external constant key, honoring instance overrides and the authored
+default. Backtick-quoted references retain their authored quoting. The binding
+does not add a `HistoryTable` alias to the external constant map or reinterpret
+ordinary literal table names. Request-bound inputs remain ineligible for
+instance-time metadata, including when a same-named instance constant exists.
+Executable SQL continues to read the normally bound input field; `$Unsafe` alone
+neither grants nor removes immutable authority.
 
 ## Projected scalar constants
 

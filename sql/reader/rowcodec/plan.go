@@ -2,18 +2,23 @@
 package rowcodec
 
 import (
+	"database/sql"
 	"fmt"
 	"io/fs"
 	"reflect"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/viant/datly/data"
+	sqlxio "github.com/viant/sqlx/io"
 	xshape "github.com/viant/x/shape"
 	xcodec "github.com/viant/xdatly/codec"
 )
 
 type Config struct {
+	// AllowNulls retains the view's native NULL scanning policy for scalar fields.
+	AllowNulls bool
 	RowType    reflect.Type
 	Columns    []*data.Column
 	Factory    xcodec.Factory
@@ -43,22 +48,36 @@ type fieldCopy struct {
 }
 
 func Compile(config Config) (*Plan, error) {
+	owner := xshape.Linked(config.RowType)
+	model := (xshape.Runtime{}).Indirect(config.RowType)
+	if model == nil || model.Kind() != reflect.Struct {
+		for _, column := range config.Columns {
+			if column != nil && column.Codec != nil {
+				return nil, fmt.Errorf("column codecs require a typed struct row")
+			}
+		}
+		return nil, nil
+	}
+	timePointer := reflect.PointerTo(reflect.TypeFor[time.Time]())
 	var columns []*data.Column
 	for _, column := range config.Columns {
-		if column != nil && column.Codec != nil {
+		if column == nil {
+			continue
+		}
+		if column.Codec != nil {
+			columns = append(columns, column)
+			continue
+		}
+		target, err := owner.Accessor(column.Name)
+		if err != nil {
+			continue
+		}
+		if target.Type() == timePointer || (!config.AllowNulls && scalarScanTarget(model, target)) {
 			columns = append(columns, column)
 		}
 	}
 	if len(columns) == 0 {
 		return nil, nil
-	}
-	if config.Factory == nil {
-		return nil, fmt.Errorf("column codec factory is required")
-	}
-	owner := xshape.Linked(config.RowType)
-	model := (xshape.Runtime{}).Indirect(config.RowType)
-	if model == nil || model.Kind() != reflect.Struct {
-		return nil, fmt.Errorf("column codecs require a typed struct row")
 	}
 	plan := &Plan{modelType: model}
 	runtime := xshape.Runtime{Lookup: config.LookupType}
@@ -77,14 +96,28 @@ func Compile(config Config) (*Plan, error) {
 		if err != nil {
 			return nil, fmt.Errorf("codec column %s: %w", column.Name, err)
 		}
-		if strings.TrimSpace(column.DataType) == "" {
-			return nil, fmt.Errorf("codec column %s requires an explicit source data type", column.Name)
+		var source reflect.Type
+		var instance xcodec.Instance
+		if column.Codec == nil {
+			if target.Type() == timePointer {
+				source = reflect.TypeFor[string]()
+				instance = nullableTimestampCodec{}
+			} else {
+				source = target.Type()
+			}
+		} else {
+			if config.Factory == nil {
+				return nil, fmt.Errorf("column codec factory is required")
+			}
+			if strings.TrimSpace(column.DataType) == "" {
+				return nil, fmt.Errorf("codec column %s requires an explicit source data type", column.Name)
+			}
+			source, err = runtime.Type(column.DataType)
+			if err != nil {
+				return nil, fmt.Errorf("codec column %s source type: %w", column.Name, err)
+			}
 		}
-		source, err := runtime.Type(column.DataType)
-		if err != nil {
-			return nil, fmt.Errorf("codec column %s source type: %w", column.Name, err)
-		}
-		if column.Codec.OutputType != "" {
+		if column.Codec != nil && column.Codec.OutputType != "" {
 			declared, err := runtime.Type(column.Codec.OutputType)
 			if err != nil {
 				return nil, err
@@ -93,11 +126,13 @@ func Compile(config Config) (*Plan, error) {
 				return nil, fmt.Errorf("codec column %s output type %s does not match %s", column.Name, declared, target.Type())
 			}
 		}
-		instance, err := config.Factory.New(&xcodec.Config{Body: column.Codec.Body, SourceType: source, DestinationType: target.Type(), Args: append([]string(nil), column.Codec.Args...), OutputTypeExpression: column.Codec.OutputType}, xcodec.WithTypeLookup(config.LookupType), xcodec.WithResourceFS(config.Resources))
-		if err != nil {
-			return nil, fmt.Errorf("compile column codec %s: %w", column.Name, err)
+		if column.Codec != nil {
+			instance, err = config.Factory.New(&xcodec.Config{Body: column.Codec.Body, SourceType: source, DestinationType: target.Type(), Args: append([]string(nil), column.Codec.Args...), OutputTypeExpression: column.Codec.OutputType}, xcodec.WithTypeLookup(config.LookupType), xcodec.WithResourceFS(config.Resources))
+			if err != nil {
+				return nil, fmt.Errorf("compile column codec %s: %w", column.Name, err)
+			}
 		}
-		if instance == nil || reflect.ValueOf(instance).Kind() == reflect.Pointer && reflect.ValueOf(instance).IsNil() {
+		if (column.Codec != nil || target.Type() == timePointer) && (instance == nil || reflect.ValueOf(instance).Kind() == reflect.Pointer && reflect.ValueOf(instance).IsNil()) {
 			return nil, fmt.Errorf("column codec %s returned a nil instance", column.Name)
 		}
 		rawName := fmt.Sprintf("Codec%d", i)
@@ -146,6 +181,36 @@ func Compile(config Config) (*Plan, error) {
 		return nil, err
 	}
 	return plan, nil
+}
+
+// Primitive scan slots retain NULL until the existing decoder assigns the
+// public scalar's zero value. Physical constraints and public types stay intact.
+func scalarScanTarget(model reflect.Type, target *xshape.Accessor) bool {
+	t := target.Type()
+	switch t.Kind() {
+	case reflect.Bool, reflect.String, reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Float32, reflect.Float64:
+	default:
+		return false
+	}
+	scanner := reflect.TypeFor[sql.Scanner]()
+	if t.Implements(scanner) || reflect.PointerTo(t).Implements(scanner) {
+		return false
+	}
+	indexes, err := target.FieldIndex()
+	if err != nil {
+		return false
+	}
+	var field reflect.StructField
+	for _, index := range indexes {
+		for model.Kind() == reflect.Pointer {
+			model = model.Elem()
+		}
+		field = model.Field(index)
+		model = field.Type
+	}
+	metadata := sqlxio.ParseTag(field.Tag)
+	return metadata.Encoding == "" || metadata.Encoding == sqlxio.EncodingRAW
 }
 
 func (p *Plan) ModelType() reflect.Type {

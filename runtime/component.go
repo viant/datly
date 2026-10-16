@@ -2,7 +2,9 @@ package runtime
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"github.com/viant/datly/constant"
 	"github.com/viant/datly/internal/drainowner"
 	"github.com/viant/datly/observability/otel"
 	xexec "github.com/viant/xdatly/exec"
@@ -15,6 +17,7 @@ import (
 	requestprovider "github.com/viant/bindly/provider/request"
 	dexec "github.com/viant/datly/exec"
 	rhandler "github.com/viant/datly/runtime/handler"
+	"github.com/viant/datly/runtime/handler/custom"
 	handlerengine "github.com/viant/datly/runtime/handler/engine"
 	handlerprovider "github.com/viant/datly/runtime/handler/provider"
 	rreader "github.com/viant/datly/runtime/handler/reader"
@@ -23,22 +26,55 @@ import (
 
 type componentStackKey struct{}
 
-func (r *Runtime) componentProvider(scope dexec.ProviderScope, parent *spec.Component) locator.Provider {
+func (r *Runtime) componentProvider(scope dexec.ProviderScope, parent *spec.Component, owners ...*RegisteredComponent) locator.Provider {
 	scope = componentDependencyScope(scope)
-	return drainowner.SealBindingGroupProvider(handlerprovider.Named(string(spec.KindComponent), func(ctx context.Context, _ reflect.Type, name string) (any, bool, error) {
+	return drainowner.SealBindingGroupProvider(handlerprovider.Named(string(spec.KindComponent), func(ctx context.Context, typ reflect.Type, name string) (value any, found bool, failure error) {
 		ctx = handlerengine.PrepareComponent(ctx, handlerengine.ComponentBinding, componentBindingOrder(parent, name))
 		ref, err := spec.ParseRouteRef(name)
 		if err != nil {
 			return nil, false, err
 		}
+		var dispatch drainowner.BindingGroupDispatch
+		reserved := false
+		if drainowner.ScopedBindingGroupMember(ctx) {
+			if len(owners) != 1 || owners[0] == nil {
+				return nil, false, drainowner.ErrBindingGroup
+			}
+			ctx, dispatch, err = drainowner.PrepareBindingGroupDispatch(ctx, groupRegistration(owners[0]), ref.String(), typ)
+			if err != nil {
+				return nil, false, err
+			}
+			reserved = true
+			defer func() {
+				if panicked := recover(); panicked != nil {
+					_ = dispatch.Complete(dexec.NewPanicError("component binding dispatch", panicked))
+					panic(panicked)
+				}
+				if closeErr := dispatch.Complete(failure); closeErr != nil && failure == nil {
+					failure = closeErr
+					value, found = nil, false
+				}
+			}()
+		}
 		component, _, ok := r.bundle.ComponentByRouteWithParams(ref.Method, ref.Path)
 		if !ok || component == nil {
 			return nil, false, fmt.Errorf("component route not found: %s", ref.String())
 		}
-		value, err := r.invokeComponent(ctx, dexec.ComponentRequest{
+		// A reserved descendant carries its own reader ticket here. Actual
+		// registration and managed-provider restrictions precede binding.
+		if reserved {
+			child, loadErr := r.registeredComponent(ctx, component.Key)
+			if loadErr != nil {
+				return nil, false, loadErr
+			}
+			if _, err = groupReaderLeaf(child, ref); err != nil {
+				return nil, false, err
+			}
+		}
+		result, err := r.invokeComponent(ctx, dexec.ComponentRequest{
 			Target: dexec.ComponentTarget{Component: component.Key, Route: ref},
 		}, scope)
-		return value, err == nil, err
+		return result, err == nil, err
 	}))
 }
 
@@ -60,21 +96,45 @@ func (i *scopedComponentInvoker) InvokeComponent(ctx context.Context, request de
 	if i.authority != nil {
 		ctx = i.authority(ctx)
 	}
+	recoveryRead := handlerengine.IsRootRecoveryRead(ctx)
 	policy := "imperative"
-	if i.buffered {
+	if i.buffered && !recoveryRead {
 		policy = "buffered"
 	}
 	ctx = context.WithValue(ctx, resolvedComponentCallPolicyKey{}, policy)
 	relation := handlerengine.ComponentImperative
-	if i.buffered {
+	if i.buffered && !recoveryRead {
 		if request.IndependentChildTransactions {
 			return nil, fmt.Errorf("buffered component calls cannot use independent child transactions")
 		}
 		relation = handlerengine.ComponentBufferedImperative
 	}
+	if recoveryRead {
+		relation = handlerengine.ComponentBinding
+	}
 	ctx = handlerengine.PrepareComponent(ctx, relation, "")
 	return i.runtime.invokeComponent(ctx, request, i.scope)
 }
+
+// Invoke adapts the public application contract to the existing scoped call.
+// Both interfaces share this invoker's authority, providers and buffered owner.
+func (i *scopedComponentInvoker) Invoke(ctx context.Context, request xhandler.ComponentRequest) (any, error) {
+	var seed *dexec.InputSeed
+	if request.ExtraInput != nil {
+		seed = dexec.WithInput(request.ExtraInput.Value())
+	}
+	return i.InvokeComponent(ctx, dexec.ComponentRequest{
+		Target: dexec.ComponentTarget{
+			Component: spec.Key{Kind: spec.KindComponent, Scope: request.Target.Scope, Name: request.Target.Name},
+			Route:     spec.RouteRef{Method: request.Target.Method, Path: request.Target.Path},
+		},
+		Input: request.Input, ExtraInput: seed,
+		Providers: request.Providers, Completion: request.Completion,
+	})
+}
+
+var _ xhandler.ComponentInvoker = (*scopedComponentInvoker)(nil)
+var _ dexec.ComponentInvoker = (*scopedComponentInvoker)(nil)
 
 func (r *Runtime) componentInvokerProvider(scope dexec.ProviderScope, buffered bool) locator.Provider {
 	scope = componentDependencyScope(scope)
@@ -222,19 +282,55 @@ func (r *Runtime) invokeComponent(ctx context.Context, request dexec.ComponentRe
 			binding := field.Binding()
 			inputs = append(inputs, drainowner.BindingGroupInput{Kind: binding.Location.Kind, In: binding.Location.In, Type: field.DestinationType(), Adapted: binding.Transformer != nil || (binding.SourceType != nil && binding.SourceType != field.DestinationType())})
 		}
-		if err := drainowner.ValidateBindingGroupTarget(ctx, route.String(), registered.Handler == nil && registered.Reader != nil, inputs...); err != nil {
+		if registered.Handler == nil && registered.Reader != nil {
+			err = drainowner.ValidateRegisteredBindingGroupReader(ctx, route.String(), groupRegistration(registered), inputs...)
+		} else {
+			var descriptor drainowner.ScopedGroupTarget
+			descriptor, err = r.scopedGroupDescriptor(ctx, registered, route, request, buffered)
+			if err == nil {
+				err = drainowner.ValidateScopedBindingGroupTarget(ctx, route.String(), groupRegistration(registered), descriptor, inputs...)
+			}
+		}
+		if err != nil {
 			return nil, err
 		}
 	}
-	if err := handlerengine.CheckComponentMutation(ctx, registered.Handler == nil && registered.Reader != nil); err != nil {
+	canonicalReader := registered.Handler == nil && registered.Reader != nil && request.Warmup == nil && !request.DryRun && !request.PrepareQuery && (request.Replay == nil || !request.Replay.Only)
+	if err := handlerengine.CheckComponentMutation(ctx, canonicalReader); err != nil {
 		return nil, err
 	}
+	readContext, finishRead, readErr := handlerengine.AdmitRootRecoveryRead(ctx)
+	if readErr != nil {
+		return nil, readErr
+	}
+	ctx = readContext
+	defer func() {
+		if finishErr := finishRead(); finishErr != nil {
+			err = errors.Join(err, finishErr)
+		}
+	}()
 	if registered.Input == nil {
 		return nil, fmt.Errorf("registered input contract not found: %s", identity)
 	}
 	inputRoute, ok := registered.Input.ForRoute(route)
 	if !ok {
 		return nil, fmt.Errorf("registered route input contract not found: %s", route.String())
+	}
+
+	scoped, policyErr := custom.ScopedInputBinding(registered.Handler)
+	if policyErr != nil {
+		return nil, policyErr
+	}
+	if scoped {
+		if request.Input != nil || request.Replay != nil || request.Warmup != nil || len(request.WarmupOmitInput) != 0 || request.PrepareQuery || request.DryRun || request.ReaderOptions != nil {
+			return nil, fmt.Errorf("scoped input binding does not accept prepared or reader-only invocation")
+		}
+		if independent {
+			return nil, fmt.Errorf("scoped input binding requires an ordinary custom invocation")
+		}
+		if err := inputRoute.PrepareScopePlans(); err != nil {
+			return nil, err
+		}
 	}
 	var resolvedInput any
 	var resolvedPaths []string
@@ -345,10 +441,16 @@ func (r *Runtime) invokeComponent(ctx context.Context, request dexec.ComponentRe
 	if err != nil {
 		return nil, err
 	}
+	values, err := (*constant.Values)(nil).For(registered.Component)
+	if err != nil {
+		return nil, err
+	}
+	ctx = constant.WithContext(ctx, values)
 	return r.invoker.Execute(ctx, handlerengine.Request{
 		IndependentChildTransactions: request.IndependentChildTransactions || (registered.Component.Settings != nil && registered.Component.Settings.IndependentChildTransactions),
 		SequenceStrategy:             sequenceStrategy,
 		BufferedComponentCalls:       buffered,
+		CanonicalReader:              canonicalReader,
 		ProtectedFlushTables:         protectedFlushTables,
 		Injector:                     r.injector,
 		Input:                        inputRoute,
@@ -364,7 +466,7 @@ func (r *Runtime) invokeComponent(ctx context.Context, request dexec.ComponentRe
 		Capabilities:                 registered.Capabilities,
 		Providers:                    registered.Providers,
 		Constants:                    constants,
-		Components:                   r.componentProvider(effectiveScope, registered.Component),
+		Components:                   r.componentProvider(effectiveScope, registered.Component, registered),
 		ComponentInvoker:             r.componentInvokerProvider(effectiveScope, buffered),
 		DataSource:                   dataSource,
 		Handler:                      handler,

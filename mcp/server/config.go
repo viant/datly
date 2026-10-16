@@ -25,7 +25,12 @@ type ServerService interface {
 	Authorization() *authorization.Policy
 }
 
+const DefaultToolsListTtlMs int64 = 5 * 60 * 1000
+
 type Config struct {
+	// ToolsListTtlMs is the private tool metadata freshness lease. Nil selects
+	// five minutes; explicit zero disables reuse by later client requests.
+	ToolsListTtlMs     *int64
 	ResourceAuthorizer auth.ResourceAuthorizer
 	Service            ServerService
 	Source             Source
@@ -52,6 +57,14 @@ type TransportConfig struct {
 }
 
 func (c Config) normalized() (Config, error) {
+	ttl := DefaultToolsListTtlMs
+	if c.ToolsListTtlMs != nil {
+		ttl = *c.ToolsListTtlMs
+	}
+	if ttl < 0 || ttl > int64(^uint(0)>>1) || ttl > int64((1<<63-1)/time.Millisecond) {
+		return Config{}, fmt.Errorf("MCP tools list TTL must be a nonnegative integer in milliseconds")
+	}
+	c.ToolsListTtlMs = &ttl
 	if c.Source != nil {
 		c.binding = &sourceBinding{source: c.Source}
 	}

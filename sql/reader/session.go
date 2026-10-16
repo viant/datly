@@ -52,6 +52,10 @@ type Session struct {
 	ForUpdate         []string
 	outputSlots       map[string][]*readmeta.Record
 	outputAccessors   *outputAccessors
+	staticSelection   *dsql.StaticProjectionSelection
+	staticFields      []string
+	selectorFailure   error
+	selectorOwned     bool
 	Output
 }
 
@@ -95,6 +99,7 @@ func (s *Session) Init() error {
 		if err != nil {
 			return err
 		}
+		s.outputAccessors.selectorOwner = s.compileSelectorOwner()
 	}
 	return nil
 }

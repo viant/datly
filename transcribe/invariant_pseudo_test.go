@@ -20,6 +20,7 @@ import (
 	gen "github.com/viant/datly/transcribe/generate"
 	plan "github.com/viant/datly/transcribe/handler/ast"
 	"github.com/viant/datly/transcribe/handler/golang"
+	"github.com/viant/datly/transcribe/internal/handlergen"
 )
 
 func TestInvariantPseudoNamedViewsSQLiteAndGo(t *testing.T) {
@@ -90,7 +91,7 @@ func TestInvariantPseudoNamedViewsSQLiteAndGo(t *testing.T) {
 	}
 	path := plan.FieldPath{"Input", "Records"}
 	semantic := &plan.Plan{Operation: plan.OperationPost, Input: plan.ContractRef{Path: path, Cardinality: spec.CardinalityMany}, Root: &plan.RecordPlan{Identity: identity, InputPath: path, Table: "ORDERS", Cardinality: spec.CardinalityMany, Write: plan.WritePolicy{ValuePath: path, Missing: plan.ActionInsert, Allowed: []plan.Action{plan.ActionInsert}}}}
-	refined, err := newHandlerGeneration(nil, nil, Options{}).withGeneratedPresence(semantic, generated.Plan)
+	refined, err := handlergen.New(nil, nil, Options{}).RefinePresence(semantic, generated.Plan)
 	if err != nil {
 		t.Fatal(err)
 	}

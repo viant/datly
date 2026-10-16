@@ -75,6 +75,12 @@ func (c *InputCatalog) fields(ref spec.RouteRef, component *spec.Key) ([]InputFi
 	if err := projection.visit(ref, component); err != nil {
 		return nil, err
 	}
+	if projection.scoped {
+		proof := scopedTransportCoverage{projection: &projection, active: map[string]bool{}, visited: map[string]bool{}}
+		if err := proof.visit(ref, component, false); err != nil {
+			return nil, err
+		}
+	}
 	return projection.fields, nil
 }
 
@@ -84,35 +90,33 @@ type inputProjection struct {
 	active, visited map[string]bool
 	locations       map[string]int
 	fields          []InputField
+	scoped          bool
 }
 
 func (p *inputProjection) visit(ref spec.RouteRef, component *spec.Key) error {
-	var entry *RouteInputContract
-	for _, candidate := range p.catalog.routes[ref.String()] {
-		if component != nil && candidate.component != *component {
-			continue
-		}
-		if entry != nil {
-			return fmt.Errorf("ambiguous component dependency route contract: %s", ref.String())
-		}
-		entry = candidate.contract
+	resolved, err := p.catalog.resolve(ref, component)
+	if err != nil {
+		return err
 	}
-	if entry == nil {
-		return fmt.Errorf("component dependency route contract not found: %s", ref.String())
-	}
-	if p.active[ref.String()] {
+	entry := resolved.contract
+	identity := resolved.component.String() + "|" + ref.String()
+	if p.active[identity] {
 		return fmt.Errorf("component input dependency cycle at %s", ref.String())
 	}
-	if p.visited[ref.String()] {
+	if p.visited[identity] {
 		return nil
 	}
-	p.active[ref.String()] = true
-	defer delete(p.active, ref.String())
+	p.active[identity] = true
+	defer delete(p.active, identity)
 	for _, field := range entry.Fields() {
 		if target, ok := field.Dependency(); ok {
 			binding := field.Binding()
-			if binding.When != "" || binding.Scope != "" || binding.With != "" {
+			if binding.When != "" || binding.With != "" {
 				return fmt.Errorf("conditional component dependency %s requires a transport projection", field.Path())
+			}
+			if binding.Scope != "" {
+				p.scoped = true
+				continue // coverage is proved against the completed default projection.
 			}
 			if err := p.visit(target, nil); err != nil {
 				return fmt.Errorf("%s input %s: %w", ref.String(), field.Path(), err)
@@ -128,7 +132,7 @@ func (p *inputProjection) visit(ref spec.RouteRef, component *spec.Key) error {
 			return fmt.Errorf("%s: %w", ref.String(), err)
 		}
 	}
-	p.visited[ref.String()] = true
+	p.visited[identity] = true
 	return nil
 }
 

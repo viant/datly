@@ -107,7 +107,7 @@ func (r *Row) OnRelation(ctx context.Context) {
 
 Keep hook mutation intentional. Replacing/reordering collections changes identity and may make loaded-field evidence unavailable. If selected view hooks need coordination, use public `handler.DataSync` rather than unrelated global locks.
 
-Input `Init(ctx context.Context) error` prepares application input before execution; it is not a row fetch hook. Preserve MCP-specific input initialization too. Use the writer skill for mutation-oriented entity Init/Validate rather than assuming reader hooks persist data.
+Input `Init(ctx context.Context, invoker handler.ComponentInvoker) error` prepares application input and explicitly invokes prerequisites before execution. Prefer this signature when composition is needed; plain `Init(ctx context.Context) error` remains supported. Neither signature is a row fetch hook. Preserve MCP-specific input initialization too. Use the writer skill for mutation-oriented entity Init/Validate rather than assuming reader hooks persist data.
 
 ## Client selectors and authored predicates
 

@@ -8,6 +8,7 @@ import (
 
 	"github.com/viant/datly/transcribe/dql"
 	"github.com/viant/datly/transcribe/dql/statement"
+	"github.com/viant/datly/transcribe/internal/program"
 )
 
 func TestCompilerTranscribesExplicitVeltyServiceProgram(t *testing.T) {
@@ -71,9 +72,9 @@ func TestTranscribeVeltyHandlerExcludesRawAndMixedSQL(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			prepared := &dql.PreparedSource{SQL: test.sql, Statements: statement.Parse(test.sql)}
-			actual, err := transcribeVeltyHandler(prepared, nil)
+			actual, err := program.Transcribe(prepared, nil)
 			if err != nil || actual != nil {
-				t.Fatalf("transcribeVeltyHandler() = (%#v, %v)", actual, err)
+				t.Fatalf("program.Transcribe() = (%#v, %v)", actual, err)
 			}
 		})
 	}

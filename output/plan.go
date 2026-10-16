@@ -51,6 +51,7 @@ type Plan struct {
 	rowPresentation     *presentation
 	csvEncoder          cachedCSV
 	xmlEncoders         sync.Map
+	errorEnvelope       *errorEnvelope
 }
 
 type Result struct {
@@ -187,6 +188,12 @@ func (c Compiler) Compile(input CompileInput) (*Plan, error) {
 	}
 	if p.custom == nil && p.jsonEncoder == nil && p.typeOf != nil {
 		p.standardJSON = jsonmarshal.NewStandard(p.typeOf)
+	}
+	if !p.TransportReady() {
+		p.errorEnvelope, err = compileErrorEnvelope(input)
+		if err != nil {
+			return nil, err
+		}
 	}
 	return p, nil
 }

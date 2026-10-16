@@ -4,11 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/viant/datly/bootstrap"
-	routecompiler "github.com/viant/datly/bootstrap/routes"
-	"path"
 	"strings"
 
+	"github.com/viant/datly/bootstrap"
+	routecompiler "github.com/viant/datly/bootstrap/routes"
 	"github.com/viant/datly/spec"
 	dsql "github.com/viant/datly/sql"
 	"github.com/viant/datly/transcribe/column"
@@ -16,6 +15,9 @@ import (
 	"github.com/viant/datly/transcribe/dql"
 	"github.com/viant/datly/transcribe/dql/statement"
 	gen "github.com/viant/datly/transcribe/generate"
+	"github.com/viant/datly/transcribe/internal/handlergen"
+	"github.com/viant/datly/transcribe/internal/link"
+	"github.com/viant/datly/transcribe/internal/program"
 	"github.com/viant/datly/typecatalog"
 )
 
@@ -53,14 +55,10 @@ type Result struct {
 // ContractTypeOverrides records only type names explicitly authored by DQL.
 // Package-inherited settings are intentionally excluded so ownership decisions
 // never need to infer provenance from equal strings.
-type ContractTypeOverrides struct {
-	Input  string
-	Output string
-}
+type ContractTypeOverrides = handlergen.ContractTypeOverrides
 
-// Compiler is the single authored-source orchestration entrypoint. Its body is
-// intentionally narrow while the original preprocess and plan stages are
-// ported behind this stable boundary.
+// Compiler orchestrates source preparation, metadata linking, read planning,
+// column discovery, and handler compilation.
 type Compiler struct{ comparisonOnly bool }
 
 func NewCompiler() *Compiler {
@@ -85,6 +83,53 @@ func (c *Compiler) Compile(ctx context.Context, source *Source) (*Result, error)
 		}
 		return c.compileHandler(source, header, body)
 	}
+	compilation, err := prepareCompilation(ctx, source)
+	if err != nil {
+		return nil, err
+	}
+	result := compilation.result
+	if result.Component.Static != nil {
+		if source.PackageComponent != nil || source.GoHandler != nil || source.VeltyHandler != nil {
+			return nil, fmt.Errorf("static source cannot overlay an executable component")
+		}
+		result.TypeContext = compileTypeContext(result.Source, result.Component.TypeContext)
+		return result, nil
+	}
+	if err := compilation.loadMetadata(c.comparisonOnly); err != nil {
+		return nil, err
+	}
+	if err := compilation.compileViews(ctx); err != nil {
+		return nil, err
+	}
+	if err := compilation.refine(ctx); err != nil {
+		return nil, err
+	}
+	if err := compilation.compileHandler(); err != nil {
+		return nil, err
+	}
+	if err := compilation.linkTypes(); err != nil {
+		return nil, err
+	}
+	if err := compilation.authoredInputs.validate(ctx); err != nil {
+		return nil, err
+	}
+	if err := c.admitBorrowedSQLRows(ctx, result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// componentCompilation holds only the products shared by successive compiler
+// stages. Public Result remains the boundary used by planning and generation.
+type componentCompilation struct {
+	result         *Result
+	authored       *spec.Component
+	prepared       *dql.PreparedSource
+	rows           *generatedRowAuthority
+	authoredInputs *authoredInputProof
+}
+
+func prepareCompilation(ctx context.Context, source *Source) (*componentCompilation, error) {
 	authoredText := source.Text
 	source, resourcePatches, err := prepareParameterizedEmbeds(ctx, source)
 	if err != nil {
@@ -141,40 +186,42 @@ func (c *Compiler) Compile(ctx context.Context, source *Source) (*Result, error)
 			}
 		}
 	}
-	if component.Static != nil {
-		if source.PackageComponent != nil || source.GoHandler != nil || source.VeltyHandler != nil {
-			return nil, fmt.Errorf("static source cannot overlay an executable component")
-		}
-		return &Result{Source: source, Component: component, SourceMap: sourceMap, TypeContext: compileTypeContext(source, component.TypeContext)}, nil
-	}
-	authoredViews := component.Views
+	return &componentCompilation{
+		result:   &Result{Source: source, Component: component, SourceMap: sourceMap},
+		authored: component, prepared: prepared,
+	}, nil
+}
+
+func (c *componentCompilation) loadMetadata(comparisonOnly bool) error {
+	source, component, prepared := c.result.Source, c.authored, c.prepared
+	var err error
 	contractTypeOverrides := authoredContractTypeOverrides(component)
 	authoredBorrowedRows := authoredBorrowedSQLRows(component)
 	var borrowedConsumed []gen.BorrowedAuthorityFile
-	if len(authoredBorrowedRows) > 0 && !c.comparisonOnly && source.ColumnRefiner != nil {
+	if len(authoredBorrowedRows) > 0 && !comparisonOnly && source.ColumnRefiner != nil {
 		borrowedConsumed, err = sealBorrowedSourcePackage(source.BaseDir())
 		if err != nil {
-			return nil, err
+			return err
 		}
 		if err = validateBorrowedSourceText(source, borrowedConsumed); err != nil {
-			return nil, err
+			return err
 		}
 		captured, err := capturedBorrowedResources(source, borrowedConsumed)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		sourceCopy := *source
 		sourceCopy.Resources = captured
 		source = &sourceCopy
 	}
 
-	loader := &componentLoader{packageComponent: source.PackageComponent, authoredComponent: component, dqlAuthored: strings.TrimSpace(source.Text) != ""}
+	loader := &link.Loader{PackageComponent: source.PackageComponent, AuthoredComponent: component, DQLAuthored: strings.TrimSpace(source.Text) != ""}
 	component, err = loader.Load()
 	if err != nil {
-		return nil, err
+		return err
 	}
 	if err = (routecompiler.Compiler{Component: component}).Compile(); err != nil {
-		return nil, err
+		return err
 	}
 	if err = synthesizeConstantParams(component); err != nil {
 		span := pointSpan(source.Text, 0)
@@ -182,17 +229,17 @@ func (c *Compiler) Compile(ctx context.Context, source *Source) (*Result, error)
 			span = Span{Start: positionAt(source.Text, authored.Start), End: positionAt(source.Text, authored.End)}
 		}
 		diagnostic := &Diagnostic{Code: "DQL-CONST", Severity: SeverityError, Message: err.Error(), Path: source.Path, Span: span}
-		return nil, &CompileError{Cause: err, Diagnostics: []*Diagnostic{diagnostic}}
+		return &CompileError{Cause: err, Diagnostics: []*Diagnostic{diagnostic}}
 	}
 	compiledTypeContext := compileTypeContext(source, component.TypeContext)
 	if err = compilePredicateContracts(component, source.Types, compiledTypeContext); err != nil {
-		return nil, err
+		return err
 	}
 	var typeResolver *typecatalog.Resolver
 	if source.Types != nil {
 		typeResolver, err = typecatalog.NewResolver(source.Types, typecatalog.TranscribeAuthority, compiledTypeContext)
 		if err != nil {
-			return nil, err
+			return err
 		}
 	}
 	if !source.Const.Empty() {
@@ -200,13 +247,25 @@ func (c *Compiler) Compile(ctx context.Context, source *Source) (*Result, error)
 		if constantsResolver == nil {
 			constantsResolver, err = typecatalog.NewResolver(typecatalog.NewCatalog(), typecatalog.TranscribeAuthority, compiledTypeContext)
 			if err != nil {
-				return nil, err
+				return err
 			}
 		}
 		if err = source.Const.Validate(component, constantsResolver.Type); err != nil {
-			return nil, err
+			return err
 		}
 	}
+	c.result.Source, c.result.Component = source, component
+	c.result.TypeContext, c.result.TypeResolver = compiledTypeContext, typeResolver
+	c.result.TypeAuthority = typecatalog.TranscribeAuthority
+	c.result.ContractTypeOverrides = contractTypeOverrides
+	c.result.AuthoredBorrowedSQLRows, c.result.borrowedConsumedFiles = authoredBorrowedRows, borrowedConsumed
+	c.result.PreparedSQL, c.result.Statements = prepared.SQL, prepared.Statements
+	return nil
+}
+
+func (c *componentCompilation) compileViews(ctx context.Context) error {
+	source, component, prepared := c.result.Source, c.result.Component, c.prepared
+	sourceMap, compiledTypeContext, typeResolver := c.result.SourceMap, c.result.TypeContext, c.result.TypeResolver
 	declarationFailure := func(err error) error {
 		span := pointSpan(source.Text, 0)
 		var declarationErr *declarationError
@@ -221,20 +280,20 @@ func (c *Compiler) Compile(ctx context.Context, source *Source) (*Result, error)
 		}
 		return &CompileError{Cause: err, Diagnostics: []*Diagnostic{diagnostic}}
 	}
-	metadataDeclarations, err := newDeclarationCompiler(component, authoredViews, source.Resources).compile()
+	metadataDeclarations, err := newDeclarationCompiler(component, c.authored.Views, source.Resources).compile()
 	if err != nil {
-		return nil, declarationFailure(err)
+		return declarationFailure(err)
 	}
 	generatedRows, err := collectGeneratedRowAuthority(component, prepared, metadataDeclarations, typeResolver, source.Path, sourceMap)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	readPlan := generatedRows.root
 	if generatedRows.plan == nil {
 		// Without package declarations, retain ordinary catalog validation.
 		readPlan, err = (&readPlanCompiler{sourceMap: sourceMap, path: source.Path, types: typeResolver}).compile(component, prepared)
 		if err != nil {
-			return nil, err
+			return err
 		}
 	}
 	if readPlan != nil {
@@ -244,15 +303,15 @@ func (c *Compiler) Compile(ctx context.Context, source *Source) (*Result, error)
 	if declarations != nil {
 		component.Views, err = declarations.removeSkeletons(component.Views)
 		if err != nil {
-			return nil, err
+			return err
 		}
-		component.Views, err = loader.mergeViews(component.Views, declarations.views)
+		component.Views, err = link.MergeViews(component.Views, declarations.views)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		component.RootView, err = mergeOutputRelations(component.RootView, declarations.outputRelations)
 		if err != nil {
-			return nil, err
+			return err
 		}
 	}
 	// Canonicalize selector targets proven by the transcribed graph and reject
@@ -260,117 +319,111 @@ func (c *Compiler) Compile(ctx context.Context, source *Source) (*Result, error)
 	// artifact bootstrap, so targets unknown here stay authored until that
 	// completed graph validates them.
 	if err := resolveQuerySelectorViews(component); err != nil {
-		return nil, err
+		return err
 	}
 	if _, err := bootstrap.NormalizeCodecReferences(component, compiledTypeContext); err != nil {
-		return nil, err
+		return err
 	}
 	var declaredViews map[string]*spec.View
 	if declarations != nil {
 		declaredViews = declarations.viewsByParam
 	}
-	viewBindings, err := loader.normalizeIndependentViewParams(component, declaredViews)
+	viewBindings, err := link.NormalizeIndependentViewParams(component, declaredViews)
 	if err != nil {
-		return nil, fmt.Errorf("normalize independent view contracts: %w", err)
+		return fmt.Errorf("normalize independent view contracts: %w", err)
 	}
 	packageViews, err := packageInputViewReferences(component, source.PackageComponent, typeResolver)
 	if err != nil {
-		return nil, err
+		return err
 	}
+	c.result.Declarations = declarations.generation
+	c.result.ViewBindings, c.result.Views = gen.ViewBindings(viewBindings), packageViews
+	authoredViews, proof, err := authoredInputViewReferences(ctx, c.result)
+	if err != nil {
+		return err
+	}
+	for identity, reference := range authoredViews {
+		if c.result.Views == nil {
+			c.result.Views = gen.ViewReferences{}
+		}
+		if prior := c.result.Views[identity]; prior != nil && prior.DescriptorKey != reference.DescriptorKey {
+			return fmt.Errorf("independent view %q has conflicting authored ownership", identity)
+		}
+		c.result.Views[identity] = reference
+	}
+	c.authoredInputs = proof
+	c.rows = generatedRows
+	return nil
+}
+
+func (c *componentCompilation) refine(ctx context.Context) error {
+	source, component, compiledTypeContext := c.result.Source, c.result.Component, c.result.TypeContext
 	applySourceDefaults(component, source)
-	if err = refineComponentColumns(ctx, component, source, declarations.generation, gen.ViewBindings(viewBindings), typeResolver); err != nil {
-		return nil, err
+	if err := column.NormalizeIdentifierMetadata(component); err != nil {
+		return err
+	}
+	if err := refineComponentColumns(ctx, component, source, c.result.Declarations, c.result.ViewBindings, c.result.TypeResolver, gen.Input{Views: c.result.Views}); err != nil {
+		return err
 	}
 
 	if _, err := bootstrap.NormalizeCodecReferences(component, compiledTypeContext); err != nil {
-		return nil, err
+		return err
 	}
 	if err := authoring.BackfillRelationMetadata(component, source.Resources); err != nil {
-		return nil, err
+		return err
 	}
 	if err := authoring.BackfillReportMetadata(component, source.Resources); err != nil {
-		return nil, err
+		return err
 	}
 	enrichDescription(ctx, component, source.Docs)
+	return nil
+}
+
+func (c *componentCompilation) compileHandler() error {
+	source, component, prepared, sourceMap := c.result.Source, c.result.Component, c.prepared, c.result.SourceMap
 	goHandler, err := source.GoHandler.Clone()
 	if err != nil {
-		return nil, err
+		return err
 	}
 	veltyHandler := source.VeltyHandler.Clone()
-	statementProgram := ""
-	for _, item := range prepared.Statements {
-		// Preserve existing Velty programs, including their unqualified argument
-		// names and assignments. The typed statement product uses explicit
-		// canonical Input/Output arguments and is one standalone service call.
-		if strings.EqualFold(item.Operation, "Execute") && (len(prepared.Statements) != 1 || !canonicalBufferedExecute(prepared.SQL[item.Start:item.End])) {
-			continue
-		}
-		batchStatement := (strings.EqualFold(item.Operation, "Insert") || strings.EqualFold(item.Operation, "Delete")) && canonicalBufferedBatch(prepared.SQL[item.Start:item.End])
-		if item.Kind == statement.KindService && (batchStatement || strings.EqualFold(item.Operation, "ExecuteWithResult") || strings.EqualFold(item.Operation, "Execute") || strings.EqualFold(item.Operation, "Merge")) {
-			shapeOnly := len(prepared.Statements) == 2
-			if shapeOnly {
-				for _, other := range prepared.Statements {
-					if other != item && other.Kind != statement.KindRead {
-						shapeOnly = false
-					}
-				}
-			}
-			if statementProgram != "" || goHandler != nil || veltyHandler != nil || (len(prepared.Statements) != 1 && !shapeOnly) {
-				return nil, fmt.Errorf("buffered result statement cannot be combined with another handler or authored statement")
-			}
-			statementProgram = strings.TrimSpace(prepared.SQL[item.Start:item.End])
-		}
+	statementProgram, err := program.BufferedStatement(prepared, goHandler != nil || veltyHandler != nil)
+	if err != nil {
+		return err
 	}
 	if statementProgram == "" {
-		veltyHandler, err = resolveAuthoredHandler(prepared, component, goHandler, veltyHandler)
+		veltyHandler, err = program.Resolve(prepared, component, goHandler, veltyHandler)
 	}
 	if err != nil {
 		span := pointSpan(source.Text, 0)
-		var programErr *veltyProgramError
-		if errors.As(err, &programErr) && programErr.end > programErr.start {
+		var programErr *program.Error
+		if errors.As(err, &programErr) && programErr.End > programErr.Start {
 			span = Span{
-				Start: sourceMap.Position(programErr.start),
-				End:   sourceMap.Position(programErr.end),
+				Start: sourceMap.Position(programErr.Start),
+				End:   sourceMap.Position(programErr.End),
 			}
 		}
 		diagnostic := &Diagnostic{
 			Code: "DQL-HANDLER", Severity: SeverityError, Message: err.Error(), Path: source.Path,
 			Span: span,
 		}
-		return nil, &CompileError{Cause: err, Diagnostics: []*Diagnostic{diagnostic}}
+		return &CompileError{Cause: err, Diagnostics: []*Diagnostic{diagnostic}}
 	}
-	result := &Result{
-		Source:                  source,
-		Component:               component,
-		PreparedSQL:             prepared.SQL,
-		Statements:              prepared.Statements,
-		SourceMap:               sourceMap,
-		TypeContext:             compiledTypeContext,
-		TypeResolver:            typeResolver,
-		TypeAuthority:           typecatalog.TranscribeAuthority,
-		Declarations:            declarations.generation,
-		ViewBindings:            gen.ViewBindings(viewBindings),
-		Views:                   packageViews,
-		GoHandler:               goHandler,
-		StatementProgram:        statementProgram,
-		VeltyHandler:            veltyHandler,
-		ContractTypeOverrides:   contractTypeOverrides,
-		AuthoredBorrowedSQLRows: authoredBorrowedRows,
-		borrowedConsumedFiles:   borrowedConsumed,
+	c.result.GoHandler, c.result.VeltyHandler, c.result.StatementProgram = goHandler, veltyHandler, statementProgram
+	return nil
+}
+
+func (c *componentCompilation) linkTypes() error {
+	result := c.result
+	if err := linkDeclaredOutputView(result, c.authored, c.rows); err != nil {
+		return err
 	}
-	if err := linkDeclaredOutputView(result, loader.authoredComponent, generatedRows); err != nil {
-		return nil, err
+	if err := linkDeclaredOutputContract(result, c.authored); err != nil {
+		return err
 	}
-	if err := linkDeclaredOutputContract(result, loader.authoredComponent); err != nil {
-		return nil, err
+	if err := linkDeclaredRelatedViews(result, c.rows); err != nil {
+		return err
 	}
-	if err := linkDeclaredRelatedViews(result, generatedRows); err != nil {
-		return nil, err
-	}
-	if err := c.admitBorrowedSQLRows(ctx, result); err != nil {
-		return nil, err
-	}
-	return result, nil
+	return nil
 }
 
 func authoredContractTypeOverrides(component *spec.Component) ContractTypeOverrides {
@@ -384,21 +437,11 @@ func authoredContractTypeOverrides(component *spec.Component) ContractTypeOverri
 }
 
 func compileTypeContext(source *Source, authored *spec.TypeContext) *typecatalog.ResolutionContext {
-	result := &typecatalog.ResolutionContext{}
+	var scope, directory string
 	if source != nil {
-		result.PackageDir = source.BaseDir()
-		result.PackagePath = strings.TrimSpace(source.Scope)
-		if result.PackagePath != "" {
-			result.PackageName = path.Base(result.PackagePath)
-		}
+		scope, directory = source.Scope, source.BaseDir()
 	}
-	if authored != nil {
-		result.DefaultPackage = authored.DefaultPackage
-		for _, item := range authored.Imports {
-			result.Imports = append(result.Imports, typecatalog.PackageImport{Alias: item.Alias, Package: item.Package})
-		}
-	}
-	return typecatalog.NormalizeContext(result)
+	return link.TypeContext(scope, directory, authored)
 }
 
 func applySourceDefaults(component *spec.Component, source *Source) {

@@ -61,7 +61,7 @@ func (b *Builder) resolveControls(options *builderOptions, excludePagination boo
 		}
 		source.sqlText = prepared.sql
 	}
-	resolver := selectorResolver{sourceSQL: source.sqlText, policy: policy, sqlText: paginationInspectionSource(source.sqlText), view: source.view, projection: source.projection, reportOrderFields: options.reportOrderFields}
+	resolver := selectorResolver{sourceSQL: source.sqlText, policy: policy, sqlText: paginationInspectionSource(source.sqlText), view: source.view, projection: source.projection, reportOrderFields: options.reportOrderFields, staticProjection: options.staticProjection}
 	orderingSQL, err := resolver.orderingSource(options.controls, options.selector)
 	if err != nil {
 		return nil, err
@@ -114,6 +114,7 @@ func applyMatcherWindow(query *cache.ParmetrizedQuery, controls *spec.ViewContro
 }
 
 type selectorResolver struct {
+	staticProjection  *dsql.StaticProjectionSelection
 	sourceSQL         string
 	sourceOrdering    bool
 	reportOrderFields []string
@@ -223,13 +224,21 @@ func (r selectorResolver) orderBy(source string) (string, error) {
 		sqlText = dsql.GroupedProjectionCriteriaSource(sqlText, r.projection)
 	}
 	projection := dsql.SelectorProjection{SQL: sqlText, View: r.view}
-	projected, err := projection.Columns(nil)
-	if err != nil {
-		return "", err
-	}
-	ordered, err := projection.Columns(r.projection)
-	if err != nil {
-		return "", err
+	var projected, ordered []dsql.ProjectionColumn
+	if r.staticProjection != nil {
+		projected, ordered = r.staticProjection.Columns()
+		if len(r.ordinalReference) > 0 {
+			return "", invalidOrdering("static companion projection does not support inherited ordinal references")
+		}
+	} else {
+		projected, err = projection.Columns(nil)
+		if err != nil {
+			return "", err
+		}
+		ordered, err = projection.Columns(r.projection)
+		if err != nil {
+			return "", err
+		}
 	}
 	ordinalColumns := ordered
 	ordinalPrepared := len(r.ordinalReference) == 0
@@ -511,9 +520,14 @@ func (r *selectorResolver) orderingSource(base *spec.ViewControls, input *xstate
 	if err != nil {
 		return "", invalidOrdering("%s", err)
 	}
-	columns, err := (dsql.SelectorProjection{SQL: r.sqlText, View: r.view}).Columns(nil)
-	if err != nil {
-		return r.sqlText, nil
+	var columns []dsql.ProjectionColumn
+	if r.staticProjection != nil {
+		columns, _ = r.staticProjection.Columns()
+	} else {
+		columns, err = (dsql.SelectorProjection{SQL: r.sqlText, View: r.view}).Columns(nil)
+		if err != nil {
+			return r.sqlText, nil
+		}
 	} // Ordinary resolution owns opaque metadata errors.
 	result := r.sqlText
 	for _, item := range items {
@@ -539,6 +553,9 @@ func (r *selectorResolver) orderingSource(base *spec.ViewControls, input *xstate
 		}
 		if !authorized {
 			return "", invalidOrdering("order by field %q is not in source projection", item.name)
+		}
+		if r.staticProjection != nil {
+			return "", invalidOrdering("static companion projection cannot replace its checked source scope")
 		}
 		sourceSQL := r.sqlText
 		if r.sourceSQL != "" {

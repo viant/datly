@@ -8,7 +8,7 @@ import (
 // candidate converts framework facts to native policy. Both scalar and batch
 // calls use this path before executing any Go or SQL constraint checks.
 func (p *plan) candidate(policy xhandler.ValidationOptions) (sqlvalidator.CandidatePolicy, error) {
-	result := sqlvalidator.CandidatePolicy{Previous: policy.Previous}
+	result := sqlvalidator.CandidatePolicy{Previous: p.sqlValue(policy.Previous)}
 	if policy.Fields != nil {
 		result.FieldFilter = policy.Fields.Has
 	}

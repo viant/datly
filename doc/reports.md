@@ -184,3 +184,7 @@ and Workspace. The runtime JWT tests use explicit linking: automatic traversal o
 `jwt.RegisteredClaims` is a separate unresolved linker case, not established by
 this automatic-build test. Multi-key composition ON expressions also need their
 own parser acceptance; the configured fixture proves a single-key left join.
+
+The `exec` request options in this guide are Datly runtime-adapter controls.
+Application DI ordinarily uses `github.com/viant/xdatly/handler.ComponentInvoker`;
+these controls are not fields of its public request contract.

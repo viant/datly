@@ -42,9 +42,28 @@ metadata concern. HTTP response documentation is carried in MCP metadata under
 `datly/httpResponses` and schema definitions under `datly/httpSchemas`; ordinary
 typed MCP output retains its structured-content contract.
 
-## Conditional injector finalizer
+## Explicit lifecycle composition
 
-Use `handler.InjectorFinalizer` when an output conditionally obtains an injector
+Prefer input `Init(ctx context.Context, invoker handler.ComponentInvoker) error`
+for prerequisites and output `Finalize(ctx context.Context, invoker handler.ComponentInvoker) error`
+for dependent work. These are separate `handler.InvokerInitializer` and
+`handler.InvokerFinalizer` contracts. New input/output scaffolds generate both
+invoker-aware methods; a type may implement either independently.
+
+Call `invoker.Invoke` with a trusted exact `handler.ComponentTarget` and typed
+`handler.ComponentRequest.Input` or an explicitly marked reader seed. Keep the
+invoker out of Input fields in new authoring. Existing field injection and plain
+`Init(ctx)` / `Finalize(ctx)` remain supported. Both invocation arguments expire
+when their callback returns; await all child work. Input initialization runs
+after binding and snapshot capture, before execution. Output composition runs
+before root transaction completion and can veto owned commit. It also runs when
+a handler returns an output with an error; that original error is preserved.
+It does not observe early binding/initialization failures. Native writer outcome
+finalization remains separate; use it for commit-dependent publication.
+
+## Existing conditional injector finalizer
+
+Existing `handler.InjectorFinalizer` remains supported when an output conditionally obtains an injector
 for a named external component and uses native Bind to automatically match the
 current output with target input through authored parameter/type metadata. Verify
 both condition branches; no lookup/binding should occur in the false branch.

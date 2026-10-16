@@ -245,6 +245,7 @@ func (h *Handler) serveHTTP(writer stdhttp.ResponseWriter, req *stdhttp.Request)
 	} else if execCtx != nil && execCtx.StatusCode != 0 {
 		statusCode = execCtx.StatusCode
 	}
+	synthesizedLegacyEnvelope := false
 	publicBody, hasPublicBody := xresponse.ErrorBody(execErr)
 	if hasPublicBody {
 		actual = publicBody
@@ -254,10 +255,20 @@ func (h *Handler) serveHTTP(writer stdhttp.ResponseWriter, req *stdhttp.Request)
 	}
 	if execErr != nil && !hasPublicBody {
 		message := dexec.ErrorMessage(execErr, statusCode)
-		actual = xresponse.Status{
-			Status:  "error",
-			Message: message,
-			Error:   message,
+		legacy, applicable, err := contract.ErrorEnvelopeWithCause(message, statusCode, execErr)
+		if err != nil {
+			h.writeOutputError(ctx, writer, err)
+			return
+		}
+		if applicable {
+			synthesizedLegacyEnvelope = true
+			actual = legacy
+		} else {
+			actual = xresponse.Status{
+				Status:  "error",
+				Message: message,
+				Error:   message,
+			}
 		}
 	}
 	if h.serviceTimeHeader != "" {
@@ -269,7 +280,7 @@ func (h *Handler) serveHTTP(writer stdhttp.ResponseWriter, req *stdhttp.Request)
 		return
 	}
 	if execErr != nil {
-		h.writeHTTPJSON(ctx, writer, req, statusCode, actual, contract)
+		h.writeHTTPErrorJSON(ctx, writer, req, statusCode, actual, contract, synthesizedLegacyEnvelope)
 		return
 	}
 	h.writeEncoded(ctx, writer, req, statusCode, actual)

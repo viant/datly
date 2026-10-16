@@ -6,12 +6,16 @@ import (
 	"strings"
 
 	"github.com/viant/datly/data"
+	"github.com/viant/datly/internal/selectorcompanion"
+	"github.com/viant/datly/spec"
+	dsql "github.com/viant/datly/sql"
 	"github.com/viant/datly/sql/criteria"
 	"github.com/viant/datly/sql/reader/collector"
 	"github.com/viant/datly/sql/reader/rowcodec"
 	sqltemplate "github.com/viant/datly/sql/template"
 	xshape "github.com/viant/x/shape"
 	xreader "github.com/viant/xdatly/reader"
+	"slices"
 )
 
 // ViewPlan is immutable execution metadata for one view in a reader graph.
@@ -38,6 +42,10 @@ type RelationPlan struct {
 
 // Plan is immutable reader execution metadata compiled during bootstrap.
 type Plan struct {
+	selectorCompanion  *selectorcompanion.BindingPlan
+	staticProjection   *dsql.StaticProjection
+	staticTemplate     sqltemplate.Evaluator
+	companionSelectors map[int]bool
 	SelectorBindings   []SelectorBindingPlan
 	ViewIndex          *ViewIndex
 	OutputViewField    string
@@ -53,6 +61,7 @@ type Plan struct {
 // PlanConfig contains compiler-owned inputs used to assemble one final reader
 // plan. The temporary maps do not escape into runtime plan state.
 type PlanConfig struct {
+	SelectorCompanion  *selectorcompanion.BindingPlan
 	SelectorBindings   []SelectorBindingPlan
 	ViewIndex          *ViewIndex
 	OutputViewField    string
@@ -78,7 +87,8 @@ func NewPlan(config PlanConfig) (*Plan, error) {
 			return nil, err
 		}
 	}
-	return &Plan{
+	result := &Plan{
+		selectorCompanion: config.SelectorCompanion, companionSelectors: map[int]bool{},
 		SelectorBindings:   append([]SelectorBindingPlan(nil), config.SelectorBindings...),
 		ViewIndex:          config.ViewIndex,
 		OutputViewField:    config.OutputViewField,
@@ -88,7 +98,54 @@ func NewPlan(config PlanConfig) (*Plan, error) {
 		Root:               root,
 		views:              views,
 		collection:         config.Collection,
-	}, nil
+	}
+	if companion := config.SelectorCompanion; companion != nil {
+		if config.ViewIndex == nil {
+			return nil, fmt.Errorf("selector companion view index missing")
+		}
+		for _, binding := range companion.Bindings() {
+			parameter, ok := binding.Extension.(*spec.Parameter)
+			if !ok || parameter.QuerySelector == nil {
+				return nil, fmt.Errorf("selector companion canonical parameter missing")
+			}
+			field, ok := companion.Field(parameter)
+			if !ok {
+				return nil, fmt.Errorf("selector companion field missing")
+			}
+			view, err := config.ViewIndex.Resolve(parameter.QuerySelector.View)
+			if err != nil {
+				return nil, err
+			}
+			matched := 0
+			for i, selected := range result.SelectorBindings {
+				if selected.View == view && selected.Property == parameter.QuerySelector.Property && slices.Equal(selected.FieldIndex, field.Index) {
+					matched++
+					result.companionSelectors[i] = true
+				}
+			}
+			if matched != 1 {
+				return nil, fmt.Errorf("selector companion exact accessor is ambiguous or missing")
+			}
+		}
+	}
+	if companion := result.selectorCompanion; companion != nil && companion.DeferredPage() {
+		if root == nil || root.View == nil || root.View.Spec.Source == nil || root.View.Spec.Source.SQL == "" {
+			return nil, fmt.Errorf("deferred companion Page requires resolved root SQL")
+		}
+		for _, binding := range companion.Bindings() {
+			p := binding.Extension.(*spec.Parameter)
+			view, err := config.ViewIndex.Resolve(p.QuerySelector.View)
+			if err != nil || view != root.View {
+				return nil, fmt.Errorf("deferred companion selectors must target the exact reader root")
+			}
+		}
+		result.staticTemplate = root.Template
+		result.staticProjection, err = dsql.NewStaticProjection(root.View.Spec.Source.SQL, root.View, nil)
+		if err != nil {
+			return nil, fmt.Errorf("deferred companion Page projection: %w", err)
+		}
+	}
+	return result, nil
 }
 
 func assembleViewPlan(view *data.View, config PlanConfig, planned map[*data.View]*ViewPlan) (*ViewPlan, error) {

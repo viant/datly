@@ -18,6 +18,9 @@ import (
 )
 
 type viewPlanner struct {
+	ordinaryBodyRoot *spec.View
+	ordinaryReads    map[*spec.View]bool
+	nativeMutation   bool
 	factoryBodyViews map[string]bool
 	requireConcrete  bool
 	sharedBodyRows   map[*spec.View]*spec.View
@@ -49,6 +52,9 @@ func (r *planResolver) resolveViews() (map[string]int, error) {
 		root = r.input.ExternalHandler.InputShape
 	}
 	planner := &viewPlanner{
+		ordinaryBodyRoot: r.ordinaryBodyRoot(),
+		ordinaryReads:    map[*spec.View]bool{},
+		nativeMutation:   r.input.nativeMutationTargetSelected,
 		factoryBodyViews: generatedFactoryBodyViews(r.input.ExternalHandler),
 		requireConcrete:  r.requireConcreteHelpers,
 		sharedBodyRows:   map[*spec.View]*spec.View{},
@@ -224,6 +230,7 @@ func (r *planResolver) resolveViews() (map[string]int, error) {
 			if parameter == nil || !strings.EqualFold(parameter.Source.Kind, "view") || r.input.ViewBindings[parameter.Identity()] != identity {
 				continue
 			}
+			planner.ordinaryReads[view] = true
 			for _, reference := range []string{parameter.TypeExpr, parameter.OutputTypeExpr} {
 				if strings.TrimSpace(reference) != "" {
 					planner.readTypes[view] = append(planner.readTypes[view], unwrapQualifiedTypeName(reference))
@@ -576,6 +583,14 @@ func (p *viewPlanner) assign(view *spec.View, typeName, destination string) erro
 		}
 		if p.factoryBodyViews[ownerIdentity] && p.explicitReads[view] {
 			if err := p.shareBodyRow(view, owner, destination); err != nil {
+				return err
+			}
+			p.names[view] = typeName
+			p.sharedBodyRows[view] = owner
+			return nil
+		}
+		if owner == p.ordinaryBodyRoot && p.ordinaryReads[view] && p.explicitReads[view] {
+			if err := p.shareOrdinaryBodyRow(view, owner, destination); err != nil {
 				return err
 			}
 			p.names[view] = typeName

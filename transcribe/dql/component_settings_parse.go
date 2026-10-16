@@ -70,6 +70,15 @@ func parseComponentSettings(blocks []directiveBlock) (ret *componentSettings, er
 				}
 			}
 			ret.Generation.BorrowedSQLRows = append(ret.Generation.BorrowedSQLRows, row)
+		case strings.EqualFold(name, "handler_adapter"):
+			if ret.HandlerAdapter != "" || len(args) != 1 || tail != "" {
+				return nil, fmt.Errorf("handler_adapter requires one quoted factory, once, without modifiers")
+			}
+			factory, quoted := parseQuotedLiteral(args[0])
+			if !quoted || strings.TrimSpace(factory) == "" {
+				return nil, fmt.Errorf("handler_adapter requires a nonempty quoted factory")
+			}
+			ret.HandlerAdapter = strings.TrimSpace(factory)
 		case strings.EqualFold(name, "handler_factory"):
 			if ret.HandlerFactory != "" || len(args) < 1 || len(args) > 2 || tail != "" {
 				return nil, fmt.Errorf("handler_factory requires a quoted factory and optional component name, once, without modifiers")
@@ -554,7 +563,7 @@ func parseComponentSettings(blocks []directiveBlock) (ret *componentSettings, er
 	if err := (&spec.Settings{ComponentCallPolicy: ret.ComponentCallPolicy, IndependentChildTransactions: ret.IndependentChildTransactions}).ValidateComponentCallPolicy(); err != nil {
 		return nil, err
 	}
-	if ret.ProtectedFlushTables == nil && ret.ResponseCompression == nil && !ret.IndependentChildTransactions && ret.ComponentCallPolicy == "" && ret.Static == nil && len(ret.MCPFolders) == 0 && ret.Documentation.IsZero() && ret.Generation.IsZero() && ret.DefaultConnector == "" && ret.SequenceStrategy == "" && ret.Report == nil && ret.Cache == nil &&
+	if ret.HandlerFactory == "" && ret.HandlerAdapter == "" && ret.ProtectedFlushTables == nil && ret.ResponseCompression == nil && !ret.IndependentChildTransactions && ret.ComponentCallPolicy == "" && ret.Static == nil && len(ret.MCPFolders) == 0 && ret.Documentation.IsZero() && ret.Generation.IsZero() && ret.DefaultConnector == "" && ret.SequenceStrategy == "" && ret.Report == nil && ret.Cache == nil &&
 		ret.InputType == "" && ret.OutputType == "" &&
 		ret.MCP == nil && ret.JSONMarshalType == "" &&
 		ret.JSONUnmarshalType == "" && ret.XMLUnmarshalType == "" &&

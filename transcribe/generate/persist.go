@@ -22,6 +22,9 @@ type scaffoldPersistence struct {
 	removals  []string
 	plan      *Plan
 	renames   map[string]bool
+	// Pristine current render stays distinct from retained publication bytes.
+	contractProposals map[string]contractArtifactProposal
+	retainedContracts map[string]string
 }
 
 // detached preserves pristine rendered artifacts separately from the preview's
@@ -69,73 +72,18 @@ func (l *scaffoldCommitLocks) acquire(target string) func() {
 	}
 }
 
-func (p *scaffoldPersistence) Commit() error {
-	target, err := p.target()
-	if err != nil {
-		return err
-	}
-	release := scaffoldLocks.acquire(target)
-	defer release()
-	return p.commitLocked(target)
-}
-
-// commitLocked retains the existing transactional persistence behavior while
-// EmitScaffold holds the target lock through the preceding preflight.
-func (p *scaffoldPersistence) commitLocked(target string) error {
-	var err error
-	parent := filepath.Dir(target)
-	if err = os.MkdirAll(parent, 0o755); err != nil {
-		return err
-	}
-	stage, err := os.MkdirTemp(parent, "."+filepath.Base(target)+"-stage-")
-	if err != nil {
-		return err
-	}
-	committed := false
-	defer func() {
-		if !committed {
-			_ = os.RemoveAll(stage)
-		}
-	}()
-	// The copy doubles as the original snapshot: each file is read once, and
-	// the fingerprint is taken from the bytes being copied.
-	original, stats, err := p.copyExisting(target, stage)
-	if err != nil {
-		return err
-	}
-	if err = p.prepareCurrent(target); err != nil {
-		return err
-	}
-	if err = p.validateUserFiles(target, stage); err != nil {
-		return err
-	}
-	for name := range p.renames {
-		if err = os.Remove(filepath.Join(stage, name)); err != nil && !os.IsNotExist(err) {
-			return err
-		}
-	}
-	if err = p.writeFiles(target, stage); err != nil {
-		return err
-	}
-	if err = p.writeUserFiles(target, stage); err != nil {
-		return err
-	}
-	if err = os.Remove(filepath.Join(stage, legacyManifestName)); err != nil && !os.IsNotExist(err) {
-		return err
-	}
-	if p.plan != nil && p.plan.ExternalHandler != nil && p.plan.ExternalHandler.Build != nil {
-		if err = p.validateHandlerStage(target, stage); err != nil {
-			return err
-		}
-	}
-	if err = p.swap(target, stage, original, stats); err != nil {
-		return err
-	}
-	committed = true
-	return nil
-}
-
 func (p *scaffoldPersistence) validateHandlerStage(target, stage string) error {
+	files, err := scaffoldBuildFiles(target, stage)
+	if err != nil {
+		return err
+	}
+	p.plan.handlerGoFiles, err = p.plan.stagedBuild().ValidateFiles(p.plan.Package, files)
+	return err
+}
+
+// scaffoldBuildFiles projects current source at its final destination. Explicit
+// staged bytes and deletions have the same precedence at selection and validation.
+func scaffoldBuildFiles(target, stage string) (map[string][]byte, error) {
 	files := map[string][]byte{}
 	// Explicit removals are part of the build overlay, not merely absent from
 	// the proposal. Otherwise stale generated files can mask an invalid update.
@@ -153,7 +101,7 @@ func (p *scaffoldPersistence) validateHandlerStage(target, stage string) error {
 		return nil
 	})
 	if err != nil {
-		return err
+		return nil, err
 	}
 	err = filepath.WalkDir(stage, func(name string, entry fs.DirEntry, err error) error {
 		if err != nil {
@@ -174,15 +122,9 @@ func (p *scaffoldPersistence) validateHandlerStage(target, stage string) error {
 		return nil
 	})
 	if err != nil {
-		return err
+		return nil, err
 	}
-	p.plan.handlerGoFiles, err = p.plan.ExternalHandler.Build.ValidateFiles(p.plan.Package, files)
-	return err
-}
-
-func (p *scaffoldPersistence) Validate() error {
-	_, err := p.preview()
-	return err
+	return files, nil
 }
 
 // preview exposes the exact current proposal to package/import validation.
@@ -487,12 +429,13 @@ func managedRelativePath(path string) (string, error) {
 // scaffoldForest keeps original disk conflict evidence separate from projected
 // mutations. A published forest is never included in cleanup.
 type scaffoldForest struct {
-	borrowed  []*BorrowedRowAuthority
-	target    string
-	stage     string
-	original  scaffoldSnapshot
-	stats     scaffoldStats
-	published bool
+	retainedContracts map[string]string
+	borrowed          []*BorrowedRowAuthority
+	target            string
+	stage             string
+	original          scaffoldSnapshot
+	stats             scaffoldStats
+	published         bool
 }
 
 func withinScaffoldTree(root, path string) bool {
@@ -590,8 +533,8 @@ func prepareScaffoldForests(templates []*scaffoldPersistence) (forests []*scaffo
 		if err = p.validateUserFiles(targets[i], projected); err != nil {
 			return
 		}
-		// Each ordinary commit replaces its target with a fresh MkdirTemp root.
-		// Reproduce that root mode, retaining descendant modes from the projection.
+		// Use the staging root mode for each generated package, retaining
+		// descendant modes from the projection.
 		modeInfo, modeErr := os.Stat(forest.stage)
 		if modeErr != nil {
 			err = modeErr
@@ -618,6 +561,12 @@ func prepareScaffoldForests(templates []*scaffoldPersistence) (forests []*scaffo
 			return
 		}
 		err = nil
+		for name, content := range p.retainedContracts {
+			if forest.retainedContracts == nil {
+				forest.retainedContracts = map[string]string{}
+			}
+			forest.retainedContracts[filepath.Join(relative, name)] = content
+		}
 		result = append(result, p.files...)
 	}
 	return
@@ -631,11 +580,23 @@ func cleanupScaffoldForests(forests []*scaffoldForest) {
 	}
 }
 
+// publishScaffoldForests publishes each disjoint destination tree independently.
+// If a later tree fails, earlier published trees remain in place; cleanup only
+// removes unpublished stages. Publication is not a transaction across trees.
 func publishScaffoldForests(forests []*scaffoldForest) error {
 	defer cleanupScaffoldForests(forests)
 	var created []scaffoldCreatedParent
 	defer func() { cleanupScaffoldParents(created) }()
 	for _, forest := range forests {
+		for name, expected := range forest.retainedContracts {
+			actual, err := os.ReadFile(filepath.Join(forest.stage, name))
+			if err != nil {
+				return err
+			}
+			if string(actual) != expected {
+				return fmt.Errorf("retained generated contract %s changed during staging", name)
+			}
+		}
 		for _, authority := range forest.borrowed {
 			if err := authority.ValidateProtectedFiles(func(path string) string { return path }); err != nil {
 				return err

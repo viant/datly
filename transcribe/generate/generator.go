@@ -5,6 +5,7 @@ import (
 
 	"github.com/viant/bindly/resource"
 	"github.com/viant/datly/spec"
+	"github.com/viant/datly/transcribe/gobuild"
 	"github.com/viant/datly/typecatalog"
 	"github.com/viant/x"
 )
@@ -34,13 +35,15 @@ type Input struct {
 	// Settings, handler assets and marker maps cannot establish this context.
 	nativeMutationTargetSelected bool
 
-	Resources       *resource.Store
-	Component       *spec.Component
-	Declarations    Declarations
-	TypeResolver    *typecatalog.Resolver
-	TargetPackage   string
-	PackageName     string
-	ProjectRoot     string
+	Resources     *resource.Store
+	Component     *spec.Component
+	Declarations  Declarations
+	TypeResolver  *typecatalog.Resolver
+	TargetPackage string
+	PackageName   string
+	ProjectRoot   string
+	// GoBuild preserves the application build selection for native authored accessor validation.
+	GoBuild         *gobuild.Context
 	Contracts       ContractReferences
 	Views           ViewReferences
 	ViewBindings    ViewBindings
@@ -125,6 +128,7 @@ func New(input Input) *Generator {
 	}
 	input.VeltyHandler = input.VeltyHandler.Clone()
 	input.ExternalHandler = input.ExternalHandler.Clone()
+	input.GoBuild = input.GoBuild.Clone()
 	if input.ExternalHandler != nil && input.ExternalHandler.GeneratedContracts && input.ExternalHandler.InputShape != nil {
 		if input.SetMarkerViews == nil {
 			input.SetMarkerViews = map[string]bool{}

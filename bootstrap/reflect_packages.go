@@ -154,6 +154,7 @@ func reflectPackage(packagePath string) (result reflectedPackageResult) {
 				Tag: componentTag, InputType: inputExpression, OutputType: outputExpression,
 				Imports:         contracts.component.TypeContext.Imports,
 				LinkedInputType: inputField.Type, LinkedOutputType: outputField.Type,
+				linkedHolderType: typeOf,
 			}
 			collectContractTypes(result.contracts, inputField.Type)
 			collectContractTypes(result.contracts, outputField.Type)

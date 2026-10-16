@@ -1,0 +1,6 @@
+#package('example.com/ordinaryread/rows')
+#import('rows','example.com/ordinaryread/rows')
+#setting($_ = $route('/ordinary-read','PATCH'))
+#define($_ = $Records<[]*rows.BodyRow>(body/Data))
+#define($_ = $Current<[]*rows.ReadRow>(view/Current).Cardinality('Many') /* SELECT ID FROM read_rows */)
+SELECT w.ID, type(w,'BodyRow') FROM body_rows w

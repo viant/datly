@@ -146,5 +146,9 @@ func (plan *Plan) contractType(contract ContractPlan) string {
 }
 
 func (plan *Plan) holderImports() []spec.ImportSpec {
-	return importsForFields([]Field{{Type: plan.contractType(plan.Input)}, {Type: plan.contractType(plan.Output)}, {Type: plan.FactoryExpression}}, plan.Imports)
+	factory := plan.FactoryExpression
+	if plan.AdapterExpression != "" {
+		factory = plan.AdapterExpression
+	}
+	return importsForFields([]Field{{Type: plan.contractType(plan.Input)}, {Type: plan.contractType(plan.Output)}, {Type: factory}}, plan.Imports)
 }

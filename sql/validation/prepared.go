@@ -31,21 +31,32 @@ func (p *plan) snapshot(fields xhandler.FieldSet) xhandler.FieldSet {
 
 func (p *plan) prepare(policy xhandler.ValidationOptions) (preparedCandidate, error) {
 	policy.Fields = p.snapshot(policy.Fields)
+	if policy.CheckOnly {
+		if policy.GoFields == nil {
+			policy.GoFields = policy.Fields
+		} else {
+			policy.GoFields = p.snapshot(policy.GoFields)
+		}
+	}
 	policy.DeferredFields = p.snapshot(policy.DeferredFields)
 	policy.PreviousFields = p.snapshot(policy.PreviousFields)
 	result := preparedCandidate{policy: policy}
 	var err error
-	if !policy.CheckOnly {
-		if result.native, err = p.candidate(policy); err != nil {
-			return preparedCandidate{}, err
-		}
+	if policy.CheckOnly {
+		result.native = sqlvalidator.CandidatePolicy{FieldFilter: policy.Fields.Has}
+	} else if result.native, err = p.candidate(policy); err != nil {
+		return preparedCandidate{}, err
 	}
 	options := []govalidator.Option{govalidator.WithShallow(true)}
 	if policy.Location != "" {
 		options = append(options, govalidator.WithPath(govalidator.NewPath().Field(policy.Location)))
 	}
-	if policy.Fields != nil {
-		options = append(options, govalidator.WithFieldFilter(policy.Fields.Has))
+	goFields := policy.Fields
+	if policy.CheckOnly {
+		goFields = policy.GoFields
+	}
+	if goFields != nil {
+		options = append(options, govalidator.WithFieldFilter(goFields.Has))
 	}
 	if policy.DeferredFields != nil {
 		options = append(options, govalidator.WithDeferredFields(policy.DeferredFields.Has))

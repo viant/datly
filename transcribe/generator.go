@@ -9,9 +9,9 @@ import (
 
 	"github.com/viant/datly/spec"
 	"github.com/viant/datly/transcribe/column"
-	tcompile "github.com/viant/datly/transcribe/compile"
 	gen "github.com/viant/datly/transcribe/generate"
 	handlercompiler "github.com/viant/datly/transcribe/handler/compiler"
+	"github.com/viant/datly/transcribe/internal/handlergen"
 	"github.com/viant/datly/typecatalog"
 )
 
@@ -118,7 +118,7 @@ func (g Generator) generateCompiled(ctx context.Context, root, dir string, compi
 	if err != nil {
 		return nil, err
 	}
-	if err := prepareFactoryCompanions(compiled, &input); err != nil {
+	if err := handlergen.PrepareCompanions(compiled.handlerContext(), &input); err != nil {
 		return nil, err
 	}
 	return NewCompiler().generateInputAt(ctx, root, dir, compiled, input)
@@ -153,7 +153,6 @@ func (g Generator) generate(ctx context.Context, root, dir string, compiled *Res
 			compiled.Component.Settings = &spec.Settings{}
 		}
 		compiled.Component.Settings.Mutation = operation
-		retainWriterConstantTables(compiled.Component)
 	}
 	if language != HandlerGo && language != HandlerVelty {
 		return nil, fmt.Errorf("unsupported transcribe language %q", language)
@@ -188,6 +187,9 @@ func (g Generator) generate(ctx context.Context, root, dir string, compiled *Res
 	if err != nil {
 		return nil, err
 	}
+	if err := input.ValidateLifecycleTarget(operation != "get" && language == HandlerGo); err != nil {
+		return nil, err
+	}
 	initial, err := gen.New(input).Plan()
 	if err != nil {
 		return nil, err
@@ -208,61 +210,20 @@ func (g Generator) generate(ctx context.Context, root, dir string, compiled *Res
 	if err != nil {
 		return nil, err
 	}
+	if err := input.ValidateLifecycleTarget(operation != "get" && language == HandlerGo); err != nil {
+		return nil, err
+	}
 	options := Options{Contracts: ContractsAuto, Handler: HandlerOptions{Target: language, Operation: derived.Operation, Input: derived.Input, Output: derived.Output, Currents: derived.Currents}}
 	if language == HandlerGo {
 		options.Handler.Go.Execution = GoExecutionMutation
 		options.Handler.Hooks.Scaffold = true
 	}
-	handlers := newHandlerGeneration(&copy, &input, options)
-	handlers.directory = filepath.Join(input.ProjectRoot, dir)
-	contractPlan, err := gen.New(input).Plan()
-	if err != nil {
-		return nil, err
-	}
-	semantic, err := handlers.compilePlan()
-	if err != nil {
-		return nil, handlers.diagnostic(err)
-	}
-	if err = handlers.validateContractAssignment(semantic, contractPlan); err != nil {
-		return nil, handlers.diagnostic(err)
-	}
-	if err = handlers.prepare(); err != nil {
-		return nil, handlers.diagnostic(err)
+	handlers := handlergen.New((&copy).handlerContext(), &input, options)
+	handlers.Directory = filepath.Join(input.ProjectRoot, dir)
+	if err = handlers.PrepareDerived(); err != nil {
+		return nil, copy.handlerDiagnostic(err)
 	}
 	return NewCompiler().generateInputAt(ctx, root, dir, &copy, input)
-}
-
-// Compilation uses authored defaults for physical discovery. Writer artifacts
-// must retain the existing symbolic target so bootstrap can apply each instance.
-func retainWriterConstantTables(component *spec.Component) {
-	seen := map[*spec.View]bool{}
-	var visit func(*spec.View)
-	visit = func(view *spec.View) {
-		if view == nil || seen[view] {
-			return
-		}
-		seen[view] = true
-		if view.Source != nil {
-			// Reuse the DQL reader's template-aware table parser; raw SQL lineage
-			// deliberately treats dynamic sources as having no physical identity.
-			parsed, err := tcompile.NewReader().Compile(tcompile.ReadInput{View: &spec.View{Name: view.Name}, SQL: view.Source.SQL})
-			if err == nil && parsed.Source != nil {
-				name := constantTableName(parsed.Source.Table)
-				if value, found := constantValue(component.Settings.Const, name); name != "" && found && value == view.Source.Table {
-					view.Source.Table = "$Unsafe." + name
-				}
-			}
-		}
-		for _, relation := range view.Relations {
-			if relation != nil {
-				visit(relation.View)
-			}
-		}
-	}
-	visit(component.RootView)
-	for _, view := range component.Views {
-		visit(view)
-	}
 }
 
 func validateWriterRoute(operation, method string, root *spec.View) error {

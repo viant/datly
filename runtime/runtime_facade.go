@@ -12,6 +12,7 @@ import (
 	"github.com/viant/bindly/resource"
 	dexec "github.com/viant/datly/exec"
 	rhandler "github.com/viant/datly/runtime/handler"
+	"github.com/viant/datly/runtime/handler/custom"
 	handlerengine "github.com/viant/datly/runtime/handler/engine"
 	handlerprovider "github.com/viant/datly/runtime/handler/provider"
 	"github.com/viant/datly/runtime/handler/provider/clients"
@@ -339,6 +340,34 @@ func registrationWithRecorder(registered *RegisteredComponent, recorder *observa
 func bindStaticHandler(ctx context.Context, injector *bindly.Injector, entry *RegisteredComponent) error {
 	if entry == nil || entry.Handler == nil {
 		return nil
+	}
+
+	scoped, err := custom.ScopedInputBinding(entry.Handler)
+	if err != nil {
+		return err
+	}
+
+	if scoped {
+		if entry.Component == nil {
+			return fmt.Errorf("scoped component metadata is required")
+		}
+		// A DataSource supplies the existing buffer/transaction; it does not imply automatic writer ownership.
+		settings := entry.Component.Settings
+		if entry.Reader != nil || settings != nil && (settings.SequenceStrategy != "" || len(settings.ProtectedFlushTables) != 0 || settings.IndependentChildTransactions) {
+			return fmt.Errorf("scoped input binding requires a custom component without mutation ownership")
+		}
+		if entry.Input == nil || entry.Component == nil {
+			return fmt.Errorf("scoped input binding requires canonical routes")
+		}
+		for _, route := range entry.Component.Routes {
+			input, ok := entry.Input.ForRoute(spec.RouteRef{Method: route.Method, Path: route.Path})
+			if !ok {
+				return fmt.Errorf("scoped input route is missing")
+			}
+			if err := input.PrepareScopePlans(); err != nil {
+				return err
+			}
+		}
 	}
 	binder, ok := entry.Handler.(interface {
 		BindStatic(context.Context, *bindly.Injector) error

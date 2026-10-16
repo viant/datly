@@ -25,7 +25,9 @@ Its independent failure does not roll back an already committed child.
 
 The policy is rejected before binding/effects unless the handler is the native
 custom contract adapter and the root has no DataSource, sequence strategy,
-outcome finalizer, injector finalizer or Completion callback. Any inherited
+outcome finalizer, composition finalizer, invoker-aware input initializer or
+Completion callback. The explicit invoker lifecycle contracts share a root
+transaction owner and therefore cannot opt into this independent policy. Any inherited
 managed unit is rejected, including a caller-owned pending transaction. No
 context detachment, early commit of someone else's unit or transaction override
 occurs. `exec.IndependentChildTransactionError` exposes a typed ownership reason.
@@ -36,3 +38,7 @@ must use fixed, authorized internal targets; callers cannot choose a target,
 provider or transaction policy through JSON. This mode permits deliberate partial
 commit behavior, so the application's publication, compensation and public error
 policy must be explicit. Default shared behavior is unchanged.
+
+The `exec` request options in this guide are Datly runtime-adapter controls.
+Application DI ordinarily uses `github.com/viant/xdatly/handler.ComponentInvoker`;
+these controls are not fields of its public request contract.

@@ -8,12 +8,15 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"github.com/viant/datly/spec"
+	"github.com/viant/datly/transcribe/internal/link"
 )
 
 func TestProtectedFlushTablesPackageOverlayAuthority(t *testing.T) {
 	base := &spec.Settings{ProtectedFlushTables: []string{"package_records"}}
 	authored := &spec.Settings{ProtectedFlushTables: []string{"records", "records/attributes"}}
-	loaded := (&settingsLoader{base: base, authored: authored}).Load()
+	merged, err := (&link.Loader{PackageComponent: &spec.Component{Settings: base}, AuthoredComponent: &spec.Component{Settings: authored}}).Load()
+	require.NoError(t, err)
+	loaded := merged.Settings
 	require.Equal(t, authored.ProtectedFlushTables, loaded.ProtectedFlushTables)
 	loaded.ProtectedFlushTables[0] = "changed"
 	require.Equal(t, "records", authored.ProtectedFlushTables[0])

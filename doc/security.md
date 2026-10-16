@@ -85,7 +85,8 @@ from HTTP routes/MCP tools; privacy is not an authorization bypass. Explicit
 trusted typed input forwarding is a separate operation and must not be exposed
 as a client-controlled service override.
 
-An internal Go caller can supply `ComponentRequest.ExtraInput: exec.WithInput(extra)`
+Here `handler` imports `github.com/viant/xdatly/handler`; the invoker binds its public
+`ComponentInvoker` interface. An internal Go caller can supply `ComponentRequest.ExtraInput: handler.WithInput(extra)`
 to reuse explicitly marked values from the exact registered native reader input
 type. This is trusted application input, including any supplied Jwt/Auth values;
 it does not establish verifier provenance or recheck credential expiry. Selected
@@ -97,9 +98,9 @@ combine with `Input`, replay, mutation/custom handlers or operational preparatio
 The caller must not mutate the supplied input during capture.
 
 ```go
-value, err := invoker.InvokeComponent(ctx, exec.ComponentRequest{
+value, err := invoker.Invoke(ctx, handler.ComponentRequest{
     Target: target,
-    ExtraInput: exec.WithInput(readerInput),
+    ExtraInput: handler.WithInput(readerInput),
     Providers: providers,
 })
 ```

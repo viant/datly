@@ -18,7 +18,12 @@ import (
 // Values is a frozen, case-insensitive set. Constructors copy all caller maps.
 // Values are strings to retain the existing typed-constant conversion boundary
 // and preserve integer precision when loading JSON or YAML numbers.
-type Values struct{ values map[string]string }
+type Values struct {
+	values map[string]string
+	// bindings retains component-local input authority, not value aliases. An
+	// empty target marks a non-const parameter and cannot grant identifier access.
+	bindings map[string]string
+}
 
 func New(values map[string]string) (*Values, error) {
 	result := &Values{values: map[string]string{}}
@@ -47,14 +52,38 @@ func (v *Values) Lookup(name string) (string, bool) {
 	return value, ok
 }
 
+// Binding returns the immutable external key declared for an input name. A
+// declared non-const input has an empty key. Raw instance values have no bindings.
+func (v *Values) Binding(name string) (string, bool) {
+	if v == nil {
+		return "", false
+	}
+	key, found := v.bindings[strings.ToLower(name)]
+	return key, found
+}
+
+// LookupBound follows declared input authority without adding aliases to the
+// external constant namespace. Undeclared names retain direct constant lookup.
+func (v *Values) LookupBound(name string) (string, bool) {
+	if key, declared := v.Binding(name); declared {
+		if key == "" {
+			return "", false
+		}
+		return v.Lookup(key)
+	}
+	return v.Lookup(name)
+}
+
 // For overlays these instance values on validated authored defaults. Missing
 // instance keys retain defaults; an empty value is an explicit override.
 func (v *Values) For(component *spec.Component) (*Values, error) {
 	defaults := map[string]string{}
+	bindings := map[string]string{}
 	if component != nil {
 		if component.Settings != nil {
 			for k, value := range component.Settings.Const {
 				defaults[k] = value
+				bindings[strings.ToLower(k)] = k
 			}
 		}
 		for _, p := range spec.EffectiveParameters(component.Parameters) {
@@ -62,6 +91,7 @@ func (v *Values) For(component *spec.Component) (*Values, error) {
 				continue
 			}
 			if !strings.EqualFold(p.Source.Kind, "const") {
+				bindings[strings.ToLower(p.Name)] = ""
 				if _, found := v.Lookup(p.Name); found {
 					return nil, fmt.Errorf("constant %q conflicts with a non-const parameter", p.Name)
 				}
@@ -72,12 +102,13 @@ func (v *Values) For(component *spec.Component) (*Values, error) {
 				}
 				continue
 			}
-			if p.Value == nil {
-				continue
-			}
 			name := p.Source.Name
 			if name == "" {
 				name = p.Name
+			}
+			bindings[strings.ToLower(p.Name)] = name
+			if p.Value == nil {
+				continue
 			}
 			for key := range defaults {
 				if strings.EqualFold(key, name) {
@@ -102,6 +133,7 @@ func (v *Values) For(component *spec.Component) (*Values, error) {
 			result.values[k] = value
 		}
 	}
+	result.bindings = bindings
 	return result, nil
 }
 
@@ -243,6 +275,15 @@ func (v *Values) Identity() string {
 	h := sha256.New()
 	for _, name := range v.Names() {
 		fmt.Fprintf(h, "%d:%s%d:%s", len(name), name, len(v.values[name]), v.values[name])
+	}
+	var bindings []string
+	for name := range v.bindings {
+		bindings = append(bindings, name)
+	}
+	sort.Strings(bindings)
+	for _, name := range bindings {
+		key := strings.ToLower(v.bindings[name])
+		fmt.Fprintf(h, "binding:%d:%s%d:%s", len(name), name, len(key), key)
 	}
 	return fmt.Sprintf("%x", h.Sum(nil))
 }

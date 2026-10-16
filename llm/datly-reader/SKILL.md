@@ -54,6 +54,21 @@ Scoped non-identity numbering is a separate capability. Its optional ledger is n
 - For cache/warmup, multiview selectors, YAML docs, static/MCP resources, deployment, async and telemetry status, read [cache-and-operations.md](references/cache-and-operations.md). Separate current APIs from pending authoring/integration contracts.
 - Use [acceptance.md](references/acceptance.md) to verify observable application behavior. Framework maintenance is outside this skill.
 
+## Application-only scalar fields
+
+
+Use `internal_transient(view.column)` for the exact combination `sqlx:"-" diff:"-" internal:"true" json:"-"`. It retains the generated scalar and presence marker while excluding SQL mapping, diffs and JSON. Keep public logical fields public; use `sqlx:"-"` alone when only persistence should be excluded. Place this annotation on the outer projection and retain separate CAST or validation declarations when needed.
+
+## Directive formatting
+
+
+Separate directive groups with one blank line: `#package`, consecutive `#import` declarations, consecutive `#setting`/`#settings` declarations, then `#define` parameters. Keep related declarations together and leave a blank line before the SQL graph. Preserve executable SQL and template expressions while formatting. Follow the original SQL-derived omission defaults instead of repeating `omitempty` on each column or adding a setting to reproduce an inferred default. Keep genuine wire exceptions and validation tags. Global `case_format` supplies ordinary names. Verify omission, explicit zero/null presence, and source response parity after regeneration; a missing inferred default is a framework gap to resolve, not a reason to inflate DQL.
+
+## Preserve original JSON presence
+
+
+For migrations, inspect the original generated Go type and explicit wire annotations before changing omission behavior. Preserve original Datly behavior: with `omitempty`, a scalar `bool(false)` is omitted, a nil `*bool` is omitted, and a nonnil `*bool(false)` is emitted as `false`. Pointer presence is distinct from the pointed-to zero value. Retain genuine source omission annotations and hooks; do not convert pointers to scalars, clear explicit false values, or add an encoder option to force absent fields. Verify disputed behavior against the pinned original serializer. Change an original expectation only with explicit authorization for that specific discrepancy.
+
 ## Simplify projections
 
 Start with `view.*` for ordinary fields. Add outer declarations only for genuine shape or behavior configuration: type/holder names, actual type conversions, required/optional overrides, codecs, validation, relations or lifecycle policy. Do not enumerate columns beside a wildcard or repeat inferred types through CAST, WithColumnType or per-column JSON tags.
@@ -106,6 +121,31 @@ Go hooks own business rules. Existing linked Go types keep their authority.
 - Generate with `datly transcribe get` (or a configured developer MCP generation target), inspect the emitted files, then exercise realistic SQLite fixtures and protocol exposure. Verify empty results, NULLs, composite joins, multiple batches, output slots, and hook counts.
 - Persist with authored-code preservation and atomic generation replacement. Expose only the chosen components/packages; keep dependency components private unless explicitly selected.
 
+## Focused lifecycle methods
+
+Keep application input/view initialization, OnFetch, OnRelation and output
+finalization small and readable. Each callback should show its business-rule order
+through named private helpers for distinct rules in the existing phase files.
+Apply this structure to existing large callbacks in the affected component as
+well as new hooks; a wrapper alone does not improve the underlying method. Do
+not expand a component change into unrelated lifecycle refactors. Use the exact
+supported signatures already documented or implemented; OnRelation has no error return.
+
+Refactor within the current package and file layout, preserving exported APIs,
+callback order, row identity, relation population/order, presence and loaded-field
+evidence, and error/output contracts. Keep generated code under canonical
+regeneration. Retire a no-op hook only after proving native behavior and public
+Go callers remain compatible; preserve an exported method when it is part of the
+source API. Retain hooks that implement actual business behavior.
+
+Add extensive tests for the affected component at its actual callback boundaries,
+reusing original business expectations and fixtures; helper-only tests are insufficient. Follow the
+[reader lifecycle unit-test coverage](references/acceptance.md#reader-lifecycle-unit-tests).
+Retain canonical generation, native execution with hydrated runtime inputs and the
+selected original Endly cases as separate gates. Run the component and directly
+affected dependency tests; broaden only when the change requires it or the user
+requests a wider suite.
+
 ## Non-obvious rules
 
 - DQL plus Go-shape metadata is the component contract. HTTP method alone does not decide handler policy.
@@ -147,3 +187,40 @@ Use explicit `$file_prefix('orders_')` only when requested or needed for chosen
 same-package destinations. Exact per-file overrides win and are never prefixed.
 Read [filename roles and override syntax](references/dql-grammar.md#generated-filenames-and-destinations)
 for support files, split destinations, collision rules and safe regeneration.
+
+## Application and runtime boundary
+
+Application components, inputs and lifecycle hooks depend on Xdatly public interfaces; Datly supplies their implementations. Use `handler.ComponentInvoker` from `github.com/viant/xdatly/handler`; prefer the explicit lifecycle arguments described below for prerequisite and dependent work. Use `handler.WithInput` for an explicitly marked reader seed; preserve the distinction from a trusted typed writer `Input`. Provider overlays and completion callbacks retain the caller's canonical binding, authorization, shared buffered writes and transaction owner. Use Xdatly contracts for DML, sequencing, validation, differ, logger and mutation reporting. Do not instantiate Datly runtime implementations inside business hooks or expose runtime-only invocation controls in application contracts. Datly bootstrap/registration adapters may depend on Datly. The older Datly invocation interface remains supported for existing consumers; new application examples use Xdatly.
+
+For binding reviews, check application DI fields and imports against Xdatly contracts, including `handler.MutationReporter` and `differ.Differ`. Preserve binding kinds and scoped behavior; regenerate generated Inputs/setters from DQL rather than replacing their Go imports by hand. Treat Datly-specific request options as runtime-adapter controls, not public Xdatly request fields.
+
+## Generated Go compatibility
+
+Minimize generated shape changes. Preserve existing exported type names, field
+names and types, pointer/value semantics, setters, package paths and file
+destinations unless the authoritative source contract requires a change. Do not
+introduce naming, alias, wrapper or field-type churn as incidental cleanup.
+Capture the current generated API before transcription, regenerate only affected
+components and their genuine dependencies, and review the API diff separately
+from tag/resource changes. Use existing DQL/native generation controls to retain
+compatible shapes; never hand-edit generated Go. Check existing DQL controls,
+public APIs and source-backed examples before proposing a framework change.
+Compile affected consuming packages and relevant reverse dependents without
+temporary overlays before integration, and retain relevant legacy consumer
+compilation when changing an SDK binding interface. Record any necessary
+incompatibility explicitly before publication; a successful generator package
+check alone does not prove downstream compilation.
+
+## Lifecycle composition
+
+Prefer `Init(ctx context.Context, invoker handler.ComponentInvoker) error` for
+input prerequisites and `Finalize(ctx context.Context, invoker handler.ComponentInvoker) error`
+for output composition. These implement separate `handler.InvokerInitializer`
+and `handler.InvokerFinalizer` interfaces; new input/output scaffolds use them.
+Avoid adding an invoker field to Input solely for lifecycle calls. Existing plain
+hooks, error/lookup finalizers and input injection remain supported; do not
+rewrite existing hooks just to match the new scaffold. When migrating, remove a
+field only after checking all its callers. Invoker-aware Finalize runs before
+transaction completion, unlike plain success Finalize; keep commit-dependent
+publication in outcome finalization. Await calls and never retain the supplied
+invoker after its callback. See [contracts and lifecycle interfaces](references/tags-and-interfaces.md).

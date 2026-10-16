@@ -115,6 +115,9 @@ func (r *Compilation) RefineRoot(ctx context.Context, component *spec.Component,
 		staged.Value = reflect.ValueOf(struct{}{})
 	}
 	input = &staged
+	if err := r.captureIdentifierOrigins(component, resources, input); err != nil {
+		return err
+	}
 	visited := map[*spec.View]bool{}
 	return r.refineView(ctx, component, component.RootView, connector, resources, input, nil, nil, visited)
 }
@@ -144,6 +147,9 @@ func (r *Compilation) RefineViews(ctx context.Context, component *spec.Component
 		staged.Value = reflect.ValueOf(struct{}{})
 	}
 	input = &staged
+	if err := r.captureIdentifierOrigins(component, resources, input); err != nil {
+		return err
+	}
 	visited := map[*spec.View]bool{}
 	for _, view := range component.Views {
 		if err := r.refineView(ctx, component, view, connector, resources, input, nil, nil, visited); err != nil {
@@ -201,6 +207,7 @@ func (r *Compilation) discover(ctx context.Context, view *spec.View, connector s
 		return nil, err
 	}
 	authoredSource := source.Clone()
+	dynamicTable := r.identifiers[view].dynamic
 	if strings.TrimSpace(source.SQL) == "" && strings.TrimSpace(source.Table) == "" {
 		return &expandedQuery{}, nil
 	}
@@ -231,12 +238,6 @@ func (r *Compilation) discover(ctx context.Context, view *spec.View, connector s
 	if db == nil {
 		return nil, fmt.Errorf("connector %q returned a nil DB", connector)
 	}
-	if input != nil {
-		source.Table, err = (sqltemplate.ConstantRenderer{Values: input.Const}).Identifier(source.Table)
-		if err != nil {
-			return nil, err
-		}
-	}
 	tx, err := exec.InvocationTransaction(ctx, db)
 	if err != nil {
 		return nil, err
@@ -258,6 +259,12 @@ func (r *Compilation) discover(ctx context.Context, view *spec.View, connector s
 	if err != nil {
 		return nil, fmt.Errorf("resolve SQL dialect: %w", err)
 	}
+	if input != nil {
+		source.Table, err = (sqltemplate.ConstantRenderer{Values: input.Const, Product: product.Name}).Identifier(source.Table)
+		if err != nil {
+			return nil, err
+		}
+	}
 	evaluationSource := source.Clone()
 	evaluationSource.SQL, err = schemaDiscoverySQL(evaluationSource.SQL)
 	if err != nil {
@@ -278,7 +285,13 @@ func (r *Compilation) discover(ctx context.Context, view *spec.View, connector s
 	if strings.TrimSpace(source.Table) == "" {
 		if table := explicitAuxiliarySource(evaluated.SQL); table != "" {
 			source.Table = table
-			view.Source.Table = table
+			authored, err := authoredDiscoveryTable(authoredSource, input, true)
+			if err != nil {
+				return nil, err
+			}
+			if !dynamicTable {
+				view.Source.Table, view.Source.TableInferred = authored, true
+			}
 			view.Auxiliary = true
 		}
 	}
@@ -290,10 +303,12 @@ func (r *Compilation) discover(ctx context.Context, view *spec.View, connector s
 			// fact for writer planning; readers do not depend on it.
 			// Keep the authored identifier when expansion revealed an instance
 			// constant. The evaluated table is only the discovery DB target.
-			if authoredTable := directSourceTable(authoredSource.SQL); authoredTable != "" {
-				view.Source.Table = authoredTable
-			} else {
-				view.Source.Table = table
+			authoredTable, err := authoredDiscoveryTable(authoredSource, input, false)
+			if err != nil {
+				return nil, err
+			}
+			if !dynamicTable {
+				view.Source.Table, view.Source.TableInferred = authoredTable, true
 			}
 		}
 	}
@@ -314,7 +329,7 @@ func (r *Compilation) discover(ctx context.Context, view *spec.View, connector s
 	if parts, parseErr := sqlparser.TableIdentifierParts(source.Table); parseErr == nil && len(parts) == 1 {
 		source.Table = parts[0]
 	}
-	if table := strings.TrimSpace(source.Table); table != "" && !strings.Contains(table, "$") {
+	if table := strings.TrimSpace(source.Table); !dynamicTable && table != "" && !strings.Contains(table, "$") {
 		constraints, err = r.metadata.loadTableConstraints(ctx, db, table)
 		if err != nil {
 			return nil, err
@@ -391,12 +406,16 @@ func (r *Compilation) discover(ctx context.Context, view *spec.View, connector s
 		}
 	}
 	view.Columns = mergeColumnsWithSources(view.Columns, public, identities)
-	if table := strings.TrimSpace(source.Table); table != "" && !strings.Contains(table, "$") {
+	if table := strings.TrimSpace(source.Table); !dynamicTable && table != "" && !strings.Contains(table, "$") {
 		lineage, err := directProjectionLineage(source)
 		if err != nil {
 			return nil, fmt.Errorf("resolve table projection lineage: %w", err)
 		}
-		applyTableConstraints(view.Columns, constraints, lineage, source.Table)
+		constraints, err = r.preserveConstraintTargets(view, constraints, lineage, product.Name)
+		if err != nil {
+			return nil, err
+		}
+		applyTableConstraints(view.Columns, constraints, lineage, view.Source.Table)
 	}
 	return evaluated, nil
 }

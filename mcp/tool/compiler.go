@@ -320,8 +320,17 @@ func validateToolName(name string) error {
 	if len(name) > 128 {
 		return fmt.Errorf("MCP tool name %q exceeds 128 characters", name)
 	}
+	// Protocol compatibility tools already use names such as skills/list.
+	// Authored catalog tools follow the same hierarchical naming contract.
+	if strings.Contains(name, "/") {
+		for _, segment := range strings.Split(name, "/") {
+			if segment == "" || segment == "." || segment == ".." {
+				return fmt.Errorf("MCP tool name %q contains an invalid namespace segment", name)
+			}
+		}
+	}
 	for _, char := range name {
-		if char >= 'a' && char <= 'z' || char >= 'A' && char <= 'Z' || char >= '0' && char <= '9' || char == '_' || char == '-' || char == '.' {
+		if char >= 'a' && char <= 'z' || char >= 'A' && char <= 'Z' || char >= '0' && char <= '9' || char == '_' || char == '-' || char == '.' || char == '/' {
 			continue
 		}
 		return fmt.Errorf("MCP tool name %q contains unsupported character %q", name, char)

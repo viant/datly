@@ -10,6 +10,7 @@ import (
 	"github.com/viant/bindly/locator"
 	bindstate "github.com/viant/bindly/state"
 	"github.com/viant/bindly/xform"
+	"github.com/viant/datly/internal/codeclookup"
 	"github.com/viant/datly/spec"
 	xcodec "github.com/viant/xdatly/codec"
 )
@@ -88,6 +89,18 @@ func BuildBindingSpecs(component *spec.Component, inputType reflect.Type, codecs
 				return nil, err
 			}
 			result = append(result, compiled)
+		}
+	}
+	optional := map[string]bool{}
+	for _, binding := range result {
+		if binding.Required == nil || !*binding.Required {
+			optional[binding.Name] = true
+			optional[binding.Path] = true
+		}
+	}
+	for _, binding := range result {
+		if transformer, ok := binding.Transformer.(*codecTransformer); ok {
+			transformer.optional = optional
 		}
 	}
 	return result, nil
@@ -191,7 +204,8 @@ func cloneBool(value *bool) *bool {
 }
 
 type codecTransformer struct {
-	codec xcodec.Instance
+	codec    xcodec.Instance
+	optional map[string]bool
 }
 
 func newCodecTransformer(codec xcodec.Instance) xform.Transformer {
@@ -206,15 +220,10 @@ func (t *codecTransformer) Transform(ctx context.Context, resolver locator.Resol
 	// collection inputs; scalar codecs receive their declared scalar type.
 	return t.codec.Value(ctx, input, xcodec.WithValueLookup(func(ctx context.Context, name string) (any, error) {
 		if resolver == nil {
-			return nil, fmt.Errorf("codec input parameter %s is unavailable", name)
+			return codeclookup.Value(ctx, name, t.optional, nil)
 		}
-		value, found, err := resolver.Value(ctx, &bindstate.Location{Kind: "param", In: name})
-		if err != nil {
-			return nil, err
-		}
-		if !found {
-			return nil, fmt.Errorf("codec input parameter %s is unavailable", name)
-		}
-		return value, nil
+		return codeclookup.Value(ctx, name, t.optional, func(ctx context.Context, name string) (any, bool, error) {
+			return resolver.Value(ctx, &bindstate.Location{Kind: "param", In: name})
+		})
 	}))
 }

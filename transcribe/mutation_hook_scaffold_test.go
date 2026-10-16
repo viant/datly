@@ -16,6 +16,7 @@ import (
 	"github.com/viant/datly/internal/testharness"
 	tcolumn "github.com/viant/datly/transcribe/column"
 	gen "github.com/viant/datly/transcribe/generate"
+	"github.com/viant/datly/transcribe/internal/handlergen"
 	"github.com/viant/datly/typecatalog"
 	xshape "github.com/viant/x/shape"
 )
@@ -205,7 +206,7 @@ SELECT ID, NAME FROM EVENTS`}
 }
 
 func TestMutationHookScaffoldOptionNormalization(t *testing.T) {
-	if _, err := normalizeOptions(Options{Handler: HandlerOptions{Target: HandlerGo, Operation: WritePost, Go: GoHandlerOptions{Execution: GoExecutionMutation}, Hooks: HookOptions{Scaffold: true}}}); err != nil {
+	if _, err := handlergen.Normalize(Options{Handler: HandlerOptions{Target: HandlerGo, Operation: WritePost, Go: GoHandlerOptions{Execution: GoExecutionMutation}, Hooks: HookOptions{Scaffold: true}}}); err != nil {
 		t.Fatal(err)
 	}
 }

@@ -128,6 +128,18 @@ func (s *PackageComponentSource) ResolveDescriptors(types *typecatalog.Resolver)
 		}
 		combined.Routes = append(combined.Routes, component.Routes...)
 	}
+	for _, route := range s.Routes {
+		association, err := route.selectorAssociation(types)
+		if err != nil {
+			return nil, err
+		}
+		if association != nil {
+			if len(s.Routes) != 1 {
+				return nil, fmt.Errorf("selector companion requires one exact route holder")
+			}
+			combined.SelectorCompanion = association
+		}
+	}
 	return (ContractResolver{
 		Component: combined, InputType: s.InputType, OutputType: s.OutputType, Types: types,
 	}).Resolve()

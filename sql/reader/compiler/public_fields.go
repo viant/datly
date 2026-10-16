@@ -3,6 +3,7 @@ package compiler
 import (
 	"github.com/viant/datly/data"
 	"github.com/viant/datly/output"
+	sqlxio "github.com/viant/sqlx/io"
 	"reflect"
 	"strings"
 )
@@ -35,7 +36,8 @@ func (b *planCompiler) compilePublicFields(views *viewSet, rootPath string) erro
 					if source == "" {
 						source = column.Name
 					}
-					view.SelectorFields = append(view.SelectorFields, data.SelectorField{GoName: field.GoName, PublicName: field.PublicName, Column: source, Index: field.Index})
+					alternatives, verified := selectorColumnAliases(rowType, field.Index, source)
+					view.SelectorFields = append(view.SelectorFields, data.SelectorField{GoName: field.GoName, PublicName: field.PublicName, Column: source, ColumnAliases: alternatives, VerifiedColumnAliases: verified, Index: field.Index})
 				}
 			}
 			for _, relation := range view.Relations {
@@ -59,4 +61,31 @@ func (b *planCompiler) compilePublicFields(views *viewSet, rootPath string) erro
 		return nil
 	}
 	return visit(views.root, rootPath)
+}
+
+// Read alternatives from the actual output-visible field once, during compilation.
+// They resolve the public field to a projected SQL result without changing its
+// primary SQLX mapping or admitting the alternatives as public field names.
+func selectorColumnAliases(rowType reflect.Type, index []int, primary string) ([]string, []string) {
+	if rowType == nil || len(index) == 0 {
+		return nil, nil
+	}
+	metadata := sqlxio.ParseTag(rowType.FieldByIndex(index).Tag)
+	if metadata == nil {
+		return nil, nil
+	}
+	seen := map[string]bool{primary: true}
+	var result, verified []string
+	for _, name := range strings.Split(metadata.Column, "|") {
+		name = strings.TrimSpace(name)
+		if name != "" && !seen[name] {
+			seen[name] = true
+			result = append(result, name)
+			matched, err := sqlxio.NewMatcher(nil).Match(rowType, sqlxio.NamesToColumns([]string{name}))
+			if err == nil && len(matched) == 1 && reflect.DeepEqual(matched[0].FieldIndex(), index) {
+				verified = append(verified, name)
+			}
+		}
+	}
+	return result, verified
 }

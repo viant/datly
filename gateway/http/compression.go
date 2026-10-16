@@ -54,16 +54,24 @@ func writeEncodedBytes(writer stdhttp.ResponseWriter, request *stdhttp.Request, 
 }
 
 func (h *Handler) writeHTTPJSON(ctx context.Context, writer stdhttp.ResponseWriter, request *stdhttp.Request, status int, payload any, contract *output.Plan) {
-	// A typed error payload keeps its opted-in output authority. Generic errors
-	// and default policies retain their existing JSON path.
+	h.writeHTTPErrorJSON(ctx, writer, request, status, payload, contract, false)
+}
+
+func (h *Handler) writeHTTPErrorJSON(ctx context.Context, writer stdhttp.ResponseWriter, request *stdhttp.Request, status int, payload any, contract *output.Plan, synthesizedLegacyEnvelope bool) {
+	// A matching typed error payload uses its declared output contract, including
+	// casing and exclusions. Generic errors retain their existing JSON path.
 	_, rawResponse := payload.(xresponse.Response)
-	if !rawResponse && payload != nil && contract != nil && contract.NilSlicePolicy() == "empty_array" && matchingOutputType(contract.Type(), reflect.TypeOf(payload)) {
+	if !rawResponse && payload != nil && contract != nil && matchingOutputType(contract.Type(), reflect.TypeOf(payload)) {
 		encoded, err := contract.Encode(ctx, "json", payload)
 		if err != nil {
 			h.writeOutputError(ctx, writer, err)
 			return
 		}
-		writer.Header().Set("Content-Type", encoded.ContentType)
+		contentType := encoded.ContentType
+		if synthesizedLegacyEnvelope {
+			contentType = "text/plain; charset=utf-8"
+		}
+		writer.Header().Set("Content-Type", contentType)
 		if err = writeEncodedBytes(writer, request, status, encoded.Data, contract.ResponseCompression()); err != nil {
 			h.writeOutputError(ctx, writer, err)
 		}

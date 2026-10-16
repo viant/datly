@@ -5,9 +5,11 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/viant/bindly"
 	docs "github.com/viant/datly/documentation"
+	"github.com/viant/datly/internal/selectorcompanion"
 	"github.com/viant/datly/runtime/auth"
 	"github.com/viant/datly/spec"
 	xshape "github.com/viant/x/shape"
@@ -16,9 +18,10 @@ import (
 
 // RouteInput is compiler output used to construct one immutable route contract.
 type RouteInput struct {
-	Route    spec.RouteRef
-	Plan     *bindly.Plan
-	Bindings []bindly.BindingSpec
+	Selectors *selectorcompanion.BindingPlan
+	Route     spec.RouteRef
+	Plan      *bindly.Plan
+	Bindings  []bindly.BindingSpec
 	// WireTypes is a route-local constructor carrier keyed by canonical binding path.
 	// Entries are retained by value in InputField, never used by runtime binding.
 	WireTypes map[string]reflect.Type
@@ -42,13 +45,17 @@ type InputField struct {
 
 // RouteInputContract is the exact binding contract for one component route.
 type RouteInputContract struct {
-	route     spec.RouteRef
-	inputType reflect.Type
-	plan      *bindly.Plan
-	contract  *InputContract
-	fields    []InputField
-	replay    *bindly.ReplayPlan
-	replayErr error
+	selectors  *selectorcompanion.BindingPlan
+	route      spec.RouteRef
+	inputType  reflect.Type
+	plan       *bindly.Plan
+	contract   *InputContract
+	fields     []InputField
+	replay     *bindly.ReplayPlan
+	replayErr  error
+	scopeOnce  sync.Once
+	scopePlans map[string]*bindly.Plan
+	scopeErr   error
 }
 
 // InputContract owns the canonical component input type and its route-effective
@@ -87,6 +94,9 @@ func NewInputContract(inputType reflect.Type, projection *bindly.Projection, rou
 		}
 		if _, ok := result.routes[key]; ok {
 			return nil, fmt.Errorf("duplicate route input contract %s", key)
+		}
+		if route.Selectors != nil && route.Selectors.PublicPlan() != route.Plan {
+			return nil, fmt.Errorf("route selector companion plan mismatch")
 		}
 		fields := make([]InputField, 0, len(route.Bindings))
 		for _, binding := range route.Bindings {
@@ -146,7 +156,7 @@ func NewInputContract(inputType reflect.Type, projection *bindly.Projection, rou
 		}
 
 		result.routes[key] = &RouteInputContract{
-			route: route.Route, inputType: inputType, plan: route.Plan, contract: result, fields: fields, replay: replay, replayErr: replayErr,
+			route: route.Route, inputType: inputType, plan: route.Plan, selectors: route.Selectors, contract: result, fields: fields, replay: replay, replayErr: replayErr,
 		}
 	}
 	return result, nil
@@ -217,6 +227,9 @@ func (c *RouteInputContract) Without(target any, names ...string) (any, error) {
 func (c *RouteInputContract) WithOptionalBindings(names ...string) (*RouteInputContract, error) {
 	if c == nil || c.contract == nil {
 		return nil, fmt.Errorf("input contract is required")
+	}
+	if c.selectors != nil {
+		return nil, fmt.Errorf("selector companion does not support optional prepared input contracts")
 	}
 	optional := map[string]bool{}
 	for _, name := range names {
@@ -467,4 +480,57 @@ func (c *RouteInputContract) ReplayPlan() (*bindly.ReplayPlan, error) {
 		return nil, fmt.Errorf("route input contract is required")
 	}
 	return c.replay, c.replayErr
+}
+
+// PrepareScopePlans compiles copied canonical metadata once for scope-selecting
+// custom handlers. The complete plan remains the route authority.
+func (c *RouteInputContract) PrepareScopePlans() error {
+	if c == nil {
+		return fmt.Errorf("route input contract is required")
+	}
+	c.scopeOnce.Do(func() {
+		groups := map[string][]bindly.BindingSpec{"": make([]bindly.BindingSpec, 0)}
+		for _, field := range c.fields {
+			binding := cloneBindingSpec(field.binding)
+			if binding.ResolutionGroup != nil {
+				c.scopeErr = fmt.Errorf("scoped input binding does not support grouped input %s", field.path)
+				return
+			}
+			if _, ok := groups[binding.Scope]; !ok {
+				groups[binding.Scope] = make([]bindly.BindingSpec, 0)
+			}
+			groups[binding.Scope] = append(groups[binding.Scope], binding)
+		}
+		injector, err := bindly.NewInjector()
+		if err != nil {
+			c.scopeErr = err
+			return
+		}
+		plans := make(map[string]*bindly.Plan, len(groups))
+		for scope, bindings := range groups {
+			plan, err := injector.CompilePlan(c.inputType, bindings...)
+			if err != nil {
+				c.scopeErr = fmt.Errorf("compile input scope %q: %w", scope, err)
+				return
+			}
+			plans[scope] = plan
+		}
+		c.scopePlans = plans
+	})
+	return c.scopeErr
+}
+func (c *RouteInputContract) ScopePlan(scope string) (*bindly.Plan, bool) {
+	if c == nil || c.PrepareScopePlans() != nil {
+		return nil, false
+	}
+	plan, ok := c.scopePlans[scope]
+	return plan, ok
+}
+
+// SelectorPlan is compiler-owned native selector metadata, never a provider or request value.
+func (c *RouteInputContract) SelectorPlan() *selectorcompanion.BindingPlan {
+	if c == nil {
+		return nil
+	}
+	return c.selectors
 }

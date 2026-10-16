@@ -1,5 +1,27 @@
 # Conditional component finalization
 
+For new lifecycle composition, prefer the separate `InvokerInitializer` and
+`InvokerFinalizer` interfaces: `Init(ctx, invoker ComponentInvoker)` and
+`Finalize(ctx, invoker ComponentInvoker)`, both returning `error`. Call `Invoke`
+with a trusted exact target and typed input. This keeps the invoker out of input
+fields. The argument is callback-scoped and child calls must be awaited.
+Invoker-aware finalization runs before transaction completion; outcome observers
+remain separate. The lookup/binder form below and existing input injection remain
+supported for existing applications.
+
+Outputs that must gate composition on the current operation error can implement
+`InvokerErrorFinalizer` with `Finalize(ctx, invoker, operationErr) error`. It uses
+the same callback-scoped invoker and pre-completion phase. `operationErr` contains
+handler, output-binding, and preparation failures encountered before the hook;
+it is nil on success. Returning nil does not discard an existing error. A hook
+can return immediately on a non-nil error without acquiring a provider or
+composing children. Early failures with no output do not synthesize this hook.
+Future drain/commit failures are observed by the separate outcome callback.
+Protected roots retain their existing later preparation order, so this hook
+does not promise the timing of `ErrorFinalizer`. Go permits only one `Finalize`
+signature per output; the existing two-argument `InvokerFinalizer` remains
+unconditional when a handler returns an output plus an error.
+
 Use `handler.InjectorFinalizer` when an output conditionally needs another
 component. The public SDK depends only on `context`; route authority, provider
 composition, binding plans and transaction ownership remain in the runtime.
@@ -91,6 +113,10 @@ ErrorFinalizer remains a once-only pre-completion hook. MCP runs after successfu
 ordinary finalization. Caller-pending completion is not proof of commit: publish
 commit-dependent messages only from an OutcomeFinalizer that checks
 `outcome.CommitConfirmed()`. Handlers implementing the existing result-aware
-OutcomeFinalizer (including generated mutation programs) retain exclusive
-ownership of their output lifecycle; the engine does not additionally call an
+OutcomeFinalizer (including generated mutation programs) retain ownership
+of these existing output finalization forms; the engine does not additionally call an
 output InjectorFinalizer, plain/Error finalizer or MCP hook for those handlers.
+
+The separate `InvokerFinalizer` contract also runs for outcome-aware adapters,
+before root completion. Their outcome callback still runs afterward with the
+actual transaction result.

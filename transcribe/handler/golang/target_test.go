@@ -396,8 +396,10 @@ func TestLowerPersistsThroughCanonicalGeneratorProduct(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(hookSource), "func (input *EventsInput) Init") ||
-		!strings.Contains(string(hookSource), "func (output *EventsOutput) Finalize") {
+	if !strings.Contains(string(hookSource), "func (output *EventsOutput) Finalize(ctx context.Context, invoker xhandler.ComponentInvoker) error") ||
+		!strings.Contains(string(hookSource), "func (input *EventsInput) Init(ctx context.Context, invoker xhandler.ComponentInvoker) error") ||
+		!strings.Contains(string(hookSource), "xhandler.InvokerInitializer") ||
+		!strings.Contains(string(hookSource), "xhandler.InvokerFinalizer") {
 		t.Fatalf("hook scaffold:\n%s", hookSource)
 	}
 	userSource := append(append([]byte(nil), hookSource...), []byte("\nconst UserHookPreserved = true\n")...)

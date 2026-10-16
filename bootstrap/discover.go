@@ -47,6 +47,7 @@ type RouteSource struct {
 	LinkedInputType  reflect.Type
 	LinkedOutputType reflect.Type
 	LinkedHandler    func() (rhandler.TypedHandler, error)
+	linkedHolderType reflect.Type
 	ordinal          int
 }
 
@@ -137,6 +138,7 @@ func (d PackageDiscovery) DiscoverFiles(files []xmodule.File) ([]*RouteSource, e
 				for holderType.Kind() == reflect.Pointer {
 					holderType = holderType.Elem()
 				}
+				source.linkedHolderType = holderType
 				if linkedField, ok := holderType.FieldByName(field.fieldName); ok && linkedField.Type.Kind() == reflect.Struct {
 					if input, found := linkedField.Type.FieldByName("Input"); found {
 						source.LinkedInputType = input.Type

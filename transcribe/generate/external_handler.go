@@ -17,6 +17,10 @@ type ExternalHandler struct {
 	InputShape *spec.View
 	Package    string
 	Name       string
+	// AdapterPackage/AdapterName override runtime adaptation while Package/Name
+	// retain the contract factory's canonical registration identity.
+	AdapterPackage string
+	AdapterName    string
 	// Build validates source-authored factories and staged registrations without
 	// requiring their contracts to be linked into the transcription executable.
 	Build *gobuild.Context
@@ -40,7 +44,13 @@ func (r *planResolver) resolveExternalHandler() error {
 	if h == nil {
 		return nil
 	}
+	if (h.AdapterPackage == "") != (h.AdapterName == "") || h.AdapterName != "" && (!token.IsIdentifier(h.AdapterName) || !token.IsExported(h.AdapterName)) {
+		return fmt.Errorf("external handler adapter requires a package and exported factory")
+	}
 	if h.GeneratedContracts {
+		if h.AdapterName != "" {
+			return fmt.Errorf("handler adapter requires source-authored contracts separate from the generated destination")
+		}
 		if h.Package != r.plan.Package || !token.IsIdentifier(h.Name) || !token.IsExported(h.Name) || r.plan.Input.Ownership != ContractGenerated || r.plan.Output.Ownership != ContractGenerated {
 			return fmt.Errorf("generated POST factory requires local generated contracts and an exported factory")
 		}
@@ -62,5 +72,10 @@ func (r *planResolver) resolveExternalHandler() error {
 	ensureImport(r.plan, alias, h.Package)
 	r.plan.ExternalHandler = h.Clone()
 	r.plan.FactoryExpression = alias + "." + h.Name
+	if h.AdapterName != "" {
+		adapterAlias := uniqueImportAlias(r.plan, h.AdapterPackage)
+		ensureImport(r.plan, adapterAlias, h.AdapterPackage)
+		r.plan.AdapterExpression = adapterAlias + "." + h.AdapterName
+	}
 	return nil
 }

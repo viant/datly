@@ -102,3 +102,31 @@ func TestParseReaderRouteName(t *testing.T) {
 		require.Error(t, err, source)
 	}
 }
+
+func TestParseHandlerAdapter(t *testing.T) {
+	const header = `/* {"URI":"/convert","Method":"POST","Name":"Convert","Factory":"business.NewConvert","AdapterFactory":"bridge.LinkedHandler","InputType":"business.Input","OutputType":"business.Output"} */`
+	const source = `#setting($_ = $handler_factory('business.NewConvert', 'Convert'))
+#setting($_ = $handler_adapter('bridge.LinkedHandler'))
+#setting($_ = $route('/convert', 'POST'))
+#setting($_ = $input_type('business.Input'))
+#setting($_ = $output_type('business.Output'))`
+	for _, text := range []string{header, source, strings.Replace(header, `,"AdapterFactory":"bridge.LinkedHandler"`, "", 1) + "\n#setting($_ = $handler_adapter('bridge.LinkedHandler'))"} {
+		parsed, _, err := ParseHandlerSource(text)
+		require.NoError(t, err)
+		require.Equal(t, "bridge.LinkedHandler", parsed.AdapterFactory, text)
+		require.Equal(t, "business.NewConvert", parsed.Factory)
+	}
+	for _, text := range []string{
+		source + "\n#setting($_ = $handler_adapter('bridge.Other'))",
+		header + "\n#setting($_ = $handler_adapter('bridge.Other'))",
+		strings.Replace(source, "'bridge.LinkedHandler'", "''", 1),
+		strings.Replace(source, "'bridge.LinkedHandler'", "bridge.LinkedHandler", 1),
+		strings.Replace(source, "'bridge.LinkedHandler'", "'bridge.LinkedHandler', 'other'", 1),
+		strings.Replace(source, "$handler_adapter('bridge.LinkedHandler')", "$handler_adapter('bridge.LinkedHandler').Optional()", 1),
+		"#setting($_ = $handler_adapter('bridge.LinkedHandler'))\nSELECT 1",
+		strings.Replace(header, `"Factory":"business.NewConvert"`, `"Type":"legacy.Handler"`, 1),
+	} {
+		_, _, err := ParseHandlerSource(text)
+		require.Error(t, err, text)
+	}
+}

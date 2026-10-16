@@ -5,10 +5,12 @@ package identifier
 
 import (
 	"fmt"
+	"go/token"
 	"sort"
 	"strings"
 
 	"github.com/viant/datly/constant"
+	"github.com/viant/datly/spec"
 	"github.com/viant/sqlparser"
 	sqltext "github.com/viant/sqlparser/source"
 	"github.com/viant/velty/ast"
@@ -31,6 +33,32 @@ type Reference struct {
 type Renderer struct {
 	Values    *constant.Values
 	Variables []string
+	Product   string
+	Connector string
+	// Products resolves source authority without querying a database.
+	Products func(connector string) (string, error)
+}
+
+func (r Renderer) parts(value string) ([]string, error) {
+	product := r.Product
+	if r.Products != nil {
+		var err error
+		product, err = r.Products(r.Connector)
+		if err != nil {
+			return nil, fmt.Errorf("connector %q identifier product: %w", r.Connector, err)
+		}
+	}
+	return (sqlparser.TableIdentifierParser{Product: product}).Parts(value)
+}
+
+// ForView preserves inherited connector authority unless the view overrides it.
+func (r Renderer) ForView(view *spec.View) Renderer {
+	if view != nil && view.Source != nil && view.Source.Bindings != nil {
+		if connector := strings.TrimSpace(view.Source.Bindings.Connector); connector != "" {
+			r.Connector = connector
+		}
+	}
+	return r
 }
 
 func (r Renderer) References(source string) ([]Reference, error) {
@@ -90,7 +118,8 @@ func (r Renderer) References(source string) ([]Reference, error) {
 					prefix++
 				}
 				qualified := prefix < len(source) && source[prefix] == '.'
-				if !quoted && !qualified {
+				fragment := span.Start > 0 && identifierByte(source[span.Start-1])
+				if !quoted && !qualified && !fragment {
 					continue
 				}
 				if quoted && prefix >= end {
@@ -110,15 +139,17 @@ func (r Renderer) References(source string) ([]Reference, error) {
 					return fmt.Errorf("unknown identifier constant %q", node.ID)
 				}
 				if value == "" {
-					// An empty environment suffix is valid only when the remaining
-					// quoted identifier is complete without another template value.
-					if !quoted {
+					// An empty suffix cannot supply an entire identifier. An
+					// unquoted fragment already has a literal identifier prefix.
+					if !quoted && !fragment {
 						return fmt.Errorf("identifier constant %q is empty", node.ID)
 					}
-					remainder := source[start+1:span.Start] + source[prefix:end-1]
-					parts, err := sqlparser.TableIdentifierParts(remainder)
-					if err != nil || len(parts) != 1 || strings.ContainsAny(remainder, "$.") {
-						return fmt.Errorf("empty identifier constant %q leaves an incomplete identifier", node.ID)
+					if quoted {
+						remainder := source[start+1:span.Start] + source[prefix:end-1]
+						parts, err := r.parts(remainder)
+						if err != nil || len(parts) != 1 || strings.ContainsAny(remainder, "$.") {
+							return fmt.Errorf("empty identifier constant %q leaves an incomplete identifier", node.ID)
+						}
 					}
 				}
 				// Identifier fragments cannot introduce SQL syntax or an enclosing quote.
@@ -156,6 +187,10 @@ func (r Renderer) References(source string) ([]Reference, error) {
 	return replacements, nil
 }
 
+func identifierByte(ch byte) bool {
+	return ch >= 'a' && ch <= 'z' || ch >= 'A' && ch <= 'Z' || ch >= '0' && ch <= '9' || ch == '_'
+}
+
 func (r Renderer) Render(source string) (string, error) {
 	replacements, err := r.References(source)
 	if err != nil {
@@ -174,12 +209,33 @@ func (r Renderer) Validate(source string) error { _, err := r.References(source)
 
 // Identifier renders transient table metadata through the SQL rendering owner.
 func (r Renderer) Identifier(table string) (string, error) {
-	if name := constant.TableName(table); name != "" {
-		if value, found := r.Values.Lookup(name); found {
-			if _, err := sqlparser.TableIdentifierParts(value); err != nil {
+	reference := strings.TrimSpace(table)
+	open, close := "", ""
+	if len(reference) >= 2 {
+		switch {
+		case reference[0] == '`' && reference[len(reference)-1] == '`', reference[0] == '"' && reference[len(reference)-1] == '"':
+			open, close = reference[:1], reference[len(reference)-1:]
+		case reference[0] == '[' && reference[len(reference)-1] == ']':
+			open, close = "[", "]"
+		}
+		if open != "" {
+			reference = reference[1 : len(reference)-1]
+		}
+	}
+	if name := constant.TableName(reference); token.IsIdentifier(name) {
+		if open != "" && reference != "$Unsafe."+name && reference != "${Unsafe."+name+"}" {
+			return table, nil // Literal prefixes/suffixes inside quotes are identity.
+		}
+		_, declared := r.Values.Binding(name)
+		if open != "" && !declared {
+			return table, nil // A quoted literal is not a declaration of authority.
+		}
+		if value, found := r.Values.LookupBound(name); found {
+			resolved := open + value + close
+			if _, err := r.parts(resolved); err != nil {
 				return "", fmt.Errorf("identifier constant %q: %w", name, err)
 			}
-			return value, nil
+			return resolved, nil
 		}
 	}
 	const prefix = "SELECT * FROM "

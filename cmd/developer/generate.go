@@ -11,6 +11,7 @@ import (
 
 	"github.com/viant/datly/transcribe"
 	"github.com/viant/datly/transcribe/column"
+	"github.com/viant/datly/transcribe/gobuild"
 )
 
 // Transcribe executes the same operation-based generation path used by the stock CLI.
@@ -79,7 +80,7 @@ func Transcribe(ctx context.Context, args []string, stdout, stderr io.Writer, ha
 		return 1
 	}
 	schema.Const = instance
-	discovery := &transcribe.Discovery{Const: instance, BaseDir: resolvedDirectory, Include: flags.Args(), SourceFile: *sourceFile}
+	discovery := &transcribe.Discovery{Const: instance, BaseDir: resolvedDirectory, GoBuild: &gobuild.Context{Dir: resolvedDirectory}, Include: flags.Args(), SourceFile: *sourceFile}
 	discovery.HandlerBindings = handlers
 	if *operation == "handler" {
 		discovery.Connector = schema.connector

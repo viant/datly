@@ -82,11 +82,13 @@ func TestConfiguredCompletionErrorCRLFAndRedaction(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "[INFO] datly view read reqTraceId=trace  injected view=datafees#  forged rows=2 elapsed=1ms  extra status=error\n"
+	// Failure completion intentionally gains ERROR severity and the useful
+	// redacted reason. SQL, credentials and record delimiters remain private.
+	want := "[ERROR] datly view read reqTraceId=trace\\r\\ninjected view=datafees#\\r\\nforged rows=2 elapsed=1ms\\r\\nextra status=error error=\"private failure SQL [REDACTED]\"\n"
 	if string(data) != want {
 		t.Fatalf("error completion/sanitization mismatch: %q", string(data))
 	}
-	for _, private := range []string{"SELECT", "private-token", "sensitive", "private failure"} {
+	for _, private := range []string{"SELECT", "private-token", "sensitive", "secret FROM"} {
 		if strings.Contains(string(data), private) {
 			t.Fatal("private failure leaked")
 		}

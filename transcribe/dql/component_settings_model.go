@@ -8,6 +8,7 @@ import (
 type componentSettings struct {
 	ProtectedFlushTables         []string
 	HandlerFactory               string
+	HandlerAdapter               string
 	HandlerName                  string
 	ResponseCompression          *spec.ResponseCompression
 	IndependentChildTransactions bool

@@ -106,3 +106,20 @@ Platform integration. MySQL/backend parity remains a separate integration check.
 Capture preserves null slots, original indexes and valid rows' original presence. Locations include parent occurrences, for example `Session[1].Attribute[2]`. Input initialization and valid entity hooks still run; invalid elements never receive entity hooks. Application parent hooks must tolerate the unchanged child collection. At initial structural validation, `handler.NestedNullRecordError{Location, Cause}` stops native row and business validation, allocation and queueing. Applications may project an existing error envelope; this is not a violation or a fabricated panic.
 
 Root policy remains independent and RootNullRecordError stays root-specific. If both policies are enabled, the first captured deferred error wins in depth-first capture order (root indexes, compiled relation order, child indexes). Captured diagnostics survive later initialization changes and precede newly introduced nulls. A non-opted-in null or another operational binding/index/frame/initialization failure still fails at its normal earlier boundary. Absent/null/empty collection holders and optional nil to-one relations keep existing behavior.
+
+A lifecycle callback may handle an explicitly invoked canonical reader's ordinary
+execution or output-finalizer error by returning nil. The reader still returns
+its original typed output and error to that callback. Returning the error from
+the callback keeps it as the parent failure.
+
+This applies only after successful input binding and initialization, while the
+shared completion owner has no enrolled writer or protected failure. Binding,
+provider, cancellation, panic, custom-handler and mixed-cause failures remain
+fatal. A later successful writer joins the existing buffer and completes once
+at the root; a writer already enrolled when the reader fails retains the veto.
+
+Per-call context values, including lexical overrides of ordinary business
+markers, reach child hooks. The lifecycle lease retains its own cancellation,
+the earliest caller or lease deadline, and canonical ownership; a caller context
+cannot replace private ownership or invocation receipts. Values added for one
+call do not modify the lease or leak into subsequent calls.

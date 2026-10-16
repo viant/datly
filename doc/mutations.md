@@ -10,6 +10,28 @@ authored Go handlers use the same invocation capabilities with explicitly
 selected orchestration. Reader generation is a separate choice; Datly does not automatically
 generate a combined reader/writer component in one struct.
 
+## Application binding boundary
+
+Application Inputs, handlers and lifecycle hooks bind public Xdatly interfaces.
+Datly provides their scoped implementations. Keep framework implementation imports
+in runtime/bootstrap adapters rather than business packages.
+
+| Capability | Application contract |
+| --- | --- |
+| Component invocation and typed request/seed | `handler.ComponentInvoker`, `handler.ComponentRequest`, `handler.WithInput` |
+| Buffered writes and sequencing | `handler.DML`, `handler.Sequencer` |
+| Validation and mutation reports | `handler.Validator`, `handler.MutationReporter` |
+| Difference calculation | `differ.Differ` |
+| Logging and responses | `logger.Logger`, `response.Status` and public response contracts |
+
+Here `handler`, `differ`, `logger` and `response` are packages under
+`github.com/viant/xdatly`. Retain the existing binding kinds, canonical component
+identity, presence markers, authorization, shared DML buffer and transaction owner.
+Do not construct a Datly runtime implementation to satisfy application DI. Existing
+Datly invocation contracts remain supported for compatibility; new application
+examples use Xdatly. Runtime-only options require the documented runtime adapter
+and must not be presented as fields of the public Xdatly request.
+
 ## Contents
 
 1. [Choose the writer product](#choose-the-writer-product)
@@ -69,8 +91,16 @@ in the DQL SQL graph, using the real authoring connector so transcription derive
 columns, keys and FK metadata. Regeneration updates that shape after schema changes.
 An optional object binds omitted data and explicit null to nil, preserving its
 presence marker so the application's original validation can distinguish them.
-Codecs, alternate output types, foreign root types and container wrappers cannot
-replace this generated body authority.
+An explicit existing codec may normalize an alternative provider source, provided
+its declared output is exactly the local SQL-derived `*Record` or `[]*Record`.
+For example, `$Data<json.RawMessage,[]*orders.Record>(body/data).WithCodec('orders.RecordJSON')`
+uses an imported `encoding/json` source and a discovered application codec factory.
+Transcription keeps SQL as body-shape authority and derives cardinality from the
+codec destination. The native compiler validates the source type and codec factory.
+Missing, foreign, value or wrapper destinations, extra body parameters and body
+emission remain rejected. Use the existing `.WithStatusCode(400)` parameter option when the
+original contract requires codec input errors to return HTTP 400.
+A codec cannot replace the generated body with an unrelated application type.
 
 A Current-only DELETE factory needs no body graph. Its declared read views generate
 the Input fields and bind before the handler runs; the handler decides which rows
@@ -368,6 +398,18 @@ or DML code. Build and link the emitted package before publishing a runtime
 generation. The generation step itself does not execute the business mutation.
 
 ### Contract and code ownership
+
+Preserve existing callable Go contracts during migration. A pointer field does
+not require changing an original convenience setter from `SetLabel(string)` to
+`SetLabel(*string)`. Keep that accessor in an authored file and let transcription
+retain it instead of emitting a duplicate. Native generation permits convenience
+signatures only with the application Go build context and successful preview and
+final staged compilation; the standard project CLI supplies this context. Direct
+calls without it remain strict. This native validation currently supports one
+generated destination package and rejects split destinations before publication.
+Compile reverse-dependent consumers separately: compiling the generated package
+and its dependencies does not prove those callers still compile. Compare setters
+and presence fields across the whole package, not just the row declaration file.
 
 The authoring flow is **DQL SQL graph + schema metadata → selected native
 operation → generated Go contracts and mutation program → authored lifecycle
@@ -1154,6 +1196,28 @@ The different output `Finalize` signatures are alternatives on a Go type;
 | Output `Finalize(ctx)` | Success-only, after owned completion; not additionally called when an error/injector-aware output contract was selected |
 | Output `FinalizeMCP(ctx, mcp.Context)` | Applicable MCP success hook in the ordinary output lifecycle |
 | Definition `FinalizeFailure` | Handles failure when a generated Program is unavailable; input/output may be nil |
+
+A successful canonical reader's error-aware output hook may compose conditional
+components through its injected Xdatly `ComponentInvoker` while its shared scope
+has no writer owner. Those children borrow the same scope; writer work first
+introduced by this hook drains only when the root finishes. A hook failure rolls
+that work back. A later preparation failure propagates from root completion
+without invoking the output hook a second time.
+
+If binding or execution has already enrolled a writer owner, protected
+preparation and terminal error observation retain their existing order. An
+error-aware writer output hook is not a composition callback. Use the existing
+injector-aware output contract for conditional work before that boundary.
+Retained invokers cannot start new work after root completion, whether passed
+the original context or a background context.
+
+An explicitly invoked canonical reader can return an ordinary error that its
+caller handles, while the entire shared scope still has no writer owner. The
+error and typed response remain visible to the caller; handling it does not
+require resetting an execution status. Once a writer owner is enrolled, child
+failures remain fatal to shared completion even when application code catches
+them. Binding-group failures, protected guard failures, cancellation and panic
+retain their existing failure semantics.
 
 A typed custom contract can explicitly implement the existing runtime
 `handler.OutcomeFinalizer`. `custom.New` and `custom.Factory` preserve that

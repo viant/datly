@@ -44,10 +44,12 @@ type PreparedSource struct {
 // original source for routes, settings, or declarations.
 type DirectivePlan struct {
 	HandlerFactory string
+	HandlerAdapter string
 	HandlerName    string
 	Static         *spec.StaticContent
 	Documentation  xdocs.Source
 	Route          *RoutePlan
+	Routes         []*RoutePlan
 	Settings       *spec.Settings
 	MCP            *spec.MCPExposure
 	MCPOnly        bool
@@ -208,17 +210,31 @@ func normalizeDirectivePlan(blocks []directiveBlock) (*DirectivePlan, error) {
 	route, routeErr := parseRouteDirective(blocks)
 	settings, settingsErr := parseComponentSettings(blocks)
 	params, paramSpans, viewOptions, declarationsErr := parseDeclarations(blocks)
-	inferenceErr := inferRoutePathParams(route, &params)
+	var inferenceErr error
+	if route != nil {
+		for _, item := range route.routes {
+			if inferenceErr = inferRoutePathParams(item, &params); inferenceErr != nil {
+				break
+			}
+		}
+	}
 	if err := earliestDirectiveError(routeErr, settingsErr, declarationsErr, inferenceErr); err != nil {
 		return nil, err
 	}
-	if settings != nil && settings.MCP != nil && route != nil && len(route.Methods) != 1 {
+	routeCount := 0
+	if route != nil {
+		for _, item := range route.routes {
+			routeCount += len(item.Methods)
+		}
+	}
+	if settings != nil && settings.MCP != nil && route != nil && routeCount != 1 {
 		return nil, &sourceError{offset: settings.mcpSpan.Start, end: settings.mcpSpan.End, err: fmt.Errorf(
-			"mcp directive is ambiguous across %d routes; declare exposure on one exact route", len(route.Methods))}
+			"mcp directive is ambiguous across %d routes; declare exposure on one exact route", routeCount)}
 	}
 	result := &DirectivePlan{Settings: toSpecSettings(settings), Params: params, ParamSpans: paramSpans, viewOptions: viewOptions}
 	if settings != nil {
 		result.HandlerFactory = settings.HandlerFactory
+		result.HandlerAdapter = settings.HandlerAdapter
 		result.HandlerName = settings.HandlerName
 		result.MCP = settings.MCP.Clone()
 		result.MCPOnly = settings.MCPOnly
@@ -233,10 +249,11 @@ func normalizeDirectivePlan(blocks []directiveBlock) (*DirectivePlan, error) {
 		}
 	}
 	if route != nil {
-		result.Route = &RoutePlan{
-			RequestBodyMode: route.RequestBodyMode,
-			URI:             route.URI, Methods: append([]string(nil), route.Methods...),
-			APIKeyHeader: route.APIKeyHeader, APIKeyValue: route.APIKeyValue,
+		for _, item := range route.routes {
+			result.Routes = append(result.Routes, &RoutePlan{RequestBodyMode: route.RequestBodyMode, URI: item.URI, Methods: append([]string(nil), item.Methods...), APIKeyHeader: route.APIKeyHeader, APIKeyValue: route.APIKeyValue})
+		}
+		if len(result.Routes) > 0 {
+			result.Route = result.Routes[0]
 		}
 	}
 	return result, nil

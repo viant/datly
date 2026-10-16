@@ -40,7 +40,7 @@ func componentFileText(packageName string, plan *Plan) (string, error) {
 		runtimeAlias = addImport("github.com/viant/datly/runtime/handler", "rhandler")
 		if plan.MutationHandler != nil {
 			adapterAlias = addImport("github.com/viant/datly/runtime/handler/mutation", "mutationhandler")
-		} else {
+		} else if plan.AdapterExpression == "" {
 			adapterAlias = addImport("github.com/viant/datly/runtime/handler/custom", "customhandler")
 		}
 	}
@@ -132,17 +132,22 @@ func componentFileText(packageName string, plan *Plan) (string, error) {
 		b.WriteString("\tif " + name + " == ")
 		b.WriteString(strconv.Quote(plan.Handler))
 		b.WriteString(" { return ")
-		b.WriteString(adapterAlias + ".Factory[")
-		b.WriteString(plan.contractType(plan.Input))
-		b.WriteString(", ")
-		b.WriteString(plan.contractType(plan.Output))
-		b.WriteString("](")
-		if plan.ExternalHandler != nil {
-			b.WriteString(plan.FactoryExpression)
+		if plan.AdapterExpression != "" {
+			b.WriteString(plan.AdapterExpression)
 		} else {
-			b.WriteString(plan.Handler)
+			b.WriteString(adapterAlias + ".Factory[")
+			b.WriteString(plan.contractType(plan.Input))
+			b.WriteString(", ")
+			b.WriteString(plan.contractType(plan.Output))
+			b.WriteString("](")
+			if plan.ExternalHandler != nil {
+				b.WriteString(plan.FactoryExpression)
+			} else {
+				b.WriteString(plan.Handler)
+			}
+			b.WriteString(")")
 		}
-		b.WriteString(") }\n")
+		b.WriteString(" }\n")
 		b.WriteString("\treturn nil\n}\n")
 		b.WriteString("\n// ")
 		b.WriteString(strings.TrimSuffix(plan.HolderName(), "Component"))

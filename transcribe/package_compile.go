@@ -10,6 +10,8 @@ import (
 	"github.com/viant/datly/bootstrap"
 	"github.com/viant/datly/spec"
 	gen "github.com/viant/datly/transcribe/generate"
+	"github.com/viant/datly/transcribe/internal/handlergen"
+	"github.com/viant/datly/transcribe/internal/link"
 	"github.com/viant/datly/typecatalog"
 	"github.com/viant/x"
 )
@@ -49,7 +51,7 @@ func (c *PackageCompilation) Transcribe(ctx context.Context, rootDir string) (*G
 	if c == nil {
 		return nil, fmt.Errorf("package compilation is required")
 	}
-	options, err := normalizeOptions(c.Options)
+	options, err := handlergen.Normalize(c.Options)
 	if err != nil {
 		return nil, err
 	}
@@ -61,10 +63,10 @@ func (c *PackageCompilation) Transcribe(ctx context.Context, rootDir string) (*G
 	if err != nil {
 		return nil, err
 	}
-	handlers := newHandlerGeneration(compiled, &input, options)
-	handlers.directory = filepath.Join(input.ProjectRoot, packageDir)
-	if err = handlers.prepare(); err != nil {
-		return nil, handlers.diagnostic(err)
+	handlers := handlergen.New(compiled.handlerContext(), &input, options)
+	handlers.Directory = filepath.Join(input.ProjectRoot, packageDir)
+	if err = handlers.Prepare(); err != nil {
+		return nil, compiled.handlerDiagnostic(err)
 	}
 	return NewCompiler().generateInputAt(ctx, rootDir, packageDir, compiled, input)
 }
@@ -158,7 +160,7 @@ func (a *packageAuthority) compile(ctx context.Context) (*Result, error) {
 		}
 		component.TypeContext.PackagePath = component.Key.Scope
 	}
-	if _, err := (&componentLoader{}).normalizeIndependentViewParams(component, nil); err != nil {
+	if _, err := link.NormalizeIndependentViewParams(component, nil); err != nil {
 		return nil, fmt.Errorf("normalize package view contracts: %w", err)
 	}
 	compileSource := *a.source
@@ -167,18 +169,25 @@ func (a *packageAuthority) compile(ctx context.Context) (*Result, error) {
 	compileSource.LinkedInputType = a.input.Type
 	compileSource.LinkedOutputType = a.output.Type
 	compileSource.LinkedHandler = a.route.LinkedHandler
+	if strings.TrimSpace(a.source.Text) == "" {
+		resources, err := packageInputDefaultResources(compileSource.Resources, compileSource.LinkedInputType, a.route.PackagePath)
+		if err != nil {
+			return nil, err
+		}
+		compileSource.Resources = resources
+	}
 	result, err := NewCompiler().Compile(ctx, &compileSource)
 	if err != nil {
 		return nil, err
 	}
-	contracts := &contractLinker{
-		packageComponent: component, compiledComponent: result.Component, source: a.route,
-		input: a.input, output: a.output,
+	contracts := &link.Contracts{
+		PackageComponent: component, CompiledComponent: result.Component, Source: a.route,
+		Input: a.input, Output: a.output,
 	}
-	result.Contracts = contracts.references()
+	result.Contracts = contracts.References()
 	if strings.TrimSpace(a.source.Text) == "" {
-		result.Contracts.Input = contracts.reference(a.route.InputType, a.input)
-		result.Contracts.Output = contracts.reference(a.route.OutputType, a.output)
+		result.Contracts.Input = link.Reference(a.route.InputType, a.input)
+		result.Contracts.Output = link.Reference(a.route.OutputType, a.output)
 	}
 	if result.Contracts.Output != nil && a.root != nil {
 		if result.Views == nil {
@@ -200,7 +209,7 @@ func (a *packageAuthority) compile(ctx context.Context) (*Result, error) {
 		}
 		result.Views[linked.identity] = &gen.ViewReference{DescriptorKey: linked.descriptor.Key()}
 	}
-	contracts.prepareGeneratedTypes(result.Component, result.Contracts, result.ContractTypeOverrides)
+	contracts.PrepareGeneratedTypes(result.Component, result.Contracts, result.ContractTypeOverrides.Input, result.ContractTypeOverrides.Output)
 	result.TypeAuthority = typecatalog.PackageAuthority
 	result.TypeResolver, err = typecatalog.NewResolver(a.catalog, result.TypeAuthority, result.TypeContext)
 	if err != nil {
