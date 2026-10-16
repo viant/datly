@@ -202,6 +202,26 @@ modified. Separate instances can therefore use one generated build with differen
 table names concurrently. The runtime cannot recover expressions already frozen
 by an older generator: regenerate those artifacts first.
 
+Identifier metadata validation uses the effective source connector's database
+product, including parent inheritance and child overrides. BigQuery project IDs
+such as `viant-e2e-mediator` are therefore valid in symbolic qualified paths and
+whole-path backticks. Other products retain their existing identifier grammar.
+Standalone obtains this authority from the registered SQL driver without opening
+a connection or querying schema metadata. Low-level bootstrap callers can supply
+`ArtifactInput.IdentifierProducts`; without product authority, validation retains
+the generic SQLParser rules. Executable SQL and generated symbolic tags remain
+unchanged.
+
+A full-table `$Unsafe.HistoryTable` reference can also use a declared input
+binding such as `HistoryTable` with `const/frequencyTargetHistoryTable`. Metadata
+follows that external constant key, honoring instance overrides and the authored
+default. Backtick-quoted references retain their authored quoting. The binding
+does not add a `HistoryTable` alias to the external constant map or reinterpret
+ordinary literal table names. Request-bound inputs remain ineligible for
+instance-time metadata, including when a same-named instance constant exists.
+Executable SQL continues to read the normally bound input field; `$Unsafe` alone
+neither grants nor removes immutable authority.
+
 ## Projected scalar constants
 
 A declared typed constant can be projected as `$Constant AS column`. It remains

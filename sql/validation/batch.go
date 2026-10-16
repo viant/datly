@@ -68,7 +68,7 @@ func (s *Service) batch(ctx context.Context, value any, policies []xhandler.Vali
 	if count == 0 {
 		return batch, nil
 	}
-	if batch.compiled, err = s.plan(ctx, typ); err != nil {
+	if batch.compiled, err = s.plan(ctx, typ, batch.policies[0].Connector); err != nil {
 		return nil, err
 	}
 	batch.nativePolicies = make([]sqlvalidator.CandidatePolicy, count)

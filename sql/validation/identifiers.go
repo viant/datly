@@ -13,12 +13,13 @@ import (
 type planKey struct {
 	typ       reflect.Type
 	constants string
+	product   string
 }
 
 // SQLX owns constraint evaluation and derives its checks from a reflected type.
 // Only when identifier tags change, give it a private, shallow column projection.
 // Go validation, public methods and writer identity keep the original contract.
-func (p *plan) resolveSQLShape(typ reflect.Type, values *constant.Values) error {
+func (p *plan) resolveSQLShape(typ reflect.Type, values *constant.Values, product string) error {
 	p.sqlType = typ
 	needed := false
 	for _, column := range p.columns {
@@ -30,7 +31,7 @@ func (p *plan) resolveSQLShape(typ reflect.Type, values *constant.Values) error 
 	if !needed {
 		return nil
 	}
-	renderer := identifier.Renderer{Values: values}
+	renderer := identifier.Renderer{Values: values, Product: product}
 	var fields []reflect.StructField
 	var indexes [][]int
 	changed := false
