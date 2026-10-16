@@ -507,6 +507,12 @@ func (s *dataScope) enrollBufferedScope(contexts ...context.Context) error {
 	}
 	s.requireBufferedOwner = true
 	root.bufferedScopeEnrolled = true
+	// Buffered call policy does not make an isolated root's supplied transaction
+	// an ordered multi-owner graph. Keep its protected lifetime enrolled; an
+	// actual buffered child still enables the journal and composition checks.
+	if s == root && sourceTransactionKey(root.source) != nil {
+		return root.orderedAdmissionLocked()
+	}
 	if err := issuer.EnableJournal(); err != nil {
 		root.guardedFailure = errors.Join(root.guardedFailure, err)
 		return err

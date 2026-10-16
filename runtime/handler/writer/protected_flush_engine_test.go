@@ -408,8 +408,10 @@ func TestProtectedFlushNativeEngineGrantIsComponentLocal(t *testing.T) {
 // A protected explicit boundary prepares a caller-owned transaction without
 // assuming its commit/rollback ownership or replaying the frozen suffix.
 func TestProtectedFlushNativeEngineCallerTransaction(t *testing.T) {
-	for _, mode := range []string{"commit", "rollback", "suffix failure", "custom source"} {
-		t.Run(mode, func(t *testing.T) {
+	for _, testMode := range []string{"commit", "rollback", "suffix failure", "custom source", "buffered commit", "buffered rollback", "buffered suffix failure"} {
+		t.Run(testMode, func(t *testing.T) {
+			buffered := strings.HasPrefix(testMode, "buffered ")
+			mode := strings.TrimPrefix(testMode, "buffered ")
 			db := protectedEngineDatabase(t)
 			tx, err := db.DB.BeginTx(t.Context(), nil)
 			if err != nil {
@@ -426,9 +428,10 @@ func TestProtectedFlushNativeEngineCallerTransaction(t *testing.T) {
 			}
 			_, err = engine.New().Execute(ctx, engine.Request{
 				Input: protectedEngineRoute(t, reflect.TypeFor[sqPlainInput]()), BoundInput: input, Handler: native,
-				Completion:           func(outcome xhandler.Outcome) { p.outcome = outcome },
-				DataSource:           sourceValue,
-				ProtectedFlushTables: []string{"children", "unused"},
+				Completion:             func(outcome xhandler.Outcome) { p.outcome = outcome },
+				DataSource:             sourceValue,
+				BufferedComponentCalls: buffered,
+				ProtectedFlushTables:   []string{"children", "unused"},
 			})
 			if mode == "suffix failure" {
 				if err == nil || !strings.Contains(err.Error(), "UNIQUE constraint failed: suffix.id") {

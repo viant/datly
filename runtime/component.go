@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/viant/datly/constant"
 	"github.com/viant/datly/internal/drainowner"
@@ -95,17 +96,21 @@ func (i *scopedComponentInvoker) InvokeComponent(ctx context.Context, request de
 	if i.authority != nil {
 		ctx = i.authority(ctx)
 	}
+	recoveryRead := handlerengine.IsRootRecoveryRead(ctx)
 	policy := "imperative"
-	if i.buffered {
+	if i.buffered && !recoveryRead {
 		policy = "buffered"
 	}
 	ctx = context.WithValue(ctx, resolvedComponentCallPolicyKey{}, policy)
 	relation := handlerengine.ComponentImperative
-	if i.buffered {
+	if i.buffered && !recoveryRead {
 		if request.IndependentChildTransactions {
 			return nil, fmt.Errorf("buffered component calls cannot use independent child transactions")
 		}
 		relation = handlerengine.ComponentBufferedImperative
+	}
+	if recoveryRead {
+		relation = handlerengine.ComponentBinding
 	}
 	ctx = handlerengine.PrepareComponent(ctx, relation, "")
 	return i.runtime.invokeComponent(ctx, request, i.scope)
@@ -290,9 +295,20 @@ func (r *Runtime) invokeComponent(ctx context.Context, request dexec.ComponentRe
 			return nil, err
 		}
 	}
-	if err := handlerengine.CheckComponentMutation(ctx, registered.Handler == nil && registered.Reader != nil); err != nil {
+	canonicalReader := registered.Handler == nil && registered.Reader != nil && request.Warmup == nil && !request.DryRun && !request.PrepareQuery && (request.Replay == nil || !request.Replay.Only)
+	if err := handlerengine.CheckComponentMutation(ctx, canonicalReader); err != nil {
 		return nil, err
 	}
+	readContext, finishRead, readErr := handlerengine.AdmitRootRecoveryRead(ctx)
+	if readErr != nil {
+		return nil, readErr
+	}
+	ctx = readContext
+	defer func() {
+		if finishErr := finishRead(); finishErr != nil {
+			err = errors.Join(err, finishErr)
+		}
+	}()
 	if registered.Input == nil {
 		return nil, fmt.Errorf("registered input contract not found: %s", identity)
 	}
@@ -434,7 +450,7 @@ func (r *Runtime) invokeComponent(ctx context.Context, request dexec.ComponentRe
 		IndependentChildTransactions: request.IndependentChildTransactions || (registered.Component.Settings != nil && registered.Component.Settings.IndependentChildTransactions),
 		SequenceStrategy:             sequenceStrategy,
 		BufferedComponentCalls:       buffered,
-		CanonicalReader:              registered.Handler == nil && registered.Reader != nil && request.Warmup == nil && !request.DryRun && !request.PrepareQuery && (request.Replay == nil || !request.Replay.Only),
+		CanonicalReader:              canonicalReader,
 		ProtectedFlushTables:         protectedFlushTables,
 		Injector:                     r.injector,
 		Input:                        inputRoute,
