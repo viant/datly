@@ -106,7 +106,19 @@ func BeginWriteEligibility(ctx context.Context) (finish func() error, err error)
 // dropping the owning guard and keeps reader dependencies in that invocation.
 func RetainMutationAuthority(ctx context.Context) func(context.Context) context.Context {
 	scope, _ := ctx.Value(dataScopeContextKey{}).(*dataScope)
+	issued := recoveryReadPermit(ctx)
 	return func(call context.Context) context.Context {
+		permit := recoveryReadPermit(call)
+		if permit != nil && permit.open() {
+			if rootScope(scope) == permit.origin || issued == permit {
+				return detachRecoveryRead(call, permit)
+			}
+			_ = permit.reject()
+			return detachRecoveryRead(call, permit)
+		}
+		if issued != nil {
+			return detachRecoveryRead(call, issued)
+		}
 		if scope == nil || (!scope.requireBufferedOwner && scope.protectedAdmissionFailure() == nil && !scope.bufferedLifetimeClosed() && !scope.mutationGuard().active()) {
 			return call
 		}
@@ -117,6 +129,9 @@ func RetainMutationAuthority(ctx context.Context) func(context.Context) context.
 // CheckComponentMutation admits canonical readers while rejecting writers and
 // unknown custom effects before child binding or data-unit creation.
 func CheckComponentMutation(ctx context.Context, canonicalReader bool) error {
+	if IsRootRecoveryRead(ctx) {
+		return checkRootRecoveryRead(ctx, canonicalReader)
+	}
 	scope, _ := ctx.Value(dataScopeContextKey{}).(*dataScope)
 	if drainowner.BindingGroupContext(ctx) {
 		if scope == nil {

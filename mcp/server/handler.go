@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"sort"
+	"time"
 
 	"github.com/viant/jsonrpc"
 	"github.com/viant/jsonrpc/transport"
@@ -26,9 +27,10 @@ type Service interface {
 
 type Handler struct {
 	*protocolserver.DefaultHandler
-	service Service
-	source  *sourceBinding
-	context xmcp.Context
+	service        Service
+	toolsListTtlMs int
+	source         *sourceBinding
+	context        xmcp.Context
 }
 
 // NewHandler creates one upstream handler factory over a compiled Datly service.
@@ -36,7 +38,14 @@ func NewHandler(service Service) (protocolserver.NewHandler, error) {
 	return newHandler(service, nil)
 }
 
-func newHandler(service Service, source *sourceBinding) (protocolserver.NewHandler, error) {
+func newHandler(service Service, source *sourceBinding, configuredTtlMs ...int64) (protocolserver.NewHandler, error) {
+	ttl := DefaultToolsListTtlMs
+	if len(configuredTtlMs) > 0 {
+		ttl = configuredTtlMs[0]
+	}
+	if ttl < 0 || ttl > int64(^uint(0)>>1) || ttl > int64((1<<63-1)/time.Millisecond) {
+		return nil, fmt.Errorf("MCP tools list TTL must be a nonnegative integer in milliseconds")
+	}
 	if source == nil && (service == nil || service.Registry() == nil) {
 		return nil, fmt.Errorf("MCP service and registry are required")
 	}
@@ -55,7 +64,7 @@ func newHandler(service Service, source *sourceBinding) (protocolserver.NewHandl
 		if operations != nil {
 			client = &protocolClient{operations: operations}
 		}
-		return &Handler{DefaultHandler: base, service: service, source: source, context: &requestContext{client: client}}, nil
+		return &Handler{DefaultHandler: base, service: service, toolsListTtlMs: int(ttl), source: source, context: &requestContext{client: client}}, nil
 	}, nil
 }
 
@@ -108,6 +117,10 @@ func (h *Handler) ListTools(ctx context.Context, request *jsonrpc.TypedRequest[*
 			}
 		}
 		result.Tools = visible
+		// Catalog visibility is filtered above for this caller. The producer grants
+		// only a private metadata lease; tool execution retains its authorization.
+		result.CacheScope = schema.ListToolsResultCacheScopePrivate
+		result.TtlMs = h.toolsListTtlMs
 		sort.SliceStable(result.Tools, func(i, j int) bool { return result.Tools[i].Name < result.Tools[j].Name })
 	}
 	return result, protocolErr

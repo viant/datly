@@ -87,6 +87,8 @@ type Endpoint struct {
 }
 
 type MCP struct {
+	// Nil defaults to five minutes; explicit zero disables tool catalog reuse.
+	ToolsListTtlMs  *int64
 	StrictArguments bool
 	Folders         []resource.Folder
 	Port            *int
@@ -171,6 +173,9 @@ func (c *Config) Validate() error {
 }
 
 func (m MCP) ListenAddress() (string, error) {
+	if m.ToolsListTtlMs != nil && (*m.ToolsListTtlMs < 0 || *m.ToolsListTtlMs > int64(^uint(0)>>1) || *m.ToolsListTtlMs > int64((1<<63-1)/time.Millisecond)) {
+		return "", fmt.Errorf("tools list TTL must be a nonnegative integer in milliseconds")
+	}
 	if m.Port != nil {
 		if m.Address != "" || *m.Port < 0 || *m.Port > 65535 {
 			return "", fmt.Errorf("invalid or conflicting MCP port")
