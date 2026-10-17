@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/viant/datly/spec"
+	"github.com/viant/tagly/tags"
 )
 
 func (l *Loader) mergeTypeContext(base, authored *spec.TypeContext, packageScope string) *spec.TypeContext {
@@ -106,6 +107,18 @@ func overlayParam(base, authored *spec.Parameter) *spec.Parameter {
 	}
 	if authored.Tag != "" {
 		result.Tag = authored.Tag
+	}
+	if strings.EqualFold(strings.TrimSpace(authored.Source.Kind), "param") &&
+		strings.TrimSpace(authored.DeclarationSQL) != "" &&
+		strings.TrimSpace(authored.TypeExpr) == "" && strings.TrimSpace(authored.OutputTypeExpr) == "" {
+		typeName := tags.NewTags(strings.TrimSpace(result.Tag)).Lookup("typeName")
+		if typeName == nil || strings.TrimSpace(string(typeName.Values)) == "" {
+			// An inferred DQL projection owns its generated helper. Retaining the
+			// previous generated Input's type suppresses inference on regeneration.
+			// Explicit typeName authority and unrelated binding tags stay intact.
+			result.TypeExpr = ""
+			result.OutputTypeExpr = ""
+		}
 	}
 	if authored.Cardinality != "" {
 		result.Cardinality = authored.Cardinality

@@ -160,6 +160,12 @@ func (d *Discovery) Compile(ctx context.Context) (*ProjectGeneration, error) {
 		}
 		project.Components = append(project.Components, compiled)
 		compiledPackages[packageSourceIdentity(compiled.Source.Scope, compiled.Source.Name)] = true
+		if compiled.ExternalHandler != nil && compiled.TypeContext != nil {
+			// A native factory owns its generated holder, rather than overlaying
+			// that holder on a subsequent discovery pass. Other package holders
+			// remain independently selected.
+			compiledPackages[packageSourceIdentity(compiled.TypeContext.PackagePath, compiled.Component.Name)] = true
+		}
 	}
 	if err = compilation.compilePackages(ctx, project, compiledPackages); err != nil {
 		return nil, err
@@ -219,8 +225,18 @@ func (c *discoveryCompilation) compileFile(ctx context.Context, file xmodule.Fil
 		ColumnRefiner:      c.discovery.ColumnRefiner,
 	}
 	var result *Result
-	packageSource := c.packages[packageSourceIdentity(file.ImportPath, source.Name)]
-	if packageSource == nil {
+	preparation, err := prepareSourceCompilation(ctx, source)
+	if err != nil {
+		return nil, fmt.Errorf("prepare component source %q: %w", file.Path, err)
+	}
+	// Authored native factories are complete source authority. A holder left
+	// by their previous generation must never turn them into DQL overlays.
+	nativeFactory := preparation.prepared.Directives.HandlerFactory != ""
+	var packageSource *bootstrap.PackageComponentSource
+	if !nativeFactory {
+		packageSource = c.packages[packageSourceIdentity(file.ImportPath, source.Name)]
+	}
+	if !nativeFactory && packageSource == nil {
 		packageSource, err = c.declaredPackageSource(ctx, source)
 		if err != nil {
 			return nil, fmt.Errorf("pair component source %q: %w", file.Path, err)
