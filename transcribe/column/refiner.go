@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"github.com/viant/datly/constant"
+	"github.com/viant/datly/internal/sqlanalysis"
 	"github.com/viant/tagly/tags"
 	"io/fs"
 	"reflect"
@@ -423,7 +424,7 @@ func schemaDiscoverySQL(SQL string) (string, error) {
 	for {
 		start := strings.Index(result, prefix)
 		if start < 0 {
-			return result, nil
+			return sqlanalysis.DiscoveryPredicates(result)
 		}
 		end := strings.IndexByte(result[start+len(prefix):], '}')
 		if end < 0 {
