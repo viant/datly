@@ -2,6 +2,7 @@ package http
 
 import (
 	"context"
+	"fmt"
 	"mime"
 	stdhttp "net/http"
 	"reflect"
@@ -20,17 +21,25 @@ type httpRequestScope struct {
 }
 
 func newHTTPRequestScope(req *stdhttp.Request, path map[string]string, onDemand ...bool) (*httpRequestScope, error) {
+	mediaType, _, _ := mime.ParseMediaType(req.Header.Get("Content-Type"))
+	options := []requestprovider.Option{requestprovider.WithPathParams(path)}
+	// Register only for XLSX: a decoder registry also selects a different JSON
+	// decoding path in Bindly. Preserve ordinary JSON binding and presence.
+	if mediaType == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" {
+		options = append(options, requestprovider.WithDecoder(mediaType, requestprovider.DecoderFunc(func(raw []byte, target any) error {
+			return unmarshalXLSBody(req.Context(), raw, target)
+		})))
+	}
 	var scope *requestprovider.Scope
 	var err error
 	if len(onDemand) > 0 && onDemand[0] {
-		scope, err = requestprovider.NewDeferred(req, requestprovider.WithPathParams(path))
+		scope, err = requestprovider.NewDeferred(req, options...)
 	} else {
-		scope, err = requestprovider.New(req, requestprovider.WithPathParams(path))
+		scope, err = requestprovider.New(req, options...)
 	}
 	if err != nil {
 		return nil, err
 	}
-	mediaType, _, _ := mime.ParseMediaType(req.Header.Get("Content-Type"))
 	// Form lookup preserves explicit empty values independently of query-only
 	// selector policies, matching request.Form rather than request.Query rules.
 	query := requestprovider.NewValues(requestprovider.WithForm(req.URL.Query())).Form()
@@ -91,4 +100,28 @@ func (l *mergedFormLocator) Value(ctx context.Context, target reflect.Type, name
 		return values[0], true, nil
 	}
 	return values, true, nil
+}
+
+// unmarshalXLSBody retains the legacy context-aware body contract. Bindly
+// supplies a pointer to the declared body type, including **T for *T bodies.
+func unmarshalXLSBody(ctx context.Context, raw []byte, target any) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	value := reflect.ValueOf(target)
+	for value.IsValid() && value.Kind() == reflect.Pointer {
+		if value.IsNil() {
+			if !value.CanSet() {
+				break
+			}
+			value.Set(reflect.New(value.Type().Elem()))
+		}
+		if decoder, ok := value.Interface().(interface {
+			UnmarshalXLS(context.Context, []byte) error
+		}); ok {
+			return decoder.UnmarshalXLS(ctx, raw)
+		}
+		value = value.Elem()
+	}
+	return fmt.Errorf("XLSX body type %T does not implement UnmarshalXLS", target)
 }
