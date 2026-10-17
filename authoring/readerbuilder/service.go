@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/viant/bindly/resource"
 	predicatevelty "github.com/viant/datly/runtime/predicate/velty"
 	"github.com/viant/datly/spec"
 	"github.com/viant/datly/transcribe"
@@ -89,8 +90,14 @@ func (s *Service) inspect(ctx context.Context, source string) (*Structure, []*tr
 	if name == "" {
 		name = "Reader"
 	}
+	resources := resource.New()
+	if s.config.Resources != nil {
+		if err := resources.Register("", s.config.Resources); err != nil {
+			return structure, []*transcribe.Diagnostic{operationDiagnostic(err)}
+		}
+	}
 	result, err := transcribe.NewCompiler().Compile(ctx, &transcribe.Source{
-		Scope: strings.TrimSpace(s.config.Scope), Name: name, Text: source, Types: s.config.Types,
+		Scope: strings.TrimSpace(s.config.Scope), Name: name, Text: source, Types: s.config.Types, Resources: resources,
 	})
 	if err == nil {
 		structure.Component = result.Component.Clone()

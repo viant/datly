@@ -117,3 +117,22 @@ JOIN (SELECT ID, NAME FROM dictionary) channel ON channel.ID = forecast.channel_
 		t.Fatal("ungrouped root must reject atomically")
 	}
 }
+
+func TestInspectEmbeddedSQLWithAuthoredNumericShape(t *testing.T) {
+	source := `#package('example.com/reader')
+#setting($_ = $route('/spend','GET'))
+#setting($_ = $cube())
+SELECT spend.*, CAST(spend.total AS int),tag(spend.total,'groupable:"false"')
+FROM (${embed:sql/spend.sql}) spend`
+	resources := fstest.MapFS{"sql/spend.sql": {Data: []byte("SELECT account_id,SUM(amount) AS total FROM spend GROUP BY account_id")}}
+	response := New(Config{Name: "Spend", Resources: resources}).Apply(context.Background(), Request{DQL: source, Operation: Operation{Type: OperationInspect}})
+	if len(response.Diagnostics) != 0 || response.Structure.Component == nil {
+		t.Fatalf("inspection lost embedded resource: %+v", response.Diagnostics)
+	}
+	if response.DQL != source {
+		t.Fatal("inspection changed authored source")
+	}
+	if response.Structure.Component.Settings.Report == nil || !response.Structure.Component.Settings.Report.Enabled {
+		t.Fatal("cube contract missing")
+	}
+}
