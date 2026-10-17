@@ -341,3 +341,8 @@ func legacySourceDeclarations(content []byte) (*xshape.Source, map[string]bool, 
 	}
 	return source, declarations, nil
 }
+
+// SourceOwnedBy reports the existing generated-source owner without granting overwrite authority.
+func SourceOwnedBy(content []byte, owner string) bool {
+	return owner != "" && generatedOwner(content) == owner
+}

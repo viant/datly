@@ -20,6 +20,10 @@ import (
 // Source is the transcribe-owned authored source/config model used to assemble
 // canonical components and generated package artifacts for package bootstrap.
 type Source struct {
+	// Compile-local selected declaration proof; maps are immutable after compilation.
+	selfGeneratedInputViews    map[string]bool
+	inheritedGeneratedCurrents map[string]bool
+
 	preparation        *sourcePreparation
 	dependencySnapshot *dependency.Snapshot
 	Const              *constant.Values

@@ -256,6 +256,14 @@ func (c *componentCompilation) loadMetadata(comparisonOnly bool) error {
 
 func (c *componentCompilation) compileViews(ctx context.Context) error {
 	source, component, prepared := c.result.Source, c.result.Component, c.prepared
+	sourceCopy := *source
+	source = &sourceCopy
+	c.result.Source = source
+	var proofErr error
+	source.selfGeneratedInputViews, source.inheritedGeneratedCurrents, proofErr = generatedCurrentAuthority(ctx, source, component, c.authored, c.result.TypeResolver)
+	if proofErr != nil {
+		return proofErr
+	}
 	sourceMap, compiledTypeContext, typeResolver := c.result.SourceMap, c.result.TypeContext, c.result.TypeResolver
 	declarationFailure := func(err error) error {
 		span := pointSpan(source.Text, 0)
@@ -323,7 +331,7 @@ func (c *componentCompilation) compileViews(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("normalize independent view contracts: %w", err)
 	}
-	packageViews, err := packageInputViewReferences(component, source.PackageComponent, typeResolver)
+	packageViews, err := packageInputViewReferences(component, source.PackageComponent, typeResolver, source.selfGeneratedInputViews)
 	if err != nil {
 		return err
 	}

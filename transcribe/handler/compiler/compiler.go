@@ -25,6 +25,9 @@ type Request struct {
 	Currents     []CurrentBinding
 	Table        string
 	Key          string
+
+	// RegenerateCurrents contains compile-local proof for inherited generation-owned inputs.
+	RegenerateCurrents map[string]bool
 }
 
 // CurrentBinding maps one canonical record-view identity to the ordinary

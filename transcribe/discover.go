@@ -16,6 +16,7 @@ import (
 	"github.com/viant/datly/constant"
 	"github.com/viant/datly/transcribe/column"
 	"github.com/viant/datly/transcribe/dql"
+	gen "github.com/viant/datly/transcribe/generate"
 	"github.com/viant/datly/transcribe/gobuild"
 	"github.com/viant/datly/transcribe/internal/dependency"
 	"github.com/viant/datly/typecatalog"
@@ -336,7 +337,14 @@ func (d *Discovery) packageSources(ctx context.Context, catalog *typecatalog.Cat
 				}
 			}
 		}
-		if err = catalog.RegisterPackage(typecatalog.TypeOriginPackage, module.Packages[packagePath]); err != nil {
+		location, locationErr := workspace.Package(packagePath)
+		if locationErr != nil {
+			return nil, nil, fmt.Errorf("locate package authority %q: %w", packagePath, locationErr)
+		}
+		if location == nil {
+			return nil, nil, fmt.Errorf("package authority %q has no source location", packagePath)
+		}
+		if err = (&gen.Result{}).RegisterPackage(catalog, module.Packages[packagePath], location.Dir); err != nil {
 			return nil, nil, fmt.Errorf("register package authority %q: %w", packagePath, err)
 		}
 	}

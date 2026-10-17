@@ -402,7 +402,7 @@ func (r *packageViewResolver) equal(left, right *spec.View) bool {
 
 // Capture unchanged package row ownership before column discovery adds derived
 // physical metadata. That metadata cannot revoke an existing Go declaration.
-func packageInputViewReferences(component, packaged *spec.Component, types *typecatalog.Resolver) (generate.ViewReferences, error) {
+func packageInputViewReferences(component, packaged *spec.Component, types *typecatalog.Resolver, generated ...map[string]bool) (generate.ViewReferences, error) {
 	if packaged == nil || types == nil {
 		return nil, nil
 	}
@@ -413,6 +413,9 @@ func packageInputViewReferences(component, packaged *spec.Component, types *type
 	compiledViews := newPackageViewResolver(component, nil)
 	var result generate.ViewReferences
 	for _, row := range linked {
+		if len(generated) > 0 && generated[0][row.identity] {
+			continue
+		}
 		view := compiledViews.byIdentity(row.identity)
 		if view == nil || !compiledViews.equal(row.view, view) {
 			continue

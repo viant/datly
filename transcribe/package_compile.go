@@ -291,7 +291,27 @@ func (c *descriptorPackageCompilation) compile(ctx context.Context) (*Result, er
 	for _, linked := range linkedInputs {
 		linkedDescriptors = append(linkedDescriptors, linked.descriptor)
 	}
-	if err = c.catalog.LinkRuntimeAll(typecatalog.TypeOriginPackage, linkedDescriptors...); err != nil {
+	// Runtime identity enriches the selected source declaration without changing
+	// its generated ownership. LinkRuntimeAll only visits these exact descriptors.
+	var generatedRuntime, packageRuntime []*x.Type
+	for _, descriptor := range linkedDescriptors {
+		if descriptor == nil {
+			return nil, fmt.Errorf("type is required")
+		}
+		origin, _, lookupErr := c.catalog.Origin(typecatalog.PackageAuthority, descriptor.Key())
+		if lookupErr != nil {
+			return nil, lookupErr
+		}
+		if origin == typecatalog.TypeOriginGenerated {
+			generatedRuntime = append(generatedRuntime, descriptor)
+		} else {
+			packageRuntime = append(packageRuntime, descriptor)
+		}
+	}
+	if err = c.catalog.LinkRuntimeAll(typecatalog.TypeOriginGenerated, generatedRuntime...); err != nil {
+		return nil, err
+	}
+	if err = c.catalog.LinkRuntimeAll(typecatalog.TypeOriginPackage, packageRuntime...); err != nil {
 		return nil, err
 	}
 	resolvedContext := compileTypeContext(c.source, component.TypeContext)
