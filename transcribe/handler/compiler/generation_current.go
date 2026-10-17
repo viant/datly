@@ -143,7 +143,7 @@ func (b *inputGeneration) appendCurrent(view *spec.View, currentName, predicate 
 	current.MutationPredicateGroup = nil
 	current.Columns = nil
 	for _, column := range view.Columns {
-		if column == nil || column.DeleteMarker {
+		if column == nil || column.DeleteMarker || b.omitTransientCurrentColumn(view, column) {
 			continue
 		}
 		projected := column.Clone()
