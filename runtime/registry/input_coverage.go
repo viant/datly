@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	bindstate "github.com/viant/bindly/state"
-	docs "github.com/viant/datly/documentation"
 	"github.com/viant/datly/spec"
 	"github.com/viant/scy/auth/jwt"
 	"github.com/viant/tagly/tags"
@@ -188,16 +187,8 @@ func compatibleTransportCoverage(authority, child InputField) error {
 	if af.Anonymous != bf.Anonymous {
 		return fmt.Errorf("different embedded field projection")
 	}
-	annotation := func(field InputField) docs.Annotation {
-		var authored docs.Annotation
-		if p, ok := field.binding.Extension.(*spec.Parameter); ok && p != nil {
-			authored = docs.Annotation{Description: p.Description, Example: p.Example}
-		}
-		return field.documentation.Parameter(field.binding.Name, authored)
-	}
-	if annotation(authority) != annotation(child) {
-		return fmt.Errorf("different parameter documentation")
-	}
+	// Descriptions and examples belong to the selected field's owner. They do
+	// not change transport compatibility; projection retains that owner's docs.
 
 	ah, e := authority.Internal()
 	if e != nil {
@@ -233,6 +224,8 @@ func coverageParameter(authority, child InputField, transformed bool) error {
 		return fmt.Errorf("unconstructed codec contract")
 	}
 	left, right := *a, *b
+	left.Description, right.Description = "", ""
+	left.Example, right.Example = "", ""
 	left.Required, right.Required = nil, nil
 	left.Raw, right.Raw = "", ""
 	left.Tag, right.Tag = "", ""
