@@ -18,7 +18,6 @@ func resolveRowColumn(shape *xshape.Type, column *spec.Column) (*xshape.Resoluti
 		return nil, err
 	}
 	var selected *xshape.Field
-	var selectedSource, selectedPhysicalSource string
 	for i := range fields {
 		field := &fields[i]
 		sqlTag := sqlxio.ParseTag(field.Tag)
@@ -46,17 +45,12 @@ func resolveRowColumn(shape *xshape.Type, column *spec.Column) (*xshape.Resoluti
 			return nil, fmt.Errorf("reader metadata column %s has ambiguous native field mapping", column.Name)
 		}
 		selected = field
-		selectedSource = sqlTag.Name()
-		selectedPhysicalSource = metadata.Source
 	}
 	if selected == nil {
 		return nil, fmt.Errorf("reader metadata column %s has no declared Go field or native alias", column.Name)
 	}
-	// Bootstrap metadata may retain the SQLX result name while fresh discovery
-	// reports the declared physical source. Both belong to this selected field.
-	if column.Source != "" && (selectedSource != "" || selectedPhysicalSource != "") &&
-		!strings.EqualFold(column.Source, selectedSource) && !strings.EqualFold(column.Source, selectedPhysicalSource) {
-		return nil, fmt.Errorf("reader metadata column %s source %s differs from native sources %s and %s", column.Name, column.Source, selectedSource, selectedPhysicalSource)
-	}
+	// Source describes SQL lineage, not Go field identity. Existing producers
+	// may retain either physical or result names; row validation checks the
+	// selected declaration and its canonical type without rewriting that lineage.
 	return shape.ResolveField(selected.Name)
 }
