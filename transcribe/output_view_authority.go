@@ -2,12 +2,15 @@ package transcribe
 
 import (
 	"fmt"
+	"io/fs"
 	"strings"
 
+	"github.com/viant/datly/internal/readergraph"
 	"github.com/viant/datly/spec"
 	dtag "github.com/viant/datly/tag"
 	gen "github.com/viant/datly/transcribe/generate"
 	"github.com/viant/datly/typecatalog"
+	"github.com/viant/x"
 	xshape "github.com/viant/x/shape"
 )
 
@@ -279,11 +282,6 @@ func linkExplicitOutputContract(result *Result, expression string) error {
 	if err != nil {
 		return fmt.Errorf("resolve output contract %q: %w", expression, err)
 	}
-	// Previously generated contracts remain generation-owned. Artifact destination
-	// and publication checks still determine whether this component may write them.
-	if resolved != nil && resolved.Origin == typecatalog.TypeOriginGenerated {
-		return nil
-	}
 	descriptor, err := result.TypeResolver.Descriptor(expression)
 	if err != nil {
 		return fmt.Errorf("resolve output contract %q: %w", expression, err)
@@ -296,12 +294,20 @@ func linkExplicitOutputContract(result *Result, expression string) error {
 	if descriptor.Name == "" || descriptor.PkgPath == "" {
 		return fmt.Errorf("output contract %q requires existing named Go type authority", expression)
 	}
+	generated := resolved != nil && resolved.Origin == typecatalog.TypeOriginGenerated
 	if result.Source != nil && result.Source.Types != nil {
 		origin, _, err := result.Source.Types.Origin(typecatalog.PackageAuthority, descriptor.Key())
 		if err != nil {
 			return err
 		}
-		if origin == typecatalog.TypeOriginGenerated {
+		generated = generated || origin == typecatalog.TypeOriginGenerated
+	}
+	if generated {
+		admitted, err := priorReaderOutputContract(result, descriptor)
+		if err != nil {
+			return err
+		}
+		if !admitted {
 			return nil
 		}
 	}
@@ -353,4 +359,39 @@ func linkExplicitOutputContract(result *Result, expression string) error {
 	}
 	result.Contracts.Output = &gen.ContractReference{Expression: expression, DescriptorKey: descriptor.Key()}
 	return nil
+}
+
+// Reuse only the exact output of the prior admitted reader. Generated provenance
+// stays unchanged, and current explicit field/type/binding checks still run.
+func priorReaderOutputContract(result *Result, selected *x.Type) (bool, error) {
+	if result.Source == nil || result.Source.PackageComponent == nil || result.Source.PackageComponent.ReaderGraph == nil {
+		return false, nil
+	}
+	baseline := result.Source.PackageComponent
+	if baseline.Settings == nil {
+		return false, fmt.Errorf("reader metadata prior contract authority required")
+	}
+	uri := result.Source.ReaderMetadataURI
+	namespace, filename, qualified := strings.Cut(uri, ":")
+	if !qualified || namespace == "" || !fs.ValidPath(filename) || !strings.HasPrefix(filename, "metadata/") {
+		return false, fmt.Errorf("reader metadata invalid admitted source URI")
+	}
+	if _, captured := baseline.ReaderGraph.Assets()[uri]; !captured {
+		return false, fmt.Errorf("reader metadata source URI was not captured by prior admission")
+	}
+	input, err := result.TypeResolver.Descriptor(baseline.Settings.InputType)
+	if err != nil {
+		return false, err
+	}
+	output, err := result.TypeResolver.Descriptor(baseline.Settings.OutputType)
+	if err != nil {
+		return false, err
+	}
+	if output == nil || selected == nil || selected.Key() != output.Key() {
+		return false, fmt.Errorf("reader metadata exact prior output contract required")
+	}
+	if err = readergraph.ValidateWithLookup(baseline, input, output, result.Source.Resources, result.TypeResolver.Descriptor); err != nil {
+		return false, err
+	}
+	return true, nil
 }
