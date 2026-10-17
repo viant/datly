@@ -244,16 +244,26 @@ func (p *scaffoldPersistence) linkedSource(content []byte) bool {
 		}
 	}
 	parsed, err := parser.ParseFile(token.NewFileSet(), "shapes.go", content, 0)
-	if err != nil {
+	if err != nil || parsed.Name.Name != p.plan.PackageName() {
 		return false
 	}
-	for _, d := range parsed.Decls {
-		g, ok := d.(*ast.GenDecl)
-		if !ok {
-			continue
-		}
-		for _, s := range g.Specs {
-			if typ, ok := s.(*ast.TypeSpec); ok && names[typ.Name.Name] {
+	for _, declaration := range parsed.Decls {
+		switch declaration := declaration.(type) {
+		case *ast.GenDecl:
+			for _, s := range declaration.Specs {
+				if typ, ok := s.(*ast.TypeSpec); ok && names[typ.Name.Name] {
+					return true
+				}
+			}
+		case *ast.FuncDecl:
+			if declaration.Recv == nil || len(declaration.Recv.List) != 1 {
+				continue
+			}
+			receiver := declaration.Recv.List[0].Type
+			if pointer, ok := receiver.(*ast.StarExpr); ok {
+				receiver = pointer.X
+			}
+			if local, ok := receiver.(*ast.Ident); ok && names[local.Name] {
 				return true
 			}
 		}
