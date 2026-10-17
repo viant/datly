@@ -35,6 +35,9 @@ func projectBindingErrors(cause error, status int, readerView string) (result []
 			ok = false
 		}
 	}()
+	if entries, matched := maskedComponentServerError(cause, status, readerView); matched {
+		return entries, http.StatusText(status), true
+	}
 	remaining := 128
 	branch, valid := readBindingBranch(cause, &remaining)
 	if !valid {
@@ -143,17 +146,63 @@ func readBindingBranch(err error, remaining *int) (*bindingBranch, bool) {
 	return n, true
 }
 
-// projectOpaqueVerifier uses only one explicit transport owner directly above
-// the terminal recorded by the same bounded parse. No inherited diagnostic
-// status, text, nested owner or verifier method is authority for this exception.
-func (n *bindingBranch) projectOpaqueVerifier(status int, readerView string) ([]*legacy.Error, string, bool) {
-	if readerView == "" || status < 400 || status >= 500 {
-		return nil, "", false
+// BindingFailureMessage projects only typed binding failures for transports
+// without a declared error envelope. It never uses private diagnostic text.
+func BindingFailureMessage(cause error, status int) (message string, ok bool) {
+	defer func() {
+		if recover() != nil {
+			message, ok = "", false
+		}
+	}()
+	if status < 400 || status >= 500 {
+		return "", false
+	}
+	remaining := 128
+	branch, valid := readBindingBranch(cause, &remaining)
+	if !valid || branch.hasNominal {
+		return "", false
+	}
+	if branch.hasVerifier {
+		_, _, message, ok = branch.opaqueVerifierOwner(status)
+		return message, ok
+	}
+	// Only transparent wrappers may precede a binding chain. Once ownership
+	// starts, each ancestor must directly own the next binding failure.
+	for branch != nil && branch.owner == nil {
+		if branch.group || branch.input != nil || len(branch.children) != 1 {
+			return "", false
+		}
+		branch = branch.children[0]
+	}
+	for branch != nil && branch.owner != nil {
+		owner := branch.owner
+		if branch.group || branch.input != nil || owner.Message != "" || (owner.Code != 0 && owner.Code != status) {
+			return "", false
+		}
+		if branch.requiredAbsence != "" {
+			if branch.code(http.StatusBadRequest) != status {
+				return "", false
+			}
+			return branch.requiredAbsence, true
+		}
+		if owner.Kind != "component" || len(branch.children) != 1 {
+			return "", false
+		}
+		branch = branch.children[0]
+	}
+	return "", false
+}
+
+// opaqueVerifierOwner shares the exact transport-owner admission used by
+// declared reader envelopes and the plain custom-handler fallback.
+func (n *bindingBranch) opaqueVerifierOwner(status int) (*bindly.BindingError, []*bindly.BindingError, string, bool) {
+	if status < 400 || status >= 500 {
+		return nil, nil, "", false
 	}
 	// Transparent wrappers may precede the entire chain, never bridge owners.
 	for n != nil && n.owner == nil {
 		if n.group || n.input != nil || n.hasNominal || n.verifier || len(n.children) != 1 {
-			return nil, "", false
+			return nil, nil, "", false
 		}
 		n = n.children[0]
 	}
@@ -161,28 +210,41 @@ func (n *bindingBranch) projectOpaqueVerifier(status int, readerView string) ([]
 	for n != nil && n.owner != nil && n.owner.Kind == "component" {
 		owner := n.owner
 		if owner.Code != 0 || owner.Message != "" || n.group || n.input != nil || len(n.children) != 1 || n.children[0].owner == nil {
-			return nil, "", false
+			return nil, nil, "", false
 		}
 		ancestors = append(ancestors, owner)
 		n = n.children[0]
 	}
 	if n == nil || n.owner == nil || n.group || n.input != nil || n.hasNominal || len(n.children) != 1 || !n.children[0].verifier {
-		return nil, "", false
+		return nil, nil, "", false
 	}
 	owner := n.owner
 	if owner.Code < 400 || owner.Code >= 500 || owner.Code != status || strings.Contains(owner.Message, "${") {
-		return nil, "", false
+		return nil, nil, "", false
 	}
 	switch owner.Kind {
 	case "header", "query", "path", "cookie", "form", "body":
 	default:
-		return nil, "", false
+		return nil, nil, "", false
 	}
 	message := http.StatusText(owner.Code)
 	if strings.TrimSpace(owner.Message) != "" {
 		message = owner.Message
 	}
 	if strings.TrimSpace(message) == "" {
+		return nil, nil, "", false
+	}
+	return owner, ancestors, message, true
+}
+
+// projectOpaqueVerifier retains reader owner/detail semantics while sharing
+// only safe message admission with the custom-handler fallback.
+func (n *bindingBranch) projectOpaqueVerifier(status int, readerView string) ([]*legacy.Error, string, bool) {
+	if readerView == "" {
+		return nil, "", false
+	}
+	owner, ancestors, message, ok := n.opaqueVerifierOwner(status)
+	if !ok {
 		return nil, "", false
 	}
 	cause := owner.Cause

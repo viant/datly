@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"github.com/viant/datly/internal/drainowner"
+	"github.com/viant/datly/internal/readfailure"
 	"github.com/viant/datly/internal/txread"
 	"github.com/viant/datly/sql/reader/collector"
 
@@ -55,7 +56,7 @@ func (r rowRead) query(ctx context.Context, q rowQuery) (err error) {
 	if groupErr != nil {
 		return groupErr
 	}
-	options := r.options
+	options := append(append([]sqlxread.Option(nil), r.options...), sqlxread.WithSourceErrorProvenance())
 	if grouped {
 		options = append(append([]sqlxread.Option(nil), options...), sqlxread.WithCleanupErrorProvenance(), sqlxread.WithRetry(sqlxread.RetryPolicy{}))
 	}
@@ -141,6 +142,7 @@ func (r rowRead) query(ctx context.Context, q rowQuery) (err error) {
 			}
 			return nil
 		}, q.query.Args...)
+		err = readfailure.Capture(err, q.read.metric.View)
 		sampleQuery()
 		// These typed cache-only outcomes occur before any database fallback.
 		if r.cacheOnly && (errors.Is(err, cache.ErrMiss) || errors.Is(err, cache.ErrLookupUnsupported)) {

@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/viant/datly/internal/readfailure"
 	"github.com/viant/datly/spec"
 	"github.com/viant/x/shape"
 	legacyresponse "github.com/viant/xdatly/handler/response"
@@ -250,6 +251,10 @@ func (p *Plan) ErrorEnvelopeWithCause(message string, statusCode int, cause erro
 	readerView := p.errorEnvelope.readerView
 	if readerView == "" {
 		readerView = sourceReaderView(cause)
+	}
+	if diagnostic, ok := readfailure.Message(cause, statusCode, readerView); ok {
+		value, err := p.errorEnvelope.fresh(diagnostic, []string{diagnostic})
+		return value, true, err
 	}
 	details, projectedMessage, ok := projectBindingErrors(cause, statusCode, readerView)
 	if !ok {
