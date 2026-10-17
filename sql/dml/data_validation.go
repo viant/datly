@@ -29,6 +29,12 @@ type dataValidation struct {
 }
 
 func (v dataValidation) Validate(ctx context.Context, value any, options ...any) (*xhandler.Validation, error) {
+	if ctx == nil {
+		return nil, fmt.Errorf("framework validation context is required")
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	owner := v.data.owner()
 	effect, err := drainowner.BeginNativeEffect(owner)
 	if err != nil {
@@ -42,6 +48,22 @@ func (v dataValidation) Validate(ctx context.Context, value any, options ...any)
 	owner.mu.Unlock()
 	if !open {
 		return nil, ErrComponentSealed
+	}
+	parents := v.data.bufferedParents()
+	if len(parents) != 0 {
+		prepared, checks, err := v.service.PrepareBufferedValidation(ctx, value, options, parents)
+		if err != nil {
+			return nil, err
+		}
+		for _, check := range checks {
+			owner.mu.Lock()
+			err = owner.registerExecutionGuardLocked(check, drainowner.NewGuardBinding(), true)
+			owner.mu.Unlock()
+			if err != nil {
+				return nil, err
+			}
+		}
+		options = prepared
 	}
 	return v.service.Validate(ctx, value, options...)
 }

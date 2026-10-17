@@ -37,6 +37,12 @@ func (d *Data) registerExecutionGuard(check func(context.Context) error, binding
 	defer owner.executionMu.Unlock()
 	owner.mu.Lock()
 	defer owner.mu.Unlock()
+	return owner.registerExecutionGuardLocked(check, binding, bound)
+}
+
+// The native validation adapter already holds both owner locks while adding
+// reference guards; share registration without re-entering executionMu.
+func (owner *Data) registerExecutionGuardLocked(check func(context.Context) error, binding *drainowner.GuardBinding, bound bool) error {
 	if failure := drainowner.ProtectedOwnerFailure(owner); failure != nil {
 		return failure
 	}
