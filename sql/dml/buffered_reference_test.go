@@ -27,6 +27,8 @@ func TestBufferedSiblingInsertReference(t *testing.T) {
 	}{
 		{name: "commit"},
 		{name: "accounting update", change: "accounting"},
+		{name: "composite update omits reference", change: "composite"},
+		{name: "same table update omits reference", change: "sameTable"},
 		{name: "batch", batch: true},
 		{name: "mixed batch", batch: true, change: "mixed", invalid: true},
 		{name: "unrelated allocated child ID", change: "childID"},
@@ -43,7 +45,7 @@ func TestBufferedSiblingInsertReference(t *testing.T) {
 			ctx := context.Background()
 			h := sqlite.New(t)
 			h.DB.SetMaxOpenConns(1)
-			if err := h.ExecStatements(ctx, "PRAGMA foreign_keys=ON", "CREATE TABLE parents(id INTEGER PRIMARY KEY, name TEXT)", "CREATE TABLE other_parents(id INTEGER PRIMARY KEY)", "CREATE TABLE children(id INTEGER PRIMARY KEY, parent_id INTEGER NOT NULL REFERENCES parents(id))"); err != nil {
+			if err := h.ExecStatements(ctx, "PRAGMA foreign_keys=ON", "CREATE TABLE parents(id INTEGER PRIMARY KEY, name TEXT, code TEXT UNIQUE DEFAULT 'seed')", "CREATE TABLE other_parents(id INTEGER PRIMARY KEY)", "CREATE TABLE children(id INTEGER PRIMARY KEY, parent_id INTEGER NOT NULL REFERENCES parents(id))", "CREATE TABLE settings(tenant INTEGER, setting INTEGER, value TEXT, PRIMARY KEY(tenant,setting))", "INSERT INTO settings VALUES(1,2,'old')"); err != nil {
 				t.Fatal(err)
 			}
 			owner := NewData(h.DB)
@@ -126,6 +128,21 @@ func TestBufferedSiblingInsertReference(t *testing.T) {
 				return
 			}
 			switch tc.change {
+			case "composite":
+				if err := second.Update("settings", &struct {
+					Tenant  int    `sqlx:"tenant,primaryKey"`
+					Setting int    `sqlx:"setting,primaryKey"`
+					Value   string `sqlx:"value"`
+				}{1, 2, "changed"}); err != nil {
+					t.Fatal(err)
+				}
+			case "sameTable":
+				if err := second.Update("parents", &struct {
+					Code string `sqlx:"code,primaryKey"`
+					Name string `sqlx:"name"`
+				}{"seed", "changed"}); err != nil {
+					t.Fatal(err)
+				}
 			case "both":
 				parent.ID = 8
 				child.ParentID = 8
@@ -164,6 +181,12 @@ func TestBufferedSiblingInsertReference(t *testing.T) {
 				t.Fatal(err)
 			}
 			h.AssertQuery(t, ctx, sqlite.Query{SQL: "SELECT COUNT(*) AS total FROM children"}, []struct{ Total int }{{1}})
+			if tc.change == "composite" {
+				h.AssertQuery(t, ctx, sqlite.Query{SQL: "SELECT value FROM settings"}, []struct{ Value string }{{"changed"}})
+			}
+			if tc.change == "sameTable" {
+				h.AssertQuery(t, ctx, sqlite.Query{SQL: "SELECT name FROM parents"}, []struct{ Name string }{{"changed"}})
+			}
 		})
 	}
 }

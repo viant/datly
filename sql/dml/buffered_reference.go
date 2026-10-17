@@ -159,6 +159,11 @@ func updatePreservesReference(payload any, column string) bool {
 				found = true
 			}
 		}
+		// A typed projection cannot assign a column absent from its mapping.
+		// This also covers same-table updates; no table-name inference is needed.
+		if matches == 0 {
+			continue
+		}
 		if matches != 1 {
 			return false
 		}
