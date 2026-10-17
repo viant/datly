@@ -3,6 +3,7 @@ package readerbuilder
 import (
 	"context"
 	"fmt"
+	"github.com/viant/datly/constant"
 	"io/fs"
 	"sort"
 	"strconv"
@@ -18,6 +19,7 @@ import (
 )
 
 type Config struct {
+	Const *constant.Values
 	// Resources is the exact authored component version's SQL resource filesystem.
 	Resources           fs.FS
 	Scope               string
@@ -97,7 +99,7 @@ func (s *Service) inspect(ctx context.Context, source string) (*Structure, []*tr
 		}
 	}
 	result, err := transcribe.NewCompiler().Compile(ctx, &transcribe.Source{
-		Scope: strings.TrimSpace(s.config.Scope), Name: name, Text: source, Types: s.config.Types, Resources: resources,
+		Const: s.config.Const, Scope: strings.TrimSpace(s.config.Scope), Name: name, Text: source, Types: s.config.Types, Resources: resources,
 	})
 	if err == nil {
 		structure.Component = result.Component.Clone()
