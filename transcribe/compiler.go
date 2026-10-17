@@ -137,28 +137,12 @@ type componentCompilation struct {
 }
 
 func prepareCompilation(ctx context.Context, source *Source) (*componentCompilation, error) {
-	authoredText := source.Text
-	source, resourcePatches, err := prepareParameterizedEmbeds(ctx, source)
+	preparation, err := prepareSourceCompilation(ctx, source)
 	if err != nil {
 		return nil, err
 	}
-	readerName, err := dql.ParseReaderRouteName(source.Text)
-	if err != nil {
-		return nil, err
-	}
-	prepared := dql.PrepareSource(source.Text)
-	authoredMap := newSourceMap(len(authoredText), resourcePatches, 0, authoredText)
-	sourceMap := newSourceMap(len(authoredText), resourcePatches, prepared.TrimPrefix, authoredText)
-	if len(prepared.Diagnostics) > 0 {
-		diagnostics := make([]*Diagnostic, 0, len(prepared.Diagnostics))
-		for _, item := range prepared.Diagnostics {
-			diagnostics = append(diagnostics, &Diagnostic{
-				Code: item.Code, Severity: SeverityError, Message: item.Message, Path: source.Path,
-				Span: Span{Start: authoredMap.Position(item.Offset), End: authoredMap.Position(item.End)},
-			})
-		}
-		return nil, &CompileError{Cause: prepared.Err(), Diagnostics: diagnostics}
-	}
+	source = preparation.apply(source)
+	prepared, sourceMap, readerName := preparation.prepared, preparation.sourceMap, preparation.readerName
 	component, err := dql.ParsePreparedComponentSource(source.Scope, source.Name, prepared)
 	// A Go-only component has package authority and no DQL overlay. Keep it
 	// on the same load/compile path without inventing an authored route.

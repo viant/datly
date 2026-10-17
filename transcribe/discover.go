@@ -186,6 +186,7 @@ func (d *Discovery) Generate(ctx context.Context, rootDir string) (*GeneratedPro
 
 type discoveryCompilation struct {
 	dependencySnapshot *dependency.Snapshot
+	pairingPackages    map[string]map[string]*bootstrap.PackageComponentSource
 	workspace          *xmodule.Workspace
 	discovery          *Discovery
 	catalog            *typecatalog.Catalog
@@ -218,7 +219,14 @@ func (c *discoveryCompilation) compileFile(ctx context.Context, file xmodule.Fil
 		ColumnRefiner:      c.discovery.ColumnRefiner,
 	}
 	var result *Result
-	if packageSource := c.packages[packageSourceIdentity(file.ImportPath, source.Name)]; packageSource != nil {
+	packageSource := c.packages[packageSourceIdentity(file.ImportPath, source.Name)]
+	if packageSource == nil {
+		packageSource, err = c.declaredPackageSource(ctx, source)
+		if err != nil {
+			return nil, fmt.Errorf("pair component source %q: %w", file.Path, err)
+		}
+	}
+	if packageSource != nil {
 		result, err = (&descriptorPackageCompilation{source: source, packageSource: packageSource, catalog: c.catalog}).compile(ctx)
 	} else {
 		result, err = NewCompiler().Compile(ctx, source)
