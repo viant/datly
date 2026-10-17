@@ -29,6 +29,18 @@ func (e *Execution) ToolResult() *schema.CallToolResult {
 			isError := true
 			return &schema.CallToolResult{Content: []schema.CallToolResultContentElem{schema.TextContent{Type: "text", Text: string(payload)}}, IsError: &isError, StructuredContent: objectPayload(payload)}
 		}
+		// Project only tool presentation; resources and the original execution
+		// retain their existing error semantics. Explicit public bodies win above.
+		if e.projectError != nil {
+			payload, applicable, err := e.projectError(e.encodingContext, status, invokeErr)
+			if err != nil {
+				return errorResult(http.StatusInternalServerError, err)
+			}
+			if applicable {
+				isError := true
+				return &schema.CallToolResult{Content: []schema.CallToolResultContentElem{schema.TextContent{Type: "text", Text: string(payload)}}, IsError: &isError, StructuredContent: objectPayload(payload)}
+			}
+		}
 		return errorResult(status, invokeErr)
 	}
 	payload, err := e.Payload()

@@ -215,6 +215,19 @@ func (c *serviceCompiler) publish(ctx context.Context, catalog *Catalog, policy 
 			encoded, err := plan.Encode(ctx, "json", value)
 			return encoded.Data, err
 		}
+	}, DeclaredError: func(target exec.ComponentTarget) invocation.ErrorProjector {
+		plan := outputs[target.Component.String()]
+		if plan == nil {
+			return nil
+		}
+		return func(ctx context.Context, status int, cause error) ([]byte, bool, error) {
+			body, applicable, err := plan.ErrorEnvelopeWithCause(exec.ErrorMessage(cause, status), status, cause)
+			if err != nil || !applicable {
+				return nil, applicable, err
+			}
+			encoded, err := plan.Encode(ctx, "json", body)
+			return encoded.Data, true, err
+		}
 	}, ErrorOutput: func(target exec.ComponentTarget) invocation.OutputEncoder {
 		plan := outputs[target.Component.String()]
 		if plan == nil || plan.NilSlicePolicy() != "empty_array" {

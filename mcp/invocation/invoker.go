@@ -18,6 +18,9 @@ import (
 // runtime owner to the protocol-neutral invocation package.
 type OutputEncoder func(context.Context, any) ([]byte, error)
 
+// ErrorProjector encodes an eligible declared error envelope without changing execution.
+type ErrorProjector func(context.Context, int, error) ([]byte, bool, error)
+
 type Config struct {
 	Invoker   exec.ComponentInvoker
 	Client    xmcp.Client
@@ -25,7 +28,8 @@ type Config struct {
 	// Output selects the component's compiled JSON presentation adapter.
 	Output func(exec.ComponentTarget) OutputEncoder
 	// ErrorOutput selects a compiled adapter for explicit public error bodies.
-	ErrorOutput func(exec.ComponentTarget) OutputEncoder
+	ErrorOutput   func(exec.ComponentTarget) OutputEncoder
+	DeclaredError func(exec.ComponentTarget) ErrorProjector
 }
 
 type Request struct {
@@ -36,15 +40,16 @@ type Request struct {
 }
 
 type Invoker struct {
-	component   exec.ComponentInvoker
-	mcp         xmcp.Context
-	authorize   func(context.Context, exec.ComponentTarget) error
-	output      func(exec.ComponentTarget) OutputEncoder
-	errorOutput func(exec.ComponentTarget) OutputEncoder
+	component     exec.ComponentInvoker
+	mcp           xmcp.Context
+	authorize     func(context.Context, exec.ComponentTarget) error
+	output        func(exec.ComponentTarget) OutputEncoder
+	errorOutput   func(exec.ComponentTarget) OutputEncoder
+	declaredError func(exec.ComponentTarget) ErrorProjector
 }
 
 func New(config Config) *Invoker {
-	return &Invoker{component: config.Invoker, mcp: &requestContext{client: config.Client}, authorize: config.Authorize, output: config.Output, errorOutput: config.ErrorOutput}
+	return &Invoker{component: config.Invoker, mcp: &requestContext{client: config.Client}, authorize: config.Authorize, output: config.Output, errorOutput: config.ErrorOutput, declaredError: config.DeclaredError}
 }
 
 func (i *Invoker) Execute(ctx context.Context, request Request) (*Execution, *jsonrpc.Error) {
@@ -90,7 +95,11 @@ func (i *Invoker) Execute(ctx context.Context, request Request) (*Execution, *js
 	if i.errorOutput != nil {
 		encodeError = i.errorOutput(request.Target)
 	}
-	return &Execution{encodeErrorOutput: encodeError, value: result, err: err, context: execContext, selection: exec.SelectedOutputFields(ctx, result), encodeOutput: encode, encodingContext: ctx}, nil
+	var projectError ErrorProjector
+	if i.declaredError != nil {
+		projectError = i.declaredError(request.Target)
+	}
+	return &Execution{projectError: projectError, encodeErrorOutput: encodeError, value: result, err: err, context: execContext, selection: exec.SelectedOutputFields(ctx, result), encodeOutput: encode, encodingContext: ctx}, nil
 }
 
 func newExecutionContext(ctx context.Context, request Request) *xexec.Context {
