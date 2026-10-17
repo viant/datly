@@ -12,9 +12,11 @@ import (
 	"github.com/viant/datly/bootstrap"
 	fixture "github.com/viant/datly/bootstrap/testdata/selectorcompanion"
 	"github.com/viant/datly/internal/selectorcompanion"
+	"github.com/viant/datly/internal/selectorcompanion/model"
 	compiler "github.com/viant/datly/runtime/handler/compiler"
 	provider "github.com/viant/datly/runtime/handler/provider"
 	"github.com/viant/datly/spec"
+	"github.com/viant/x"
 	xhandler "github.com/viant/xdatly/handler"
 )
 
@@ -219,4 +221,30 @@ func (b *delegatingBinder) Bind(_ context.Context, target any) error {
 }
 func (b *delegatingBinder) Lookup(context.Context, xhandler.ValueKey) (any, bool, error) {
 	return b.input, true, b.failure
+}
+
+func TestSelectorCompanionMalformedReflectedAssociationFailsClosed(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		holder reflect.Type
+		field  string
+	}{
+		{"scalar holder", reflect.TypeFor[int](), "ID"},
+		{"scalar component field", reflect.TypeFor[fixture.Input](), "ID"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			component := runtimeComponent(t)
+			descriptor, err := component.SelectorCompanion.Companion()
+			if err != nil {
+				t.Fatal(err)
+			}
+			component.SelectorCompanion, err = model.New(x.NewType(tc.holder), tc.field, descriptor)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err = selectorcompanion.Select(component, reflect.TypeFor[fixture.Input]()); err == nil {
+				t.Fatal("malformed reflected association accepted")
+			}
+		})
+	}
 }

@@ -9,16 +9,19 @@ import (
 	"github.com/viant/bindly"
 	"github.com/viant/bindly/xform/conv"
 	"github.com/viant/datly/constant"
+	"github.com/viant/datly/internal/selectorcompanion"
 	runtimecompiler "github.com/viant/datly/runtime/handler/compiler"
 	"github.com/viant/datly/spec"
 	sqltemplate "github.com/viant/datly/sql/template"
 	"github.com/viant/datly/tag"
 	"github.com/viant/datly/transcribe/column"
 	gen "github.com/viant/datly/transcribe/generate"
+	"github.com/viant/datly/transcribe/internal/discoverytype"
 	"github.com/viant/datly/transcribe/internal/link"
 	"github.com/viant/datly/typecatalog"
 	"github.com/viant/sqlx"
 	"github.com/viant/toolbox"
+	"github.com/viant/x"
 	xshape "github.com/viant/x/shape"
 )
 
@@ -46,7 +49,39 @@ func (c *discoveryInputCompiler) compile() (*column.TemplateInput, error) {
 	if err != nil {
 		return nil, err
 	}
-	inputType, err := c.inputType()
+	parameters := c.component.Parameters
+	var selectedInput reflect.Type
+	if c.component.SelectorCompanion != nil {
+		if c.resolver == nil || c.component.Settings == nil {
+			return nil, fmt.Errorf("transcribe column: selector companion requires exact selected contracts")
+		}
+		input, err := c.resolver.Descriptor(c.component.Settings.InputType)
+		if err != nil {
+			return nil, err
+		}
+		output, err := c.resolver.Descriptor(c.component.Settings.OutputType)
+		if err != nil {
+			return nil, err
+		}
+		selected, err := selectorcompanion.SelectContracts(c.component, input, output, c.resolver.Descriptor)
+		if err != nil {
+			return nil, fmt.Errorf("transcribe column: %w", err)
+		}
+		selectedInput, err = discoveryContractType(input, c.resolver, map[string]reflect.Type{}, map[string]bool{})
+		if err != nil {
+			return nil, err
+		}
+		parameters = nil
+		for _, p := range c.component.Parameters {
+			if !selected.Contains(p) {
+				parameters = append(parameters, p)
+			}
+		}
+	}
+	inputType := selectedInput
+	if inputType == nil {
+		inputType, err = c.inputType()
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -61,7 +96,7 @@ func (c *discoveryInputCompiler) compile() (*column.TemplateInput, error) {
 	}
 	projected := make([]bindly.ProjectionField, 0, inputType.NumField())
 	variables := make([]sqltemplate.Variable, 0, inputType.NumField())
-	for _, param := range spec.EffectiveParameters(c.component.Parameters) {
+	for _, param := range spec.EffectiveParameters(parameters) {
 		if param == nil || param.EmitOutput || strings.EqualFold(strings.TrimSpace(param.Source.Kind), "output") {
 			continue
 		}
@@ -167,7 +202,7 @@ func (c *discoveryInputCompiler) compile() (*column.TemplateInput, error) {
 	if err != nil {
 		return nil, fmt.Errorf("transcribe column: compile input projection: %w", err)
 	}
-	resolver := discoveryParameterResolver(projection.Resolver(value.Addr().Interface()), inputDiscoveryTypes(inputType, c.component.Parameters, fieldIndex))
+	resolver := discoveryParameterResolver(projection.Resolver(value.Addr().Interface()), inputDiscoveryTypes(inputType, parameters, fieldIndex))
 	return &column.TemplateInput{Const: constants, Value: value, Variables: variables, ParameterResolver: resolver}, nil
 }
 
@@ -307,4 +342,44 @@ func indirectInputType(inputType reflect.Type) reflect.Type {
 		inputType = inputType.Elem()
 	}
 	return inputType
+}
+
+// discoveryContractType materializes only an already validated selected contract.
+// A structural source representation is compile-local, never proof of identity.
+func discoveryContractType(descriptor *x.Type, resolver *typecatalog.Resolver, cache map[string]reflect.Type, building map[string]bool) (reflect.Type, error) {
+	if descriptor == nil {
+		return nil, fmt.Errorf("transcribe column: selected input declaration missing")
+	}
+	if descriptor.Type != nil {
+		return descriptor.Type, nil
+	}
+	key := descriptor.Key()
+	if typ := cache[key]; typ != nil {
+		return typ, nil
+	}
+	if building[key] {
+		return nil, fmt.Errorf("transcribe column: recursive source contract %s", key)
+	}
+	building[key] = true
+	defer delete(building, key)
+	runtime := xshape.Runtime{Lookup: func(name string) (reflect.Type, error) {
+		if standard := discoverytype.StandardType(name); standard != nil {
+			return standard, nil
+		}
+		linked, err := resolver.Type(name)
+		if err != nil || linked != nil {
+			return linked, err
+		}
+		nested, err := resolver.Descriptor(name)
+		if err != nil {
+			return nil, err
+		}
+		return discoveryContractType(nested, resolver, cache, building)
+	}}
+	typ, err := discoverytype.Materialize(descriptor, resolver.Descriptor, runtime)
+	if err != nil {
+		return nil, err
+	}
+	cache[key] = typ
+	return typ, nil
 }
