@@ -906,6 +906,10 @@ func appendViewTagsWithMatch(fieldTag string, view *spec.View, match string) (st
 	if view == nil {
 		return fieldTag, nil
 	}
+	// Literal SQL-control zero cannot round-trip through legacy unlimited-zero view tags.
+	if source := view.RuntimeSource(); source != nil && source.Controls != nil && source.Controls.Limit != nil && *source.Controls.Limit == 0 {
+		return "", fmt.Errorf("view %s: literal SQL-control limit zero cannot be represented as a view tag; author SQL LIMIT 0 instead", view.CanonicalName())
+	}
 	fieldTag = withoutStructTags(fieldTag, tag.ViewName, tag.SQLName)
 	metadata := tag.View{Name: view.CanonicalName(), TypeName: view.TypeName, Dest: view.Dest, EntityHooks: view.EntityHooks, WriterIdentityPolicy: view.WriterIdentityPolicy, WriterActionPolicy: view.WriterActionPolicy, QueueContract: view.QueueContract, Reconciliation: view.Reconciliation.Clone(), InsertValidationPresence: view.InsertValidationPresence, RootNullPolicy: view.RootNullPolicy, NestedNullPolicy: view.NestedNullPolicy, RowLock: view.RowLock, RowLockOrder: view.RowLockOrder, OnDeleteNotFound: view.OnDeleteNotFound, MutationPredicateGroup: view.MutationPredicateGroup, Batch: view.BatchSize,
 		BatchConcurrency: view.BatchConcurrency,

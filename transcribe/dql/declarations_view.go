@@ -87,7 +87,12 @@ func materializeDeclaredViews(params []*spec.Parameter, options map[string]decla
 		}
 		if viewOptions.limit != nil {
 			limit := *viewOptions.limit
-			view.Source.Controls = &spec.ViewControls{Limit: &limit}
+			// Legacy view metadata zero means unlimited; direct SQL controls zero remains literal.
+			if limit == 0 {
+				view.Selector = &spec.Selector{NoLimit: true}
+			} else {
+				view.Source.Controls = &spec.ViewControls{Limit: &limit}
+			}
 		}
 		for _, authored := range viewOptions.columns {
 			if authored == nil {
