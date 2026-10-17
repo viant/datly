@@ -137,11 +137,10 @@ func (c *entityHookCompilation) apply(record *plan.RecordPlan, parent string) er
 }
 
 // writeEligibilityAllowed derives admission from the compiled role, never an
-// authoring switch. An auxiliary root or any writable descendant is outside
-// the initial eligibility contract, including writable children behind an
-// auxiliary relation. Missing or unknown write policy also fails closed.
+// authoring switch. The runtime permits linked direct writable leaf children;
+// deeper writes and missing or unknown root policies remain unsupported.
 func writeEligibilityAllowed(record *plan.RecordPlan, root bool) bool {
-	if record == nil || !root || record.Auxiliary || record.Entity == nil || record.Entity.HooksComponent || len(record.SelfRelations) != 0 || hasWritableDescendant(record) || len(record.Write.Allowed) == 0 || record.Write.DeleteMarker.Field != "" {
+	if record == nil || !root || record.Auxiliary || record.Entity == nil || record.Entity.HooksComponent || len(record.SelfRelations) != 0 || !writeEligibilityChildrenAllowed(record) || len(record.Write.Allowed) == 0 || record.Write.DeleteMarker.Field != "" {
 		return false
 	}
 	for _, action := range record.Write.Allowed {
@@ -155,6 +154,35 @@ func writeEligibilityAllowed(record *plan.RecordPlan, root bool) bool {
 		}
 	}
 	return true
+}
+
+// Keep transcription aligned with the runtime eligibility topology. Suppressing
+// a root write never suppresses its children; runtime validates their persisted
+// parent identity before queueing them.
+func writeEligibilityChildrenAllowed(root *plan.RecordPlan) bool {
+	active := map[*plan.RecordPlan]bool{}
+	var visit func(*plan.RecordPlan) bool
+	visit = func(record *plan.RecordPlan) bool {
+		if record == nil || active[record] || len(record.SelfRelations) != 0 {
+			return false
+		}
+		active[record] = true
+		defer delete(active, record)
+		for _, relation := range record.Relations {
+			if relation == nil || relation.Child == nil {
+				return false
+			}
+			child := relation.Child
+			if !child.Auxiliary && (record != root || child == root || len(relation.Links) == 0 || len(child.Relations) != 0) {
+				return false
+			}
+			if !visit(child) {
+				return false
+			}
+		}
+		return true
+	}
+	return visit(root)
 }
 
 // refreshLocalTypes reads the authored destination on regeneration, including

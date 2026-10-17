@@ -169,7 +169,7 @@ func (c EntityHookCompiler) Compile(request EntityHookRequest) (spec.TypeRef, er
 			continue
 		}
 		if !request.WriteEligibilityAllowed || request.Component || parent != "github.com/viant/xdatly/handler.NoParent" || strings.TrimSpace(request.Input) == "" {
-			return spec.TypeRef{}, fmt.Errorf("entity hook %s.WriteEligible requires a physical INSERT/UPDATE root without writable descendants and canonical input", resolved.Identity)
+			return spec.TypeRef{}, fmt.Errorf("entity hook %s.WriteEligible requires a physical INSERT/UPDATE root with supported child topology and canonical input", resolved.Identity)
 		}
 		if _, err := (xshape.Resolver{}).Canonical(request.Input); err != nil {
 			return spec.TypeRef{}, err
