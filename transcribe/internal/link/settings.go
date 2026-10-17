@@ -99,6 +99,9 @@ func (l *settingsLoader) mergeGeneration(base, authored *spec.GenerationSettings
 	} else {
 		base = base.Clone()
 	}
+	if authored.WriterOmitEmpty {
+		base.WriterOmitEmpty = true
+	}
 	if len(authored.SourceMembers) > 0 {
 		base.SourceMembers = append([]spec.SourceMember(nil), authored.SourceMembers...)
 	}
@@ -122,6 +125,16 @@ func (l *settingsLoader) mergeGeneration(base, authored *spec.GenerationSettings
 		}
 		for role, file := range authored.SupportFiles {
 			base.SupportFiles[role] = file
+		}
+	}
+	// SQL destinations are authored generation settings just like support files.
+	// Keep linked defaults while allowing DQL to retain its original SQL layout.
+	if len(authored.SQLFiles) > 0 {
+		if base.SQLFiles == nil {
+			base.SQLFiles = map[string]string{}
+		}
+		for role, file := range authored.SQLFiles {
+			base.SQLFiles[role] = file
 		}
 	}
 	if base.IsZero() {
