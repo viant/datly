@@ -18,7 +18,7 @@ func resolveRowColumn(shape *xshape.Type, column *spec.Column) (*xshape.Resoluti
 		return nil, err
 	}
 	var selected *xshape.Field
-	var selectedSource string
+	var selectedSource, selectedPhysicalSource string
 	for i := range fields {
 		field := &fields[i]
 		sqlTag := sqlxio.ParseTag(field.Tag)
@@ -47,15 +47,16 @@ func resolveRowColumn(shape *xshape.Type, column *spec.Column) (*xshape.Resoluti
 		}
 		selected = field
 		selectedSource = sqlTag.Name()
-		if selectedSource == "" {
-			selectedSource = metadata.Source
-		}
+		selectedPhysicalSource = metadata.Source
 	}
 	if selected == nil {
 		return nil, fmt.Errorf("reader metadata column %s has no declared Go field or native alias", column.Name)
 	}
-	if column.Source != "" && selectedSource != "" && !strings.EqualFold(column.Source, selectedSource) {
-		return nil, fmt.Errorf("reader metadata column %s source %s differs from native source %s", column.Name, column.Source, selectedSource)
+	// Bootstrap metadata may retain the SQLX result name while fresh discovery
+	// reports the declared physical source. Both belong to this selected field.
+	if column.Source != "" && (selectedSource != "" || selectedPhysicalSource != "") &&
+		!strings.EqualFold(column.Source, selectedSource) && !strings.EqualFold(column.Source, selectedPhysicalSource) {
+		return nil, fmt.Errorf("reader metadata column %s source %s differs from native sources %s and %s", column.Name, column.Source, selectedSource, selectedPhysicalSource)
 	}
 	return shape.ResolveField(selected.Name)
 }
