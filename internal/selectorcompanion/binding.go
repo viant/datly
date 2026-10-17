@@ -13,6 +13,7 @@ import (
 	"github.com/viant/datly/spec"
 	"github.com/viant/datly/tag"
 	"github.com/viant/x"
+	xshape "github.com/viant/x/shape"
 	xhandler "github.com/viant/xdatly/handler"
 	xmcp "github.com/viant/xdatly/handler/mcp"
 )
@@ -41,21 +42,12 @@ func Select(component *spec.Component, input reflect.Type) (*Selection, error) {
 	if holder.Type == nil || descriptor.Type == nil {
 		return nil, fmt.Errorf("selector companion requires linked runtime contracts")
 	}
-	contract, err := Resolve(holder, a.Field(), func(name string) (*x.Type, error) {
-		if name == descriptor.Key() {
-			return descriptor, nil
-		}
-		return nil, nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	if contract == nil || contract.Descriptor.Type != descriptor.Type || holder.PkgPath != component.Key.Scope || component.Key.Kind != spec.KindComponent {
-		return nil, fmt.Errorf("selector companion association mismatch")
+	if holder.Type.Kind() != reflect.Struct {
+		return nil, fmt.Errorf("selector companion holder must be a struct")
 	}
 	field, ok := holder.Type.FieldByName(a.Field())
-	if !ok {
-		return nil, fmt.Errorf("selector holder field missing")
+	if !ok || field.Type.Kind() != reflect.Struct {
+		return nil, fmt.Errorf("selector holder component field must be a struct")
 	}
 	in, ok := field.Type.FieldByName("Inout")
 	if !ok {
@@ -64,14 +56,34 @@ func Select(component *spec.Component, input reflect.Type) (*Selection, error) {
 	if !ok || in.Type != input {
 		return nil, fmt.Errorf("selector companion canonical input mismatch")
 	}
-	metadata, present, err := tag.ParseComponent(field.Tag)
-	if err != nil || !present || component.Key.Name != metadata.Name || component.Name != metadata.Name || len(component.Routes) != 1 || component.Routes[0] == nil || component.Routes[0].Method != "GET" || component.Routes[0].Path != metadata.Path || component.Routes[0].Handler != "" {
-		return nil, fmt.Errorf("selector companion current route mismatch")
+	out, ok := field.Type.FieldByName("Output")
+	if !ok {
+		return nil, fmt.Errorf("selector companion canonical output missing")
 	}
-	if s := component.Settings; s != nil && (s.Mutation != "" || s.SequenceStrategy != "" || s.ComponentCallPolicy != "" || s.IndependentChildTransactions || len(s.ProtectedFlushTables) != 0 || s.WarmupTarget != nil) {
-		return nil, fmt.Errorf("selector companion current execution owner mismatch")
+	contract, err := CheckContracts(component, x.NewType(input), x.NewType(out.Type), nil)
+	if err != nil {
+		return nil, err
 	}
-	result := &Selection{Association: a, Type: descriptor.Type}
+	if contract.Descriptor.Type != descriptor.Type {
+		return nil, fmt.Errorf("selector companion association mismatch")
+	}
+	return selectCanonical(component, contract)
+}
+
+// SelectContracts selects only exact canonical pointers after source-capable I/O validation.
+func SelectContracts(component *spec.Component, input, output *x.Type, lookup xshape.Lookup) (*Selection, error) {
+	if component == nil || component.SelectorCompanion == nil {
+		return nil, nil
+	}
+	contract, err := CheckContracts(component, input, output, lookup)
+	if err != nil {
+		return nil, err
+	}
+	return selectCanonical(component, contract)
+}
+
+func selectCanonical(component *spec.Component, contract *Contract) (*Selection, error) {
+	result := &Selection{Association: component.SelectorCompanion, Type: contract.Descriptor.Type}
 	candidates := map[string]*spec.Parameter{}
 	for _, p := range spec.EffectiveParameters(component.Parameters) {
 		if p == nil || p.EmitOutput || p.Source.Kind == "output" {
@@ -83,9 +95,6 @@ func Select(component *spec.Component, input reflect.Type) (*Selection, error) {
 		candidates[p.Name] = p
 	}
 	for _, f := range contract.Fields {
-		if _, ok := input.FieldByName(f.Name); ok {
-			return nil, fmt.Errorf("selector companion duplicates public input %s", f.Name)
-		}
 		p := candidates[f.Name]
 		if p == nil {
 			return nil, fmt.Errorf("selector companion canonical parameter %s missing", f.Name)

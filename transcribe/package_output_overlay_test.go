@@ -106,7 +106,7 @@ func TestPackageOverlayNativeGenerationReloadRetainsControls(t *testing.T) {
 func TestReaderMetadataNativeNoSelectorDQLRefresh(t *testing.T) {
 	testPackageOverlayNativeGenerationReload(t, true)
 }
-func testPackageOverlayNativeGenerationReload(t *testing.T, withoutSelector bool) {
+func testPackageOverlayNativeGenerationReload(t *testing.T, withoutSelector bool, generatedOrigin ...bool) {
 	root := t.TempDir()
 	(testharness.GeneratedModule{Path: "github.com/viant/datly/transcribe/testdata"}).Write(t, root)
 	for _, path := range []string{"fixture.go", "holder.go", "sql/records.sql", "sql/metric.sql"} {
@@ -239,6 +239,9 @@ func testPackageOverlayNativeGenerationReload(t *testing.T, withoutSelector bool
 		require.Equal(t, string(original), string(actual), "authored bytes changed: %s", path)
 	}
 
+	if len(generatedOrigin) > 0 && generatedOrigin[0] {
+		checkGeneratedSourceOutputRefresh(t, root, text)
+	}
 	before := map[string]string{}
 	for _, file := range generated.Result.Files {
 		data, err := os.ReadFile(file.Path)

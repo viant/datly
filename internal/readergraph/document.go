@@ -357,7 +357,7 @@ func CheckRows(d *Document, lookup xshape.Lookup) error {
 			if column == nil {
 				return fmt.Errorf("nil metadata column")
 			}
-			field, err := shape.ResolveField(column.Name)
+			field, err := resolveRowColumn(shape, column)
 			if err != nil {
 				return err
 			}
