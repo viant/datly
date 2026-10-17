@@ -115,6 +115,12 @@ func (c *artifactCompiler) compile() (*Artifact, error) {
 	if err = input.Const.Validate(component, c.lookupType); err != nil {
 		return nil, err
 	}
+	// Retain the admitted graph for reader validation; runtime binding defaults
+	// below are instance values, not changes to the authored reader contract.
+	var checkedReader *spec.Component
+	if component.ReaderGraph != nil {
+		checkedReader = component.Clone()
+	}
 	// Linked contracts can declare constants absent from the incoming spec.
 	// Apply the frozen instance once, after their declarations are validated.
 	if input.Const != nil {
@@ -177,7 +183,7 @@ func (c *artifactCompiler) compile() (*Artifact, error) {
 		if !input.HandlerOwnedOutput {
 			readerPlan, err = readercompiler.Compile(readercompiler.Input{
 				CodecFactory: factory,
-				Component:    input.Component, InputType: input.InputType, OutputType: input.OutputType,
+				Component:    input.Component, AuthoredComponent: checkedReader, IdentifierProducts: input.IdentifierProducts, InputType: input.InputType, OutputType: input.OutputType,
 				Bindings: compiledInput.Bindings, SelectorCompanion: compiledInput.SelectorPlan,
 				Predicate: predicate, TypeLookup: c.lookupType,
 				Const: input.Const, DirectViewField: input.DirectViewField, Resources: input.Resources,
@@ -188,7 +194,7 @@ func (c *artifactCompiler) compile() (*Artifact, error) {
 		}
 		viewDependencies, err = readercompiler.CompileViewDependencies(readercompiler.Input{
 			CodecFactory: factory,
-			Component:    input.Component, InputType: input.InputType, OutputType: input.OutputType,
+			Component:    input.Component, AuthoredComponent: checkedReader, IdentifierProducts: input.IdentifierProducts, InputType: input.InputType, OutputType: input.OutputType,
 			Bindings:  compiledInput.Bindings,
 			Predicate: predicate, TypeLookup: c.lookupType,
 			Const: input.Const, Resources: input.Resources,

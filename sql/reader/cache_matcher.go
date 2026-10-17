@@ -3,6 +3,7 @@ package reader
 import (
 	"context"
 	"fmt"
+	"github.com/viant/xdatly/handler/runtimecache"
 	"reflect"
 	"strings"
 
@@ -16,11 +17,14 @@ import (
 )
 
 type rootCacheMatcher struct {
-	session   *Session
-	input     reflect.Value
-	binder    xhandler.Binder
-	selectors invocationSelectors
-	query     *cache.ParmetrizedQuery
+	owner         any
+	cacheIdentity runtimecache.Identity
+	snapshot      *runtimecache.Snapshot
+	session       *Session
+	input         reflect.Value
+	binder        xhandler.Binder
+	selectors     invocationSelectors
+	query         *cache.ParmetrizedQuery
 }
 
 func (m rootCacheMatcher) apply(ctx context.Context, connection dsql.Connection) error {
@@ -33,7 +37,35 @@ func (m rootCacheMatcher) apply(ctx context.Context, connection dsql.Connection)
 	if err != nil {
 		return err
 	}
-	settings, name, values, err := m.selectWarmup(warmups)
+	participated, denied, column, parameter, selectedValues, err := m.snapshot.Selection(m.owner, m.cacheIdentity)
+	if err != nil {
+		return err
+	}
+	if denied {
+		return nil
+	}
+	var settings *spec.CacheWarmupSettings
+	var name string
+	var values []any
+	if participated {
+		for _, candidate := range warmups {
+			if candidate != nil && strings.TrimSpace(candidate.IndexColumn) == column {
+				candidateParameter := candidate.IndexParameter
+				if candidateParameter == "" {
+					candidateParameter = candidate.IndexColumn
+				}
+				if candidateParameter != parameter || settings != nil {
+					return fmt.Errorf("cache selection does not uniquely match canonical warmup")
+				}
+				settings, name, values = candidate, parameter, selectedValues
+			}
+		}
+		if settings == nil {
+			return fmt.Errorf("cache selection has no canonical warmup")
+		}
+	} else {
+		settings, name, values, err = m.selectWarmup(warmups)
+	}
 	if err != nil || settings == nil {
 		return err
 	}
@@ -72,8 +104,14 @@ func (m rootCacheMatcher) apply(ctx context.Context, connection dsql.Connection)
 	// opt-in predicate validates its sealed scope and retained values. Ordinary
 	// input preparation, actual/fallback SQL and other predicates stay filtered.
 	identityCtx := ctx
+	if participated {
+		identityCtx, err = runtimecache.EnterIdentity(ctx, m.owner, m.snapshot, m.cacheIdentity, prepared.Input, name, column, values)
+		if err != nil {
+			return err
+		}
+	}
 	if len(values) > 0 {
-		identityCtx = dexec.WithCacheIdentity(ctx, name, values)
+		identityCtx = dexec.WithCacheIdentity(identityCtx, name, values)
 	}
 	identity, err := builder.NewBuilder().CacheSQL(identityCtx,
 		builder.WithBuilderComponent(m.session.Component), builder.WithBuilderView(view), builder.WithBuilderCriteriaCompiler(root.Criteria),

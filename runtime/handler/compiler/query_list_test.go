@@ -169,7 +169,7 @@ func TestDefaultPrimitivePathListsHTTPAndMCP(t *testing.T) {
 		wire    string
 		want    []int
 		invalid bool
-	}{{"31", []int{31}, false}, {"31,32,31", []int{31, 32, 31}, false}, {"1,,2", nil, true}, {"no", nil, true}, {"999999999999999999999999", nil, true}, {"", nil, true}} {
+	}{{"31", []int{31}, false}, {"9.00126489e+08", []int{900126489}, false}, {"1e2,2.9,-2.9", []int{100, 2, -2}, false}, {"31,32,31", []int{31, 32, 31}, false}, {"1,,2", nil, true}, {"no", nil, true}, {"1e999", nil, true}, {"", nil, true}} {
 		t.Run("HTTP "+tc.wire, func(t *testing.T) {
 			values := requestprovider.NewValues(requestprovider.WithPathParams(map[string]string{"ids": tc.wire}))
 			defer values.Close()

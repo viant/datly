@@ -15,8 +15,14 @@ import (
 // prepared in a locally owned transaction. Preparation errors are supplied by
 // the engine before this once-only callback.
 func finalizeBeforeCompletion(ctx context.Context, result any, handlerErr error) (any, error) {
+	return finalizeBeforeCompletionObserved(ctx, result, handlerErr, nil)
+}
+func finalizeBeforeCompletionObserved(ctx context.Context, result any, handlerErr error, observe func(error, error)) (any, error) {
 	if finalizer, ok := result.(xhandler.ErrorFinalizer); ok {
 		finalizeErr := invokeErrorFinalizer(ctx, finalizer, handlerErr)
+		if observe != nil {
+			observe(handlerErr, finalizeErr)
+		}
 		switch {
 		case handlerErr != nil && finalizeErr != nil:
 			joined := errors.Join(handlerErr, finalizeErr)

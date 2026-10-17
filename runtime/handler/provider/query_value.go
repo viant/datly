@@ -1,7 +1,6 @@
 package provider
 
-// TypedQueryValue carries an already decoded invocation value. It separates
-// typed report filters from HTTP query occurrences that still need CSV parsing.
-type TypedQueryValue struct {
-	Value any
-}
+import xhandler "github.com/viant/xdatly/handler"
+
+// TypedQueryValue retains the public trusted query value's concrete identity.
+type TypedQueryValue = xhandler.TypedQueryValue

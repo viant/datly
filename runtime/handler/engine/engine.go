@@ -7,11 +7,13 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"sync/atomic"
 
 	"github.com/viant/bindly"
 	"github.com/viant/bindly/locator"
 	dexec "github.com/viant/datly/exec"
 	"github.com/viant/datly/internal/drainowner"
+	"github.com/viant/datly/internal/responsebinding"
 	rhandler "github.com/viant/datly/runtime/handler"
 	"github.com/viant/datly/runtime/handler/custom"
 	handlerprovider "github.com/viant/datly/runtime/handler/provider"
@@ -75,6 +77,38 @@ func New() *Engine { return &Engine{} }
 func (e *Engine) Execute(ctx context.Context, request Request) (actual any, failure error) {
 	callContext := ctx
 	readerCall := claimReaderCall(ctx)
+	// Match token creation, including absent ownership for independent custom callers.
+	// A typed nil scope would not equal the token's nil interface.
+	responseOwner := ResponseBindingOwner(ctx)
+	responseRoute := ""
+	if request.Input != nil {
+		responseRoute = request.Input.Route().String()
+	}
+	ctx, responseToken := responsebinding.Claim(ctx, responseOwner, responseRoute, request.OutputType)
+	parentChildFailure, _ := ctx.Value(responsebinding.ChildKey{}).(func())
+	var childFailed atomic.Bool
+	if responseToken != nil || parentChildFailure != nil {
+		ctx = context.WithValue(ctx, responsebinding.ChildKey{}, func() { childFailed.Store(true) })
+	}
+	defer func() {
+		if (failure != nil || childFailed.Load()) && parentChildFailure != nil {
+			parentChildFailure()
+		}
+	}()
+	var ownFinalizerErr error
+	ownFinalizerCalls := 0
+	recordFinalizer := func(incoming, raw error) {
+		ownFinalizerCalls++
+		if incoming == nil {
+			ownFinalizerErr = raw
+		}
+	}
+	finalizeOwn := func(ctx context.Context, result any, incoming error) (any, error) {
+		if _, ok := result.(xhandler.ErrorFinalizer); ok {
+			return finalizeBeforeCompletionObserved(ctx, result, incoming, recordFinalizer)
+		}
+		return finalizeBeforeCompletion(ctx, result, incoming)
+	}
 	readerResult := false
 	readerRetired := false
 	var readerRetiredCause error
@@ -351,7 +385,7 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 				}
 				if !ownsData || !data.protectedLifetime() {
 					outputFinalized = true
-					result, operationErr = finalizeBeforeCompletion(ctx, result, operationErr)
+					result, operationErr = finalizeOwn(ctx, result, operationErr)
 				}
 			}
 		}
@@ -377,7 +411,7 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 					}
 				}
 				outputFinalized = true
-				result, operationErr = finalizeBeforeCompletion(ctx, result, operationErr)
+				result, operationErr = finalizeOwn(ctx, result, operationErr)
 			}
 			data.finishOutcome(completionFrame, invocation, result, operationErr)
 		}
@@ -425,11 +459,16 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 		}
 		return result, notifyCompletion(completionErr)
 	}
+	resolveInheritedCompanion := false
 	if request.BufferedComponentCalls && data != nil && (data.source != nil || data.parent != nil) {
 		if selectors != nil {
-			return finish(nil, fmt.Errorf("selector companion does not support buffered parent data preparation"))
-		}
-		if _, err := data.resolve(ctx); err != nil {
+			if data.parent == nil || data.source != nil || ownsData {
+				return finish(nil, fmt.Errorf("selector companion does not support buffered parent data preparation"))
+			}
+			// An ordinary reader borrows its caller's owner. Validate composed
+			// selector providers before resolving that owner, without draining it.
+			resolveInheritedCompanion = true
+		} else if _, err := data.resolve(ctx); err != nil {
 			return finish(nil, err)
 		}
 	}
@@ -493,6 +532,11 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 	}
 	if selectors != nil {
 		if err := selectors.ValidateProviders(providers); err != nil {
+			return finish(nil, err)
+		}
+	}
+	if resolveInheritedCompanion {
+		if _, err := data.resolve(ctx); err != nil {
 			return finish(nil, err)
 		}
 	}
@@ -705,7 +749,11 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 			handlerErr = errors.Join(handlerErr, outputErr)
 		}
 	}
-	completeSelection(result, handlerErr)
+	if responseToken != nil {
+		completeSelection(nil, nil)
+	} else {
+		completeSelection(result, handlerErr)
+	}
 	var compositionPrepareErr error
 	_, invokerAware := result.(xhandler.InvokerFinalizer)
 	_, invokerErrorAware := result.(xhandler.InvokerErrorFinalizer)
@@ -731,13 +779,25 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 		case xhandler.InvokerErrorFinalizer:
 			lease.phase = "invoker error finalizer"
 			operationErr := handlerErr
-			handlerErr = lease.finish(func(ctx context.Context) error { return finalizer.Finalize(ctx, lease, operationErr) }, operationErr)
+			handlerErr = lease.finish(func(ctx context.Context) error {
+				raw := finalizer.Finalize(ctx, lease, operationErr)
+				recordFinalizer(operationErr, raw)
+				return raw
+			}, operationErr)
 		case xhandler.InvokerFinalizer:
 			lease.phase = "invoker finalizer"
-			handlerErr = lease.finish(func(ctx context.Context) error { return finalizer.Finalize(ctx, lease) }, handlerErr)
+			handlerErr = lease.finish(func(ctx context.Context) error {
+				raw := finalizer.Finalize(ctx, lease)
+				recordFinalizer(handlerErr, raw)
+				return raw
+			}, handlerErr)
 		case xhandler.InjectorFinalizer:
 			lease.phase = "injector finalizer"
-			handlerErr = lease.finish(func(ctx context.Context) error { return finalizer.Finalize(ctx, lease.get) }, handlerErr)
+			handlerErr = lease.finish(func(ctx context.Context) error {
+				raw := finalizer.Finalize(ctx, lease.get)
+				recordFinalizer(handlerErr, raw)
+				return raw
+			}, handlerErr)
 		}
 	}
 	if outcomeAware {
@@ -751,7 +811,7 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 	if request.CanonicalReader && readerResult && request.BufferedComponentCalls && handlerErr == nil && ownsData && data.neutralReaderComposition() {
 		if _, errorAware := result.(xhandler.ErrorFinalizer); errorAware {
 			outputFinalized = true
-			result, handlerErr = finalizeBeforeCompletion(ctx, result, handlerErr)
+			result, handlerErr = finalizeOwn(ctx, result, handlerErr)
 		}
 	}
 	protected := ownsData && data.protectedLifetime()
@@ -764,9 +824,30 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 	}
 	if !protected && !outputFinalized {
 		outputFinalized = true
-		result, handlerErr = finalizeBeforeCompletion(ctx, result, handlerErr)
+		result, handlerErr = finalizeOwn(ctx, result, handlerErr)
 	}
-	if data != nil && !ownsData && hasCompletionHooks(ctx, result) {
+	// Classify only this call's still-local own-finalizer business response.
+	// Earlier successful managed writes remain in their original shared owner;
+	// no already-published failure or activity is cleared here.
+	responseClassified := false
+	if responseToken != nil && request.CanonicalReader && readerResult && !childFailed.Load() && ctx.Err() == nil && data.protectedAdmissionFailure() == nil {
+		projected, classified, projectionErr := responseToken.Project(responseOwner, ownFinalizerErr, handlerErr, ownFinalizerCalls)
+		if projectionErr != nil {
+			handlerErr = projectionErr
+		} else if classified && ctx.Err() != nil {
+			handlerErr = errors.Join(ownFinalizerErr, ctx.Err())
+		} else if classified && data.protectedAdmissionFailure() != nil {
+			handlerErr = errors.Join(ownFinalizerErr, data.protectedAdmissionFailure())
+		} else if classified {
+			result = projected
+			handlerErr = nil
+			responseClassified = true
+		}
+	}
+	if responseToken != nil && !responseClassified && handlerErr == nil {
+		completeSelection(result, nil)
+	}
+	if !responseClassified && data != nil && !ownsData && hasCompletionHooks(ctx, result) {
 		var registerErr error
 		completionFrame, registerErr = data.registerOutcome(ctx, request.Input.Route().String(), outputCompletion{})
 		if registerErr != nil {
@@ -781,7 +862,7 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 	if handlerErr != nil {
 		return result, handlerErr
 	}
-	if data != nil && !ownsData {
+	if responseClassified || data != nil && !ownsData {
 		return result, nil
 	}
 	return finalizeAfterCompletion(ctx, result)
@@ -927,4 +1008,17 @@ func errorAwareOutput(outputType reflect.Type) any {
 		return nil
 	}
 	return reflect.New(outputType).Interface()
+}
+
+// ResponseBindingOwner exposes only opaque captured ownership to Datly's
+// internal projection token. Applications cannot construct that token.
+func ResponseBindingOwner(ctx context.Context) any {
+	owner, _ := ctx.Value(dataScopeContextKey{}).(*dataScope)
+	if owner == nil {
+		return nil
+	}
+	if owner.root != nil {
+		return owner.root
+	}
+	return owner
 }

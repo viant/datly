@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"github.com/viant/datly/constant"
 	"github.com/viant/datly/internal/drainowner"
+	"github.com/viant/datly/internal/responsebinding"
 	"github.com/viant/datly/observability/otel"
 	xexec "github.com/viant/xdatly/exec"
 	xhandler "github.com/viant/xdatly/handler"
+	legacyresponse "github.com/viant/xdatly/handler/response"
 	"reflect"
 	"strings"
 	"time"
@@ -91,13 +93,19 @@ type scopedComponentInvoker struct {
 // descendants, whose relationship marker alone cannot retain imperative policy.
 type resolvedComponentCallPolicyKey struct{}
 
-func (i *scopedComponentInvoker) InvokeComponent(ctx context.Context, request dexec.ComponentRequest) (any, error) {
+func (i *scopedComponentInvoker) InvokeComponent(ctx context.Context, request dexec.ComponentRequest) (_ any, failure error) {
 	if i == nil || i.runtime == nil {
 		return nil, fmt.Errorf("component invoker is not configured")
 	}
 	if i.authority != nil {
 		ctx = i.authority(ctx)
 	}
+	observeChildFailure, _ := ctx.Value(responsebinding.ChildKey{}).(func())
+	defer func() {
+		if failure != nil && observeChildFailure != nil {
+			observeChildFailure()
+		}
+	}()
 	recoveryRead := handlerengine.IsRootRecoveryRead(ctx)
 	policy := "imperative"
 	if i.buffered && !recoveryRead {
@@ -115,7 +123,16 @@ func (i *scopedComponentInvoker) InvokeComponent(ctx context.Context, request de
 		relation = handlerengine.ComponentBinding
 	}
 	ctx = handlerengine.PrepareComponent(ctx, relation, "")
-	return i.runtime.invokeComponent(ctx, request, i.scope)
+	value, err := i.runtime.invokeComponent(ctx, request, i.scope)
+	if err != nil && request.Input == nil && request.Replay == nil && !request.PrepareQuery && !request.DryRun && request.Warmup == nil && len(request.WarmupOmitInput) == 0 && request.ReaderOptions == nil && request.ReportOrdering == nil {
+		// Scoped proxy calls preserve the checked child's source identity. The
+		// declarative component provider retains its own binding ownership.
+		registered, lookupErr := i.runtime.registeredComponent(ctx, request.Target.Component)
+		if lookupErr == nil && registered != nil && registered.Reader != nil && registered.Handler == nil {
+			err = registered.Output.PreserveReaderBindingSource(err)
+		}
+	}
+	return value, err
 }
 
 // Invoke adapts the public application contract to the existing scoped call.
@@ -561,3 +578,88 @@ func canonicalCompanionWarmup(ctx context.Context, registered *RegisteredCompone
 	}
 	return matched == 1
 }
+
+// BindResponse runs the ordinary invocation and copies only an exact typed
+// success or a declared response certified by that invocation's private projection token.
+func (i *scopedComponentInvoker) BindResponse(ctx context.Context, request xhandler.ComponentRequest, destination any) (_ xhandler.BoundResponse, failure error) {
+	var bound xhandler.BoundResponse
+	if i == nil || i.runtime == nil {
+		return bound, fmt.Errorf("component invoker is not configured")
+	}
+	if i.authority != nil {
+		ctx = i.authority(ctx)
+	}
+	observeChildFailure, _ := ctx.Value(responsebinding.ChildKey{}).(func())
+	defer func() {
+		if failure != nil && observeChildFailure != nil {
+			observeChildFailure()
+		}
+	}()
+	// A canceled bind must not enter the child lifecycle. In particular, an
+	// independent caller has no shared data owner to reject it during admission.
+	if err := ctx.Err(); err != nil {
+		return bound, err
+	}
+	key := spec.Key{Kind: spec.KindComponent, Scope: request.Target.Scope, Name: request.Target.Name}
+	registered, err := i.runtime.registeredComponent(ctx, key)
+	if err != nil {
+		return bound, err
+	}
+	if registered == nil || registered.Component == nil || registered.OutputType == nil {
+		return bound, fmt.Errorf("registered output contract not found: %s", key.String())
+	}
+	route := spec.RouteRef{Method: strings.ToUpper(strings.TrimSpace(request.Target.Method)), Path: strings.TrimSpace(request.Target.Path)}
+	if !componentOwnsRoute(registered.Component, route) {
+		return bound, fmt.Errorf("component %s does not own route %s", key.String(), route.String())
+	}
+	dest := reflect.ValueOf(destination)
+	expected := registered.OutputType
+	if expected.Kind() != reflect.Pointer {
+		expected = reflect.PointerTo(expected)
+	}
+	if !dest.IsValid() || dest.Kind() != reflect.Pointer || dest.IsNil() || dest.Type() != expected {
+		return bound, fmt.Errorf("response destination must be a non-nil %s, got %T", expected, destination)
+	}
+	eligible := registered.Reader != nil && registered.Handler == nil && route.Method == "GET" && request.Input == nil
+	var token *responsebinding.Token
+	if eligible {
+		ctx, token = responsebinding.New(ctx, handlerengine.ResponseBindingOwner(ctx), route.String(), registered.OutputType, func(candidate *legacyresponse.Error) (any, bool, error) {
+			projected, ok, err := registered.Output.ErrorEnvelopeWithCause(candidate.Message, candidate.Code, candidate)
+			if err != nil || !ok {
+				return nil, ok, err
+			}
+			if reflect.TypeOf(projected) == expected.Elem() {
+				pointer := reflect.New(expected.Elem())
+				pointer.Elem().Set(reflect.ValueOf(projected))
+				projected = pointer.Interface()
+			}
+			actual := reflect.ValueOf(projected)
+			if !actual.IsValid() || actual.Type() != expected || actual.IsNil() {
+				return nil, false, fmt.Errorf("declared response must be %s, got %T", expected, projected)
+			}
+			return projected, true, nil
+		})
+	}
+	value, err := i.Invoke(ctx, request)
+	if err != nil {
+		return bound, err
+	}
+	if candidate := token.Consume(); candidate != nil {
+		if failure := handlerengine.CheckComponentMutation(ctx, true); failure != nil {
+			return bound, failure
+		}
+		bound = xhandler.BoundResponse{StatusCode: candidate.Code, Cause: candidate}
+	}
+
+	actual := reflect.ValueOf(value)
+	if !actual.IsValid() || actual.Type() != expected || actual.IsNil() {
+		return xhandler.BoundResponse{}, fmt.Errorf("component response must be %s, got %T", expected, value)
+	}
+	if ctx.Err() != nil {
+		return xhandler.BoundResponse{}, ctx.Err()
+	}
+	dest.Elem().Set(actual.Elem())
+	return bound, nil
+}
+
+var _ xhandler.ComponentResponseBinder = (*scopedComponentInvoker)(nil)

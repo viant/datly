@@ -864,7 +864,16 @@ func (r *packageComponentResolver) view(field xshape.Field, name string, metadat
 		}
 		if metadata.View.Limit != nil {
 			limit := *metadata.View.Limit
-			view.Source.Controls.Limit = &limit
+			// Legacy view metadata zero means unlimited; direct SQL controls zero remains literal.
+			if limit == 0 {
+				if view.Selector == nil {
+					view.Selector = &spec.Selector{}
+				}
+				view.Selector.NoLimit = true
+				view.Source.Controls.Limit = nil
+			} else {
+				view.Source.Controls.Limit = &limit
+			}
 		}
 		if metadata.View.Offset != nil {
 			offset := *metadata.View.Offset

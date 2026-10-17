@@ -123,7 +123,19 @@ func (d *Discovery) Compile(ctx context.Context) (*ProjectGeneration, error) {
 	if err != nil {
 		return nil, err
 	}
-	dqlImports, err := (&dependency.Loader{Workspace: workspace, Catalog: catalog, Registry: d.Registry}).Load(ctx, files)
+	dependencySource := &Source{GoBuild: d.GoBuild}
+	for _, file := range files {
+		content, err := os.ReadFile(file.Path)
+		if err != nil {
+			return nil, err
+		}
+		dependencySource.Text = string(content)
+		d.prepareDependencySnapshot(ctx, dependencySource)
+		if dependencySource.dependencySnapshot != nil {
+			break
+		}
+	}
+	dqlImports, err := (&dependency.Loader{Workspace: workspace, Catalog: catalog, Registry: d.Registry, Snapshot: dependencySource.dependencySnapshot}).Load(ctx, files)
 	if err != nil {
 		return nil, err
 	}
@@ -133,7 +145,7 @@ func (d *Discovery) Compile(ctx context.Context) (*ProjectGeneration, error) {
 		return nil, err
 	}
 	project.Resources = assets.Store
-	compilation := &discoveryCompilation{discovery: d, catalog: catalog, packages: packageSources, resources: assets.Store, defaults: map[string]*resource.Store{}, workspace: workspace}
+	compilation := &discoveryCompilation{discovery: d, catalog: catalog, packages: packageSources, resources: assets.Store, defaults: map[string]*resource.Store{}, workspace: workspace, dependencySnapshot: dependencySource.dependencySnapshot}
 	compiledPackages := map[string]bool{}
 	for _, file := range files {
 		if assets.IsAsset(file.Path) {
@@ -173,12 +185,13 @@ func (d *Discovery) Generate(ctx context.Context, rootDir string) (*GeneratedPro
 }
 
 type discoveryCompilation struct {
-	workspace *xmodule.Workspace
-	discovery *Discovery
-	catalog   *typecatalog.Catalog
-	packages  map[string]*bootstrap.PackageComponentSource
-	resources *resource.Store
-	defaults  map[string]*resource.Store
+	dependencySnapshot *dependency.Snapshot
+	workspace          *xmodule.Workspace
+	discovery          *Discovery
+	catalog            *typecatalog.Catalog
+	packages           map[string]*bootstrap.PackageComponentSource
+	resources          *resource.Store
+	defaults           map[string]*resource.Store
 }
 
 func (c *discoveryCompilation) compileFile(ctx context.Context, file xmodule.File) (*Result, error) {
@@ -191,17 +204,18 @@ func (c *discoveryCompilation) compileFile(ctx context.Context, file xmodule.Fil
 		return nil, err
 	}
 	source := &Source{
-		GoBuild:         c.discovery.GoBuild.Clone(),
-		HandlerBindings: c.discovery.HandlerBindings,
-		Const:           c.discovery.Const,
-		Scope:           file.ImportPath,
-		Name:            strings.TrimSuffix(filepath.Base(file.Path), filepath.Ext(file.Path)),
-		Path:            file.Path,
-		Text:            string(content),
-		Connector:       c.discovery.Connector,
-		Resources:       resources,
-		Types:           c.catalog,
-		ColumnRefiner:   c.discovery.ColumnRefiner,
+		dependencySnapshot: c.dependencySnapshot,
+		GoBuild:            c.discovery.GoBuild.Clone(),
+		HandlerBindings:    c.discovery.HandlerBindings,
+		Const:              c.discovery.Const,
+		Scope:              file.ImportPath,
+		Name:               strings.TrimSuffix(filepath.Base(file.Path), filepath.Ext(file.Path)),
+		Path:               file.Path,
+		Text:               string(content),
+		Connector:          c.discovery.Connector,
+		Resources:          resources,
+		Types:              c.catalog,
+		ColumnRefiner:      c.discovery.ColumnRefiner,
 	}
 	var result *Result
 	if packageSource := c.packages[packageSourceIdentity(file.ImportPath, source.Name)]; packageSource != nil {

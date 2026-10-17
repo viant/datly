@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/viant/xdatly/handler/runtimecache"
 	"reflect"
 	"strings"
 	"unsafe"
@@ -101,6 +102,32 @@ func (s *Service) Read(ctx context.Context, session *Session, input any, binder 
 
 func (s *Service) readBound(ctx context.Context, session *Session, input reflect.Value, binder xhandler.Binder, selectors invocationSelectors) (_ any, err error) {
 	root := session.Artifact.Root
+	// A nonzero-sized local token prevents inherited or nested invocations from
+	// consuming this root's selection or key-render authorization.
+	owner := new(struct{ marker byte })
+	cacheIdentity := runtimecache.Identity{Component: session.Component, Root: root, Input: input.Interface()}
+	var indexes []runtimecache.Index
+	cacheEnabled := root.View.Cache != nil && session.ReadCaches[root.View] != nil
+	if cacheEnabled {
+		warmups, warmupErr := root.View.Cache.EffectiveWarmups()
+		if warmupErr != nil {
+			return nil, warmupErr
+		}
+		for _, warmup := range warmups {
+			if warmup != nil && strings.TrimSpace(warmup.IndexColumn) != "" {
+				parameter := warmup.IndexParameter
+				if parameter == "" {
+					parameter = warmup.IndexColumn
+				}
+				indexes = append(indexes, runtimecache.Index{Column: strings.TrimSpace(warmup.IndexColumn), Parameter: parameter})
+			}
+		}
+	}
+	ctx, err = runtimecache.InstallActual(ctx, owner, cacheIdentity, indexes)
+	if err != nil {
+		return nil, err
+	}
+	defer runtimecache.Close(ctx, owner)
 	read := session.rootRead
 	rootSelector := selectors.forView(root.View)
 	rootConnection, err := viewConnection(ctx, session, root)
@@ -144,7 +171,14 @@ func (s *Service) readBound(ctx context.Context, session *Session, input reflect
 		}
 		return &dexec.ReadPlan{SQL: query.SQL, Args: append([]any(nil), query.Args...)}, nil
 	}
-	if err := (rootCacheMatcher{session: session, input: input, binder: binder, selectors: selectors, query: query}).apply(ctx, rootConnection); err != nil {
+	var snapshot *runtimecache.Snapshot
+	if cacheEnabled && rootConnection.Tx == nil {
+		snapshot, err = runtimecache.Seal(ctx, owner, cacheIdentity)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if err := (rootCacheMatcher{session: session, input: input, binder: binder, selectors: selectors, query: query, owner: owner, cacheIdentity: cacheIdentity, snapshot: snapshot}).apply(ctx, rootConnection); err != nil {
 		return nil, err
 	}
 	if session.OutputType == nil {
@@ -441,7 +475,7 @@ func viewProjection(view *data.View, selector *xstate.Selector) []string {
 		result = append(result, name)
 	}
 	for _, item := range selection {
-		if relationHolderSelected(view.Relations, item) {
+		if relationHolderSelected(view.Relations, item) || outputOnlySelectorField(view, item) != nil {
 			continue
 		}
 		appendName(item)

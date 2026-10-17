@@ -196,7 +196,7 @@ func compileErrorData(input CompileInput, root reflect.Type, owner *shape.Type, 
 	return accessor, field.Type
 }
 
-func (e *errorEnvelope) fresh(message string, details []*legacyresponse.Error) (any, error) {
+func (e *errorEnvelope) fresh(message string, details any) (any, error) {
 	root := e.root
 	if root.Kind() == reflect.Pointer {
 		root = root.Elem()
@@ -213,7 +213,7 @@ func (e *errorEnvelope) fresh(message string, details []*legacyresponse.Error) (
 	if err := e.message.Set(value.Interface(), message); err != nil {
 		return nil, err
 	}
-	if err := e.errors.Set(value.Interface(), detailsValue(details)); err != nil {
+	if err := e.errors.Set(value.Interface(), details); err != nil {
 		return nil, err
 	}
 	if e.root.Kind() == reflect.Pointer {
@@ -239,21 +239,33 @@ func (p *Plan) ErrorEnvelopeWithCause(message string, statusCode int, cause erro
 	if p == nil || p.errorEnvelope == nil {
 		return nil, false, nil
 	}
-	details, projectedMessage, ok := projectBindingErrors(cause, statusCode, p.errorEnvelope.readerView)
+	// Original reader finalization places a direct public business message in
+	// the declared Status.Errors string array. This grants no binding ownership
+	// and deliberately does not inspect private causes or structured objects.
+	if direct, ok := cause.(*legacyresponse.Error); ok && direct != nil &&
+		direct.Code >= 400 && direct.Code < 500 && direct.Code == statusCode && direct.Message != "" {
+		value, err := p.errorEnvelope.fresh(direct.Message, []string{direct.Message})
+		return value, true, err
+	}
+	readerView := p.errorEnvelope.readerView
+	if readerView == "" {
+		readerView = sourceReaderView(cause)
+	}
+	details, projectedMessage, ok := projectBindingErrors(cause, statusCode, readerView)
 	if !ok {
 		return p.ErrorEnvelope(message)
 	}
 	if projectedMessage != "" {
 		message = projectedMessage
 	}
-	if view := p.errorEnvelope.readerView; view != "" {
+	if view := readerView; view != "" {
 		for _, detail := range details {
 			if detail != nil && detail.View == "" {
 				detail.View = view
 			}
 		}
 	}
-	value, err := p.errorEnvelope.fresh(message, details)
+	value, err := p.errorEnvelope.fresh(message, detailsValue(details))
 	return value, true, err
 }
 func detailsValue(details []*legacyresponse.Error) any {
