@@ -41,6 +41,7 @@ func buildDataViewsWithType(component *spec.Component, outputType reflect.Type, 
 	rowRelations, outputRelations := splitOutputRelations(view.Relations)
 	view.Relations = rowRelations
 	deriver := newViewDeriver(result.rowTypes)
+	deriver.authoritative = component != nil && component.ReaderGraph != nil
 	if directType != nil {
 		elemType, err := directViewElemType(directType)
 		if err != nil {
@@ -50,7 +51,14 @@ func buildDataViewsWithType(component *spec.Component, outputType reflect.Type, 
 		if err != nil {
 			return nil, fmt.Errorf("build view columns: %w", err)
 		}
-		view.Columns = reconcileColumns(typedColumns, view.Columns)
+		if deriver.authoritative {
+			view.Columns, err = reconcileReaderGraphColumns(typedColumns, view.Columns)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			view.Columns = reconcileColumns(typedColumns, view.Columns)
+		}
 		if err := deriver.enrich(view, elemType); err != nil {
 			return nil, err
 		}
@@ -70,7 +78,14 @@ func buildDataViewsWithType(component *spec.Component, outputType reflect.Type, 
 		if err != nil {
 			return nil, fmt.Errorf("build view columns: %w", err)
 		}
-		view.Columns = reconcileColumns(typedColumns, view.Columns)
+		if deriver.authoritative {
+			view.Columns, err = reconcileReaderGraphColumns(typedColumns, view.Columns)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			view.Columns = reconcileColumns(typedColumns, view.Columns)
+		}
 		if err := deriver.enrich(view, elemType); err != nil {
 			return nil, err
 		}

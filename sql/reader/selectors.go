@@ -114,6 +114,10 @@ func resolveInvocationSelectors(ctx context.Context, session *Session, input ref
 					}
 					resolved = field
 				}
+
+				if resolved != nil && resolved.OutputOnly && view.IsGroupable() {
+					return nil, invalidSelectorField(name, "output-only selection is not supported for grouped views")
+				}
 				if resolved != nil && resolved.Holder {
 					names[i] = resolved.GoName
 				}

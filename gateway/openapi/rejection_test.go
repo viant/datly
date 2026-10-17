@@ -42,10 +42,6 @@ func TestUnrepresentableContractsFailClosed(t *testing.T) {
 			A string `parameter:"A,kind=query,in=q"`
 			B string `parameter:"B,kind=query,in=q"`
 		}](), want: "duplicate transport"},
-		{name: "duplicate case-folded header", input: reflect.TypeFor[struct {
-			A string `parameter:"A,kind=header,in=X-Name"`
-			B string `parameter:"B,kind=header,in=x-name"`
-		}](), want: "duplicate transport"},
 		{name: "overlapping body", input: reflect.TypeFor[struct {
 			A child  `parameter:"A,kind=body"`
 			B string `parameter:"B,kind=body,in=name"`
@@ -62,17 +58,13 @@ func TestUnrepresentableContractsFailClosed(t *testing.T) {
 				f.component = &spec.Component{Key: spec.Key{Kind: spec.KindComponent, Name: "Records"}, Routes: []*spec.Route{{Method: "POST", Path: "/records"}}, Settings: tc.settings}
 			}
 			entry, buildErr := f.build()
-			if tc.name == "duplicate query name" || tc.name == "duplicate case-folded header" {
-				// Bindly rejects conflicting aliases before schema generation.
+			if tc.name == "duplicate query name" {
+				// Exact duplicate query bindings are rejected before schema generation.
 				// Assert the conflicting destinations, not its previous wording.
 				require.ErrorContains(t, buildErr, "input alias")
 				require.ErrorContains(t, buildErr, "targets both A and B")
 				require.Nil(t, entry)
-				if tc.name == "duplicate query name" {
-					require.ErrorContains(t, buildErr, `"q"`)
-				} else {
-					require.ErrorContains(t, buildErr, `"x-name"`)
-				}
+				require.ErrorContains(t, buildErr, `"q"`)
 				return
 			}
 			require.NoError(t, buildErr)

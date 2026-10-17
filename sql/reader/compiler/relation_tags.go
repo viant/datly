@@ -54,7 +54,16 @@ func applyFieldViewTag(view *data.View, options *dtag.View) {
 	}
 	if options.Limit != nil {
 		limit := *options.Limit
-		view.Spec.Source.Controls.Limit = &limit
+		// Legacy view metadata zero means unlimited; direct SQL controls zero remains literal.
+		if limit == 0 {
+			if view.Spec.Selector == nil {
+				view.Spec.Selector = &spec.Selector{}
+			}
+			view.Spec.Selector.NoLimit = true
+			view.Spec.Source.Controls.Limit = nil
+		} else {
+			view.Spec.Source.Controls.Limit = &limit
+		}
 	}
 	if options.Offset != nil {
 		offset := *options.Offset

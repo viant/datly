@@ -56,6 +56,9 @@ func ResolveOutputField(component *spec.Component, outputType reflect.Type, slot
 			}
 		}
 	}
+	if component != nil && component.ReaderGraph != nil {
+		return ""
+	}
 	if slot.FieldName != "" {
 		if component != nil {
 			for _, param := range component.Parameters {

@@ -176,9 +176,18 @@ func (a *packageAuthority) compile(ctx context.Context) (*Result, error) {
 		}
 		compileSource.Resources = resources
 	}
+	// The holder was admitted before this detached explicit DQL authoring pass.
+	// Its previous immutable graph cannot authorize the newly compiled graph.
+	if strings.TrimSpace(a.source.Text) != "" {
+		component.ReaderGraph = nil
+	}
 	result, err := NewCompiler().Compile(ctx, &compileSource)
 	if err != nil {
 		return nil, err
+	}
+	if a.component.ReaderGraph != nil {
+		result.Source.PackageComponent = a.component.Clone()
+		result.Source.ReaderMetadataURI = a.route.Tag.ReaderMetadata
 	}
 	contracts := &link.Contracts{
 		PackageComponent: component, CompiledComponent: result.Component, Source: a.route,
@@ -189,11 +198,18 @@ func (a *packageAuthority) compile(ctx context.Context) (*Result, error) {
 		result.Contracts.Input = link.Reference(a.route.InputType, a.input)
 		result.Contracts.Output = link.Reference(a.route.OutputType, a.output)
 	}
-	if result.Contracts.Output != nil && a.root != nil {
-		if result.Views == nil {
-			result.Views = gen.ViewReferences{}
-		}
-		result.Views[gen.RootViewPath] = &gen.ViewReference{DescriptorKey: a.root.Key()}
+	// Explicit qualified DQL output authority composes with the strict implicit
+	// role decision. Validate through the same resolver generation consumes.
+	result.TypeAuthority = typecatalog.PackageAuthority
+	result.TypeResolver, err = typecatalog.NewResolver(a.catalog, result.TypeAuthority, result.TypeContext)
+	if err != nil {
+		return nil, err
+	}
+	if err = linkExplicitOutputContract(result, result.ContractTypeOverrides.Output); err != nil {
+		return nil, err
+	}
+	if err = retainPackageOutputRoot(result, a.output, a.root); err != nil {
+		return nil, err
 	}
 	compiledViews := newPackageViewResolver(result.Component, nil)
 	for _, linked := range a.inputViews {
@@ -210,12 +226,26 @@ func (a *packageAuthority) compile(ctx context.Context) (*Result, error) {
 		result.Views[linked.identity] = &gen.ViewReference{DescriptorKey: linked.descriptor.Key()}
 	}
 	contracts.PrepareGeneratedTypes(result.Component, result.Contracts, result.ContractTypeOverrides.Input, result.ContractTypeOverrides.Output)
-	result.TypeAuthority = typecatalog.PackageAuthority
-	result.TypeResolver, err = typecatalog.NewResolver(a.catalog, result.TypeAuthority, result.TypeContext)
-	if err != nil {
-		return nil, err
-	}
 	return result, nil
+}
+
+// A package's row belongs only to that package output. Keep independently
+// validated row authority and its receipts; an explicit output cannot replace it.
+func retainPackageOutputRoot(result *Result, output, root *x.Type) error {
+	if result == nil || result.Contracts.Output == nil || output == nil || root == nil || result.Contracts.Output.DescriptorKey != output.Key() {
+		return nil
+	}
+	if result.Views == nil {
+		result.Views = gen.ViewReferences{}
+	}
+	if prior := result.Views[gen.RootViewPath]; prior != nil {
+		if prior.DescriptorKey != root.Key() {
+			return fmt.Errorf("output contract has conflicting root row type authorities")
+		}
+		return nil
+	}
+	result.Views[gen.RootViewPath] = &gen.ViewReference{DescriptorKey: root.Key()}
+	return nil
 }
 
 func (c *descriptorPackageCompilation) compile(ctx context.Context) (*Result, error) {
@@ -261,7 +291,27 @@ func (c *descriptorPackageCompilation) compile(ctx context.Context) (*Result, er
 	for _, linked := range linkedInputs {
 		linkedDescriptors = append(linkedDescriptors, linked.descriptor)
 	}
-	if err = c.catalog.LinkRuntimeAll(typecatalog.TypeOriginPackage, linkedDescriptors...); err != nil {
+	// Runtime identity enriches the selected source declaration without changing
+	// its generated ownership. LinkRuntimeAll only visits these exact descriptors.
+	var generatedRuntime, packageRuntime []*x.Type
+	for _, descriptor := range linkedDescriptors {
+		if descriptor == nil {
+			return nil, fmt.Errorf("type is required")
+		}
+		origin, _, lookupErr := c.catalog.Origin(typecatalog.PackageAuthority, descriptor.Key())
+		if lookupErr != nil {
+			return nil, lookupErr
+		}
+		if origin == typecatalog.TypeOriginGenerated {
+			generatedRuntime = append(generatedRuntime, descriptor)
+		} else {
+			packageRuntime = append(packageRuntime, descriptor)
+		}
+	}
+	if err = c.catalog.LinkRuntimeAll(typecatalog.TypeOriginGenerated, generatedRuntime...); err != nil {
+		return nil, err
+	}
+	if err = c.catalog.LinkRuntimeAll(typecatalog.TypeOriginPackage, packageRuntime...); err != nil {
 		return nil, err
 	}
 	resolvedContext := compileTypeContext(c.source, component.TypeContext)

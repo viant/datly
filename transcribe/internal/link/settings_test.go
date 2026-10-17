@@ -174,3 +174,33 @@ func TestComponentLoaderRequestBodyModeAuthority(t *testing.T) {
 		})
 	}
 }
+
+func TestMergeGenerationPreservesWriterOmission(t *testing.T) {
+	for _, inherited := range []bool{false, true} {
+		base := &spec.GenerationSettings{WriterOmitEmpty: inherited, ViewFile: "rows.go"}
+		got := (&settingsLoader{}).mergeGeneration(base, &spec.GenerationSettings{WriterOmitEmpty: true})
+		if !got.WriterOmitEmpty || got.ViewFile != "rows.go" || base.WriterOmitEmpty != inherited {
+			t.Fatalf("merge lost omission or mutated base: %+v", got)
+		}
+	}
+	if got := (&settingsLoader{}).mergeGeneration(nil, &spec.GenerationSettings{WriterOmitEmpty: true}); !got.WriterOmitEmpty {
+		t.Fatal("authored omission lost without base")
+	}
+}
+
+func TestMergeGenerationPreservesSQLDestinations(t *testing.T) {
+	base := &spec.GenerationSettings{SQLFiles: map[string]string{"records": "old.sql", "children": "children.sql"}}
+	authored := &spec.GenerationSettings{SQLFiles: map[string]string{"records": "queries/records.sql"}}
+	got := (&settingsLoader{}).mergeGeneration(base, authored)
+	if got.SQLFile("records", "") != "queries/records.sql" || got.SQLFile("children", "") != "children.sql" {
+		t.Fatalf("lost SQL destinations: %+v", got.SQLFiles)
+	}
+	got.SQLFiles["records"] = "changed.sql"
+	if base.SQLFiles["records"] != "old.sql" || authored.SQLFiles["records"] != "queries/records.sql" {
+		t.Fatal("merged SQL destinations alias source settings")
+	}
+	fresh := (&settingsLoader{}).mergeGeneration(nil, authored)
+	if fresh == nil || fresh.SQLFile("records", "") != "queries/records.sql" {
+		t.Fatal("standalone SQL destination discarded")
+	}
+}

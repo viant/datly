@@ -79,3 +79,47 @@ A transient content snapshot detects edits made during staging and restores the
 original tree if publication detects a concurrent change. These hashes exist
 only for the publication transaction and are never persisted as ownership data.
 Other processes should coordinate filesystem writes during publication.
+
+## Explicit source members on generated factory contracts
+
+A source-authored generated factory may retain direct local application state with
+`#setting($_ = $source_member('Request','origin'))`. The two literals select only
+a local generated owner and direct member. Its current build-selected source
+supplies the exact type, tag (including absence), ordering and file destination;
+none is repeated in configuration. Selected fields must exist exactly once. The
+same parsed source AST is shared with staged retention; changed source preimages
+reject publication. Initial admission compares all remaining members against
+independently rendered binding/SQL authority. Unknown fields, order, type or tag
+drift fail that comparison. Regeneration uses fresh generated fields, discards
+unselected extras and retains only selected state. Selections cannot claim `Has`
+or presence markers. This supplies no SQL/schema or linked graph exemption and
+creates no runtime parameter binding.
+
+`#setting($_ = $source_input('Request'))` keeps that generated transport Input
+free of synthesized Has, its companion and setters. It requires explicit source
+members on the same local input; physical row presence behavior is unchanged.
+When the input and selected body owner explicitly use the same generated
+destination, their independently generated declarations are assembled into one
+staged artifact. Functions and methods in that file survive. Missing selections,
+duplicate ownership, foreign owner files, incompatible generated declarations and
+staged Go build failures reject publication. No persistent ownership metadata is
+created. Current DQL and current source/generated authority define ownership.
+
+A source-selected generated factory can author a nonpersisted composition through
+its exact Go body declaration and member joins. Each logical occurrence must be
+proved from the same build-selected source snapshot; native SQLX row mappings
+still require independently authored physical sources and existing six-argument
+`borrow_sql_row` owner evidence. Logical occurrence proof is compilation-local,
+never persisted as configuration. It permits a missing sparse marker only on
+that exact nonpersisted occurrence; existing malformed markers and every physical
+child remain subject to their ordinary checks. A logical root has no generated
+physical writer companion. Its complete plan is validated before that companion
+is skipped, and referenced native children keep their own helpers.
+
+Reference-only native owner admission compiles the complete original owner,
+checks its original generated artifacts byte for byte, and seals source and fresh
+physical descendant facts through final staged publication. It does not transfer
+owner readers, DML or generated-file ownership. Complete raw MySQL table seals
+retain known nonunique, nonPRIMARY index prefixes exactly; generated physical-leaf
+borrowing and unique/PRIMARY prefix rejection remain unchanged. These raw facts
+establish no projection, full-column uniqueness, nominal type or relation proof.

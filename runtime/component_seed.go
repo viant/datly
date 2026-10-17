@@ -74,6 +74,7 @@ func (r *Runtime) prepareReaderSeed(ctx context.Context, component *RegisteredCo
 		return nil, nil, err
 	}
 	var paths []string
+	borrowed := map[string]any{}
 	for _, field := range contract.Fields() {
 		binding := field.Binding()
 		kind := strings.ToLower(strings.TrimSpace(binding.Location.Kind))
@@ -101,9 +102,7 @@ func (r *Runtime) prepareReaderSeed(ctx context.Context, component *RegisteredCo
 		if (kind == "view" || kind == "param" || kind == "state") && seedNil(supplied) {
 			continue
 		}
-		if err := selection.Select(typ, field.Path()); err != nil {
-			return nil, nil, err
-		}
+		borrow := false
 		if kind == "component" {
 			ref, err := spec.ParseRouteRef(binding.Location.In)
 			if err != nil {
@@ -120,7 +119,20 @@ func (r *Runtime) prepareReaderSeed(ctx context.Context, component *RegisteredCo
 			if registered == nil || registered.OutputType != (xshape.Runtime{}).Indirect(field.DestinationType()) {
 				return nil, nil, fmt.Errorf("seed dependency output type does not match %s", field.Path())
 			}
-			if err := selectDependencySeedData(&selection, registered); err != nil {
+			stripped, err := selectDependencySeedData(&selection, registered)
+			if err != nil {
+				return nil, nil, err
+			}
+			if !stripped && supplied.Kind() == reflect.Pointer {
+				if err := rejectBorrowedSeedCapabilities(supplied, map[seedReference]bool{}); err != nil {
+					return nil, nil, err
+				}
+				borrowed[field.Path()] = supplied.Interface()
+				borrow = true
+			}
+		}
+		if !borrow {
+			if err := selection.Select(typ, field.Path()); err != nil {
 				return nil, nil, err
 			}
 		}
@@ -132,6 +144,17 @@ func (r *Runtime) prepareReaderSeed(ctx context.Context, component *RegisteredCo
 	}
 	if err := rejectSeedCapabilities(reflect.ValueOf(detached), map[seedReference]bool{}); err != nil {
 		return nil, nil, err
+	}
+	// Borrowed component outputs remain caller-owned read-only references. The
+	// child still traverses canonical binding, predicates and lifecycle phases.
+	for path, ref := range borrowed {
+		access, err := xshape.Linked(typ).Accessor(path)
+		if err != nil {
+			return nil, nil, err
+		}
+		if err := access.Set(detached, ref); err != nil {
+			return nil, nil, err
+		}
 	}
 	return detached, paths, nil
 }
@@ -155,7 +178,7 @@ func seedNil(value reflect.Value) bool {
 
 // Use the same output binding compiler that owns native output capabilities.
 // Exclude declared capability slots, never JSON-hidden authorization data.
-func selectDependencySeedData(selection *xshape.CloneOptions, dependency *RegisteredComponent) error {
+func selectDependencySeedData(selection *xshape.CloneOptions, dependency *RegisteredComponent) (bool, error) {
 	kinds := []string{"logger", "binder", "component_invoker", "connector", "differ", "validator", "mbus", "message_bus", "executor", "transaction", "session", "input_snapshot", "input_read_metadata", "read_metadata", "reader_input", "http_request", "request"}
 	for _, p := range spec.EffectiveParameters(dependency.Component.Parameters) {
 		if p != nil && p.EmitOutput && !readerSeedDataKind(p.Source.Kind) && p.Source.Kind != "output" {
@@ -164,16 +187,16 @@ func selectDependencySeedData(selection *xshape.CloneOptions, dependency *Regist
 	}
 	bindings, err := (compiler.OutputBindingCompiler{Component: dependency.Component, Type: dependency.OutputType, Kinds: kinds}).CompileBindings()
 	if err != nil {
-		return err
+		return false, err
 	}
 	if len(bindings) == 0 {
-		return nil
+		return false, nil
 	}
 	excluded := map[reflect.Type]map[int]bool{}
 	for _, binding := range bindings {
 		member, err := xshape.Linked(dependency.OutputType).StructField(binding.Path)
 		if err != nil {
-			return err
+			return false, err
 		}
 		current := dependency.OutputType
 		for n, index := range member.Index {
@@ -192,17 +215,17 @@ func selectDependencySeedData(selection *xshape.CloneOptions, dependency *Regist
 		for n := 0; n < typ.NumField(); n++ {
 			member := typ.Field(n)
 			if !member.IsExported() {
-				return fmt.Errorf("seed output selection cannot omit private field %s.%s", typ, member.Name)
+				return false, fmt.Errorf("seed output selection cannot omit private field %s.%s", typ, member.Name)
 			}
 			if !blocked[n] {
 				names = append(names, member.Name)
 			}
 		}
 		if err := selection.Select(typ, names...); err != nil {
-			return err
+			return false, err
 		}
 	}
-	return nil
+	return true, nil
 }
 
 // Capability exclusion follows declared interface/type identity even if a

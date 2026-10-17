@@ -2,14 +2,17 @@ package dependency
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
+	"github.com/viant/datly/internal/packageasset"
 	"go/build"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"reflect"
 	"sort"
+	"strings"
 
 	"github.com/viant/datly/transcribe/dql"
 	gen "github.com/viant/datly/transcribe/generate"
@@ -25,7 +28,16 @@ import (
 // DQL imports can name authored Go hooks without a Go component in the source
 // package. Load their existing package authority; future generated destinations
 // remain unresolved until the ordinary shape planner owns them.
+// Snapshot retains compilation-local source authority used by the same AST load.
+// Select returns build-selected filenames relative to the package directory.
+type Snapshot struct {
+	Packages map[string]*smodel.Package
+	Files    []gen.BorrowedAuthorityFile
+	Select   func(context.Context, string, string) ([]string, error)
+}
+
 type Loader struct {
+	Snapshot  *Snapshot
 	Workspace *xmodule.Workspace
 	Catalog   *typecatalog.Catalog
 	Registry  *x.Registry
@@ -131,7 +143,7 @@ func (d *Loader) LoadImports(ctx context.Context, imports map[string]bool) ([]st
 	if len(available) == 0 {
 		return nil, nil
 	}
-	packagesByPath, err := loadAvailablePackageClosure(ctx, d.Workspace, available)
+	packagesByPath, err := loadAvailablePackageClosure(ctx, d.Workspace, available, d.Snapshot)
 	if err != nil {
 		return nil, err
 	}
@@ -227,7 +239,7 @@ func (d *Loader) registerLinkedPackageTypes(path string) error {
 	return nil
 }
 
-func loadAvailablePackageClosure(ctx context.Context, workspace *xmodule.Workspace, roots []string) (map[string]*smodel.Package, error) {
+func loadAvailablePackageClosure(ctx context.Context, workspace *xmodule.Workspace, roots []string, snapshots ...*Snapshot) (map[string]*smodel.Package, error) {
 	result := map[string]*smodel.Package{}
 	queued := map[string]bool{}
 	queue := append([]string(nil), roots...)
@@ -239,7 +251,17 @@ func loadAvailablePackageClosure(ctx context.Context, workspace *xmodule.Workspa
 		if result[path] != nil {
 			continue
 		}
-		pkg, err := LoadPackage(ctx, workspace, path)
+		var snapshot *Snapshot
+		if len(snapshots) > 0 {
+			snapshot = snapshots[0]
+		}
+		var pkg *smodel.Package
+		var err error
+		if snapshot != nil {
+			pkg, err = loadSnapshotPackage(ctx, workspace, path, snapshot)
+		} else {
+			pkg, err = LoadPackage(ctx, workspace, path)
+		}
 		if err != nil {
 			var noGo *build.NoGoError
 			if errors.As(err, &noGo) {
@@ -302,4 +324,86 @@ func LoadPackage(ctx context.Context, workspace *xmodule.Workspace, packagePath 
 func isGeneratedPostFactorySource(header *dql.HandlerHeader, source string) bool {
 	_, ok := program.FactoryContracts(header, dql.PrepareSource(source))
 	return ok
+}
+
+func loadSnapshotPackage(ctx context.Context, workspace *xmodule.Workspace, packagePath string, snapshot *Snapshot) (*smodel.Package, error) {
+	if pkg := snapshot.Packages[packagePath]; pkg != nil {
+		return pkg, nil
+	}
+	location, err := workspace.Package(packagePath)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil || location == nil {
+		return nil, err
+	}
+	var names []string
+	if snapshot.Select != nil {
+		names, err = snapshot.Select(ctx, packagePath, location.Dir)
+	} else {
+		var selected *build.Package
+		selected, err = build.Default.ImportDir(location.Dir, 0)
+		if err == nil {
+			names = append(append([]string(nil), selected.GoFiles...), selected.CgoFiles...)
+		}
+	}
+	if err != nil {
+		return nil, err
+	}
+	relative, err := filepath.Rel(location.Module.Dir, location.Dir)
+	if err != nil {
+		return nil, err
+	}
+	paths := []string{"go.mod"}
+	for _, name := range names {
+		if filepath.Base(name) != name || !strings.HasSuffix(name, ".go") {
+			return nil, fmt.Errorf("invalid selected Go filename %q", name)
+		}
+		paths = append(paths, filepath.ToSlash(filepath.Join(relative, name)))
+	}
+	source := workspace.SourceFS(location.Module)
+	frozen, err := (packageasset.Snapshotter{Source: source}).Files(ctx, paths)
+	if err != nil {
+		return nil, err
+	}
+	// Seal the same immutable bytes the parser consumes, never a second live read.
+	files := make([]gen.BorrowedAuthorityFile, 0, len(paths))
+	for _, name := range paths {
+		data, err := fs.ReadFile(frozen, name)
+		if err != nil {
+			return nil, err
+		}
+		info, err := fs.Stat(source, name)
+		if err != nil {
+			return nil, err
+		}
+		files = append(files, gen.BorrowedAuthorityFile{Path: filepath.Join(location.Module.Dir, filepath.FromSlash(name)), Mode: info.Mode(), SHA256: fmt.Sprintf("%x", sha256.Sum256(data)), Bytes: data})
+	}
+	pkg, err := loaderast.LoadPackageFS(ctx, frozen, filepath.ToSlash(relative))
+	if err != nil {
+		return nil, err
+	}
+	if snapshot.Packages == nil {
+		snapshot.Packages = map[string]*smodel.Package{}
+	}
+	existing := map[string]gen.BorrowedAuthorityFile{}
+	for _, file := range snapshot.Files {
+		existing[file.Path] = file
+	}
+	for _, file := range files {
+		if prior, ok := existing[file.Path]; ok {
+			if prior.SHA256 != file.SHA256 || prior.Mode != file.Mode {
+				return nil, fmt.Errorf("dependency source changed during compilation: %s", file.Path)
+			}
+			continue
+		}
+		existing[file.Path] = file
+	}
+	snapshot.Packages[packagePath] = pkg
+	snapshot.Files = snapshot.Files[:0]
+	for _, file := range existing {
+		snapshot.Files = append(snapshot.Files, file)
+	}
+	sort.Slice(snapshot.Files, func(i, j int) bool { return snapshot.Files[i].Path < snapshot.Files[j].Path })
+	return pkg, nil
 }

@@ -283,7 +283,7 @@ func (c *discoveryInputCompiler) inputType() (reflect.Type, error) {
 		// before packageAuthority.compile attaches its final linked references.
 		if c.source.PackageComponent != nil && c.factoryShape == nil && c.resolver != nil {
 			var err error
-			input.Views, err = packageInputViewReferences(component, c.source.PackageComponent, c.resolver)
+			input.Views, err = packageInputViewReferences(component, c.source.PackageComponent, c.resolver, c.source.selfGeneratedInputViews)
 			if err != nil {
 				return nil, err
 			}
@@ -293,6 +293,9 @@ func (c *discoveryInputCompiler) inputType() (reflect.Type, error) {
 }
 
 func (c *discoveryInputCompiler) linkedInputAllowed() bool {
+	if c.factoryShape != nil && c.factoryShape.GeneratedContracts {
+		return false
+	}
 	if c.source == nil || c.source.PackageComponent == nil {
 		return true
 	}

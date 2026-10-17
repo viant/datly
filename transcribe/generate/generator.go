@@ -29,6 +29,9 @@ type DeclarationProjection struct {
 type Declarations map[string]Declaration
 
 type Input struct {
+	// ReaderMetadataSource retains the admitted source baseline independently from an explicit DQL result.
+	ReaderMetadataSource *spec.Component
+	ReaderMetadataURI    string
 	// Only ColumnDiscoveryInputType may plan not-yet-discovered inferred columns.
 	columnDiscovery bool
 	// Records the explicit trusted in-process Go/universal mutation selection.
@@ -96,6 +99,7 @@ type typeResolver interface {
 
 func New(input Input) *Generator {
 	input.Component = input.Component.Clone()
+	input.ReaderMetadataSource = input.ReaderMetadataSource.Clone()
 	input.Declarations = cloneDeclarations(input.Declarations)
 	input.Views = cloneViewReferences(input.Views)
 	input.ViewBindings = cloneViewBindings(input.ViewBindings)
@@ -128,6 +132,9 @@ func New(input Input) *Generator {
 	}
 	input.VeltyHandler = input.VeltyHandler.Clone()
 	input.ExternalHandler = input.ExternalHandler.Clone()
+	if err := input.ExternalHandler.validateCompositionOccurrences(); err != nil && cloneErr == nil {
+		cloneErr = err
+	}
 	input.GoBuild = input.GoBuild.Clone()
 	if input.ExternalHandler != nil && input.ExternalHandler.GeneratedContracts && input.ExternalHandler.InputShape != nil {
 		if input.SetMarkerViews == nil {
@@ -141,7 +148,9 @@ func New(input Input) *Generator {
 			}
 			visited[view] = true
 			if identity, err := view.Identity(); err == nil {
-				input.SetMarkerViews[identity] = true
+				if !input.ExternalHandler.compositionOccurrence(view) {
+					input.SetMarkerViews[identity] = true
+				}
 			}
 			for _, relation := range view.Relations {
 				if relation != nil {

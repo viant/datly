@@ -10,6 +10,7 @@ import (
 
 	dexec "github.com/viant/datly/exec"
 	internallog "github.com/viant/datly/internal/logging"
+	"github.com/viant/datly/output"
 	druntime "github.com/viant/datly/runtime"
 	"github.com/viant/datly/spec"
 	xexec "github.com/viant/xdatly/exec"
@@ -264,6 +265,10 @@ func (h *Handler) serveHTTP(writer stdhttp.ResponseWriter, req *stdhttp.Request)
 			synthesizedLegacyEnvelope = true
 			actual = legacy
 		} else {
+			// Reuse typed binding provenance for responses without a declared envelope.
+			if safe, ok := output.BindingFailureMessage(execErr, statusCode); ok {
+				message = safe
+			}
 			actual = xresponse.Status{
 				Status:  "error",
 				Message: message,

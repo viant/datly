@@ -5,6 +5,8 @@ import (
 	"strings"
 
 	"github.com/viant/datly/spec"
+	"github.com/viant/tagly/format/text"
+	"github.com/viant/tagly/tags"
 )
 
 func (l *Loader) mergeTypeContext(base, authored *spec.TypeContext, packageScope string) *spec.TypeContext {
@@ -56,6 +58,7 @@ func (l *Loader) mergeParams(base, authored []*spec.Parameter) ([]*spec.Paramete
 		baseByIdentity[identity] = param
 	}
 	authoredIdentities := map[string]bool{}
+	consumedBase := map[string]bool{}
 	for _, param := range authored {
 		if param == nil {
 			continue
@@ -68,7 +71,22 @@ func (l *Loader) mergeParams(base, authored []*spec.Parameter) ([]*spec.Paramete
 			return nil, fmt.Errorf("authored parameter %q is declared more than once", identity)
 		}
 		authoredIdentities[identity] = true
-		result = append(result, overlayParam(baseByIdentity[identity], param))
+		matched := baseByIdentity[identity]
+		matchedIdentity := identity
+		if matched == nil {
+			var err error
+			matched, matchedIdentity, err = inheritedSelectorAlias(base, param)
+			if err != nil {
+				return nil, err
+			}
+		}
+		if matched != nil {
+			if consumedBase[matchedIdentity] {
+				return nil, fmt.Errorf("package parameter %q matches more than one authored selector", matchedIdentity)
+			}
+			consumedBase[matchedIdentity] = true
+		}
+		result = append(result, overlayParam(matched, param))
 	}
 	for _, param := range base {
 		if param == nil {
@@ -78,11 +96,47 @@ func (l *Loader) mergeParams(base, authored []*spec.Parameter) ([]*spec.Paramete
 		if err != nil {
 			return nil, err
 		}
-		if !authoredIdentities[identity] {
+		if !consumedBase[identity] {
 			result = append(result, param)
 		}
 	}
 	return result, nil
+}
+
+// An input field generated from a selector uses its transport source name.
+// On package-linked regeneration that field may therefore be named Sort while
+// the authored selector remains OrderBy(query/sort). Only reconcile that exact
+// generated alias; unrelated parameters sharing a transport key stay distinct.
+func inheritedSelectorAlias(base []*spec.Parameter, authored *spec.Parameter) (*spec.Parameter, string, error) {
+	if authored.EmitOutput || authored.QuerySelector == nil || !strings.EqualFold(authored.Source.Kind, "query") {
+		return nil, "", nil
+	}
+	property, canonical := spec.SelectorPropertyForParam(authored.Name)
+	if !canonical || property != authored.QuerySelector.Property {
+		return nil, "", nil
+	}
+	source := strings.TrimLeft(strings.TrimSpace(authored.Source.Name), "_")
+	if source == "" {
+		return nil, "", nil
+	}
+	alias := text.DetectCaseFormat(source).Format(source, text.CaseFormatUpperCamel)
+	var matched *spec.Parameter
+	var identity string
+	for _, candidate := range base {
+		if candidate == nil || candidate.EmitOutput || candidate.QuerySelector == nil || candidate.Name != alias ||
+			!strings.EqualFold(candidate.Source.Kind, authored.Source.Kind) ||
+			!strings.EqualFold(candidate.Source.Name, authored.Source.Name) ||
+			candidate.QuerySelector.Property != property ||
+			!strings.EqualFold(candidate.QuerySelector.View, authored.QuerySelector.View) {
+			continue
+		}
+		if matched != nil {
+			return nil, "", fmt.Errorf("authored selector %q matches more than one inherited generated alias", authored.Name)
+		}
+		matched = candidate
+		identity = candidate.Identity()
+	}
+	return matched, identity, nil
 }
 
 func overlayParam(base, authored *spec.Parameter) *spec.Parameter {
@@ -106,6 +160,18 @@ func overlayParam(base, authored *spec.Parameter) *spec.Parameter {
 	}
 	if authored.Tag != "" {
 		result.Tag = authored.Tag
+	}
+	if strings.EqualFold(strings.TrimSpace(authored.Source.Kind), "param") &&
+		strings.TrimSpace(authored.DeclarationSQL) != "" &&
+		strings.TrimSpace(authored.TypeExpr) == "" && strings.TrimSpace(authored.OutputTypeExpr) == "" {
+		typeName := tags.NewTags(strings.TrimSpace(result.Tag)).Lookup("typeName")
+		if typeName == nil || strings.TrimSpace(string(typeName.Values)) == "" {
+			// An inferred DQL projection owns its generated helper. Retaining the
+			// previous generated Input's type suppresses inference on regeneration.
+			// Explicit typeName authority and unrelated binding tags stay intact.
+			result.TypeExpr = ""
+			result.OutputTypeExpr = ""
+		}
 	}
 	if authored.Cardinality != "" {
 		result.Cardinality = authored.Cardinality

@@ -2,6 +2,7 @@ package generate
 
 import (
 	"fmt"
+	"go/ast"
 	"strings"
 	"unicode"
 
@@ -12,9 +13,10 @@ import (
 )
 
 type Plan struct {
-	Cubes           []CubePlan
-	CubeDestination string
-	BorrowedRows    []*BorrowedRowAuthority
+	sourceMemberSyntax map[string]*ast.File
+	Cubes              []CubePlan
+	CubeDestination    string
+	BorrowedRows       []*BorrowedRowAuthority
 	// Retain exact resolved local descriptor identity after Go alias normalization.
 	knownLocalTypes map[string]string
 	// Canonical descriptor proof retained when a reference moves to its owner.
@@ -48,12 +50,14 @@ type Plan struct {
 	LifecycleTypes       []string
 	WireTypes            []string
 
-	ViewDest     string
-	RouterDest   string
-	RootViewName string
-	RootViewType string
-	RootSource   string
-	Views        []ViewPlan
+	ViewDest               string
+	RouterDest             string
+	RootViewName           string
+	RootViewType           string
+	readerMetadataPrevious map[string][32]byte
+	ReaderMetadata         string
+	RootSource             string
+	Views                  []ViewPlan
 
 	// ClientInput is an opt-in generation-only transport projection.
 	ClientInput *ContractPlan

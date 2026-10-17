@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/viant/datly/internal/readergraph"
 	"github.com/viant/datly/spec"
 	"github.com/viant/datly/tag"
 	authoring "github.com/viant/datly/transcribe/compile"
@@ -16,6 +17,8 @@ import (
 // component metadata, type authority, view indexes, and validation policy in
 // one invocation-scoped object rather than threading them through globals.
 type planResolver struct {
+	readerMetadataRequired bool
+	readerMetadataDocument *readergraph.Document
 	input                  Input
 	types                  typeResolver
 	plan                   *Plan
@@ -25,6 +28,9 @@ type planResolver struct {
 
 func (r *planResolver) resolve() (*Plan, error) {
 	r.input.Component = r.input.Component.Clone()
+	if err := r.validateReaderMetadataSource(); err != nil {
+		return nil, err
+	}
 	r.input.ExternalHandler = r.input.ExternalHandler.Clone()
 	if err := authoring.BackfillRelationMetadata(r.input.Component, r.input.Resources); err != nil {
 		return nil, err
@@ -112,7 +118,9 @@ func (r *planResolver) resolve() (*Plan, error) {
 					view.Fields[i].Tag = withoutStructTags(view.Fields[i].Tag, tag.ViewName, tag.SQLName, tag.RelationName)
 					// SQLX treats on-tagged relations as transient. Preserve
 					// that exclusion when body-only shapes omit read tags.
-					view.Fields[i].Tag = replaceStructTag(view.Fields[i].Tag, "sqlx", "-")
+					if _, logical := h.CompositionViews[view.Identity]; !logical {
+						view.Fields[i].Tag = replaceStructTag(view.Fields[i].Tag, "sqlx", "-")
+					}
 				}
 			}
 		}
@@ -154,6 +162,9 @@ func (r *planResolver) resolve() (*Plan, error) {
 		return nil, err
 	}
 	destinations.contracts(r.plan)
+	if err := r.checkReaderMetadataTarget(); err != nil {
+		return nil, err
+	}
 	if r.input.VeltyHandler != nil {
 		applyGeneratedInputVeltyAliases(r.plan, r.input.Component)
 	}
@@ -199,6 +210,11 @@ func (r *planResolver) resolve() (*Plan, error) {
 	}
 	if err = r.resolveCubes(); err != nil {
 		return nil, fmt.Errorf("generate cube facade: %w", err)
+	}
+	if r.requireConcreteHelpers {
+		if err = r.prepareReaderMetadata(); err != nil {
+			return nil, err
+		}
 	}
 	if err = r.plan.validateGeneratedNames(); err != nil {
 		return nil, err

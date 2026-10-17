@@ -30,8 +30,10 @@ func (b *planCompiler) compilePublicFields(views *viewSet, rootPath string) erro
 		}
 		view.SelectorFieldsBound = names != nil
 		for _, field := range names {
+			matched := false
 			for _, column := range view.Columns {
 				if column != nil && column.Name == field.GoName {
+					matched = true
 					source := column.Column
 					if source == "" {
 						source = column.Name
@@ -42,7 +44,15 @@ func (b *planCompiler) compilePublicFields(views *viewSet, rootPath string) erro
 			}
 			for _, relation := range view.Relations {
 				if relation != nil && relation.Holder == field.GoName {
+					matched = true
 					view.SelectorFields = append(view.SelectorFields, data.SelectorField{GoName: field.GoName, PublicName: field.PublicName, Holder: true, Index: field.Index})
+				}
+			}
+
+			if !matched && rowType != nil && len(field.Index) > 0 {
+				metadata := sqlxio.ParseTag(rowType.FieldByIndex(field.Index).Tag)
+				if metadata != nil && metadata.Transient && rowType.FieldByIndex(field.Index).Tag.Get("internal") != "true" {
+					view.SelectorFields = append(view.SelectorFields, data.SelectorField{GoName: field.GoName, PublicName: field.PublicName, Index: field.Index, OutputOnly: true})
 				}
 			}
 		}

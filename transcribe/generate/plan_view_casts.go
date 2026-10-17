@@ -37,6 +37,7 @@ func (r *planResolver) validateLinkedViewCasts(view *spec.View, descriptor *x.Ty
 			return false
 		}
 		validator.factoryBody = contains(h.InputShape)
+		validator.logicalOccurrence = h.compositionOccurrence
 		if !validator.directNamedStruct(descriptor, map[string]bool{}) {
 			return fmt.Errorf("linked factory type %s must be a named struct", descriptor.Key())
 		}
@@ -45,12 +46,13 @@ func (r *planResolver) validateLinkedViewCasts(view *spec.View, descriptor *x.Ty
 }
 
 type linkedViewCastValidator struct {
-	plan          *Plan
-	shape         *xshape.Type
-	visiting      map[*spec.View]bool
-	factoryBody   bool
-	lookup        xshape.Lookup
-	discoveryOnly bool
+	plan              *Plan
+	shape             *xshape.Type
+	visiting          map[*spec.View]bool
+	factoryBody       bool
+	lookup            xshape.Lookup
+	discoveryOnly     bool
+	logicalOccurrence func(*spec.View) bool
 }
 
 // View relations supply authored holder paths; x/shape owns all traversal of
@@ -132,6 +134,18 @@ func (v *linkedViewCastValidator) validate(view *spec.View, prefix string) error
 			if ambiguous {
 				return fmt.Errorf("ambiguous SQLX mapping %q on uneditable linked type %s", wantedTag.Column, v.shape.Descriptor().Key())
 			}
+			// A tableless source-member projection names an existing Go field,
+			// rather than a physical SQLX column. Keep its exact declared acronym
+			// spelling; generation naming policy cannot rename a linked struct.
+			if mapped == "" && v.factoryBody && v.logicalOccurrence != nil && v.logicalOccurrence(view) && !strings.Contains(wantedTag.Column, "|") {
+				for _, field := range linkedFields {
+					actualTag := sqlio.ParseTag(field.Tag)
+					if field.Exported && field.Name == wantedTag.Column && actualTag.Column == "" && !actualTag.Transient {
+						mapped = prefix + field.Name
+						break
+					}
+				}
+			}
 			if mapped != "" {
 				path = mapped
 				mappedColumn = true
@@ -212,14 +226,14 @@ func (v *linkedViewCastValidator) validate(view *spec.View, prefix string) error
 		}
 	}
 	if v.factoryBody {
-		return v.validatePresence(prefix, markerNames)
+		return v.validatePresence(view, prefix, markerNames)
 	}
 	return nil
 }
 
 // Linked rows retain their actual presence provider; generation must not invent
 // a replacement Has contract or silently discard sparse zero/null membership.
-func (v *linkedViewCastValidator) validatePresence(prefix string, names []string) error {
+func (v *linkedViewCastValidator) validatePresence(view *spec.View, prefix string, names []string) error {
 	fields, err := v.shape.FieldsAt(strings.TrimSuffix(prefix, "."))
 	if err != nil {
 		return err
@@ -238,6 +252,9 @@ func (v *linkedViewCastValidator) validatePresence(prefix string, names []string
 		}
 	}
 	if marker == "" {
+		if v.logicalOccurrence != nil && v.logicalOccurrence(view) {
+			return nil
+		}
 		return fmt.Errorf("linked factory body %s requires an existing sparse presence provider", prefix)
 	}
 	// Decoding uses the external contract, not just this SQL projection. Retain

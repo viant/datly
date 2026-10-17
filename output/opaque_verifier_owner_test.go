@@ -194,3 +194,38 @@ func TestOpaqueVerifierUnregisteredStatusRequiresNonblankLiteral(t *testing.T) {
 		}
 	}
 }
+
+func TestOpaqueVerifierZeroCodeComponentAncestors(t *testing.T) {
+	failure := genuineVerifierFailure(t)
+	leaf := &bindly.BindingError{Name: "Credential", Kind: "header", Code: 401, Cause: failure}
+	inner := &bindly.BindingError{Name: "Identity", Kind: "component", Cause: leaf}
+	outer := &bindly.BindingError{Name: "Auth", Kind: "component", Cause: inner}
+	p := opaqueOwnerPlan(t, reflect.TypeFor[*errorEnvelopeValue](), "Status")
+	value, ok, err := p.ErrorEnvelopeWithCause("PRIVATE", 401, outer)
+	if err != nil || !ok {
+		t.Fatal(err)
+	}
+	status := value.(*errorEnvelopeValue).Status
+	records := status.Errors.([]*legacy.Error)
+	for i, want := range []string{"Auth", "Identity", "Credential"} {
+		if len(records) != 1 || records[0].Parameter != want || records[0].Code != 401 || records[0].Message != "Unauthorized" {
+			t.Fatal("nested owner lost")
+		}
+		if i == 0 && records[0].View != "OrdersCase" {
+			t.Fatal("outer view lost")
+		}
+		if i < 2 {
+			records = records[0].Object.([]*legacy.Error)
+		} else if records[0].Err != failure {
+			t.Fatal("private cause identity changed")
+		}
+	}
+	for _, alter := range []func(*bindly.BindingError){func(b *bindly.BindingError) { b.Code = 401 }, func(b *bindly.BindingError) { b.Message = "authored" }, func(b *bindly.BindingError) { b.Kind = "header" }, func(b *bindly.BindingError) { b.Cause = &countedOwnerWrapper{cause: inner} }} {
+		copy := *outer
+		alter(&copy)
+		v, _, e := p.ErrorEnvelopeWithCause("unchanged", 401, &copy)
+		if e != nil || v.(*errorEnvelopeValue).Errors != nil {
+			t.Fatal("unsupported ancestor admitted")
+		}
+	}
+}

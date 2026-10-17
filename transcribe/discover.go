@@ -16,6 +16,7 @@ import (
 	"github.com/viant/datly/constant"
 	"github.com/viant/datly/transcribe/column"
 	"github.com/viant/datly/transcribe/dql"
+	gen "github.com/viant/datly/transcribe/generate"
 	"github.com/viant/datly/transcribe/gobuild"
 	"github.com/viant/datly/transcribe/internal/dependency"
 	"github.com/viant/datly/typecatalog"
@@ -123,7 +124,19 @@ func (d *Discovery) Compile(ctx context.Context) (*ProjectGeneration, error) {
 	if err != nil {
 		return nil, err
 	}
-	dqlImports, err := (&dependency.Loader{Workspace: workspace, Catalog: catalog, Registry: d.Registry}).Load(ctx, files)
+	dependencySource := &Source{GoBuild: d.GoBuild}
+	for _, file := range files {
+		content, err := os.ReadFile(file.Path)
+		if err != nil {
+			return nil, err
+		}
+		dependencySource.Text = string(content)
+		d.prepareDependencySnapshot(ctx, dependencySource)
+		if dependencySource.dependencySnapshot != nil {
+			break
+		}
+	}
+	dqlImports, err := (&dependency.Loader{Workspace: workspace, Catalog: catalog, Registry: d.Registry, Snapshot: dependencySource.dependencySnapshot}).Load(ctx, files)
 	if err != nil {
 		return nil, err
 	}
@@ -133,7 +146,7 @@ func (d *Discovery) Compile(ctx context.Context) (*ProjectGeneration, error) {
 		return nil, err
 	}
 	project.Resources = assets.Store
-	compilation := &discoveryCompilation{discovery: d, catalog: catalog, packages: packageSources, resources: assets.Store, defaults: map[string]*resource.Store{}, workspace: workspace}
+	compilation := &discoveryCompilation{discovery: d, catalog: catalog, packages: packageSources, resources: assets.Store, defaults: map[string]*resource.Store{}, workspace: workspace, dependencySnapshot: dependencySource.dependencySnapshot}
 	compiledPackages := map[string]bool{}
 	for _, file := range files {
 		if assets.IsAsset(file.Path) {
@@ -148,6 +161,12 @@ func (d *Discovery) Compile(ctx context.Context) (*ProjectGeneration, error) {
 		}
 		project.Components = append(project.Components, compiled)
 		compiledPackages[packageSourceIdentity(compiled.Source.Scope, compiled.Source.Name)] = true
+		if compiled.ExternalHandler != nil && compiled.TypeContext != nil {
+			// A native factory owns its generated holder, rather than overlaying
+			// that holder on a subsequent discovery pass. Other package holders
+			// remain independently selected.
+			compiledPackages[packageSourceIdentity(compiled.TypeContext.PackagePath, compiled.Component.Name)] = true
+		}
 	}
 	if err = compilation.compilePackages(ctx, project, compiledPackages); err != nil {
 		return nil, err
@@ -173,12 +192,14 @@ func (d *Discovery) Generate(ctx context.Context, rootDir string) (*GeneratedPro
 }
 
 type discoveryCompilation struct {
-	workspace *xmodule.Workspace
-	discovery *Discovery
-	catalog   *typecatalog.Catalog
-	packages  map[string]*bootstrap.PackageComponentSource
-	resources *resource.Store
-	defaults  map[string]*resource.Store
+	dependencySnapshot *dependency.Snapshot
+	pairingPackages    map[string]map[string]*bootstrap.PackageComponentSource
+	workspace          *xmodule.Workspace
+	discovery          *Discovery
+	catalog            *typecatalog.Catalog
+	packages           map[string]*bootstrap.PackageComponentSource
+	resources          *resource.Store
+	defaults           map[string]*resource.Store
 }
 
 func (c *discoveryCompilation) compileFile(ctx context.Context, file xmodule.File) (*Result, error) {
@@ -191,20 +212,38 @@ func (c *discoveryCompilation) compileFile(ctx context.Context, file xmodule.Fil
 		return nil, err
 	}
 	source := &Source{
-		GoBuild:         c.discovery.GoBuild.Clone(),
-		HandlerBindings: c.discovery.HandlerBindings,
-		Const:           c.discovery.Const,
-		Scope:           file.ImportPath,
-		Name:            strings.TrimSuffix(filepath.Base(file.Path), filepath.Ext(file.Path)),
-		Path:            file.Path,
-		Text:            string(content),
-		Connector:       c.discovery.Connector,
-		Resources:       resources,
-		Types:           c.catalog,
-		ColumnRefiner:   c.discovery.ColumnRefiner,
+		dependencySnapshot: c.dependencySnapshot,
+		GoBuild:            c.discovery.GoBuild.Clone(),
+		HandlerBindings:    c.discovery.HandlerBindings,
+		Const:              c.discovery.Const,
+		Scope:              file.ImportPath,
+		Name:               strings.TrimSuffix(filepath.Base(file.Path), filepath.Ext(file.Path)),
+		Path:               file.Path,
+		Text:               string(content),
+		Connector:          c.discovery.Connector,
+		Resources:          resources,
+		Types:              c.catalog,
+		ColumnRefiner:      c.discovery.ColumnRefiner,
 	}
 	var result *Result
-	if packageSource := c.packages[packageSourceIdentity(file.ImportPath, source.Name)]; packageSource != nil {
+	preparation, err := prepareSourceCompilation(ctx, source)
+	if err != nil {
+		return nil, fmt.Errorf("prepare component source %q: %w", file.Path, err)
+	}
+	// Authored native factories are complete source authority. A holder left
+	// by their previous generation must never turn them into DQL overlays.
+	nativeFactory := preparation.prepared.Directives.HandlerFactory != ""
+	var packageSource *bootstrap.PackageComponentSource
+	if !nativeFactory {
+		packageSource = c.packages[packageSourceIdentity(file.ImportPath, source.Name)]
+	}
+	if !nativeFactory && packageSource == nil {
+		packageSource, err = c.declaredPackageSource(ctx, source)
+		if err != nil {
+			return nil, fmt.Errorf("pair component source %q: %w", file.Path, err)
+		}
+	}
+	if packageSource != nil {
 		result, err = (&descriptorPackageCompilation{source: source, packageSource: packageSource, catalog: c.catalog}).compile(ctx)
 	} else {
 		result, err = NewCompiler().Compile(ctx, source)
@@ -298,7 +337,14 @@ func (d *Discovery) packageSources(ctx context.Context, catalog *typecatalog.Cat
 				}
 			}
 		}
-		if err = catalog.RegisterPackage(typecatalog.TypeOriginPackage, module.Packages[packagePath]); err != nil {
+		location, locationErr := workspace.Package(packagePath)
+		if locationErr != nil {
+			return nil, nil, fmt.Errorf("locate package authority %q: %w", packagePath, locationErr)
+		}
+		if location == nil {
+			return nil, nil, fmt.Errorf("package authority %q has no source location", packagePath)
+		}
+		if err = (&gen.Result{}).RegisterPackage(catalog, module.Packages[packagePath], location.Dir); err != nil {
 			return nil, nil, fmt.Errorf("register package authority %q: %w", packagePath, err)
 		}
 	}

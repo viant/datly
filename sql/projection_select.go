@@ -2,6 +2,7 @@ package sql
 
 import (
 	"fmt"
+	"github.com/viant/datly/internal/sqlanalysis"
 	"github.com/viant/sqlparser/expr"
 	"github.com/viant/sqlparser/query"
 	"strings"
@@ -172,6 +173,16 @@ func newSelectProjectionSource(sqlText string) (selectProjectionSource, bool) {
 // parse delegates identifiers (including delimited parts) to the native
 // identifier parser; other SQL expressions remain owned by ParseQuery.
 func (s selectProjectionSource) parse() (*query.Select, error) {
+	return s.parseItems(false)
+}
+
+// parseMembership can inspect supported predicate templates without granting
+// their analysis AST to executable grouped/projection rewriting.
+func (s selectProjectionSource) parseMembership() (*query.Select, error) {
+	return s.parseItems(true)
+}
+
+func (s selectProjectionSource) parseItems(membership bool) (*query.Select, error) {
 	result := &query.Select{}
 	for _, raw := range s.parts {
 		core, alias := sqltext.SplitTopLevelAlias(raw)
@@ -179,7 +190,16 @@ func (s selectProjectionSource) parse() (*query.Select, error) {
 			result.List = append(result.List, &query.Item{Expr: &expr.Ident{Name: core}, Alias: alias})
 			continue
 		}
-		parsed, err := parseProjectionQuery("SELECT " + raw + " FROM projection_source")
+		itemSQL := "SELECT " + raw + " FROM projection_source"
+		parsed, err := parseProjectionQuery(itemSQL)
+		if err != nil && membership && alias != "" {
+			// Checked returns a detached AST. Keep the authored parts as the only
+			// rendering authority, and require a fixed output identity.
+			_, checked, checkErr := sqlanalysis.Checked(itemSQL, nil)
+			if checkErr == nil && checked != nil && len(checked.List) == 1 && checked.List[0] != nil && checked.List[0].Expr != nil && checked.List[0].Alias != "" && canonicalProjectionName(checked.List[0].Alias) == canonicalProjectionName(alias) {
+				parsed, err = checked, nil
+			}
+		}
 		if err != nil {
 			return nil, fmt.Errorf("source projection item %q: %w", raw, err)
 		}

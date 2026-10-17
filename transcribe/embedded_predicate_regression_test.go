@@ -12,6 +12,7 @@ func TestEmbeddedPredicateExplicitProjectedType(t *testing.T) {
 	grouped := "SELECT e.category, COUNT(*) AS total FROM events e " + analysisWhere + " GROUP BY e.category " + analysisHaving
 	for _, tc := range []struct{ name, SQL string }{
 		{"aggregate", grouped},
+		{"searched CASE", `SELECT CASE WHEN 1=0 ${predicate.Builder().CombineOr($predicate.FilterGroup(2,"AND")).Build("OR")} THEN e.id ELSE e.other END AS total FROM events e`},
 		{"CTE", "WITH filtered AS (SELECT e.category FROM events e " + analysisWhere + ") SELECT f.category, COUNT(*) AS total FROM filtered f GROUP BY f.category " + analysisHaving},
 		{"join", "SELECT e.category, COUNT(*) AS total FROM events e JOIN event_types t ON e.type_id=t.id " + analysisWhere + " GROUP BY e.category " + analysisHaving},
 	} {

@@ -7,7 +7,11 @@ import (
 	"github.com/viant/datly/spec"
 )
 
-func validateView(view *spec.View, visited map[*spec.View]bool) error {
+func validateView(view *spec.View, visited map[*spec.View]bool, proofs ...*FactoryComposition) error {
+	var proof *FactoryComposition
+	if len(proofs) != 0 {
+		proof = proofs[0]
+	}
 	if view == nil {
 		return fmt.Errorf("transcribe plan view is required")
 	}
@@ -25,7 +29,7 @@ func validateView(view *spec.View, visited map[*spec.View]bool) error {
 		if relation.View == nil {
 			return fmt.Errorf("view %s relation %s child view is required", view.Name, relation.Name)
 		}
-		if len(relation.On) == 0 && relation.Kind != spec.RelationKindDerived {
+		if len(relation.On) == 0 && relation.Kind != spec.RelationKindDerived && !proof.admits(relation) {
 			return fmt.Errorf("view %s relation %s links are required", view.Name, relation.Name)
 		}
 		for _, link := range relation.On {
@@ -33,7 +37,7 @@ func validateView(view *spec.View, visited map[*spec.View]bool) error {
 				return fmt.Errorf("view %s relation %s contains an incomplete link", view.Name, relation.Name)
 			}
 		}
-		if err := validateView(relation.View, visited); err != nil {
+		if err := validateView(relation.View, visited, proof); err != nil {
 			return err
 		}
 	}

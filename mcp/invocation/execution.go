@@ -13,6 +13,7 @@ import (
 
 // Execution is the protocol-neutral outcome of one exact MCP component call.
 type Execution struct {
+	projectError      ErrorProjector
 	encodeOutput      OutputEncoder
 	encodeErrorOutput OutputEncoder
 	encodingContext   context.Context

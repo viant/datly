@@ -140,6 +140,9 @@ func (b *inputGeneration) record(view *spec.View, body string, path []string, sc
 		}
 	}
 
+	if err := b.regenerateCurrent(currentName); err != nil {
+		return err
+	}
 	if existing := b.names[currentName]; existing != nil {
 		if existing.Source.Kind != "view" || b.request.ViewBindings[existing.Identity()] == "" {
 			return fmt.Errorf("current input %q conflicts with authored binding", currentName)

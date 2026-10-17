@@ -9,6 +9,7 @@ import (
 
 	"github.com/viant/bindly/locator"
 	"github.com/viant/datly/internal/drainowner"
+	"github.com/viant/datly/internal/responsebinding"
 	"github.com/viant/structology"
 )
 
@@ -105,9 +106,15 @@ func BeginWriteEligibility(ctx context.Context) (finish func() error, err error)
 // throughout the call lifetime. Restoring it prevents a replacement call context from
 // dropping the owning guard and keeps reader dependencies in that invocation.
 func RetainMutationAuthority(ctx context.Context) func(context.Context) context.Context {
+	childFailure, _ := ctx.Value(responsebinding.ChildKey{}).(func())
 	scope, _ := ctx.Value(dataScopeContextKey{}).(*dataScope)
 	issued := recoveryReadPermit(ctx)
 	return func(call context.Context) context.Context {
+		// Descendant failure provenance follows the captured invocation owner,
+		// even when application code supplies a replacement call context.
+		if childFailure != nil {
+			call = context.WithValue(call, responsebinding.ChildKey{}, childFailure)
+		}
 		permit := recoveryReadPermit(call)
 		if permit != nil && permit.open() {
 			if rootScope(scope) == permit.origin || issued == permit {

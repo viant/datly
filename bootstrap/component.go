@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/viant/datly/internal/readergraph"
 	"github.com/viant/datly/spec"
 	dtag "github.com/viant/datly/tag"
 	"github.com/viant/datly/typecatalog"
@@ -48,12 +49,15 @@ func (r ContractResolver) Resolve() (*spec.Component, error) {
 	if err != nil {
 		return nil, fmt.Errorf("package output: %w", err)
 	}
-	if err = mergeDescriptorImports(component, r.InputType); err != nil {
-		return nil, fmt.Errorf("package input imports: %w", err)
+	if component.ReaderGraph == nil {
+		if err = mergeDescriptorImports(component, r.InputType); err != nil {
+			return nil, fmt.Errorf("package input imports: %w", err)
+		}
+		if err = mergeDescriptorImports(component, r.OutputType); err != nil {
+			return nil, fmt.Errorf("package output imports: %w", err)
+		}
 	}
-	if err = mergeDescriptorImports(component, r.OutputType); err != nil {
-		return nil, fmt.Errorf("package output imports: %w", err)
-	}
+
 	resolver := &packageComponentResolver{
 		component: component,
 		types:     r.Types,
@@ -68,6 +72,65 @@ func (r ContractResolver) Resolve() (*spec.Component, error) {
 			return nil, err
 		}
 		resolver.contracts = append(resolver.contracts, packageContract{role: inputContract, fields: companion.Fields, descriptor: companion.Descriptor})
+	}
+	if component.ReaderGraph != nil {
+		body, err := readergraph.Bytes(component)
+		if err != nil {
+			return nil, err
+		}
+		if r.InputType == nil || r.OutputType == nil {
+			return nil, fmt.Errorf("reader metadata exact contracts required")
+		}
+		if err = component.ReaderGraph.ValidateSelector(component.SelectorCompanion); err != nil {
+			return nil, err
+		}
+		signature, err := readergraph.Signature(r.InputType, r.OutputType, lookup)
+		if err != nil {
+			return nil, err
+		}
+		if err = component.ReaderGraph.ValidateContracts(signature); err != nil {
+			return nil, err
+		}
+		if err = component.ReaderGraph.ValidateGraph(body, r.InputType.Key(), r.OutputType.Key()); err != nil {
+			return nil, err
+		}
+		for _, param := range component.Parameters {
+			if param == nil || param.QuerySelector == nil {
+				continue
+			}
+			if component.SelectorCompanion == nil {
+				return nil, fmt.Errorf("reader metadata selector declaration missing")
+			}
+			companion, err := checkedSelectorContract(component, r.InputType, r.OutputType, r.Types)
+			if err != nil {
+				return nil, err
+			}
+			matched := false
+			for _, field := range companion.Fields {
+				if field.Name != param.Name {
+					continue
+				}
+				metadata, err := dtag.ParseField(field.StructField())
+				if err != nil {
+					return nil, err
+				}
+				identity, err := field.CanonicalType()
+				if err != nil {
+					return nil, err
+				}
+				if metadata.QuerySelector == nil || metadata.Binding == nil || metadata.QuerySelector.View != param.QuerySelector.View || metadata.QuerySelector.Property != param.QuerySelector.Property || metadata.Binding.Location.Kind != param.Source.Kind || metadata.Binding.Location.In != param.Source.Name || identity != param.TypeExpr {
+					return nil, fmt.Errorf("reader metadata selector binding mismatch")
+				}
+				matched = true
+			}
+			if !matched {
+				return nil, fmt.Errorf("reader metadata selector field missing")
+			}
+		}
+		if err = readergraph.Contracts(component, r.InputType, r.OutputType, lookup); err != nil {
+			return nil, err
+		}
+		return component, nil
 	}
 	resolver.indexCanonicalMetadata()
 	resolved, err := resolver.resolve()
@@ -87,9 +150,17 @@ func (s *RouteSource) Resolve(inputType, outputType reflect.Type) (*spec.Compone
 	if err != nil {
 		return nil, err
 	}
-	component.SelectorCompanion, err = s.selectorAssociation(nil)
-	if err != nil {
-		return nil, err
+	if s.Tag.ReaderMetadata != "" {
+		component, err = s.resolveReaderMetadata(xshape.Linked(inputType).Descriptor(), xshape.Linked(outputType).Descriptor(), nil)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if component.ReaderGraph == nil {
+		component.SelectorCompanion, err = s.selectorAssociation(nil)
+		if err != nil {
+			return nil, err
+		}
 	}
 	return (ContractResolver{
 		Component: component, InputType: xshape.Linked(inputType).Descriptor(), OutputType: xshape.Linked(outputType).Descriptor(),
@@ -793,7 +864,16 @@ func (r *packageComponentResolver) view(field xshape.Field, name string, metadat
 		}
 		if metadata.View.Limit != nil {
 			limit := *metadata.View.Limit
-			view.Source.Controls.Limit = &limit
+			// Legacy view metadata zero means unlimited; direct SQL controls zero remains literal.
+			if limit == 0 {
+				if view.Selector == nil {
+					view.Selector = &spec.Selector{}
+				}
+				view.Selector.NoLimit = true
+				view.Source.Controls.Limit = nil
+			} else {
+				view.Source.Controls.Limit = &limit
+			}
 		}
 		if metadata.View.Offset != nil {
 			offset := *metadata.View.Offset

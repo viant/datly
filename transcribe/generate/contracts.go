@@ -11,6 +11,7 @@ import (
 
 	"github.com/viant/datly/spec"
 	"github.com/viant/x"
+	xshape "github.com/viant/x/shape"
 )
 
 func (r *planResolver) resolveContractOwnership() error {
@@ -74,7 +75,26 @@ func linkedNamedTypeExpression(plan *Plan, targetPackage string, descriptor *x.T
 }
 
 func replaceContractBase(expression, replacement string) (string, error) {
-	parsed, err := parser.ParseExpr(strings.TrimSpace(expression))
+	// Canonical package identities contain slashes/hyphens, which Go's parser
+	// interprets as operators. Normalize them with the shared type resolver;
+	// retain the contract-specific wrapper checks below.
+	normalized, err := (xshape.Resolver{Rewriter: func(name string) (string, error) {
+		if !strings.Contains(name, "/") {
+			return name, nil
+		}
+		ref, err := (xshape.Resolver{}).Reference(name)
+		if err != nil {
+			return "", err
+		}
+		if len(ref.Arguments) > 0 {
+			return "", fmt.Errorf("unsupported generic linked contract expression %q", name)
+		}
+		return "ContractBase", nil
+	}}).Rewrite(strings.TrimSpace(expression))
+	if err != nil {
+		return "", err
+	}
+	parsed, err := parser.ParseExpr(normalized)
 	if err != nil {
 		return "", fmt.Errorf("parse contract expression %q: %w", expression, err)
 	}

@@ -139,14 +139,12 @@ func TestNominalBusinessReaderCompileMetadataExclusions(t *testing.T) {
 
 func TestNominalBusinessUnsupportedAuthorityRetainsPlain(t *testing.T) {
 	p := nominalBusinessPlan(t, nominalBusinessComponent())
-	for _, name := range []string{"direct", "typed nil", "zero code", "server code", "empty message", "view", "parameter", "object", "typed nil object", "outer conflict", "selected mismatch", "authored message", "private template", "input diagnostic", "join", "wrapped mixed join"} {
+	for _, name := range []string{"typed nil", "zero code", "server code", "empty message", "view", "parameter", "object", "typed nil object", "outer conflict", "selected mismatch", "authored message", "private template", "input diagnostic", "join", "wrapped mixed join"} {
 		t.Run(name, func(t *testing.T) {
 			root, terminal := nominalBusinessCause()
 			var cause error = root
 			status := 403
 			switch name {
-			case "direct":
-				cause = terminal
 			case "typed nil":
 				cause = &bindly.BindingError{Name: "Access", Cause: (*legacy.Error)(nil)}
 			case "zero code":

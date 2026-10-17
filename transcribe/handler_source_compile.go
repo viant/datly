@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"go/token"
 	"go/types"
+	"path/filepath"
 	"reflect"
 	"strconv"
 	"strings"
@@ -526,6 +527,17 @@ func (c *Compiler) compileGeneratedPostFactory(ctx context.Context, source *Sour
 		return nil, fmt.Errorf("source handler requires a Go build directory")
 	}
 	ownership := &factoryDeclarations{ctx: ctx, build: build, pkg: destination}
+	if c.factoryOwner != nil {
+		if source.dependencySnapshot == nil || source.dependencySnapshot.Packages[destination] == nil || filepath.Clean(source.Path) != filepath.Clean(c.factoryOwner.source.Path) || source.Text != c.factoryOwner.source.Text || destination != c.factoryOwner.declaration.Package {
+			return nil, fmt.Errorf("factory owner compilation lost exact source/build authority")
+		}
+		ownership.ownerPackage = source.dependencySnapshot.Packages[destination]
+		ownership.ownerFiles = source.dependencySnapshot.Files
+		ownership.directory = c.factoryOwner.directory
+	}
+	if settings.Generation != nil {
+		ownership.sourceMembers = settings.Generation.SourceMembers
+	}
 	// Qualified local contracts use the same generated ownership as bare names.
 	// Protect selected authored declarations before discovery or publication.
 	for i, role := range []string{"input", "output"} {
@@ -616,8 +628,12 @@ func (c *Compiler) compileGeneratedPostFactory(ctx context.Context, source *Sour
 	if _, err = bootstrap.NormalizeCodecReferences(component, typeContext); err != nil {
 		return nil, err
 	}
+	sourceMemberFiles, err := ownership.sourceMemberFiles(resolver)
+	if err != nil {
+		return nil, err
+	}
 	return &Result{Source: &copy, Component: component, TypeContext: typeContext, TypeResolver: resolver, TypeAuthority: typecatalog.TranscribeAuthority,
-		Declarations: declarations.generation, Views: linkedViews, ViewBindings: gen.ViewBindings(viewBindings), ExternalHandler: &gen.ExternalHandler{Package: destination, Name: names[0], Build: build.WithContext(nil), GeneratedContracts: true, InputShape: inputShape}}, nil
+		Declarations: declarations.generation, Views: linkedViews, ViewBindings: gen.ViewBindings(viewBindings), ExternalHandler: &gen.ExternalHandler{Package: destination, Name: names[0], Build: build.WithContext(nil), GeneratedContracts: true, InputShape: inputShape, SourceMemberFiles: sourceMemberFiles, CompositionViews: ownership.compositionViews, ValidateOwnerSources: c.validateFactoryOwnerSources(ctx)}}, nil
 }
 
 // Go's selected source list is available before the generated contracts exist.

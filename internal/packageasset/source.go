@@ -20,7 +20,12 @@ const (
 
 // DiscoverSourceResources finds generated go:embed declarations in a package.
 func DiscoverSourceResources(directory string) ([]*Resources, error) {
-	files, err := filepath.Glob(filepath.Join(directory, "*.go"))
+	return DiscoverSourceResourcesFS(os.DirFS(directory))
+}
+
+// DiscoverSourceResourcesFS reads declarations and assets through one confined authority.
+func DiscoverSourceResourcesFS(source fs.FS) ([]*Resources, error) {
+	files, err := fs.Glob(source, "*.go")
 	if err != nil {
 		return nil, err
 	}
@@ -31,7 +36,7 @@ func DiscoverSourceResources(directory string) ([]*Resources, error) {
 		if strings.HasSuffix(filename, "_test.go") {
 			continue
 		}
-		content, err := os.ReadFile(filename)
+		content, err := fs.ReadFile(source, filename)
 		if err != nil {
 			return nil, err
 		}
@@ -60,7 +65,11 @@ func DiscoverSourceResources(directory string) ([]*Resources, error) {
 						if decodeErr != nil {
 							return nil, decodeErr
 						}
-						namespaces[strings.TrimSuffix(name, resourceNamespaceSuffix)] = decoded
+						symbol := strings.TrimSuffix(name, resourceNamespaceSuffix)
+						if _, exists := namespaces[symbol]; exists {
+							return nil, fmt.Errorf("duplicate resource namespace declaration %s", symbol)
+						}
+						namespaces[symbol] = decoded
 					}
 				}
 				if generated.Tok != token.VAR || len(value.Names) != 1 || !strings.HasSuffix(value.Names[0].Name, resourceVariableSuffix) {
@@ -71,7 +80,11 @@ func DiscoverSourceResources(directory string) ([]*Resources, error) {
 					return nil, fmt.Errorf("parse package resources %s: %w", filename, parseErr)
 				}
 				if len(patterns) > 0 {
-					resources[strings.TrimSuffix(value.Names[0].Name, resourceVariableSuffix)] = patterns
+					symbol := strings.TrimSuffix(value.Names[0].Name, resourceVariableSuffix)
+					if _, exists := resources[symbol]; exists {
+						return nil, fmt.Errorf("duplicate embedded resource declaration %s", symbol)
+					}
+					resources[symbol] = patterns
 					sourceFiles[strings.TrimSuffix(value.Names[0].Name, resourceVariableSuffix)] = filepath.Base(filename)
 				}
 			}
@@ -92,7 +105,7 @@ func DiscoverSourceResources(directory string) ([]*Resources, error) {
 			return nil, fmt.Errorf("duplicate resource namespace %s", namespace)
 		}
 		seen[namespace] = true
-		item.Files, err = ExpandSourceResources(directory, patterns)
+		item.Files, err = ExpandSourceResourcesFS(source, patterns)
 		if err != nil {
 			return nil, err
 		}
@@ -152,7 +165,11 @@ func SourceEmbedFiles(directory string, content []byte) ([]string, error) {
 // ExpandSourceResources follows Go embed file/directory/glob selection. Missing
 // literal files remain explicit so snapshot loading reports the broken contract.
 func ExpandSourceResources(directory string, patterns []string) ([]string, error) {
-	source := os.DirFS(directory)
+	return ExpandSourceResourcesFS(os.DirFS(directory), patterns)
+}
+
+// ExpandSourceResourcesFS shares the supplied declaration filesystem authority.
+func ExpandSourceResourcesFS(source fs.FS, patterns []string) ([]string, error) {
 	seen := map[string]bool{}
 	for _, pattern := range patterns {
 		all := strings.HasPrefix(pattern, "all:")

@@ -60,7 +60,7 @@ func (r *planResolver) resolveCubes() error {
 	if err != nil {
 		return err
 	}
-	component, err = bootstrap.ResolveReportSource(component, output, r.input.Resources)
+	component, err = bootstrap.ResolveReportSourceWithContracts(component, input, output, r.input.Resources)
 	if err != nil {
 		return err
 	}

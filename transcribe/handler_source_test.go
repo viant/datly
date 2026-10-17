@@ -11,6 +11,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"github.com/viant/datly/internal/testharness"
+	"github.com/viant/datly/spec"
 	"github.com/viant/datly/transcribe/column"
 	"github.com/viant/datly/transcribe/generate"
 	"github.com/viant/datly/transcribe/gobuild"
@@ -322,6 +323,78 @@ func TestDeclarativeSourceHandlerDiscoveryGenerationRuntime(t *testing.T) {
 	cmd.Dir = root
 	out, err := cmd.CombinedOutput()
 	require.NoError(t, err, "%s", out)
+}
+
+func TestDeclarativeSourceHandlerDiscoverySharedDirectory(t *testing.T) {
+	for _, basename := range []string{"Convert", "authored"} {
+		t.Run(basename, func(t *testing.T) {
+			ctx := context.Background()
+			root, source := sourceHandlerFixture(t)
+			source.Text = fmt.Sprintf(`#package(%q)
+#import('business',%q)
+#setting($_ = $handler_factory('business.NewConvert','Convert'))
+#setting($_ = $route('/convert','POST'))
+#setting($_ = $input_type('business.Alias'))
+#setting($_ = $output_type('business.Output'))`, handlerFixtureModule+"/registration", handlerFixtureModule+"/business")
+			writeSourceHandlerFile(t, root, "registration/"+basename+".dql", source.Text)
+			discovery := Discovery{BaseDir: root, Include: []string{handlerFixtureModule + "/registration"}, GoBuild: source.GoBuild}
+			project, err := discovery.Compile(ctx)
+			require.NoError(t, err)
+			require.Len(t, project.Components, 1)
+			_, err = (Generator{Operation: "handler"}).Generate(ctx, GenerationRequest{Compiled: project.Components[0], Destination: root})
+			require.NoError(t, err)
+			// An adjacent holder is still independent authority. Only Convert's
+			// generated holder is claimed by the authored native factory.
+			router, err := os.ReadFile(filepath.Join(root, "registration/router.go"))
+			require.NoError(t, err)
+			neighbor := strings.ReplaceAll(string(router), "Convert", "Neighbor")
+			neighbor = strings.ReplaceAll(neighbor, "NewNeighbor", "NewConvert")
+			neighbor = strings.ReplaceAll(neighbor, "/convert", "/neighbor")
+			writeSourceHandlerFile(t, root, "registration/neighbor.go", neighbor)
+			stable := sourceHandlerSnapshot(t, filepath.Join(root, "registration"))
+			for pass := 0; pass < 2; pass++ {
+				project, err = discovery.Compile(ctx)
+				require.NoError(t, err)
+				require.Len(t, project.Components, 2)
+				var native *Result
+				for _, compiled := range project.Components {
+					switch compiled.Component.Name {
+					case "Convert":
+						native = compiled
+						require.Nil(t, compiled.Source.PackageComponent)
+						require.NotNil(t, compiled.ExternalHandler)
+					case "Neighbor":
+						require.NotNil(t, compiled.Source.PackageComponent)
+					default:
+						t.Fatalf("unexpected component %q", compiled.Component.Name)
+					}
+				}
+				require.NotNil(t, native)
+				_, err = (Generator{Operation: "handler"}).Generate(ctx, GenerationRequest{Compiled: native, Destination: root})
+				require.NoError(t, err)
+				require.Equal(t, stable, sourceHandlerSnapshot(t, filepath.Join(root, "registration")))
+			}
+			writeSourceHandlerFile(t, root, "registration/router.go", "package registration\n// Application-owned file.\n")
+			before := sourceHandlerSnapshot(t, root)
+			project, err = discovery.Compile(ctx)
+			require.NoError(t, err)
+			for _, compiled := range project.Components {
+				if compiled.Component.Name == "Convert" {
+					_, err = (Generator{Operation: "handler"}).Generate(ctx, GenerationRequest{Compiled: compiled, Destination: root})
+					break
+				}
+			}
+			require.ErrorContains(t, err, "collides with an unowned package file")
+			require.Equal(t, before, sourceHandlerSnapshot(t, root))
+		})
+	}
+}
+
+func TestSourceHandlerRejectsExplicitComponentOverlay(t *testing.T) {
+	_, source := sourceHandlerFixture(t)
+	source.PackageComponent = &spec.Component{Name: "Existing"}
+	_, err := NewCompiler().Compile(context.Background(), source)
+	require.ErrorContains(t, err, "source handler cannot overlay another component or handler asset")
 }
 
 func TestDeclarativeSourceHandlerCompleteBindingMetadata(t *testing.T) {

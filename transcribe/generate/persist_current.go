@@ -46,6 +46,19 @@ func (p *scaffoldPersistence) prepareCurrent(target string) error {
 // prepareCurrentAt keeps destination ownership nominal while inspecting the
 // current projected tree. The ordinary wrapper uses the destination itself.
 func (p *scaffoldPersistence) prepareCurrentAt(target, readRoot string) error {
+	if p.plan != nil && p.plan.ExternalHandler != nil && p.plan.ExternalHandler.ValidateOwnerSources != nil {
+		if err := p.plan.ExternalHandler.ValidateOwnerSources(func(path string) string {
+			if withinScaffoldTree(target, path) {
+				relative, err := filepath.Rel(target, path)
+				if err == nil {
+					return filepath.Join(readRoot, relative)
+				}
+			}
+			return path
+		}); err != nil {
+			return err
+		}
+	}
 	p.renames = map[string]bool{}
 	p.retainedContracts = map[string]string{}
 	if err := p.prepareContractProposals(target); err != nil {
@@ -60,6 +73,38 @@ func (p *scaffoldPersistence) prepareCurrentAt(target, readRoot string) error {
 		if err == nil && string(current) != resource.sourceText {
 			return fmt.Errorf("linked authored resource declaration %q changed after planning", resource.Destination)
 		}
+	}
+	if p.plan != nil && p.plan.Resources != nil {
+		root, openErr := os.OpenRoot(readRoot)
+		if openErr != nil && !os.IsNotExist(openErr) {
+			return openErr
+		}
+		if openErr == nil {
+			defer root.Close()
+			for filename, want := range p.plan.readerMetadataPrevious {
+				body, err := readerMetadataOwned(root.FS(), p.plan, p.plan.Resources, p.plan.Resources.Namespace+":"+filename)
+				if err != nil {
+					return err
+				}
+				if sha256.Sum256(body) != want {
+					return fmt.Errorf("reader metadata changed after planning")
+				}
+			}
+			if p.plan.ReaderMetadata != "" {
+				_, filename, _ := strings.Cut(p.plan.ReaderMetadata, ":")
+				if _, err := root.Stat(filename); err == nil {
+					if _, owned := p.plan.readerMetadataPrevious[filename]; !owned {
+						return fmt.Errorf("reader metadata destination lacks current generated ownership")
+					}
+				} else if !os.IsNotExist(err) {
+					return err
+				}
+			}
+		}
+	}
+	sourceMembers, err := p.prepareSourceMembers(target, readRoot)
+	if err != nil {
+		return err
 	}
 	desired, err := p.desiredFiles(target)
 	if err != nil {
@@ -132,7 +177,7 @@ func (p *scaffoldPersistence) prepareCurrentAt(target, readRoot string) error {
 		if keep[entry.Name()] && p.linkedSource(content) {
 			return fmt.Errorf("generated destination %q contains a linked Go type; link the remaining row types or choose a separate generated destination", entry.Name())
 		}
-		if keep[entry.Name()] && owner == "" && !(legacyComponent && p.matchesCurrentDeclarations(entry.Name(), content)) {
+		if keep[entry.Name()] && owner == "" && !sourceMembers[entry.Name()] && !(legacyComponent && p.matchesCurrentDeclarations(entry.Name(), content)) {
 			return fmt.Errorf("generated file %q collides with an unowned package file", entry.Name())
 		}
 
@@ -295,4 +340,9 @@ func legacySourceDeclarations(content []byte) (*xshape.Source, map[string]bool, 
 		declarations["method:"+receiver+"."+method.Name.Name+":"+signature] = true
 	}
 	return source, declarations, nil
+}
+
+// SourceOwnedBy reports the existing generated-source owner without granting overwrite authority.
+func SourceOwnedBy(content []byte, owner string) bool {
+	return owner != "" && generatedOwner(content) == owner
 }

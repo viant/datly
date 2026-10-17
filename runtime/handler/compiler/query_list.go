@@ -20,7 +20,7 @@ import (
 type queryListTransformer struct {
 	target     reflect.Type
 	allowEmpty bool
-	strict     bool // HTTP paths retain their existing conversion policy.
+	strict     bool // HTTP paths retain CSV tokenization and reject empty items.
 }
 
 func (t *queryListTransformer) WireSourceType() reflect.Type { return t.target }
@@ -73,7 +73,7 @@ func (t *queryListTransformer) Transform(ctx context.Context, _ locator.Resolver
 			return nil, &bindinput.Error{Cause: fmt.Errorf("query list item %d is empty", index)}
 		}
 		item, err := (conv.ValueConverter{}).Convert(token, t.target.Elem())
-		if !t.strict && legacyQueryInteger(t.target.Elem().Kind()) {
+		if legacyQueryInteger(t.target.Elem().Kind()) {
 			item, err = legacyQueryListInteger(token, t.target.Elem())
 		}
 		if err != nil {
@@ -119,7 +119,7 @@ func legacyQueryInteger(kind reflect.Kind) bool {
 }
 
 // Original integer lists parse scientific/fractional notation through a machine
-// int before widening or unsigned conversion. Keep that behavior for query wire
+// int before widening or unsigned conversion. Keep that behavior for query/path wire
 // text; smaller integer kinds retain the existing range-checked converter.
 func legacyQueryListInteger(raw string, target reflect.Type) (any, error) {
 	var number int

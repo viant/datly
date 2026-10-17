@@ -80,11 +80,18 @@ func ParseHandlerSource(source string) (*HandlerHeader, string, error) {
 		return nil, "", err
 	}
 	hasFactory := false
+	hasAdapter := false
 	for _, block := range extractDirectiveBlocks(body) {
 		name, _, _, ok := parseDirectiveCall(block.body)
-		if block.kind == directiveKindSetting && ok && strings.EqualFold(name, "handler_factory") {
-			hasFactory = true
+		if block.kind == directiveKindSetting && ok {
+			hasFactory = hasFactory || strings.EqualFold(name, "handler_factory")
+			hasAdapter = hasAdapter || strings.EqualFold(name, "handler_adapter")
 		}
+	}
+	// Reader preparation belongs to the shared discovery/compiler stage.
+	// Handler classification must not prepare the same reader a second time.
+	if legacy == nil && !hasFactory && !hasAdapter {
+		return nil, source, nil
 	}
 	prepared := PrepareSource(body)
 	if hasFactory && prepared.Err() != nil {

@@ -48,6 +48,30 @@ func parseComponentSettings(blocks []directiveBlock) (ret *componentSettings, er
 			if err := (&spec.Settings{ProtectedFlushTables: ret.ProtectedFlushTables}).ValidateProtectedFlushTables(); err != nil {
 				return nil, err
 			}
+		case strings.EqualFold(name, "source_member"):
+			if len(args) != 2 || tail != "" {
+				return nil, fmt.Errorf("source_member requires quoted local owner and direct member names")
+			}
+			owner, ownerQuoted := parseQuotedLiteral(args[0])
+			member, memberQuoted := parseQuotedLiteral(args[1])
+			if !ownerQuoted || !memberQuoted || !token.IsIdentifier(owner) || !token.IsIdentifier(member) || owner == "_" || member == "_" || member == "Has" {
+				return nil, fmt.Errorf("source_member requires a local owner and a direct non-marker member")
+			}
+			for _, prior := range ret.Generation.SourceMembers {
+				if prior.Owner == owner && prior.Name == member {
+					return nil, fmt.Errorf("duplicate source_member %s.%s", owner, member)
+				}
+			}
+			ret.Generation.SourceMembers = append(ret.Generation.SourceMembers, spec.SourceMember{Owner: owner, Name: member})
+		case strings.EqualFold(name, "source_input"):
+			if len(args) != 1 || tail != "" || ret.Generation.SourceInput != "" {
+				return nil, fmt.Errorf("source_input requires one quoted local input name, once")
+			}
+			value, quoted := parseQuotedLiteral(args[0])
+			if !quoted || !token.IsIdentifier(value) {
+				return nil, fmt.Errorf("source_input requires a local input identifier")
+			}
+			ret.Generation.SourceInput = value
 		case strings.EqualFold(name, "borrow_sql_row"):
 			if len(args) != 6 || tail != "" {
 				return nil, fmt.Errorf("borrow_sql_row requires exactly six quoted literals without modifiers")

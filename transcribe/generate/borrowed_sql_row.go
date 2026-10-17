@@ -381,6 +381,19 @@ func BorrowedNativeOwnerArtifacts(input Input, dir string) ([]BorrowedAuthorityF
 			return nil, fmt.Errorf("borrow_sql_row native owner metadata/resource missing: %w", err)
 		}
 		if string(sealed.Bytes) != file.Content {
+			expected, actual := strings.Split(file.Content, "\n"), strings.Split(string(sealed.Bytes), "\n")
+			for line := 0; line < len(expected) || line < len(actual); line++ {
+				var want, have string
+				if line < len(expected) {
+					want = expected[line]
+				}
+				if line < len(actual) {
+					have = actual[line]
+				}
+				if want != have {
+					return nil, fmt.Errorf("borrow_sql_row native owner metadata/resource is stale: %s line %d: fresh=%q current=%q", file.Path, line+1, want, have)
+				}
+			}
 			return nil, fmt.Errorf("borrow_sql_row native owner metadata/resource is stale: %s", file.Path)
 		}
 		result = append(result, sealed)

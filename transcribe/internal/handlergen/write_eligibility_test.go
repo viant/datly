@@ -31,7 +31,26 @@ func TestHandlerGenerationWriteEligibilityCanonicalAdmission(t *testing.T) {
 		{name: "insert only root", method: true, mutate: func(r *plan.RecordPlan) { r.Write.Allowed = []plan.Action{plan.ActionInsert} }},
 		{name: "update only root", method: true, mutate: func(r *plan.RecordPlan) { r.Write.Allowed = []plan.Action{plan.ActionUpdate} }},
 		{name: "read only auxiliary relation", method: true, mutate: func(r *plan.RecordPlan) { r.Relations[0].Child.Auxiliary = true }},
+		{name: "linked writable leaf", method: true, mutate: func(r *plan.RecordPlan) {
+			r.Relations[0].Child.Auxiliary = false
+			r.Relations[0].Links = []plan.KeyLink{{}}
+		}},
+		{name: "linked writable leaf with delete", method: true, mutate: func(r *plan.RecordPlan) {
+			r.Relations[0].Child.Auxiliary = false
+			r.Relations[0].Links = []plan.KeyLink{{}}
+			r.Relations[0].Child.Write.Allowed = []plan.Action{plan.ActionDelete}
+		}},
 		{name: "writable child", method: true, mutate: func(r *plan.RecordPlan) { r.Relations[0].Child.Auxiliary = false }, invalid: true},
+		{name: "linked child with descendants", method: true, mutate: func(r *plan.RecordPlan) {
+			r.Relations[0].Child.Auxiliary = false
+			r.Relations[0].Links = []plan.KeyLink{{}}
+			r.Relations[0].Child.Relations = []*plan.RelationPlan{{Child: &plan.RecordPlan{Auxiliary: true}}}
+		}, invalid: true},
+		{name: "linked recursive child", method: true, mutate: func(r *plan.RecordPlan) {
+			r.Relations[0].Child.Auxiliary = false
+			r.Relations[0].Links = []plan.KeyLink{{}}
+			r.Relations[0].Child.SelfRelations = []plan.SelfRelationPlan{{FieldPath: plan.FieldPath{"Children"}}}
+		}, invalid: true},
 		{name: "recursive writable descendants", method: true, mutate: func(r *plan.RecordPlan) {
 			r.SelfRelations = []plan.SelfRelationPlan{{FieldPath: plan.FieldPath{"Children"}}}
 		}, invalid: true},

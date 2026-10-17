@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/viant/datly/spec"
+	authoring "github.com/viant/datly/transcribe/compile"
 	"github.com/viant/datly/transcribe/dql"
 	gen "github.com/viant/datly/transcribe/generate"
 	"github.com/viant/datly/typecatalog"
@@ -32,7 +33,7 @@ type generatedColumnDependencies struct {
 	err  error
 }
 
-func collectGeneratedRowAuthority(component *spec.Component, prepared *dql.PreparedSource, declarations *declarationProducts, resolver *typecatalog.Resolver, path string, sourceMap *SourceMap) (*generatedRowAuthority, error) {
+func collectGeneratedRowAuthority(component *spec.Component, prepared *dql.PreparedSource, declarations *declarationProducts, resolver *typecatalog.Resolver, path string, sourceMap *SourceMap, compositions ...*authoring.FactoryComposition) (*generatedRowAuthority, error) {
 	a := &generatedRowAuthority{owners: map[string][]*spec.View{}, resolver: resolver}
 	if component.TypeContext == nil || component.TypeContext.PackagePath == "" {
 		return a, nil
@@ -42,7 +43,11 @@ func collectGeneratedRowAuthority(component *spec.Component, prepared *dql.Prepa
 	// keys before source decomposition. Named CAST lookup is deferred until this
 	// graph supplies SQL ownership; validateDependencies below checks every named
 	// dependency before the graph can be returned to any downstream consumer.
-	root, err := (&readPlanCompiler{path: path, sourceMap: sourceMap, types: resolver,
+	var composition *authoring.FactoryComposition
+	if len(compositions) != 0 {
+		composition = compositions[0]
+	}
+	root, err := (&readPlanCompiler{composition: composition, path: path, sourceMap: sourceMap, types: resolver,
 		generatedType: func(string) (bool, error) { return true, nil },
 	}).compile(component, prepared)
 	if err != nil {

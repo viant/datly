@@ -25,6 +25,9 @@ func (b *inputGeneration) auxiliary(parent *spec.View, relation *spec.Relation, 
 	if err != nil {
 		return err
 	}
+	if err := b.regenerateCurrent(currentName); err != nil {
+		return err
+	}
 	if existing := b.names[currentName]; existing != nil {
 		if existing.Source.Kind != "view" || b.request.ViewBindings[existing.Identity()] == "" {
 			return fmt.Errorf("auxiliary current %s conflicts with authored binding", currentName)

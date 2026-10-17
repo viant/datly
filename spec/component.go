@@ -1,11 +1,14 @@
 package spec
 
 import (
+	graphModel "github.com/viant/datly/internal/readergraph/model"
 	selectorModel "github.com/viant/datly/internal/selectorcompanion/model"
 	xdocs "github.com/viant/xdatly/docs"
 )
 
 type Component struct {
+	// ReaderGraph is immutable checked native holder/resource authority, never a wire option.
+	ReaderGraph *graphModel.Authority `json:"-"`
 	// SelectorCompanion is transient immutable checked holder metadata. The native
 	// generated holder method, never JSON or a runtime option, supplies it.
 	SelectorCompanion *selectorModel.Association `json:"-"`
@@ -81,7 +84,16 @@ type OutputSettings struct {
 
 // GenerationSettings contains transcription controls that are consumed while
 // producing a Go package and are not part of runtime component behavior.
+// SourceMember selects a direct declaration retained from the current Go source.
+// The build-selected source declaration supplies type, tag and destination.
+type SourceMember struct {
+	Owner string `json:"owner"`
+	Name  string `json:"name"`
+}
+
 type GenerationSettings struct {
+	SourceMembers       []SourceMember    `json:"sourceMembers,omitempty"`
+	SourceInput         string            `json:"sourceInput,omitempty"`
 	BorrowedSQLRows     []BorrowedSQLRow  `json:"borrowedSQLRows,omitempty"`
 	ClientInputType     string            `json:"clientInputType,omitempty"`
 	WriterOmitEmpty     bool              `json:"writerOmitEmpty,omitempty"`
@@ -103,7 +115,7 @@ type GenerationSettings struct {
 }
 
 func (s GenerationSettings) IsZero() bool {
-	return len(s.BorrowedSQLRows) == 0 && s.ClientInputType == "" && !s.WriterOmitEmpty && s.FilePrefix == "" && s.Template == "" && s.DescriptionResource == "" && s.ViewFile == "" &&
+	return len(s.SourceMembers) == 0 && s.SourceInput == "" && len(s.BorrowedSQLRows) == 0 && s.ClientInputType == "" && !s.WriterOmitEmpty && s.FilePrefix == "" && s.Template == "" && s.DescriptionResource == "" && s.ViewFile == "" &&
 		s.InputFile == "" && s.OutputFile == "" && s.RouterFile == "" &&
 		s.HandlerFile == "" && s.LifecycleFile == "" && s.MutationFile == "" &&
 		s.ResourcesFile == "" && s.LinksFile == "" && s.TemplateFile == "" && len(s.SupportFiles) == 0 && len(s.SQLFiles) == 0

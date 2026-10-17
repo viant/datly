@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
 	"sync"
 
 	dexec "github.com/viant/datly/exec"
+	"github.com/viant/datly/internal/responsebinding"
 	xbind "github.com/viant/xdatly/bind"
 	xhandler "github.com/viant/xdatly/handler"
 )
@@ -58,6 +60,9 @@ func (s *lifecycleScope) run(call context.Context, fn func(context.Context) erro
 }
 
 func (s *lifecycleScope) runInvocation(call context.Context, fn func(context.Context) error, readerCall *readerInvocation) error {
+	return s.runInvocationCommit(call, fn, readerCall, nil)
+}
+func (s *lifecycleScope) runInvocationCommit(call context.Context, fn func(context.Context) error, readerCall *readerInvocation, commit func() error) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.closed {
@@ -104,6 +109,9 @@ func (s *lifecycleScope) runInvocation(call context.Context, fn func(context.Con
 		if canceled := ctx.Err(); canceled != nil && !errors.Is(err, canceled) {
 			err = errors.Join(err, canceled)
 		}
+	}
+	if err == nil && commit != nil {
+		err = commit()
 	}
 	if readerCall == nil || !readerCall.handled(err) {
 		s.record(err)
@@ -190,7 +198,7 @@ type lifecycleCallContext struct {
 
 func (c lifecycleCallContext) Value(key any) any {
 	switch key.(type) {
-	case dataScopeContextKey, componentScopeKey, readerInvocationKey:
+	case dataScopeContextKey, componentScopeKey, readerInvocationKey, responsebinding.Key, responsebinding.ChildKey:
 		return c.Context.Value(key)
 	}
 	if value := c.call.Value(key); value != nil {
@@ -198,3 +206,44 @@ func (c lifecycleCallContext) Value(key any) any {
 	}
 	return c.Context.Value(key)
 }
+
+// BindResponse shares the lease's serial admission, cancellation and close rules.
+func (s *lifecycleScope) BindResponse(ctx context.Context, request xhandler.ComponentRequest, destination any) (bound xhandler.BoundResponse, err error) {
+	owner := s.data
+	if owner != nil && owner.root != nil {
+		owner = owner.root
+	}
+	target := reflect.ValueOf(destination)
+	staged := destination
+	if target.IsValid() && target.Kind() == reflect.Pointer && !target.IsNil() {
+		staged = reflect.New(target.Type().Elem()).Interface()
+	}
+	receipt := &readerInvocation{owner: owner}
+	err = s.runInvocationCommit(ctx, func(ctx context.Context) error {
+		invoker, lookupErr := xbind.MustLookup[xhandler.ComponentInvoker](ctx, s.binder, xhandler.ComponentInvokerKey)
+		if lookupErr != nil {
+			return lookupErr
+		}
+		binder, ok := invoker.(xhandler.ComponentResponseBinder)
+		if !ok {
+			return fmt.Errorf("component response binder is not configured")
+		}
+		var bindErr error
+		bound, bindErr = binder.BindResponse(ctx, request, staged)
+		return bindErr
+	}, receipt, func() error {
+		if failure := s.data.protectedAdmissionFailure(); failure != nil {
+			return failure
+		}
+		if target.IsValid() && target.Kind() == reflect.Pointer && !target.IsNil() {
+			target.Elem().Set(reflect.ValueOf(staged).Elem())
+		}
+		return nil
+	})
+	if err != nil {
+		return xhandler.BoundResponse{}, err
+	}
+	return
+}
+
+var _ xhandler.ComponentResponseBinder = (*lifecycleScope)(nil)

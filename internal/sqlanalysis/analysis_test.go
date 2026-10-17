@@ -111,3 +111,77 @@ func TestCheckedRetainsNestedASTWithoutChangingSource(t *testing.T) {
 		})
 	}
 }
+
+func TestParsePredicateInSearchedCaseCondition(t *testing.T) {
+	predicate := `${predicate.Builder().CombineOr($predicate.FilterGroup(2,"AND")).Build("OR")}`
+	for _, source := range []string{
+		`SELECT CASE WHEN 1=0 ` + predicate + ` THEN r.created_at ELSE r.updated_at END AS chosen_time FROM records r`,
+		`SELECT x.chosen_time FROM (SELECT CASE WHEN 1=0 ` + predicate + ` THEN r.created_at ELSE r.updated_at END AS chosen_time FROM records r) x`,
+	} {
+		t.Run(source, func(t *testing.T) {
+			analysis, parsed, err := Parse(source, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if parsed == nil || strings.Contains(analysis, "${predicate") {
+				t.Fatal("missing checked static CASE projection")
+			}
+		})
+	}
+}
+
+func TestParseRejectsPredicateOutsideSearchedCaseCondition(t *testing.T) {
+	value := `${predicate.Expand("x")}`
+	for _, source := range []string{
+		`SELECT ` + value + ` AS chosen_value FROM records r`,
+		`SELECT CASE WHEN r.id=1 THEN ` + value + ` ELSE 0 END AS chosen_value FROM records r`,
+		`SELECT CASE WHEN r.id=1 THEN 1 ELSE ` + value + ` END AS chosen_value FROM records r`,
+		`SELECT CASE ` + value + ` WHEN 1 THEN 1 ELSE 0 END AS chosen_value FROM records r`,
+		`SELECT CASE r.id WHEN ` + value + ` THEN 1 ELSE 0 END AS chosen_value FROM records r`,
+		`SELECT CASE WHEN 1=0 ${predicate.Builder().CombineOr($predicate.FilterGroup(2,"AND")).Build("OR")} THEN 1 ELSE 0 END FROM records r`,
+	} {
+		t.Run(source, func(t *testing.T) {
+			if _, _, err := Parse(source, nil); err == nil {
+				t.Fatal("dynamic CASE projection authority admitted")
+			}
+		})
+	}
+}
+
+func TestCasePredicateScopesAndInputSibling(t *testing.T) {
+	for _, prefix := range []string{"", "AND", "OR"} {
+		predicate := `${predicate.Builder().CombineOr($predicate.FilterGroup(2,"AND")).Build("` + prefix + `")}`
+		condition := predicate
+		if prefix != "" {
+			condition = "1=0 " + predicate
+		}
+		source := `SELECT CASE WHEN ` + condition + ` THEN CASE WHEN ` + condition + ` THEN r.id ELSE 0 END ELSE 1 END AS chosen FROM records r WHERE CASE WHEN ` + condition + ` THEN r.id ELSE 0 END = ${Input.Id}`
+		_, parsed, err := Parse(source, func(*veltyexpr.Select) (string, error) { return "Input.Id", nil })
+		if err != nil || parsed == nil {
+			t.Fatalf("prefix %q: %v", prefix, err)
+		}
+	}
+	value := `${predicate.Expand("x")}`
+	for _, operand := range []string{
+		`CASE WHEN r.id=1 THEN ` + value + ` ELSE 0 END`,
+		`CASE WHEN r.id=1 THEN 1 ELSE ` + value + ` END`,
+		`CASE ` + value + ` WHEN 1 THEN 1 ELSE 0 END`,
+		`CASE r.id WHEN ` + value + ` THEN 1 ELSE 0 END`,
+	} {
+		for _, source := range []string{
+			`SELECT r.id FROM records r WHERE ` + operand + ` = 1`,
+			`SELECT r.id FROM records r GROUP BY r.id HAVING ` + operand + ` = 1`,
+			`SELECT r.id FROM records r JOIN labels l ON ` + operand + ` = 1`,
+		} {
+			if _, _, err := Parse(source, nil); err == nil {
+				t.Fatalf("CASE operand inherited condition authority: %s", source)
+			}
+		}
+	}
+	for _, prefix := range []string{"WHERE", "HAVING"} {
+		source := `SELECT CASE WHEN ${predicate.Builder().CombineOr($predicate.FilterGroup(2,"AND")).Build("` + prefix + `")} THEN 1 ELSE 0 END AS chosen FROM records r`
+		if _, _, err := Parse(source, nil); err == nil {
+			t.Fatalf("invalid WHEN prefix admitted: %s", prefix)
+		}
+	}
+}

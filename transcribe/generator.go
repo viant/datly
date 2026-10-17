@@ -194,7 +194,7 @@ func (g Generator) generate(ctx context.Context, root, dir string, compiled *Res
 	if err != nil {
 		return nil, err
 	}
-	derived, err := (&handlercompiler.Compiler{}).BuildInput(handlercompiler.Request{Component: input.Component, ViewBindings: input.ViewBindings, Operation: WriteOperation(operation)}, initial.RootViewType)
+	derived, err := (&handlercompiler.Compiler{}).BuildInput(handlercompiler.Request{Component: input.Component, ViewBindings: input.ViewBindings, RegenerateCurrents: compiled.Source.inheritedGeneratedCurrents, Operation: WriteOperation(operation)}, initial.RootViewType)
 	if err != nil {
 		return nil, err
 	}

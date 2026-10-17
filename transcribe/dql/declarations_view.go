@@ -87,7 +87,12 @@ func materializeDeclaredViews(params []*spec.Parameter, options map[string]decla
 		}
 		if viewOptions.limit != nil {
 			limit := *viewOptions.limit
-			view.Source.Controls = &spec.ViewControls{Limit: &limit}
+			// Legacy view metadata zero means unlimited; direct SQL controls zero remains literal.
+			if limit == 0 {
+				view.Selector = &spec.Selector{NoLimit: true}
+			} else {
+				view.Source.Controls = &spec.ViewControls{Limit: &limit}
+			}
 		}
 		for _, authored := range viewOptions.columns {
 			if authored == nil {
@@ -145,7 +150,15 @@ func declarationColumnTypeNode(expression ast.Expr, context *spec.TypeContext, r
 			return spec.TypeRef{}, fmt.Errorf("fixed arrays are not supported")
 		}
 		if result.Cardinality != "" {
-			return spec.TypeRef{}, fmt.Errorf("nested slices are not supported")
+			// Keep the nested element expression intact, as maps already do for
+			// independently named branches. The outer TypeRef retains its wrappers.
+			element, err := declarationColumnTypeNode(actual.Elt, context, spec.TypeRef{})
+			if err != nil {
+				return spec.TypeRef{}, err
+			}
+			result.Name = "[]" + columnTypeExpression(element)
+			result.Package = ""
+			return result, nil
 		}
 		result.Cardinality = spec.CardinalityMany
 		result.SlicePointer = result.Pointer

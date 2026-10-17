@@ -72,3 +72,24 @@ func TestOriginalDatlyQueryIntegerCastCompatibility(t *testing.T) {
 		t.Fatal("small integer range check lost")
 	}
 }
+
+// Path integers use the same pinned legacy casts as query integers. Keep the
+// transport tokenization, narrow integer checks and native tool branch separate.
+func TestOriginalDatlyPathIntegerCastCompatibility(t *testing.T) {
+	for _, raw := range []string{"9.00126489e+08", "2.9", "-2.9", "999999999999999999999999", "NaN", "+Inf", "-Inf"} {
+		floating, err := strconv.ParseFloat(raw, 64)
+		if err != nil {
+			t.Fatal(err)
+		}
+		original := int(floating)
+		for _, want := range []any{[]int{original}, []int64{int64(original)}, []uint{uint(original)}, []uint64{uint64(uint(original))}} {
+			got, err := (&pathListTransformer{target: reflect.TypeOf(want)}).Transform(context.Background(), nil, raw)
+			if err != nil || !reflect.DeepEqual(got, want) {
+				t.Fatalf("%s -> %T: %#v want %#v: %v", raw, want, got, want, err)
+			}
+		}
+	}
+	if _, err := (&pathListTransformer{target: reflect.TypeFor[[]int8]()}).Transform(context.Background(), nil, "128"); err == nil {
+		t.Fatal("small integer range check lost")
+	}
+}

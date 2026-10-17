@@ -4,14 +4,16 @@ import (
 	"context"
 	"github.com/stretchr/testify/require"
 	"github.com/viant/datly/runtime/handler/provider"
+	xhandler "github.com/viant/xdatly/handler"
 	"reflect"
 	"testing"
 )
 
 func TestQueryListTypedInvocationValues(t *testing.T) {
+	require.Equal(t, reflect.TypeFor[provider.TypedQueryValue](), reflect.TypeFor[xhandler.TypedQueryValue]())
 	decoder := &queryListTransformer{target: reflect.TypeFor[[]string]()}
 	for _, value := range [][]string{{"a,b", ""}, {}, nil} {
-		got, err := decoder.Transform(context.Background(), nil, provider.TypedQueryValue{Value: value})
+		got, err := decoder.Transform(context.Background(), nil, xhandler.TypedQueryValue{Value: value})
 		require.NoError(t, err)
 		require.Equal(t, value, got)
 	}

@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"github.com/viant/datly/constant"
 	"github.com/viant/datly/internal/drainowner"
+	"github.com/viant/datly/internal/responsebinding"
 	"github.com/viant/datly/observability/otel"
 	xexec "github.com/viant/xdatly/exec"
 	xhandler "github.com/viant/xdatly/handler"
+	legacyresponse "github.com/viant/xdatly/handler/response"
 	"reflect"
 	"strings"
 	"time"
@@ -21,7 +23,9 @@ import (
 	handlerengine "github.com/viant/datly/runtime/handler/engine"
 	handlerprovider "github.com/viant/datly/runtime/handler/provider"
 	rreader "github.com/viant/datly/runtime/handler/reader"
+	"github.com/viant/datly/runtime/registry"
 	"github.com/viant/datly/spec"
+	handlerexec "github.com/viant/xdatly/handler/exec"
 )
 
 type componentStackKey struct{}
@@ -89,13 +93,19 @@ type scopedComponentInvoker struct {
 // descendants, whose relationship marker alone cannot retain imperative policy.
 type resolvedComponentCallPolicyKey struct{}
 
-func (i *scopedComponentInvoker) InvokeComponent(ctx context.Context, request dexec.ComponentRequest) (any, error) {
+func (i *scopedComponentInvoker) InvokeComponent(ctx context.Context, request dexec.ComponentRequest) (_ any, failure error) {
 	if i == nil || i.runtime == nil {
 		return nil, fmt.Errorf("component invoker is not configured")
 	}
 	if i.authority != nil {
 		ctx = i.authority(ctx)
 	}
+	observeChildFailure, _ := ctx.Value(responsebinding.ChildKey{}).(func())
+	defer func() {
+		if failure != nil && observeChildFailure != nil {
+			observeChildFailure()
+		}
+	}()
 	recoveryRead := handlerengine.IsRootRecoveryRead(ctx)
 	policy := "imperative"
 	if i.buffered && !recoveryRead {
@@ -113,7 +123,16 @@ func (i *scopedComponentInvoker) InvokeComponent(ctx context.Context, request de
 		relation = handlerengine.ComponentBinding
 	}
 	ctx = handlerengine.PrepareComponent(ctx, relation, "")
-	return i.runtime.invokeComponent(ctx, request, i.scope)
+	value, err := i.runtime.invokeComponent(ctx, request, i.scope)
+	if err != nil && request.Input == nil && request.Replay == nil && !request.PrepareQuery && !request.DryRun && request.Warmup == nil && len(request.WarmupOmitInput) == 0 && request.ReaderOptions == nil && request.ReportOrdering == nil {
+		// Scoped proxy calls preserve the checked child's source identity. The
+		// declarative component provider retains its own binding ownership.
+		registered, lookupErr := i.runtime.registeredComponent(ctx, request.Target.Component)
+		if lookupErr == nil && registered != nil && registered.Reader != nil && registered.Handler == nil {
+			err = registered.Output.PreserveReaderBindingSource(err)
+		}
+	}
+	return value, err
 }
 
 // Invoke adapts the public application contract to the existing scoped call.
@@ -343,6 +362,7 @@ func (r *Runtime) invokeComponent(ctx context.Context, request dexec.ComponentRe
 			return nil, err
 		}
 	}
+	canonicalInputRoute := inputRoute
 	if len(request.WarmupOmitInput) > 0 {
 		inputRoute, err = inputRoute.WithOptionalBindings(request.WarmupOmitInput...)
 		if err != nil {
@@ -450,27 +470,28 @@ func (r *Runtime) invokeComponent(ctx context.Context, request dexec.ComponentRe
 		IndependentChildTransactions: request.IndependentChildTransactions || (registered.Component.Settings != nil && registered.Component.Settings.IndependentChildTransactions),
 		SequenceStrategy:             sequenceStrategy,
 		BufferedComponentCalls:       buffered,
-		CanonicalReader:              canonicalReader,
-		ProtectedFlushTables:         protectedFlushTables,
-		Injector:                     r.injector,
-		Input:                        inputRoute,
-		OutputType:                   registered.OutputType,
-		OutputCapabilities:           outputPlan,
-		BoundInput:                   request.Input,
-		ResolvedInput:                resolvedInput,
-		ResolvedPaths:                resolvedPaths,
-		Replay:                       request.Replay,
-		BindingOutput:                request.BindingOutput,
-		Injectors:                    (&componentInjectors{runtime: r, scope: effectiveScope}).Lookup,
-		Scope:                        effectiveScope,
-		Capabilities:                 registered.Capabilities,
-		Providers:                    registered.Providers,
-		Constants:                    constants,
-		Components:                   r.componentProvider(effectiveScope, registered.Component, registered),
-		ComponentInvoker:             r.componentInvokerProvider(effectiveScope, buffered),
-		DataSource:                   dataSource,
-		Handler:                      handler,
-		Completion:                   request.Completion,
+		// Keep selector-companion admission while sharing the recovery-read classification.
+		CanonicalReader:      canonicalReader && (inputRoute.SelectorPlan() == nil || len(request.WarmupOmitInput) == 0) || canonicalCompanionWarmup(ctx, registered, request, canonicalInputRoute, inputRoute),
+		ProtectedFlushTables: protectedFlushTables,
+		Injector:             r.injector,
+		Input:                inputRoute,
+		OutputType:           registered.OutputType,
+		OutputCapabilities:   outputPlan,
+		BoundInput:           request.Input,
+		ResolvedInput:        resolvedInput,
+		ResolvedPaths:        resolvedPaths,
+		Replay:               request.Replay,
+		BindingOutput:        request.BindingOutput,
+		Injectors:            (&componentInjectors{runtime: r, scope: effectiveScope}).Lookup,
+		Scope:                effectiveScope,
+		Capabilities:         registered.Capabilities,
+		Providers:            registered.Providers,
+		Constants:            constants,
+		Components:           r.componentProvider(effectiveScope, registered.Component, registered),
+		ComponentInvoker:     r.componentInvokerProvider(effectiveScope, buffered),
+		DataSource:           dataSource,
+		Handler:              handler,
+		Completion:           request.Completion,
 	})
 }
 
@@ -514,3 +535,131 @@ func enterComponent(ctx context.Context, target dexec.ComponentTarget) (context.
 	path := append(append([]dexec.ComponentTarget(nil), stack...), target)
 	return context.WithValue(ctx, componentStackKey{}, path), nil
 }
+
+// canonicalCompanionWarmup admits only unchanged optional root-index contracts.
+// Relation inventories are excluded even during preparation, which clears Warmup.
+func canonicalCompanionWarmup(ctx context.Context, registered *RegisteredComponent, request dexec.ComponentRequest, original, current *registry.RouteInputContract) bool {
+	if registered == nil || registered.Handler != nil || registered.Reader == nil || original == nil || current != original || current.SelectorPlan() == nil || request.Input != nil || request.ExtraInput != nil || request.Replay != nil || request.DryRun || request.ReaderOptions != nil || request.BindingOutput != nil || len(request.WarmupOmitInput) != 1 {
+		return false
+	}
+	info := handlerexec.InvocationFromContext(ctx)
+	if !info.MayBypassRowAuthorization() {
+		return false
+	}
+	switch info.WarmupPhase() {
+	case handlerexec.WarmupPhasePrepare:
+		if request.Warmup != nil || !request.PrepareQuery {
+			return false
+		}
+	case handlerexec.WarmupPhaseFill:
+		if request.Warmup == nil || request.PrepareQuery || request.Warmup.View != "" || request.Warmup.Settings == nil {
+			return false
+		}
+	default:
+		return false
+	}
+	targets, err := warmupTargets(registered)
+	if err != nil {
+		return false
+	}
+	matched := 0
+	for _, target := range targets {
+		if target.View != "" {
+			return false
+		}
+		settings := target.Settings
+		if settings == nil || settings.IndexColumn == "" || settings.IndexParameter != request.WarmupOmitInput[0] {
+			continue
+		}
+		if request.Warmup != nil && (request.Warmup.Settings.IndexColumn != settings.IndexColumn || request.Warmup.Settings.IndexParameter != settings.IndexParameter) {
+			continue
+		}
+		matched++
+	}
+	return matched == 1
+}
+
+// BindResponse runs the ordinary invocation and copies only an exact typed
+// success or a declared response certified by that invocation's private projection token.
+func (i *scopedComponentInvoker) BindResponse(ctx context.Context, request xhandler.ComponentRequest, destination any) (_ xhandler.BoundResponse, failure error) {
+	var bound xhandler.BoundResponse
+	if i == nil || i.runtime == nil {
+		return bound, fmt.Errorf("component invoker is not configured")
+	}
+	if i.authority != nil {
+		ctx = i.authority(ctx)
+	}
+	observeChildFailure, _ := ctx.Value(responsebinding.ChildKey{}).(func())
+	defer func() {
+		if failure != nil && observeChildFailure != nil {
+			observeChildFailure()
+		}
+	}()
+	// A canceled bind must not enter the child lifecycle. In particular, an
+	// independent caller has no shared data owner to reject it during admission.
+	if err := ctx.Err(); err != nil {
+		return bound, err
+	}
+	key := spec.Key{Kind: spec.KindComponent, Scope: request.Target.Scope, Name: request.Target.Name}
+	registered, err := i.runtime.registeredComponent(ctx, key)
+	if err != nil {
+		return bound, err
+	}
+	if registered == nil || registered.Component == nil || registered.OutputType == nil {
+		return bound, fmt.Errorf("registered output contract not found: %s", key.String())
+	}
+	route := spec.RouteRef{Method: strings.ToUpper(strings.TrimSpace(request.Target.Method)), Path: strings.TrimSpace(request.Target.Path)}
+	if !componentOwnsRoute(registered.Component, route) {
+		return bound, fmt.Errorf("component %s does not own route %s", key.String(), route.String())
+	}
+	dest := reflect.ValueOf(destination)
+	expected := registered.OutputType
+	if expected.Kind() != reflect.Pointer {
+		expected = reflect.PointerTo(expected)
+	}
+	if !dest.IsValid() || dest.Kind() != reflect.Pointer || dest.IsNil() || dest.Type() != expected {
+		return bound, fmt.Errorf("response destination must be a non-nil %s, got %T", expected, destination)
+	}
+	eligible := registered.Reader != nil && registered.Handler == nil && route.Method == "GET" && request.Input == nil
+	var token *responsebinding.Token
+	if eligible {
+		ctx, token = responsebinding.New(ctx, handlerengine.ResponseBindingOwner(ctx), route.String(), registered.OutputType, func(candidate *legacyresponse.Error) (any, bool, error) {
+			projected, ok, err := registered.Output.ErrorEnvelopeWithCause(candidate.Message, candidate.Code, candidate)
+			if err != nil || !ok {
+				return nil, ok, err
+			}
+			if reflect.TypeOf(projected) == expected.Elem() {
+				pointer := reflect.New(expected.Elem())
+				pointer.Elem().Set(reflect.ValueOf(projected))
+				projected = pointer.Interface()
+			}
+			actual := reflect.ValueOf(projected)
+			if !actual.IsValid() || actual.Type() != expected || actual.IsNil() {
+				return nil, false, fmt.Errorf("declared response must be %s, got %T", expected, projected)
+			}
+			return projected, true, nil
+		})
+	}
+	value, err := i.Invoke(ctx, request)
+	if err != nil {
+		return bound, err
+	}
+	if candidate := token.Consume(); candidate != nil {
+		if failure := handlerengine.CheckComponentMutation(ctx, true); failure != nil {
+			return bound, failure
+		}
+		bound = xhandler.BoundResponse{StatusCode: candidate.Code, Cause: candidate}
+	}
+
+	actual := reflect.ValueOf(value)
+	if !actual.IsValid() || actual.Type() != expected || actual.IsNil() {
+		return xhandler.BoundResponse{}, fmt.Errorf("component response must be %s, got %T", expected, value)
+	}
+	if ctx.Err() != nil {
+		return xhandler.BoundResponse{}, ctx.Err()
+	}
+	dest.Elem().Set(actual.Elem())
+	return bound, nil
+}
+
+var _ xhandler.ComponentResponseBinder = (*scopedComponentInvoker)(nil)

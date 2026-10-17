@@ -10,6 +10,15 @@ import (
 // ExternalHandler links an application-validated factory without copying its
 // implementation or generating replacement contracts.
 type ExternalHandler struct {
+	// ValidateOwnerSources rechecks compilation-local linked owner source/schema
+	// evidence against original bytes and, when supplied, their staged mapping.
+	// It emits no receipt and grants no generated-file or runtime authority.
+	ValidateOwnerSources func(mapPath func(string) string) error `json:"-" yaml:"-"`
+
+	// SourceMemberFiles reuses the current build-selected parse; no persisted ownership registry.
+	SourceMemberFiles map[string]SourceMemberFile
+	// CompositionViews is exact compiler-established occurrence evidence, never serialized.
+	CompositionViews map[string]CompositionOccurrence `json:"-" yaml:"-"`
 	// GeneratedContracts is the canonical source factory branch; the field planner owns local Input/Output.
 	GeneratedContracts bool
 	// InputShape is compiler-owned authoring metadata. It only owns generated fields;
@@ -33,6 +42,12 @@ func (h *ExternalHandler) Clone() *ExternalHandler {
 		return nil
 	}
 	result := *h
+	if h.CompositionViews != nil {
+		result.CompositionViews = make(map[string]CompositionOccurrence, len(h.CompositionViews))
+		for identity, proof := range h.CompositionViews {
+			result.CompositionViews[identity] = proof
+		}
+	}
 	result.Build = h.Build.Clone()
 	result.WireTypes = append([]string(nil), h.WireTypes...)
 	result.InputShape = h.InputShape.Clone()
@@ -76,6 +91,70 @@ func (r *planResolver) resolveExternalHandler() error {
 		adapterAlias := uniqueImportAlias(r.plan, h.AdapterPackage)
 		ensureImport(r.plan, adapterAlias, h.AdapterPackage)
 		r.plan.AdapterExpression = adapterAlias + "." + h.AdapterName
+	}
+	return nil
+}
+
+// CompositionOccurrence is compilation-local evidence from the existing selected
+// source-member composition proof. It grants no runtime or generated ownership.
+type CompositionOccurrence struct {
+	TypeName    string
+	Cardinality spec.Cardinality
+}
+
+func (h *ExternalHandler) compositionOccurrence(view *spec.View) bool {
+	if h == nil || !h.GeneratedContracts || view == nil {
+		return false
+	}
+	identity, err := view.Identity()
+	if err != nil {
+		return false
+	}
+	proof, ok := h.CompositionViews[identity]
+	return ok && proof.TypeName != "" && (proof.Cardinality == spec.CardinalityOne || proof.Cardinality == spec.CardinalityMany) && proof.TypeName == view.TypeName && proof.Cardinality == view.Cardinality && view.Source != nil && view.Source.Table == "" && view.Source.SQL == "" && view.Source.URI == "" && len(view.Source.Embeds) == 0 && view.Source.Controls == nil && view.Source.Bindings == nil && view.SelfReference == nil && view.RowLock == ""
+}
+
+func (h *ExternalHandler) validateCompositionOccurrences() error {
+	if h == nil || len(h.CompositionViews) == 0 {
+		return nil
+	}
+	if !h.GeneratedContracts || h.InputShape == nil {
+		return fmt.Errorf("composition occurrence proof requires a generated factory body")
+	}
+	found := map[string]bool{}
+	visiting := map[*spec.View]bool{}
+	var visit func(*spec.View) error
+	visit = func(view *spec.View) error {
+		if view == nil || visiting[view] {
+			return fmt.Errorf("composition occurrence graph is incomplete or cyclic")
+		}
+		visiting[view] = true
+		defer delete(visiting, view)
+		identity, err := view.Identity()
+		if err != nil {
+			return err
+		}
+		if _, exists := h.CompositionViews[identity]; exists {
+			if found[identity] || !h.compositionOccurrence(view) {
+				return fmt.Errorf("composition occurrence proof is stale, ambiguous or physical: %s", identity)
+			}
+			found[identity] = true
+		}
+		for _, relation := range view.Relations {
+			if relation == nil {
+				return fmt.Errorf("composition relation incomplete")
+			}
+			if err := visit(relation.View); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	if err := visit(h.InputShape); err != nil {
+		return err
+	}
+	if len(found) != len(h.CompositionViews) {
+		return fmt.Errorf("composition occurrence proof contains an unknown member")
 	}
 	return nil
 }

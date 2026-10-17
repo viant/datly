@@ -55,6 +55,10 @@ func (s *outputSelection) view(plan *ViewPlan, path []string) error {
 				}
 			}
 			if !relation {
+				if field := outputOnlySelectorField(plan.View, name); field != nil {
+					scope.Indexes = append(scope.Indexes, field.Index)
+					continue
+				}
 				column, err := outputSelectionColumn(plan.View, name)
 				if err != nil {
 					return err
@@ -138,4 +142,18 @@ func outputSelectionColumnName(name string) string {
 		return parts[0]
 	}
 	return name
+}
+
+// Only encoder-approved, explicitly SQL-transient metadata can bypass SQL names.
+func outputOnlySelectorField(view *data.View, name string) *data.SelectorField {
+	if view == nil {
+		return nil
+	}
+	for i := range view.SelectorFields {
+		field := &view.SelectorFields[i]
+		if field.OutputOnly && !field.Holder && (dsql.ProjectionNames{field.PublicName, field.GoName}).Matches(name) {
+			return field
+		}
+	}
+	return nil
 }

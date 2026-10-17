@@ -17,6 +17,7 @@ import (
 // Wrapper text is intentionally not part of owner or public-message authority.
 type bindingBranch struct {
 	owner                 *bindly.BindingError
+	requiredAbsence       string
 	input                 *bindinput.Error
 	children              []*bindingBranch
 	group                 bool
@@ -34,6 +35,9 @@ func projectBindingErrors(cause error, status int, readerView string) (result []
 			ok = false
 		}
 	}()
+	if entries, matched := maskedComponentServerError(cause, status, readerView); matched {
+		return entries, http.StatusText(status), true
+	}
 	remaining := 128
 	branch, valid := readBindingBranch(cause, &remaining)
 	if !valid {
@@ -66,6 +70,7 @@ func readBindingBranch(err error, remaining *int) (*bindingBranch, bool) {
 			return nil, false
 		}
 		n.owner = e
+		n.requiredAbsence, _ = e.RequiredAbsenceMessage()
 	case *bindly.ResolutionGroupError:
 		if e == nil {
 			return nil, false
@@ -141,44 +146,118 @@ func readBindingBranch(err error, remaining *int) (*bindingBranch, bool) {
 	return n, true
 }
 
-// projectOpaqueVerifier uses only one explicit transport owner directly above
-// the terminal recorded by the same bounded parse. No inherited diagnostic
-// status, text, nested owner or verifier method is authority for this exception.
+// BindingFailureMessage projects only typed binding failures for transports
+// without a declared error envelope. It never uses private diagnostic text.
+func BindingFailureMessage(cause error, status int) (message string, ok bool) {
+	defer func() {
+		if recover() != nil {
+			message, ok = "", false
+		}
+	}()
+	if status < 400 || status >= 500 {
+		return "", false
+	}
+	remaining := 128
+	branch, valid := readBindingBranch(cause, &remaining)
+	if !valid || branch.hasNominal {
+		return "", false
+	}
+	if branch.hasVerifier {
+		_, _, message, ok = branch.opaqueVerifierOwner(status)
+		return message, ok
+	}
+	// Only transparent wrappers may precede a binding chain. Once ownership
+	// starts, each ancestor must directly own the next binding failure.
+	for branch != nil && branch.owner == nil {
+		if branch.group || branch.input != nil || len(branch.children) != 1 {
+			return "", false
+		}
+		branch = branch.children[0]
+	}
+	for branch != nil && branch.owner != nil {
+		owner := branch.owner
+		if branch.group || branch.input != nil || owner.Message != "" || (owner.Code != 0 && owner.Code != status) {
+			return "", false
+		}
+		if branch.requiredAbsence != "" {
+			if branch.code(http.StatusBadRequest) != status {
+				return "", false
+			}
+			return branch.requiredAbsence, true
+		}
+		if owner.Kind != "component" || len(branch.children) != 1 {
+			return "", false
+		}
+		branch = branch.children[0]
+	}
+	return "", false
+}
+
+// opaqueVerifierOwner shares the exact transport-owner admission used by
+// declared reader envelopes and the plain custom-handler fallback.
+func (n *bindingBranch) opaqueVerifierOwner(status int) (*bindly.BindingError, []*bindly.BindingError, string, bool) {
+	if status < 400 || status >= 500 {
+		return nil, nil, "", false
+	}
+	// Transparent wrappers may precede the entire chain, never bridge owners.
+	for n != nil && n.owner == nil {
+		if n.group || n.input != nil || n.hasNominal || n.verifier || len(n.children) != 1 {
+			return nil, nil, "", false
+		}
+		n = n.children[0]
+	}
+	var ancestors []*bindly.BindingError
+	for n != nil && n.owner != nil && n.owner.Kind == "component" {
+		owner := n.owner
+		if owner.Code != 0 || owner.Message != "" || n.group || n.input != nil || len(n.children) != 1 || n.children[0].owner == nil {
+			return nil, nil, "", false
+		}
+		ancestors = append(ancestors, owner)
+		n = n.children[0]
+	}
+	if n == nil || n.owner == nil || n.group || n.input != nil || n.hasNominal || len(n.children) != 1 || !n.children[0].verifier {
+		return nil, nil, "", false
+	}
+	owner := n.owner
+	if owner.Code < 400 || owner.Code >= 500 || owner.Code != status || strings.Contains(owner.Message, "${") {
+		return nil, nil, "", false
+	}
+	switch owner.Kind {
+	case "header", "query", "path", "cookie", "form", "body":
+	default:
+		return nil, nil, "", false
+	}
+	message := http.StatusText(owner.Code)
+	if strings.TrimSpace(owner.Message) != "" {
+		message = owner.Message
+	}
+	if strings.TrimSpace(message) == "" {
+		return nil, nil, "", false
+	}
+	return owner, ancestors, message, true
+}
+
+// projectOpaqueVerifier retains reader owner/detail semantics while sharing
+// only safe message admission with the custom-handler fallback.
 func (n *bindingBranch) projectOpaqueVerifier(status int, readerView string) ([]*legacy.Error, string, bool) {
 	if readerView == "" {
 		return nil, "", false
 	}
-	for n != nil {
-		if n.group || n.input != nil || n.hasNominal || n.verifier || len(n.children) != 1 {
-			return nil, "", false
-		}
-		if n.owner == nil {
-			n = n.children[0] // transparent wrappers above the actual owner only.
-			continue
-		}
-		owner := n.owner
-		if !n.children[0].verifier || owner.Code < 400 || owner.Code > 499 || owner.Code != status || strings.Contains(owner.Message, "${") {
-			return nil, "", false
-		}
-		switch owner.Kind {
-		case "header", "query", "path", "cookie", "form", "body":
-		default:
-			return nil, "", false
-		}
-		message := http.StatusText(owner.Code)
-		if strings.TrimSpace(owner.Message) != "" {
-			message = owner.Message
-		}
-		if strings.TrimSpace(message) == "" {
-			return nil, "", false
-		}
-		cause := owner.Cause
-		if cause == nil {
-			cause = owner.Err
-		}
-		return []*legacy.Error{{Parameter: owner.Name, View: readerView, Code: owner.Code, Message: message, Err: cause}}, message, true
+	owner, ancestors, message, ok := n.opaqueVerifierOwner(status)
+	if !ok {
+		return nil, "", false
 	}
-	return nil, "", false
+	cause := owner.Cause
+	if cause == nil {
+		cause = owner.Err
+	}
+	details := []*legacy.Error{{Parameter: owner.Name, Code: owner.Code, Message: message, Err: cause}}
+	for i := len(ancestors) - 1; i >= 0; i-- {
+		ancestor := ancestors[i]
+		details = []*legacy.Error{{Parameter: ancestor.Name, Code: status, Message: message, Err: ancestor.Unwrap(), Object: details}}
+	}
+	details[0].View = readerView
+	return details, message, true
 }
 
 // projectNominal admits only one already-read linear owner chain ending in the
@@ -326,6 +405,11 @@ func (n *bindingBranch) publicText(status int) (string, bool) {
 func (n *bindingBranch) safeNativeError() (error, bool) {
 	if n.owner != nil {
 		clone := *n.owner
+		if clone.Message == "" {
+			if text, ok := n.requiredText(); ok {
+				clone.Message = text
+			}
+		}
 		clone.Err = nil
 		clone.Cause = nil
 		if len(n.children) > 0 {
@@ -364,4 +448,87 @@ func (n *bindingBranch) safeNativeError() (error, bool) {
 		return n.children[0].safeNativeError()
 	}
 	return nil, false
+}
+
+// requiredText carries only the exact absence owner's safe literal through a
+// linear binding chain. Authored messages and groups retain their existing policy.
+func (n *bindingBranch) requiredText() (string, bool) {
+	if n == nil || n.group || n.input != nil || n.owner == nil || n.owner.Message != "" {
+		return "", false
+	}
+	if n.requiredAbsence != "" {
+		return n.requiredAbsence, true
+	}
+	if len(n.children) == 1 {
+		return n.children[0].requiredText()
+	}
+	return "", false
+}
+
+// readerBindingSource retains source identity without changing error status,
+// public bodies, or transport encoding. Only a compiled native reader issues it.
+type readerBindingSource struct {
+	cause error
+	view  string
+}
+
+func (e *readerBindingSource) Error() string { return e.cause.Error() }
+func (e *readerBindingSource) Unwrap() error { return e.cause }
+
+// sourceReaderView accepts only transparent, single-cause forwarding. A new
+// binding owner or joined outcome must not borrow a descendant's source name.
+func sourceReaderView(cause error) (view string) {
+	defer func() {
+		if recover() != nil {
+			view = ""
+		}
+	}()
+	for remaining := 128; cause != nil && remaining > 0; remaining-- {
+		if source, ok := cause.(*readerBindingSource); ok {
+			return source.view
+		}
+		switch cause.(type) {
+		case *bindly.BindingError, *bindinput.Error, *bindly.ResolutionGroupError,
+			interface{ Unwrap() []error }, interface{ StatusCode() int }, interface{ As(any) bool }:
+			return ""
+		}
+		next, ok := cause.(interface{ Unwrap() error })
+		if !ok {
+			return ""
+		}
+		cause = next.Unwrap()
+	}
+	return ""
+}
+
+// PreserveReaderBindingSource is used by scoped invocation after completion.
+// It records only validated binding failures; nominal business errors remain exact.
+func (p *Plan) PreserveReaderBindingSource(cause error) (result error) {
+	result = cause
+	defer func() {
+		if recover() != nil {
+			result = cause
+		}
+	}()
+	if cause == nil || p == nil || p.errorEnvelope == nil || p.errorEnvelope.readerView == "" {
+		return cause
+	}
+	if _, ok := cause.(*legacy.Error); ok {
+		return cause
+	}
+	// Validate the entire graph before status traversal: errors.As alone is
+	// unbounded and permits application-defined As/Unwrap implementations.
+	remaining := 128
+	branch, valid := readBindingBranch(cause, &remaining)
+	if !valid || branch.hasNominal || branch.hasVerifier {
+		return cause
+	}
+	status := branch.code(0)
+	if status < 400 || status > 499 {
+		return cause
+	}
+	if _, ok := branch.project(status); !ok {
+		return cause
+	}
+	return &readerBindingSource{cause: cause, view: p.errorEnvelope.readerView}
 }

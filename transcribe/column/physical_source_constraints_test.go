@@ -327,3 +327,76 @@ func TestPhysicalSourceConstraintsRejectsUnresolvedResourcesBeforeDiscovery(t *t
 	_, err := r.PhysicalSourceConstraints(context.Background(), "main", view)
 	require.NoError(t, err, "resolved SQL with retained URI must preserve resolver precedence")
 }
+
+func TestPhysicalTableConstraintsDoesNotGrantProjectionAuthority(t *testing.T) {
+	ctx := context.Background()
+	r, db, v := nativeConstraintFixture(t, "CREATE TABLE records(id INTEGER PRIMARY KEY AUTOINCREMENT,a INTEGER REFERENCES parents(id))")
+	leaf, err := r.PhysicalSourceConstraints(ctx, "main", v)
+	require.NoError(t, err)
+	facts, err := r.PhysicalTableConstraints(ctx, "main", "records")
+	require.NoError(t, err)
+	require.Empty(t, facts.Projection)
+	leaf.Projection = nil
+	require.Equal(t, leaf, facts)
+	v.Relations = []*spec.Relation{{Name: "Children", View: &spec.View{Name: "Child"}}}
+	_, err = r.PhysicalSourceConstraints(ctx, "main", v)
+	require.Error(t, err, "generated borrowing must still reject nonleaf")
+	require.NoError(t, db.ExecStatements(ctx, "ALTER TABLE records ADD COLUMN added TEXT"))
+	fresh, err := r.PhysicalTableConstraints(ctx, "main", "records")
+	require.NoError(t, err)
+	require.NotEqual(t, facts.NativeColumns, fresh.NativeColumns)
+	for _, table := range []string{"", "missing", "records r", "main.records", "records;DELETE"} {
+		_, err = r.PhysicalTableConstraints(ctx, "main", table)
+		require.Error(t, err, table)
+	}
+}
+
+func TestPhysicalTableConstraintsNonuniquePrefixIsExactRawEvidence(t *testing.T) {
+	r, c, v := constraintMySQLFixture(t)
+	c.rows["indexes"].values[0][5] = "1"
+	c.rows["members"].values[0][7] = int64(1024)
+	sealed, err := r.PhysicalTableConstraints(context.Background(), "main", "records")
+	require.NoError(t, err)
+	require.False(t, sealed.Indexes[0].Unique)
+	require.Equal(t, "1", sealed.Indexes[0].RawUnique)
+	require.Equal(t, int64(1024), *sealed.Indexes[0].Members[0].PrefixLength)
+	again, err := r.PhysicalTableConstraints(context.Background(), "main", "records")
+	require.NoError(t, err)
+	require.Equal(t, sealed, again)
+	_, err = r.PhysicalSourceConstraints(context.Background(), "main", v)
+	require.Error(t, err, "same complete table remains unsupported generated leaf")
+	for _, prefix := range []int64{512, 0} {
+		c.rows["members"].values[0][7] = prefix
+		fresh, err := r.PhysicalTableConstraints(context.Background(), "main", "records")
+		require.NoError(t, err)
+		require.NotEqual(t, sealed, fresh)
+		require.Equal(t, int64(1024), *sealed.Indexes[0].Members[0].PrefixLength, "sealed facts are detached")
+	}
+	for _, tc := range []struct {
+		name   string
+		mutate func(*constraintMetadataConnector)
+	}{
+		{"negative", func(c *constraintMetadataConnector) { c.rows["members"].values[0][7] = int64(-1) }},
+		{"missing", func(c *constraintMetadataConnector) { c.rows["members"].values[0][7] = nil }},
+		{"unique", func(c *constraintMetadataConnector) { c.rows["indexes"].values[0][5] = "0" }},
+		{"unknown_unique", func(c *constraintMetadataConnector) { c.rows["indexes"].values[0][5] = "?" }},
+		{"primary", func(c *constraintMetadataConnector) {
+			c.rows["indexes"].values[0][4] = "PRIMARY"
+			c.rows["members"].values[0][3] = "PRIMARY"
+		}},
+		{"direction", func(c *constraintMetadataConnector) { c.rows["members"].values[0][6] = "?" }},
+		{"missing_member", func(c *constraintMetadataConnector) { c.rows["members"].values = nil }},
+		{"duplicate_member", func(c *constraintMetadataConnector) {
+			c.rows["members"].values = append(c.rows["members"].values, c.rows["members"].values[0])
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r, c, _ := constraintMySQLFixture(t)
+			c.rows["indexes"].values[0][5] = "1"
+			c.rows["members"].values[0][7] = int64(1024)
+			tc.mutate(c)
+			_, err := r.PhysicalTableConstraints(context.Background(), "main", "records")
+			require.Error(t, err)
+		})
+	}
+}

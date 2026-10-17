@@ -1,8 +1,10 @@
 package compiler
 
 import (
+	"bytes"
 	"fmt"
 	"github.com/viant/datly/constant"
+	"github.com/viant/datly/constant/identifier"
 	"io/fs"
 	"reflect"
 	"sort"
@@ -11,6 +13,7 @@ import (
 	"github.com/viant/bindly"
 	"github.com/viant/datly/data"
 	dexec "github.com/viant/datly/exec"
+	"github.com/viant/datly/internal/readergraph"
 	"github.com/viant/datly/internal/selectorcompanion"
 	"github.com/viant/datly/spec"
 	sqlmacro "github.com/viant/datly/sql/macro"
@@ -26,18 +29,22 @@ import (
 )
 
 type Input struct {
-	SelectorCompanion *selectorcompanion.BindingPlan
-	Const             *constant.Values
-	CodecFactory      xcodec.Factory
-	Component         *spec.Component
-	InputType         reflect.Type
-	OutputType        reflect.Type
-	Bindings          []bindly.BindingSpec
-	Predicate         dexec.PredicateEvaluator
-	TypeLookup        func(name string) (reflect.Type, error)
-	DirectViewField   string
-	DirectViewType    reflect.Type
-	Resources         fs.FS
+	// AuthoredComponent is the checked predecessor of the shared runtime graph.
+	AuthoredComponent *spec.Component
+	// IdentifierProducts resolves trusted connector products without database I/O.
+	IdentifierProducts func(string) (string, error)
+	SelectorCompanion  *selectorcompanion.BindingPlan
+	Const              *constant.Values
+	CodecFactory       xcodec.Factory
+	Component          *spec.Component
+	InputType          reflect.Type
+	OutputType         reflect.Type
+	Bindings           []bindly.BindingSpec
+	Predicate          dexec.PredicateEvaluator
+	TypeLookup         func(name string) (reflect.Type, error)
+	DirectViewField    string
+	DirectViewType     reflect.Type
+	Resources          fs.FS
 }
 
 func Compile(input Input) (*sqlreader.Plan, error) {
@@ -59,9 +66,45 @@ func CompileViewMetadata(input Input) (*data.View, error) {
 }
 
 func (b *planCompiler) prepareViews() (*viewSet, string, error) {
-	constants, err := b.input.Const.For(b.input.Component)
+	authored := b.input.Component
+	if b.input.AuthoredComponent != nil {
+		authored = b.input.AuthoredComponent
+		if b.input.Component == nil || authored.ReaderGraph == nil || authored.ReaderGraph != b.input.Component.ReaderGraph || authored.SelectorCompanion != b.input.Component.SelectorCompanion {
+			return nil, "", fmt.Errorf("reader runtime predecessor association mismatch")
+		}
+	}
+	if err := readergraph.Validate(authored, xshape.Linked(b.input.InputType).Descriptor(), xshape.Linked(b.input.OutputType).Descriptor(), b.input.Resources); err != nil {
+		return nil, "", err
+	}
+	constants, err := b.input.Const.For(authored)
 	if err != nil {
 		return nil, "", err
+	}
+	if authored != nil && authored.ReaderGraph != nil {
+		if err = b.input.Const.Validate(authored, b.input.TypeLookup); err != nil {
+			return nil, "", err
+		}
+		expected := b.input.Const.Apply(authored)
+		expected, err = (identifier.Renderer{Values: constants, Products: b.input.IdentifierProducts}).Component(expected)
+		if err != nil {
+			return nil, "", fmt.Errorf("resolve runtime identifiers: %w", err)
+		}
+		if b.input.AuthoredComponent != nil {
+			actualBytes, err := readergraph.Bytes(b.input.Component)
+			if err != nil {
+				return nil, "", err
+			}
+			expectedBytes, err := readergraph.Bytes(expected)
+			if err != nil {
+				return nil, "", err
+			}
+			if !bytes.Equal(actualBytes, expectedBytes) {
+				return nil, "", fmt.Errorf("reader runtime graph differs from checked constant transform")
+			}
+			// Keep the same parameter objects used by the compiled binding plan.
+		} else {
+			b.input.Component = expected
+		}
 	}
 	b.input.Const = constants
 	b.input.Resources = constants.Resources(b.input.Resources)

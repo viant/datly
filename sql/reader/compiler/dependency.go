@@ -16,6 +16,9 @@ func CompileViewDependencies(input Input) ([]*sqlreader.ViewDependency, error) {
 	if input.Component == nil || len(input.Component.Views) == 0 {
 		return nil, nil
 	}
+	if input.Component.ReaderGraph != nil {
+		return nil, fmt.Errorf("reader metadata independent input views are unsupported")
+	}
 	views, err := indexIndependentViews(input.Component.Views)
 	if err != nil {
 		return nil, err
@@ -45,6 +48,7 @@ func CompileViewDependencies(input Input) ([]*sqlreader.ViewDependency, error) {
 			continue
 		}
 		component := componentWithRootView(input.Component, view)
+
 		viewInput := input
 		viewInput.Component = component
 		viewInput.OutputType = targetType

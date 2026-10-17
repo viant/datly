@@ -220,7 +220,7 @@ func generationInput(rootDir, packageDir string, compiled *Result) (gen.Input, s
 			}
 		}
 	}
-	input := gen.Input{Resources: resources,
+	input := gen.Input{Resources: resources, ReaderMetadataSource: compiled.Source.PackageComponent, ReaderMetadataURI: compiled.Source.ReaderMetadataURI,
 		Component: component, Declarations: compiled.Declarations,
 		SQLResources:  true,
 		TargetPackage: targetPackage, ProjectRoot: rootDir, Contracts: compiled.Contracts, Views: compiled.Views, ViewBindings: compiled.ViewBindings,

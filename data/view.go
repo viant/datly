@@ -11,6 +11,8 @@ import (
 // field links), while all other structural metadata is owned by spec.View.
 // Execution state, collectors, partitioners and native caches live in reader.
 type SelectorField struct {
+	// OutputOnly is a visible SQL-transient output field, never SQL authority.
+	OutputOnly bool
 	GoName     string
 	PublicName string
 	Column     string

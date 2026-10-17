@@ -185,12 +185,12 @@ func scaffoldArtifacts(dir string, plan *Plan) ([]EmittedFile, []EmittedFile, []
 	if plan.Input.Ownership == ContractGenerated && plan.localShape(plan.Input.Package) {
 		files = append(files, EmittedFile{
 			Path: filepath.Join(dir, plan.Input.Destination),
-			Content: inputStructFile(packageName,
+			Content: plan.inputSource(packageName,
 				fmt.Sprintf("// %s is the generated input scaffold for %s.", plan.Input.Type, plan.ComponentName),
 				plan.Input.Type, plan.Input.Fields, plan.Imports,
 			),
 		})
-		if setters := inputSetterFile(packageName, plan.Input.Type, plan.Input.Fields, plan.Imports); setters != "" {
+		if setters := plan.inputSetters(packageName); setters != "" {
 			files = append(files, EmittedFile{Path: filepath.Join(dir, plan.Generation.File("input_setters", "input_setters.go")), Content: setters})
 		}
 	}
@@ -304,6 +304,10 @@ func scaffoldArtifacts(dir string, plan *Plan) ([]EmittedFile, []EmittedFile, []
 		}
 	}
 	if err := formatGoArtifacts(files, preformatted); err != nil {
+		return nil, nil, nil, err
+	}
+	files, err = plan.combineSourceMemberArtifacts(files)
+	if err != nil {
 		return nil, nil, nil, err
 	}
 	return files, userFiles, removals, nil

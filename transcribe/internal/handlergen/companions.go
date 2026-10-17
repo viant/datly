@@ -21,6 +21,18 @@ func PrepareCompanions(compiled *Context, input *gen.Input) error {
 	if err != nil {
 		return err
 	}
+	// A proven source-member composition has no generated physical entity at
+	// its root. Its nominal linked owners retain their own native helpers;
+	// compiling a synthetic writer root would invent table/DML authority.
+	if contracts.ExternalHandler != nil && contracts.ExternalHandler.InputShape != nil {
+		identity, err := contracts.ExternalHandler.InputShape.Identity()
+		if err != nil {
+			return err
+		}
+		if _, logical := contracts.ExternalHandler.CompositionViews[identity]; logical {
+			return nil
+		}
+	}
 	staged := *compiled
 	staged.Component = compiled.Component.Clone()
 	staged.Component.RootView = compiled.ExternalHandler.InputShape.Clone()

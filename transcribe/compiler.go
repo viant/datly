@@ -59,7 +59,11 @@ type ContractTypeOverrides = handlergen.ContractTypeOverrides
 
 // Compiler orchestrates source preparation, metadata linking, read planning,
 // column discovery, and handler compilation.
-type Compiler struct{ comparisonOnly bool }
+type Compiler struct {
+	comparisonOnly    bool
+	factoryOwner      *factoryOwnerReference
+	factoryReferences []*factoryOwnerReference
+}
 
 func NewCompiler() *Compiler {
 	return &Compiler{}
@@ -72,6 +76,9 @@ func (c *Compiler) Compile(ctx context.Context, source *Source) (*Result, error)
 	if source == nil {
 		return nil, ErrNilSource
 	}
+	// Source-owner evidence belongs to this compilation; reusable compilers must
+	// not attach a previous source's closure to another generated component.
+	c.factoryReferences = nil
 	if header, body, err := dql.ParseHandlerSource(source.Text); err != nil {
 		return nil, err
 	} else if header != nil {
@@ -130,28 +137,12 @@ type componentCompilation struct {
 }
 
 func prepareCompilation(ctx context.Context, source *Source) (*componentCompilation, error) {
-	authoredText := source.Text
-	source, resourcePatches, err := prepareParameterizedEmbeds(ctx, source)
+	preparation, err := prepareSourceCompilation(ctx, source)
 	if err != nil {
 		return nil, err
 	}
-	readerName, err := dql.ParseReaderRouteName(source.Text)
-	if err != nil {
-		return nil, err
-	}
-	prepared := dql.PrepareSource(source.Text)
-	authoredMap := newSourceMap(len(authoredText), resourcePatches, 0, authoredText)
-	sourceMap := newSourceMap(len(authoredText), resourcePatches, prepared.TrimPrefix, authoredText)
-	if len(prepared.Diagnostics) > 0 {
-		diagnostics := make([]*Diagnostic, 0, len(prepared.Diagnostics))
-		for _, item := range prepared.Diagnostics {
-			diagnostics = append(diagnostics, &Diagnostic{
-				Code: item.Code, Severity: SeverityError, Message: item.Message, Path: source.Path,
-				Span: Span{Start: authoredMap.Position(item.Offset), End: authoredMap.Position(item.End)},
-			})
-		}
-		return nil, &CompileError{Cause: prepared.Err(), Diagnostics: diagnostics}
-	}
+	source = preparation.apply(source)
+	prepared, sourceMap, readerName := preparation.prepared, preparation.sourceMap, preparation.readerName
 	component, err := dql.ParsePreparedComponentSource(source.Scope, source.Name, prepared)
 	// A Go-only component has package authority and no DQL overlay. Keep it
 	// on the same load/compile path without inventing an authored route.
@@ -265,6 +256,14 @@ func (c *componentCompilation) loadMetadata(comparisonOnly bool) error {
 
 func (c *componentCompilation) compileViews(ctx context.Context) error {
 	source, component, prepared := c.result.Source, c.result.Component, c.prepared
+	sourceCopy := *source
+	source = &sourceCopy
+	c.result.Source = source
+	var proofErr error
+	source.selfGeneratedInputViews, source.inheritedGeneratedCurrents, proofErr = generatedCurrentAuthority(ctx, source, component, c.authored, c.result.TypeResolver)
+	if proofErr != nil {
+		return proofErr
+	}
 	sourceMap, compiledTypeContext, typeResolver := c.result.SourceMap, c.result.TypeContext, c.result.TypeResolver
 	declarationFailure := func(err error) error {
 		span := pointSpan(source.Text, 0)
@@ -332,7 +331,7 @@ func (c *componentCompilation) compileViews(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("normalize independent view contracts: %w", err)
 	}
-	packageViews, err := packageInputViewReferences(component, source.PackageComponent, typeResolver)
+	packageViews, err := packageInputViewReferences(component, source.PackageComponent, typeResolver, source.selfGeneratedInputViews)
 	if err != nil {
 		return err
 	}
@@ -459,6 +458,14 @@ func applySourceDefaults(component *spec.Component, source *Source) {
 // refineComponentColumns shares the reader discovery order with generated
 // custom contracts: body columns first, then typed dependent input reads.
 func refineComponentColumns(ctx context.Context, component *spec.Component, source *Source, declarations gen.Declarations, viewBindings gen.ViewBindings, typeResolver *typecatalog.Resolver, factoryInputs ...gen.Input) error {
+	return refineComponentColumnsWithOwnerProof(ctx, component, source, declarations, viewBindings, typeResolver, nil, factoryInputs...)
+}
+
+func refineComponentColumnsWithOwnerProof(ctx context.Context, component *spec.Component, source *Source, declarations gen.Declarations, viewBindings gen.ViewBindings, typeResolver *typecatalog.Resolver, ownerProof func(*spec.Component) error, factoryInputs ...gen.Input) error {
+	return refineComponentColumnsWithFactoryProof(ctx, component, source, declarations, viewBindings, typeResolver, ownerProof, nil, factoryInputs...)
+}
+
+func refineComponentColumnsWithFactoryProof(ctx context.Context, component *spec.Component, source *Source, declarations gen.Declarations, viewBindings gen.ViewBindings, typeResolver *typecatalog.Resolver, ownerProof func(*spec.Component) error, composition *authoring.FactoryComposition, factoryInputs ...gen.Input) error {
 	var factoryShape *gen.ExternalHandler
 	var linkedViews gen.ViewReferences
 	if len(factoryInputs) != 0 {
@@ -493,8 +500,15 @@ func refineComponentColumns(ctx context.Context, component *spec.Component, sour
 				rootDiscovery.RootView = nil
 			}
 		}
+		rootDiscovery, transfer := composition.Discovery(rootDiscovery)
 		if err := columnCompilation.RefineRoot(ctx, rootDiscovery, source.Resources, templateInput); err != nil {
 			return err
+		}
+		transfer()
+		if ownerProof != nil {
+			if err := ownerProof(component); err != nil {
+				return err
+			}
 		}
 		templateInput, compileErr = (&discoveryInputCompiler{
 			component: component, declarations: declarations,

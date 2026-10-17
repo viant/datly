@@ -6,6 +6,7 @@ import (
 	"reflect"
 
 	"github.com/viant/bindly"
+	"github.com/viant/bindly/locator"
 	"github.com/viant/datly/internal/selectorcompanion"
 	"github.com/viant/datly/runtime/registry"
 	"github.com/viant/datly/spec"
@@ -106,6 +107,17 @@ func (c *Compiler) compile(describe bool) (*Result, error) {
 		bindings, bindErr := BuildBindingSpecs(&companion, c.selection.Type, nil)
 		if bindErr != nil {
 			return nil, bindErr
+		}
+		// Native input/param dependencies run in the public stage before selectors.
+		for _, public := range result.Bindings {
+			if public.Location.Kind == "input" || public.Location.Kind == "param" {
+				for i := range bindings {
+					if bindings[i].Location.Kind == "query" {
+						bindings[i].Priority = locator.PriorityDependent
+					}
+				}
+				break
+			}
 		}
 		companionPlan, bindErr := injector.CompilePlan(c.selection.Type, bindings...)
 		if bindErr != nil {

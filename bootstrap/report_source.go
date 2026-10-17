@@ -90,8 +90,14 @@ func (c *artifactCompiler) compileHandlerReportSource(component *spec.Component)
 // compiling executable SQL templates, codecs, collectors, or opening a DB.
 // It is shared by authoring-time facade emission and runtime derivation.
 func ResolveReportSource(component *spec.Component, output reflect.Type, resources *resource.Store) (*spec.Component, error) {
-	compiler := &artifactCompiler{input: ArtifactInput{Component: component, OutputType: output, Resources: resources}}
-	source, err := (ContractResolver{Component: component, OutputType: linkedContractType(output)}).Resolve()
+	return ResolveReportSourceWithContracts(component, nil, output, resources)
+}
+
+// ResolveReportSourceWithContracts preserves canonical input and output authority
+// when resolving detached report metadata for a reader with selector companions.
+func ResolveReportSourceWithContracts(component *spec.Component, input, output reflect.Type, resources *resource.Store) (*spec.Component, error) {
+	compiler := &artifactCompiler{input: ArtifactInput{Component: component, InputType: input, OutputType: output, Resources: resources}}
+	source, err := (ContractResolver{Component: component, InputType: linkedContractType(input), OutputType: linkedContractType(output)}).Resolve()
 	if err != nil {
 		return nil, err
 	}

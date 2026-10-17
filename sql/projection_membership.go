@@ -226,7 +226,7 @@ func (p SelectorProjection) columns() ([]ProjectionColumn, bool, error) {
 	var parsed *query.Select
 	var err error
 	if ok {
-		parsed, err = parts.parse()
+		parsed, err = parts.parseMembership()
 	} else {
 		parsed, err = parseProjectionQuery(p.SQL)
 	}
