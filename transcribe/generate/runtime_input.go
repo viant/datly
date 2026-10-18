@@ -38,21 +38,26 @@ func (g *Generator) ColumnDiscoveryInput() (reflect.Type, []*spec.Parameter, err
 	if err != nil {
 		return nil, nil, err
 	}
+	side, err := selectorParameters(g.input.Component, plan.QuerySelectors)
+	return typ, side, err
+}
+
+func selectorParameters(component *spec.Component, fields []Field) ([]*spec.Parameter, error) {
 	selected := map[string]bool{}
-	for _, field := range plan.QuerySelectors {
+	for _, field := range fields {
 		m, err := tag.ParseField(reflect.StructField{Name: field.Name, Tag: reflect.StructTag(field.Tag)})
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 		selected[(&spec.Parameter{Name: m.Binding.Name, Source: spec.BindSource{Kind: m.Binding.Location.Kind, Name: m.Binding.Location.In}}).Identity()] = true
 	}
 	var side []*spec.Parameter
-	for _, parameter := range spec.EffectiveParameters(g.input.Component.Parameters) {
+	for _, parameter := range spec.EffectiveParameters(component.Parameters) {
 		if parameter != nil && selected[parameter.Identity()] {
 			side = append(side, parameter)
 		}
 	}
-	return typ, side, nil
+	return side, nil
 }
 
 func (g *Generator) runtimeInputPlan(discoveryOnly bool) (reflect.Type, *Plan, error) {
@@ -331,3 +336,36 @@ func (m *runtimeInputMaterializer) descriptorType(name string) (reflect.Type, er
 }
 
 func standardRuntimeType(name string) reflect.Type { return discoverytype.StandardType(name) }
+
+// SelectorSideParameters plans only side storage against an admitted Input.
+// Full generation remains responsible for output and view graph validation.
+func (g *Generator) SelectorSideParameters() ([]*spec.Parameter, error) {
+	if g == nil {
+		return nil, fmt.Errorf("generator is required")
+	}
+	if g.initErr != nil {
+		return nil, g.initErr
+	}
+	if g.input.Component == nil {
+		return nil, fmt.Errorf("generation component is required")
+	}
+	if !ordinarySelectorReader(g.input.Component) {
+		return nil, nil
+	}
+	fields, err := resolveSelectorFields(g.input.Component, g.input.Declarations)
+	if err != nil {
+		return nil, err
+	}
+	plan := &Plan{Package: g.input.TargetPackage, QuerySelectors: fields}
+	resolver := &planResolver{input: g.input, types: g.resolver, plan: plan}
+	if err = resolver.resolveContract("input", &plan.Input, g.input.Contracts.Input); err != nil {
+		return nil, err
+	}
+	if plan.Input.Ownership == ContractLinked {
+		plan.QuerySelectors, err = resolver.linkedSelectorFields()
+		if err != nil {
+			return nil, err
+		}
+	}
+	return selectorParameters(g.input.Component, plan.QuerySelectors)
+}

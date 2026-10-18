@@ -41,7 +41,7 @@ func (a *packageAuthority) retainSelectorBusinessInput(result *Result, contracts
 		if component.TypeContext != nil && component.TypeContext.PackagePath != "" {
 			target = component.TypeContext.PackagePath
 		}
-		_, side, err := gen.New(gen.Input{Component: component.Clone(), Declarations: result.Declarations, TypeResolver: result.TypeResolver, TargetPackage: target, Contracts: gen.ContractReferences{Input: reference}, Views: result.Views, ViewBindings: result.ViewBindings, Resources: result.Source.Resources}).ColumnDiscoveryInput()
+		side, err := gen.New(gen.Input{Component: component.Clone(), Declarations: result.Declarations, TypeResolver: result.TypeResolver, TargetPackage: target, Contracts: gen.ContractReferences{Input: reference}, Views: result.Views, ViewBindings: result.ViewBindings, Resources: result.Source.Resources}).SelectorSideParameters()
 		if err != nil {
 			return nil, err
 		}

@@ -7,10 +7,13 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/viant/datly/bootstrap"
 	"github.com/viant/datly/spec"
+	gen "github.com/viant/datly/transcribe/generate"
 	"github.com/viant/datly/transcribe/internal/link"
 	"github.com/viant/datly/typecatalog"
 	"github.com/viant/x"
 )
+
+type SelectorLinkedSummary struct{ Count int }
 
 type SelectorLinkedInput struct {
 	ID   int `parameter:"ID,kind=query,in=id"`
@@ -19,8 +22,9 @@ type SelectorLinkedInput struct {
 
 func TestSelectorBusinessInputRetainsExternalDirectBindingComparison(t *testing.T) {
 	descriptor := x.NewType(reflect.TypeFor[SelectorLinkedInput]())
+	summary := x.NewType(reflect.TypeFor[SelectorLinkedSummary]())
 	catalog := typecatalog.NewCatalog()
-	require.NoError(t, catalog.LinkRuntimeAll(typecatalog.TypeOriginPackage, descriptor))
+	require.NoError(t, catalog.LinkRuntimeAll(typecatalog.TypeOriginPackage, descriptor, summary))
 	resolver, err := typecatalog.NewResolver(catalog, typecatalog.PackageAuthority, nil)
 	require.NoError(t, err)
 	base := &spec.Component{Key: spec.Key{Kind: spec.KindComponent, Scope: "example.com/reader", Name: "Records"}, Name: "Records", Routes: []*spec.Route{{Method: "GET", Path: "/records"}}, Parameters: []*spec.Parameter{
@@ -33,6 +37,9 @@ func TestSelectorBusinessInputRetainsExternalDirectBindingComparison(t *testing.
 		retained bool
 	}{
 		{"side addition", nil, true},
+		{"unrelated new linked output view", func(c *spec.Component) {
+			c.Views = []*spec.View{{Name: "Meta", Namespace: "t", TypeName: summary.Key()}}
+		}, true},
 		{"ordinary addition", func(c *spec.Component) {
 			c.Parameters = append(c.Parameters, &spec.Parameter{Name: "Extra", TypeExpr: "int", Source: spec.BindSource{Kind: "query", Name: "extra"}})
 		}, false},
@@ -51,6 +58,11 @@ func TestSelectorBusinessInputRetainsExternalDirectBindingComparison(t *testing.
 			}
 			source := &Source{Text: "authored DQL"}
 			result := &Result{Source: source, Component: current, TypeResolver: resolver}
+			if len(current.Views) > 0 {
+				identity, e := current.Views[0].Identity()
+				require.NoError(t, e)
+				result.Views = gen.ViewReferences{identity: &gen.ViewReference{DescriptorKey: summary.Key()}}
+			}
 			authority := &packageAuthority{source: source, route: &bootstrap.RouteSource{InputType: descriptor.Key()}, input: descriptor}
 			contracts := &link.Contracts{PackageComponent: base, CompiledComponent: current}
 			require.NoError(t, authority.retainSelectorBusinessInput(result, contracts))

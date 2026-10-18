@@ -132,34 +132,9 @@ func (r *planResolver) preserveLinkedSelectors(generated bool) error {
 		p.Input.Ownership = ContractGenerated
 		return nil
 	}
-	descriptor, err := r.types.Descriptor(p.Input.DescriptorKey)
+	side, err := r.linkedSelectorFields()
 	if err != nil {
 		return err
-	}
-	fields, err := xshape.New(descriptor, r.types.Descriptor).Fields()
-	if err != nil {
-		return err
-	}
-	side := p.QuerySelectors[:0]
-	for _, selector := range p.QuerySelectors {
-		wanted, err := tag.ParseField(reflect.StructField{Name: selector.Name, Tag: reflect.StructTag(selector.Tag)})
-		if err != nil {
-			return err
-		}
-		direct := false
-		for _, field := range fields {
-			actual, err := tag.ParseField(field.StructField())
-			if err != nil {
-				return err
-			}
-			if actual.Binding != nil && actual.QuerySelector != nil && wanted.Binding != nil && wanted.QuerySelector != nil && actual.Binding.Location.Kind == wanted.Binding.Location.Kind && actual.Binding.Location.In == wanted.Binding.Location.In && actual.QuerySelector.View == wanted.QuerySelector.View && actual.QuerySelector.Property == wanted.QuerySelector.Property {
-				direct = true
-				break
-			}
-		}
-		if !direct {
-			side = append(side, selector)
-		}
 	}
 	p.QuerySelectors = side
 	planned, err := resolveInputFieldsMode(r.input.Component, r.input.Declarations, false)
@@ -177,4 +152,40 @@ func (r *planResolver) preserveLinkedSelectors(generated bool) error {
 		}
 	}
 	return nil
+}
+
+// linkedSelectorFields classifies side storage against the exact admitted Input
+// without resolving unrelated output or independent-view graph ownership.
+func (r *planResolver) linkedSelectorFields() ([]Field, error) {
+	p := r.plan
+	descriptor, err := r.types.Descriptor(p.Input.DescriptorKey)
+	if err != nil {
+		return nil, err
+	}
+	fields, err := xshape.New(descriptor, r.types.Descriptor).Fields()
+	if err != nil {
+		return nil, err
+	}
+	side := make([]Field, 0, len(p.QuerySelectors))
+	for _, selector := range p.QuerySelectors {
+		wanted, err := tag.ParseField(reflect.StructField{Name: selector.Name, Tag: reflect.StructTag(selector.Tag)})
+		if err != nil {
+			return nil, err
+		}
+		direct := false
+		for _, field := range fields {
+			actual, err := tag.ParseField(field.StructField())
+			if err != nil {
+				return nil, err
+			}
+			if actual.Binding != nil && actual.QuerySelector != nil && wanted.Binding != nil && wanted.QuerySelector != nil && actual.Binding.Location.Kind == wanted.Binding.Location.Kind && actual.Binding.Location.In == wanted.Binding.Location.In && actual.QuerySelector.View == wanted.QuerySelector.View && actual.QuerySelector.Property == wanted.QuerySelector.Property {
+				direct = true
+				break
+			}
+		}
+		if !direct {
+			side = append(side, selector)
+		}
+	}
+	return side, nil
 }
