@@ -380,6 +380,9 @@ func (r *Compilation) discover(ctx context.Context, view *spec.View, connector s
 	if err != nil {
 		return nil, err
 	}
+	if view.Groupable != nil && *view.Groupable {
+		applyDiscoveredProjectionRoles(columns, evaluated.SQL)
+	}
 	projected := make([]string, 0, len(columns))
 	for _, column := range columns {
 		projected = append(projected, column.Name)
@@ -807,4 +810,38 @@ func firstValue(values ...string) string {
 		}
 	}
 	return ""
+}
+
+// Fresh discovery defaults follow evaluated SQL, without typed view fallback.
+// Opaque SQL or ambiguous/unmatched identities retain canonicalColumns defaults.
+func applyDiscoveredProjectionRoles(columns []*spec.Column, sql string) {
+	fields, err := (dsql.CacheProjection{SQL: sql}).Fields()
+	if err != nil {
+		return
+	}
+	roles, counts := map[string]bool{}, map[string]int{}
+	for _, field := range fields {
+		key := normalizedName(field.Name)
+		counts[key]++
+		if field.MeasureKey != "" {
+			roles[key] = false
+		} else if field.DimensionKey != "" {
+			roles[key] = true
+		}
+	}
+	results := map[string]int{}
+	for _, column := range columns {
+		if column != nil {
+			results[normalizedName(column.Name)]++
+		}
+	}
+	for _, column := range columns {
+		if column == nil {
+			continue
+		}
+		key := normalizedName(column.Name)
+		if role, ok := roles[key]; ok && counts[key] == 1 && results[key] == 1 {
+			column.Groupable = &role
+		}
+	}
 }
