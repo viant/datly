@@ -2,6 +2,7 @@ package selectorcompanion
 
 import (
 	"context"
+	"github.com/viant/datly/spec"
 	"reflect"
 	"strings"
 	"testing"
@@ -105,7 +106,7 @@ func TestCompanionInvalidSourceDeclarationsFailClosed(t *testing.T) {
 		{"multiple holder fields", "Contract xdatly.Component", "Other int; Contract xdatly.Component"},
 		{"wrong component generic", "xdatly.Component[fixtureInput,fixtureOutput]", "fixtureInput"},
 		{"promoted selector field", "Fields []string", "fixtureInput; Fields []string"},
-		{"unsupported selector", "property=page", "property=limit"},
+		{"unsupported selector", "property=page", "property=criteria"},
 		{"wrong field type", "Page int", "Page string"},
 		{"nonquery source", "kind=query,in=fields", "kind=header,in=fields"},
 		{"missing source name", "kind=query,in=fields", "kind=query"},
@@ -126,5 +127,42 @@ func TestMissingCompanionMethodPreservesOrdinaryHolder(t *testing.T) {
 	holder, lookup := loadedHolder(t, strings.Replace(sourceFixture, "DatlyQuerySelectors()", "UnrelatedMethod()", 1))
 	if result, err := Resolve(holder, "Contract", lookup); err != nil || result != nil {
 		t.Fatal("ordinary holder changed")
+	}
+}
+
+func TestCompanionFivePropertiesAndSelectedRoute(t *testing.T) {
+	source := strings.Replace(sourceFixture, "Contract xdatly.Component", `Other xdatly.Component[fixtureInput,fixtureOutput] `+"`component:\"Rows,path=/other,method=GET\"`"+`; Contract xdatly.Component`, 1)
+	source = strings.Replace(source, "Page int", `Limit int `+"`parameter:\"Limit,kind=query,in=limit,required=false\" querySelector:\"view=rows,property=limit\"`"+`; Offset int `+"`parameter:\"Offset,kind=query,in=offset,required=false\" querySelector:\"view=rows,property=offset\"`"+`; Sort []string `+"`parameter:\"OrderBy,kind=query,in=sort,required=false\" querySelector:\"view=rows,property=orderBy\"`"+`; Page int`, 1)
+	holder, lookup := loadedHolder(t, source)
+	for _, field := range []string{"Contract", "Other"} {
+		contract, err := Resolve(holder, field, lookup)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(contract.Fields) != 5 {
+			t.Fatal("lost selector fields")
+		}
+	}
+}
+
+type repeatedSelectorNames struct {
+	RootFields  []string `parameter:"Fields,kind=query,in=root_fields" querySelector:"view=root,property=fields"`
+	ChildFields []string `parameter:"Fields,kind=query,in=child_fields" querySelector:"view=children,property=fields"`
+}
+
+func TestCompanionCanonicalIdentityIncludesQuerySource(t *testing.T) {
+	descriptor := x.NewType(reflect.TypeFor[repeatedSelectorNames]())
+	fields, err := xshape.New(descriptor, nil).Fields()
+	if err != nil {
+		t.Fatal(err)
+	}
+	root := &spec.Parameter{Name: "Fields", TypeExpr: "[]string", Source: spec.BindSource{Kind: "query", Name: "root_fields"}, QuerySelector: &spec.QuerySelectorBinding{View: "root", Property: spec.SelectorPropertyFields}}
+	child := &spec.Parameter{Name: "Fields", TypeExpr: "[]string", Source: spec.BindSource{Kind: "query", Name: "child_fields"}, QuerySelector: &spec.QuerySelectorBinding{View: "children", Property: spec.SelectorPropertyFields}}
+	selected, err := selectCanonical(&spec.Component{Parameters: []*spec.Parameter{root, child}}, &Contract{Descriptor: descriptor, Fields: fields})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(selected.Parameters) != 2 || selected.Parameters[0] != root || selected.Parameters[1] != child {
+		t.Fatal("query source identity was collapsed")
 	}
 }

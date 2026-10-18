@@ -19,16 +19,20 @@ var nativeQueryProviderType = reflect.TypeOf(requestprovider.NewValues().Query()
 type pageSource struct {
 	provider locator.Provider
 	binding  bindly.BindingSpec
+	legacy   bool
 }
 
 func newPageSource(provider locator.Provider, binding bindly.BindingSpec) (*pageSource, error) {
 	if provider == nil || reflect.TypeOf(provider) != nativeQueryProviderType || reflect.ValueOf(provider).IsNil() || provider.Kind() != "query" || binding.Location.Kind != "query" || binding.Location.In == "" {
 		return nil, fmt.Errorf("deferred companion Page requires the exact native query provider")
 	}
-	return &pageSource{provider: provider, binding: binding}, nil
+	return &pageSource{provider: provider, binding: binding, legacy: true}, nil
 }
 
 func (p *pageSource) resolve(ctx context.Context) (int, error) {
+	if p.provider == nil {
+		return 0, nil
+	}
 	locator := p.provider.Locate(nil)
 	if locator == nil {
 		return 0, p.failure(fmt.Errorf("native query locator is missing"))
@@ -41,9 +45,16 @@ func (p *pageSource) resolve(ctx context.Context) (int, error) {
 		if !present {
 			continue
 		}
+		if value, ok := raw.(int); ok {
+			return value, nil
+		}
 		values, ok := raw.([]string)
 		if !ok {
-			return 0, p.failure(fmt.Errorf("unexpected native query value %T", raw))
+			if value, stringValue := raw.(string); stringValue {
+				values = []string{value}
+			} else {
+				return 0, p.failure(fmt.Errorf("unexpected query Page value %T", raw))
+			}
 		}
 		// The original locator returns one string for a single query value. Its
 		// binding conversion handles that string before numeric selector conversion.
@@ -60,12 +71,12 @@ func (p *pageSource) resolve(ctx context.Context) (int, error) {
 			page, err = strconv.Atoi(text)
 		}
 		if err != nil {
-			if index == 0 {
+			if index == 0 && p.legacy {
 				continue
 			}
 			return 0, p.failure(err)
 		}
-		if page < 1 {
+		if page < 1 && p.legacy {
 			page = 1
 		}
 		return page, nil

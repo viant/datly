@@ -20,7 +20,7 @@ import (
 )
 
 func TestSelectorCompanionInheritedRejectsBeforeOwnerResolution(t *testing.T) {
-	for _, mode := range []string{"missing composed query", "bound input", "resolved input", "replay", "child source", "priority interleaving"} {
+	for _, mode := range []string{"bound input", "replay", "child source", "priority interleaving"} {
 		t.Run(mode, func(t *testing.T) {
 			source := &companionSource{}
 			childSource := &companionSource{}

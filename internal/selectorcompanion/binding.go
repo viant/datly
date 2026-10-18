@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"strings"
 
 	"github.com/viant/bindly"
 	"github.com/viant/bindly/locator"
@@ -89,21 +90,26 @@ func selectCanonical(component *spec.Component, contract *Contract) (*Selection,
 		if p == nil || p.EmitOutput || p.Source.Kind == "output" {
 			continue
 		}
-		if _, exists := candidates[p.Name]; exists {
+		if _, exists := candidates[p.Identity()]; exists {
 			return nil, fmt.Errorf("selector companion ambiguous canonical parameter %s", p.Name)
 		}
-		candidates[p.Name] = p
+		candidates[p.Identity()] = p
 	}
 	for _, f := range contract.Fields {
-		p := candidates[f.Name]
-		if p == nil {
-			return nil, fmt.Errorf("selector companion canonical parameter %s missing", f.Name)
-		}
 		m, err := tag.ParseField(f.StructField())
 		if err != nil {
 			return nil, err
 		}
 		b := m.Binding
+		identity := b.Name
+		if identity == "" {
+			identity = f.Name
+		}
+		key := (&spec.Parameter{Name: identity, Source: spec.BindSource{Kind: b.Location.Kind, Name: b.Location.In}}).Identity()
+		p := candidates[key]
+		if p == nil {
+			return nil, fmt.Errorf("selector companion canonical parameter %s missing", identity)
+		}
 		typ, _ := f.BuiltinType()
 		name := b.Name
 		if name == "" {
@@ -146,6 +152,10 @@ type BindingPlan struct {
 	public, selectors         []bindly.BindingSpec
 	deferredPlan              *bindly.Plan
 	deferredBinding           *bindly.BindingSpec
+	pageBindings              []bindly.BindingSpec
+	pagePlan                  *bindly.Plan
+	absentPlan                *bindly.Plan
+	owner                     *BindingPlan
 }
 
 func NewBindingPlan(component *spec.Component, selected *Selection, input reflect.Type, publicPlan, companionPlan *bindly.Plan, public, selectors []bindly.BindingSpec) (*BindingPlan, error) {
@@ -155,33 +165,39 @@ func NewBindingPlan(component *spec.Component, selected *Selection, input reflec
 	if selected.Association != component.SelectorCompanion || publicPlan == nil || companionPlan == nil || publicPlan.TargetType() != input || companionPlan.TargetType() != selected.Type || len(selectors) != len(selected.Parameters) {
 		return nil, fmt.Errorf("selector companion compiled plan mismatch")
 	}
-	ordered := append(append([]bindly.BindingSpec(nil), public...), selectors...)
-	canonical := []*spec.Parameter{}
-	for _, p := range spec.EffectiveParameters(component.Parameters) {
-		if p != nil && !p.EmitOutput && p.Source.Kind != "output" {
-			canonical = append(canonical, p)
+	publicCanonical, selectorCanonical := []*spec.Parameter{}, []*spec.Parameter{}
+	for _, parameter := range spec.EffectiveParameters(component.Parameters) {
+		if parameter == nil || parameter.EmitOutput || parameter.Source.Kind == "output" {
+			continue
+		}
+		if selected.Contains(parameter) {
+			selectorCanonical = append(selectorCanonical, parameter)
+		} else {
+			publicCanonical = append(publicCanonical, parameter)
 		}
 	}
-	if len(ordered) != len(canonical) {
-		return nil, fmt.Errorf("selector companion requires exact canonical binding declaration order")
+	if len(publicCanonical) != len(public) || len(selectorCanonical) != len(selectors) {
+		return nil, fmt.Errorf("selector companion requires exact canonical binding coverage")
 	}
 	locations := map[string]bool{}
-	for i, b := range ordered {
-		if b.Extension != canonical[i] {
-			return nil, fmt.Errorf("selector companion requires trailing canonical selectors and reflected binding order")
+	for i, b := range public {
+		if b.Extension != publicCanonical[i] {
+			return nil, fmt.Errorf("public canonical binding order changed")
+		}
+		locations[b.Location.Kind+"\x00"+b.Location.In] = true
+	}
+	for i, b := range selectors {
+		if b.Extension != selectorCanonical[i] {
+			return nil, fmt.Errorf("selector canonical binding order changed")
 		}
 		if b.Async || b.ResolutionGroup != nil || b.Scope != "" || b.When != "" || b.With != "" || b.URI != "" || b.ResourceRef != "" {
-			return nil, fmt.Errorf("selector companion does not support staged binding responsibilities")
+			return nil, fmt.Errorf("selector companion does not support staged selector bindings")
 		}
 		key := b.Location.Kind + "\x00" + b.Location.In
-		if i < len(public) {
-			locations[key] = true
-		} else {
-			if locations[key] {
-				return nil, fmt.Errorf("selector companion overlaps an existing source location")
-			}
-			locations[key] = true
+		if locations[key] {
+			return nil, fmt.Errorf("selector companion overlaps an existing source location")
 		}
+		locations[key] = true
 	}
 	for i, b := range selectors {
 		if b.Extension != selected.Parameters[i] {
@@ -193,10 +209,10 @@ func NewBindingPlan(component *spec.Component, selected *Selection, input reflec
 		if reflect.PointerTo(input).Implements(reflect.TypeFor[xhandler.Initializer]()) || reflect.PointerTo(input).Implements(reflect.TypeFor[xhandler.InvokerInitializer]()) || reflect.PointerTo(input).Implements(reflect.TypeFor[xmcp.Initializer]()) {
 			return nil, fmt.Errorf("deferred companion Page does not support input callbacks")
 		}
-		var executable []bindly.BindingSpec
+		executable := make([]bindly.BindingSpec, 0)
 		for _, b := range selectors {
 			parameter := b.Extension.(*spec.Parameter)
-			if parameter.QuerySelector.Property == spec.SelectorPropertyPage {
+			if parameter.QuerySelector.Property == spec.SelectorPropertyPage && (b.Required == nil || !*b.Required) {
 				field, ok := result.Field(parameter)
 				if result.deferredBinding != nil || !ok || field.Type != reflect.TypeFor[int]() {
 					return nil, fmt.Errorf("deferred companion Page requires one exact int field")
@@ -218,11 +234,41 @@ func NewBindingPlan(component *spec.Component, selected *Selection, input reflec
 			}
 		}
 	}
+	ordinary := make([]bindly.BindingSpec, 0)
+	for _, binding := range selectors {
+		if binding.Extension.(*spec.Parameter).QuerySelector.Property == spec.SelectorPropertyPage && (binding.Required == nil || !*binding.Required) && (result.IsDeferredPage(binding.Extension.(*spec.Parameter)) || unlimitedPageView(component, binding.Extension.(*spec.Parameter))) {
+			result.pageBindings = append(result.pageBindings, binding)
+		} else {
+			ordinary = append(ordinary, binding)
+		}
+	}
+	if len(result.pageBindings) > 0 {
+		injector, err := bindly.NewInjector()
+		if err != nil {
+			return nil, err
+		}
+		result.pagePlan, err = injector.CompilePlan(selected.Type, ordinary...)
+		if err != nil {
+			return nil, err
+		}
+	}
+	injector, err := bindly.NewInjector()
+	if err != nil {
+		return nil, err
+	}
+	result.absentPlan, err = injector.CompilePlan(selected.Type, make([]bindly.BindingSpec, 0)...)
+	if err != nil {
+		return nil, err
+	}
 	return result, nil
 
 }
 
-func (p *BindingPlan) ValidateProviders(providers []locator.Provider) error {
+func (p *BindingPlan) ValidateProviders(providers []locator.Provider, resolvedPaths ...string) error {
+	resolved := map[string]bool{}
+	for _, path := range resolvedPaths {
+		resolved[path] = true
+	}
 	if p.DeferredPage() {
 		if _, err := p.pageSource(providers); err != nil {
 			return err
@@ -246,6 +292,12 @@ func (p *BindingPlan) ValidateProviders(providers []locator.Provider) error {
 		for _, b := range bindings {
 			priority, ok := priorities[b.Location.Kind]
 			if !ok {
+				if i == 0 && resolved[b.Path] {
+					continue
+				}
+				if b.Location.Kind == "query" && (b.Required == nil || !*b.Required) && !p.DeferredPage() {
+					continue
+				}
 				return fmt.Errorf("selector companion provider %s is not in the composed invocation", b.Location.Kind)
 			}
 			if b.Priority != 0 {
@@ -265,12 +317,30 @@ func (p *BindingPlan) ValidateProviders(providers []locator.Provider) error {
 }
 func (p *BindingPlan) PublicPlan() *bindly.Plan { return p.publicPlan }
 func (p *BindingPlan) Type() reflect.Type       { return p.companion }
-func (p *BindingPlan) Bind(ctx context.Context, scope *bindly.Injector, input any) (any, error) {
+func (p *BindingPlan) Bind(ctx context.Context, scope *bindly.Injector, input any, providers ...locator.Provider) (any, error) {
 	if reflect.TypeOf(input) != reflect.PointerTo(p.input) {
 		return nil, fmt.Errorf("selector companion requires exact canonical input")
 	}
 	target := reflect.New(p.companion).Interface()
 	plan := p.companionPlan
+	if len(providers) > 0 {
+		hasQuery := false
+		for _, provider := range providers {
+			if provider != nil && provider.Kind() == "query" {
+				hasQuery = true
+				break
+			}
+		}
+		if !hasQuery {
+			plan = p.absentPlan
+		}
+	}
+	for _, provider := range providers {
+		if p.pagePlan != nil && provider != nil && reflect.TypeOf(provider) == nativeQueryProviderType {
+			plan = p.pagePlan
+			break
+		}
+	}
 	if p.deferredPlan != nil {
 		plan = p.deferredPlan
 	}
@@ -290,6 +360,7 @@ type carrier struct {
 	plan         *BindingPlan
 	input, value any
 	page         *pageSource
+	pages        map[*spec.Parameter]*pageSource
 }
 
 func (p *BindingPlan) Carry(binder xhandler.Binder, input, value any) (xhandler.Binder, error) {
@@ -328,12 +399,12 @@ func (p *BindingPlan) CarryPrepared(source xhandler.Binder, original, prepared a
 			return nil, fmt.Errorf("unsupported prepared companion field")
 		}
 	}
-	return &carrier{Binder: binder, plan: p, input: prepared, value: copyValue.Interface(), page: source.(*carrier).page}, nil
+	return &carrier{Binder: binder, plan: p, input: prepared, value: copyValue.Interface(), page: source.(*carrier).page, pages: source.(*carrier).pages}, nil
 }
 
 func (p *BindingPlan) Value(binder xhandler.Binder, input any) (reflect.Value, error) {
 	c, ok := binder.(*carrier)
-	if !ok || c.plan != p || c.plan.association != p.association || c.input != input {
+	if !ok || c.plan.authority() != p.authority() || c.plan.association != p.association || c.input != input {
 		return reflect.Value{}, fmt.Errorf("selector companion invocation carrier mismatch")
 	}
 	return reflect.ValueOf(c.value), nil
@@ -369,20 +440,54 @@ func (p *BindingPlan) IsDeferredPage(parameter *spec.Parameter) bool {
 	return p.DeferredPage() && p.deferredBinding.Extension == parameter
 }
 
+// HasPageSources retains Page conversion until the reader has merged per-view selectors.
+func (p *BindingPlan) HasPageSources() bool { return p != nil && len(p.pageBindings) > 0 }
+func (p *BindingPlan) PageParameters() []*spec.Parameter {
+	var result []*spec.Parameter
+	for _, b := range p.pageBindings {
+		result = append(result, b.Extension.(*spec.Parameter))
+	}
+	return result
+}
 func (p *BindingPlan) CarryPage(binder xhandler.Binder, input, value any, providers []locator.Provider) (xhandler.Binder, error) {
 	wrapped, err := p.Carry(binder, input, value)
 	if err != nil {
 		return nil, err
 	}
-	if !p.DeferredPage() {
-		return nil, fmt.Errorf("deferred Page plan missing")
+	c := wrapped.(*carrier)
+	c.pages = map[*spec.Parameter]*pageSource{}
+	if p.DeferredPage() {
+		c.page, err = p.pageSource(providers)
+		if err != nil {
+			return nil, err
+		}
 	}
-	source, err := p.pageSource(providers)
-	if err != nil {
-		return nil, err
+	for _, binding := range p.pageBindings {
+		var query locator.Provider
+		for _, candidate := range providers {
+			if candidate != nil && candidate.Kind() == "query" {
+				if query != nil {
+					return nil, fmt.Errorf("ambiguous query provider")
+				}
+				query = candidate
+			}
+		}
+		if query == nil && binding.Required != nil && *binding.Required {
+			return nil, fmt.Errorf("selector Page query provider missing")
+		}
+		c.pages[binding.Extension.(*spec.Parameter)] = &pageSource{provider: query, binding: binding, legacy: p.DeferredPage()}
 	}
-	wrapped.(*carrier).page = source
 	return wrapped, nil
+}
+func (p *BindingPlan) ResolvePageParameter(ctx context.Context, binder xhandler.Binder, input any, parameter *spec.Parameter) (int, error) {
+	if _, err := p.Value(binder, input); err != nil {
+		return 0, err
+	}
+	source := binder.(*carrier).pages[parameter]
+	if source == nil {
+		return 0, fmt.Errorf("selector Page source missing")
+	}
+	return source.resolve(ctx)
 }
 func (p *BindingPlan) ResolvePage(ctx context.Context, binder xhandler.Binder, input any) (int, error) {
 	if _, err := p.Value(binder, input); err != nil {
@@ -406,4 +511,99 @@ func (p *BindingPlan) pageSource(providers []locator.Provider) (*pageSource, err
 		}
 	}
 	return newPageSource(query, *p.deferredBinding)
+}
+
+func (p *BindingPlan) authority() *BindingPlan {
+	if p.owner != nil {
+		return p.owner
+	}
+	return p
+}
+
+// ForPublicPlan retains exact side authority while projecting ordinary URI-
+// activated public bindings for one already validated native route.
+func (p *BindingPlan) ForPublicPlan(plan *bindly.Plan, bindings []bindly.BindingSpec) (*BindingPlan, error) {
+	if plan == nil || plan.TargetType() != p.input {
+		return nil, fmt.Errorf("selector public route plan mismatch")
+	}
+	at := 0
+	for _, binding := range bindings {
+		found := false
+		for at < len(p.public) {
+			candidate := p.public[at]
+			at++
+			if binding.Extension == candidate.Extension && binding.Path == candidate.Path {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return nil, fmt.Errorf("selector public route binding is not a canonical projection")
+		}
+	}
+	copy := *p
+	copy.owner = p.authority()
+	copy.publicPlan = plan
+	copy.public = append([]bindly.BindingSpec(nil), bindings...)
+	return &copy, nil
+}
+
+func (p *BindingPlan) RawPageField(index []int) bool {
+	for _, binding := range p.pageBindings {
+		field, ok := p.companion.FieldByName(binding.Path)
+		if !ok || len(field.Index) != len(index) {
+			continue
+		}
+		same := true
+		for i := range index {
+			if index[i] != field.Index[i] {
+				same = false
+				break
+			}
+		}
+		if same {
+			return true
+		}
+	}
+	return false
+}
+
+func (p *BindingPlan) SameAuthority(other *BindingPlan) bool {
+	return p != nil && other != nil && p.authority() == other.authority() && p.association == other.association && p.input == other.input && p.companion == other.companion
+}
+
+func unlimitedPageView(component *spec.Component, parameter *spec.Parameter) bool {
+	if parameter == nil || parameter.QuerySelector == nil {
+		return false
+	}
+	target := parameter.QuerySelector.View
+	seen := map[*spec.View]bool{}
+	var find func(*spec.View) bool
+	find = func(view *spec.View) bool {
+		if view == nil || seen[view] {
+			return false
+		}
+		seen[view] = true
+		if strings.EqualFold(view.CanonicalName(), target) || strings.EqualFold(view.Name, target) {
+			if view.Selector != nil && view.Selector.PermissionSpecified(spec.SelectorPropertyPage) && !view.Selector.AllowPage {
+				return false
+			}
+			return view.Selector != nil && view.Selector.NoLimit || view.Source != nil && view.Source.Controls != nil && view.Source.Controls.Limit != nil && *view.Source.Controls.Limit == 0
+		}
+		for _, relation := range view.Relations {
+			if relation != nil && find(relation.View) {
+				return true
+			}
+		}
+		return false
+	}
+	if find(component.RootView) {
+		return true
+	}
+	for _, view := range component.Views {
+		if find(view) {
+			return true
+		}
+	}
+	return false
 }

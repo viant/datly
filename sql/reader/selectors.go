@@ -30,7 +30,7 @@ func resolveInvocationSelectors(ctx context.Context, session *Session, input ref
 		source := input
 		if session.Artifact.companionSelectors[index] {
 			source = companion
-			if session.Artifact.selectorCompanion.DeferredPage() && binding.Property == spec.SelectorPropertyPage {
+			if binding.Property == spec.SelectorPropertyPage && session.Artifact.selectorCompanion.RawPageField(binding.FieldIndex) {
 				continue
 			}
 		}
@@ -63,6 +63,7 @@ func resolveInvocationSelectors(ctx context.Context, session *Session, input ref
 		return nil, err
 	}
 	rootOverride := false
+	overrides := map[*data.View]bool{}
 	for _, named := range selectors {
 		if named == nil {
 			continue
@@ -72,6 +73,7 @@ func resolveInvocationSelectors(ctx context.Context, session *Session, input ref
 			return nil, fmt.Errorf("query selector: %w", err)
 		}
 		result[view] = named.Selector.Clone()
+		overrides[view] = true
 		if session.Artifact.Root != nil && view == session.Artifact.Root.View {
 			rootOverride = true
 		}
@@ -79,7 +81,7 @@ func resolveInvocationSelectors(ctx context.Context, session *Session, input ref
 			session.selectorOwned = false
 		}
 	}
-	if len(result) == 0 && (session.Artifact.selectorCompanion == nil || !session.Artifact.selectorCompanion.DeferredPage()) {
+	if len(result) == 0 && (session.Artifact.selectorCompanion == nil || !session.Artifact.selectorCompanion.HasPageSources()) {
 		return nil, nil
 	}
 	for view, selector := range result {
@@ -129,6 +131,39 @@ func resolveInvocationSelectors(ctx context.Context, session *Session, input ref
 				return nil, owned
 			}
 			return nil, failure
+		}
+	}
+	if plan := session.Artifact.selectorCompanion; plan != nil && plan.HasPageSources() && !plan.DeferredPage() {
+		for _, parameter := range plan.PageParameters() {
+			view, err := session.Artifact.ViewIndex.Resolve(parameter.QuerySelector.View)
+			if err != nil {
+				return nil, err
+			}
+			if overrides[view] {
+				continue
+			}
+			selector := result[view]
+			if selector == nil {
+				selector = &xstate.Selector{}
+				result[view] = selector
+			}
+			if selector.Offset > 0 {
+				continue
+			}
+			// A NoLimit policy suppresses the default window only; an explicit
+			// positive client/source limit still gives Page execution authority.
+			policy := view.Spec.Selector
+			limit := selector.Limit
+			if limit <= 0 && view.Spec.Source != nil && view.Spec.Source.Controls != nil && view.Spec.Source.Controls.Limit != nil {
+				limit = *view.Spec.Source.Controls.Limit
+			}
+			if policy != nil && policy.NoLimit && limit <= 0 {
+				continue
+			}
+			selector.Page, err = plan.ResolvePageParameter(ctx, binder, input.Interface(), parameter)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 	if plan := session.Artifact.selectorCompanion; plan != nil && plan.DeferredPage() {
@@ -224,7 +259,15 @@ func applySelectorBinding(selector *xstate.Selector, binding SelectorBindingPlan
 		}
 		selector.Fields = fields
 	case spec.SelectorPropertyOrderBy:
-		selector.OrderBy = value.String()
+		if value.Kind() == reflect.Slice {
+			parts := make([]string, value.Len())
+			for i := range parts {
+				parts[i] = value.Index(i).String()
+			}
+			selector.OrderBy = strings.Join(parts, ",")
+		} else {
+			selector.OrderBy = value.String()
+		}
 	case spec.SelectorPropertyCriteria:
 		selector.Criteria = value.String()
 	case spec.SelectorPropertyOffset:

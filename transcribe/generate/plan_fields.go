@@ -15,6 +15,9 @@ func preferDefinedParams(params []*spec.Parameter) []*spec.Parameter {
 }
 
 func resolveInputFields(component *spec.Component, declarations Declarations) ([]Field, error) {
+	return resolveInputFieldsMode(component, declarations, true)
+}
+func resolveInputFieldsMode(component *spec.Component, declarations Declarations, side bool) ([]Field, error) {
 	if component == nil {
 		return nil, nil
 	}
@@ -24,7 +27,7 @@ func resolveInputFields(component *spec.Component, declarations Declarations) ([
 		if param == nil {
 			continue
 		}
-		if param.EmitOutput {
+		if param.EmitOutput || side && selectorSideParameter(param) && ordinarySelectorReader(component) {
 			continue
 		}
 		if strings.EqualFold(strings.TrimSpace(param.Source.Kind), "output") {
@@ -354,4 +357,61 @@ func generatedParameterName(param *spec.Parameter) string {
 		return text.DetectCaseFormat(source).Format(source, text.CaseFormatUpperCamel)
 	}
 	return exportedName(param.Name)
+}
+
+// QuerySelector declarations retain canonical parameter metadata, while their
+// invocation storage belongs to the holder companion rather than business I/O.
+func ordinarySelectorReader(component *spec.Component) bool {
+	if component == nil || len(component.Routes) == 0 {
+		return false
+	}
+	if component.Settings != nil && component.Settings.Mutation != "" {
+		return false
+	}
+	for _, route := range component.Routes {
+		if route == nil || route.Method != "GET" || route.Handler != "" {
+			return false
+		}
+	}
+	return true
+}
+func resolveSelectorFields(component *spec.Component, declarations Declarations) ([]Field, error) {
+	var result []Field
+	names := map[string]bool{}
+	for _, parameter := range preferDefinedParams(component.Parameters) {
+		if parameter == nil || !selectorSideParameter(parameter) {
+			continue
+		}
+		field, ok, err := resolveField(parameter, declarations)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			continue
+		}
+		metadata, err := canonicalFieldMetadata(parameter)
+		if err != nil {
+			return nil, err
+		}
+		field.Tag = fieldTag(parameter, parameter.Name, metadata)
+		if names[field.Name] {
+			return nil, fmt.Errorf("duplicate selector side field %s", field.Name)
+		}
+		names[field.Name] = true
+		result = append(result, field)
+	}
+	return result, nil
+}
+
+func selectorSideParameter(p *spec.Parameter) bool {
+	if p == nil || p.QuerySelector == nil {
+		return false
+	}
+	switch p.QuerySelector.Property {
+	case spec.SelectorPropertyFields, spec.SelectorPropertyOrderBy:
+		return p.TypeExpr == "[]string" && (p.OutputTypeExpr == "" || p.OutputTypeExpr == "[]string")
+	case spec.SelectorPropertyPage, spec.SelectorPropertyLimit, spec.SelectorPropertyOffset:
+		return p.TypeExpr == "int" && (p.OutputTypeExpr == "" || p.OutputTypeExpr == "int")
+	}
+	return false
 }

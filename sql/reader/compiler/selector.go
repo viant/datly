@@ -113,7 +113,14 @@ func validateSelectorField(property spec.SelectorProperty, fieldType reflect.Typ
 		if fieldType.Kind() == reflect.Slice && fieldType.Elem().Kind() == reflect.String {
 			return nil
 		}
-	case spec.SelectorPropertyOrderBy, spec.SelectorPropertyCriteria:
+	case spec.SelectorPropertyOrderBy:
+		if fieldType.Kind() == reflect.Slice && fieldType.Elem().Kind() == reflect.String {
+			return nil
+		}
+		if fieldType.Kind() == reflect.String {
+			return nil
+		}
+	case spec.SelectorPropertyCriteria:
 		if fieldType.Kind() == reflect.String {
 			return nil
 		}

@@ -103,6 +103,15 @@ func componentFileText(packageName string, plan *Plan) (string, error) {
 		}
 	}
 	b.WriteString("}\n")
+	if len(plan.QuerySelectors) > 0 && !plan.ExistingQuerySelectors {
+		name := strings.ToLower(plan.HolderName()[:1]) + plan.HolderName()[1:] + "Selectors"
+		b.WriteString("\ntype " + name + " struct {\n")
+		for _, field := range plan.QuerySelectors {
+			fmt.Fprintf(&b, "\t%s %s %s\n", field.Name, field.Type, strconv.Quote(field.Tag))
+		}
+		b.WriteString("}\n")
+		fmt.Fprintf(&b, "\nfunc (%s) DatlyQuerySelectors() %s { return %s{} }\n", plan.HolderName(), name, name)
+	}
 	b.WriteString("\n// ")
 	b.WriteString(strings.TrimSuffix(plan.HolderName(), "Component"))
 	b.WriteString("DatlyType returns the public component type.\n")

@@ -243,6 +243,14 @@ func overlayParam(base, authored *spec.Parameter) *spec.Parameter {
 	}
 	if authored.QuerySelector != nil {
 		result.QuerySelector = authoredCopy.QuerySelector
+		if authored.TypeExpr != "" {
+			// A typed DQL selector declaration owns its conversion contract.
+			// Removing a former public-input bridge must not retain its codec
+			// or destination type during native source/package reload.
+			result.Codec = authoredCopy.Codec
+			result.OutputTypeExpr = authoredCopy.OutputTypeExpr
+			result.QueryListCSV = authoredCopy.QueryListCSV
+		}
 	}
 	return result
 }

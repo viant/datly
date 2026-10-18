@@ -97,8 +97,8 @@ func TestSelectorCompanionComposedProviderAndPlanAuthority(t *testing.T) {
 	if err := p.ValidateProviders([]locator.Provider{source}); err != nil {
 		t.Fatal(err)
 	}
-	if err := p.ValidateProviders(nil); err == nil {
-		t.Fatal("inherited/unknown provider admitted")
+	if err := p.ValidateProviders(nil); err != nil {
+		t.Fatal("absent optional query source rejected", err)
 	}
 	selected, err := selectorcompanion.Select(c, reflect.TypeFor[fixture.Input]())
 	if err != nil {

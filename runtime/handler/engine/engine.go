@@ -164,8 +164,8 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 		inputPlan, _ = request.Input.ScopePlan("")
 	}
 	selectors := request.Input.SelectorPlan()
-	if selectors != nil && (!request.CanonicalReader || scoped || request.BoundInput != nil || request.ResolvedInput != nil || request.Replay != nil || len(request.ResolvedPaths) != 0 || selectors.PublicPlan() != inputPlan) {
-		return nil, fmt.Errorf("selector companion requires ordinary canonical reader binding without prepared input")
+	if selectors != nil && (!request.CanonicalReader || scoped || request.BoundInput != nil || request.Replay != nil || selectors.PublicPlan() != inputPlan) {
+		return nil, fmt.Errorf("selector companion requires ordinary canonical reader binding without bound input or replay")
 	}
 	if selectors != nil && selectors.DeferredPage() {
 		if _, ok := request.Handler.(rhandler.InputCapturer); ok {
@@ -531,7 +531,7 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 		return finish(nil, err)
 	}
 	if selectors != nil {
-		if err := selectors.ValidateProviders(providers); err != nil {
+		if err := selectors.ValidateProviders(providers, request.ResolvedPaths...); err != nil {
 			return finish(nil, err)
 		}
 	}
@@ -614,7 +614,7 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 			}
 		}
 		if selectors != nil {
-			selectorValue, err = selectors.Bind(ctx, scope, input)
+			selectorValue, err = selectors.Bind(ctx, scope, input, providers...)
 			if err != nil {
 				return err
 			}
@@ -666,7 +666,7 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 		defer scopedLease.close()
 	}
 	if selectors != nil {
-		if selectors.DeferredPage() {
+		if selectors.HasPageSources() {
 			binder, err = selectors.CarryPage(binder, input, selectorValue, providers)
 		} else {
 			binder, err = selectors.Carry(binder, input, selectorValue)

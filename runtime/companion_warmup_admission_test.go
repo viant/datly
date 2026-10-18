@@ -29,11 +29,24 @@ func TestCanonicalCompanionWarmupAdmission(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	for _, parameter := range component.Parameters {
+		if parameter.Name == "ID" {
+			required := true
+			parameter.Required = &required
+		}
+	}
 	compiled, err := compiler.New(compiler.Input{Component: component, InputType: reflect.TypeFor[fixture.Input]()}).Compile()
 	if err != nil {
 		t.Fatal(err)
 	}
 	route, _ := compiled.Input.ForRoute(spec.RouteRef{Method: "GET", Path: "/selector-records"})
+	prepared, err := route.WithOptionalBindings("ID")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if prepared == route {
+		t.Fatal("required input was not detached")
+	}
 	policy := &spec.CacheWarmupSettings{IndexColumn: "id", IndexParameter: "ID"}
 	reader := &warmupAdmissionReader{targets: []dexec.ReaderWarmupTarget{{Settings: policy}}}
 	registered := &RegisteredComponent{Component: component, Input: compiled.Input, Reader: reader}
@@ -43,7 +56,7 @@ func TestCanonicalCompanionWarmupAdmission(t *testing.T) {
 		if phase == handlerexec.WarmupPhaseFill {
 			request.Warmup = &dexec.ReaderWarmupRequest{Settings: policy}
 		}
-		if !canonicalCompanionWarmup(ctx, registered, request, route, route) {
+		if !canonicalCompanionWarmup(ctx, registered, request, route, prepared) {
 			t.Fatal("exact optional root request rejected")
 		}
 		for name, change := range map[string]func(*dexec.ComponentRequest){
@@ -57,21 +70,21 @@ func TestCanonicalCompanionWarmupAdmission(t *testing.T) {
 			t.Run(name, func(t *testing.T) {
 				bad := request
 				change(&bad)
-				if canonicalCompanionWarmup(ctx, registered, bad, route, route) {
+				if canonicalCompanionWarmup(ctx, registered, bad, route, prepared) {
 					t.Fatal("unsupported request admitted")
 				}
 			})
 		}
-		if canonicalCompanionWarmup(t.Context(), registered, request, route, route) {
+		if canonicalCompanionWarmup(t.Context(), registered, request, route, prepared) {
 			t.Fatal("untrusted context admitted")
 		}
 		reader.targets = append(reader.targets, dexec.ReaderWarmupTarget{View: "relation", Settings: policy})
-		if canonicalCompanionWarmup(ctx, registered, request, route, route) {
+		if canonicalCompanionWarmup(ctx, registered, request, route, prepared) {
 			t.Fatal("relation inventory admitted")
 		}
 		reader.targets = reader.targets[:1]
 		reader.targets = append(reader.targets, dexec.ReaderWarmupTarget{Settings: policy})
-		if canonicalCompanionWarmup(ctx, registered, request, route, route) {
+		if canonicalCompanionWarmup(ctx, registered, request, route, prepared) {
 			t.Fatal("ambiguous root inventory admitted")
 		}
 		reader.targets = reader.targets[:1]

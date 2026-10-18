@@ -237,30 +237,10 @@ func (c *RouteInputContract) WithOptionalBindings(names ...string) (*RouteInputC
 	if len(optional) == 0 {
 		return c, nil
 	}
-	if c.selectors != nil {
-		for name := range optional {
-			matched := 0
-			for _, field := range c.fields {
-				for _, key := range inputFieldMatchKeys(field) {
-					if key != name {
-						continue
-					}
-					matched++
-					if field.binding.Required == nil || *field.binding.Required {
-						return nil, fmt.Errorf("selector companion requires explicitly optional prepared input %q", name)
-					}
-					break
-				}
-			}
-			if matched != 1 {
-				return nil, fmt.Errorf("optional input binding %q requires exactly one canonical field", name)
-			}
-		}
-		return c, nil
-	}
 	bindings := make([]bindly.BindingSpec, 0, len(c.fields))
 	wireTypes := make(map[string]reflect.Type)
 	matched := map[string]int{}
+	changed := false
 	for _, field := range c.fields {
 		if field.wireType != nil {
 			wireTypes[field.path] = field.wireType
@@ -269,6 +249,7 @@ func (c *RouteInputContract) WithOptionalBindings(names ...string) (*RouteInputC
 		keys := inputFieldMatchKeys(field)
 		for _, key := range keys {
 			if optional[key] {
+				changed = changed || binding.Required == nil || *binding.Required
 				value := false
 				binding.Required = &value
 				matched[key]++
@@ -286,6 +267,9 @@ func (c *RouteInputContract) WithOptionalBindings(names ...string) (*RouteInputC
 			return nil, fmt.Errorf("optional input binding %q is ambiguous for route %s", name, c.route.String())
 		}
 	}
+	if c.selectors != nil && !changed {
+		return c, nil
+	}
 	injector, err := bindly.NewInjector()
 	if err != nil {
 		return nil, err
@@ -294,7 +278,14 @@ func (c *RouteInputContract) WithOptionalBindings(names ...string) (*RouteInputC
 	if err != nil {
 		return nil, err
 	}
-	contract, err := NewInputContract(c.inputType, c.contract.projection, RouteInput{Route: c.route, Plan: plan, Bindings: bindings, WireTypes: wireTypes})
+	var selectors *selectorcompanion.BindingPlan
+	if c.selectors != nil {
+		selectors, err = c.selectors.ForPublicPlan(plan, bindings)
+		if err != nil {
+			return nil, err
+		}
+	}
+	contract, err := NewInputContract(c.inputType, c.contract.projection, RouteInput{Route: c.route, Plan: plan, Bindings: bindings, WireTypes: wireTypes, Selectors: selectors})
 	if err != nil {
 		return nil, err
 	}
@@ -551,4 +542,31 @@ func (c *RouteInputContract) SelectorPlan() *selectorcompanion.BindingPlan {
 		return nil
 	}
 	return c.selectors
+}
+
+// selectorFields projects existing typed side metadata for protocol discovery;
+// it never places selectors in the canonical business Input or its Bindly plan.
+func (c *RouteInputContract) selectorFields() []InputField {
+	if c == nil || c.selectors == nil {
+		return nil
+	}
+	var result []InputField
+	for _, binding := range c.selectors.Bindings() {
+		parameter, ok := binding.Extension.(*spec.Parameter)
+		if !ok {
+			continue
+		}
+		field, ok := c.selectors.Field(parameter)
+		if !ok {
+			continue
+		}
+		binding = cloneBindingSpec(binding)
+		// Protocol names follow the DQL declaration, not private companion storage.
+		binding.Name = parameter.Name
+		if binding.SourceType == nil {
+			binding.SourceType = field.Type
+		}
+		result = append(result, InputField{owner: c.selectors.Type(), origin: c.route, path: binding.Path, destinationType: field.Type, binding: binding})
+	}
+	return result
 }

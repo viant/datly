@@ -147,10 +147,15 @@ func (s *PackageComponentSource) ResolveDescriptors(types *typecatalog.Resolver)
 			return nil, err
 		}
 		if association != nil {
-			if len(s.Routes) != 1 {
-				return nil, fmt.Errorf("selector companion requires one exact route holder")
+			if combined.SelectorCompanion != nil {
+				prior, priorErr := combined.SelectorCompanion.Companion()
+				next, nextErr := association.Companion()
+				if priorErr != nil || nextErr != nil || prior.Key() != next.Key() {
+					return nil, fmt.Errorf("route holders have conflicting selector companions")
+				}
+			} else {
+				combined.SelectorCompanion = association
 			}
-			combined.SelectorCompanion = association
 		}
 	}
 	return (ContractResolver{

@@ -55,14 +55,30 @@ func Resolve(holder *x.Type, fieldName string, lookup xshape.Lookup) (*Contract,
 	if err != nil {
 		return nil, err
 	}
-	if len(fields) != 1 || fields[0].Anonymous || !fields[0].Exported || len(fields[0].Index) != 1 || fields[0].Name != fieldName {
-		return nil, fmt.Errorf("selector companion holder requires one direct selected component field")
+	var selectedField *xshape.Field
+	for i := range fields {
+		if fields[i].Name == fieldName {
+			selectedField = &fields[i]
+			break
+		}
 	}
-	component, present, err := tag.ParseComponent(fields[0].Tag)
+	if selectedField == nil || selectedField.Anonymous || !selectedField.Exported || len(selectedField.Index) != 1 {
+		return nil, fmt.Errorf("selector companion holder requires a direct selected component field")
+	}
+	for _, field := range fields {
+		other, present, parseErr := tag.ParseComponent(field.Tag)
+		if field.Anonymous || !field.Exported || len(field.Index) != 1 || parseErr != nil || !present || other.ValidateRoute() != nil || !componentField(holder, field) {
+			return nil, fmt.Errorf("selector companion holder requires direct component routes")
+		}
+		if field.ReflectedType != selectedField.ReflectedType || field.TypeExpr != selectedField.TypeExpr {
+			return nil, fmt.Errorf("selector companion holder routes require the same contracts")
+		}
+	}
+	component, present, err := tag.ParseComponent(selectedField.Tag)
 	if err != nil {
 		return nil, err
 	}
-	if !present || component.ValidateRoute() != nil || !componentField(holder, fields[0]) {
+	if !present || component.ValidateRoute() != nil || !componentField(holder, *selectedField) {
 		return nil, fmt.Errorf("selector companion field must declare an exact Component[I,O] route")
 	}
 	if component.Method != "GET" || component.Handler != "" || component.Settings.Mutation != "" {
@@ -121,8 +137,9 @@ func Resolve(holder *x.Type, fieldName string, lookup xshape.Lookup) (*Contract,
 		}
 		typ, builtin := field.BuiltinType()
 		property := metadata.QuerySelector.Property
-		if !builtin || property == spec.SelectorPropertyFields && typ != "[]string" || property == spec.SelectorPropertyPage && typ != "int" || property != spec.SelectorPropertyFields && property != spec.SelectorPropertyPage {
-			return nil, fmt.Errorf("selector companion field %s requires Fields []string or Page int", field.Name)
+		validType := (property == spec.SelectorPropertyFields || property == spec.SelectorPropertyOrderBy) && typ == "[]string" || (property == spec.SelectorPropertyPage || property == spec.SelectorPropertyLimit || property == spec.SelectorPropertyOffset) && typ == "int"
+		if !builtin || !validType {
+			return nil, fmt.Errorf("selector companion field %s requires Fields/OrderBy []string or Page/Limit/Offset int", field.Name)
 		}
 		view := strings.TrimSpace(metadata.QuerySelector.View)
 		if view == "" {

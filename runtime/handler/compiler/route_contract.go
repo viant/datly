@@ -70,7 +70,15 @@ func (c routeContractCompiler) compile(projection *bindly.Projection) (*registry
 				return nil, fmt.Errorf("compile input binding plan for %s: %w", ref.String(), planErr)
 			}
 		}
-		compiled = append(compiled, registry.RouteInput{Route: ref, Plan: plan, Bindings: routeBindings, WireTypes: c.wireTypes, Selectors: c.selectors})
+		selectors := c.selectors
+		if selectors != nil && selectors.PublicPlan() != plan {
+			var err error
+			selectors, err = selectors.ForPublicPlan(plan, routeBindings)
+			if err != nil {
+				return nil, err
+			}
+		}
+		compiled = append(compiled, registry.RouteInput{Route: ref, Plan: plan, Bindings: routeBindings, WireTypes: c.wireTypes, Selectors: selectors})
 	}
 	contract, err := registry.NewInputContract(c.inputType, projection, compiled...)
 	if err != nil {

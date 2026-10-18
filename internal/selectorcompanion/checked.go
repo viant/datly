@@ -48,7 +48,13 @@ func CheckContracts(component *spec.Component, input, output *x.Type, lookup xsh
 	if err != nil {
 		return nil, err
 	}
-	field := fields[0]
+	var field xshape.Field
+	for _, candidate := range fields {
+		if candidate.Name == association.Field() {
+			field = candidate
+			break
+		}
+	}
 	metadata, present, err := tag.ParseComponent(field.Tag)
 	if err != nil || !present {
 		return nil, fmt.Errorf("selector holder route declaration missing")
@@ -57,8 +63,35 @@ func CheckContracts(component *spec.Component, input, output *x.Type, lookup xsh
 	if name == "" {
 		name = association.Field()
 	}
-	if component.Key.Name != name || component.Name != name || len(component.Routes) != 1 || component.Routes[0] == nil || component.Routes[0].Method != metadata.Method || component.Routes[0].Path != metadata.Path {
+	if component.Key.Name != name || component.Name != name || len(component.Routes) == 0 {
 		return nil, fmt.Errorf("selector companion route identity mismatch")
+	}
+	selectedRoute := false
+	for _, route := range component.Routes {
+		if route == nil || route.Handler != "" {
+			return nil, fmt.Errorf("selector companion route identity mismatch")
+		}
+		found := false
+		for _, candidate := range fields {
+			tag, ok, err := tag.ParseComponent(candidate.Tag)
+			candidateName := tag.Name
+			if candidateName == "" {
+				candidateName = candidate.Name
+			}
+			if err == nil && ok && candidateName == name && tag.Method == route.Method && tag.Path == route.Path {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return nil, fmt.Errorf("selector companion route identity mismatch")
+		}
+		if route.Method == metadata.Method && route.Path == metadata.Path {
+			selectedRoute = true
+		}
+	}
+	if !selectedRoute {
+		return nil, fmt.Errorf("selector companion selected route missing")
 	}
 	// A genuine reader declaration cannot grant selector storage to execution
 	// metadata that has since selected a handler or mutation owner.

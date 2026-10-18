@@ -60,9 +60,11 @@ type Plan struct {
 	Views                  []ViewPlan
 
 	// ClientInput is an opt-in generation-only transport projection.
-	ClientInput *ContractPlan
-	Input       ContractPlan
-	Output      ContractPlan
+	ClientInput            *ContractPlan
+	QuerySelectors         []Field
+	ExistingQuerySelectors bool
+	Input                  ContractPlan
+	Output                 ContractPlan
 
 	HelperTypes       []HelperType
 	GeneratedTypes    []GeneratedTypePlan
@@ -290,6 +292,13 @@ func (r *planResolver) resolveBase() (*Plan, error) {
 	}
 	if component.TypeContext != nil {
 		plan.Imports = append(plan.Imports, component.TypeContext.Imports...)
+	}
+	if ordinarySelectorReader(component) {
+		plan.QuerySelectors, err = resolveSelectorFields(component, declarations)
+		if err != nil {
+			return nil, err
+		}
+		plan.ExistingQuerySelectors = component.SelectorCompanion != nil
 	}
 	plan.Routes, plan.Handler, err = resolveRoutes(component.Routes)
 	if err != nil {

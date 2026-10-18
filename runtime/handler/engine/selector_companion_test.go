@@ -55,21 +55,9 @@ func TestSelectorCompanionEngineRejectsUnsupportedModesBeforeBinding(t *testing.
 	}{
 		{"not native reader", func(r *Request, _ *companionSource) { r.CanonicalReader = false }},
 		{"bound input", func(r *Request, _ *companionSource) { r.BoundInput = &fixture.Input{} }},
-		{"resolved input", func(r *Request, _ *companionSource) {
-			r.ResolvedInput = &fixture.Input{}
-			r.ResolvedPaths = []string{"ID"}
-		}},
+
 		{"replay", func(r *Request, _ *companionSource) { r.Replay = &bindly.ReplayBinding{} }},
 		{"buffered data", func(r *Request, s *companionSource) { r.BufferedComponentCalls = true; r.DataSource = s }},
-		{"missing query provider", func(r *Request, _ *companionSource) { r.Providers = nil }},
-		{"inherited query provider only", func(r *Request, _ *companionSource) {
-			root, err := bindly.NewInjector(bindly.WithProviders(r.Providers...))
-			if err != nil {
-				t.Fatal(err)
-			}
-			r.Injector = root
-			r.Providers = nil
-		}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			entries, lookups := 0, 0
@@ -154,5 +142,36 @@ func TestSelectorCompanionOptionalPreparationPreservesExactRoute(t *testing.T) {
 	}
 	if _, err := route.WithOptionalBindings("missing"); err == nil {
 		t.Fatal("unknown alias admitted")
+	}
+}
+
+func TestSelectorCompanionAbsentOptionalQueryDoesNotInheritSideValues(t *testing.T) {
+	route := companionRoute(t)
+	sideReads := 0
+	parent := provider.Named("query", func(_ context.Context, _ reflect.Type, name string) (any, bool, error) {
+		if name == "fields" || name == "page" {
+			sideReads++
+			return []string{"label"}, true, nil
+		}
+		return "7", name == "id", nil
+	})
+	injector, err := bindly.NewInjector(bindly.WithProviders(parent))
+	if err != nil {
+		t.Fatal(err)
+	}
+	calls := 0
+	_, err = New().Execute(t.Context(), Request{Input: route, CanonicalReader: true, Injector: injector, Handler: rhandler.HandlerFunc(func(_ context.Context, inv rhandler.Invocation) (any, error) {
+		calls++
+		side, err := route.SelectorPlan().Value(inv.Binder, inv.Input)
+		if err != nil {
+			return nil, err
+		}
+		if side.Elem().FieldByName("Fields").Len() != 0 || side.Elem().FieldByName("Page").Int() != 0 {
+			t.Fatal("inherited query acquired side authority")
+		}
+		return nil, nil
+	})})
+	if err != nil || calls != 1 || sideReads != 0 {
+		t.Fatalf("err=%v calls=%d sideReads=%d", err, calls, sideReads)
 	}
 }

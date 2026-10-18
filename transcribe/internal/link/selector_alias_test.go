@@ -97,3 +97,20 @@ func TestMergeSelectorAliasRejectsExactAndAliasCompetition(t *testing.T) {
 		require.ErrorContains(t, err, "matches more than one authored selector")
 	}
 }
+
+func TestCanonicalSideSelectorRetiresFormerCodecBridge(t *testing.T) {
+	base := selectorParam("Sort", "sort", "creative", spec.SelectorPropertyOrderBy)
+	base.TypeExpr = "[]string"
+	base.OutputTypeExpr = "string"
+	base.Codec = &spec.Codec{Body: "OrderByList"}
+	authored := selectorParam("OrderBy", "sort", "creative", spec.SelectorPropertyOrderBy)
+	authored.TypeExpr = "[]string"
+	got, err := (&Loader{}).mergeParams([]*spec.Parameter{base}, []*spec.Parameter{authored})
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	require.Nil(t, got[0].Codec)
+	require.Empty(t, got[0].OutputTypeExpr)
+	require.Equal(t, "[]string", got[0].TypeExpr)
+	require.NotNil(t, base.Codec)
+	require.Equal(t, "string", base.OutputTypeExpr)
+}

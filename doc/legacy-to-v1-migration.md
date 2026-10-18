@@ -136,6 +136,15 @@ empty collection remains distinguishable from a missing or forbidden scope.
 Prove both shapes, including omitted child work, missing targets, and viewer
 permissions, with the generated runtime rather than comparing SQL text alone.
 
+`QuerySelector(view)` is a typed side input for the selected view, not a
+business Input or Output field. Keep its canonical `#define` declaration,
+query key and type; native generation owns its separate selector metadata.
+Do not add a public Input field or change an integer Page to a string to
+compensate for selector binding. HTTP and MCP still expose the declared typed
+selector arguments. Existing explicitly authored Go input fields remain
+supported; their compatibility does not require new generated readers to copy
+selectors into business inputs.
+
 Aggregates assembled from several legacy service calls should normally become
 one reader graph with related and DerivedView outputs. Do not preserve a
 service-local fan-out of raw SELECTs merely because the public response is an
@@ -154,9 +163,6 @@ Populating a struct literal alone does not mark the field present:
 ```go
 input := &recordread.ReadInput{}
 input.SetTenantID(tenantID) // generated setter marks Has.TenantID
-if fields != nil {
-    input.SetFields(fields) // omit this call when the selector is absent
-}
 value, err := invoker.Invoke(ctx, handler.ComponentRequest{
     Target: target,
     Input:  input,
@@ -167,8 +173,10 @@ Prefer generated setters for every supplied query/path/header/body parameter
 in internal readers, writers, and cubes. A trusted Go literal may equivalently
 initialize the generated presence type explicitly, for example
 `&recordread.ReadInput{TenantID: tenantID, Has: &recordread.ReadInputHas{TenantID: true}}`.
-Mark every supplied field, including optional selectors; do not mark omitted
-fields. An explicit zero or empty value can still be present; a nonzero literal
+Mark every supplied regular input field; do not mark omitted fields. Query
+selector side inputs use the invocation's selector binding, not InputHas.
+For existing Go contracts that explicitly keep selectors in Input, retain
+their normal field-presence handling. An explicit zero or empty value can still be present; a nonzero literal
 without its marker is not. In particular,
 do not weaken required-input validation or infer presence from Go zero values
 to make old callers pass: that can suppress a required authorization scope.

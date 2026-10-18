@@ -6,6 +6,8 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/viant/datly/spec"
+	"github.com/viant/datly/tag"
 	"github.com/viant/datly/transcribe/internal/discoverytype"
 	xshape "github.com/viant/x/shape"
 )
@@ -25,25 +27,60 @@ func (g *Generator) ColumnDiscoveryInputType() (reflect.Type, error) {
 }
 
 func (g *Generator) runtimeInputType(discoveryOnly bool) (reflect.Type, error) {
+	typ, _, err := g.runtimeInputPlan(discoveryOnly)
+	return typ, err
+}
+
+// ColumnDiscoveryInput returns the exact generated side-parameter projection
+// alongside the provisional business input. No holder method must exist yet.
+func (g *Generator) ColumnDiscoveryInput() (reflect.Type, []*spec.Parameter, error) {
+	typ, plan, err := g.runtimeInputPlan(true)
+	if err != nil {
+		return nil, nil, err
+	}
+	selected := map[string]bool{}
+	for _, field := range plan.QuerySelectors {
+		m, err := tag.ParseField(reflect.StructField{Name: field.Name, Tag: reflect.StructTag(field.Tag)})
+		if err != nil {
+			return nil, nil, err
+		}
+		selected[(&spec.Parameter{Name: m.Binding.Name, Source: spec.BindSource{Kind: m.Binding.Location.Kind, Name: m.Binding.Location.In}}).Identity()] = true
+	}
+	var side []*spec.Parameter
+	for _, parameter := range spec.EffectiveParameters(g.input.Component.Parameters) {
+		if parameter != nil && selected[parameter.Identity()] {
+			side = append(side, parameter)
+		}
+	}
+	return typ, side, nil
+}
+
+func (g *Generator) runtimeInputPlan(discoveryOnly bool) (reflect.Type, *Plan, error) {
 	if g == nil {
-		return nil, fmt.Errorf("generator is required")
+		return nil, nil, fmt.Errorf("generator is required")
 	}
 	if g.initErr != nil {
-		return nil, g.initErr
+		return nil, nil, g.initErr
 	}
 	if g.input.Component == nil {
-		return nil, fmt.Errorf("generation component is required")
+		return nil, nil, fmt.Errorf("generation component is required")
 	}
 	staged := *g
 	staged.input.columnDiscovery = discoveryOnly
 	plan, err := staged.plan(false)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	plan.omitUnresolvedHelpers()
+	if !discoveryOnly {
+		// Preserve the existing transient, methodless Go input API. Persisted
+		// DQL generation uses the holder companion instead of these fields.
+		plan.Input.Fields = append(plan.Input.Fields, plan.QuerySelectors...)
+	}
 	materializer := newRuntimeInputMaterializer(plan, g.resolver)
 	materializer.discoveryOnly = discoveryOnly
-	return materializer.inputType()
+	typ, err := materializer.inputType()
+	return typ, plan, err
 }
 
 // RuntimeOutputType materializes the generated output contract used before a

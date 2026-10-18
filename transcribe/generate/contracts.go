@@ -18,7 +18,10 @@ func (r *planResolver) resolveContractOwnership() error {
 	if err := r.resolveContract("input", &r.plan.Input, r.input.Contracts.Input); err != nil {
 		return err
 	}
-	return r.resolveContract("output", &r.plan.Output, r.input.Contracts.Output)
+	if err := r.resolveContract("output", &r.plan.Output, r.input.Contracts.Output); err != nil {
+		return err
+	}
+	return r.prepareSelectorOwnership()
 }
 
 func (r *planResolver) resolveContract(role string, contract *ContractPlan, reference *ContractReference) error {

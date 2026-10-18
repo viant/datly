@@ -108,7 +108,7 @@ func (p *inputProjection) visit(ref spec.RouteRef, component *spec.Key) error {
 	}
 	p.active[identity] = true
 	defer delete(p.active, identity)
-	for _, field := range entry.Fields() {
+	for _, field := range append(entry.Fields(), entry.selectorFields()...) {
 		if target, ok := field.Dependency(); ok {
 			binding := field.Binding()
 			if binding.When != "" || binding.With != "" {

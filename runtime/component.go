@@ -536,10 +536,10 @@ func enterComponent(ctx context.Context, target dexec.ComponentTarget) (context.
 	return context.WithValue(ctx, componentStackKey{}, path), nil
 }
 
-// canonicalCompanionWarmup admits only unchanged optional root-index contracts.
+// canonicalCompanionWarmup admits root-index contracts retaining canonical selector authority.
 // Relation inventories are excluded even during preparation, which clears Warmup.
 func canonicalCompanionWarmup(ctx context.Context, registered *RegisteredComponent, request dexec.ComponentRequest, original, current *registry.RouteInputContract) bool {
-	if registered == nil || registered.Handler != nil || registered.Reader == nil || original == nil || current != original || current.SelectorPlan() == nil || request.Input != nil || request.ExtraInput != nil || request.Replay != nil || request.DryRun || request.ReaderOptions != nil || request.BindingOutput != nil || len(request.WarmupOmitInput) != 1 {
+	if registered == nil || registered.Handler != nil || registered.Reader == nil || original == nil || current == nil || current.Route() != original.Route() || current.Type() != original.Type() || !current.SelectorPlan().SameAuthority(original.SelectorPlan()) || request.Input != nil || request.ExtraInput != nil || request.Replay != nil || request.DryRun || request.ReaderOptions != nil || request.BindingOutput != nil || len(request.WarmupOmitInput) != 1 {
 		return false
 	}
 	info := handlerexec.InvocationFromContext(ctx)

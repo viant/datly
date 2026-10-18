@@ -26,13 +26,14 @@ import (
 )
 
 type discoveryInputCompiler struct {
-	component    *spec.Component
-	declarations gen.Declarations
-	viewBindings gen.ViewBindings
-	resolver     *typecatalog.Resolver
-	source       *Source
-	factoryShape *gen.ExternalHandler
-	views        gen.ViewReferences
+	component      *spec.Component
+	declarations   gen.Declarations
+	viewBindings   gen.ViewBindings
+	resolver       *typecatalog.Resolver
+	source         *Source
+	factoryShape   *gen.ExternalHandler
+	views          gen.ViewReferences
+	sideParameters []*spec.Parameter
 }
 
 func (c *discoveryInputCompiler) compile() (*column.TemplateInput, error) {
@@ -84,6 +85,18 @@ func (c *discoveryInputCompiler) compile() (*column.TemplateInput, error) {
 	}
 	if err != nil {
 		return nil, err
+	}
+	if len(c.sideParameters) > 0 {
+		selected := map[string]bool{}
+		for _, p := range c.sideParameters {
+			selected[p.Identity()] = true
+		}
+		parameters = nil
+		for _, p := range c.component.Parameters {
+			if p != nil && !selected[p.Identity()] {
+				parameters = append(parameters, p)
+			}
+		}
 	}
 	inputType = indirectInputType(inputType)
 	if inputType == nil || inputType.Kind() != reflect.Struct {
@@ -324,7 +337,9 @@ func (c *discoveryInputCompiler) inputType() (reflect.Type, error) {
 			}
 		}
 	}
-	return gen.New(input).ColumnDiscoveryInputType()
+	typ, side, err := gen.New(input).ColumnDiscoveryInput()
+	c.sideParameters = side
+	return typ, err
 }
 
 func (c *discoveryInputCompiler) linkedInputAllowed() bool {
