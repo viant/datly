@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/viant/datly/internal/readergraph/model"
+	"github.com/viant/datly/internal/typeidentity"
 	"github.com/viant/datly/spec"
 	dtag "github.com/viant/datly/tag"
 	"github.com/viant/x"
@@ -238,6 +239,21 @@ func Contracts(c *spec.Component, input, output *x.Type, lookup xshape.Lookup) e
 				return err
 			}
 			if canonical != resolved.Identity {
+				// Source aliases and reflected fields may spell the same Go type
+				// differently; only true aliases can reconcile their identities.
+				if lookup != nil {
+					declaredIdentity, err := typeidentity.Alias(canonical, lookup, "reader metadata")
+					if err != nil {
+						return err
+					}
+					linkedIdentity, err := typeidentity.Alias(resolved.Identity, lookup, "reader metadata")
+					if err != nil {
+						return err
+					}
+					if declaredIdentity == linkedIdentity {
+						continue
+					}
+				}
 				return fmt.Errorf("reader metadata field %s type %s differs from %s", field.Name, canonical, resolved.Identity)
 			}
 		}
