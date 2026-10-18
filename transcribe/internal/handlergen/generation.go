@@ -234,7 +234,7 @@ func (g *Generation) prepareGo(semantic *handlerplan.Plan) error {
 		if g.input.TypeResolver != nil {
 			config.ReadIndexes.Types = g.input.TypeResolver.Descriptor
 		}
-		return g.prepareMutation(semantic, config)
+		return g.prepareMutation(semantic, config, contractPlan)
 	}
 	asset, err := handlergo.Lower(semantic, config)
 	if err != nil {

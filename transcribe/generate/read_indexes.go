@@ -1,6 +1,11 @@
 package generate
 
-import "fmt"
+import (
+	"fmt"
+	"path/filepath"
+
+	"github.com/viant/datly/typecatalog"
+)
 
 // ReadIndexSource is generated application support owned by the input package.
 // Keeping it there lets Input.Init use typed indexes without importing its
@@ -21,6 +26,14 @@ func (s *ReadIndexSource) resolve(plan *Plan) error {
 	}
 	if s.CacheField != "" {
 		if plan.Input.Ownership != ContractGenerated {
+			authority, err := typecatalog.NewDestinationAuthority(plan.ProjectRoot)
+			if err == nil {
+				destination, resolveErr := authority.Resolve(s.Package, ".")
+				if resolveErr == nil && RetainsReadIndexCache(filepath.Join(plan.ProjectRoot, destination.Directory), source.Destination, plan.Input.Destination, plan.ComponentName, plan.Input.Type, s.CacheField, s.TypeName, source.File) {
+					plan.ReadIndexes = &ReadIndexSource{Package: s.Package, TypeName: s.TypeName, CacheField: s.CacheField, Source: source}
+					return nil
+				}
+			}
 			return fmt.Errorf("read index storage requires a generated input")
 		}
 		if _, exists := plan.Input.Field(s.CacheField); exists {
