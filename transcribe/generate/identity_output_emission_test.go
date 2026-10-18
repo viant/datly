@@ -12,7 +12,7 @@ func TestCanonicalOutputIdentityMatchesExistingFieldEmission(t *testing.T) {
 		kind, slot string
 		emit       bool
 	}{
-		{"body", "", true}, {"body", "data", true}, {"output", "view", true}, {"output", "view", false}, {"output", "status", true}, {"output", "summary", false}, {"output", "derived", true}, {"logger", "", true}, {"const", "Flag", true},
+		{"body", "", true}, {"body", "data", true}, {"output", "view", true}, {"output", "view", false}, {"output", "status", true}, {"output", "summary", false}, {"output", "derived", true}, {"logger", "", true}, {"const", "Flag", true}, {"component_invoker", "", true},
 	} {
 		p := &spec.Parameter{Name: "Data", TypeExpr: "string", Source: spec.BindSource{Kind: c.kind, Name: c.slot}, EmitOutput: c.emit, WireTypeExpr: "example.com/models.Wire"}
 		emitted := fieldTag(p, p.Name, nil)
@@ -21,7 +21,7 @@ func TestCanonicalOutputIdentityMatchesExistingFieldEmission(t *testing.T) {
 			t.Fatal(err)
 		}
 		reloaded := &spec.Parameter{Name: meta.Binding.Name, Source: spec.BindSource{Kind: meta.Binding.Location.Kind, Name: meta.Binding.Location.In}}
-		if c.kind == "logger" || c.kind == "const" {
+		if c.kind == "logger" || c.kind == "const" || c.kind == "component_invoker" {
 			reloaded.EmitOutput = true
 		}
 		if p.Identity() != reloaded.Identity() {

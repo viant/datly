@@ -378,6 +378,13 @@ Write the canonical option names shown here. Do not infer input, field, column o
 | WithColumnTag(column,tag), ColumnTag(...) | 2 | view column tags |
 | WithColumnGroupable(column,bool), ColumnGroupable(...) | 2 | grouping policy |
 
+Server capabilities `logger`, `const` and `component_invoker` retain their native
+binding kind when declared with `.Output()`. A private output invoker can compose
+children from an existing error-aware finalizer without becoming a request field:
+`#define($_ = $Invoker<handler.ComponentInvoker>(component_invoker/).Required().Output().WithTag('json:"-"'))`.
+Handle an existing operation error before using the capability; calls retain the
+invocation's providers, authorization and transaction completion owner.
+
 View options do not apply to ordinary request parameters. A declaration SQL comment is last; unrecognized trailing syntax is invalid.
 
 ### Selector view scoping

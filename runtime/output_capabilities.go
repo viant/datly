@@ -19,7 +19,7 @@ func (r *Runtime) outputCapabilityPlan(component *RegisteredComponent) (*bindly.
 		return cached.(*outputCapabilityEntry).plan, cached.(*outputCapabilityEntry).err
 	}
 	entry := &outputCapabilityEntry{}
-	bindings, err := (compiler.OutputBindingCompiler{Component: component.Component, Type: component.OutputType, Kinds: []string{"logger", "const"}}).CompileBindings()
+	bindings, err := (compiler.OutputBindingCompiler{Component: component.Component, Type: component.OutputType, Kinds: []string{"logger", "const", "component_invoker"}}).CompileBindings()
 	if err != nil {
 		entry.err = err
 	} else if len(bindings) > 0 {

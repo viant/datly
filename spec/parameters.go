@@ -50,14 +50,14 @@ func (p *Parameter) Identity() string {
 	if p.IsDerivedOutput() {
 		name = "derived"
 	}
-	if p.EmitOutput && kind != "logger" && kind != "const" {
+	if p.EmitOutput && kind != "logger" && kind != "const" && kind != "component_invoker" {
 		kind = "output"
 		if name == "" {
 			name = "body"
 		}
 	}
 	key := strings.ToLower(strings.TrimSpace(p.Name)) + "|" + kind + "|" + name
-	if p.EmitOutput && (kind == "logger" || kind == "const") {
+	if p.EmitOutput && (kind == "logger" || kind == "const" || kind == "component_invoker") {
 		key += "|output"
 	}
 	return key

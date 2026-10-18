@@ -711,7 +711,7 @@ func (r *packageComponentResolver) param(role contractRole, field xshape.Field, 
 	}
 	// Output-owned constants and capabilities retain their server source rather
 	// than becoming body slots. They use the ordinary typed binding contract.
-	if role == outputContract && (strings.EqualFold(binding.Location.Kind, "logger") || strings.EqualFold(binding.Location.Kind, "const")) {
+	if role == outputContract && (strings.EqualFold(binding.Location.Kind, "logger") || strings.EqualFold(binding.Location.Kind, "const") || strings.EqualFold(binding.Location.Kind, "component_invoker")) {
 		param.EmitOutput = true
 	}
 	if binding.DefaultValue != nil {
