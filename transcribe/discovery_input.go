@@ -78,6 +78,13 @@ func (c *discoveryInputCompiler) compile() (*column.TemplateInput, error) {
 				parameters = append(parameters, p)
 			}
 		}
+		if !c.linkedInputAllowed() {
+			// Refresh only the prospective side projection. The admitted holder
+			// remains the exact business contract for ordinary field discovery.
+			if _, err := c.inputType(); err != nil {
+				return nil, err
+			}
+		}
 	}
 	inputType := selectedInput
 	if inputType == nil {
