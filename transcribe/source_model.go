@@ -21,6 +21,7 @@ import (
 // canonical components and generated package artifacts for package bootstrap.
 type Source struct {
 	// Compile-local selected declaration proof; maps are immutable after compilation.
+	ownedGeneratedHelpers      map[string]string
 	selfGeneratedInputViews    map[string]bool
 	inheritedGeneratedCurrents map[string]bool
 

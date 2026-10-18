@@ -116,3 +116,14 @@ func inferFieldType(param *spec.Parameter, declarations Declarations) string {
 	}
 	return "any"
 }
+
+// InferredHelperType returns the normal generated projection contract before
+// reflected package bindings are applied. It does not establish source ownership.
+func InferredHelperType(param *spec.Parameter, declarations Declarations) (string, bool) {
+	if param == nil {
+		return "", false
+	}
+	inferred := param.Clone()
+	inferred.TypeExpr, inferred.OutputTypeExpr = "", ""
+	return inferHelperType(inferred, declarations)
+}

@@ -205,6 +205,7 @@ func (g Generator) generate(ctx context.Context, root, dir string, compiled *Res
 	if err != nil {
 		return nil, err
 	}
+	restoreInferredHelpers(copy.Component, compiled.Source.ownedGeneratedHelpers, declarations.generation)
 	copy.Declarations = declarations.generation
 	input, dir, err = generationInput(root, dir, &copy)
 	if err != nil {

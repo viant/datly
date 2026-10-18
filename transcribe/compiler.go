@@ -283,6 +283,10 @@ func (c *componentCompilation) compileViews(ctx context.Context) error {
 	if err != nil {
 		return declarationFailure(err)
 	}
+	source.ownedGeneratedHelpers, proofErr = generatedHelperAuthority(ctx, source, component, c.authored, c.result.TypeResolver)
+	if proofErr != nil {
+		return proofErr
+	}
 	generatedRows, err := collectGeneratedRowAuthority(component, prepared, metadataDeclarations, typeResolver, source.Path, sourceMap)
 	if err != nil {
 		return err
