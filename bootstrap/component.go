@@ -114,12 +114,16 @@ func (r ContractResolver) Resolve() (*spec.Component, error) {
 			}
 			matched := false
 			for _, field := range companion.Fields {
-				if field.Name != param.Name {
-					continue
-				}
 				metadata, err := dtag.ParseField(field.StructField())
 				if err != nil {
 					return nil, err
+				}
+				logicalName := field.Name
+				if metadata.Binding != nil && strings.TrimSpace(metadata.Binding.Name) != "" {
+					logicalName = strings.TrimSpace(metadata.Binding.Name)
+				}
+				if !strings.EqualFold(strings.TrimSpace(param.Name), logicalName) || metadata.Binding == nil || !sameCanonicalSource(param, metadata.Binding.Location.Kind, metadata.Binding.Location.In) {
+					continue
 				}
 				identity, err := field.CanonicalType()
 				if err != nil {
