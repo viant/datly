@@ -139,6 +139,7 @@ SELECT orderRows.id, orderRows.name FROM orders orderRows WHERE orderRows.tenant
 			require.NoError(t, err)
 			require.Equal(t, gen.ViewGenerated, generated.Result.Plan.ViewByType("MetaView").Ownership)
 			fixture := strings.Replace(generatedSummaryTest, "package orders", "package generated", 1)
+			fixture = strings.ReplaceAll(fixture, "SummaryFixtureHolder", generated.Result.Plan.HolderName())
 			fixture = strings.ReplaceAll(fixture, "DatlyResourceNamespace", generated.Result.Plan.Resources.Symbol+"DatlyResourceNamespace")
 			fixture = strings.ReplaceAll(fixture, "DatlyResources", generated.Result.Plan.Resources.Symbol+"DatlyResources")
 			require.NoError(t, os.WriteFile(filepath.Join(root, "generated", "summary_test.go"), []byte(fixture), 0600))

@@ -116,6 +116,10 @@ func selectCanonical(component *spec.Component, contract *Contract) (*Selection,
 			name = f.Name
 		}
 		expected := spec.Parameter{Name: name, Source: spec.BindSource{Kind: b.Location.Kind, Name: b.Location.In}, TypeExpr: typ, QueryListCSV: m.QueryListCSV, Required: b.Required, Cacheable: b.Cacheable, Cardinality: b.Cardinality, ErrorStatusCode: b.ErrorCode, ErrorMessage: b.ErrorMessage, QuerySelector: &spec.QuerySelectorBinding{View: m.QuerySelector.View, Property: m.QuerySelector.Property}}
+		if b.DefaultValue != nil {
+			value := fmt.Sprint(b.DefaultValue)
+			expected.Value = &value
+		}
 		actual := *p
 		actual.Declaration = ""
 		actual.Raw = ""
@@ -212,7 +216,7 @@ func NewBindingPlan(component *spec.Component, selected *Selection, input reflec
 		executable := make([]bindly.BindingSpec, 0)
 		for _, b := range selectors {
 			parameter := b.Extension.(*spec.Parameter)
-			if parameter.QuerySelector.Property == spec.SelectorPropertyPage && (b.Required == nil || !*b.Required) {
+			if parameter.QuerySelector.Property == spec.SelectorPropertyPage && b.DefaultValue == nil && (b.Required == nil || !*b.Required) {
 				field, ok := result.Field(parameter)
 				if result.deferredBinding != nil || !ok || field.Type != reflect.TypeFor[int]() {
 					return nil, fmt.Errorf("deferred companion Page requires one exact int field")
@@ -236,7 +240,7 @@ func NewBindingPlan(component *spec.Component, selected *Selection, input reflec
 	}
 	ordinary := make([]bindly.BindingSpec, 0)
 	for _, binding := range selectors {
-		if binding.Extension.(*spec.Parameter).QuerySelector.Property == spec.SelectorPropertyPage && (binding.Required == nil || !*binding.Required) && (result.IsDeferredPage(binding.Extension.(*spec.Parameter)) || unlimitedPageView(component, binding.Extension.(*spec.Parameter))) {
+		if binding.Extension.(*spec.Parameter).QuerySelector.Property == spec.SelectorPropertyPage && binding.DefaultValue == nil && (binding.Required == nil || !*binding.Required) && (result.IsDeferredPage(binding.Extension.(*spec.Parameter)) || unlimitedPageView(component, binding.Extension.(*spec.Parameter))) {
 			result.pageBindings = append(result.pageBindings, binding)
 		} else {
 			ordinary = append(ordinary, binding)
@@ -256,7 +260,13 @@ func NewBindingPlan(component *spec.Component, selected *Selection, input reflec
 	if err != nil {
 		return nil, err
 	}
-	result.absentPlan, err = injector.CompilePlan(selected.Type, make([]bindly.BindingSpec, 0)...)
+	defaults := make([]bindly.BindingSpec, 0)
+	for _, binding := range selectors {
+		if binding.DefaultValue != nil {
+			defaults = append(defaults, binding)
+		}
+	}
+	result.absentPlan, err = injector.CompilePlan(selected.Type, defaults...)
 	if err != nil {
 		return nil, err
 	}
@@ -333,6 +343,13 @@ func (p *BindingPlan) Bind(ctx context.Context, scope *bindly.Injector, input an
 		}
 		if !hasQuery {
 			plan = p.absentPlan
+			// No query provider belongs to this invocation. Evaluate canonical defaults
+			// without inheriting an ambient parent query provider.
+			var err error
+			scope, err = bindly.NewInjector()
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 	for _, provider := range providers {

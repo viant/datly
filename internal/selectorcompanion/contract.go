@@ -132,7 +132,7 @@ func Resolve(holder *x.Type, fieldName string, lookup xshape.Lookup) (*Contract,
 		if metadata.QuerySelector == nil || binding == nil || binding.Location.Kind != "query" || strings.TrimSpace(binding.Location.In) == "" {
 			return nil, fmt.Errorf("selector companion field %s requires a plain query selector", field.Name)
 		}
-		if metadata.Codec != nil || len(metadata.Predicates) != 0 || metadata.View != nil || metadata.SQL != nil || len(metadata.Relation) != 0 || metadata.Self != nil || metadata.FormatSelector || binding.Transformer != nil || binding.ResolutionGroup != nil || binding.Scope != "" || binding.When != "" || binding.With != "" || binding.URI != "" || binding.ResourceRef != "" || binding.Async || binding.DefaultValue != nil {
+		if metadata.Codec != nil || len(metadata.Predicates) != 0 || metadata.View != nil || metadata.SQL != nil || len(metadata.Relation) != 0 || metadata.Self != nil || metadata.FormatSelector || binding.Transformer != nil || binding.ResolutionGroup != nil || binding.Scope != "" || binding.When != "" || binding.With != "" || binding.URI != "" || binding.ResourceRef != "" || binding.Async {
 			return nil, fmt.Errorf("selector companion field %s has unsupported binding responsibilities", field.Name)
 		}
 		typ, builtin := field.BuiltinType()

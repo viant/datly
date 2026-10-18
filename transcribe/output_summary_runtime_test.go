@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -67,7 +68,7 @@ SELECT orderRows.id, orderRows.name FROM orders orderRows WHERE orderRows.tenant
 			}
 		}
 	}
-	require.NoError(t, os.WriteFile(filepath.Join(root, "generated", "summary_test.go"), []byte(generatedSummaryTest), 0600))
+	require.NoError(t, os.WriteFile(filepath.Join(root, "generated", "summary_test.go"), []byte(strings.ReplaceAll(generatedSummaryTest, "SummaryFixtureHolder", plan.HolderName())), 0600))
 	command := exec.Command("go", "test", "-mod=mod", "-count=1", "./...")
 	command.Dir = root
 	out, err := command.CombinedOutput()
@@ -88,7 +89,6 @@ import (
  gateway "github.com/viant/datly/gateway/http"
  "github.com/viant/datly/internal/testharness/sqlite"
  druntime "github.com/viant/datly/runtime"
- "github.com/viant/datly/spec"
  dsql "github.com/viant/datly/sql"
 )
 
@@ -100,8 +100,23 @@ func TestGeneratedSummaryExecution(t *testing.T) {
  require.False(t,present)
  resources:=resource.New()
  require.NoError(t,resources.Register(DatlyResourceNamespace,DatlyResources))
+ // Generated routes retain their side inputs on the canonical holder.
+ _,present=reflect.TypeFor[SummaryFixtureHolder]().MethodByName("DatlyQuerySelectors")
+ require.True(t,present)
+ linked,err:=bootstrap.ReflectSelectedPackages([]string{reflect.TypeFor[SummaryFixtureHolder]().PkgPath()},nil)
+ require.NoError(t,err)
+ var source *bootstrap.RouteSource
+ for _,candidate:=range linked.Components {
+  if candidate.HolderType=="SummaryFixtureHolder" && candidate.Tag.Name=="Orders" && candidate.Tag.Method=="GET" && candidate.Tag.Path=="/orders" {
+   require.Nil(t,source,"generated route must have one exact holder")
+   source=candidate
+  }
+ }
+ require.NotNil(t,source)
+ component,err:=source.Resolve(reflect.TypeFor[OrdersInput](),reflect.TypeFor[OrdersOutput]())
+ require.NoError(t,err)
  artifact,err:=bootstrap.BuildArtifact(bootstrap.ArtifactInput{
-  Component:&spec.Component{Key:spec.Key{Kind:spec.KindComponent,Name:"Orders"},Routes:[]*spec.Route{{Method:"GET",Path:"/orders"}}},
+  Component:component,
   InputType:reflect.TypeFor[OrdersInput](),OutputType:reflect.TypeFor[OrdersOutput](),Resources:resources,
  })
  require.NoError(t,err)
@@ -114,6 +129,7 @@ func TestGeneratedSummaryExecution(t *testing.T) {
  t.Cleanup(func(){require.NoError(t,rt.Shutdown(context.Background()))})
  handler:=gateway.NewHandler(rt,nil,"test")
  for _,tc:=range []struct{name,query string;rows,records,pages int}{
+  {"default limit","",2,3,2},
   {"populated","?limit=2",2,3,2},
   {"empty","?tenant=99&limit=2",0,0,0},
   {"projected","?fields=id&limit=2",2,3,2},
