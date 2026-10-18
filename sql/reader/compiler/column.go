@@ -142,12 +142,19 @@ func reconcileReaderGraphColumns(typed, canonical []*data.Column) ([]*data.Colum
 			return nil, fmt.Errorf("nil reader metadata column")
 		}
 		var match *data.Column
-		for _, candidate := range typed {
-			if matchingColumn([]*data.Column{column}, candidate) != nil {
-				if match != nil {
-					return nil, fmt.Errorf("ambiguous reader metadata column %s", column.Name)
+		// The result alias owns the scanner binding. A physical source may have
+		// the same name as another result column, so use it only as a fallback.
+		for _, identity := range []*data.Column{{Name: column.Name}, column} {
+			for _, candidate := range typed {
+				if matchingColumn([]*data.Column{identity}, candidate) != nil {
+					if match != nil {
+						return nil, fmt.Errorf("ambiguous reader metadata column %s", column.Name)
+					}
+					match = candidate
 				}
-				match = candidate
+			}
+			if match != nil {
+				break
 			}
 		}
 		if match == nil || seen[match.Name] {

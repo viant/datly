@@ -114,3 +114,47 @@ func TestColumnsFromTypeVisibility(t *testing.T) {
 		})
 	}
 }
+
+// Result aliases can equal another column's physical source. The scanner must
+// bind the result identity before considering a source-name fallback.
+func TestReaderMetadataResultAliasPrecedesPhysicalSource(t *testing.T) {
+	type row struct {
+		Category   *int `sqlx:"category" source:"TYPE"`
+		CategoryID *int `sqlx:"category_id" source:"CATEGORY"`
+	}
+	typed, err := columnsFromType(reflect.TypeFor[row]())
+	if err != nil {
+		t.Fatal(err)
+	}
+	canonical := []*data.Column{{Name: "category", Column: "TYPE"}, {Name: "category_id", Column: "CATEGORY"}}
+	result, err := reconcileReaderGraphColumns(typed, canonical)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, column := range result {
+		if column.Tag != typed[i].Tag || column.Name != canonical[i].Name || column.Column != canonical[i].Column {
+			t.Fatalf("wrong scanner binding at %d: %+v", i, column)
+		}
+	}
+}
+
+func TestReaderMetadataAliasMatchingRetainsFallbackAndAmbiguity(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		typed     []*data.Column
+		canonical []*data.Column
+		fail      bool
+	}{
+		{"source fallback", []*data.Column{{Name: "Value", Column: "physical_value"}}, []*data.Column{{Name: "result_value", Column: "physical_value"}}, false},
+		{"duplicate result aliases", []*data.Column{{Name: "First", Column: "result"}, {Name: "Second", Column: "result"}}, []*data.Column{{Name: "result", Column: "physical"}}, true},
+		{"ambiguous source fallback", []*data.Column{{Name: "First", Column: "physical"}, {Name: "Second", Column: "physical"}}, []*data.Column{{Name: "result", Column: "physical"}}, true},
+		{"same Go field reused", []*data.Column{{Name: "Value", Column: "result"}}, []*data.Column{{Name: "result"}, {Name: "other", Column: "result"}}, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := reconcileReaderGraphColumns(tc.typed, tc.canonical)
+			if (err != nil) != tc.fail {
+				t.Fatalf("error = %v, want failure %v", err, tc.fail)
+			}
+		})
+	}
+}
