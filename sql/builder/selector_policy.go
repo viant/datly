@@ -180,7 +180,10 @@ func (r selectorResolver) controls(base *spec.ViewControls, input *xstate.Select
 				}
 				offset := input.Offset
 				result.Offset = &offset
-			} else if input.Page > 0 {
+			}
+			// Original Datly applies Page after Offset for both request and
+			// injected selectors, so the page window owns the final offset.
+			if input.Page > 0 {
 				if r.policy != nil && !r.policy.AllowPage {
 					return nil, fmt.Errorf("selector page is not allowed")
 				}

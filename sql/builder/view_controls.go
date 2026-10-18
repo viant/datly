@@ -30,7 +30,9 @@ func MergeViewControlsWithSelector(controls *spec.ViewControls, selector *xstate
 		if selector.Offset > 0 {
 			offset := selector.Offset
 			merged.Offset = &offset
-		} else if selector.Page > 0 && effectiveLimit > 0 {
+		}
+		// Match the original selector order: Page replaces an explicit Offset.
+		if selector.Page > 0 && effectiveLimit > 0 {
 			offset := effectiveLimit * (selector.Page - 1)
 			merged.Offset = &offset
 		}

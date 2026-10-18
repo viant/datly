@@ -84,7 +84,7 @@ func TestFiveSideSelectorsSQLite(t *testing.T) {
 						}{"?sort=id%20DESC&sort=label%20ASC&limit=1&page=2", []int{3}}, struct {
 							query string
 							ids   []int
-						}{"?sort=id%20DESC&limit=2&offset=1&page=2", []int{3, 2}})
+						}{"?sort=id%20DESC&limit=2&offset=1&page=2", []int{2, 1}})
 					}
 				}
 				for _, tc := range cases {

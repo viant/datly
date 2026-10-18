@@ -134,7 +134,8 @@ FROM ($View.Users.NonWindowSQL) parent`,
 	if err != nil {
 		t.Fatalf("build failed: %v", err)
 	}
-	wantSQL := wantEvaluatedSQL + " LIMIT 99 OFFSET 98"
+	// Page 97 owns the child window: 99 * (97 - 1), independently of the parent.
+	wantSQL := wantEvaluatedSQL + " LIMIT 99 OFFSET 9504"
 	if strings.TrimSpace(query.SQL) != wantSQL {
 		t.Fatalf("unexpected SQL: %q", query.SQL)
 	}

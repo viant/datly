@@ -135,7 +135,7 @@ func TestMergeViewControlsWithSelector_PageUsesSelectorLimitWhenPresent(t *testi
 	}
 }
 
-func TestMergeViewControlsWithSelector_ExplicitOffsetWinsOverPage(t *testing.T) {
+func TestMergeViewControlsWithSelector_PageOverridesExplicitOffset(t *testing.T) {
 	limit := 5
 	actual := MergeViewControlsWithSelector(&spec.ViewControls{Limit: &limit}, &xstate.Selector{
 		Page:   4,
@@ -144,7 +144,7 @@ func TestMergeViewControlsWithSelector_ExplicitOffsetWinsOverPage(t *testing.T) 
 	if actual == nil {
 		t.Fatalf("expected merged controls")
 	}
-	if actual.Offset == nil || *actual.Offset != 1 {
-		t.Fatalf("expected explicit offset 1, got %+v", actual.Offset)
+	if actual.Offset == nil || *actual.Offset != 15 {
+		t.Fatalf("expected original page-derived offset 15, got %+v", actual.Offset)
 	}
 }

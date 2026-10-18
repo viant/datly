@@ -147,9 +147,7 @@ func resolveInvocationSelectors(ctx context.Context, session *Session, input ref
 				selector = &xstate.Selector{}
 				result[view] = selector
 			}
-			if selector.Offset > 0 {
-				continue
-			}
+			// Resolve Page even with an Offset: original Datly applies Page last.
 			// A NoLimit policy suppresses the default window only; an explicit
 			// positive client/source limit still gives Page execution authority.
 			policy := view.Spec.Selector
