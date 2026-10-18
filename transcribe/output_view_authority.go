@@ -336,7 +336,14 @@ func linkExplicitOutputContract(result *Result, expression string, currentOutput
 			if err != nil {
 				return fmt.Errorf("output contract %q field %s: %w", expression, param.Name, err)
 			}
-			if metadata.Binding == nil || !strings.EqualFold(metadata.Binding.Location.Kind, param.Source.Kind) || !strings.EqualFold(metadata.Binding.Location.In, param.Source.Name) {
+			if metadata.Binding == nil {
+				return fmt.Errorf("output contract %q field %s has incompatible binding metadata", expression, param.Name)
+			}
+			// Summary is the original spelling of derived output. Use the same
+			// canonical binding identity as parameter matching and generation.
+			declared := &spec.Parameter{Name: param.Name, Source: spec.BindSource{Kind: metadata.Binding.Location.Kind, Name: metadata.Binding.Location.In}}
+			wantedBinding := &spec.Parameter{Name: param.Name, Source: param.Source}
+			if declared.Identity() != wantedBinding.Identity() {
 				return fmt.Errorf("output contract %q field %s has incompatible binding metadata", expression, param.Name)
 			}
 		}
