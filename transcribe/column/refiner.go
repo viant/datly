@@ -9,6 +9,7 @@ import (
 	"github.com/viant/tagly/tags"
 	"io/fs"
 	"reflect"
+	"strconv"
 	"strings"
 
 	"github.com/viant/datly/exec"
@@ -655,7 +656,7 @@ func canonicalColumns(source []*sink.Column, groupable bool) ([]*spec.Column, er
 		if name == "" {
 			return nil, fmt.Errorf("discovered column name is required")
 		}
-		columnType := io.NormalizeColumnType(item.ScanType(), item.Type)
+		columnType := io.NormalizeColumnType(item.ScanType(), discoveredScalarType(item.Type))
 		typeRef, nullable := canonicalType(columnType, item.IsNullable())
 		columnGroupable := groupable
 		result = append(result, &spec.Column{
@@ -856,4 +857,25 @@ func applyDiscoveredProjectionRoles(columns []*spec.Column, sql string) {
 			column.Groupable = &role
 		}
 	}
+}
+
+// Some drivers retain declared character lengths even when ScanType is absent
+// for an empty result. Keep the full declaration in DatabaseType; normalize only
+// recognized scalar character declarations for Go type inference.
+func discoveredScalarType(declaration string) string {
+	base, size, found := strings.Cut(strings.TrimSpace(declaration), "(")
+	if !found || !strings.HasSuffix(size, ")") {
+		return declaration
+	}
+	base = strings.ToUpper(strings.TrimSpace(base))
+	switch base {
+	case "VARCHAR", "CHAR", "NVARCHAR", "NCHAR":
+	default:
+		return declaration
+	}
+	length, err := strconv.Atoi(strings.TrimSpace(strings.TrimSuffix(size, ")")))
+	if err != nil || length <= 0 {
+		return declaration
+	}
+	return base
 }

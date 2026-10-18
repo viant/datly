@@ -400,8 +400,8 @@ use SQL namespaces, so verify the registered view identity rather than assuming
 those two naming surfaces are interchangeable. Selector parameters default noncacheable unless
 explicitly configured. Scope inputs deliberately for multiple views; do not add
 all selectors to every view. The selected view still needs allowed columns and
-methods. Fields must be a string slice, OrderBy/Criteria a string, and
-Offset/Limit/Page signed integer types (pointers are unwrapped). One property
+methods. Fields must be a string slice, OrderBy a string or string slice, Criteria a
+string, and Offset/Limit/Page signed integer types (pointers are unwrapped). One property
 cannot be bound twice to the same prepared view. Order aliases are explicit `allowed_order_by_columns` entries, not
 inferred SQL or wire-name conversions. Pagination, field selection and criteria
 are validated by the reader/compiler and SQL builder after declaration parsing.
