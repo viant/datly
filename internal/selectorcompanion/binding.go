@@ -397,6 +397,24 @@ func (p *BindingPlan) Carry(binder xhandler.Binder, input, value any) (xhandler.
 	return &carrier{Binder: binder, plan: p, input: input, value: value}, nil
 }
 
+// CarryBound associates fresh zero side state with an already bound public
+// input. Absent Page sources cannot acquire ambient request/query authority.
+func (p *BindingPlan) CarryBound(binder xhandler.Binder, input any) (xhandler.Binder, error) {
+	wrapped, err := p.Carry(binder, input, reflect.New(p.companion).Interface())
+	if err != nil {
+		return nil, err
+	}
+	c := wrapped.(*carrier)
+	c.pages = map[*spec.Parameter]*pageSource{}
+	if p.DeferredPage() {
+		c.page = &pageSource{binding: *p.deferredBinding, legacy: true}
+	}
+	for _, binding := range p.pageBindings {
+		c.pages[binding.Extension.(*spec.Parameter)] = &pageSource{binding: binding, legacy: p.DeferredPage()}
+	}
+	return wrapped, nil
+}
+
 // CarryPrepared transfers invocation-only selector state after canonical Without.
 // It performs no binding, initialization, or deferred Page evaluation.
 func (p *BindingPlan) CarryPrepared(source xhandler.Binder, original, prepared any, binder xhandler.Binder) (xhandler.Binder, error) {

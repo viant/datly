@@ -216,3 +216,31 @@ func TestDeferredPageRejectsInvokerAndMCPInputCallbacks(t *testing.T) {
 		}
 	}
 }
+
+func TestBoundCompanionCarriesAbsentDeferredPage(t *testing.T) {
+	plan := compiledPage(t)
+	input := &pagefixture.Input{}
+	first, err := plan.CarryBound(&delegatingBinder{}, input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	value, err := plan.Value(first, input)
+	if err != nil || !value.Elem().IsZero() {
+		t.Fatalf("bound side state: %v %v", value, err)
+	}
+	page, err := plan.ResolvePage(t.Context(), first, input)
+	if err != nil || page != 0 {
+		t.Fatalf("absent bound Page: %d %v", page, err)
+	}
+	second, err := plan.CarryBound(&delegatingBinder{}, input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	other, err := plan.Value(second, input)
+	if err != nil || value.Pointer() == other.Pointer() {
+		t.Fatal("bound side storage reused", err)
+	}
+	if _, err := plan.Value(first, &pagefixture.Input{}); err == nil {
+		t.Fatal("different public input admitted")
+	}
+}

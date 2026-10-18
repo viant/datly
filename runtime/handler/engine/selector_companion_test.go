@@ -54,7 +54,7 @@ func TestSelectorCompanionEngineRejectsUnsupportedModesBeforeBinding(t *testing.
 		alter func(*Request, *companionSource)
 	}{
 		{"not native reader", func(r *Request, _ *companionSource) { r.CanonicalReader = false }},
-		{"bound input", func(r *Request, _ *companionSource) { r.BoundInput = &fixture.Input{} }},
+		{"noncanonical bound input", func(r *Request, _ *companionSource) { r.BoundInput = &fixture.Input{}; r.CanonicalReader = false }},
 
 		{"replay", func(r *Request, _ *companionSource) { r.Replay = &bindly.ReplayBinding{} }},
 		{"buffered data", func(r *Request, s *companionSource) { r.BufferedComponentCalls = true; r.DataSource = s }},

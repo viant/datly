@@ -20,7 +20,7 @@ import (
 )
 
 func TestSelectorCompanionInheritedRejectsBeforeOwnerResolution(t *testing.T) {
-	for _, mode := range []string{"bound input", "replay", "child source", "priority interleaving"} {
+	for _, mode := range []string{"noncanonical bound input", "replay", "child source", "priority interleaving"} {
 		t.Run(mode, func(t *testing.T) {
 			source := &companionSource{}
 			childSource := &companionSource{}
@@ -39,8 +39,9 @@ func TestSelectorCompanionInheritedRejectsBeforeOwnerResolution(t *testing.T) {
 				switch mode {
 				case "missing composed query":
 					request.Providers = nil
-				case "bound input":
+				case "noncanonical bound input":
 					request.BoundInput = &fixture.Input{}
+					request.CanonicalReader = false
 				case "resolved input":
 					request.ResolvedInput = &fixture.Input{}
 					request.ResolvedPaths = []string{"ID"}

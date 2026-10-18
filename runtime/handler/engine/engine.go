@@ -164,8 +164,8 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 		inputPlan, _ = request.Input.ScopePlan("")
 	}
 	selectors := request.Input.SelectorPlan()
-	if selectors != nil && (!selectors.TransportOnly() && !request.CanonicalReader || scoped || request.BoundInput != nil || request.Replay != nil || selectors.PublicPlan() != inputPlan) {
-		return nil, fmt.Errorf("selector companion requires ordinary canonical reader binding without bound input or replay")
+	if selectors != nil && (!selectors.TransportOnly() && !request.CanonicalReader || scoped || request.BoundInput != nil && selectors.TransportOnly() || request.Replay != nil || selectors.PublicPlan() != inputPlan) {
+		return nil, fmt.Errorf("selector companion requires compatible canonical binding without scoped execution or replay")
 	}
 	if selectors != nil && selectors.TransportOnly() {
 		// Custom transport declarations describe the inherited query only; the
@@ -535,7 +535,7 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 	if err != nil {
 		return finish(nil, err)
 	}
-	if selectors != nil {
+	if selectors != nil && !bound {
 		if err := selectors.ValidateProviders(providers, request.ResolvedPaths...); err != nil {
 			return finish(nil, err)
 		}
@@ -618,7 +618,7 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 				return err
 			}
 		}
-		if selectors != nil {
+		if selectors != nil && !bound {
 			selectorValue, err = selectors.Bind(ctx, scope, input, providers...)
 			if err != nil {
 				return err
@@ -671,7 +671,11 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 		defer scopedLease.close()
 	}
 	if selectors != nil {
-		if selectors.HasPageSources() {
+		if bound {
+			// Trusted typed input does not acquire request query binding merely
+			// because the reader also declares transport-side selectors.
+			binder, err = selectors.CarryBound(binder, input)
+		} else if selectors.HasPageSources() {
 			binder, err = selectors.CarryPage(binder, input, selectorValue, providers)
 		} else {
 			binder, err = selectors.Carry(binder, input, selectorValue)
