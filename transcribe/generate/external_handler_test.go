@@ -42,3 +42,12 @@ func TestExternalHandlerHolderImportCollisions(t *testing.T) {
 	out, err := command.CombinedOutput()
 	require.NoError(t, err, "%s", out)
 }
+
+func TestExternalHandlerSideEvidenceIsDetached(t *testing.T) {
+	handler := &ExternalHandler{SourceSideParameters: map[string]bool{"Page|query|page": true}}
+	clone := handler.Clone()
+	delete(clone.SourceSideParameters, "Page|query|page")
+	if !handler.SourceSideParameters["Page|query|page"] {
+		t.Fatal("source-side evidence mutated through clone")
+	}
+}

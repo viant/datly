@@ -145,6 +145,14 @@ selector arguments. Existing explicitly authored Go input fields remain
 supported; their compatibility does not require new generated readers to copy
 selectors into business inputs.
 
+Custom handlers may declare plain optional, default-free query selectors for an
+already served view through the same private companion. These declarations
+provide transport metadata; the parent does not convert or carry their values.
+The custom handler must forward the native query provider to its existing child
+reader, which owns selector conversion, authorization order and view policy.
+Required or defaulted side bindings are not supported on this transport path.
+Business Input and Has contracts remain unchanged.
+
 Aggregates assembled from several legacy service calls should normally become
 one reader graph with related and DerivedView outputs. Do not preserve a
 service-local fan-out of raw SELECTs merely because the public response is an

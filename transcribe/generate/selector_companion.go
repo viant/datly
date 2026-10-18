@@ -10,6 +10,7 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/viant/datly/spec"
 	"github.com/viant/datly/tag"
 	"github.com/viant/datly/transcribe/gobuild"
 	"github.com/viant/datly/typecatalog"
@@ -137,6 +138,9 @@ func (r *planResolver) preserveLinkedSelectors(generated bool) error {
 		return err
 	}
 	p.QuerySelectors = side
+	if r.input.ExternalHandler != nil && !r.input.ExternalHandler.GeneratedContracts {
+		return nil
+	}
 	planned, err := resolveInputFieldsMode(r.input.Component, r.input.Declarations, false)
 	if err != nil {
 		return err
@@ -161,6 +165,21 @@ func (r *planResolver) linkedSelectorFields() ([]Field, error) {
 	descriptor, err := r.types.Descriptor(p.Input.DescriptorKey)
 	if err != nil {
 		return nil, err
+	}
+
+	if h := r.input.ExternalHandler; h != nil && h.Build != nil && !h.GeneratedContracts && descriptor.Type == nil && descriptor.SynteticType == nil {
+		side := make([]Field, 0, len(p.QuerySelectors))
+		for _, field := range p.QuerySelectors {
+			metadata, err := tag.ParseField(reflect.StructField{Name: field.Name, Tag: reflect.StructTag(field.Tag)})
+			if err != nil {
+				return nil, err
+			}
+			identity := (&spec.Parameter{Name: metadata.Binding.Name, Source: spec.BindSource{Kind: metadata.Binding.Location.Kind, Name: metadata.Binding.Location.In}}).Identity()
+			if h.SourceSideParameters[identity] {
+				side = append(side, field)
+			}
+		}
+		return side, nil
 	}
 	fields, err := xshape.New(descriptor, r.types.Descriptor).Fields()
 	if err != nil {

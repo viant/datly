@@ -24,6 +24,7 @@ type Contract struct {
 	Holder, Field string
 	Descriptor    *x.Type
 	Fields        []xshape.Field
+	transportOnly bool
 }
 
 // Resolve accepts a value result only. A reflected result is inspected as a type,
@@ -81,7 +82,7 @@ func Resolve(holder *x.Type, fieldName string, lookup xshape.Lookup) (*Contract,
 	if !present || component.ValidateRoute() != nil || !componentField(holder, *selectedField) {
 		return nil, fmt.Errorf("selector companion field must declare an exact Component[I,O] route")
 	}
-	if component.Handler != "" || component.Settings.Mutation != "" {
+	if component.Settings.Mutation != "" {
 		return nil, fmt.Errorf("selector companion requires an ordinary reader")
 	}
 	identity := selected.Results[0]
@@ -135,6 +136,9 @@ func Resolve(holder *x.Type, fieldName string, lookup xshape.Lookup) (*Contract,
 		if metadata.Codec != nil || len(metadata.Predicates) != 0 || metadata.View != nil || metadata.SQL != nil || len(metadata.Relation) != 0 || metadata.Self != nil || metadata.FormatSelector || binding.Transformer != nil || binding.ResolutionGroup != nil || binding.Scope != "" || binding.When != "" || binding.With != "" || binding.URI != "" || binding.ResourceRef != "" || binding.Async {
 			return nil, fmt.Errorf("selector companion field %s has unsupported binding responsibilities", field.Name)
 		}
+		if component.Handler != "" && !TransportField(metadata) {
+			return nil, fmt.Errorf("custom selector transport requires optional default-free queries")
+		}
 		typ, builtin := field.BuiltinType()
 		property := metadata.QuerySelector.Property
 		validType := (property == spec.SelectorPropertyFields || property == spec.SelectorPropertyOrderBy) && typ == "[]string" || (property == spec.SelectorPropertyPage || property == spec.SelectorPropertyLimit || property == spec.SelectorPropertyOffset) && typ == "int"
@@ -153,7 +157,7 @@ func Resolve(holder *x.Type, fieldName string, lookup xshape.Lookup) (*Contract,
 		}
 		seen[property][view] = true
 	}
-	return &Contract{Holder: holder.Key(), Field: fieldName, Descriptor: descriptor, Fields: selectors}, nil
+	return &Contract{Holder: holder.Key(), Field: fieldName, Descriptor: descriptor, Fields: selectors, transportOnly: component.Handler != ""}, nil
 }
 
 func concrete(descriptor *x.Type) bool {
@@ -191,4 +195,14 @@ func componentField(holder *x.Type, field xshape.Field) bool {
 	}
 	ref, err := resolver.Reference(canonical)
 	return err == nil && ref.Qualifier == packagePath && ref.BaseName == "Component" && len(ref.Arguments) == 2
+}
+
+// TransportField admits only metadata whose binding responsibilities can remain
+// with a downstream reader receiving the unchanged native query provider.
+func TransportField(metadata *tag.Field) bool {
+	if metadata == nil || metadata.Binding == nil || metadata.QuerySelector == nil {
+		return false
+	}
+	b := metadata.Binding
+	return b.Location.Kind == "query" && strings.TrimSpace(b.Location.In) != "" && b.DefaultValue == nil && b.ErrorCode == 0 && b.ErrorMessage == "" && b.MinAllowedRecords == nil && b.MaxAllowedRecords == nil && b.ExpectedReturned == nil && (b.Required == nil || !*b.Required) && metadata.Codec == nil && len(metadata.Predicates) == 0 && metadata.View == nil && metadata.SQL == nil && len(metadata.Relation) == 0 && metadata.Self == nil && !metadata.FormatSelector && b.Transformer == nil && b.ResolutionGroup == nil && b.Scope == "" && b.When == "" && b.With == "" && b.URI == "" && b.ResourceRef == "" && !b.Async
 }

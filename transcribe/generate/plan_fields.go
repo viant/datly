@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/viant/datly/internal/selectorcompanion"
 	"github.com/viant/datly/spec"
 	dtag "github.com/viant/datly/tag"
 )
@@ -27,8 +28,17 @@ func resolveInputFieldsMode(component *spec.Component, declarations Declarations
 		if param == nil {
 			continue
 		}
-		if param.EmitOutput || side && selectorSideParameter(param) && ordinarySelectorReader(component) {
+		if param.EmitOutput {
 			continue
+		}
+		if side && ordinarySelectorReader(component) {
+			selected, err := selectorStorageParameter(component, param)
+			if err != nil {
+				return nil, err
+			}
+			if selected {
+				continue
+			}
 		}
 		if strings.EqualFold(strings.TrimSpace(param.Source.Kind), "output") {
 			continue
@@ -368,8 +378,12 @@ func ordinarySelectorReader(component *spec.Component) bool {
 	if component.Settings != nil && component.Settings.Mutation != "" {
 		return false
 	}
+	if component.Routes[0] == nil {
+		return false
+	}
+	handler := component.Routes[0].Handler
 	for _, route := range component.Routes {
-		if route == nil || route.Handler != "" {
+		if route == nil || route.Handler != handler {
 			return false
 		}
 	}
@@ -379,7 +393,11 @@ func resolveSelectorFields(component *spec.Component, declarations Declarations)
 	var result []Field
 	names := map[string]bool{}
 	for _, parameter := range preferDefinedParams(component.Parameters) {
-		if parameter == nil || !selectorSideParameter(parameter) {
+		selected, err := selectorStorageParameter(component, parameter)
+		if err != nil {
+			return nil, err
+		}
+		if !selected {
 			continue
 		}
 		field, ok, err := resolveField(parameter, declarations)
@@ -414,4 +432,22 @@ func selectorSideParameter(p *spec.Parameter) bool {
 		return p.TypeExpr == "int" && (p.OutputTypeExpr == "" || p.OutputTypeExpr == "int")
 	}
 	return false
+}
+
+func selectorStorageParameter(component *spec.Component, parameter *spec.Parameter) (bool, error) {
+	if !selectorSideParameter(parameter) {
+		return false, nil
+	}
+	if len(component.Routes) == 0 || component.Routes[0] == nil || component.Routes[0].Handler == "" {
+		return true, nil
+	}
+	metadata, err := canonicalFieldMetadata(parameter)
+	if err != nil {
+		return false, err
+	}
+	parsed, err := dtag.ParseField(reflect.StructField{Name: generatedParameterName(parameter), Tag: reflect.StructTag(fieldTag(parameter, parameter.Name, metadata))})
+	if err != nil {
+		return false, err
+	}
+	return selectorcompanion.TransportField(parsed), nil
 }

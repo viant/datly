@@ -22,9 +22,10 @@ import (
 // Selection is temporary compiler evidence. Component.Parameters remains the
 // only parameter catalog; the entries below are those exact canonical pointers.
 type Selection struct {
-	Association *model.Association
-	Type        reflect.Type
-	Parameters  []*spec.Parameter
+	Association   *model.Association
+	Type          reflect.Type
+	Parameters    []*spec.Parameter
+	transportOnly bool
 }
 
 func Select(component *spec.Component, input reflect.Type) (*Selection, error) {
@@ -84,7 +85,7 @@ func SelectContracts(component *spec.Component, input, output *x.Type, lookup xs
 }
 
 func selectCanonical(component *spec.Component, contract *Contract) (*Selection, error) {
-	result := &Selection{Association: component.SelectorCompanion, Type: contract.Descriptor.Type}
+	result := &Selection{Association: component.SelectorCompanion, Type: contract.Descriptor.Type, transportOnly: contract.transportOnly}
 	candidates := map[string]*spec.Parameter{}
 	for _, p := range spec.EffectiveParameters(component.Parameters) {
 		if p == nil || p.EmitOutput || p.Source.Kind == "output" {
@@ -160,6 +161,7 @@ type BindingPlan struct {
 	pagePlan                  *bindly.Plan
 	absentPlan                *bindly.Plan
 	owner                     *BindingPlan
+	transportOnly             bool
 }
 
 func NewBindingPlan(component *spec.Component, selected *Selection, input reflect.Type, publicPlan, companionPlan *bindly.Plan, public, selectors []bindly.BindingSpec) (*BindingPlan, error) {
@@ -208,7 +210,10 @@ func NewBindingPlan(component *spec.Component, selected *Selection, input reflec
 			return nil, fmt.Errorf("selector companion canonical parameter identity mismatch")
 		}
 	}
-	result := &BindingPlan{association: selected.Association, input: input, companion: selected.Type, publicPlan: publicPlan, companionPlan: companionPlan, public: append([]bindly.BindingSpec(nil), public...), selectors: append([]bindly.BindingSpec(nil), selectors...)}
+	result := &BindingPlan{transportOnly: selected.transportOnly, association: selected.Association, input: input, companion: selected.Type, publicPlan: publicPlan, companionPlan: companionPlan, public: append([]bindly.BindingSpec(nil), public...), selectors: append([]bindly.BindingSpec(nil), selectors...)}
+	if result.transportOnly {
+		return result, nil
+	}
 	if component.Settings != nil && component.Settings.IgnoreEmptyQueryParameters != nil && !*component.Settings.IgnoreEmptyQueryParameters {
 		if reflect.PointerTo(input).Implements(reflect.TypeFor[xhandler.Initializer]()) || reflect.PointerTo(input).Implements(reflect.TypeFor[xhandler.InvokerInitializer]()) || reflect.PointerTo(input).Implements(reflect.TypeFor[xmcp.Initializer]()) {
 			return nil, fmt.Errorf("deferred companion Page does not support input callbacks")
@@ -325,6 +330,11 @@ func (p *BindingPlan) ValidateProviders(providers []locator.Provider, resolvedPa
 	}
 	return nil
 }
+
+// TransportOnly identifies compiler-validated custom-handler declarations.
+// Their raw query values remain owned by the handler's downstream invocation.
+func (p *BindingPlan) TransportOnly() bool { return p != nil && p.transportOnly }
+
 func (p *BindingPlan) PublicPlan() *bindly.Plan { return p.publicPlan }
 func (p *BindingPlan) Type() reflect.Type       { return p.companion }
 func (p *BindingPlan) Bind(ctx context.Context, scope *bindly.Injector, input any, providers ...locator.Provider) (any, error) {

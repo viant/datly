@@ -179,9 +179,6 @@ func (c *Compiler) compileSourceHandler(ctx context.Context, source *Source, hea
 	if err != nil {
 		return nil, err
 	}
-	if err = validateSourceHandlerParameters(loader, fields, outputs, prepared.TypeContext, d.Params, wireMatch); err != nil {
-		return nil, err
-	}
 	connector := header.Connector
 	if source.Connector != "" {
 		if connector != "" && connector != source.Connector {
@@ -206,6 +203,19 @@ func (c *Compiler) compileSourceHandler(ctx context.Context, source *Source, hea
 		if err := (routes.Compiler{Component: component}).Compile(); err != nil {
 			return nil, err
 		}
+	}
+
+	side, err := gen.New(gen.Input{Component: component, TargetPackage: destination}).SelectorSideParameters()
+	if err != nil {
+		return nil, err
+	}
+	sideIdentities := map[string]bool{}
+	for _, parameter := range side {
+		sideIdentities[parameter.Identity()] = true
+	}
+	admittedSide := map[string]bool{}
+	if err = validateSourceHandlerParameters(loader, fields, outputs, prepared.TypeContext, d.Params, wireMatch, sideIdentities, admittedSide); err != nil {
+		return nil, err
 	}
 	copy := *source
 	copy.GoBuild = build.WithContext(nil)
@@ -257,7 +267,7 @@ func (c *Compiler) compileSourceHandler(ctx context.Context, source *Source, hea
 	}
 	return &Result{Source: &copy, Component: component, TypeContext: typeContext, TypeResolver: resolver, TypeAuthority: typecatalog.TranscribeAuthority,
 		Contracts:       gen.ContractReferences{Input: &gen.ContractReference{Expression: input.Name, DescriptorKey: input.Key()}, Output: &gen.ContractReference{Expression: output.Name, DescriptorKey: output.Key()}},
-		ExternalHandler: &gen.ExternalHandler{Package: packages[0], Name: names[0], AdapterPackage: adapterPackage, AdapterName: adapterName, Build: build.WithContext(nil), WireTypes: wireReferences}}, nil
+		ExternalHandler: &gen.ExternalHandler{Package: packages[0], Name: names[0], AdapterPackage: adapterPackage, AdapterName: adapterName, Build: build.WithContext(nil), WireTypes: wireReferences, SourceSideParameters: admittedSide}}, nil
 }
 
 func validateSourceHandlerAdapter(loader types.Importer, object types.Object, reference string) error {
@@ -352,7 +362,7 @@ func sourceHandlerFields(typ types.Type) (map[string]sourceHandlerField, error) 
 	return result, nil
 }
 
-func validateSourceHandlerParameters(loader types.Importer, fields, outputs map[string]sourceHandlerField, tc *spec.TypeContext, params []*spec.Parameter, wireMatch func(string, string) (string, bool)) error {
+func validateSourceHandlerParameters(loader types.Importer, fields, outputs map[string]sourceHandlerField, tc *spec.TypeContext, params []*spec.Parameter, wireMatch func(string, string) (string, bool), sideIdentities, admittedSide map[string]bool) error {
 	scope := types.NewPackage("datly.local/handlercheck", "handlercheck")
 	for _, imp := range tc.Imports {
 		pkg, err := loader.Import(imp.Package)
@@ -378,6 +388,10 @@ func validateSourceHandlerParameters(loader types.Importer, fields, outputs map[
 			field, ok = outputs[param.Name]
 		}
 		if !ok {
+			if sideIdentities[param.Identity()] {
+				admittedSide[param.Identity()] = true
+				continue
+			}
 			return fmt.Errorf("handler parameter %q is not in the source contract; remove obsolete declarations", param.Name)
 		}
 		binding := field.binding

@@ -164,8 +164,13 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 		inputPlan, _ = request.Input.ScopePlan("")
 	}
 	selectors := request.Input.SelectorPlan()
-	if selectors != nil && (!request.CanonicalReader || scoped || request.BoundInput != nil || request.Replay != nil || selectors.PublicPlan() != inputPlan) {
+	if selectors != nil && (!selectors.TransportOnly() && !request.CanonicalReader || scoped || request.BoundInput != nil || request.Replay != nil || selectors.PublicPlan() != inputPlan) {
 		return nil, fmt.Errorf("selector companion requires ordinary canonical reader binding without bound input or replay")
+	}
+	if selectors != nil && selectors.TransportOnly() {
+		// Custom transport declarations describe the inherited query only; the
+		// handler's child owns conversion, authorization order and reader policy.
+		selectors = nil
 	}
 	if selectors != nil && selectors.DeferredPage() {
 		if _, ok := request.Handler.(rhandler.InputCapturer); ok {

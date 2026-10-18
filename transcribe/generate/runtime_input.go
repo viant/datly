@@ -358,8 +358,10 @@ func (g *Generator) SelectorSideParameters() ([]*spec.Parameter, error) {
 	}
 	plan := &Plan{Package: g.input.TargetPackage, QuerySelectors: fields}
 	resolver := &planResolver{input: g.input, types: g.resolver, plan: plan}
-	if err = resolver.resolveContract("input", &plan.Input, g.input.Contracts.Input); err != nil {
-		return nil, err
+	if g.input.Contracts.Input != nil {
+		if err = resolver.resolveContract("input", &plan.Input, g.input.Contracts.Input); err != nil {
+			return nil, err
+		}
 	}
 	if plan.Input.Ownership == ContractLinked {
 		plan.QuerySelectors, err = resolver.linkedSelectorFields()

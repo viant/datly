@@ -95,7 +95,6 @@ func TestCompanionSourceAndReflectionAgreeWithoutInvocation(t *testing.T) {
 func TestCompanionInvalidSourceDeclarationsFailClosed(t *testing.T) {
 	for _, tc := range []struct{ name, old, new string }{
 		{"mutation owner", `component:"Rows,path=/rows,method=GET"`, `component:"Rows,path=/rows,method=POST" mutation:"insert"`},
-		{"custom handler", "method=GET", "method=GET,handler=Custom"},
 		{"argument", "DatlyQuerySelectors()", "DatlyQuerySelectors(_ int)"},
 		{"variadic", "DatlyQuerySelectors()", "DatlyQuerySelectors(_ ...int)"},
 		{"pointer result", "DatlyQuerySelectors() fixtureSelectors", "DatlyQuerySelectors() *fixtureSelectors"},
@@ -175,6 +174,21 @@ func TestCompanionPostAndMixedReaderRoutes(t *testing.T) {
 		holder, lookup := loadedHolder(t, source)
 		if _, err := Resolve(holder, "Contract", lookup); err != nil {
 			t.Fatal(err)
+		}
+	}
+}
+
+func TestCustomCompanionTransportRequiresOptionalDefaultFreeQueries(t *testing.T) {
+	source := strings.Replace(sourceFixture, "method=GET", "method=GET,handler=Custom", 1)
+	holder, lookup := loadedHolder(t, source)
+	contract, err := Resolve(holder, "Contract", lookup)
+	if err != nil || !contract.transportOnly {
+		t.Fatalf("custom transport: %v", err)
+	}
+	for _, binding := range []string{"required=true", "required=false,value=2"} {
+		holder, lookup = loadedHolder(t, strings.Replace(source, "in=page,required=false", "in=page,"+binding, 1))
+		if _, err = Resolve(holder, "Contract", lookup); err == nil {
+			t.Fatalf("binding obligation admitted: %s", binding)
 		}
 	}
 }

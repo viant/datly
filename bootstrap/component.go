@@ -18,10 +18,13 @@ import (
 // ContractResolver projects canonical linked or synthetic contract types into
 // one component. Existing component metadata retains authority.
 type ContractResolver struct {
-	Component  *spec.Component
-	InputType  *x.Type
-	OutputType *x.Type
-	Types      *typecatalog.Resolver
+	// selectorOutput retains actual output identity when handler-owned output
+	// deliberately suppresses structural output projection.
+	selectorOutput *x.Type
+	Component      *spec.Component
+	InputType      *x.Type
+	OutputType     *x.Type
+	Types          *typecatalog.Resolver
 }
 
 func (r ContractResolver) Resolve() (*spec.Component, error) {
@@ -67,7 +70,11 @@ func (r ContractResolver) Resolve() (*spec.Component, error) {
 		},
 	}
 	if component.SelectorCompanion != nil {
-		companion, err := checkedSelectorContract(component, r.InputType, r.OutputType, r.Types)
+		output := r.OutputType
+		if output == nil {
+			output = r.selectorOutput
+		}
+		companion, err := checkedSelectorContract(component, r.InputType, output, r.Types)
 		if err != nil {
 			return nil, err
 		}

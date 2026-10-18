@@ -112,3 +112,56 @@ func TestGeneratedPostReaderSelectorsAreSideInputs(t *testing.T) {
 		}
 	}
 }
+
+func TestCustomSelectorTransportPreservesExistingBindingObligations(t *testing.T) {
+	required := true
+	value := "2"
+	component := &spec.Component{Name: "Proxy", Routes: []*spec.Route{{Method: "GET", Path: "/proxy", Handler: "NewProxy"}}, Parameters: []*spec.Parameter{
+		{Name: "Page", TypeExpr: "int", Source: spec.BindSource{Kind: "query", Name: "page"}, QuerySelector: &spec.QuerySelectorBinding{View: "rows", Property: spec.SelectorPropertyPage}},
+		{Name: "Limit", TypeExpr: "int", Required: &required, Source: spec.BindSource{Kind: "query", Name: "limit"}, QuerySelector: &spec.QuerySelectorBinding{View: "rows", Property: spec.SelectorPropertyLimit}},
+		{Name: "Offset", TypeExpr: "int", Value: &value, Source: spec.BindSource{Kind: "query", Name: "offset"}, QuerySelector: &spec.QuerySelectorBinding{View: "rows", Property: spec.SelectorPropertyOffset}},
+		{Name: "Fields", TypeExpr: "[]string", Scope: "custom", Source: spec.BindSource{Kind: "query", Name: "fields"}, QuerySelector: &spec.QuerySelectorBinding{View: "rows", Property: spec.SelectorPropertyFields}},
+	}}
+	plan, err := New(Input{Component: component, PackageName: "proxy"}).Plan()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(plan.QuerySelectors) != 1 || plan.QuerySelectors[0].Name != "Page" {
+		t.Fatalf("transport fields: %+v", plan.QuerySelectors)
+	}
+	for _, name := range []string{"Limit", "Offset", "Fields"} {
+		if _, ok := plan.Input.Field(name); !ok {
+			t.Fatalf("existing public binding %s lost", name)
+		}
+	}
+	if _, ok := plan.Input.Field("Page"); ok {
+		t.Fatal("optional transport Page leaked into Input")
+	}
+	side, err := New(Input{Component: component}).SelectorSideParameters()
+	if err != nil || len(side) != 1 || side[0] != nil && side[0].Identity() != component.Parameters[0].Identity() {
+		t.Fatalf("source admission differs from generated storage: %v %v", side, err)
+	}
+}
+
+func TestCustomSelectorTransportRetainsErrorAndCountBindings(t *testing.T) {
+	count := 1
+	for _, parameter := range []*spec.Parameter{
+		{ErrorStatusCode: 422}, {ErrorMessage: "selector failure"}, {MinAllowedRecords: &count}, {MaxAllowedRecords: &count}, {ExpectedReturned: &count},
+	} {
+		parameter.Name = "Limit"
+		parameter.TypeExpr = "int"
+		parameter.Source = spec.BindSource{Kind: "query", Name: "limit"}
+		parameter.QuerySelector = &spec.QuerySelectorBinding{View: "rows", Property: spec.SelectorPropertyLimit}
+		component := &spec.Component{Name: "Proxy", Routes: []*spec.Route{{Method: "GET", Path: "/proxy", Handler: "NewProxy"}}, Parameters: []*spec.Parameter{parameter}}
+		plan, err := New(Input{Component: component, PackageName: "proxy"}).Plan()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(plan.QuerySelectors) != 0 {
+			t.Fatalf("binding responsibility moved to transport: %+v", parameter)
+		}
+		if _, ok := plan.Input.Field("Limit"); !ok {
+			t.Fatal("existing custom binding lost")
+		}
+	}
+}

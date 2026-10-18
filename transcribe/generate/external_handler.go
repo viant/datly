@@ -33,6 +33,9 @@ type ExternalHandler struct {
 	// Build validates source-authored factories and staged registrations without
 	// requiring their contracts to be linked into the transcription executable.
 	Build *gobuild.Context
+	// SourceSideParameters contains only exact identities admitted as absent
+	// from a factory-validated source Input. It is compilation-local evidence.
+	SourceSideParameters map[string]bool `json:"-" yaml:"-"`
 	// WireTypes retains canonical Go-owner discovery references for linked Input.
 	WireTypes []string
 }
@@ -46,6 +49,12 @@ func (h *ExternalHandler) Clone() *ExternalHandler {
 		result.CompositionViews = make(map[string]CompositionOccurrence, len(h.CompositionViews))
 		for identity, proof := range h.CompositionViews {
 			result.CompositionViews[identity] = proof
+		}
+	}
+	if h.SourceSideParameters != nil {
+		result.SourceSideParameters = make(map[string]bool, len(h.SourceSideParameters))
+		for identity, admitted := range h.SourceSideParameters {
+			result.SourceSideParameters[identity] = admitted
 		}
 	}
 	result.Build = h.Build.Clone()

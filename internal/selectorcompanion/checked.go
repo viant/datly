@@ -68,7 +68,7 @@ func CheckContracts(component *spec.Component, input, output *x.Type, lookup xsh
 	}
 	selectedRoute := false
 	for _, route := range component.Routes {
-		if route == nil || route.Handler != "" {
+		if route == nil || route.Handler != metadata.Handler {
 			return nil, fmt.Errorf("selector companion route identity mismatch")
 		}
 		found := false
@@ -78,7 +78,7 @@ func CheckContracts(component *spec.Component, input, output *x.Type, lookup xsh
 			if candidateName == "" {
 				candidateName = candidate.Name
 			}
-			if err == nil && ok && candidateName == name && tag.Method == route.Method && tag.Path == route.Path {
+			if err == nil && ok && candidateName == name && tag.Method == route.Method && tag.Path == route.Path && tag.Handler == route.Handler {
 				found = true
 				break
 			}
@@ -95,7 +95,7 @@ func CheckContracts(component *spec.Component, input, output *x.Type, lookup xsh
 	}
 	// A genuine reader declaration cannot grant selector storage to execution
 	// metadata that has since selected a handler or mutation owner.
-	if component.Routes[0].Handler != "" {
+	if component.Routes[0].Handler != metadata.Handler {
 		return nil, fmt.Errorf("selector companion requires the current ordinary reader execution policy")
 	}
 	if settings := component.Settings; settings != nil && (settings.Mutation != "" || settings.SequenceStrategy != "" || settings.ComponentCallPolicy != "" || settings.IndependentChildTransactions || len(settings.ProtectedFlushTables) != 0 || settings.WarmupTarget != nil) {

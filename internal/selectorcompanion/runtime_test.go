@@ -62,6 +62,7 @@ func TestSelectorCompanionCanonicalExclusionFailsClosed(t *testing.T) {
 			c.Parameters = append(c.Parameters, &spec.Parameter{Name: "Absent", TypeExpr: "string", Source: spec.BindSource{Kind: "query", Name: "missing"}})
 		}},
 		{"overlapping source", func(c *spec.Component) { c.Parameters[0].Source.Name = "fields" }},
+		{"reader relabeled custom", func(c *spec.Component) { c.Routes[0].Handler = "HandleRecords" }},
 		{"foreign kind", func(c *spec.Component) { c.Key.Kind = spec.KindView }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

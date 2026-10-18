@@ -89,11 +89,13 @@ func (c *artifactCompiler) compile() (*Artifact, error) {
 		}
 	}
 	outputDescriptor := linkedContractType(input.OutputType)
+	var selectorOutput *x.Type
 	if input.HandlerOwnedOutput {
+		selectorOutput = outputDescriptor
 		outputDescriptor = nil
 	}
 	component, err := (ContractResolver{
-		Component: input.Component, InputType: linkedContractType(input.InputType), OutputType: outputDescriptor,
+		Component: input.Component, InputType: linkedContractType(input.InputType), OutputType: outputDescriptor, selectorOutput: selectorOutput,
 	}).Resolve()
 	if err != nil {
 		return nil, err
