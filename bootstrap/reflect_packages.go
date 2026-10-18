@@ -188,6 +188,14 @@ func collectContractTypes(contracts map[reflect.Type]bool, typeOf reflect.Type) 
 	if typeOf == nil {
 		return
 	}
+	// Preserve nominal container identity before following element types. The
+	// same visited authority also terminates recursive named maps and slices.
+	if typeOf.Name() != "" && typeOf.PkgPath() != "" {
+		if contracts[typeOf] {
+			return
+		}
+		contracts[typeOf] = true
+	}
 	switch typeOf.Kind() {
 	case reflect.Slice, reflect.Array, reflect.Pointer:
 		collectContractTypes(contracts, typeOf.Elem())
@@ -195,18 +203,8 @@ func collectContractTypes(contracts map[reflect.Type]bool, typeOf reflect.Type) 
 		collectContractTypes(contracts, typeOf.Key())
 		collectContractTypes(contracts, typeOf.Elem())
 	case reflect.Struct:
-		if typeOf.Name() != "" && typeOf.PkgPath() != "" {
-			if contracts[typeOf] {
-				return
-			}
-			contracts[typeOf] = true
-		}
 		for i := 0; i < typeOf.NumField(); i++ {
 			collectContractTypes(contracts, typeOf.Field(i).Type)
-		}
-	default:
-		if typeOf.Name() != "" && typeOf.PkgPath() != "" {
-			contracts[typeOf] = true
 		}
 	}
 }
