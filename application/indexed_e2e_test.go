@@ -295,6 +295,10 @@ type Holder struct { Route xdatly.Component[Input,Output] `+"`"+`component:"`+fi
 	if materializer.count("One")+materializer.count("Two") != 0 {
 		t.Fatal("OpenAPI configuration materialized components at bootstrap")
 	}
+	initialStatus := readManagerStatus(t, manager)
+	if materializer.count("One")+materializer.count("Two") != 0 {
+		t.Fatal("status request materialized components")
+	}
 	normal := httptest.NewRecorder()
 	manager.ServeHTTP(normal, httptest.NewRequest(http.MethodGet, "/one?name=Ada", nil))
 	if normal.Code != http.StatusOK || materializer.count("One") != 1 || materializer.count("Two") != 0 {
@@ -310,6 +314,7 @@ type Holder struct { Route xdatly.Component[Input,Output] `+"`"+`component:"`+fi
 	if materializer.count("One") != 1 || materializer.count("Two") != 1 {
 		t.Fatalf("OpenAPI component cache calls=%v", materializer.calls)
 	}
+	requireStatusContinuity(t, initialStatus, readManagerStatus(t, manager))
 	if err := manager.Shutdown(context.Background()); err != nil {
 		t.Fatal(err)
 	}

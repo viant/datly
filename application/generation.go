@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/viant/bindly/resource"
 	documentation "github.com/viant/datly/documentation"
@@ -109,6 +110,7 @@ type Manager struct {
 	publication     sync.Mutex
 	stopped         atomic.Bool
 	warmups         *gateway.WarmupLifetime
+	startTime       time.Time
 	observation     *runtime.Observability
 	async           *asyncLifetime
 	shutdownDone    chan struct{}
@@ -135,7 +137,7 @@ func New(types *typecatalog.Catalog, configure ...Option) (*Manager, error) {
 	if err != nil {
 		return nil, err
 	}
-	manager := &Manager{seed: seed}
+	manager := &Manager{seed: seed, startTime: time.Now()}
 	manager.async, err = manager.newAsync(options.async)
 	if err != nil {
 		return nil, err

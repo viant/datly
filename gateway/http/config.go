@@ -55,12 +55,14 @@ type Config struct {
 }
 
 const DefaultCacheWarmURI = "/v1/api/cache/warmup"
+const DefaultStatusURI = "/v1/api/meta/status"
 
 // Meta preserves original Init semantics: empty selects the default URI;
-// a nonempty whitespace value explicitly disables warmup route activation.
+// a nonempty whitespace value does not select the default.
 type Meta struct {
+	StatusURI string `json:"StatusURI,omitempty" yaml:"StatusURI,omitempty"`
+	MetricURI string `json:"MetricURI,omitempty" yaml:"MetricURI,omitempty"`
 	// AllowedSubnet retains original RemoteAddr prefix matching (not CIDR parsing).
-	MetricURI          string   `json:"MetricURI,omitempty" yaml:"MetricURI,omitempty"`
 	AllowedSubnet      []string `json:"AllowedSubnet,omitempty" yaml:"AllowedSubnet,omitempty"`
 	OpenApiURI         string   `json:"OpenApiURI,omitempty" yaml:"OpenApiURI,omitempty"`
 	DocURI             string   `json:"DocURI,omitempty" yaml:"DocURI,omitempty"`
@@ -70,6 +72,9 @@ type Meta struct {
 
 func (c Config) resolved() Config {
 	c.Meta.AllowedSubnet = append([]string(nil), c.Meta.AllowedSubnet...)
+	if c.Meta.StatusURI == "" {
+		c.Meta.StatusURI = DefaultStatusURI
+	}
 	if c.DisableCors {
 		c.CORS = nil
 	} else if c.CORS == nil {
@@ -133,6 +138,9 @@ type HandlerInput struct {
 	Components []*registry.RegisteredComponent
 	Logger     xlogger.Logger
 	Version    string
+	// StartTime is the immutable service start shared across handler rebuilds.
+	// Zero selects the handler construction time for standalone gateway users.
+	StartTime time.Time
 }
 
 func (c Config) NewHandler(rt *druntime.Runtime, log xlogger.Logger, version string) (*Handler, error) {
@@ -174,6 +182,10 @@ func (c Config) Build(ctx context.Context, input HandlerInput) (*Handler, error)
 		return nil, err
 	}
 	h := NewHandler(rt, log, version)
+	h.statusURI = c.Meta.StatusURI
+	if !input.StartTime.IsZero() {
+		h.startTime = input.StartTime
+	}
 	h.metricPrefix = metricPrefix
 	h.metricPrefixes, err = metricReportingPrefixes(input, metricPrefix)
 	if err != nil {

@@ -12,6 +12,7 @@ import (
 )
 
 func (m *Manager) newHTTPHandler(ctx context.Context, built *Build, input gateway.HandlerInput) (*gateway.Handler, error) {
+	input.StartTime = m.startTime
 	httpConfig := built.HTTP
 	if httpConfig.Warmup != nil {
 		policy := *httpConfig.Warmup

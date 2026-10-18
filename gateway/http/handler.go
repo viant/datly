@@ -34,6 +34,8 @@ type Handler struct {
 	metricPrefixes       []string
 	async                *asyncRoutes
 	allowedSubnet        []string
+	statusURI            string
+	startTime            time.Time
 	documents            *documentRoutes
 	static               []*staticRoute
 	cors                 map[string]*corsPolicy
@@ -48,10 +50,11 @@ type Handler struct {
 
 func NewHandler(rt *druntime.Runtime, log xlogger.Logger, version string) *Handler {
 	h := &Handler{
-		runtime: rt,
-		logger:  log,
-		version: version,
-		cors:    map[string]*corsPolicy{},
+		runtime:   rt,
+		logger:    log,
+		version:   version,
+		startTime: time.Now(),
+		cors:      map[string]*corsPolicy{},
 	}
 	for _, endpoint := range rt.Routes() {
 		policy, _ := newCORSPolicy(endpoint.CORS.Resolve(nil))
@@ -75,6 +78,9 @@ func (h *Handler) ServeHTTP(writer stdhttp.ResponseWriter, req *stdhttp.Request)
 func (h *Handler) serveHTTP(writer stdhttp.ResponseWriter, req *stdhttp.Request) {
 	if !h.allowsRemote(req) {
 		writer.WriteHeader(stdhttp.StatusForbidden)
+		return
+	}
+	if h.serveStatus(writer, req) {
 		return
 	}
 	if h.serveMetricReporting(writer, req) {

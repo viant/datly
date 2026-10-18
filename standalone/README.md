@@ -112,8 +112,14 @@ Definitions are fixed for a server lifetime; route reload does not reload them.
 
 HTTP policy is the existing `gateway/http.Config`: CORS defaults and presence,
 DisableCors, APIPrefix, Meta and OpenAPI retain their owner. `Info` selects
-OpenAPI generation; configuring both Info and OpenAPI fails. JWTValidator
-configures the existing declared-input JwtClaim codec, never an ambient
+OpenAPI generation; configuring both Info and OpenAPI fails. `Meta.StatusURI`
+defaults to `/v1/api/meta/status` only when empty. The exact GET route returns
+unwrapped JSON `Version`, `Status` (`UP`), `UpTime`, and `StartTime`; service start
+and uptime survive route reloads and lazy OpenAPI generation. It reports process
+status without checking database readiness. `Meta.AllowedSubnet` applies existing
+`RemoteAddr` prefix authorization; forwarding headers do not grant access.
+Non-GET requests use ordinary routing, returning 404 when no component matches.
+JWTValidator configures the existing declared-input JwtClaim codec, never an ambient
 principal. MCP accepts Port or Address plus the native Authorization policy and
 uses `mcp/server` with Manager as its generation source. Old MCP OAuth/BFF option
 conversion is not implemented.
