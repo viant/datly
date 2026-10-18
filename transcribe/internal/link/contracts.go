@@ -6,13 +6,16 @@ import (
 	"strings"
 
 	"github.com/viant/datly/bootstrap"
+	"github.com/viant/datly/internal/typeidentity"
 	"github.com/viant/datly/spec"
 	gen "github.com/viant/datly/transcribe/generate"
 	"github.com/viant/x"
+	xshape "github.com/viant/x/shape"
 )
 
 // Contracts identifies package contracts whose metadata survives a DQL overlay.
 type Contracts struct {
+	Lookup            xshape.Lookup
 	PackageComponent  *spec.Component
 	CompiledComponent *spec.Component
 	Source            *bootstrap.RouteSource
@@ -20,15 +23,24 @@ type Contracts struct {
 	Output            *x.Type
 }
 
-func (l *Contracts) References() gen.ContractReferences {
+// References propagates current type-authority failures during authoring.
+func (l *Contracts) References() (gen.ContractReferences, error) {
 	var result gen.ContractReferences
-	if l.EqualParams(false) {
+	input, err := l.EqualParamsChecked(false)
+	if err != nil {
+		return result, err
+	}
+	if input {
 		result.Input = Reference(l.Source.InputType, l.Input)
 	}
-	if l.EqualParams(true) {
+	output, err := l.EqualParamsChecked(true)
+	if err != nil {
+		return result, err
+	}
+	if output {
 		result.Output = Reference(l.Source.OutputType, l.Output)
 	}
-	return result
+	return result, nil
 }
 
 // PrepareGeneratedTypes removes package-owned type expressions only
@@ -61,15 +73,32 @@ func Reference(expression string, descriptor *x.Type) *gen.ContractReference {
 }
 
 func (l *Contracts) EqualParams(output bool) bool {
+	equal, err := l.EqualParamsChecked(output)
+	return err == nil && equal
+}
+
+// EqualParamsChecked compares detached contracts under the selected authority.
+func (l *Contracts) EqualParamsChecked(output bool) (bool, error) {
 	if output && !l.equalViews() {
-		return false
+		return false, nil
 	}
-	packageContract, err := json.Marshal(l.params(l.PackageComponent, output))
+	packageParams, err := l.params(l.PackageComponent, output)
 	if err != nil {
-		return false
+		return false, err
 	}
-	compiledContract, err := json.Marshal(l.params(l.CompiledComponent, output))
-	return err == nil && bytes.Equal(packageContract, compiledContract)
+	compiledParams, err := l.params(l.CompiledComponent, output)
+	if err != nil {
+		return false, err
+	}
+	packageContract, err := json.Marshal(packageParams)
+	if err != nil {
+		return false, err
+	}
+	compiledContract, err := json.Marshal(compiledParams)
+	if err != nil {
+		return false, err
+	}
+	return bytes.Equal(packageContract, compiledContract), nil
 }
 
 func (l *Contracts) equalViews() bool {
@@ -148,9 +177,9 @@ func NormalizeOwnershipView(source *spec.View, inheritedDest string, omitNamespa
 	return view
 }
 
-func (l *Contracts) params(component *spec.Component, output bool) []*spec.Parameter {
+func (l *Contracts) params(component *spec.Component, output bool) ([]*spec.Parameter, error) {
 	if component == nil {
-		return nil
+		return nil, nil
 	}
 	var result []*spec.Parameter
 	for _, param := range spec.EffectiveParameters(component.Parameters) {
@@ -160,9 +189,16 @@ func (l *Contracts) params(component *spec.Component, output bool) []*spec.Param
 		copy := *param
 		copy.Declaration = ""
 		copy.Raw = ""
+		// Compare the same Go destination identity serialized by reader metadata;
+		// reflection erases aliases but cannot change a named type or wrapper.
+		if l.Lookup != nil {
+			if err := typeidentity.NormalizeDestination(&copy, component.Key.Scope, component.TypeContext, l.Lookup); err != nil {
+				return nil, err
+			}
+		}
 		result = append(result, &copy)
 	}
-	return result
+	return result, nil
 }
 
 func (l *Contracts) isOutputParam(param *spec.Parameter) bool {

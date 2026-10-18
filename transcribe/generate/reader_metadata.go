@@ -8,6 +8,7 @@ import (
 	"github.com/viant/datly/bootstrap"
 	"github.com/viant/datly/internal/packageasset"
 	"github.com/viant/datly/internal/readergraph"
+	"github.com/viant/datly/internal/typeidentity"
 	"github.com/viant/datly/spec"
 	dsql "github.com/viant/datly/sql"
 	"github.com/viant/datly/tag"
@@ -328,6 +329,11 @@ func (r *planResolver) prepareReaderMetadata() error {
 	}
 	for _, param := range graph.Parameters {
 		if param != nil {
+			// Persist the exact Go destination while source alias declarations are
+			// available; reflected runtime types no longer carry those aliases.
+			if err := typeidentity.NormalizeDestination(param, p.Package, graph.TypeContext, r.types.Descriptor); err != nil {
+				return err
+			}
 			if value, planned := sideTags[param.Identity()]; planned {
 				param.Tag = value
 			}

@@ -437,12 +437,38 @@ func Signature(input, output *x.Type, lookup xshape.Lookup) (string, error) {
 	}
 	signatures := map[string][]field{}
 	active := map[string]bool{}
+	aliasIdentity := func(identity string) (string, error) {
+		if lookup == nil || identity == "" {
+			return identity, nil
+		}
+		formatted, err := (xshape.Resolver{}).Rewrite(identity)
+		if err != nil {
+			return "", err
+		}
+		expanded, err := typeidentity.Alias(identity, lookup, "reader metadata")
+		if err != nil {
+			return "", err
+		}
+		// Preserve the existing ABI spelling when no true alias expanded;
+		// resolver formatting alone must not rewrite anonymous closures.
+		if expanded == formatted {
+			return identity, nil
+		}
+		return expanded, nil
+	}
 	var visit func(*x.Type) error
 	visit = func(descriptor *x.Type) error {
 		if descriptor == nil {
 			return fmt.Errorf("reader metadata missing contract descriptor")
 		}
 		key := descriptor.Key()
+		if lookup != nil && key != "" {
+			var err error
+			key, err = aliasIdentity(key)
+			if err != nil {
+				return err
+			}
+		}
 		if active[key] {
 			return nil
 		}
@@ -467,6 +493,14 @@ func Signature(input, output *x.Type, lookup xshape.Lookup) (string, error) {
 			identity, err := f.CanonicalType()
 			if err != nil {
 				return err
+			}
+			// Go reflection erases true aliases; source and reflected closures
+			// must sign the same exact nominal type without erasing wrappers.
+			if lookup != nil && identity != "" {
+				identity, err = aliasIdentity(identity)
+				if err != nil {
+					return err
+				}
 			}
 			result = append(result, field{Name: f.Name, Type: identity, Anonymous: f.Anonymous, Index: append([]int(nil), f.Index...), Tag: string(f.Tag)})
 			resolved, err := shape.ResolveField(f.Name)

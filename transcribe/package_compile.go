@@ -190,10 +190,13 @@ func (a *packageAuthority) compile(ctx context.Context) (*Result, error) {
 		result.Source.ReaderMetadataURI = a.route.Tag.ReaderMetadata
 	}
 	contracts := &link.Contracts{
-		PackageComponent: component, CompiledComponent: result.Component, Source: a.route,
+		PackageComponent: component, CompiledComponent: result.Component, Source: a.route, Lookup: result.TypeResolver.Descriptor,
 		Input: a.input, Output: a.output,
 	}
-	result.Contracts = contracts.References()
+	result.Contracts, err = contracts.References()
+	if err != nil {
+		return nil, fmt.Errorf("compare linked contracts: %w", err)
+	}
 	if err = a.retainSelectorBusinessInput(result, contracts); err != nil {
 		return nil, fmt.Errorf("plan linked input selector ownership: %w", err)
 	}

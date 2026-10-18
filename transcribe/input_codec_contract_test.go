@@ -40,7 +40,9 @@ func TestPackageInputCodecRetainsExactDestinationContract(t *testing.T) {
 			authored := component.Clone()
 			authored.Parameters[0].OutputTypeExpr = tc.destination
 			contracts := &link.Contracts{PackageComponent: component, CompiledComponent: authored, Input: descriptor, Source: &bootstrap.RouteSource{InputType: descriptor.Key()}}
-			require.Equal(t, tc.linked, contracts.References().Input != nil)
+			references, err := contracts.References()
+			require.NoError(t, err)
+			require.Equal(t, tc.linked, references.Input != nil)
 		})
 	}
 }

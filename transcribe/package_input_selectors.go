@@ -67,8 +67,12 @@ func (a *packageAuthority) retainSelectorBusinessInput(result *Result, contracts
 	if err != nil {
 		return err
 	}
-	ordinary := &link.Contracts{PackageComponent: oldInput, CompiledComponent: newInput}
-	if ordinary.EqualParams(false) {
+	ordinary := &link.Contracts{PackageComponent: oldInput, CompiledComponent: newInput, Lookup: result.TypeResolver.Descriptor}
+	equal, err := ordinary.EqualParamsChecked(false)
+	if err != nil {
+		return err
+	}
+	if equal {
 		result.Contracts.Input = reference
 	}
 	return nil

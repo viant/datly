@@ -429,6 +429,13 @@ func (r *packageComponentResolver) resolveField(contract *packageContract, field
 }
 
 func (r *packageComponentResolver) resolveParamType(role contractRole, field xshape.Field, param *spec.Parameter) error {
+	// Explicit binding types still need the reflected field's exact import
+	// authority; retaining the wire spelling must not omit its package scope.
+	if param != nil && role == inputContract && param.Codec == nil && strings.TrimSpace(param.TypeExpr) != "" && field.ReflectedType != nil {
+		if _, err := r.fieldTypeExpression(field); err != nil {
+			return fmt.Errorf("resolve package input %s type imports: %w", field.Name, err)
+		}
+	}
 	// The wire TypeExpr must not hide the codec Go destination from canonical
 	// contract comparison during linked package regeneration.
 	if param != nil && role == inputContract && param.Codec != nil && strings.TrimSpace(param.OutputTypeExpr) == "" {
