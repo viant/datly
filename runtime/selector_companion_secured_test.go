@@ -167,6 +167,21 @@ func TestSelectorCompanionNativeOwnerAuthOrderingAndIsolation(t *testing.T) {
 	}
 	// A direct native call retains the actual projection cause and canonical owner.
 	target, _ := rt.ComponentTargetByMethodPath("GET", "/companion-secured")
+	t.Run("absent public credential provider retains required401", func(t *testing.T) {
+		beforeAuth, beforeReads := authCalls.Load(), reads.Load()
+		query := handlerprovider.Named("query", func(context.Context, reflect.Type, string) (any, bool, error) {
+			t.Error("selector evaluated before missing credential")
+			return nil, false, nil
+		})
+		_, cause := rt.InvokeComponent(t.Context(), dexec.ComponentRequest{Target: target, Providers: []locator.Provider{query}})
+		var status interface{ StatusCode() int }
+		if !errors.As(cause, &status) || status.StatusCode() != 401 {
+			t.Fatalf("missing credential lost401: %T %v", cause, cause)
+		}
+		if authCalls.Load() != beforeAuth || reads.Load() != beforeReads {
+			t.Fatal("missing public credential reached auth/SQL")
+		}
+	})
 	// Use separate native request providers for the direct call, with the same header.
 	req := httptest.NewRequest("GET", "/companion-secured?fields=missing", nil)
 	req.Header.Set("Authorization", token)

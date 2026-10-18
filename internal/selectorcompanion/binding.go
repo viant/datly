@@ -280,10 +280,6 @@ func NewBindingPlan(component *spec.Component, selected *Selection, input reflec
 }
 
 func (p *BindingPlan) ValidateProviders(providers []locator.Provider, resolvedPaths ...string) error {
-	resolved := map[string]bool{}
-	for _, path := range resolvedPaths {
-		resolved[path] = true
-	}
 	if p.DeferredPage() {
 		if _, err := p.pageSource(providers); err != nil {
 			return err
@@ -307,7 +303,9 @@ func (p *BindingPlan) ValidateProviders(providers []locator.Provider, resolvedPa
 		for _, b := range bindings {
 			priority, ok := priorities[b.Location.Kind]
 			if !ok {
-				if i == 0 && resolved[b.Path] {
+				// Public missing-provider/default/required semantics belong to the
+				// canonical Bindly plan, including its authored error status.
+				if i == 0 {
 					continue
 				}
 				if b.Location.Kind == "query" && (b.Required == nil || !*b.Required) && !p.DeferredPage() {
