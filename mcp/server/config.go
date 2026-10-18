@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	streamauth "github.com/viant/jsonrpc/transport/server/auth"
+
 	"github.com/viant/mcp-protocol/authorization"
 	"github.com/viant/mcp-protocol/schema"
 	upstream "github.com/viant/mcp/server"
@@ -32,6 +34,10 @@ type Config struct {
 	// five minutes; explicit zero disables reuse by later client requests.
 	ToolsListTtlMs     *int64
 	ResourceAuthorizer auth.ResourceAuthorizer
+	// BackendForFrontend is supplied by the trusted host. One broker retains
+	// challenge and exchange state across requests.
+	BackendForFrontend *auth.BackendForFrontend
+	bffGrantStore      streamauth.Store
 	Service            ServerService
 	Source             Source
 	binding            *sourceBinding
@@ -66,7 +72,7 @@ func (c Config) normalized() (Config, error) {
 	}
 	c.ToolsListTtlMs = &ttl
 	if c.Source != nil {
-		c.binding = &sourceBinding{source: c.Source}
+		c.binding = &sourceBinding{source: c.Source, broker: &authBroker{backendForFrontend: c.BackendForFrontend, resourceAuthorizer: c.ResourceAuthorizer}}
 	}
 	if c.Source != nil && c.Service != nil {
 		return Config{}, fmt.Errorf("MCP service and source are mutually exclusive")
@@ -76,6 +82,12 @@ func (c Config) normalized() (Config, error) {
 	}
 	if c.Transport.Kind == "" {
 		c.Transport.Kind = TransportStdio
+	}
+	if c.BackendForFrontend != nil && c.Transport.Kind != TransportStdio {
+		c.bffGrantStore = streamauth.NewMemoryStore(30*time.Minute, 24*time.Hour, 2*time.Minute)
+		if c.binding != nil {
+			c.binding.broker.grantStore = c.bffGrantStore
+		}
 	}
 	switch c.Transport.Kind {
 	case TransportStdio:

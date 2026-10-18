@@ -17,7 +17,10 @@ type Source interface {
 	Pin(context.Context) (context.Context, ServerService, error)
 }
 
-type sourceBinding struct{ source Source }
+type sourceBinding struct {
+	source Source
+	broker *authBroker
+}
 type pinnedServiceKey struct{ binding *sourceBinding }
 
 func (b *sourceBinding) pin(ctx context.Context) (context.Context, error) {
@@ -51,6 +54,13 @@ func (b *sourceBinding) service(ctx context.Context) (ServerService, bool) {
 	return service, ok
 }
 
+func (c Config) sourceAuthorizer(policy *authorization.Policy, requireResourceAuthorization bool) (*auth.Service, error) {
+	if c.BackendForFrontend == nil {
+		return auth.New(&auth.Config{Policy: policy, AuthorizeResource: c.ResourceAuthorizer, RequireResourceAuthorization: requireResourceAuthorization})
+	}
+	return c.binding.broker.view(policy, requireResourceAuthorization)
+}
+
 func (c Config) sourceOptions() []upstream.Option {
 	return []upstream.Option{
 		upstream.WithRequestContext(c.binding.pin),
@@ -61,9 +71,12 @@ func (c Config) sourceOptions() []upstream.Option {
 			}
 			policy := service.Authorization()
 			if policy == nil {
+				if c.BackendForFrontend != nil {
+					return nil, fmt.Errorf("MCP OAuth broker requires an authorization policy")
+				}
 				return nil, nil
 			}
-			authorizer, err := auth.New(&auth.Config{Policy: policy, AuthorizeResource: c.ResourceAuthorizer, RequireResourceAuthorization: service.Registry().ImplementsSkills()})
+			authorizer, err := c.sourceAuthorizer(policy, service.Registry().ImplementsSkills())
 			if err != nil {
 				return nil, err
 			}
@@ -79,12 +92,16 @@ func (c Config) sourceOptions() []upstream.Option {
 				r = r.WithContext(ctx)
 				service, _ := c.binding.service(ctx)
 				if policy := service.Authorization(); policy != nil {
-					authorizer, err := auth.New(&auth.Config{Policy: policy})
+					authorizer, err := c.sourceAuthorizer(policy, service.Registry().ImplementsSkills())
 					if err != nil {
 						http.Error(w, "MCP service unavailable", http.StatusServiceUnavailable)
 						return
 					}
 					authorizer.Middleware(next).ServeHTTP(w, r)
+					return
+				}
+				if c.BackendForFrontend != nil {
+					http.Error(w, "MCP authorization unavailable", http.StatusServiceUnavailable)
 					return
 				}
 				next.ServeHTTP(w, r)
@@ -99,10 +116,14 @@ func (c Config) sourceOptions() []upstream.Option {
 			service, _ := c.binding.service(ctx)
 			policy := service.Authorization()
 			if policy == nil {
+				if c.BackendForFrontend != nil {
+					http.Error(w, "MCP authorization unavailable", http.StatusServiceUnavailable)
+					return
+				}
 				http.NotFound(w, r)
 				return
 			}
-			authorizer, err := auth.New(&auth.Config{Policy: policy})
+			authorizer, err := c.sourceAuthorizer(policy, service.Registry().ImplementsSkills())
 			if err != nil {
 				http.Error(w, "MCP service unavailable", http.StatusServiceUnavailable)
 				return

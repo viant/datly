@@ -13,6 +13,8 @@ import (
 	"github.com/viant/datly/exec"
 	"github.com/viant/datly/standalone"
 	"github.com/viant/datly/standalone/config"
+	"github.com/viant/mcp-protocol/authorization"
+	"github.com/viant/mcp/server/auth"
 	"github.com/viant/x"
 	xmodule "github.com/viant/x/module"
 	xauth "github.com/viant/xdatly/auth"
@@ -23,7 +25,11 @@ import (
 type Service struct {
 	// HTTPMiddleware and LinkedArtifact are trusted process-owned bindings.
 	HTTPMiddleware func(http.Handler) http.Handler
-	LinkedArtifact *exec.LinkedArtifact
+	// MCPAuthorization and MCPBackendForFrontend are process-owned OAuth
+	// bindings; neither is inferred from component inputs.
+	MCPAuthorization      *authorization.Policy
+	MCPBackendForFrontend *auth.BackendForFrontend
+	LinkedArtifact        *exec.LinkedArtifact
 	// Deprecated: passed through to the runtime, which rejects mandatory MCP
 	// component wire binding. Use server-owned resource resolution instead.
 	RequireComponentBinding bool
@@ -75,7 +81,14 @@ func (s Service) Run(ctx context.Context, args []string, stdout, stderr io.Write
 		fmt.Fprintln(stderr, err)
 		return 1
 	}
-	server, err := standalone.New(ctx, standalone.Options{HTTPMiddleware: s.HTTPMiddleware, LinkedArtifact: s.LinkedArtifact, RequireComponentBinding: s.RequireComponentBinding, Config: cfg, Registry: s.Registry, Workspace: s.Workspace, Holders: s.Holders, Providers: s.Providers, InvocationLogger: s.InvocationLogger, InvocationDiffer: s.InvocationDiffer, DefaultAuthenticator: s.DefaultAuthenticator, RequireLinked: true, Diagnostics: stderr})
+	if s.MCPAuthorization != nil || s.MCPBackendForFrontend != nil {
+		if cfg.MCP == nil || s.MCPAuthorization == nil || s.MCPBackendForFrontend == nil || cfg.MCP.Authorization != nil {
+			fmt.Fprintln(stderr, "MCP OAuth binding requires an MCP listener, one host policy and one BFF client")
+			return 1
+		}
+		cfg.MCP.Authorization = s.MCPAuthorization
+	}
+	server, err := standalone.New(ctx, standalone.Options{HTTPMiddleware: s.HTTPMiddleware, MCPBackendForFrontend: s.MCPBackendForFrontend, LinkedArtifact: s.LinkedArtifact, RequireComponentBinding: s.RequireComponentBinding, Config: cfg, Registry: s.Registry, Workspace: s.Workspace, Holders: s.Holders, Providers: s.Providers, InvocationLogger: s.InvocationLogger, InvocationDiffer: s.InvocationDiffer, DefaultAuthenticator: s.DefaultAuthenticator, RequireLinked: true, Diagnostics: stderr})
 	if err != nil {
 		fmt.Fprintln(stderr, err)
 		return 1

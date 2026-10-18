@@ -13,7 +13,7 @@ require (
 	github.com/viant/assertly v0.9.1-0.20220620174148-bab013f93a60
 	github.com/viant/gmetric v0.3.2
 	github.com/viant/govalidator v0.3.4-0.20260913213120-027a9dd54d73
-	github.com/viant/mcp v0.24.1-0.20261008165059-494f36529f6e
+	github.com/viant/mcp v0.24.1-0.20261018180156-2794488fbdb7
 	github.com/viant/mcp-protocol v0.19.1-0.20261018081747-0021ac0fe5d2
 	github.com/viant/parsly v0.3.3
 	github.com/viant/sqlparser v0.13.1-0.20261012001419-edea4bd5d9c1
@@ -126,7 +126,7 @@ require (
 	github.com/viant/afs v1.30.1-0.20260914155934-90e95d483861
 	github.com/viant/bindly v0.4.1-0.20261018155557-9d28a71d691c
 	github.com/viant/godiff v0.4.3-0.20260914060527-9f2005ca82e8
-	github.com/viant/jsonrpc v0.25.0
+	github.com/viant/jsonrpc v0.25.1-0.20261017043720-5809a36c92af
 	github.com/viant/scy v0.35.1-0.20260914041206-699e6c909726
 	github.com/viant/toolbox v0.39.0
 	github.com/viant/xlsy v0.3.1

@@ -34,21 +34,30 @@ func New(config Config) (*Server, error) {
 		upstream.WithNewHandler(newHandler),
 		upstream.WithToolProtocolErrors(),
 	}
+	if config.bffGrantStore != nil {
+		options = append(options, upstream.WithBFFAuthStore(config.bffGrantStore))
+	}
 	options = append(options, serverOptions(config)...)
 	if config.Source != nil {
 		options = append(options, config.sourceOptions()...)
 	} else if policy := config.Service.Authorization(); policy != nil {
-		authorizer, authErr := auth.New(&auth.Config{Policy: policy, AuthorizeResource: config.ResourceAuthorizer, RequireResourceAuthorization: config.Service.Registry().ImplementsSkills()})
-		if authErr != nil {
-			return nil, fmt.Errorf("create MCP authorizer: %w", authErr)
+		if config.BackendForFrontend != nil {
+			options = append(options, staticBFFOptions(config, policy)...)
+		} else {
+			authorizer, authErr := auth.New(&auth.Config{Policy: policy, AuthorizeResource: config.ResourceAuthorizer, RequireResourceAuthorization: config.Service.Registry().ImplementsSkills()})
+			if authErr != nil {
+				return nil, fmt.Errorf("create MCP authorizer: %w", authErr)
+			}
+			options = append(options, upstream.WithJRPCAuthorizer(authorizer.EnsureAuthorized))
+			if config.Transport.Kind != TransportStdio {
+				options = append(options,
+					upstream.WithAuthorizer(authorizer.Middleware),
+					upstream.WithProtectedResourcesHandler(authorizer.ProtectedResourcesHandler),
+				)
+			}
 		}
-		options = append(options, upstream.WithJRPCAuthorizer(authorizer.EnsureAuthorized))
-		if config.Transport.Kind != TransportStdio {
-			options = append(options,
-				upstream.WithAuthorizer(authorizer.Middleware),
-				upstream.WithProtectedResourcesHandler(authorizer.ProtectedResourcesHandler),
-			)
-		}
+	} else if config.BackendForFrontend != nil {
+		return nil, fmt.Errorf("MCP OAuth broker requires an authorization policy")
 	}
 	wrapped, err := upstream.New(options...)
 	if err != nil {

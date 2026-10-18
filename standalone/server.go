@@ -72,6 +72,9 @@ type Options struct {
 	// MCPResourceAuthorizer uses the linked deployment's existing token/scope
 	// verifier for protected embedded resources. Nil denies protected skill reads.
 	MCPResourceAuthorizer auth.ResourceAuthorizer
+	// MCPBackendForFrontend is a trusted host OAuth client. It is never loaded
+	// from a component or exposed in the MCP catalog.
+	MCPBackendForFrontend *auth.BackendForFrontend
 	// Config is transferred to the server; callers must not mutate it after New.
 	Config *config.Config
 	// Registry supplies compiled package exports, including typed handler bridges.
@@ -85,6 +88,7 @@ type Server struct {
 	httpMiddleware        func(http.Handler) http.Handler
 	httpHandler           http.Handler
 	mcpResourceAuthorizer auth.ResourceAuthorizer
+	mcpBackendForFrontend *auth.BackendForFrontend
 	ready                 chan struct{}
 	addresses             []string
 	manager               *application.Manager
@@ -148,7 +152,7 @@ func New(ctx context.Context, options Options) (_ *Server, err error) {
 		options.LinkedArtifact = &artifact
 	}
 	s := &Server{httpMiddleware: options.HTTPMiddleware, source: &source{Workspace: options.Workspace, config: options.Config, resources: options.Resources, holders: append([]any(nil), options.Holders...), invocationLogger: options.InvocationLogger, invocationDiffer: options.InvocationDiffer, providers: providers, requireLinked: options.RequireLinked || options.Holders != nil,
-		linkedArtifact: options.LinkedArtifact, requireComponentBinding: options.RequireComponentBinding, toolMetadata: options.ToolMetadata}, done: make(chan struct{}), ready: make(chan struct{}), mcpResourceAuthorizer: options.MCPResourceAuthorizer}
+		linkedArtifact: options.LinkedArtifact, requireComponentBinding: options.RequireComponentBinding, toolMetadata: options.ToolMetadata}, done: make(chan struct{}), ready: make(chan struct{}), mcpResourceAuthorizer: options.MCPResourceAuthorizer, mcpBackendForFrontend: options.MCPBackendForFrontend}
 	s.source.codecFactories, err = normalizeCodecs(options.Codecs)
 	if err != nil {
 		return nil, err
@@ -326,7 +330,7 @@ func (s *Server) prepare(ctx context.Context) error {
 	s.servers = []*http.Server{{Addr: address, Handler: s.httpHandler, ReadHeaderTimeout: time.Duration(endpoint.ReadHeaderTimeoutMs) * time.Millisecond, IdleTimeout: time.Duration(endpoint.IdleTimeoutMs) * time.Millisecond, ReadTimeout: time.Duration(endpoint.ReadTimeoutMs) * time.Millisecond, WriteTimeout: time.Duration(endpoint.WriteTimeoutMs) * time.Millisecond, MaxHeaderBytes: endpoint.MaxHeaderBytes}}
 	if policy := s.source.config.MCP; policy != nil {
 		address, _ := policy.ListenAddress()
-		protocol, createErr := mcpserver.New(mcpserver.Config{Source: s.manager, ToolsListTtlMs: policy.ToolsListTtlMs, ResourceAuthorizer: s.mcpResourceAuthorizer, Transport: mcpserver.TransportConfig{Kind: mcpserver.TransportStreamable, Address: address, ReadHeaderTimeout: time.Duration(endpoint.ReadHeaderTimeoutMs) * time.Millisecond, IdleTimeout: time.Duration(endpoint.IdleTimeoutMs) * time.Millisecond}})
+		protocol, createErr := mcpserver.New(mcpserver.Config{Source: s.manager, ToolsListTtlMs: policy.ToolsListTtlMs, ResourceAuthorizer: s.mcpResourceAuthorizer, BackendForFrontend: s.mcpBackendForFrontend, Transport: mcpserver.TransportConfig{Kind: mcpserver.TransportStreamable, Address: address, ReadHeaderTimeout: time.Duration(endpoint.ReadHeaderTimeoutMs) * time.Millisecond, IdleTimeout: time.Duration(endpoint.IdleTimeoutMs) * time.Millisecond}})
 		if createErr != nil {
 			return createErr
 		}
