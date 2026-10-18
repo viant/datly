@@ -127,7 +127,7 @@ func compileMetadata(component *spec.Component, contract *registry.RouteInputCon
 		}
 		// Verified credentials retain their ordinary transport binding; frame
 		// filters must neither mask them nor substitute body values for them.
-		if cubeOwnedSelector(component, param) || inputField.VerifiesJWT() || !param.Source.RequestValue() {
+		if OwnsRootSelector(component, param) || inputField.VerifiesJWT() || !param.Source.RequestValue() {
 			continue
 		}
 		internal, err := inputField.Internal()
@@ -306,9 +306,10 @@ func simpleReportIdentifier(value string) bool {
 	return true
 }
 
-// The facade owns root projection/order/pagination. Criteria and selectors for
+// OwnsRootSelector reports whether the cube facade owns projection/order/pagination.
+// Criteria and selectors for
 // other views still belong to the original input contract and are proxied.
-func cubeOwnedSelector(component *spec.Component, param *spec.Parameter) bool {
+func OwnsRootSelector(component *spec.Component, param *spec.Parameter) bool {
 	if param == nil || param.QuerySelector == nil || param.QuerySelector.Property == spec.SelectorPropertyCriteria {
 		return false
 	}

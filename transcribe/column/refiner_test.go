@@ -468,3 +468,33 @@ func TestRefinerDiscoversRelationCriteriaWithoutChangingAuthoredSQL(t *testing.T
 		})
 	}
 }
+
+func TestSizedCharacterMetadataWithoutRows(t *testing.T) {
+	harness := testharness.NewSQLiteHarness(t)
+	ctx := context.Background()
+	if err := harness.ExecStatements(ctx, "CREATE TABLE sized_keys (name VARCHAR(128) NOT NULL PRIMARY KEY, note VARCHAR(500))"); err != nil {
+		t.Fatal(err)
+	}
+	component := &spec.Component{Settings: &spec.Settings{DefaultConnector: "main"}, RootView: &spec.View{Name: "SizedKeys", Source: &spec.ViewSource{Table: "sized_keys"}}}
+	if err := New(Connections{"main": harness.DB}).Refine(ctx, component, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range component.RootView.Columns {
+		if c.Type.Name != "string" {
+			t.Fatalf("%s: inferred %s from %s", c.Name, c.Type.Name, c.DatabaseType)
+		}
+		if !strings.HasPrefix(c.DatabaseType, "VARCHAR(") {
+			t.Fatalf("lost declared metadata: %s", c.DatabaseType)
+		}
+	}
+	if len(component.RootView.Columns) != 2 {
+		t.Fatal("missing discovered columns")
+	}
+}
+func TestSizedCharacterNormalizationIsConservative(t *testing.T) {
+	for input, want := range map[string]string{"VARCHAR(128)": "VARCHAR", " char ( 12 ) ": "CHAR", "NVARCHAR(40)": "NVARCHAR", "NCHAR(2)": "NCHAR", "VARCHAR(20) ARRAY": "VARCHAR(20) ARRAY", "CUSTOM(20)": "CUSTOM(20)", "VARCHAR(invalid)": "VARCHAR(invalid)", "VARCHAR(0)": "VARCHAR(0)", "DECIMAL(10,2)": "DECIMAL(10,2)"} {
+		if got := discoveredScalarType(input); got != want {
+			t.Errorf("%q: got %q want %q", input, got, want)
+		}
+	}
+}

@@ -8,6 +8,7 @@ import (
 	"github.com/viant/datly/bootstrap"
 	"github.com/viant/datly/report"
 	"github.com/viant/datly/spec"
+	"github.com/viant/datly/tag"
 	"github.com/viant/datly/typecatalog"
 	"github.com/viant/x"
 	xshape "github.com/viant/x/shape"
@@ -64,7 +65,30 @@ func (r *planResolver) resolveCubes() error {
 	if err != nil {
 		return err
 	}
-	described, err := bootstrap.DescribeInputContract(component, input, materializer.identifierType)
+	// A generated reader's root selector fields live on its companion, not
+	// its business Input. The cube has its own projection and paging controls;
+	// omit only those exact side declarations from this authoring description.
+	// Keep the source component and emitted companion intact for native MCP.
+	description := component.Clone()
+	ownedSide := map[string]bool{}
+	for _, field := range p.QuerySelectors {
+		metadata, err := tag.ParseField(reflect.StructField{Name: field.Name, Tag: reflect.StructTag(field.Tag)})
+		if err != nil {
+			return err
+		}
+		if metadata.Binding != nil {
+			parameter := &spec.Parameter{Name: metadata.Binding.Name, Source: spec.BindSource{Kind: metadata.Binding.Location.Kind, Name: metadata.Binding.Location.In}}
+			ownedSide[parameter.Identity()] = true
+		}
+	}
+	description.Parameters = nil
+	for _, parameter := range component.Parameters {
+		if parameter != nil && ownedSide[parameter.Identity()] && report.OwnsRootSelector(component, parameter) {
+			continue
+		}
+		description.Parameters = append(description.Parameters, parameter)
+	}
+	described, err := bootstrap.DescribeInputContract(description, input, materializer.identifierType)
 	if err != nil {
 		return fmt.Errorf("describe cube source input: %w", err)
 	}
