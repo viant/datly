@@ -271,7 +271,7 @@ func TestCompilerFlattensExplicitAnonymousBody(t *testing.T) {
 	metadata := plan.Metadata()
 	if len(metadata.InputSchema.Properties) != 2 || metadata.InputSchema.Properties["name"]["type"] != "string" ||
 		metadata.InputSchema.Properties["count"]["type"] != "integer" ||
-		len(metadata.InputSchema.Required) != 0 {
+		!reflect.DeepEqual(metadata.InputSchema.Required, []string{"name"}) {
 		t.Fatalf("anonymous schema = %+v", metadata.InputSchema)
 	}
 	if _, err = plan.Scope(nil); err != nil {

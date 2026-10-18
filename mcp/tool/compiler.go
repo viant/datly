@@ -180,7 +180,7 @@ func (c *Compiler) Compile(input Input) (*Plan, error) {
 			property["examples"] = []interface{}{argument.example}
 		}
 		inputSchema.Properties[argument.publicName] = property
-		if argument.required {
+		if argument.required || argument.schemaRequired {
 			inputSchema.Required = append(inputSchema.Required, argument.publicName)
 		}
 		bindingArguments[index] = mcpinput.Argument{

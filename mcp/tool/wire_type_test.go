@@ -140,8 +140,12 @@ func TestCustomJSONWireAuthorityRejectsInvalidDeclarations(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = compileWireTool(input); err == nil || !strings.Contains(err.Error(), "direct named") {
-		t.Fatalf("anonymous bypass: %v", err)
+	plan, err := compileWireTool(input)
+	if err != nil {
+		t.Fatalf("anonymous Go JSON projection: %v", err)
+	}
+	if _, exists := plan.Metadata().InputSchema.Properties["Body"]; exists {
+		t.Fatal("anonymous custom JSON body retained named wrapper")
 	}
 }
 

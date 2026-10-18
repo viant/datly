@@ -29,10 +29,15 @@ type Argument struct {
 	wireSchema      *spec.WireSchema
 	wireSchemas     map[string]*spec.WireSchema
 	wireType        reflect.Type
-	bodyNullPolicy  string
-	required        bool
-	description     string
-	example         string
+	// Anonymous JSON fields retain their whole-body owner for XLS decoding.
+	parentBodyType   reflect.Type
+	parentBodySource string
+	bodyNullPolicy   string
+	required         bool
+	// Schema parity must not introduce a new runtime missing-argument check.
+	schemaRequired bool
+	description    string
+	example        string
 }
 
 func (a Argument) PublicName() string            { return a.publicName }

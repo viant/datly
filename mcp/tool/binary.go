@@ -35,6 +35,9 @@ func fileArgument(a Argument) bool {
 }
 func rawArgument(a Argument) bool {
 	t := a.sourceType
+	if a.parentBodyType != nil {
+		t = a.parentBodyType
+	}
 	return a.sourceKind == "body" && t != nil && (t.Implements(xlsType) || t.Kind() != reflect.Pointer && reflect.PointerTo(t).Implements(xlsType))
 }
 func binaryCapabilities(args []Argument) (files, raw bool) {
@@ -353,7 +356,11 @@ func (d binaryXLSDecoder) Decode(raw []byte, target any) error {
 }
 func (d binaryXLSDecoder) DecodeField(raw []byte, name string, target any) (bool, error) {
 	for _, a := range d.args {
-		if rawArgument(a) && a.sourceName == name {
+		sourceName := a.sourceName
+		if a.parentBodyType != nil {
+			sourceName = a.parentBodySource
+		}
+		if rawArgument(a) && sourceName == name {
 			err := d.Decode(raw, target)
 			return err == nil, err
 		}

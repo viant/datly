@@ -2,13 +2,13 @@ package tool
 
 import (
 	"encoding"
-	"encoding/json"
 	"fmt"
 	"reflect"
 	"strings"
 
 	"github.com/viant/datly/internal/inputvisibility"
 	"github.com/viant/datly/runtime/registry"
+	"github.com/viant/mcp-protocol/schema"
 	xshape "github.com/viant/x/shape"
 )
 
@@ -22,14 +22,13 @@ func (c *Compiler) compileAnonymousBody(inputField registry.InputField) ([]Argum
 	}
 	types := xshape.Runtime{}
 	sourceType := types.Indirect(inputField.SourceType())
-	customJSON := false
+	customText := false
 	if sourceType != nil {
 		pointer := reflect.PointerTo(sourceType)
 		// Match the pinned reflector's custom method sets without executing them.
-		customJSON = sourceType.Implements(reflect.TypeFor[json.Marshaler]()) || pointer.Implements(reflect.TypeFor[json.Marshaler]()) || pointer.Implements(reflect.TypeFor[json.Unmarshaler]()) ||
-			sourceType.Implements(reflect.TypeFor[encoding.TextMarshaler]()) || pointer.Implements(reflect.TypeFor[encoding.TextMarshaler]()) || pointer.Implements(reflect.TypeFor[encoding.TextUnmarshaler]())
+		customText = sourceType.Implements(reflect.TypeFor[encoding.TextMarshaler]()) || pointer.Implements(reflect.TypeFor[encoding.TextMarshaler]()) || pointer.Implements(reflect.TypeFor[encoding.TextUnmarshaler]())
 	}
-	if inputField.WireType() != nil || customJSON {
+	if inputField.WireType() != nil || customText {
 		return nil, fmt.Errorf("anonymous body field %q custom JSON source requires a direct named body argument", inputField.Path())
 	}
 	destinationType := types.Indirect(inputField.DestinationType())
@@ -42,6 +41,11 @@ func (c *Compiler) compileAnonymousBody(inputField registry.InputField) ([]Argum
 	fields, err := xshape.Linked(sourceType).JSONFields()
 	if err != nil {
 		return nil, err
+	}
+	_, requiredNames := schema.StructToProperties(sourceType)
+	required := make(map[string]bool, len(requiredNames))
+	for _, name := range requiredNames {
+		required[name] = true
 	}
 	result := make([]Argument, 0, len(fields))
 	for _, projected := range fields {
@@ -60,6 +64,8 @@ func (c *Compiler) compileAnonymousBody(inputField registry.InputField) ([]Argum
 			documentation: inputField.Documentation(), publicName: publicName, aliases: aliases, path: inputField.Path() + "." + field.Name,
 			sourceKind: "body", sourceName: projected.Name,
 			sourceType: field.Type, destinationType: field.Type,
+			parentBodyType: inputField.SourceType(), parentBodySource: binding.Location.In,
+			schemaRequired: required[projected.Name],
 		})
 	}
 	if len(result) == 0 {
