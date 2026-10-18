@@ -228,6 +228,9 @@ func coverageParameter(authority, child InputField, transformed bool) error {
 	left.Example, right.Example = "", ""
 	left.Required, right.Required = nil, nil
 	left.Raw, right.Raw = "", ""
+	// EffectiveParameters already resolved define/set selection before binding.
+	// Its authoring marker does not change the resulting transport contract.
+	left.Declaration, right.Declaration = "", ""
 	left.Tag, right.Tag = "", ""
 	left.Source, right.Source = spec.BindSource{}, spec.BindSource{}
 	if !reflect.DeepEqual(left, right) {

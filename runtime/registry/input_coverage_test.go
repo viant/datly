@@ -267,3 +267,25 @@ func TestScopedTransportCoverageRejectsSameNamedForeignTransformer(t *testing.T)
 		t.Fatal("same-named foreign transformer admitted")
 	}
 }
+
+func TestScopedJWTMetadataIgnoresResolvedDeclarationMarker(t *testing.T) {
+	parent := &spec.Parameter{Name: "Jwt", Declaration: "define", Codec: &spec.Codec{Body: "JwtClaim"}}
+	child := &spec.Parameter{Name: "Jwt", Codec: &spec.Codec{Body: "JwtClaim"}}
+	a := InputField{binding: bindly.BindingSpec{Extension: parent}}
+	b := InputField{binding: bindly.BindingSpec{Extension: child}}
+	if err := coverageParameter(a, b, true); err != nil {
+		t.Fatal(err)
+	}
+	if parent.Declaration != "define" || child.Declaration != "" {
+		t.Fatal("comparison mutated original parameters")
+	}
+	child.Codec = &spec.Codec{Body: "JwtClaim", Args: []string{"different"}}
+	if err := coverageParameter(a, b, true); err == nil {
+		t.Fatal("changed authentication codec accepted")
+	}
+	child.Codec = &spec.Codec{Body: "JwtClaim"}
+	child.TypeExpr = "int"
+	if err := coverageParameter(a, b, true); err == nil {
+		t.Fatal("different transport metadata accepted")
+	}
+}
