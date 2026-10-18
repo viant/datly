@@ -5,7 +5,6 @@ import (
 	bindstate "github.com/viant/bindly/state"
 	"github.com/viant/datly/spec"
 	"reflect"
-	"strings"
 	"testing"
 )
 
@@ -19,10 +18,14 @@ type pointerOpaqueInput struct {
 	Payload pointerOpaquePayload `json:"payload"`
 }
 
-func TestCompilerRejectsPointerOpaqueBodySchema(t *testing.T) {
+func TestCompilerReflectsPointerOpaqueBodyGoShape(t *testing.T) {
 	contract := testRouteContract(t, reflect.TypeFor[pointerOpaqueInput](), []bindly.BindingSpec{{Path: "Payload", Name: "Payload", Location: bindstate.Location{Kind: "body", In: "payload"}}})
-	_, err := NewCompiler().Compile(Input{Component: spec.Key{Kind: spec.KindComponent, Name: "Opaque"}, Exposure: &spec.MCPExposure{Kind: spec.MCPExposureTool, Name: "opaque"}, Contract: contract})
-	if err == nil || !strings.Contains(err.Error(), "authored wire authority") {
-		t.Fatal("opaque body schema accepted", err)
+	plan, err := NewCompiler().Compile(Input{Component: spec.Key{Kind: spec.KindComponent, Name: "Opaque"}, Exposure: &spec.MCPExposure{Kind: spec.MCPExposureTool, Name: "opaque"}, Contract: contract})
+	if err != nil {
+		t.Fatal(err)
+	}
+	property := plan.Metadata().InputSchema.Properties["payload"]
+	if property["type"] != "object" || !reflect.DeepEqual(property["properties"], map[string]interface{}{"Value": map[string]interface{}{"type": "string"}}) {
+		t.Fatalf("Go shape: %#v", property)
 	}
 }

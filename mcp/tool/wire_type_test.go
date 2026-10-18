@@ -56,8 +56,14 @@ func TestCustomJSONWireAuthority(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = compileWireTool(missing); err == nil || !strings.Contains(err.Error(), "authored wire authority") {
-		t.Fatalf("missing authority: %v", err)
+	fallback, err := compileWireTool(missing)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := schemaObjectNode(fallback.Metadata().InputSchema.Properties["Body"])
+	fields := body["properties"].(map[string]interface{})
+	if !reflect.DeepEqual(fields["lookup"], map[string]interface{}{}) || schemaObjectNode(fields["options"].(map[string]interface{}))["properties"].(map[string]interface{})["labels"] == nil || body["$defs"] == nil {
+		t.Fatalf("original Go shape: %#v", body)
 	}
 	input, err := wireInput(t, reflect.TypeFor[customjson.Input](), &spec.Parameter{Name: "Body", Source: spec.BindSource{Kind: "body"}, Required: boolPtr(true)})
 	if err != nil {
@@ -119,7 +125,6 @@ func TestCustomJSONWireAuthorityRejectsInvalidDeclarations(t *testing.T) {
 		{"map", reflect.TypeFor[absent](), "map[string]" + pkg + "RequestWire", nil, "non-pointer"},
 		{"ordinary", reflect.TypeFor[plain](), pkg + "RequestWire", nil, "custom JSON source"},
 		{"cycle", reflect.TypeFor[absent](), pkg + "Request", nil, "cyclic"},
-		{"custom representation", reflect.TypeFor[absent](), pkg + "CustomWire", nil, "authored wire authority"},
 		{"conflict", reflect.TypeFor[customjson.Input](), pkg + "OtherWire", nil, "conflicting"},
 		{"scalar conflict", reflect.TypeFor[customjson.Input](), pkg + "RequestWire", &spec.WireSchema{Type: "string"}, "conflicts"},
 		{"anonymous authority", reflect.TypeFor[anonymous](), pkg + "RequestWire", nil, "direct named"},
@@ -160,8 +165,12 @@ func TestAnonymousBodyRejectsTextMethodAuthority(t *testing.T) {
 	for _, source := range []reflect.Type{reflect.TypeFor[anonymousTextValue](), reflect.TypeFor[anonymousTextPointer](), reflect.TypeFor[anonymousTextDecoder]()} {
 		for _, pointer := range []bool{false, true} {
 			t.Run(source.Name()+map[bool]string{false: "_value", true: "_pointer"}[pointer], func(t *testing.T) {
-				if _, err := (jsonschema.Reflector{}).Compile(jsonschema.Request{Type: source}); err == nil || !strings.Contains(err.Error(), "authored wire authority") {
-					t.Fatalf("lower authority: %v", err)
+				shape, err := (jsonschema.Reflector{}).Compile(jsonschema.Request{Type: source})
+				if err != nil {
+					t.Fatal(err)
+				}
+				if shape["type"] != "object" || !reflect.DeepEqual(shape["properties"], map[string]interface{}{"Value": map[string]interface{}{"type": "string"}}) {
+					t.Fatalf("original Go shape: %#v", shape)
 				}
 				bodyType := source
 				if pointer {
@@ -177,5 +186,23 @@ func TestAnonymousBodyRejectsTextMethodAuthority(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+func TestCustomJSONWireRepresentationReflectsGoShape(t *testing.T) {
+	type input struct {
+		Body *customjson.Request `parameter:",kind=body"`
+	}
+	contract, err := wireInput(t, reflect.TypeFor[input](), &spec.Parameter{Name: "Body", Source: spec.BindSource{Kind: "body"}, WireTypeExpr: "github.com/viant/datly/mcp/tool/testdata/customjson.CustomWire"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan, err := compileWireTool(contract)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := schemaObjectNode(plan.Metadata().InputSchema.Properties["Body"])
+	if !reflect.DeepEqual(body["type"], []string{"object", "null"}) || !reflect.DeepEqual(body["properties"], map[string]interface{}{"value": map[string]interface{}{"type": "string"}}) {
+		t.Fatalf("custom representation Go shape: %#v", body)
 	}
 }
