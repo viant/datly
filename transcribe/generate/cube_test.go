@@ -20,6 +20,18 @@ func TestCubeEmitsLinkedFacade(t *testing.T) {
 	root := t.TempDir()
 	testharness.WriteGeneratedGoMod(t, root)
 	component := cubeFixture()
+
+	for _, selector := range []struct {
+		name, typ, location string
+		property            spec.SelectorProperty
+	}{
+		{"Limit", "int", "limit", spec.SelectorPropertyLimit},
+		{"Page", "int", "page", spec.SelectorPropertyPage},
+		{"Fields", "[]string", "fields", spec.SelectorPropertyFields},
+		{"OrderBy", "[]string", "sort", spec.SelectorPropertyOrderBy},
+	} {
+		component.Parameters = append(component.Parameters, &spec.Parameter{Name: selector.name, TypeExpr: selector.typ, Source: spec.BindSource{Kind: "query", Name: selector.location}, QuerySelector: &spec.QuerySelectorBinding{View: "spend", Property: selector.property}})
+	}
 	component.RootView.Columns[0].Tag = `json:"AccountID"`
 	component.RootView.Columns[1].Tag = `json:"reader_amount"`
 	component.RootView.Columns = append(component.RootView.Columns, &spec.Column{Name: "Hidden", Source: "hidden", Type: spec.TypeRef{Name: "int"}, Groupable: component.RootView.Groupable, Tag: `json:"-"`})
@@ -31,6 +43,14 @@ func TestCubeEmitsLinkedFacade(t *testing.T) {
 	generated, err := New(Input{Component: component, TargetPackage: "example.com/generated/reporting"}).Generate(filepath.Join(root, "reporting"))
 	if err != nil {
 		t.Fatal(err)
+	}
+	for _, field := range generated.Plan.Input.Fields {
+		if field.Name == "Limit" || field.Name == "Page" || field.Name == "Fields" || field.Name == "Sort" {
+			t.Fatalf("selector leaked into business input: %s", field.Name)
+		}
+	}
+	if len(generated.Plan.QuerySelectors) != 4 {
+		t.Fatalf("lost selector side metadata: %+v", generated.Plan.QuerySelectors)
 	}
 	if len(generated.Plan.Cubes) != 1 || !generated.Plan.Report.LinkedFacade {
 		t.Fatalf("missing linked facade: %+v", generated.Plan.Cubes)
@@ -134,8 +154,25 @@ import (
 func resolve(t *testing.T,holder,input,output reflect.Type)*spec.Component {
  t.Helper();field:=holder.Field(0);metadata,_,err:=tag.ParseComponent(field.Tag);if err!=nil{t.Fatal(err)}
  source:=&bootstrap.RouteSource{PackagePath:holder.PkgPath(),HolderType:holder.Name(),FieldName:field.Name,Tag:metadata,InputType:input.Name(),OutputType:output.Name()}
+
  component,err:=source.Resolve(input,output);if err!=nil{t.Fatal(err)};return component
 }
+func TestGeneratedReaderSelectorMCP(t *testing.T) {
+ for _, name := range []string{"Limit","Page","Fields","OrderBy","Sort"} {if _,ok:=reflect.TypeFor[SpendInput]().FieldByName(name);ok {t.Fatalf("selector entered business Input: %s",name)}}
+ reflected,err:=bootstrap.ReflectSelectedPackages([]string{reflect.TypeFor[Component]().PkgPath()},nil);if err!=nil{t.Fatal(err)}
+ var base *spec.Component
+ for _,source:=range reflected.Components {if source.HolderType=="Component" {base,err=source.Resolve(reflect.TypeFor[SpendInput](),reflect.TypeFor[SpendOutput]());if err!=nil{t.Fatal(err)};break}}
+ if base==nil || base.SelectorCompanion==nil {t.Fatal("missing genuine selector companion")}
+ base.Routes[0].MCP=[]*spec.MCPExposure{{Kind:spec.MCPExposureTool,Name:"SpendRead"}}
+ artifact,err:=bootstrap.BuildArtifact(bootstrap.ArtifactInput{Component:base,InputType:reflect.TypeFor[SpendInput](),OutputType:reflect.TypeFor[SpendOutput]()});if err!=nil{t.Fatal(err)}
+ registered,err:=artifact.Registration(registry.RegisteredComponent{Handler:custom.NewFunc[SpendInput,SpendOutput](func(context.Context,*SpendInput)(*SpendOutput,error){return &SpendOutput{},nil})});if err!=nil{t.Fatal(err)}
+ rt,err:=runtime.NewRuntime([]*registry.RegisteredComponent{registered});if err!=nil{t.Fatal(err)};defer rt.Shutdown(context.Background())
+ service,err:=mcp.New(mcp.Config{Components:[]*registry.RegisteredComponent{registered},Invoker:rt});if err!=nil{t.Fatal(err)}
+ sourceTool,ok:=service.Catalog().Tool("SpendRead");if !ok{t.Fatal("reader MCP tool missing")}
+ sourceWire,_:=json.Marshal(sourceTool.Metadata().InputSchema)
+ var sourceSchema struct{Properties map[string]struct{Type string}};if err:=json.Unmarshal(sourceWire,&sourceSchema);err!=nil{t.Fatal(err)}
+ for name,typ:=range map[string]string{"Limit":"integer","Page":"integer","Fields":"array","OrderBy":"array"}{if sourceSchema.Properties[name].Type!=typ{t.Fatalf("MCP selector %s: schema %s",name,sourceWire)}}
+ }
 func TestLinkedCubeRegistrationMCPAndDependency(t *testing.T) {
  ctx:=context.Background()
  dimensions,_:=reflect.TypeFor[SpendCubeInput]().FieldByName("Dimensions")
