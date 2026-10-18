@@ -58,8 +58,8 @@ func (c *Compiler) compileWireTypes(bindings []bindly.BindingSpec) (map[string]r
 		if param, ok := binding.Extension.(*spec.Parameter); ok && param != nil {
 			anonymous = anonymous || strings.EqualFold(strings.TrimSpace(reflect.StructTag(param.Tag).Get("anonymous")), "true")
 		}
-		if binding.Location.Kind != "body" || anonymous || strings.Contains(binding.Path, ".") || binding.Transformer != nil {
-			return nil, fmt.Errorf("input %s field %s wireType supports only a direct named body argument without a codec", c.input.InputType, binding.Path)
+		if binding.Location.Kind != "body" || anonymous || strings.Contains(binding.Path, ".") {
+			return nil, fmt.Errorf("input %s field %s wireType supports only a direct named body argument", c.input.InputType, binding.Path)
 		}
 		source := binding.SourceType
 		if source == nil {
