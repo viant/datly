@@ -53,7 +53,7 @@ func ParsePreparedComponentSource(scope, name string, prepared *PreparedSource) 
 			runtimeSettings.Generation = nil
 		}
 
-		if strings.TrimSpace(prepared.SQL) != "" || len(prepared.Directives.Params) != 0 || len(prepared.Directives.Views) != 0 || prepared.Directives.MCP != nil || !runtimeSettings.IsZero() {
+		if strings.TrimSpace(prepared.SQL) != "" || len(prepared.Directives.Params) != 0 || len(prepared.Directives.Views) != 0 || prepared.Directives.MCP != nil || len(prepared.Directives.routeMCP) > 0 || !runtimeSettings.IsZero() {
 			return nil, fmt.Errorf("static declarations cannot contain SQL, handler, parameter or component settings")
 		}
 		for _, method := range methods {

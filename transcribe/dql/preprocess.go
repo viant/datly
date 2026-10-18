@@ -52,6 +52,7 @@ type DirectivePlan struct {
 	Routes         []*RoutePlan
 	Settings       *spec.Settings
 	MCP            *spec.MCPExposure
+	routeMCP       map[spec.RouteRef]*spec.MCPExposure
 	MCPOnly        bool
 	Internal       bool
 	Params         []*spec.Parameter
@@ -237,6 +238,10 @@ func normalizeDirectivePlan(blocks []directiveBlock) (*DirectivePlan, error) {
 		result.HandlerAdapter = settings.HandlerAdapter
 		result.HandlerName = settings.HandlerName
 		result.MCP = settings.MCP.Clone()
+		result.routeMCP, settingsErr = normalizeRouteMCP(settings, route)
+		if settingsErr != nil {
+			return nil, settingsErr
+		}
 		result.MCPOnly = settings.MCPOnly
 		result.Internal = settings.Internal
 		result.Documentation = settings.Documentation.Clone()

@@ -945,7 +945,25 @@ in the final language section with the other SQL-source substitutions.
 
 `meta('docs/component.md')` selects a description resource.
 `mcp('orders','List orders','docs/orders.md')` declares tool exposure and an
-optional description resource. `mcp_folder('docs','public','docs://orders/')` exposes
+optional description resource. Global `mcp` applies to a single declared route;
+multiple routes retain the ambiguity error. Use an exact route reference to
+expose selected methods or paths from one DQL owner:
+
+```sql
+#setting($_ = $route('/campaign/archive', 'PATCH'))
+#setting($_ = $route('/campaign/unarchive', 'PATCH'))
+#setting($_ = $mcp_route('PATCH:/campaign/archive', 'ArchiveCampaign', 'Archive campaign'))
+```
+
+`mcp_route('METHOD:/exact/path','ToolName','optional description','optional description resource')`
+uses the existing MCP exposure contract. The target must be declared in the same
+source; settings may precede or follow route declarations. Only the selected
+method/path receives the exposure. Different methods may use different tool names
+and descriptions while retaining one Input, Output, handler and SQL owner.
+Conflicting exposure declarations for the same target fail. Description resources
+use the same named resource store and packaging as global `mcp`.
+
+`mcp_folder('docs','public','docs://orders/')` exposes
 an explicit namespace/root/URI prefix; `mcp_skill_folder` additionally marks the
 root as a skill folder. Folder validation is owned by `spec/resource_folder.go`:
 namespace must be nonempty without `:`, `/` or backslash; root must be a valid

@@ -286,6 +286,19 @@ func parseComponentSettings(blocks []directiveBlock) (ret *componentSettings, er
 			if ret.Generation.DescriptionResource == "" {
 				return nil, fmt.Errorf("invalid meta directive: empty path")
 			}
+		case strings.EqualFold(name, "mcp_route"):
+			if len(args) < 2 || len(args) > 4 || tail != "" {
+				return nil, fmt.Errorf("mcp_route requires METHOD:/path, name, optional description and description path")
+			}
+			ref, err := spec.ParseRouteRef(trimQuote(args[0]))
+			if err != nil {
+				return nil, err
+			}
+			exposure, err := parseMCPExposure(args[1:])
+			if err != nil {
+				return nil, err
+			}
+			ret.routeMCP = append(ret.routeMCP, routeMCPExposure{ref: ref, exposure: exposure, span: SourceSpan{Start: block.start, End: block.end}})
 		case strings.EqualFold(name, "mcp"):
 			mcp, err := parseMCPExposure(args)
 			if err != nil {
@@ -561,10 +574,10 @@ func parseComponentSettings(blocks []directiveBlock) (ret *componentSettings, er
 	if err := ret.Generation.ValidateFilePrefix(); err != nil {
 		return nil, err
 	}
-	if ret != nil && ret.MCPOnly && ret.MCP == nil {
+	if ret != nil && ret.MCPOnly && ret.MCP == nil && len(ret.routeMCP) == 0 {
 		return nil, fmt.Errorf("mcpOnly requires an explicit mcp tool")
 	}
-	if ret.Internal && (ret.MCP != nil || ret.MCPOnly) {
+	if ret.Internal && (ret.MCP != nil || len(ret.routeMCP) > 0 || ret.MCPOnly) {
 		return nil, fmt.Errorf("internal(true) cannot expose MCP; use mcpOnly(true) for an MCP-only route")
 	}
 	if ret.Internal && ret.Static != nil {
@@ -589,7 +602,7 @@ func parseComponentSettings(blocks []directiveBlock) (ret *componentSettings, er
 	}
 	if ret.HandlerFactory == "" && ret.HandlerAdapter == "" && ret.ProtectedFlushTables == nil && ret.ResponseCompression == nil && !ret.IndependentChildTransactions && ret.ComponentCallPolicy == "" && ret.Static == nil && len(ret.MCPFolders) == 0 && ret.Documentation.IsZero() && ret.Generation.IsZero() && ret.DefaultConnector == "" && ret.SequenceStrategy == "" && ret.Report == nil && ret.Cache == nil &&
 		ret.InputType == "" && ret.OutputType == "" &&
-		ret.MCP == nil && ret.JSONMarshalType == "" &&
+		ret.MCP == nil && len(ret.routeMCP) == 0 && ret.JSONMarshalType == "" &&
 		ret.JSONUnmarshalType == "" && ret.XMLUnmarshalType == "" &&
 		ret.Format == "" && ret.DateFormat == "" && ret.CaseFormat == "" && ret.Output == nil &&
 		len(ret.Const) == 0 && ret.IgnoreEmptyQueryParameters == nil && !ret.MCPOnly && !ret.Internal {

@@ -23,6 +23,7 @@ type componentSettings struct {
 	Cache                        *spec.CacheSettings
 	Generation                   spec.GenerationSettings
 	MCP                          *spec.MCPExposure
+	routeMCP                     []routeMCPExposure
 	MCPOnly                      bool
 	Internal                     bool
 	InputType                    string
@@ -37,4 +38,11 @@ type componentSettings struct {
 	Const                        map[string]string
 	constSpans                   map[string]SourceSpan
 	mcpSpan                      SourceSpan
+}
+
+// routeMCPExposure is transient DQL authoring state lowered to spec.Route.MCP.
+type routeMCPExposure struct {
+	ref      spec.RouteRef
+	exposure *spec.MCPExposure
+	span     SourceSpan
 }
