@@ -27,9 +27,18 @@ func NormalizeDestination(parameter *spec.Parameter, defaultPackage string, cont
 			imports[imported.Alias] = imported.Package
 		}
 	}
+	// Without lookup authority, own imports can qualify a destination but an
+	// unresolved short name must not be guessed from a default package.
+	if lookup == nil {
+		defaultPackage = ""
+	}
 	canonical, err := (xshape.Resolver{Package: defaultPackage, Imports: imports}).Canonical(*destination)
 	if err != nil {
 		return err
+	}
+	if lookup == nil {
+		*destination = canonical
+		return nil
 	}
 	*destination, err = Alias(canonical, lookup, "contract destination")
 	return err

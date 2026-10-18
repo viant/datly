@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/viant/datly/internal/readergraph"
+	"github.com/viant/datly/internal/typeidentity"
 	"github.com/viant/datly/spec"
 	dtag "github.com/viant/datly/tag"
 	"github.com/viant/datly/typecatalog"
@@ -444,6 +445,17 @@ func (r *packageComponentResolver) resolveParamType(role contractRole, field xsh
 			return fmt.Errorf("resolve package input %s codec destination: %w", field.Name, err)
 		}
 		param.OutputTypeExpr = destination
+	}
+	// Persisted metadata and plain Go inputs must publish the same codec
+	// destination identity without changing wire or verification contracts.
+	if param != nil && role == inputContract && param.Codec != nil {
+		lookup := xshape.Lookup(nil)
+		if r.types != nil {
+			lookup = r.types.Descriptor
+		}
+		if err := typeidentity.NormalizeDestination(param, r.component.Key.Scope, r.component.TypeContext, lookup); err != nil {
+			return fmt.Errorf("resolve package input %s codec destination identity: %w", field.Name, err)
+		}
 	}
 	if param == nil || strings.TrimSpace(param.TypeExpr) != "" {
 		return nil

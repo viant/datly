@@ -9,6 +9,7 @@ import (
 	"github.com/viant/datly/spec"
 	"github.com/viant/scy/auth/jwt"
 	"github.com/viant/tagly/tags"
+	xshape "github.com/viant/x/shape"
 )
 
 func (c *InputCatalog) resolve(ref spec.RouteRef, component *spec.Key) (*componentInputRoute, error) {
@@ -224,6 +225,20 @@ func coverageParameter(authority, child InputField, transformed bool) error {
 		return fmt.Errorf("unconstructed codec contract")
 	}
 	left, right := *a, *b
+	// Older sealed reader metadata may omit a codec destination already fixed
+	// by its exact Go field. Complete comparison copies without changing authority.
+	for _, item := range []struct {
+		parameter   *spec.Parameter
+		destination reflect.Type
+	}{{&left, authority.destinationType}, {&right, child.destinationType}} {
+		if item.parameter.Codec != nil && item.parameter.OutputTypeExpr == "" && item.destination != nil {
+			expression, err := (xshape.Resolver{Qualifier: func(packagePath, suggested string) string { return packagePath }}).Expression(item.destination)
+			if err != nil {
+				return err
+			}
+			item.parameter.OutputTypeExpr = expression
+		}
+	}
 	left.Description, right.Description = "", ""
 	left.Example, right.Example = "", ""
 	left.Required, right.Required = nil, nil

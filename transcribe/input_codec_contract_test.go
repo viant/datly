@@ -23,7 +23,7 @@ func TestPackageInputCodecRetainsExactDestinationContract(t *testing.T) {
 	require.Len(t, component.Parameters, 1)
 	p := component.Parameters[0]
 	require.Equal(t, "string", p.TypeExpr)
-	require.Equal(t, "*transcribe.CodecContractClaims", p.OutputTypeExpr)
+	require.Equal(t, "*github.com/viant/datly/transcribe.CodecContractClaims", p.OutputTypeExpr)
 	require.Equal(t, "JwtClaim", p.Codec.Body)
 	require.Empty(t, p.Codec.OutputType)
 	require.Equal(t, 401, p.ErrorStatusCode)
@@ -33,8 +33,8 @@ func TestPackageInputCodecRetainsExactDestinationContract(t *testing.T) {
 		name, destination string
 		linked            bool
 	}{
-		{"same destination", "*transcribe.CodecContractClaims", true},
-		{"changed destination", "*transcribe.CodecContractOtherClaims", false},
+		{"same destination", "*github.com/viant/datly/transcribe.CodecContractClaims", true},
+		{"changed destination", "*github.com/viant/datly/transcribe.CodecContractOtherClaims", false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			authored := component.Clone()
