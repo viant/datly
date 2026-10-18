@@ -357,6 +357,17 @@ func linkExplicitOutputContract(result *Result, expression string, currentOutput
 				return fmt.Errorf("output contract %q field %s: %w", expression, param.Name, err)
 			}
 			if canonical != field.Identity {
+				declaredIdentity, err := outputAliasIdentity(result.TypeResolver, canonical, map[string]bool{})
+				if err != nil {
+					return fmt.Errorf("output contract %q field %s: %w", expression, param.Name, err)
+				}
+				linkedIdentity, err := outputAliasIdentity(result.TypeResolver, field.Identity, map[string]bool{})
+				if err != nil {
+					return fmt.Errorf("output contract %q field %s: %w", expression, param.Name, err)
+				}
+				if declaredIdentity == linkedIdentity {
+					continue
+				}
 				return fmt.Errorf("output contract %q field %s: declared %s differs from linked field %s", expression, param.Name, canonical, field.Identity)
 			}
 		}
@@ -401,4 +412,37 @@ func priorReaderOutputContract(result *Result, selected *x.Type) (bool, error) {
 		return false, err
 	}
 	return true, nil
+}
+
+// outputAliasIdentity follows only Go alias declarations. Canonical/Rewrite own
+// expression syntax and wrappers; each target uses its declaring Go file's
+// package/import scope. This comparison never changes authored metadata.
+func outputAliasIdentity(resolver *typecatalog.Resolver, expression string, visiting map[string]bool) (string, error) {
+	return (xshape.Resolver{Rewriter: func(name string) (string, error) {
+		descriptor, err := resolver.Descriptor(name)
+		if err != nil {
+			return "", err
+		}
+		if descriptor == nil || descriptor.SynteticType == nil || descriptor.SynteticType.TypeSpec == nil || !descriptor.SynteticType.TypeSpec.Assign.IsValid() {
+			return name, nil
+		}
+		key := descriptor.Key()
+		if visiting[key] {
+			return "", fmt.Errorf("cyclic output type alias %q", key)
+		}
+		visiting[key] = true
+		defer delete(visiting, key)
+		declaration := descriptor.SynteticType
+		scope := xshape.Resolver{Package: descriptor.PkgPath, Imports: map[string]string{}}
+		for alias, imported := range declaration.Imports {
+			if imported != nil {
+				scope.Imports[alias] = imported.Path
+			}
+		}
+		target, err := scope.Canonical(declaration.TypeSpec.Type)
+		if err != nil {
+			return "", err
+		}
+		return outputAliasIdentity(resolver, target, visiting)
+	}}).Rewrite(expression)
 }
