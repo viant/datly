@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/viant/datly/internal/typeidentity"
 	"github.com/viant/datly/spec"
 	"github.com/viant/datly/typecatalog"
 	"github.com/viant/x"
@@ -177,7 +178,7 @@ func (v *linkedViewCastValidator) validate(view *spec.View, prefix string) error
 			markerNames = append(markerNames, strings.TrimPrefix(path, prefix))
 			continue
 		}
-		equivalent, err := contract.Equivalent(wanted.Type, actual.Identity)
+		equivalent, err := v.equivalentType(contract, wanted.Type, actual.Identity)
 		if err != nil {
 			return err
 		}
@@ -349,4 +350,32 @@ func (v *linkedViewCastValidator) directNamedStruct(descriptor *x.Type, seen map
 	default:
 		return false
 	}
+}
+
+// Linked reflect types erase true Go aliases. Compare their declaration targets
+// in the declaring file's scope, as output contract validation already does.
+// Defined types retain their identity, and authored CAST metadata is untouched.
+func (v *linkedViewCastValidator) equivalentType(contract xshape.Contract, left, right string) (bool, error) {
+	equal, err := contract.Equivalent(left, right)
+	if err != nil || equal || v.lookup == nil {
+		return equal, err
+	}
+	scope := xshape.Resolver{Package: contract.Packages.Default, Imports: contract.Packages.Imports}
+	left, err = scope.Canonical(left)
+	if err != nil {
+		return false, err
+	}
+	right, err = scope.Canonical(right)
+	if err != nil {
+		return false, err
+	}
+	left, err = typeidentity.Alias(left, v.lookup, "linked")
+	if err != nil {
+		return false, err
+	}
+	right, err = typeidentity.Alias(right, v.lookup, "linked")
+	if err != nil {
+		return false, err
+	}
+	return (xshape.Contract{}).Equivalent(left, right)
 }

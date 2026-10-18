@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/viant/datly/internal/readergraph"
+	"github.com/viant/datly/internal/typeidentity"
 	"github.com/viant/datly/spec"
 	dtag "github.com/viant/datly/tag"
 	gen "github.com/viant/datly/transcribe/generate"
@@ -357,11 +358,11 @@ func linkExplicitOutputContract(result *Result, expression string, currentOutput
 				return fmt.Errorf("output contract %q field %s: %w", expression, param.Name, err)
 			}
 			if canonical != field.Identity {
-				declaredIdentity, err := outputAliasIdentity(result.TypeResolver, canonical, map[string]bool{})
+				declaredIdentity, err := typeidentity.Alias(canonical, result.TypeResolver.Descriptor, "output")
 				if err != nil {
 					return fmt.Errorf("output contract %q field %s: %w", expression, param.Name, err)
 				}
-				linkedIdentity, err := outputAliasIdentity(result.TypeResolver, field.Identity, map[string]bool{})
+				linkedIdentity, err := typeidentity.Alias(field.Identity, result.TypeResolver.Descriptor, "output")
 				if err != nil {
 					return fmt.Errorf("output contract %q field %s: %w", expression, param.Name, err)
 				}
@@ -412,37 +413,4 @@ func priorReaderOutputContract(result *Result, selected *x.Type) (bool, error) {
 		return false, err
 	}
 	return true, nil
-}
-
-// outputAliasIdentity follows only Go alias declarations. Canonical/Rewrite own
-// expression syntax and wrappers; each target uses its declaring Go file's
-// package/import scope. This comparison never changes authored metadata.
-func outputAliasIdentity(resolver *typecatalog.Resolver, expression string, visiting map[string]bool) (string, error) {
-	return (xshape.Resolver{Rewriter: func(name string) (string, error) {
-		descriptor, err := resolver.Descriptor(name)
-		if err != nil {
-			return "", err
-		}
-		if descriptor == nil || descriptor.SynteticType == nil || descriptor.SynteticType.TypeSpec == nil || !descriptor.SynteticType.TypeSpec.Assign.IsValid() {
-			return name, nil
-		}
-		key := descriptor.Key()
-		if visiting[key] {
-			return "", fmt.Errorf("cyclic output type alias %q", key)
-		}
-		visiting[key] = true
-		defer delete(visiting, key)
-		declaration := descriptor.SynteticType
-		scope := xshape.Resolver{Package: descriptor.PkgPath, Imports: map[string]string{}}
-		for alias, imported := range declaration.Imports {
-			if imported != nil {
-				scope.Imports[alias] = imported.Path
-			}
-		}
-		target, err := scope.Canonical(declaration.TypeSpec.Type)
-		if err != nil {
-			return "", err
-		}
-		return outputAliasIdentity(resolver, target, visiting)
-	}}).Rewrite(expression)
 }
