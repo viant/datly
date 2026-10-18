@@ -158,6 +158,39 @@ one reader graph with related and DerivedView outputs. Do not preserve a
 service-local fan-out of raw SELECTs merely because the public response is an
 aggregate.
 
+
+### Composition patterns and anti-patterns
+
+- Keep one caller-owned buffered write scope across component calls. Reuse the
+  injected Xdatly invoker and scoped DML services; do not create a second runtime,
+  session or transaction inside a business hook.
+- Put prerequisites in the existing input `Init` hook and dependent composition
+  in the invoker-aware output `Finalize` hook. Keep commit-dependent publication
+  in outcome finalization after commit confirmation. These callbacks have
+  different timing; a method named `Finalize` alone does not establish timing.
+- Treat typed `ComponentRequest.Input` as already bound for readers and writers.
+  Preserve generated presence markers and the child's validation and authority
+  checks. Do not rebind a separate capability struct through the canonical input
+  binder; use the existing scoped capability lookup or lifecycle argument.
+- Keep query selectors in their generated side companion. Do not change numeric
+  selector types to strings, add them to business `Input`/`Has`, or invent a view
+  solely to carry tool metadata.
+- Keep one authoritative DQL/SQL graph and regenerate affected native artifacts.
+  Do not copy SQL into hooks, reparse it per request, or hand-edit generated
+  fields to repair discovery. Check the public Go shape and rebuilt generation
+  repeat as well as compilation.
+- Keep reusable runtime types linked with fully qualified imports and native
+  retention anchors, including named container representations. An anchor keeps
+  a type discoverable; it is not a registration API or permission bypass.
+- Separate codec input representation, destination type and discovery schema.
+  Preserve the codec's conversion, null/presence and error behavior when repairing
+  metadata. Do not erase an explicit destination or replace a custom decoder just
+  to make schema comparison pass.
+- Keep lifecycle methods focused on their phase and extract cohesive helpers
+  when business logic becomes hard to follow. Test meaningful hook behavior,
+  error ordering and buffer ownership; avoid duplicating unchanged original E2E
+  assertions with an unrelated acceptance matrix.
+
 ### Mark presence in internal component calls
 
 Import `handler` from `github.com/viant/xdatly/handler` for application DI and
