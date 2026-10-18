@@ -3,7 +3,9 @@ package generate
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/viant/datly/report"
 	"reflect"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -65,6 +67,19 @@ func (p *Plan) cubeFileText() (string, error) {
 					}
 					section.WriteString("}\n")
 					sections.WriteString(section.String())
+					aliases := cubeSelectorAliases(field, cube.Definition)
+					if len(aliases) != 0 {
+						fmt.Fprintf(&sections, "func (v *%s) UnmarshalJSON(data []byte) error {type plain %s;return %s.UnmarshalSelectorJSON(data,(*plain)(v),map[string]string{", sectionName, sectionName, reportAlias)
+						keys := make([]string, 0, len(aliases))
+						for key := range aliases {
+							keys = append(keys, key)
+						}
+						sort.Strings(keys)
+						for _, key := range keys {
+							fmt.Fprintf(&sections, "%q:%q,", key, aliases[key])
+						}
+						sections.WriteString("})}\n")
+					}
 					if _, ok := field.Type.FieldByName("Has"); ok {
 						for j := 0; j < field.Type.NumField(); j++ {
 							member := field.Type.Field(j)
@@ -201,4 +216,50 @@ func cubeTypeExpression(typ reflect.Type, localPackage string, add func(string, 
 	default:
 		return typ.String(), nil
 	}
+}
+
+// Alias authority comes only from the compiled selector definition and member
+// JSON tags. Canonical names (including case-fold matches) retain ownership.
+func cubeSelectorAliases(section reflect.StructField, definition report.Definition) map[string]string {
+	selections := append(append([]report.SelectionDefinition(nil), definition.Dimensions...), definition.Measures...)
+	type candidate struct{ alias, canonical, owner string }
+	var candidates []candidate
+	var canonical []candidate
+	for i := 0; i < section.Type.NumField(); i++ {
+		member := section.Type.Field(i)
+		if member.Type.Kind() != reflect.Bool {
+			continue
+		}
+		name := strings.Split(member.Tag.Get("json"), ",")[0]
+		if name == "-" {
+			continue
+		}
+		if name == "" {
+			name = member.Name
+		}
+		canonical = append(canonical, candidate{canonical: name, owner: member.Name})
+		for _, selection := range selections {
+			if selection.Field == section.Name+"."+member.Name && selection.Name != "" && !strings.EqualFold(selection.Name, name) {
+				candidates = append(candidates, candidate{selection.Name, name, member.Name})
+			}
+		}
+	}
+	aliases := map[string]string{}
+	for _, candidate := range candidates {
+		conflict := false
+		for _, field := range canonical {
+			if strings.EqualFold(field.canonical, candidate.alias) && field.owner != candidate.owner {
+				conflict = true
+			}
+		}
+		for _, other := range candidates {
+			if strings.EqualFold(other.alias, candidate.alias) && other.owner != candidate.owner {
+				conflict = true
+			}
+		}
+		if !conflict {
+			aliases[candidate.alias] = candidate.canonical
+		}
+	}
+	return aliases
 }
