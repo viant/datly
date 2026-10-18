@@ -8,6 +8,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"github.com/viant/datly/bootstrap"
+	postselectors "github.com/viant/datly/bootstrap/testdata/postselectors"
 	fixture "github.com/viant/datly/bootstrap/testdata/selectorcompanion"
 	allselectors "github.com/viant/datly/bootstrap/testdata/selectorside"
 	"github.com/viant/datly/internal/testharness/mcpclient"
@@ -132,5 +133,39 @@ func TestSelectorSideOrderByMCP(t *testing.T) {
 			ids = append(ids, row.ID)
 		}
 		require.Equal(t, tc.ids, ids)
+	}
+}
+
+func TestSelectorSidePostInputsMCP(t *testing.T) {
+	service := selectorSideService(t, reflect.TypeFor[postselectors.Component](), reflect.TypeFor[postselectors.Input](), reflect.TypeFor[postselectors.Output](), "ReadPostRows")
+	native := mcpclient.New(t, service, schema.LatestProtocolVersion)
+	listed, err := native.ListTools(t.Context(), nil)
+	require.NoError(t, err)
+	require.Len(t, listed.Tools, 1)
+	encoded, err := json.Marshal(listed.Tools[0].InputSchema)
+	require.NoError(t, err)
+	var wire struct {
+		Properties map[string]struct {
+			Type string `json:"type"`
+		} `json:"properties"`
+	}
+	require.NoError(t, json.Unmarshal(encoded, &wire))
+	require.Equal(t, "integer", wire.Properties["Page"].Type)
+	require.Equal(t, "array", wire.Properties["OrderBy"].Type)
+	require.Equal(t, "integer", wire.Properties["Limit"].Type)
+	require.Equal(t, "integer", wire.Properties["Offset"].Type)
+	for _, args := range []map[string]any{{"Min": 1, "ID": 1, "OrderBy": []string{"id DESC"}, "Limit": 1, "Page": 1}, {"Min": 0, "ID": 2, "Page": 1}} {
+		result, err := native.CallTool(t.Context(), &schema.CallToolRequestParams{Name: "records.select", Arguments: args})
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		if result.IsError != nil {
+			require.False(t, *result.IsError, "%+v", result)
+		}
+		body, err := json.Marshal(result.StructuredContent)
+		require.NoError(t, err)
+		var output postselectors.Output
+		require.NoError(t, json.Unmarshal(body, &output))
+		require.Len(t, output.Data, 1)
+		require.Equal(t, 2, output.Data[0].ID)
 	}
 }

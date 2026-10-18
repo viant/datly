@@ -94,7 +94,7 @@ func TestCompanionSourceAndReflectionAgreeWithoutInvocation(t *testing.T) {
 
 func TestCompanionInvalidSourceDeclarationsFailClosed(t *testing.T) {
 	for _, tc := range []struct{ name, old, new string }{
-		{"nonreader", "method=GET", "method=POST"},
+		{"mutation owner", `component:"Rows,path=/rows,method=GET"`, `component:"Rows,path=/rows,method=POST" mutation:"insert"`},
 		{"custom handler", "method=GET", "method=GET,handler=Custom"},
 		{"argument", "DatlyQuerySelectors()", "DatlyQuerySelectors(_ int)"},
 		{"variadic", "DatlyQuerySelectors()", "DatlyQuerySelectors(_ ...int)"},
@@ -164,5 +164,17 @@ func TestCompanionCanonicalIdentityIncludesQuerySource(t *testing.T) {
 	}
 	if len(selected.Parameters) != 2 || selected.Parameters[0] != root || selected.Parameters[1] != child {
 		t.Fatal("query source identity was collapsed")
+	}
+}
+
+func TestCompanionPostAndMixedReaderRoutes(t *testing.T) {
+	for _, source := range []string{
+		strings.ReplaceAll(sourceFixture, "method=GET", "method=POST"),
+		strings.Replace(sourceFixture, "Contract xdatly.Component", `Other xdatly.Component[fixtureInput,fixtureOutput] `+"`component:\"Rows,path=/other,method=POST\"`"+`; Contract xdatly.Component`, 1),
+	} {
+		holder, lookup := loadedHolder(t, source)
+		if _, err := Resolve(holder, "Contract", lookup); err != nil {
+			t.Fatal(err)
+		}
 	}
 }

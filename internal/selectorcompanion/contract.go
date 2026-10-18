@@ -81,7 +81,7 @@ func Resolve(holder *x.Type, fieldName string, lookup xshape.Lookup) (*Contract,
 	if !present || component.ValidateRoute() != nil || !componentField(holder, *selectedField) {
 		return nil, fmt.Errorf("selector companion field must declare an exact Component[I,O] route")
 	}
-	if component.Method != "GET" || component.Handler != "" || component.Settings.Mutation != "" {
+	if component.Handler != "" || component.Settings.Mutation != "" {
 		return nil, fmt.Errorf("selector companion requires an ordinary reader")
 	}
 	identity := selected.Results[0]

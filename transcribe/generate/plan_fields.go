@@ -369,7 +369,7 @@ func ordinarySelectorReader(component *spec.Component) bool {
 		return false
 	}
 	for _, route := range component.Routes {
-		if route == nil || route.Method != "GET" || route.Handler != "" {
+		if route == nil || route.Handler != "" {
 			return false
 		}
 	}

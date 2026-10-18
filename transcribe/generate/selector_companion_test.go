@@ -93,3 +93,22 @@ func TestSelectorCompanionPreservesExternalLinkedDirectFields(t *testing.T) {
 		t.Fatal("mixed direct/side projection changed")
 	}
 }
+
+func TestGeneratedPostReaderSelectorsAreSideInputs(t *testing.T) {
+	for _, methods := range [][]string{{"POST"}, {"GET", "POST"}} {
+		c := &spec.Component{Name: "Rows", Parameters: []*spec.Parameter{
+			{Name: "Minimum", TypeExpr: "int", Source: spec.BindSource{Kind: "body", Name: "minimum"}},
+			{Name: "Page", TypeExpr: "int", Source: spec.BindSource{Kind: "query", Name: "page"}, QuerySelector: &spec.QuerySelectorBinding{View: "rows", Property: spec.SelectorPropertyPage}},
+		}}
+		for _, method := range methods {
+			c.Routes = append(c.Routes, &spec.Route{Method: method, Path: "/rows"})
+		}
+		plan, err := New(Input{Component: c, PackageName: "rows"}).Plan()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(plan.QuerySelectors) != 1 || len(plan.Input.Fields) != 1 || plan.Input.Fields[0].Name != "Minimum" {
+			t.Fatalf("POST side/public mismatch: %+v / %+v", plan.QuerySelectors, plan.Input.Fields)
+		}
+	}
+}
