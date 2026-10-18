@@ -57,9 +57,9 @@ func NewInputCatalog(entries []*RegisteredComponent) (*InputCatalog, error) {
 	return result, nil
 }
 
-// Fields returns detached effective HTTP inputs, including every statically
-// declared component dependency. All component fields execute binding regardless
-// of their own Required flag; child requiredness therefore remains authoritative.
+// Fields returns detached transport inputs, including ordinary component
+// dependencies, the selected component's selectors and required child selectors.
+// Child requiredness remains authoritative for statically declared dependencies.
 func (c *InputCatalog) Fields(ref spec.RouteRef) ([]InputField, error) {
 	return c.fields(ref, nil)
 }
@@ -72,7 +72,7 @@ func (c *InputCatalog) FieldsFor(component spec.Key, ref spec.RouteRef) ([]Input
 
 func (c *InputCatalog) fields(ref spec.RouteRef, component *spec.Key) ([]InputField, error) {
 	projection := inputProjection{root: ref, catalog: c, active: map[string]bool{}, visited: map[string]bool{}, locations: map[string]int{}}
-	if err := projection.visit(ref, component); err != nil {
+	if err := projection.visit(ref, component, true); err != nil {
 		return nil, err
 	}
 	if projection.scoped {
@@ -93,7 +93,7 @@ type inputProjection struct {
 	scoped          bool
 }
 
-func (p *inputProjection) visit(ref spec.RouteRef, component *spec.Key) error {
+func (p *inputProjection) visit(ref spec.RouteRef, component *spec.Key, selectedRoot bool) error {
 	resolved, err := p.catalog.resolve(ref, component)
 	if err != nil {
 		return err
@@ -108,7 +108,15 @@ func (p *inputProjection) visit(ref spec.RouteRef, component *spec.Key) error {
 	}
 	p.active[identity] = true
 	defer delete(p.active, identity)
-	for _, field := range append(entry.Fields(), entry.selectorFields()...) {
+	fields := entry.Fields()
+	for _, selector := range entry.selectorFields() {
+		// Optional side controls belong to the selected component, while a
+		// required child binding remains an obligation of its public parent.
+		if selectedRoot || transportRequired(selector) {
+			fields = append(fields, selector)
+		}
+	}
+	for _, field := range fields {
 		if target, ok := field.Dependency(); ok {
 			binding := field.Binding()
 			if binding.When != "" || binding.With != "" {
@@ -118,7 +126,7 @@ func (p *inputProjection) visit(ref spec.RouteRef, component *spec.Key) error {
 				p.scoped = true
 				continue // coverage is proved against the completed default projection.
 			}
-			if err := p.visit(target, nil); err != nil {
+			if err := p.visit(target, nil, false); err != nil {
 				return fmt.Errorf("%s input %s: %w", ref.String(), field.Path(), err)
 			}
 			continue
