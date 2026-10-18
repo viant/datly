@@ -271,12 +271,52 @@ func main(){_,_=reflect.TypeFor[outputoverlay.RecordsComponent]().MethodByName("
 	require.NoError(t, err, "repeat native generated reload: %s", output)
 }
 
+func TestPackageOverlayRegeneratesSQLRowsAtSharedDestination(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	const pkg = "example.com/overlay/records"
+	(testharness.GeneratedModule{Path: "example.com/overlay"}).Write(t, root)
+	text := `#package('` + pkg + `')
+#import('self','` + pkg + `')
+#setting($_ = $route('/records','GET'))
+#setting($_ = $dest('records.go'))
+#setting($_ = $input_type('` + pkg + `.RecordsInput'))
+#setting($_ = $output_type('` + pkg + `.RecordsOutput'))
+#define($_ = $Meta<self.SummaryView>(output/summary) /* SELECT total.*,type(total,'SummaryView'),CAST(total.CNT AS int) FROM (SELECT 1 AS CNT) total */)
+#define($_ = $Data<[]*self.Record>(output/view))
+SELECT r.*,type(r,'Record'),CAST(r.ID AS int) FROM (SELECT 1 AS ID) r`
+	initial, err := NewCompiler().Transcribe(ctx, Request{Destination: root, Source: &Source{Scope: "example.com/overlay/source", Name: "Records", Text: text}, Generation: GenerationOptions{Operation: "get"}})
+	require.NoError(t, err)
+	require.Equal(t, gen.ViewGenerated, initial.Result.Plan.ViewByType("Record").Ownership)
+	writeSourceFile(t, root, "source/query.dql", text)
+	discovery := &Discovery{BaseDir: root, Include: []string{"example.com/overlay/source"}, SourceFile: "query.dql"}
+	for i := 0; i < 2; i++ {
+		compiled, err := discovery.Compile(ctx)
+		require.NoError(t, err)
+		require.Len(t, compiled.Components, 1)
+		generated, err := (Generator{Operation: "get"}).Generate(ctx, GenerationRequest{Compiled: compiled.Components[0], Destination: root})
+		require.NoError(t, err)
+		require.Equal(t, gen.ContractLinked, generated.Result.Plan.Output.Ownership)
+		for _, name := range []string{"Record", "SummaryView"} {
+			row := generated.Result.Plan.ViewByType(name)
+			require.NotNil(t, row)
+			require.Equal(t, gen.ViewGenerated, row.Ownership)
+			require.Equal(t, "records.go", row.Destination)
+		}
+		content, err := os.ReadFile(filepath.Join(root, "records", "records.go"))
+		require.NoError(t, err)
+		require.Contains(t, string(content), "type Record struct")
+		require.Contains(t, string(content), "type SummaryView struct")
+	}
+}
+
 func TestPackageOverlayRetainsValidatedRootReceipt(t *testing.T) {
 	output := x.NewType(reflect.TypeFor[outputoverlay.Output]())
 	row := x.NewType(reflect.TypeFor[outputoverlay.Row]())
 	receipt := &gen.BorrowedRowAuthority{OwnerName: "original-authority"}
 	prior := &gen.ViewReference{DescriptorKey: row.Key(), Borrowed: receipt}
-	result := &Result{Contracts: gen.ContractReferences{Output: &gen.ContractReference{DescriptorKey: output.Key()}}, Views: gen.ViewReferences{gen.RootViewPath: prior}}
+	root := &spec.View{Name: "Records"}
+	result := &Result{Component: &spec.Component{RootView: root}, generatedOutputRows: map[*spec.View]bool{root: true}, Contracts: gen.ContractReferences{Output: &gen.ContractReference{DescriptorKey: output.Key()}}, Views: gen.ViewReferences{gen.RootViewPath: prior}}
 	require.NoError(t, retainPackageOutputRoot(result, output, row))
 	require.Same(t, prior, result.Views[gen.RootViewPath])
 	require.Same(t, receipt, result.Views[gen.RootViewPath].Borrowed)

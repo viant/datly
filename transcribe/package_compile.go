@@ -248,6 +248,11 @@ func retainPackageOutputRoot(result *Result, output, root *x.Type) error {
 		}
 		return nil
 	}
+	// Explicit current SQL already admitted this exact root as generated. The
+	// linked output contract does not transfer ownership of its generated rows.
+	if result.Component != nil && result.generatedOutputRows[result.Component.RootView] {
+		return nil
+	}
 	result.Views[gen.RootViewPath] = &gen.ViewReference{DescriptorKey: root.Key()}
 	return nil
 }
