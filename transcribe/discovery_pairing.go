@@ -51,7 +51,7 @@ func (c *discoveryCompilation) declaredPackageSource(ctx context.Context, source
 	var matched *bootstrap.PackageComponentSource
 	conflict := false
 	for _, candidate := range candidates {
-		component, err := candidate.ResolveDescriptors(resolver)
+		component, err := resolvePackageDeclarations(candidate, resolver)
 		if err != nil {
 			return nil, err
 		}
@@ -107,4 +107,18 @@ func declaredRoutesMatch(authored, existing []*spec.Route) (all, any bool) {
 		all, any = all && found, any || found
 	}
 	return all, any
+}
+
+// resolvePackageDeclarations reads current holder contracts without admitting a
+// previously generated executable graph. Copies keep the original metadata
+// locator available to package-only compilation and generation replacement.
+func resolvePackageDeclarations(source *bootstrap.PackageComponentSource, resolver *typecatalog.Resolver) (*spec.Component, error) {
+	copy := *source
+	copy.Routes = make([]*bootstrap.RouteSource, len(source.Routes))
+	for i, route := range source.Routes {
+		detached := *route
+		detached.Tag.ReaderMetadata = ""
+		copy.Routes[i] = &detached
+	}
+	return copy.ResolveDescriptors(resolver)
 }

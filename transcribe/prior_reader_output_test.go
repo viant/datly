@@ -8,8 +8,10 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"github.com/viant/datly/bootstrap"
 	gen "github.com/viant/datly/transcribe/generate"
 	"github.com/viant/datly/typecatalog"
+	"github.com/viant/x"
 )
 
 func TestGeneratedSourceReaderRefreshRetainsAdmittedExplicitOutput(t *testing.T) {
@@ -37,14 +39,35 @@ func checkGeneratedSourceOutputRefresh(t *testing.T, root, text string) {
 		}
 	}
 	require.NotNil(t, result)
-	require.NotNil(t, result.Source.PackageComponent.ReaderGraph)
-	require.NotEmpty(t, result.Source.ReaderMetadataURI)
+	require.Nil(t, result.Source.PackageComponent.ReaderGraph)
+	require.Empty(t, result.Source.ReaderMetadataURI)
 	resolved, err := result.TypeResolver.ResolveWithProvenance(overlayFixturePackage + ".Output")
 	require.NoError(t, err)
 	require.Equal(t, typecatalog.TypeOriginGenerated, resolved.Origin)
-	require.NotNil(t, result.Contracts.Output, "explicit prior admitted generated output must stay linked")
+	require.NotNil(t, result.Contracts.Output, "exact current selected generated output must stay linked")
 	require.Equal(t, overlayFixturePackage+".Output", result.Contracts.Output.DescriptorKey)
-	assertPriorReaderOutputRejections(t, result)
+	assertCurrentReaderOutputRejections(t, result)
+	// Prior-admission corruption checks still exercise the unchanged fallback;
+	// explicit current DQL itself retains no prior executable graph.
+	routes, err := (bootstrap.PackageDiscovery{BaseDir: root, Include: []string{overlayFixturePackage}}).Discover(context.Background())
+	require.NoError(t, err)
+	groups, err := bootstrap.GroupPackageComponentSources(routes, result.TypeResolver)
+	require.NoError(t, err)
+	for _, group := range groups {
+		if group.ComponentName() != "Records" {
+			continue
+		}
+		prior, err := group.ResolveDescriptors(result.TypeResolver)
+		require.NoError(t, err)
+		require.NotNil(t, prior.ReaderGraph)
+		priorResult := *result
+		priorSource := *result.Source
+		priorResult.Source = &priorSource
+		priorSource.PackageComponent = prior
+		priorSource.ReaderMetadataURI = group.Routes[0].Tag.ReaderMetadata
+		assertPriorReaderOutputRejections(t, &priorResult)
+	}
+
 	baselineBytes, err := json.Marshal(result.Source.PackageComponent)
 	require.NoError(t, err)
 	marker := result.Source.PackageComponent.ReaderGraph
@@ -60,6 +83,70 @@ func checkGeneratedSourceOutputRefresh(t *testing.T, root, text string) {
 	require.NoError(t, err)
 	require.Equal(t, string(baselineBytes), string(after))
 	require.Same(t, marker, result.Source.PackageComponent.ReaderGraph)
+}
+
+func assertCurrentReaderOutputRejections(t *testing.T, result *Result) {
+	t.Helper()
+	for _, tc := range []struct {
+		name             string
+		change           func(*Result)
+		wantError        bool
+		absentCurrent    bool
+		differentCurrent bool
+	}{
+		{"ordinary generated", func(r *Result) {}, false, true, false},
+		{"omitted output", func(r *Result) { r.ContractTypeOverrides.Output = "" }, false, false, false},
+		{"bare output", func(r *Result) { r.ContractTypeOverrides.Output = "Output" }, false, false, false},
+		{"unrelated generated output", func(r *Result) { r.ContractTypeOverrides.Output = "legacy.Input" }, false, false, false},
+		{"different selected descriptor", func(r *Result) {}, false, false, true},
+		{"missing field", func(r *Result) {
+			for _, p := range r.Component.Parameters {
+				if p.Source.Kind == "output" && p.Source.Name == "view" {
+					p.Name = "Missing"
+				}
+			}
+		}, true, false, false},
+		{"changed binding", func(r *Result) {
+			for _, p := range r.Component.Parameters {
+				if p.Source.Kind == "output" && p.Source.Name == "view" {
+					p.Source.Name = "body"
+				}
+			}
+		}, true, false, false},
+		{"changed type", func(r *Result) {
+			for _, p := range r.Component.Parameters {
+				if p.Source.Kind == "output" && p.Source.Name == "view" {
+					p.TypeExpr = "[]*legacy.Metric"
+					p.OutputTypeExpr = "[]*legacy.Metric"
+				}
+			}
+		}, true, false, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			copy := *result
+			source := *result.Source
+			source.PackageComponent = result.Source.PackageComponent.Clone()
+			copy.Source = &source
+			copy.Component = result.Component.Clone()
+			copy.Contracts.Output = nil
+			tc.change(&copy)
+			var selected *x.Type
+			if !tc.absentCurrent {
+				name := ".Output"
+				if tc.differentCurrent {
+					name = ".Input"
+				}
+				selected, _ = copy.TypeResolver.Descriptor(overlayFixturePackage + name)
+			}
+			err := linkExplicitOutputContract(&copy, copy.ContractTypeOverrides.Output, selected)
+			if tc.wantError {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
+			require.Nil(t, copy.Contracts.Output)
+		})
+	}
 }
 
 func assertPriorReaderOutputRejections(t *testing.T, result *Result) {
@@ -106,7 +193,7 @@ func assertPriorReaderOutputRejections(t *testing.T, result *Result) {
 			copy.Component = result.Component.Clone()
 			copy.Contracts.Output = nil
 			tc.change(&copy)
-			err := linkExplicitOutputContract(&copy, copy.ContractTypeOverrides.Output)
+			err := linkExplicitOutputContract(&copy, copy.ContractTypeOverrides.Output, nil)
 			if tc.wantError {
 				require.Error(t, err)
 			} else {
