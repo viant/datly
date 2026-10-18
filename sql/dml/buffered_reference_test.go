@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/viant/datly/internal/testharness/sqlite"
+	"github.com/viant/datly/sql/validation"
 	xhandler "github.com/viant/xdatly/handler"
 )
 
@@ -33,12 +34,14 @@ func TestBufferedSiblingInsertReference(t *testing.T) {
 		{name: "mixed batch", batch: true, change: "mixed", invalid: true},
 		{name: "unrelated allocated child ID", change: "childID"},
 		{name: "wrong key", change: "wrongKey", invalid: true},
+		{name: "batch wrong key", batch: true, change: "wrongKey", invalid: true},
 		{name: "wrong table", change: "wrongTable", invalid: true},
 		{name: "later binding parent", change: "binding", invalid: true},
 		{name: "other owner", change: "owner", invalid: true},
 		{name: "both keys changed", change: "both", guarded: true},
 		{name: "parent key changed", change: "parent", guarded: true},
 		{name: "parent deleted", change: "delete", guarded: true},
+		{name: "batch parent deleted", batch: true, change: "delete", guarded: true},
 		{name: "opaque SQL appended", change: "execute", guarded: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -305,5 +308,90 @@ func TestBufferedReferenceRejectsDuplicateUpdateColumns(t *testing.T) {
 		if updatePreservesReference(row, "code") {
 			t.Fatal("ambiguous SET/WHERE reference accepted")
 		}
+	}
+}
+
+type bufferedReferenceFields map[string]bool
+
+func (f bufferedReferenceFields) Has(name string) bool { return f[name] }
+
+func TestBufferedReferenceOmittedFieldCoverage(t *testing.T) {
+	for _, batch := range []bool{false, true} {
+		name := "scalar"
+		if batch {
+			name = "batch"
+		}
+		t.Run(name, func(t *testing.T) {
+			ctx := context.Background()
+			h := sqlite.New(t)
+			h.DB.SetMaxOpenConns(1)
+			if err := h.ExecStatements(ctx, "PRAGMA foreign_keys=ON", "CREATE TABLE parents(id INTEGER PRIMARY KEY)", "CREATE TABLE children(id INTEGER PRIMARY KEY,parent_id INTEGER NOT NULL REFERENCES parents(id))", "CREATE TABLE unrelated(id INTEGER PRIMARY KEY)", "INSERT INTO unrelated VALUES(3)"); err != nil {
+				t.Fatal(err)
+			}
+			owner := NewData(h.DB)
+			if err := owner.BeginInvocation(); err != nil {
+				t.Fatal(err)
+			}
+			defer owner.Complete(ctx, errors.New("test rollback"))
+			if err := owner.Start(ctx); err != nil {
+				t.Fatal(err)
+			}
+			parent := &bufferedParentRow{7}
+			first := owner.ComponentData(ComponentImperative, "").(*Data)
+			if err := first.Insert("parents", parent); err != nil {
+				t.Fatal(err)
+			}
+			first.SealComponent()
+			second := owner.ComponentData(ComponentImperative, "").(*Data)
+			child := &bufferedChildRow{11, 7}
+			policy := xhandler.ValidationOptions{Action: xhandler.WriteInsert, Shallow: true, HonorPresence: true, Fields: bufferedReferenceFields{"ID": true}}
+			var value any = child
+			options := []any{policy}
+			if batch {
+				value = []*bufferedChildRow{child}
+				options = []any{[]xhandler.ValidationOptions{policy}}
+			}
+			prepared, guards, err := validation.New(second).PrepareBufferedValidation(ctx, value, options, second.bufferedParents())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(guards) != 0 {
+				t.Fatalf("omitted FK created %d guards", len(guards))
+			}
+			policies := []xhandler.ValidationOptions{}
+			if batch {
+				policies = prepared[0].([]xhandler.ValidationOptions)
+			} else {
+				policies = append(policies, prepared[0].(xhandler.ValidationOptions))
+			}
+			for _, p := range policies {
+				if len(p.SatisfiedReferences) != 0 {
+					t.Fatalf("omitted FK acquired receipts: %+v", p.SatisfiedReferences)
+				}
+			}
+			result, err := second.FrameworkValidator().Validate(ctx, value, options...)
+			if err != nil || result.Failed {
+				t.Fatalf("validation=%+v err=%v", result, err)
+			}
+			var count int
+			if err := owner.tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM parents").Scan(&count); err != nil {
+				t.Fatal(err)
+			}
+			if count != 0 {
+				t.Fatal("validation flushed parent")
+			}
+			if err := second.Delete("unrelated", &bufferedParentRow{3}); err != nil {
+				t.Fatal(err)
+			}
+			if err := second.Insert("children", child); err != nil {
+				t.Fatal(err)
+			}
+			second.SealComponent()
+			if err := owner.Complete(ctx, nil); err != nil {
+				t.Fatal(err)
+			}
+			h.AssertQuery(t, ctx, sqlite.Query{SQL: "SELECT COUNT(*) AS total FROM children"}, []struct{ Total int }{{1}})
+			h.AssertQuery(t, ctx, sqlite.Query{SQL: "SELECT COUNT(*) AS total FROM unrelated"}, []struct{ Total int }{{0}})
+		})
 	}
 }

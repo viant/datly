@@ -46,9 +46,11 @@ func (s *Service) PrepareBufferedValidation(ctx context.Context, value any, opti
 		if err != nil {
 			return nil, nil, err
 		}
-		if _, err = plan.prepare(policy); err != nil {
+		prepared, err := plan.prepare(policy)
+		if err != nil {
 			return nil, nil, err
 		}
+		policy = prepared.policy
 		if err = plan.checkCoverage(policy); err != nil {
 			return nil, nil, err
 		}
@@ -73,6 +75,9 @@ func (s *Service) PrepareBufferedValidation(ctx context.Context, value any, opti
 		}
 		for _, check := range plan.nativeChecks.RefKey {
 			ref := check.Reference
+			if policy.Fields != nil && !policy.Fields.Has(ref.Field) {
+				continue
+			}
 			expected := xhandler.ValidationReference{Field: ref.Field, Schema: ref.Schema, Table: ref.Table, Column: ref.Column}
 			found := false
 			for _, receipt := range policies[i].SatisfiedReferences {
