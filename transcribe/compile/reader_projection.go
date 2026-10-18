@@ -103,8 +103,9 @@ func markInternalColumn(view *spec.View, name string) {
 		column.Tag = withInternalColumnTag(column.Tag)
 		return
 	}
+	// A new visibility annotation must not claim a SQL projection position.
 	view.Columns = append(view.Columns, &spec.Column{
-		Name: name, Source: name, Tag: withInternalColumnTag(""),
+		Name: name, Source: name, Tag: withInternalColumnTag(""), AnnotationOnly: true,
 	})
 }
 
