@@ -2,6 +2,7 @@
 package tool
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	docs "github.com/viant/datly/documentation"
@@ -90,18 +91,45 @@ func (p *Plan) Arguments() []Argument {
 	return result
 }
 
+// Scope returns request providers owned by the caller; call Close after consuming results.
 func (p *Plan) Scope(arguments map[string]interface{}) (*requestprovider.Scope, error) {
 	if p == nil {
 		return nil, fmt.Errorf("MCP tool plan is required")
 	}
-	normalized, err := p.binding.NormalizeArguments(arguments)
+	return p.scope(context.Background(), arguments)
+}
+func (p *Plan) scope(ctx context.Context, arguments map[string]interface{}) (*requestprovider.Scope, error) {
+	normalized, synthetic, err := p.binaryArguments(arguments)
+	if err != nil {
+		return nil, err
+	}
+	request, options, err := p.binaryRequest(ctx, normalized, synthetic)
 	if err != nil {
 		return nil, err
 	}
 	for _, argument := range p.args {
+		if request != nil && argument.sourceKind == "body" {
+			continue
+		}
 		if _, ok := normalized[argument.publicName]; argument.required && !ok {
 			return nil, fmt.Errorf("missing required MCP argument %q", argument.publicName)
 		}
+	}
+	if request != nil {
+		// Original raw-Blob precedence still consumes supplied multipart form
+		// arguments, while raw-only calls retain ordinary form projection.
+		multipartSupplied := false
+		for _, argument := range p.args {
+			multipartSupplied = multipartSupplied || fileArgument(argument) && normalized[argument.publicName] != nil
+		}
+		if multipartSupplied {
+			for _, argument := range p.args {
+				if argument.sourceKind == "form" {
+					delete(normalized, argument.publicName)
+				}
+			}
+		}
+		return p.binding.ScopeRequest(mcpinput.Arguments(normalized), request, options...)
 	}
 	return p.binding.Scope(mcpinput.Arguments(normalized))
 }

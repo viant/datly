@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"mime"
 	"net/http"
 	"net/url"
 	"reflect"
@@ -41,6 +42,14 @@ type resolvedValue struct {
 // canonical request providers. Bindly remains the sole owner of request-source
 // lookup and component input conversion.
 func (p *Plan) Scope(source Source) (*requestprovider.Scope, error) {
+	return p.scope(source, nil, nil)
+}
+
+// ScopeRequest reuses compiled non-body projections with an encoded binary request.
+func (p *Plan) ScopeRequest(source Source, request *http.Request, options ...requestprovider.Option) (*requestprovider.Scope, error) {
+	return p.scope(source, request, options)
+}
+func (p *Plan) scope(source Source, request *http.Request, requestOptions []requestprovider.Option) (*requestprovider.Scope, error) {
 	if p == nil {
 		return nil, fmt.Errorf("MCP input plan is required")
 	}
@@ -64,7 +73,15 @@ func (p *Plan) Scope(source Source) (*requestprovider.Scope, error) {
 	var formValues url.Values
 	var namedBody map[string]json.RawMessage
 	var wholeBody json.RawMessage
+	encodedForm := false
+	if request != nil {
+		media, _, _ := mime.ParseMediaType(request.Header.Get("Content-Type"))
+		encodedForm = media == "multipart/form-data"
+	}
 	for _, argument := range p.arguments {
+		if request != nil && (encodedForm && argument.Source.Kind == requestprovider.FormKind || argument.Source.Kind == requestprovider.BodyKind) {
+			continue
+		}
 		resolved, found, err := source.resolve(argument)
 		if err != nil {
 			return nil, err
@@ -143,6 +160,9 @@ func (p *Plan) Scope(source Source) (*requestprovider.Scope, error) {
 			return nil, err
 		}
 		options = append(options, requestprovider.WithBodySource(body))
+	}
+	if request != nil {
+		return requestprovider.New(request, append(options, requestOptions...)...)
 	}
 	return requestprovider.NewValues(options...), nil
 }

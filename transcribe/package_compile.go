@@ -205,7 +205,11 @@ func (a *packageAuthority) compile(ctx context.Context) (*Result, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err = linkExplicitOutputContract(result, result.ContractTypeOverrides.Output); err != nil {
+	var currentOutput *x.Type
+	if strings.TrimSpace(a.source.Text) != "" {
+		currentOutput = a.output
+	}
+	if err = linkExplicitOutputContract(result, result.ContractTypeOverrides.Output, currentOutput); err != nil {
 		return nil, err
 	}
 	if err = retainPackageOutputRoot(result, a.output, a.root); err != nil {
@@ -265,7 +269,12 @@ func (c *descriptorPackageCompilation) compile(ctx context.Context) (*Result, er
 	if err != nil {
 		return nil, err
 	}
-	component, err := c.packageSource.ResolveDescriptors(resolver)
+	var component *spec.Component
+	if strings.TrimSpace(c.source.Text) != "" {
+		component, err = resolvePackageDeclarations(c.packageSource, resolver)
+	} else {
+		component, err = c.packageSource.ResolveDescriptors(resolver)
+	}
 	if err != nil {
 		return nil, err
 	}

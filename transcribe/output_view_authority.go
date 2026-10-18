@@ -265,12 +265,12 @@ func linkDeclaredOutputContract(result *Result, authored *spec.Component) error 
 	if result == nil || result.TypeResolver == nil || authored == nil || authored.Settings == nil || result.Source != nil && result.Source.PackageComponent != nil {
 		return nil
 	}
-	return linkExplicitOutputContract(result, authored.Settings.OutputType)
+	return linkExplicitOutputContract(result, authored.Settings.OutputType, nil)
 }
 
 // linkExplicitOutputContract checks only an expression retained from the current
 // authored DQL. Package defaults and implicit role linkage remain separate.
-func linkExplicitOutputContract(result *Result, expression string) error {
+func linkExplicitOutputContract(result *Result, expression string, currentOutput *x.Type) error {
 	if result == nil || result.TypeResolver == nil {
 		return nil
 	}
@@ -302,7 +302,7 @@ func linkExplicitOutputContract(result *Result, expression string) error {
 		}
 		generated = generated || origin == typecatalog.TypeOriginGenerated
 	}
-	if generated {
+	if generated && (currentOutput == nil || currentOutput.Key() != descriptor.Key()) {
 		admitted, err := priorReaderOutputContract(result, descriptor)
 		if err != nil {
 			return err

@@ -3,6 +3,7 @@ package input
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"net/url"
 	"reflect"
 	"strings"
@@ -371,4 +372,30 @@ func TestExtraArgumentsAreLenientByDefaultAndStrictOnlyWhenConfigured(t *testing
 			t.Fatal("lenient mode accepted an invalid known value")
 		}
 	}
+}
+
+func TestScopeRequestRetainsCompiledNonBodySources(t *testing.T) {
+	plan, err := NewCompiler().Compile([]Argument{
+		{PublicName: "q", Source: bindstate.Location{Kind: "query", In: "search"}, SourceType: reflect.TypeOf("")},
+		{PublicName: "id", Source: bindstate.Location{Kind: "path", In: "id"}, SourceType: reflect.TypeOf(0)},
+		{PublicName: "auth", Source: bindstate.Location{Kind: "header", In: "Authorization"}, SourceType: reflect.TypeOf("")},
+		{PublicName: "session", Source: bindstate.Location{Kind: "cookie", In: "session"}, SourceType: reflect.TypeOf("")},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	req, err := http.NewRequestWithContext(context.Background(), "POST", "http://localhost/", strings.NewReader("bytes"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/octet-stream")
+	scope, err := plan.ScopeRequest(Arguments{"q": "active", "id": float64(7), "auth": "Bearer token", "session": "abc"}, req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer scope.Close()
+	assertValue(t, scope.Query(), reflect.TypeOf(""), "search", "active")
+	assertValue(t, scope.Path(), reflect.TypeOf(0), "id", "7")
+	assertValue(t, scope.Header(), reflect.TypeOf(""), "Authorization", "Bearer token")
+	assertValue(t, scope.Cookie(), reflect.TypeOf(""), "session", "abc")
 }

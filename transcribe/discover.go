@@ -385,7 +385,9 @@ func (d *Discovery) packageSources(ctx context.Context, catalog *typecatalog.Cat
 			return nil, nil, groupErr
 		}
 		for _, component := range components {
-			resolved, err := component.ResolveDescriptors(resolver)
+			// Package loading collects declarations before authored sources claim
+			// their holders. Unclaimed packages are admitted in compilePackages.
+			resolved, err := resolvePackageDeclarations(component, resolver)
 			if err != nil {
 				return nil, nil, err
 			}

@@ -190,6 +190,7 @@ func (c *Compiler) Compile(input Input) (*Plan, error) {
 			SourceType: argument.sourceType,
 		}
 	}
+	projectBinarySchema(arguments, &inputSchema)
 	binding, err := c.binding.Compile(bindingArguments)
 	if err != nil {
 		return nil, fmt.Errorf("compile MCP tool %q binding: %w", name, err)

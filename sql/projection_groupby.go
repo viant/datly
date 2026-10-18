@@ -105,7 +105,7 @@ func containsAggregateNode(n node.Node) bool {
 					return true
 				}
 			case *expr.Selector:
-				if isAggregateFunction(ident.Name) {
+				if isAggregateFunction(ident.Name) || isHLLMergePartial(ident) {
 					return true
 				}
 			}
@@ -162,4 +162,11 @@ func isAggregateFunction(name string) bool {
 	default:
 		return false
 	}
+}
+
+// Only the qualified BigQuery sketch aggregate has aggregate semantics here;
+// EXTRACT and unrelated functions named MERGE_PARTIAL remain scalar.
+func isHLLMergePartial(callable *expr.Selector) bool {
+	terminal, ok := callable.X.(*expr.Ident)
+	return ok && strings.EqualFold(callable.Name, "HLL_COUNT") && strings.EqualFold(terminal.Name, "MERGE_PARTIAL")
 }
