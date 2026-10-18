@@ -15,6 +15,7 @@ import (
 	"github.com/viant/sqlparser"
 	"github.com/viant/sqlparser/expr"
 	sqltext "github.com/viant/sqlparser/source"
+	sqlxio "github.com/viant/sqlx/io"
 	"github.com/viant/x"
 	xshape "github.com/viant/x/shape"
 	"go/ast"
@@ -293,11 +294,19 @@ func (r *planResolver) prepareReaderMetadata() error {
 			}
 			rel.Tag = withoutStructTags(rel.Tag, tag.SQLName, tag.ViewName, tag.RelationName, "self")
 		}
+		columns := v.Columns[:0]
 		for _, column := range v.Columns {
+			// Metadata carries the native scan projection; SQL-transient fields
+			// remain owned by hooks and presentation on the linked public row.
+			if column != nil && sqlxio.ParseTag(reflect.StructTag(column.Tag)).Transient {
+				continue
+			}
 			if column != nil {
 				column.Tag = withoutStructTags(column.Tag, tag.SQLName, tag.ViewName, tag.RelationName, "self", "groupable", "codec")
 			}
+			columns = append(columns, column)
 		}
+		v.Columns = columns
 		return nil
 	}
 	if err = walk(graph.RootView, sources[graph.RootView], nil); err != nil {
