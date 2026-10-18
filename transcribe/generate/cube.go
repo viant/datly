@@ -70,23 +70,27 @@ func (r *planResolver) resolveCubes() error {
 	// omit only those exact side declarations from this authoring description.
 	// Keep the source component and emitted companion intact for native MCP.
 	description := component.Clone()
-	ownedSide := map[string]bool{}
-	for _, field := range p.QuerySelectors {
-		metadata, err := tag.ParseField(reflect.StructField{Name: field.Name, Tag: reflect.StructTag(field.Tag)})
-		if err != nil {
-			return err
+	// An admitted companion is validated and projected by the native description
+	// compiler; retain its complete canonical parameter association.
+	if component.SelectorCompanion == nil {
+		ownedSide := map[string]bool{}
+		for _, field := range p.QuerySelectors {
+			metadata, err := tag.ParseField(reflect.StructField{Name: field.Name, Tag: reflect.StructTag(field.Tag)})
+			if err != nil {
+				return err
+			}
+			if metadata.Binding != nil {
+				parameter := &spec.Parameter{Name: metadata.Binding.Name, Source: spec.BindSource{Kind: metadata.Binding.Location.Kind, Name: metadata.Binding.Location.In}}
+				ownedSide[parameter.Identity()] = true
+			}
 		}
-		if metadata.Binding != nil {
-			parameter := &spec.Parameter{Name: metadata.Binding.Name, Source: spec.BindSource{Kind: metadata.Binding.Location.Kind, Name: metadata.Binding.Location.In}}
-			ownedSide[parameter.Identity()] = true
+		description.Parameters = nil
+		for _, parameter := range component.Parameters {
+			if parameter != nil && ownedSide[parameter.Identity()] && report.OwnsRootSelector(component, parameter) {
+				continue
+			}
+			description.Parameters = append(description.Parameters, parameter)
 		}
-	}
-	description.Parameters = nil
-	for _, parameter := range component.Parameters {
-		if parameter != nil && ownedSide[parameter.Identity()] && report.OwnsRootSelector(component, parameter) {
-			continue
-		}
-		description.Parameters = append(description.Parameters, parameter)
 	}
 	described, err := bootstrap.DescribeInputContract(description, input, materializer.identifierType)
 	if err != nil {

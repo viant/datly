@@ -7,8 +7,13 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/viant/datly/bootstrap"
+	fixture "github.com/viant/datly/bootstrap/testdata/selectorside"
 	"github.com/viant/datly/internal/testharness"
 	"github.com/viant/datly/spec"
+	"github.com/viant/datly/typecatalog"
+	"github.com/viant/x"
+	"reflect"
 )
 
 func cubeFixture() *spec.Component {
@@ -259,5 +264,72 @@ func TestCubeInputCannotCollideWithOwnedView(t *testing.T) {
 	component.Parameters[1].TypeExpr = "[]*SpendCubeInput"
 	if _, err := New(Input{Component: component, TargetPackage: "example.com/generated/reporting"}).Plan(); err == nil {
 		t.Fatal("cube input shadowed an owned Go view")
+	}
+}
+
+func TestCubePreservesAdmittedCompanionCanonicalDescription(t *testing.T) {
+	input, output := reflect.TypeFor[fixture.Input](), reflect.TypeFor[fixture.Output]()
+	pkg := reflect.TypeFor[fixture.Component]().PkgPath()
+	if _, ok := reflect.TypeFor[fixture.Component]().MethodByName("DatlyQuerySelectors"); !ok {
+		t.Fatal("fixture companion method unavailable")
+	}
+	found, err := bootstrap.ReflectSelectedPackages([]string{pkg}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var component *spec.Component
+	for _, source := range found.Components {
+		if source.HolderType == "Component" {
+			component, err = source.Resolve(input, output)
+			if err != nil {
+				t.Fatal(err)
+			}
+			break
+		}
+	}
+	if component == nil || component.SelectorCompanion == nil {
+		t.Fatal("genuine admitted companion missing")
+	}
+	component, err = (bootstrap.ContractResolver{Component: component, InputType: x.NewType(input), OutputType: x.NewType(output)}).Resolve()
+	if err != nil {
+		t.Fatal(err)
+	}
+	groupable := true
+	component.RootView.Groupable = &groupable
+	component.RootView.Columns = []*spec.Column{{Name: "ID", Source: "id", Type: spec.TypeRef{Name: "int"}}, {Name: "Label", Source: "label", Type: spec.TypeRef{Name: "string"}, Groupable: &groupable}}
+	component.Settings.Report = &spec.ReportSettings{Enabled: true}
+	catalog := typecatalog.NewCatalog()
+	for _, typ := range []reflect.Type{input, output, reflect.TypeFor[fixture.Row]()} {
+		if err = catalog.Register(typecatalog.TypeOriginPackage, x.NewType(typ)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	resolver, err := typecatalog.NewResolver(catalog, typecatalog.PackageAuthority, &typecatalog.ResolutionContext{PackagePath: pkg, DefaultPackage: pkg})
+	if err != nil {
+		t.Fatal(err)
+	}
+	generator := New(Input{Component: component, TargetPackage: pkg, TypeResolver: resolver, Contracts: ContractReferences{
+		Input: &ContractReference{Expression: "Input", DescriptorKey: x.NewType(input).Key()}, Output: &ContractReference{Expression: "Output", DescriptorKey: x.NewType(output).Key()},
+	}})
+	for pass := 0; pass < 2; pass++ {
+		plan, err := generator.Plan()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(plan.Cubes) != 1 {
+			t.Fatal("cube missing")
+		}
+		if _, ok := plan.Cubes[0].InputType.FieldByName("Fields"); ok {
+			t.Fatal("root side control inherited by cube input")
+		}
+	}
+	count := 0
+	for _, p := range component.Parameters {
+		if p.QuerySelector != nil {
+			count++
+		}
+	}
+	if count != 5 || component.SelectorCompanion == nil {
+		t.Fatal("canonical source/association mutated")
 	}
 }
