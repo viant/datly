@@ -60,12 +60,20 @@ func (c *Compiler) compileAnonymousBody(inputField registry.InputField) ([]Argum
 		if hidden {
 			continue
 		}
+
+		goName := ""
+		// Legacy anonymous bodies accept the exact Go spelling before JSON names.
+		// Explicit MCP naming/aliases retain their own existing conflict policy.
+		if strings.TrimSpace(field.Tag.Get("mcp")) == "" && field.Name != publicName {
+			goName = field.Name
+			aliases = append(aliases, goName)
+		}
 		result = append(result, Argument{
 			documentation: inputField.Documentation(), publicName: publicName, aliases: aliases, path: inputField.Path() + "." + field.Name,
 			sourceKind: "body", sourceName: projected.Name,
 			sourceType: field.Type, destinationType: field.Type,
 			parentBodyType: inputField.SourceType(), parentBodySource: binding.Location.In,
-			schemaRequired: required[projected.Name],
+			schemaRequired: required[projected.Name], anonymousGoName: goName,
 		})
 	}
 	if len(result) == 0 {

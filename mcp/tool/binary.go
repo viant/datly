@@ -107,6 +107,17 @@ func (p *Plan) binaryArguments(args map[string]interface{}) (map[string]interfac
 			ordinary[k] = v
 		}
 	}
+	// Only compiler-owned anonymous aliases use legacy Go-first presence semantics.
+	// ordinary is detached: nil/false/zero/empty values must win without changing args.
+	for _, argument := range p.args {
+		if argument.anonymousGoName == "" {
+			continue
+		}
+		if value, present := ordinary[argument.anonymousGoName]; present {
+			ordinary[argument.publicName] = value
+			delete(ordinary, argument.anonymousGoName)
+		}
+	}
 	normalized, err := p.binding.NormalizeArguments(ordinary)
 	return normalized, synthetic, err
 }

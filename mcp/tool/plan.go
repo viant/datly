@@ -32,6 +32,7 @@ type Argument struct {
 	// Anonymous JSON fields retain their whole-body owner for XLS decoding.
 	parentBodyType   reflect.Type
 	parentBodySource string
+	anonymousGoName  string
 	bodyNullPolicy   string
 	required         bool
 	// Schema parity must not introduce a new runtime missing-argument check.
