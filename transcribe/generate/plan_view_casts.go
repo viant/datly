@@ -192,6 +192,11 @@ func (v *linkedViewCastValidator) validate(view *spec.View, prefix string) error
 		if relation == nil || relation.View == nil {
 			continue
 		}
+		// Derived summaries belong to the output envelope. planViews resolves
+		// their linked types separately; they are not holders on each data row.
+		if !v.factoryBody && relation.Kind == spec.RelationKindDerived {
+			continue
+		}
 		holder := typecatalog.FieldName(relation.Holder)
 		if holder == "" {
 			holder = typecatalog.FieldName(relation.Name)
