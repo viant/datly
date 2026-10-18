@@ -79,7 +79,9 @@ func (d *reportDeriver) deriveCompose(source Source, route *spec.Route, identity
 		role   cubecompose.Role
 	}{{metadata.dimensions, cubecompose.Dimension}, {metadata.measures, cubecompose.Measure}} {
 		for _, column := range section.fields {
-			rowField, ok := typecatalog.FieldByName(rowType, column.fieldName)
+			// Resolve the original column identity before formatting it for the
+			// cube selector: existing row fields may retain underscores.
+			rowField, ok := typecatalog.FieldByName(rowType, column.publicName)
 			if !ok {
 				return nil, nil, fmt.Errorf("compose column %s requires a resolved row field", column.publicName)
 			}

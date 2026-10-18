@@ -100,3 +100,18 @@ func TestCubeDuplicateMetadataOutput(t *testing.T) {
 	_, err := NewProjectCompiler(ProjectConfig{Types: typecatalog.NewCatalog()}).Compile([]Source{source})
 	require.ErrorContains(t, err, "duplicate projected column metadata")
 }
+
+func TestComposePreservesExistingUnderscoredRowFields(t *testing.T) {
+	type row struct {
+		Units_50 *int `sqlx:"units_50"`
+		Units25  *int `sqlx:"units_25"`
+	}
+	source := reportSource(t, &spec.ReportSettings{Enabled: true, Compose: &spec.CubeComposeSettings{Enabled: true}})
+	source.OutputType = reflect.TypeFor[[]row]()
+	source.Component.RootView.Source.SQL = "SELECT units_50, units_25 FROM metrics"
+	source.Component.RootView.Relations = nil
+	source.Component.RootView.Columns = []*spec.Column{{Name: "units_50", Source: "units_50", NameInferred: true}, {Name: "units_25", Source: "units_25", NameInferred: true}}
+	project, err := NewProjectCompiler(ProjectConfig{Types: typecatalog.NewCatalog()}).Compile([]Source{source})
+	require.NoError(t, err)
+	require.NotEmpty(t, project.Derived())
+}
