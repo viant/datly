@@ -3,11 +3,13 @@ package readerbuilder
 import (
 	"context"
 	"fmt"
+	"github.com/viant/datly/constant"
 	"io/fs"
 	"sort"
 	"strconv"
 	"strings"
 
+	"github.com/viant/bindly/resource"
 	predicatevelty "github.com/viant/datly/runtime/predicate/velty"
 	"github.com/viant/datly/spec"
 	"github.com/viant/datly/transcribe"
@@ -17,6 +19,7 @@ import (
 )
 
 type Config struct {
+	Const *constant.Values
 	// Resources is the exact authored component version's SQL resource filesystem.
 	Resources           fs.FS
 	Scope               string
@@ -89,8 +92,14 @@ func (s *Service) inspect(ctx context.Context, source string) (*Structure, []*tr
 	if name == "" {
 		name = "Reader"
 	}
+	resources := resource.New()
+	if s.config.Resources != nil {
+		if err := resources.Register("", s.config.Resources); err != nil {
+			return structure, []*transcribe.Diagnostic{operationDiagnostic(err)}
+		}
+	}
 	result, err := transcribe.NewCompiler().Compile(ctx, &transcribe.Source{
-		Scope: strings.TrimSpace(s.config.Scope), Name: name, Text: source, Types: s.config.Types,
+		Const: s.config.Const, Scope: strings.TrimSpace(s.config.Scope), Name: name, Text: source, Types: s.config.Types, Resources: resources,
 	})
 	if err == nil {
 		structure.Component = result.Component.Clone()
