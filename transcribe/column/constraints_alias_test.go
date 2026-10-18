@@ -88,3 +88,18 @@ func TestInferredForeignKeyDoesNotInventResultLineage(t *testing.T) {
 		t.Fatalf("no-FK enrichment changed: %+v", column)
 	}
 }
+
+func TestInferredForeignKeyThroughWildcardOuterRename(t *testing.T) {
+	lineage, err := directProjectionLineage(&spec.ViewSource{Table: "child", SQL: "SELECT c.* FROM child c"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	column := &spec.Column{Name: "ParentId", Source: "PARENT_ID", Tag: `sqlx:"PARENT_ID"`}
+	applyTableConstraints([]*spec.Column{column}, map[string]tableConstraint{
+		"parent_id": {name: "PARENT_ID", notNull: true, reference: &tableReference{table: "parent", column: "ID"}},
+	}, lineage)
+	parsed := sqlio.ParseTag(reflect.StructTag(column.Tag))
+	if !column.NotNull || parsed.RefTable != "parent" || parsed.RefColumn != "ID" {
+		t.Fatalf("wildcard outer rename lost physical constraints: %+v, %s", column, column.Tag)
+	}
+}

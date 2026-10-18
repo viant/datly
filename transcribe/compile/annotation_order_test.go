@@ -123,3 +123,20 @@ func TestProjectionExclusionKeepsExistingColumnOwnership(t *testing.T) {
 	require.Equal(t, "enabled", reflect.StructTag(existing.Tag).Get("json"))
 	require.Equal(t, "true", reflect.StructTag(existing.Tag).Get("internal"))
 }
+
+func TestExplicitProjectionOrderPrecedesAnnotationDiscoveryOrder(t *testing.T) {
+	h := testharness.NewSQLiteHarness(t)
+	ctx := context.Background()
+	require.NoError(t, h.ExecStatements(ctx, `CREATE TABLE records (ID INTEGER NOT NULL, NAME TEXT NOT NULL, UPDATED_BY TEXT)`))
+	SQL := `SELECT r.ID AS Id, r.NAME AS Name, r.UPDATED_BY AS UpdatedBy, r.*, CAST(r.UPDATED_BY AS string), required(r.NAME) FROM (SELECT * FROM records) r`
+	view, err := NewReader().Compile(ReadInput{View: &spec.View{Name: "Records", Source: &spec.ViewSource{SQL: SQL}}, SQL: SQL})
+	require.NoError(t, err)
+	component := &spec.Component{Settings: &spec.Settings{DefaultConnector: "main"}, RootView: view}
+	require.NoError(t, column.New(column.Connections{"main": h.DB}).Refine(ctx, component, nil, nil))
+	var names []string
+	for _, c := range view.Columns {
+		names = append(names, c.Name)
+	}
+	require.Equal(t, []string{"Id", "Name", "UpdatedBy"}, names)
+	require.True(t, view.Columns[1].Required)
+}

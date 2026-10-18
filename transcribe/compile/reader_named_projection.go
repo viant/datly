@@ -32,6 +32,7 @@ func readViewProjection(parsed *query.Select, root, view *spec.View) (query.List
 		return nil, err
 	}
 	var result query.List
+	var explicitColumns []*spec.Column
 	wildcard := false
 	outputs := map[string]bool{}
 	direct := map[string][]string{}
@@ -90,6 +91,7 @@ func readViewProjection(parsed *query.Select, root, view *spec.View) (query.List
 				metadata.Name = item.Alias
 			}
 			metadata.AnnotationOnly = false
+			explicitColumns = append(explicitColumns, metadata)
 			metadata.Source = column.Name
 			if reflect.StructTag(metadata.Tag).Get(sqlio.TagSqlx) == "" {
 				parsedTags := tags.NewTags(metadata.Tag)
@@ -102,6 +104,27 @@ func readViewProjection(parsed *query.Select, root, view *spec.View) (query.List
 			projected = &copy
 		}
 		result = append(result, projected)
+	}
+	// CAST/tag declarations are lowered before the projection and may have
+	// created these columns in annotation order. Explicit field projections
+	// own their relative order; retain unrelated column positions and the
+	// same metadata objects rather than moving or replacing their authority.
+	if len(explicitColumns) != 0 {
+		selected := make(map[*spec.Column]bool, len(explicitColumns))
+		ordered := make([]*spec.Column, 0, len(explicitColumns))
+		for _, column := range explicitColumns {
+			if !selected[column] {
+				ordered = append(ordered, column)
+				selected[column] = true
+			}
+		}
+		next := 0
+		for i, column := range view.Columns {
+			if selected[column] {
+				view.Columns[i] = ordered[next]
+				next++
+			}
+		}
 	}
 	if wildcard {
 		// A field rename over a wildcard must not select the same SQL column twice.

@@ -351,8 +351,12 @@ func applyTableConstraints(columns []*spec.Column, constraints map[string]tableC
 			sourceName, ok = lineage.direct[sourceOutput]
 			resultName = lineage.names[sourceOutput]
 		}
-		if !ok && lineage.wildcard && !lineage.blocked[output] {
-			sourceName = output
+		// Outer Go-field aliases do not rename the SQL wildcard's result.
+		// Resolve physical facts using that retained result identity, just as
+		// the explicit projection lookup above does.
+		wildcardOutput := normalizedName(firstValue(column.Source, column.Name))
+		if !ok && lineage.wildcard && !lineage.blocked[wildcardOutput] {
+			sourceName = wildcardOutput
 			ok = sourceName != ""
 		}
 		if !ok {
