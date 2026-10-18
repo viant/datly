@@ -429,6 +429,15 @@ func (r *packageComponentResolver) resolveField(contract *packageContract, field
 }
 
 func (r *packageComponentResolver) resolveParamType(role contractRole, field xshape.Field, param *spec.Parameter) error {
+	// The wire TypeExpr must not hide the codec Go destination from canonical
+	// contract comparison during linked package regeneration.
+	if param != nil && role == inputContract && param.Codec != nil && strings.TrimSpace(param.OutputTypeExpr) == "" {
+		destination, err := r.fieldTypeExpression(field)
+		if err != nil {
+			return fmt.Errorf("resolve package input %s codec destination: %w", field.Name, err)
+		}
+		param.OutputTypeExpr = destination
+	}
 	if param == nil || strings.TrimSpace(param.TypeExpr) != "" {
 		return nil
 	}
