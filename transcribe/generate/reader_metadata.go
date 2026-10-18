@@ -308,8 +308,20 @@ func (r *planResolver) prepareReaderMetadata() error {
 			return err
 		}
 	}
+	sideTags := make(map[string]string, len(p.QuerySelectors))
+	for _, field := range p.QuerySelectors {
+		metadata, err := tag.ParseField(reflect.StructField{Name: field.Name, Tag: reflect.StructTag(field.Tag)})
+		if err != nil {
+			return err
+		}
+		identity := (&spec.Parameter{Name: metadata.Binding.Name, Source: spec.BindSource{Kind: metadata.Binding.Location.Kind, Name: metadata.Binding.Location.In}}).Identity()
+		sideTags[identity] = field.Tag
+	}
 	for _, param := range graph.Parameters {
 		if param != nil {
+			if value, planned := sideTags[param.Identity()]; planned {
+				param.Tag = value
+			}
 			param.Tag = withoutStructTags(param.Tag, tag.SQLName, tag.ViewName, tag.RelationName, "self")
 		}
 	}

@@ -194,6 +194,9 @@ func (a *packageAuthority) compile(ctx context.Context) (*Result, error) {
 		Input: a.input, Output: a.output,
 	}
 	result.Contracts = contracts.References()
+	if err = a.retainSelectorBusinessInput(result, contracts); err != nil {
+		return nil, fmt.Errorf("plan linked input selector ownership: %w", err)
+	}
 	if strings.TrimSpace(a.source.Text) == "" {
 		result.Contracts.Input = link.Reference(a.route.InputType, a.input)
 		result.Contracts.Output = link.Reference(a.route.OutputType, a.output)
