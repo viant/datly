@@ -6,6 +6,8 @@ import "strings"
 // Runtime field handles and database services are resolved by later owners.
 type Column struct {
 	Name string `json:"name"`
+	// AnnotationOnly is transient compiler provenance, consumed by column discovery.
+	AnnotationOnly bool `json:"-" yaml:"-"`
 	// Output and Selector retain authoring-time SQL projection identities.
 	Output           string `json:"output,omitempty"`
 	Selector         string `json:"selector,omitempty"`

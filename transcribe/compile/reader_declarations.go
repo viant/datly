@@ -134,7 +134,7 @@ func lowerColumnDeclarations(parsed *query.Select, root *spec.View, types *typec
 			}
 		}
 		if column == nil {
-			column = &spec.Column{Name: parts[1], Source: parts[1]}
+			column = &spec.Column{Name: parts[1], Source: parts[1], AnnotationOnly: true}
 			view.Columns = append(view.Columns, column)
 		}
 		if name == "required" || name == "optional" {

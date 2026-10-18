@@ -710,6 +710,7 @@ func mergeColumnsWithSources(base, discovered []*spec.Column, identities resultS
 		}
 	}
 	result := make([]*spec.Column, 0, len(base)+len(discovered))
+	deferred := map[string]*spec.Column{}
 	for _, column := range base {
 		if column == nil {
 			continue
@@ -749,6 +750,12 @@ func mergeColumnsWithSources(base, discovered []*spec.Column, identities resultS
 			}
 			delete(byName, key)
 		}
+		if cloned.AnnotationOnly && fresh != nil {
+			// An annotation creates metadata, not an explicit projection position.
+			cloned.AnnotationOnly = false
+			deferred[key] = cloned
+			continue
+		}
 		result = append(result, cloned)
 	}
 	for _, column := range discovered {
@@ -756,6 +763,11 @@ func mergeColumnsWithSources(base, discovered []*spec.Column, identities resultS
 			continue
 		}
 		key := strings.ToLower(strings.TrimSpace(column.Name))
+		if annotation := deferred[key]; annotation != nil {
+			result = append(result, annotation)
+			delete(deferred, key)
+			continue
+		}
 		if byName[key] == nil {
 			continue
 		}

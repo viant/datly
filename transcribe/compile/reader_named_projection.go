@@ -89,6 +89,7 @@ func readViewProjection(parsed *query.Select, root, view *spec.View) (query.List
 			if renames != nil {
 				metadata.Name = item.Alias
 			}
+			metadata.AnnotationOnly = false
 			metadata.Source = column.Name
 			if reflect.StructTag(metadata.Tag).Get(sqlio.TagSqlx) == "" {
 				parsedTags := tags.NewTags(metadata.Tag)
