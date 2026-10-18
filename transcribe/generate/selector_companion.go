@@ -129,13 +129,15 @@ func (r *planResolver) preserveLinkedSelectors(generated bool) error {
 	if p.Input.Ownership != ContractLinked {
 		return nil
 	}
-	if generated && p.Input.Package == p.Package {
-		p.Input.Ownership = ContractGenerated
-		return nil
-	}
 	side, err := r.linkedSelectorFields()
 	if err != nil {
 		return err
+	}
+	if generated && p.Input.Package == p.Package && len(side) != len(p.QuerySelectors) {
+		// The admitted link already proves the business contract unchanged.
+		// Only legacy public selector storage still needs input regeneration.
+		p.Input.Ownership = ContractGenerated
+		return nil
 	}
 	p.QuerySelectors = side
 	if r.input.ExternalHandler != nil && !r.input.ExternalHandler.GeneratedContracts {
