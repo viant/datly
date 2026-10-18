@@ -692,6 +692,10 @@ func (r *planResolver) readerMetadataCapability() (string, error) {
 	if metadata.SQL != nil {
 		uri = metadata.SQL.URI
 	}
+	plans := map[string]*ViewPlan{}
+	for i := range p.Views {
+		plans[p.Views[i].Identity] = &p.Views[i]
+	}
 	seen := map[*spec.View]bool{}
 	var visit func(*spec.View, *x.Type, string) (string, error)
 	visit = func(view *spec.View, row *x.Type, uri string) (string, error) {
@@ -702,6 +706,15 @@ func (r *planResolver) readerMetadataCapability() (string, error) {
 			return "", fmt.Errorf("reader metadata ambiguous repeated graph occurrence")
 		}
 		seen[view] = true
+		identity, err := view.Identity()
+		if err != nil {
+			return "", err
+		}
+		// Linked contracts can still contain SQL-owned generated rows after a
+		// package reload. Optional metadata requires linked row authority too.
+		if planned := plans[identity]; planned != nil && planned.Ownership != ViewLinked {
+			return "generated row outside linked reader metadata capability", nil
+		}
 		if row.PkgPath != p.Package {
 			return "foreign nominal row capability", nil
 		}

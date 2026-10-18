@@ -123,3 +123,37 @@ func TestReviewPureMetadataReaderWithoutSelector(t *testing.T) {
 	}
 	t.Logf("pure reader without selector metadata emitted=%v", metadata)
 }
+
+func TestGeneratedRowMetadataCapabilityRetainsRequiredRefreshGuard(t *testing.T) {
+	input := reviewLinkedEligibilityInput(t, false)
+	plan, err := New(input).Plan()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plan.ReaderMetadata == "" {
+		t.Fatal("fixture did not select metadata")
+	}
+	identity, err := input.Component.RootView.Identity()
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for i := range plan.Views {
+		if plan.Views[i].Identity == identity {
+			plan.Views[i].Ownership = ViewGenerated
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("missing planned root")
+	}
+	originalResources, originalURI := plan.Resources, plan.ReaderMetadata
+	resolver := &planResolver{input: input, types: input.TypeResolver, plan: plan, readerMetadataRequired: true}
+	err = resolver.prepareReaderMetadata()
+	if err == nil || !strings.Contains(err.Error(), "reader metadata refresh required: generated row outside linked reader metadata capability") {
+		t.Fatalf("required metadata refresh lost fail-closed guard: %v", err)
+	}
+	if plan.Resources != originalResources || plan.ReaderMetadata != originalURI {
+		t.Fatal("failed refresh mutated resources")
+	}
+}

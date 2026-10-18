@@ -310,6 +310,76 @@ SELECT r.*,type(r,'Record'),CAST(r.ID AS int) FROM (SELECT 1 AS ID) r`
 	}
 }
 
+func TestPackageOverlayQualifiedGeneratedSiteRowRetainsResources(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	const pkg = "example.com/overlay/site"
+	(testharness.GeneratedModule{Path: "example.com/overlay"}).Write(t, root)
+	text := `#package('` + pkg + `')
+#setting($_ = $route('/site','GET'))
+#setting($_ = $dest('site.go'))
+#setting($_ = $input_type('` + pkg + `.SiteInput'))
+#setting($_ = $output_type('` + pkg + `.SiteOutput'))
+#define($_ = $Data<[]*` + pkg + `.Site>(output/view))
+SELECT site.*,type(site,'` + pkg + `.Site'),set_limit(site,0),CAST(site.ID AS int) FROM (SELECT 1 AS ID) site`
+	initial, err := NewCompiler().Transcribe(ctx, Request{Destination: root, Source: &Source{Scope: "example.com/overlay/source", Name: "Site", Text: text}, Generation: GenerationOptions{Operation: "get"}})
+	require.NoError(t, err)
+	var previous, previousContracts string
+	check := func(plan *gen.Plan) {
+		t.Helper()
+		row := plan.ViewByType("Site")
+		require.NotNil(t, row)
+		require.Equal(t, gen.ViewGenerated, row.Ownership)
+		require.Equal(t, pkg, row.Package)
+		require.Equal(t, "site.go", row.Destination)
+		require.Empty(t, plan.ReaderMetadata)
+		require.NotNil(t, plan.Resources)
+		var sql string
+		for _, file := range plan.Resources.Files {
+			require.False(t, strings.HasPrefix(file.Path, "metadata/"))
+			if strings.HasSuffix(file.Path, ".sql") {
+				sql += file.Path + "\n" + file.Content
+			}
+		}
+		require.Contains(t, sql, "SELECT 1 AS ID")
+		if previous != "" {
+			require.Equal(t, previous, sql)
+		}
+		previous = sql
+		content, err := os.ReadFile(filepath.Join(root, "site", "site.go"))
+		require.NoError(t, err)
+		require.Contains(t, string(content), "type Site struct")
+		files, err := filepath.Glob(filepath.Join(root, "site", "*.go"))
+		require.NoError(t, err)
+		contracts := ""
+		for _, name := range files {
+			body, err := os.ReadFile(name)
+			require.NoError(t, err)
+			contracts += string(body)
+		}
+		require.Contains(t, contracts, "sql:")
+		require.Contains(t, contracts, "uri=")
+		require.Contains(t, contracts, "selectorNoLimit=true")
+		if previousContracts != "" {
+			require.Equal(t, previousContracts, contracts)
+		}
+		previousContracts = contracts
+	}
+	check(initial.Result.Plan)
+	writeSourceFile(t, root, "source/query.dql", text)
+	discovery := &Discovery{BaseDir: root, Include: []string{"example.com/overlay/source"}, SourceFile: "query.dql"}
+	for i := 0; i < 2; i++ {
+		compiled, err := discovery.Compile(ctx)
+		require.NoError(t, err)
+		require.Len(t, compiled.Components, 1)
+		generated, err := (Generator{Operation: "get"}).Generate(ctx, GenerationRequest{Compiled: compiled.Components[0], Destination: root})
+		require.NoError(t, err)
+		require.Equal(t, gen.ContractLinked, generated.Result.Plan.Input.Ownership)
+		require.Equal(t, gen.ContractLinked, generated.Result.Plan.Output.Ownership)
+		check(generated.Result.Plan)
+	}
+}
+
 func TestPackageOverlayRetainsValidatedRootReceipt(t *testing.T) {
 	output := x.NewType(reflect.TypeFor[outputoverlay.Output]())
 	row := x.NewType(reflect.TypeFor[outputoverlay.Row]())
