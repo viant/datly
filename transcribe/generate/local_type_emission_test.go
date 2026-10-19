@@ -20,6 +20,60 @@ import (
 	"github.com/viant/x"
 )
 
+func TestInferredPackageBasenameReusesAuthoredImportAlias(t *testing.T) {
+	const local = "example.com/app/write"
+	const external = "example.com/app/catalog"
+	imports := []spec.ImportSpec{{Alias: "lookup", Package: external}}
+	for _, expression := range []string{"catalog.Output", "*catalog.Output", "[]*catalog.Output", "map[string]*catalog.Output", "*lookup.Output"} {
+		t.Run(expression, func(t *testing.T) {
+			plan := &Plan{Package: local, Imports: append([]spec.ImportSpec(nil), imports...)}
+			resolver := fieldTypeResolver{
+				plan: plan, targetPackage: local,
+				context: &spec.TypeContext{PackagePath: local, Imports: imports},
+				lookup: func(string) (*x.Type, error) {
+					return &x.Type{Name: "Output", PkgPath: external}, nil
+				},
+			}
+			actual, err := resolver.resolve(expression)
+			want := strings.ReplaceAll(expression, "catalog.", "lookup.")
+			if err != nil || actual != want {
+				t.Fatalf("resolve(%q) = %q, %v; want %q", expression, actual, err, want)
+			}
+			if !reflect.DeepEqual(plan.Imports, imports) {
+				t.Fatalf("inferred type added another alias for the authored package: %+v", plan.Imports)
+			}
+		})
+	}
+}
+
+func TestGenerationReusesAuthoredAliasAfterPackageContextMerge(t *testing.T) {
+	const local = "example.com/app/write"
+	const external = "example.com/app/catalog"
+	catalog := typecatalog.NewCatalog()
+	if err := catalog.Register(typecatalog.TypeOriginPackage, x.NewType(reflect.TypeFor[localEmissionValue](), x.WithName("Output"), x.WithPkgPath(external))); err != nil {
+		t.Fatal(err)
+	}
+	imports := []spec.ImportSpec{{Alias: "lookup", Package: external}, {Alias: "catalog", Package: external}}
+	resolver, err := typecatalog.NewResolver(catalog, typecatalog.TranscribeAuthority, &typecatalog.ResolutionContext{PackagePath: local, Imports: []typecatalog.PackageImport{{Alias: "lookup", Package: external}, {Alias: "catalog", Package: external}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	component := &spec.Component{Name: "Records", TypeContext: &spec.TypeContext{PackagePath: local, Imports: imports}, Parameters: []*spec.Parameter{{Name: "Selected", TypeExpr: "*lookup.Output", OutputTypeExpr: "*catalog.Output", Source: spec.BindSource{Kind: "transient"}}}}
+	plan, err := New(Input{Component: component, TargetPackage: local, TypeResolver: resolver}).Plan()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(plan.Input.Fields) != 1 || plan.Input.Fields[0].Type != "*lookup.Output" {
+		t.Fatalf("merged output type lost authored alias: %+v", plan.Input.Fields)
+	}
+	if !reflect.DeepEqual(plan.Imports, imports[:1]) {
+		t.Fatalf("duplicate package aliases survived planning: %+v", plan.Imports)
+	}
+	if !reflect.DeepEqual(component.TypeContext.Imports, imports) {
+		t.Fatal("planning mutated source import context")
+	}
+}
+
 func TestLocalTypeEmissionDescriptorAuthority(t *testing.T) {
 	const local = "example.com/localtypes/model"
 	const external = "example.com/elsewhere/model"

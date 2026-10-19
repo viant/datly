@@ -238,8 +238,17 @@ func (r *fieldTypeResolver) emittedNamedType(authored string, descriptor *x.Type
 	if qualifier, name, found := strings.Cut(unwrapQualifiedTypeName(authored), "."); found && name == descriptor.Name && !strings.Contains(qualifier, "/") && r.context != nil {
 		for _, item := range r.context.Imports {
 			if item.Alias == qualifier {
-				ensureImport(r.plan, qualifier, item.Package)
-				return authored
+				alias := qualifier
+				if r.plan != nil {
+					for _, imported := range r.plan.Imports {
+						if imported.Package == item.Package {
+							alias = uniqueImportAlias(r.plan, item.Package)
+							break
+						}
+					}
+				}
+				ensureImport(r.plan, alias, item.Package)
+				return applyQualifiedWrapper(authored, alias+"."+descriptor.Name)
 			}
 		}
 	}
@@ -248,8 +257,9 @@ func (r *fieldTypeResolver) emittedNamedType(authored string, descriptor *x.Type
 	}
 	if qualifier, name, found := strings.Cut(unwrapQualifiedTypeName(authored), "."); found && name == descriptor.Name && !strings.Contains(qualifier, "/") {
 		if qualifier == packageAlias(packagePath) {
-			ensureImport(r.plan, qualifier, packagePath)
-			return authored
+			alias := uniqueImportAlias(r.plan, packagePath)
+			ensureImport(r.plan, alias, packagePath)
+			return applyQualifiedWrapper(authored, alias+"."+descriptor.Name)
 		}
 	}
 	alias := uniqueImportAlias(r.plan, packagePath)

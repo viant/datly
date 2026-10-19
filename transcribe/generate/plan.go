@@ -291,7 +291,15 @@ func (r *planResolver) resolveBase() (*Plan, error) {
 		plan.Holder = upperCamel(name) + "Component"
 	}
 	if component.TypeContext != nil {
-		plan.Imports = append(plan.Imports, component.TypeContext.Imports...)
+		// Linked package metadata follows authored imports. Keep the authored
+		// alias when both contexts name the same package differently.
+		seenPackages := map[string]bool{}
+		for _, item := range component.TypeContext.Imports {
+			if !seenPackages[item.Package] {
+				plan.Imports = append(plan.Imports, item)
+				seenPackages[item.Package] = true
+			}
+		}
 	}
 	if ordinarySelectorReader(component) {
 		plan.QuerySelectors, err = resolveSelectorFields(component, declarations)
