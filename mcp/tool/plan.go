@@ -14,6 +14,7 @@ import (
 	"github.com/viant/datly/runtime/registry"
 	"github.com/viant/datly/spec"
 	"github.com/viant/mcp-protocol/schema"
+	"github.com/viant/mcp-protocol/schema/fieldname"
 )
 
 // Argument is an immutable public projection of one canonical input field.
@@ -109,6 +110,30 @@ func (p *Plan) scope(ctx context.Context, arguments map[string]interface{}) (*re
 	normalized, synthetic, err := p.binaryArguments(arguments)
 	if err != nil {
 		return nil, err
+	}
+	// Normalize only explicitly named ordinary JSON subtrees before the existing
+	// request/body providers and Bindly decoder. Wire representations stay owned
+	// by their declared authority; unannotated arguments retain their exact path.
+	for _, argument := range p.args {
+		if argument.sourceKind != "body" || argument.wireType != nil || argument.wireSchema != nil || len(argument.wireSchemas) > 0 {
+			continue
+		}
+		value, present := normalized[argument.publicName]
+		if !present {
+			continue
+		}
+		names, e := fieldname.HasNames(argument.sourceType, memberNameVisibility())
+		if e != nil {
+			return nil, e
+		}
+		if !names {
+			continue
+		}
+		value, e = fieldname.Normalize(argument.sourceType, value, memberNameVisibility())
+		if e != nil {
+			return nil, fmt.Errorf("normalize MCP argument %q: %w", argument.publicName, e)
+		}
+		normalized[argument.publicName] = value
 	}
 	request, options, err := p.binaryRequest(ctx, normalized, synthetic)
 	if err != nil {

@@ -222,11 +222,12 @@ func TestDeveloperValidationGoAndLinkedPackages(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
+			fixture.write(t, "svc/records/sql/records.sql", "SELECT id FROM records")
 			fixture.write(t, "svc/records/component.go", `package records
 import xdatly "github.com/viant/xdatly"
 type Row struct { ID int `+"`sqlx:\"id\"`"+` }
 type Input struct {}
-type Output struct { Data []*Row `+"`parameter:\"Data,kind=output,in=view\" view:\"Records,table=records\" sql:\"SELECT id FROM records\"`"+` }
+type Output struct { Data []*Row `+"`parameter:\"Data,kind=output,in=view\" view:\"Records,type=Row,table=records\" sql:\"SELECT id FROM records\"`"+` }
 type Component struct { Contract xdatly.Component[Input,Output] `+"`component:\"Records,path=/records,method=GET,view=Records\"`"+` }
 `)
 			before := fixture.snapshot(t)

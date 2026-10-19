@@ -3,6 +3,7 @@ package tool
 import (
 	docs "github.com/viant/datly/documentation"
 	"github.com/viant/datly/spec"
+	"github.com/viant/mcp-protocol/schema/fieldname"
 	"github.com/viant/mcp-protocol/schema/jsonschema"
 	"reflect"
 	"strings"
@@ -29,9 +30,8 @@ func (p *schemaProjector) argument(t reflect.Type, path, property string, schema
 		}
 		authority = map[reflect.Type]reflect.Type{source: p.wireType}
 	}
-	result, err := (jsonschema.Reflector{WireTypes: authority, ExcludeInternal: true, ExcludeField: func(field reflect.StructField) bool {
-		return strings.TrimSpace(field.Tag.Get("mcp")) == "-"
-	}, Annotate: func(path string, field reflect.StructField) (string, any) {
+	visibility := memberNameVisibility()
+	result, err := (jsonschema.Reflector{WireTypes: authority, ExcludeInternal: visibility.ExcludeInternal, ExcludeField: visibility.ExcludeField, Annotate: func(path string, field reflect.StructField) (string, any) {
 		annotation := p.docs.StructField(path, field)
 		var example any
 		if annotation.Example != "" {
@@ -148,4 +148,12 @@ func schemaObjectNode(node map[string]interface{}) map[string]interface{} {
 		}
 	}
 	return node
+}
+
+// One policy is shared by native schema projection and MCP JSON-key normalization.
+func memberNameVisibility() fieldname.Visibility {
+	return fieldname.Visibility{ExcludeInternal: true, ExcludeField: excludedMCPMember}
+}
+func excludedMCPMember(field reflect.StructField) bool {
+	return strings.TrimSpace(field.Tag.Get("mcp")) == "-"
 }

@@ -83,6 +83,9 @@ func (r *Collector) resetEvidenceHolder() {
 	if !r.provenance || r.parent == nil || !r.parent.provenance {
 		return
 	}
+	// Sibling relations share the parent's evidence graph with attachEvidence.
+	r.Lock().Lock()
+	defer r.Lock().Unlock()
 	for i := 0; i < r.parent.Len(); i++ {
 		r.parent.evidence(i).relations[r.relation.Holder] = nil
 	}

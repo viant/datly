@@ -718,7 +718,7 @@ func (p *viewPlanner) fields(view *spec.View) ([]Field, error) {
 		selfTag := appendStructTag(`sqlx:"-"`, tag.SelfName, selfValue)
 		fields = append(fields, Field{Name: holder, Type: "[]*" + p.names[view], Tag: selfTag})
 	}
-	if err := applyInferredJSONTags(p.plan, fields); err != nil {
+	if err := applyInferredJSONTags(p.plan, fields, view); err != nil {
 		return nil, fmt.Errorf("generated view %q: %w", view.Name, err)
 	}
 	return fields, nil

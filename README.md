@@ -232,6 +232,23 @@ these boundaries.
 For contribution scope and quality rules, read [CONTRIBUTING.md](CONTRIBUTING.md).
 Review and release evidence is maintained separately from these product guides.
 
+## Optional discovery exclusions
+
+Place a `.goignore` beside your module's `go.mod` to exclude paths from authoring
+discovery before directories are traversed. Without this file, discovery is unchanged.
+
+```text
+# Paths are relative to this module root.
+e2e/logs
+reviews
+```
+
+Each entry is a literal file or directory path; directories exclude their descendants.
+Blank lines and full-line `#` comments are allowed. Globs and negation are not
+supported. Absolute paths and paths escaping the module are rejected. Each workspace
+module uses its own file. This affects Datly discovery through `viant/x`, not Go's
+compiler or dependency loading: do not exclude sources you intend to transcribe.
+
 ## License and notices
 
 Datly is licensed under the [Apache License 2.0](LICENSE). Preserve [NOTICE](NOTICE)
