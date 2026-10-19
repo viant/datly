@@ -60,15 +60,19 @@ func (s *Service) Verifier() *verifier.Service {
 }
 
 // New constructs every configured implementation before the application is
-// allowed to serve. Missing default/JWT services fail closed.
+// allowed to serve. JWT services are required; credential authentication is
+// available only when the application supplies its default implementation.
 func New(ctx context.Context, config Config) (*Service, error) {
 	if ctx == nil {
 		return nil, errors.New("auth provider context is required")
 	}
-	if config.Default == nil || config.JWTSigner == nil || config.JWTValidator == nil {
-		return nil, errors.New("auth provider requires default authenticator, JWT signer, and JWT verifier")
+	if config.JWTSigner == nil || config.JWTValidator == nil {
+		return nil, errors.New("auth provider requires JWT signer and JWT verifier")
 	}
-	result := &Service{authenticators: map[xauth.Vendor]xauth.Authenticator{xauth.VendorDefault: config.Default}}
+	result := &Service{authenticators: map[xauth.Vendor]xauth.Authenticator{}}
+	if config.Default != nil {
+		result.authenticators[xauth.VendorDefault] = config.Default
+	}
 	result.signer = signer.New(config.JWTSigner)
 	if err := result.signer.Init(ctx); err != nil {
 		return nil, fmt.Errorf("initialize JWT signer: %w", err)
