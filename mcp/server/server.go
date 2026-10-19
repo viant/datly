@@ -51,7 +51,9 @@ func New(config Config) (*Server, error) {
 			options = append(options, upstream.WithJRPCAuthorizer(authorizer.EnsureAuthorized))
 			if config.Transport.Kind != TransportStdio {
 				options = append(options,
-					upstream.WithAuthorizer(authorizer.Middleware),
+					upstream.WithAuthorizer(func(next http.Handler) http.Handler {
+						return authorizer.Middleware(forwardCatalogBearer(config.Service, next))
+					}),
 					upstream.WithProtectedResourcesHandler(authorizer.ProtectedResourcesHandler),
 				)
 			}

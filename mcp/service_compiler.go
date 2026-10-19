@@ -292,7 +292,7 @@ func (c *serviceCompiler) publish(ctx context.Context, catalog *Catalog, policy 
 	for _, metadata := range catalog.resources.Templates() {
 		protocolRegistry.RegisterResourceTemplate(metadata, resourceReadHandler)
 	}
-	if len(catalog.resources.Names()) > 0 {
+	if len(catalog.resources.Names()) > 0 || hasNamespaceResourceResolver(catalog, c.config.Indexed) {
 		protocolRegistry.Methods.Put(schema.MethodResourcesRead, true)
 	}
 	if err := catalog.resources.RegisterSkills(protocolRegistry); err != nil {

@@ -97,14 +97,14 @@ func (c Config) sourceOptions() []upstream.Option {
 						http.Error(w, "MCP service unavailable", http.StatusServiceUnavailable)
 						return
 					}
-					authorizer.Middleware(next).ServeHTTP(w, r)
+					authorizer.Middleware(forwardCatalogBearer(service, next)).ServeHTTP(w, r)
 					return
 				}
 				if c.BackendForFrontend != nil {
 					http.Error(w, "MCP authorization unavailable", http.StatusServiceUnavailable)
 					return
 				}
-				next.ServeHTTP(w, r)
+				forwardCatalogBearer(service, next).ServeHTTP(w, r)
 			})
 		}),
 		upstream.WithProtectedResourcesHandler(func(w http.ResponseWriter, r *http.Request) {

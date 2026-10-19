@@ -132,7 +132,10 @@ func (h *Handler) ListResources(ctx context.Context, request *jsonrpc.TypedReque
 		return nil, err
 	}
 	defer releasePinned(ctx)
-	result, protocolErr := h.DefaultHandler.ListResources(ctx, request)
+	result, protocolErr, handled := h.listResourceCatalog(h.withContext(ctx), request)
+	if !handled {
+		result, protocolErr = h.DefaultHandler.ListResources(ctx, request)
+	}
 	if result != nil {
 		visible := result.Resources[:0]
 		for _, entry := range result.Resources {

@@ -18,3 +18,17 @@ and server-owned resource policy. Skill frontmatter is descriptive content.
 Nil catalog callbacks preserve public metadata behavior. Hosts exposing protected
 components must configure catalog callbacks independently of execution guards.
 Callbacks apply to each pinned generation and never mutate its registry.
+
+## Namespace resource reads
+
+`resources/read` is the standard MCP method. A registered namespace-extension
+`resource/get` tool provides its equivalent JSON resolver for catalog resources.
+When no native resource mapping exists, Datly invokes that tool's existing
+compiled handler with the requested URI, preserving binding and authorization.
+Mapped resource failures and authorization denials remain terminal. A failed
+tool result never becomes successful resource contents. Actor-scoped bridge
+responses are private and have no retained cache lifetime.
+
+This is one resolver exposed through two protocol surfaces, not two resource
+implementations. Existing native resources and servers without `resource/get`
+retain their behavior.
