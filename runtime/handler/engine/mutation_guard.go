@@ -19,6 +19,9 @@ var ErrWriteEligibilityMutation = errors.New("managed mutation is forbidden duri
 
 type mutationGuard struct {
 	mu                       sync.Mutex
+	readOnlyGroups           int
+	readOnlyFailure          error
+	readOnlyRoot             *mutationGuard
 	depth                    int
 	reconciliationDepth      int
 	reconciliationReplayVeto bool
@@ -41,12 +44,33 @@ func (s *dataScope) mutationGuard() *mutationGuard {
 	return &s.writeEligibility
 }
 
+// A capability issued to a read-only branch can never regain mutation authority
+// merely because the parent's binding group has since completed.
+func (s *dataScope) capabilityGuard() *mutationGuard {
+	guard := s.mutationGuard()
+	if s != nil && s.readOnlyDependency != nil {
+		return &mutationGuard{readOnlyRoot: guard}
+	}
+	return guard
+}
+
 func (g *mutationGuard) check(operation string) error {
 	if g == nil {
 		return nil
 	}
+	if g.readOnlyRoot != nil {
+		err := fmt.Errorf("%w: %s", ErrReadOnlyDependency, operation)
+		g.readOnlyRoot.rejectReadOnly(err)
+		return err
+	}
 	g.mu.Lock()
 	defer g.unlockAndPublishProtectedFailure()
+	if g.readOnlyGroups != 0 {
+		err := fmt.Errorf("%w: %s", ErrReadOnlyDependency, operation)
+		g.readOnlyFailure = errors.Join(g.readOnlyFailure, err)
+		g.guardedFailure = errors.Join(g.guardedFailure, err)
+		return err
+	}
 	if drainowner.BindingGroupOpen(g.protectedIssuer) {
 		err := fmt.Errorf("%w: %s", drainowner.ErrBindingGroup, operation)
 		g.guardedFailure = errors.Join(g.guardedFailure, err)
@@ -109,7 +133,33 @@ func RetainMutationAuthority(ctx context.Context) func(context.Context) context.
 	childFailure, _ := ctx.Value(responsebinding.ChildKey{}).(func())
 	scope, _ := ctx.Value(dataScopeContextKey{}).(*dataScope)
 	issued := recoveryReadPermit(ctx)
+	readOnly := readOnlyFrom(ctx)
 	return func(call context.Context) context.Context {
+		if readOnly != nil {
+			// Preserve caller values when supplied, but retain cancellation and the
+			// original member's scheduler when a hook uses a replacement context.
+			original := call
+			call = lifecycleCallContext{Context: readOnly.anchor, call: call}
+			var cancel context.CancelFunc
+			if deadline, ok := original.Deadline(); ok {
+				call, cancel = context.WithDeadline(call, deadline)
+			} else {
+				call, cancel = context.WithCancel(call)
+			}
+			stop := context.AfterFunc(original, cancel)
+			context.AfterFunc(call, func() { stop() })
+			if scope != nil {
+				scope.retainContext(cancel)
+			}
+			if original.Err() != nil {
+				cancel()
+			}
+			if childFailure != nil {
+				call = context.WithValue(call, responsebinding.ChildKey{}, childFailure)
+			}
+			call = context.WithValue(call, readOnlyDependencyKey{}, readOnly)
+			return withDataScope(call, scope)
+		}
 		// Descendant failure provenance follows the captured invocation owner,
 		// even when application code supplies a replacement call context.
 		if childFailure != nil {
@@ -136,6 +186,9 @@ func RetainMutationAuthority(ctx context.Context) func(context.Context) context.
 // CheckComponentMutation admits canonical readers while rejecting writers and
 // unknown custom effects before child binding or data-unit creation.
 func CheckComponentMutation(ctx context.Context, canonicalReader bool) error {
+	if ReadOnlyDependency(ctx) && !canonicalReader {
+		return RejectReadOnlyDependency(ctx, "writer or custom handler invocation")
+	}
 	if IsRootRecoveryRead(ctx) {
 		return checkRootRecoveryRead(ctx, canonicalReader)
 	}
@@ -234,7 +287,7 @@ func (g *mutationGuard) active() bool {
 	}
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	return g.depth != 0 || g.completionClosed || g.guardedExecution || drainowner.BindingGroupOpen(g.protectedIssuer)
+	return g.depth != 0 || g.readOnlyGroups != 0 || g.completionClosed || g.guardedExecution || drainowner.BindingGroupOpen(g.protectedIssuer)
 }
 
 func (g *mutationGuard) closeCompletion(protected ...bool) {
@@ -251,8 +304,19 @@ func (g *mutationGuard) admitStreamingQuery() error {
 	if g == nil {
 		return nil
 	}
+	if g.readOnlyRoot != nil {
+		err := fmt.Errorf("%w: raw transaction SQL", ErrReadOnlyDependency)
+		g.readOnlyRoot.rejectReadOnly(err)
+		return err
+	}
 	g.mu.Lock()
 	defer g.unlockAndPublishProtectedFailure()
+	if g.readOnlyGroups != 0 {
+		err := fmt.Errorf("%w: raw transaction SQL", ErrReadOnlyDependency)
+		g.readOnlyFailure = errors.Join(g.readOnlyFailure, err)
+		g.guardedFailure = errors.Join(g.guardedFailure, err)
+		return err
+	}
 	if drainowner.BindingGroupOpen(g.protectedIssuer) {
 		err := fmt.Errorf("%w: streaming SQL", drainowner.ErrBindingGroup)
 		g.guardedFailure = errors.Join(g.guardedFailure, err)

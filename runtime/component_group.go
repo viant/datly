@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/viant/bindly"
 	dexec "github.com/viant/datly/exec"
 	"github.com/viant/datly/internal/drainowner"
 	rhandler "github.com/viant/datly/runtime/handler"
@@ -12,7 +13,34 @@ import (
 	"github.com/viant/datly/runtime/registry"
 	"github.com/viant/datly/spec"
 	xhandler "github.com/viant/xdatly/handler"
+	xmcp "github.com/viant/xdatly/handler/mcp"
 )
+
+// Unlike the legacy finite group, this policy admits native readers with nested
+// read dependencies. Runtime revalidates every actual descendant, including calls
+// made by handwritten hooks; no authority is inferred from the HTTP method.
+func readOnlyGroupReader(entry *RegisteredComponent, route spec.RouteRef) bool {
+	if entry == nil || entry.Component == nil || entry.Input == nil || entry.OutputType == nil || entry.Reader == nil || entry.Handler != nil || entry.DataSource != nil || !componentOwnsRoute(entry.Component, route) || !groupSettingsAllowed(entry.Component) || groupManagedProviderOverride(entry) {
+		return false
+	}
+	input, ok := entry.Input.ForRoute(route)
+	if !ok {
+		return false
+	}
+	for _, field := range input.Fields() {
+		binding := field.Binding()
+		if binding.Async || binding.Scope != "" || binding.ResolutionGroup != nil && binding.ResolutionGroup.Mode != bindly.ResolutionGroupDependencies {
+			return false
+		}
+	}
+	output := entry.OutputType
+	if output.Kind() != reflect.Pointer {
+		output = reflect.PointerTo(output)
+	}
+	// Post-commit callbacks cannot truthfully complete before a binding result is
+	// exposed while retaining an inherited transaction. Never run them early.
+	return !output.Implements(reflect.TypeFor[xhandler.Finalizer]()) && !output.Implements(reflect.TypeFor[xmcp.Finalizer]())
+}
 
 // Recorder/default-provider wrappers retain these compiled identities. The
 // wrapper's address is deliberately not an identity for indexed registrations.

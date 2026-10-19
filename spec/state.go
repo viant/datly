@@ -63,6 +63,7 @@ func (s *WireSchema) Clone() *WireSchema {
 
 type ResolutionGroupSpec struct {
 	Name      string   `json:"name,omitempty"`
+	Mode      string   `json:"mode,omitempty"`
 	After     []string `json:"after,omitempty"`
 	DependsOn []string `json:"dependsOn,omitempty"`
 }

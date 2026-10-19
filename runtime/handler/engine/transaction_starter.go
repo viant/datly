@@ -32,6 +32,6 @@ func (s *dataScope) transactionStarterProvider() locator.Provider {
 		if !ok {
 			return nil, false, nil
 		}
-		return transactionStarter{service: starter, guard: s.mutationGuard()}, true, nil
+		return transactionStarter{service: starter, guard: s.capabilityGuard()}, true, nil
 	})
 }

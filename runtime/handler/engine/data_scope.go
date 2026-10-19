@@ -23,6 +23,7 @@ import (
 type dataScopeContextKey struct{}
 
 type dataScope struct {
+	readOnlyDependency       *readOnlyDependency
 	invocationContext        context.Context
 	nativeInvocation         *drainowner.Invocation
 	journalFrame             *drainowner.Frame
@@ -171,7 +172,7 @@ func (p transactionSQLProvider) Connector(ctx context.Context, name string) (rha
 	if !ok {
 		return nil, fmt.Errorf("transaction SQL is unavailable for connector %q", name)
 	}
-	return transactionSQLCapability{service: txSQL, guard: p.scope.mutationGuard()}, nil
+	return transactionSQLCapability{service: txSQL, guard: p.scope.capabilityGuard()}, nil
 }
 
 // dmlCapability exposes only buffered writes under the focused DML key.
@@ -365,7 +366,7 @@ func invocationDataScope(ctx context.Context, source dexec.DataSource) (*dataSco
 			root = root.root
 		}
 		component := componentFromContext(ctx)
-		child := &dataScope{source: source, root: root, parent: inherited, relation: component.relation, order: component.order}
+		child := &dataScope{source: source, root: root, parent: inherited, relation: component.relation, order: component.order, readOnlyDependency: readOnlyFrom(ctx)}
 		root.mu.Lock()
 		child.ensureJournalFrameLocked(root)
 		root.mu.Unlock()
@@ -876,14 +877,14 @@ func (s *dataScope) providers(authorities ...*flushAuthority) []locator.Provider
 			if err != nil || data == nil {
 				return nil, false, err
 			}
-			return newHandlerData(data, s.mutationGuard(), authority), true, nil
+			return newHandlerData(data, s.capabilityGuard(), authority), true, nil
 		}),
 		handlerprovider.New(xhandler.DMLKey, func(ctx context.Context) (any, bool, error) {
 			data, err := s.resolve(ctx)
 			if err != nil || data == nil {
 				return nil, false, err
 			}
-			return newQueueAwareDMLCapability(data, s.mutationGuard()), true, nil
+			return newQueueAwareDMLCapability(data, s.capabilityGuard()), true, nil
 		}),
 		handlerprovider.New(xhandler.SequencerKey, func(ctx context.Context) (any, bool, error) {
 			data, err := s.resolve(ctx)
@@ -894,14 +895,14 @@ func (s *dataScope) providers(authorities ...*flushAuthority) []locator.Provider
 			if !ok {
 				return nil, false, nil
 			}
-			return sequencerCapability{service: sequencer, guard: s.mutationGuard()}, true, nil
+			return sequencerCapability{service: sequencer, guard: s.capabilityGuard()}, true, nil
 		}),
 		handlerprovider.New(xhandler.FlusherKey, func(ctx context.Context) (any, bool, error) {
 			data, err := s.resolve(ctx)
 			if err != nil || data == nil {
 				return nil, false, err
 			}
-			return flusherCapability{service: data, guard: s.mutationGuard(), authority: authority}, true, nil
+			return flusherCapability{service: data, guard: s.capabilityGuard(), authority: authority}, true, nil
 		}),
 	}
 	if s.connectors != nil {

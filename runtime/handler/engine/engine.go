@@ -142,6 +142,9 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 	if request.Input == nil {
 		return nil, fmt.Errorf("route input contract is required")
 	}
+	if ReadOnlyDependency(ctx) && (!request.CanonicalReader || request.IndependentChildTransactions || request.Completion != nil || request.DataSource != nil) {
+		return nil, RejectReadOnlyDependency(ctx, "non-reader execution or independent completion")
+	}
 	scoped, policyErr := custom.ScopedInputBinding(request.Handler)
 	if policyErr != nil {
 		return nil, policyErr
@@ -284,7 +287,7 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 		}
 		activityActive = err == nil
 	}
-	runtimeProviders = handlerprovider.Capabilities(request.Capabilities)
+	runtimeProviders = readOnlyProviders(ctx, handlerprovider.Capabilities(request.Capabilities))
 	if request.Scope != nil {
 		protocolProviders = request.Scope.Providers()
 	}
@@ -592,7 +595,7 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 			return finish(nil, fmt.Errorf("start pre-binding transaction: %w", err))
 		}
 	}
-	if err := phases.Run(ctx, xhandler.PhaseBinding, func() error {
+	bindInvocationInput := func(ctx context.Context) error {
 		bindPlan := inputPlan
 		if bound {
 			if err := normalizeBoundBodyNulls(request.Input, input); err != nil {
@@ -630,6 +633,20 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 			}
 		}
 		return nil
+	}
+	if err := phases.Run(ctx, xhandler.PhaseBinding, func() error {
+		// Descendant binding waits release the member permit. Ordinary binding
+		// reacquires one runnable phase; explicit groups schedule their own work.
+		return bindly.SuspendResolutionGroup(ctx, func(bindingCtx context.Context) error {
+			grouped := false
+			for _, field := range request.Input.Fields() {
+				grouped = grouped || field.Binding().ResolutionGroup != nil
+			}
+			if grouped {
+				return bindInvocationInput(bindingCtx)
+			}
+			return bindly.RunResolutionGroupPhase(bindingCtx, bindInvocationInput)
+		})
 	}); err != nil {
 		return finish(nil, err)
 	}

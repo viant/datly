@@ -28,6 +28,21 @@ func TestResolutionGroupCanonicalTagAgreementAndIsolation(t *testing.T) {
 		t.Fatal("generated-only group accepted against canonical declaration")
 	}
 }
+
+func TestReadOnlyGroupCanonicalTagAgreement(t *testing.T) {
+	type input struct {
+		Child int `parameter:"Child,kind=component,in=GET:/child,resolutionGroup=reads,resolutionMode=dependencies"`
+	}
+	component := &spec.Component{Parameters: []*spec.Parameter{{Name: "Child", Source: spec.BindSource{Kind: "component", Name: "GET:/child"}, ResolutionGroup: &spec.ResolutionGroupSpec{Name: "reads", Mode: "dependencies"}}}}
+	bindings, err := BuildBindingSpecs(component, reflect.TypeFor[input](), nil)
+	if err != nil || bindings[0].ResolutionGroup.Mode != bindly.ResolutionGroupDependencies {
+		t.Fatalf("read-only mode lost: %+v %v", bindings, err)
+	}
+	component.Parameters[0].ResolutionGroup.Mode = ""
+	if _, err := BuildBindingSpecs(component, reflect.TypeFor[input](), nil); err == nil {
+		t.Fatal("canonical mode disagreement accepted")
+	}
+}
 func TestResolutionGroupUnsupportedMetadataRejected(t *testing.T) {
 	for _, param := range []*spec.Parameter{{Async: true}, {When: "enabled"}, {Codec: &spec.Codec{Body: "adapt"}}, {EmitOutput: true}} {
 		param.Name = "ID"

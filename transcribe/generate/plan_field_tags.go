@@ -48,6 +48,7 @@ func fieldTag(param *spec.Parameter, tagName string, metadata []structTagValue) 
 	}
 	if param.ResolutionGroup != nil {
 		appendValue("resolutionGroup", param.ResolutionGroup.Name)
+		appendValue("resolutionMode", param.ResolutionGroup.Mode)
 		appendValue("resolutionAfter", strings.Join(param.ResolutionGroup.After, "|"))
 		appendValue("dependsOn", strings.Join(param.ResolutionGroup.DependsOn, "|"))
 	}

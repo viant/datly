@@ -56,3 +56,63 @@ Generic SQLite tests exercise real driver statements, triggers, batching and
 transaction outcomes. Platform generated dispatch/CI_EVENT batch shape, MySQL
 witnesses and application E2E/contract parity require separate root integration
 verification before acceptance.
+
+## Explicit Read-Only Dependency Groups
+
+Independent native reader inputs can opt into bounded concurrent resolution:
+
+```text
+#define($_ = $Audiences<*audience.AudienceOutput>(component/GET:/audiences)
+    .Optional().WithReadOnlyGroup('subject'))
+#define($_ = $Creatives<*creative.ActiveCreativesOutput>(component/POST:/creatives)
+    .Optional().WithReadOnlyGroup('subject'))
+```
+
+`WithReadOnlyGroup('subject', 'Auth')` adds an explicit successful prerequisite
+outside the group. `DependsOn('OtherMember')` orders a member behind another member
+of that group. Unknown references and cycles fail compilation. Generated binding
+tags carry `resolutionGroup=subject,resolutionMode=dependencies` plus the optional
+`resolutionAfter` and `dependsOn` lists. The legacy `WithResolutionGroup` policy
+retains its existing finite shape and security requirements.
+
+Declare authorization inputs as explicit barriers rather than assuming that an
+ungrouped input will run first. Required verified-JWT inputs and required inputs
+declaring status 401/403 must be barriers; omission is rejected before member
+execution. Application-specific authorization without that metadata must likewise
+be named explicitly. Group authoring never grants an authorization bypass.
+
+The shared Bindly scheduler defaults to four runnable members per invocation.
+Waiting ancestors release their permit during input binding; native execution
+and hooks reacquire or reuse the inherited permit. Nested bindings remain
+sequential unless they explicitly declare a group. No HTTP method establishes
+read-only authority: native POST readers are eligible; custom GET handlers and
+writers are not. Unrelated components remain lazy. Eager, indexed, and LinkedOnly
+loaders use the same effective metadata and runtime admission.
+
+Each branch has separate input, binding, and output state. Providers and codecs
+must still treat inherited values as read-only and be concurrency-safe. Child
+error-aware and invoker finalizers finish before results become visible. Contracts
+requiring success-only post-commit or MCP completion hooks are rejected, not run
+early against an uncommitted transaction. Use the existing pre-completion
+error-aware output finalizer for reader result construction.
+
+Read-only authority covers nested calls and hooks for their complete binding
+lifetime. Datly-managed DML, sequences, flushes, transaction startup, unchecked
+transaction SQL, raw connector capabilities, and message-bus capabilities are
+denied. Provider overrides, independent transactions and caller completion
+callbacks are not admitted. Rejected effects remain failures even if caught;
+retained child capabilities never acquire the parent's later write authority.
+This is managed capability enforcement, not a sandbox for arbitrary Go code or
+externally retained database/message-bus handles.
+
+Inherited transactions and existing cursor locks are retained. Available worker
+capacity never permits concurrent cursors on a transaction whose driver requires
+serialization. A separate connector continues to resolve its own connection.
+Optional means missing values are allowed, not that errors are ignored. Binding
+errors are reported in declaration order. Authorization failures, cancellation,
+transaction/cleanup failures and recovered panics cancel outstanding work. All
+started work is joined before returning. Existing batching is unchanged.
+
+MDP adoption requires explicit group declarations and regeneration. Its complete
+Index response/publication comparison and scheduling-only latency A/B remain
+application-level acceptance checks; unit overlap is not a latency claim.

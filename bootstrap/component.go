@@ -746,7 +746,7 @@ func (r *packageComponentResolver) param(role contractRole, field xshape.Field, 
 	}
 	if binding.ResolutionGroup != nil {
 		group := binding.ResolutionGroup
-		param.ResolutionGroup = &spec.ResolutionGroupSpec{Name: group.Name, After: append([]string(nil), group.After...), DependsOn: append([]string(nil), group.DependsOn...)}
+		param.ResolutionGroup = &spec.ResolutionGroupSpec{Name: group.Name, Mode: string(group.Mode), After: append([]string(nil), group.After...), DependsOn: append([]string(nil), group.DependsOn...)}
 	}
 	// Output-owned constants and capabilities retain their server source rather
 	// than becoming body slots. They use the ordinary typed binding contract.

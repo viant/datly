@@ -16,9 +16,15 @@ type resolutionGroupController struct {
 }
 type resolutionGroupRun struct{ group drainowner.BindingGroup }
 
-func (c resolutionGroupController) Open(_ context.Context, plan bindly.ResolutionGroupPlan) (bindly.ResolutionGroupRun, error) {
+func (c resolutionGroupController) Open(ctx context.Context, plan bindly.ResolutionGroupPlan) (bindly.ResolutionGroupRun, error) {
 	if c.scope == nil || !c.request.BufferedComponentCalls || !drainowner.IsBindingGroupProvider(c.request.Components) || c.request.BoundInput != nil || c.request.Replay != nil || c.request.ResolvedInput != nil {
 		return nil, fmt.Errorf("resolution groups require canonical buffered input and native component authority")
+	}
+	if plan.Mode() == bindly.ResolutionGroupDependencies {
+		return c.openReadOnly(plan)
+	}
+	if ReadOnlyDependency(ctx) {
+		return nil, RejectReadOnlyDependency(ctx, "legacy resolution groups cannot run inside a read-only group")
 	}
 	fields := map[string]registry.InputField{}
 	for _, field := range c.request.Input.Fields() {
