@@ -109,7 +109,7 @@ func Open(ctx context.Context, configs []Config, defaultName string) (_ *Set, er
 			if ctx.Err() != nil {
 				return nil, ctx.Err()
 			}
-			return nil, fmt.Errorf("connector connection failed")
+			return nil, connectionError(config.Name, config.Driver, pingErr)
 		}
 		if err = set.SQL.RegisterConnector(config.Name, db); err != nil {
 			return nil, err
