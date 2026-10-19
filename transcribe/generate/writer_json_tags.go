@@ -5,7 +5,9 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/viant/datly/spec"
 	"github.com/viant/datly/tag"
+	"github.com/viant/datly/typecatalog"
 	"github.com/viant/tagly/format/text"
 	"github.com/viant/tagly/tags"
 )
@@ -13,7 +15,7 @@ import (
 // applyInferredJSONTags needs the complete struct, including relation holders.
 // Case formatting can collapse distinct Go names; preserve their original tags
 // so projection can still select canonical fields before runtime formatting.
-func applyInferredJSONTags(plan *Plan, fields []Field) error {
+func applyInferredJSONTags(plan *Plan, fields []Field, source ...*spec.View) error {
 	original := make([]string, len(fields))
 	for i := range fields {
 		field := &fields[i]
@@ -25,7 +27,7 @@ func applyInferredJSONTags(plan *Plan, fields []Field) error {
 			if format := text.NewCaseFormat(plan.Settings.CaseFormat); format != text.CaseFormatUndefined && !hasStructTag(field.Tag, "json") {
 				field.Tag = appendStructTag(field.Tag, "json", text.DetectCaseFormat(field.Name).Format(field.Name, format))
 			}
-		} else {
+		} else if !authoredEmptyJSONName(source, field.Name) {
 			field.Tag = writerScalarJSONTag(plan, field.Name, field.Tag)
 		}
 	}
@@ -110,4 +112,22 @@ func writerScalarJSONTag(plan *Plan, name, raw string) string {
 	}
 	parsed.Set("json", strings.Join(parts, ","))
 	return parsed.Stringify()
+}
+
+// Preserve exact option-only JSON authority from the existing canonical owner.
+// Nullability may have synthesized an identical tag on Field, so inspect the
+// column source before synthesis rather than guessing from the final tag.
+func authoredEmptyJSONName(source []*spec.View, field string) bool {
+	if len(source) == 0 || source[0] == nil {
+		return false
+	}
+	for _, column := range source[0].Columns {
+		if column == nil || typecatalog.FieldName(column.Name) != field {
+			continue
+		}
+		value, present := reflect.StructTag(column.Tag).Lookup("json")
+		name, _, _ := strings.Cut(value, ",")
+		return present && name == ""
+	}
+	return false
 }

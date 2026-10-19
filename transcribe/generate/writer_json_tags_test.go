@@ -70,3 +70,20 @@ func TestReaderGeneratedJSONNamesKeepMapKeysAndOmission(t *testing.T) {
 	require.NoError(t, err)
 	require.JSONEq(t, `{"conversationId":"","metadata":{"MixedCase":true,"nested":{"APIKey":2}}}`, string(body))
 }
+
+// The same option-only tag can originate in authored DQL or nullable-column
+// inference. Only the authored tag is authoritative for the JSON name.
+func TestCanonicalScalarJSONNameAuthority(t *testing.T) {
+	component := &spec.Component{Name: "Records", Settings: &spec.Settings{Mutation: "patch", CaseFormat: "lc"}, RootView: &spec.View{Name: "Records", Columns: []*spec.Column{
+		{Name: "authored_value", Type: spec.TypeRef{Name: "string", Pointer: true}, Nullable: true, Tag: `json:",omitempty"`},
+		{Name: "nullable_value", Type: spec.TypeRef{Name: "string", Pointer: true}, Nullable: true},
+		{Name: "explicit_value", Type: spec.TypeRef{Name: "string"}, Tag: `json:"wireName,omitempty"`},
+		{Name: "plain_value", Type: spec.TypeRef{Name: "string"}},
+	}}}
+	p := testPlan(t, component)
+	for name, want := range map[string]string{"AuthoredValue": ",omitempty", "NullableValue": "nullableValue,omitempty", "ExplicitValue": "wireName,omitempty", "PlainValue": "plainValue"} {
+		field, ok := p.Views[0].Field(name)
+		require.True(t, ok, name)
+		require.Equal(t, want, reflect.StructTag(field.Tag).Get("json"), name)
+	}
+}
