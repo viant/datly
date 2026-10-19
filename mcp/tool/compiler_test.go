@@ -89,7 +89,7 @@ func TestCompilerBuildsSchemaAndBindingFromRouteContract(t *testing.T) {
 	payload := metadata.InputSchema.Properties["payload"]
 	properties, ok := payload["properties"].(map[string]interface{})
 	if !ok || properties["when"].(map[string]interface{})["format"] != "date-time" ||
-		properties["tags"].(map[string]interface{})["type"] != "array" || payload["required"] != nil {
+		properties["tags"].(map[string]interface{})["type"] != "array" || !reflect.DeepEqual(payload["required"], []string{"when", "tags"}) {
 		t.Fatalf("payload schema = %+v", payload)
 	}
 	args := plan.Arguments()
