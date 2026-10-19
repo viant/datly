@@ -14,7 +14,9 @@ func (p *Parameter) IsMutationInput() bool {
 	return kind == "body" || kind == "internal"
 }
 
-// ValidateInternalMutationRoot limits nontransport roots to explicit DELETE graphs.
+// ValidateInternalMutationRoot keeps server-prepared mutation roots separate
+// from client binding while supporting the same operation/transport combinations
+// as generated writers.
 func ValidateInternalMutationRoot(component *Component, operation string) error {
 	if component == nil {
 		return fmt.Errorf("mutation component is required")
@@ -36,15 +38,20 @@ func ValidateInternalMutationRoot(component *Component, operation string) error 
 	if roots != 1 {
 		return fmt.Errorf("internal mutation root is ambiguous with another mutation input")
 	}
-	if operation != "put" && operation != "patch" {
-		return fmt.Errorf("internal mutation root requires PUT or PATCH operation")
+	if operation != "post" && operation != "put" && operation != "patch" {
+		return fmt.Errorf("internal mutation root requires POST, PUT or PATCH operation")
 	}
 	if len(component.Routes) == 0 {
-		return fmt.Errorf("internal mutation root requires an explicit DELETE route")
+		return fmt.Errorf("internal mutation root requires an explicit write route")
 	}
 	for _, route := range component.Routes {
-		if route == nil || !strings.EqualFold(strings.TrimSpace(route.Method), "DELETE") {
-			return fmt.Errorf("internal mutation root requires exclusively DELETE routes")
+		if route == nil {
+			return fmt.Errorf("internal mutation root requires an explicit write route")
+		}
+		method := strings.ToUpper(strings.TrimSpace(route.Method))
+		allowed := operation == "post" && (method == "POST" || method == "PATCH") || operation == "patch" && (method == "PATCH" || method == "PUT" || method == "DELETE") || operation == "put" && (method == "PUT" || method == "DELETE")
+		if !allowed {
+			return fmt.Errorf("internal mutation root operation %s is incompatible with %s route", operation, method)
 		}
 	}
 	if strings.TrimSpace(internal.Source.Name) != "" {

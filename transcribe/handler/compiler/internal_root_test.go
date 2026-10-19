@@ -6,12 +6,20 @@ import (
 	"testing"
 )
 
-func TestBuildInputInternalDeleteRoot(t *testing.T) {
-	for _, operation := range []plan.Operation{plan.OperationPut, plan.OperationPatch} {
-		t.Run(string(operation), func(t *testing.T) {
+func TestBuildInputInternalMutationRoot(t *testing.T) {
+	for _, tc := range []struct {
+		operation plan.Operation
+		method    string
+	}{
+		{plan.OperationPut, "DELETE"}, {plan.OperationPatch, "DELETE"},
+		{plan.OperationPost, "POST"}, {plan.OperationPost, "PATCH"},
+		{plan.OperationPatch, "PATCH"}, {plan.OperationPatch, "PUT"}, {plan.OperationPut, "PUT"},
+	} {
+		operation := tc.operation
+		t.Run(string(operation)+"/"+tc.method, func(t *testing.T) {
 			root := &spec.View{Name: "Views", Source: &spec.ViewSource{Table: "CI_GRID_USER_VIEW", SQL: "SELECT ID FROM CI_GRID_USER_VIEW"}, Columns: []*spec.Column{{Name: "ID", Source: "ID", PrimaryKey: true, Type: spec.TypeRef{Name: "int"}}}}
 			internal := &spec.Parameter{Name: "Delete", Source: spec.BindSource{Kind: "internal"}, TypeExpr: "[]*DeleteView", Cardinality: "Many"}
-			component := &spec.Component{Name: "Viewsdelete", Routes: []*spec.Route{{Method: "DELETE", Path: "/views/{id}"}}, RootView: root, Parameters: []*spec.Parameter{internal}}
+			component := &spec.Component{Name: "Viewsdelete", Routes: []*spec.Route{{Method: tc.method, Path: "/views/{id}"}}, RootView: root, Parameters: []*spec.Parameter{internal}}
 			got, err := (&Compiler{}).BuildInput(Request{Component: component, Operation: operation}, "DeleteView")
 			if err != nil {
 				t.Fatal(err)
@@ -38,7 +46,7 @@ func TestInternalDeleteRootRejectsInvalidScopes(t *testing.T) {
 		body, required                  bool
 	}{
 		{name: "POST operation", method: "DELETE", operation: "post"},
-		{name: "PATCH route", method: "PATCH", operation: "patch"},
+		{name: "incompatible route", method: "PATCH", operation: "put"},
 		{name: "missing route", operation: "put"},
 		{name: "body conflict", method: "DELETE", operation: "put", body: true},
 		{name: "transport name", method: "DELETE", operation: "put", source: "data"},

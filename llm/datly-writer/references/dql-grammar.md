@@ -1134,3 +1134,17 @@ When `assigned-update` selects an unmatched identity and queues no mutation,
 both passes. Omitted insert-only fields are not required for this no-op; supplied
 null/zero/invalid fields and business hooks remain checked. This exception does
 not change complete final validation for actual INSERTs or database constraints.
+
+## Server-prepared writer rows
+
+An optional unnamed `internal/` input supplies mutation rows prepared by application
+`Input.Init`, without a request-body binding or client schema field. It supports
+the same native operation/transport combinations as body-backed writers, including
+POST insertion policy over PATCH transport. Keep candidate selection in declared
+view parameters; do not synthesize client body fields for query-driven mutations.
+The writer still owns sequencing, validation, buffering and transaction completion.
+When business output differs from the private write rows, declare the actual
+write-result carrier as `output/body` with `json:"-" internal:"true"`, and retain
+the business field under `output/result` with its original JSON name. Lifecycle
+hooks prepare that business result. This uses existing output projection behavior;
+private rows are not exposed as public JSON/MCP fields.
