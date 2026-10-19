@@ -1,7 +1,7 @@
 package tool
 
 import (
-	"fmt"
+	"github.com/viant/mcp-protocol/schema/fieldname"
 	"reflect"
 	"strings"
 )
@@ -62,53 +62,9 @@ func jsonField(field reflect.StructField) (name string, hidden bool) {
 }
 
 func mcpFieldMetadata(field reflect.StructField) (mcpField, error) {
-	value := strings.TrimSpace(field.Tag.Get("mcp"))
-	if value == "" {
-		return mcpField{}, nil
+	name, err := fieldname.Resolve(field, "")
+	if err != nil {
+		return mcpField{}, err
 	}
-	if value == "-" {
-		return mcpField{hidden: true}, nil
-	}
-	result := mcpField{}
-	for _, item := range strings.Split(value, ",") {
-		item = strings.TrimSpace(item)
-		if item == "" {
-			continue
-		}
-		key, raw, ok := strings.Cut(item, "=")
-		if !ok {
-			return mcpField{}, fmt.Errorf("unsupported mcp tag option %q on field %s", item, field.Name)
-		}
-		key = strings.TrimSpace(key)
-		raw = strings.TrimSpace(raw)
-		switch key {
-		case "name":
-			result.name = raw
-		case "aliases":
-			result.aliases = splitMCPAliases(raw)
-		default:
-			return mcpField{}, fmt.Errorf("unsupported mcp tag option %q on field %s", key, field.Name)
-		}
-	}
-	return result, nil
-}
-
-func splitMCPAliases(value string) []string {
-	if value == "" {
-		return nil
-	}
-	parts := strings.FieldsFunc(value, func(r rune) bool {
-		return r == '|' || r == ';'
-	})
-	result := make([]string, 0, len(parts))
-	seen := map[string]bool{}
-	for _, part := range parts {
-		part = strings.TrimSpace(part)
-		if part == "" || seen[part] {
-			continue
-		}
-		seen[part] = true
-		result = append(result, part)
-	}
-	return result
+	return mcpField{name: name.Public, aliases: name.Aliases, hidden: name.Hidden}, nil
 }

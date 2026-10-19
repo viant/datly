@@ -73,7 +73,7 @@ func (c *Compiler) compileAnonymousBody(inputField registry.InputField) ([]Argum
 			sourceKind: "body", sourceName: projected.Name,
 			sourceType: field.Type, destinationType: field.Type,
 			parentBodyType: inputField.SourceType(), parentBodySource: binding.Location.In,
-			schemaRequired: required[projected.Name], anonymousGoName: goName,
+			schemaRequired: required[publicName], anonymousGoName: goName,
 		})
 	}
 	if len(result) == 0 {

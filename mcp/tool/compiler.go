@@ -16,6 +16,7 @@ import (
 	"github.com/viant/datly/runtime/registry"
 	"github.com/viant/datly/spec"
 	"github.com/viant/mcp-protocol/schema"
+	"github.com/viant/mcp-protocol/schema/fieldname"
 	xshape "github.com/viant/x/shape"
 )
 
@@ -150,6 +151,22 @@ func (c *Compiler) Compile(input Input) (*Plan, error) {
 		annotation := owner.Parameter(argument.path, documentation.Annotation{Description: argument.description, Example: argument.example})
 		argument.description, argument.example = annotation.Description, annotation.Example
 		arguments[index] = argument
+		if argument.wireType != nil || argument.wireSchema != nil || len(argument.wireSchemas) > 0 {
+			named, err := fieldname.HasNames(argument.sourceType, memberNameVisibility())
+			if err != nil {
+				return nil, err
+			}
+			if argument.wireType != nil {
+				wireNamed, e := fieldname.HasNames(argument.wireType, memberNameVisibility())
+				if e != nil {
+					return nil, e
+				}
+				named = named || wireNamed
+			}
+			if named {
+				return nil, fmt.Errorf("MCP member names on explicit wire representation require decoding authority")
+			}
+		}
 		sourceType := argument.sourceType
 		if argument.required && argument.bodyNullPolicy == "" {
 			sourceType = (xshape.Runtime{}).Indirect(sourceType)
