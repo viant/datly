@@ -29,6 +29,18 @@ func (e *Execution) ToolResult() *schema.CallToolResult {
 			isError := true
 			return &schema.CallToolResult{Content: []schema.CallToolResultContentElem{schema.TextContent{Type: "text", Text: string(payload)}}, IsError: &isError, StructuredContent: objectPayload(payload)}
 		}
+		// Preserve ordinary authentication failures at the tool presentation boundary.
+		// Explicit public bodies above retain priority; private causes and declared
+		// HTTP error envelopes must not replace the original MCP unauthorized result.
+		if status == http.StatusUnauthorized {
+			message := http.StatusText(status)
+			isError := true
+			return &schema.CallToolResult{
+				Content:           []schema.CallToolResultContentElem{schema.TextContent{Type: "text", Text: message}},
+				IsError:           &isError,
+				StructuredContent: map[string]interface{}{"error": true, "code": schema.Unauthorized, "message": message},
+			}
+		}
 		// Project only tool presentation; resources and the original execution
 		// retain their existing error semantics. Explicit public bodies win above.
 		if e.projectError != nil {
