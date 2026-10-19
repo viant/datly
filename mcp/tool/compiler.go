@@ -287,6 +287,9 @@ func (c *Compiler) compileExternal(inputField registry.InputField, field reflect
 		argument.example = strings.TrimSpace(param.Example)
 	}
 	argument.schemaRequired = legacyNamedSchemaRequired(argument.sourceKind, binding.URI != "", inputField.DestinationType(), sourceTag)
+	if required, associated := wholeBodyMemberSchemaRequired(argument); associated {
+		argument.schemaRequired = required
+	}
 	return argument, true, nil
 }
 
