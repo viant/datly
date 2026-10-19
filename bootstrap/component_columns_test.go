@@ -96,7 +96,7 @@ func TestPackageOutputCanonicalColumns(t *testing.T) {
 		t.Fatal(err)
 	}
 	require.NoError(t, (&outputColumnCompiler{output: xshape.New(inline, resolver.Descriptor)}).compile(inlineComponent.RootView, "Data"))
-	require.Equal(t, []*spec.Column{{Name: "ID", NameInferred: true, Source: "inline_id", Type: spec.TypeRef{Name: "int", Pointer: true}, Nullable: true, Groupable: new(bool), Tag: `sqlx:"inline_id"`}}, inlineComponent.RootView.Columns)
+	require.Equal(t, []*spec.Column{{Name: "ID", NameInferred: true, Source: "inline_id", Type: spec.TypeRef{Name: "int", Pointer: true}, Nullable: true, Tag: `sqlx:"inline_id"`}}, inlineComponent.RootView.Columns)
 	for _, tc := range []struct {
 		name   string
 		output *x.Type
@@ -312,7 +312,7 @@ func TestPackageOutputAnonymousScalar(t *testing.T) {
 			require.Equal(t, "Amount", amount.Source)
 			require.Equal(t, spec.TypeRef{Package: "example.com/anonymousscalar/amounts", Name: "Amount", Pointer: name == "PointerOutput"}, amount.Type)
 			require.Equal(t, name == "PointerOutput", amount.Nullable)
-			require.False(t, *amount.Groupable)
+			require.Nil(t, amount.Groupable)
 			require.Equal(t, "Region", component.RootView.Columns[1].Name)
 			require.Equal(t, "region_code", component.RootView.Columns[1].Source)
 			require.True(t, *component.RootView.Columns[1].Groupable)
@@ -372,3 +372,38 @@ func TestAnonymousScalarArtifacts(t *testing.T){
  }
 }
 `
+
+type groupingPresenceRow struct {
+	Absent    int `sqlx:"absent"`
+	Dimension int `sqlx:"dimension" groupable:"true"`
+	Measure   int `sqlx:"measure" groupable:"false"`
+}
+type groupingPresenceOutput struct {
+	Rows []*groupingPresenceRow `parameter:"Rows,kind=output,in=view"`
+}
+
+func TestOutputColumnGroupingPresence(t *testing.T) {
+	linked := reflect.TypeFor[groupingPresenceOutput]()
+	row := reflect.StructOf([]reflect.StructField{
+		{Name: "Absent", Type: reflect.TypeFor[int](), Tag: `sqlx:"absent"`},
+		{Name: "Dimension", Type: reflect.TypeFor[int](), Tag: `sqlx:"dimension" groupable:"true"`},
+		{Name: "Measure", Type: reflect.TypeFor[int](), Tag: `sqlx:"measure" groupable:"false"`},
+	})
+	synthetic := reflect.StructOf([]reflect.StructField{{Name: "Rows", Type: reflect.SliceOf(reflect.PointerTo(row)), Tag: `parameter:"Rows,kind=output,in=view"`}})
+	for _, output := range []reflect.Type{linked, synthetic} {
+		component := &spec.Component{RootView: &spec.View{Name: "Report"}, Parameters: []*spec.Parameter{{Name: "Rows", Source: spec.BindSource{Kind: "output", Name: "view"}}}}
+		require.NoError(t, CompileOutputColumns(component, output))
+		require.Len(t, component.RootView.Columns, 3)
+		require.Nil(t, component.RootView.Columns[0].Groupable)
+		require.NotNil(t, component.RootView.Columns[1].Groupable)
+		require.True(t, *component.RootView.Columns[1].Groupable)
+		require.NotNil(t, component.RootView.Columns[2].Groupable)
+		require.False(t, *component.RootView.Columns[2].Groupable)
+		flag := false
+		supplied := &spec.Column{Name: "Authored", Groupable: &flag}
+		component.RootView.Columns = []*spec.Column{supplied}
+		require.NoError(t, CompileOutputColumns(component, output))
+		require.Same(t, supplied, component.RootView.Columns[0])
+		require.Same(t, &flag, component.RootView.Columns[0].Groupable)
+	}
+}

@@ -9,6 +9,7 @@ import (
 	"github.com/viant/datly/report"
 	"github.com/viant/datly/spec"
 	"github.com/viant/datly/tag"
+	authoring "github.com/viant/datly/transcribe/compile"
 	"github.com/viant/datly/typecatalog"
 	"github.com/viant/x"
 	xshape "github.com/viant/x/shape"
@@ -60,6 +61,21 @@ func (r *planResolver) resolveCubes() error {
 	component, err = (bootstrap.ContractResolver{Component: component, InputType: xshape.Linked(input).Descriptor(), OutputType: xshape.Linked(output).Descriptor()}).Resolve()
 	if err != nil {
 		return err
+	}
+	// Linked rows can reach generation without canonical columns. Admit their
+	// existing root projection before deriving reports, then retain its SQL
+	// metadata for the reader snapshot emitted later in this same plan.
+	if err = bootstrap.CompileOutputColumns(component, output); err != nil {
+		return err
+	}
+	if err = authoring.BackfillReportMetadata(component, r.input.Resources); err != nil {
+		return err
+	}
+	if component.RootView.Columns != nil {
+		r.input.Component.RootView.Columns = make([]*spec.Column, len(component.RootView.Columns))
+		for i, column := range component.RootView.Columns {
+			r.input.Component.RootView.Columns[i] = column.Clone()
+		}
 	}
 	component, err = bootstrap.ResolveReportSourceWithContracts(component, input, output, r.input.Resources)
 	if err != nil {

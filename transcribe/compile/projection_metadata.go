@@ -24,6 +24,8 @@ type AuthoredOutputColumn struct {
 	Column   *spec.Column
 	Name     string
 	Selector string
+	// Groupable is optional SQL-derived role authority, independent of names.
+	Groupable *bool
 }
 
 func (p AuthoredViewProjection) Columns() ([]AuthoredOutputColumn, error) {
@@ -94,11 +96,16 @@ func (p authoredOutputProjection) resolve(column *spec.Column) (AuthoredOutputCo
 			name = column.Name
 		}
 	}
-	return AuthoredOutputColumn{Column: column, Name: output.OutputName(), Selector: name}, nil
+	result := AuthoredOutputColumn{Column: column, Name: output.OutputName(), Selector: name}
+	if role, known := output.Groupable(); known {
+		result.Groupable = &role
+	}
+	return result, nil
 }
 
-// BackfillReportMetadata records parsed output labels before generated shapes
-// cross the linked load boundary. Non-report components do not need this pass.
+// BackfillReportMetadata records parsed output labels and optional SQL-derived
+// grouping roles before generated shapes cross the linked load boundary.
+// Non-report components do not need this pass.
 func BackfillReportMetadata(component *spec.Component, resources ...fs.FS) error {
 	if component == nil || component.Settings == nil || component.Settings.Report == nil || !component.Settings.Report.Enabled || component.RootView == nil || len(component.RootView.Columns) == 0 {
 		return nil
@@ -119,7 +126,7 @@ func BackfillReportMetadata(component *spec.Component, resources ...fs.FS) error
 	}
 	complete := true
 	for _, column := range component.RootView.Columns {
-		if column != nil && (column.Output == "" || column.Selector == "") {
+		if column != nil && (column.Output == "" || column.Selector == "" || component.RootView.Groupable != nil && *component.RootView.Groupable && column.Groupable == nil) {
 			complete = false
 			break
 		}
@@ -146,6 +153,10 @@ func BackfillReportMetadata(component *spec.Component, resources ...fs.FS) error
 		for _, output := range projected {
 			if output.Column.Name == column.Name && output.Column.Source == column.Source {
 				column.Output, column.Selector = output.Name, output.Selector
+				if component.RootView.Groupable != nil && *component.RootView.Groupable && column.Groupable == nil && output.Groupable != nil {
+					role := *output.Groupable
+					column.Groupable = &role
+				}
 				break
 			}
 		}

@@ -239,7 +239,8 @@ func (p SelectorProjection) wildcardSourceColumns(stmt *query.Select, src wildca
 		if output == "" {
 			return nil, fmt.Errorf("wildcard source projection has unnamed expression")
 		}
-		columns = append(columns, ProjectionColumn{output: output})
+		groupable := !isAggregateSelectItem(inner)
+		columns = append(columns, ProjectionColumn{output: output, groupable: &groupable})
 	}
 	for i := range columns {
 		name := columns[i].output
@@ -255,7 +256,7 @@ func (p SelectorProjection) wildcardSourceColumns(stmt *query.Select, src wildca
 				return nil, err
 			}
 		}
-		columns[i] = ProjectionColumn{names: []string{name}, order: ref, source: rendered, output: name, wildcard: true}
+		columns[i] = ProjectionColumn{names: []string{name}, order: ref, source: rendered, output: name, wildcard: true, groupable: columns[i].groupable}
 	}
 	return columns, nil
 }

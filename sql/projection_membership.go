@@ -30,6 +30,7 @@ type ProjectionColumn struct {
 	metadata   *data.Column
 	wildcard   bool
 	pureStar   bool
+	groupable  *bool
 }
 
 // ProjectionNames contains declared output names and explicit configured aliases.
@@ -53,6 +54,15 @@ func (names ProjectionNames) Matches(name string) bool {
 
 // OutputName is the declared SQL result name, before configured selector aliases.
 func (c ProjectionColumn) OutputName() string { return c.output }
+
+// Groupable reports a role proven by an explicit SQL projection item.
+// Physical wildcard metadata has no SQL-derived role.
+func (c ProjectionColumn) Groupable() (value, known bool) {
+	if c.groupable == nil {
+		return false, false
+	}
+	return *c.groupable, true
+}
 
 func (c ProjectionColumn) Matches(name string) bool { return c.names.Matches(name) }
 
@@ -281,7 +291,8 @@ func (p SelectorProjection) columnsFromParsed(parsed *query.Select, parts select
 		if len(names) == 0 {
 			return nil, false, fmt.Errorf("source projection has no output name")
 		}
-		columns = append(columns, ProjectionColumn{names: names, output: names[0], order: order, source: raw, expression: core})
+		groupable := !isAggregateSelectItem(item)
+		columns = append(columns, ProjectionColumn{names: names, output: names[0], order: order, source: raw, expression: core, groupable: &groupable})
 	}
 	seen := make(map[string]bool)
 	for _, column := range columns {
