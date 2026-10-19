@@ -341,7 +341,7 @@ func (c *componentCompilation) compileViews(ctx context.Context) error {
 	}
 	c.result.Declarations = declarations.generation
 	c.result.ViewBindings, c.result.Views = gen.ViewBindings(viewBindings), packageViews
-	authoredViews, proof, err := authoredInputViewReferences(ctx, c.result)
+	authoredViews, proof, err := authoredInputViewReferences(ctx, c.result, c.authored)
 	if err != nil {
 		return err
 	}

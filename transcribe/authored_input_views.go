@@ -29,9 +29,10 @@ type authoredInputProof struct {
 }
 
 // authoredInputViewReferences selects only ordinary local independent reads.
-// Existing package overlays and external/factory linking keep their own policy.
-func authoredInputViewReferences(ctx context.Context, result *Result) (gen.ViewReferences, *authoredInputProof, error) {
-	if result == nil || result.Source == nil || result.Source.PackageComponent != nil || result.Source.GoBuild == nil || result.Component == nil || result.Component.TypeContext == nil || result.TypeResolver == nil {
+// Package overlays admit only explicit DQL rows through the same source proof;
+// inherited views and external/factory linking retain their existing policies.
+func authoredInputViewReferences(ctx context.Context, result *Result, authored ...*spec.Component) (gen.ViewReferences, *authoredInputProof, error) {
+	if result == nil || result.Source == nil || result.Source.GoBuild == nil || result.Component == nil || result.Component.TypeContext == nil || result.TypeResolver == nil {
 		return nil, nil, nil
 	}
 	pkg := strings.TrimSpace(result.Component.TypeContext.PackagePath)
@@ -45,6 +46,22 @@ func authoredInputViewReferences(ctx context.Context, result *Result) (gen.ViewR
 		return nil, nil, err
 	}
 	declarations := &factoryDeclarations{ctx: ctx, build: build, pkg: pkg}
+	var explicit map[string]string
+	if result.Source.PackageComponent != nil {
+		if len(authored) == 0 || authored[0] == nil {
+			return nil, nil, nil
+		}
+		explicit = map[string]string{}
+		for _, parameter := range spec.EffectiveParameters(authored[0].Parameters) {
+			if parameter == nil || !strings.EqualFold(parameter.Source.Kind, "view") {
+				continue
+			}
+			canonical, err := authority.CanonicalType(pkg, parameter.TypeExpr)
+			if err == nil {
+				explicit[parameter.Identity()] = canonical
+			}
+		}
+	}
 	// Filter before the shared selector, whose existing foreign branch is wider.
 	component := *result.Component
 	component.Parameters = nil
@@ -56,6 +73,9 @@ func authoredInputViewReferences(ctx context.Context, result *Result) (gen.ViewR
 		}
 		canonical, err := authority.CanonicalType(pkg, parameter.TypeExpr)
 		if err != nil {
+			continue
+		}
+		if explicit != nil && explicit[parameter.Identity()] != canonical {
 			continue
 		}
 		base, err := (xshape.Resolver{}).Named(canonical)

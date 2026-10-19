@@ -223,3 +223,25 @@ func TestAuthoredInputSelectedMissingOrAmbiguousDeclarationDoesNotLink(t *testin
 		})
 	}
 }
+
+func TestAuthoredIndependentReadOverlayRequiresExplicitDQL(t *testing.T) {
+	_, result := authoredReadTestResult(t, false)
+	authored := result.Component.Clone()
+	// A reloaded generated package carries URI-based metadata while the DQL
+	// retains inline SQL. Authored row ownership must survive that transition.
+	result.Source.PackageComponent = result.Component.Clone()
+	for _, view := range result.Source.PackageComponent.Views {
+		if view.Source != nil {
+			view.Source.URI = "generated:current.sql"
+		}
+	}
+	refs, proof, err := authoredInputViewReferences(context.Background(), result, authored)
+	if err != nil || proof == nil || len(refs) != 1 {
+		t.Fatalf("explicit row ownership lost: refs=%v proof=%v err=%v", refs, proof, err)
+	}
+	authored.Parameters = nil
+	refs, proof, err = authoredInputViewReferences(context.Background(), result, authored)
+	if err != nil || len(refs) != 0 || proof != nil {
+		t.Fatalf("inherited row gained explicit ownership: %v %v", refs, err)
+	}
+}
