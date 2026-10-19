@@ -149,6 +149,9 @@ func overlayParam(base, authored *spec.Parameter) *spec.Parameter {
 	result.Source = authored.Source
 	result.Declaration = authored.Declaration
 	result.Raw = authored.Raw
+	// A matched DQL declaration owns the complete scheduling policy, including
+	// removing a group previously emitted into the linked input contract.
+	result.ResolutionGroup = authoredCopy.ResolutionGroup
 	if authored.TypeExpr != "" {
 		result.TypeExpr = authored.TypeExpr
 	}
