@@ -144,6 +144,13 @@ func ParseField(field reflect.StructField) (*Field, error) {
 		return nil, err
 	}
 	if ok {
+		// Legacy Datly linked fields carry defaults in a separate value tag.
+		// An explicit binding default retains precedence, including an empty value.
+		if binding.DefaultValue == nil {
+			if value, present := field.Tag.Lookup("value"); present {
+				binding.DefaultValue = value
+			}
+		}
 		result.Binding = &binding
 	}
 	return result, nil

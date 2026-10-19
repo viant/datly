@@ -36,6 +36,7 @@ type Argument struct {
 	bodyNullPolicy   string
 	required         bool
 	// Schema parity must not introduce a new runtime missing-argument check.
+	// schemaRequired is the complete advertised value, separate from runtime required.
 	schemaRequired bool
 	description    string
 	example        string
