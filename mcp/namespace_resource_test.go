@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"context"
+	"reflect"
 	"testing"
 	"testing/fstest"
 
@@ -10,6 +11,44 @@ import (
 	"github.com/viant/mcp-protocol/schema"
 	protocol "github.com/viant/mcp-protocol/server"
 )
+
+func TestNamespaceResourceBridgeForwardsDeclaredPresentationTarget(t *testing.T) {
+	service, err := New(Config{Invoker: &serviceInvoker{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	calls := 0
+	target := map[string]interface{}{"platform": "web", "formFactor": "desktop", "capabilities": []string{"touch"}}
+	service.Registry().RegisterTool(&protocol.ToolEntry{Metadata: schema.Tool{Name: "resource/get", InputSchema: schema.ToolInputSchema{Properties: map[string]map[string]interface{}{"target": {"type": "object"}}}}, Handler: func(_ context.Context, in *schema.CallToolRequest) (*schema.CallToolResult, *jsonrpc.Error) {
+		calls++
+		if !reflect.DeepEqual(in.Params.Arguments["target"], target) {
+			t.Fatalf("lost target: %+v", in.Params.Arguments)
+		}
+		return &schema.CallToolResult{StructuredContent: map[string]interface{}{"selected": "desktop"}}, nil
+	}})
+	if !service.SupportsWindowTarget() {
+		t.Fatal("declared target not advertised")
+	}
+	request := &schema.ReadResourceRequest{Params: schema.ReadResourceRequestParams{Uri: "window://example/demo", Meta: schema.RequestMetaObject{AdditionalProperties: map[string]interface{}{windowTargetExtension: target}}}}
+	result, rpc := service.ReadResource(context.Background(), request)
+	if rpc != nil || result == nil || calls != 1 {
+		t.Fatalf("targeted read: %+v %v calls=%d", result, rpc, calls)
+	}
+	for _, invalid := range []interface{}{nil, "web", map[string]interface{}{"selectionToken": "forged"}, map[string]interface{}{"executionProof": map[string]interface{}{}}, map[string]interface{}{"dependencyPins": map[string]interface{}{}}, map[string]interface{}{"platform": 4}} {
+		request.Params.Meta.AdditionalProperties = map[string]interface{}{windowTargetExtension: invalid}
+		if result, rpc = service.ReadResource(context.Background(), request); result != nil || rpc == nil || calls != 1 {
+			t.Fatalf("invalid target invoked resolver: %v", invalid)
+		}
+	}
+	service.Registry().RegisterTool(&protocol.ToolEntry{Metadata: schema.Tool{Name: "resource/get"}})
+	if service.SupportsWindowTarget() {
+		t.Fatal("undeclared target advertised")
+	}
+	request.Params.Meta.AdditionalProperties = map[string]interface{}{windowTargetExtension: target}
+	if result, rpc = service.ReadResource(context.Background(), request); result != nil || rpc == nil || calls != 1 {
+		t.Fatal("unsupported target was ignored")
+	}
+}
 
 func TestNamespaceResourceBridge(t *testing.T) {
 	service, err := New(Config{Invoker: &serviceInvoker{}})

@@ -115,6 +115,12 @@ func forwardCatalogBearer(service Service, next http.Handler) http.Handler {
 }
 
 func publishResourceFilterCapability(service Service, capabilities *schema.ServerCapabilities) {
+	if target, ok := service.(interface{ SupportsWindowTarget() bool }); ok && target.SupportsWindowTarget() {
+		if capabilities.Extensions == nil {
+			capabilities.Extensions = map[string]map[string]interface{}{}
+		}
+		capabilities.Extensions["io.viant/window/target"] = map[string]interface{}{"schemaVersion": 1, "fields": []string{"platform", "formFactor", "surface", "capabilities"}}
+	}
 	if catalog, ok := service.(resourceCatalog); ok && catalog.SupportsResourceCatalog() {
 		if capabilities.Extensions == nil {
 			capabilities.Extensions = map[string]map[string]interface{}{}

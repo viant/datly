@@ -1,13 +1,59 @@
 package mcp
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"strings"
 
 	"github.com/viant/datly/spec"
 	"github.com/viant/jsonrpc"
 	"github.com/viant/mcp-protocol/schema"
 )
+
+const windowTargetExtension = "io.viant/window/target"
+
+// SupportsWindowTarget advertises the optional presentation selector only when
+// the application's resolver declares that input. Ordinary resource servers do
+// not acquire window semantics by exposing a resource/get tool.
+func (s *Service) SupportsWindowTarget() bool {
+	if s == nil || s.Registry() == nil {
+		return false
+	}
+	entry, ok := s.Registry().ToolRegistry.Get("resource/get")
+	return ok && entry.Metadata.InputSchema.Properties["target"] != nil
+}
+
+func windowReadArguments(request *schema.ReadResourceRequest) (map[string]interface{}, *jsonrpc.Error) {
+	arguments := map[string]interface{}{"uri": request.Params.Uri}
+	values, _ := request.Params.Meta.AdditionalProperties.(map[string]interface{})
+	value, present := values[windowTargetExtension]
+	if !present {
+		return arguments, nil
+	}
+	if !strings.HasPrefix(request.Params.Uri, "window://") {
+		return nil, jsonrpc.NewInvalidParamsError("window target requires a window resource", nil)
+	}
+	raw, err := json.Marshal(value)
+	if err != nil || bytes.Equal(raw, []byte("null")) {
+		return nil, jsonrpc.NewInvalidParamsError("invalid window target", nil)
+	}
+	var target struct {
+		Platform     string   `json:"platform,omitempty"`
+		FormFactor   string   `json:"formFactor,omitempty"`
+		Surface      string   `json:"surface,omitempty"`
+		Capabilities []string `json:"capabilities,omitempty"`
+	}
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	if decoder.Decode(&target) != nil {
+		return nil, jsonrpc.NewInvalidParamsError("invalid window target", nil)
+	}
+	// The application resolver owns native target normalization and exact variant
+	// selection. The bridge forwards only the presentation fields it declares.
+	arguments["target"] = value
+	return arguments, nil
+}
 
 // readNamespaceResource adapts the conventional namespace-extension resolver.
 // Only an unmapped URI reaches this bridge. Its compiled tool handler retains
@@ -17,7 +63,14 @@ func (s *Service) readNamespaceResource(ctx context.Context, request *schema.Rea
 	if !ok {
 		return nil, nil, false
 	}
-	result, protocolErr := entry.Handler(ctx, &schema.CallToolRequest{Method: schema.MethodToolsCall, Params: schema.CallToolRequestParams{Name: "resource/get", Arguments: map[string]interface{}{"uri": request.Params.Uri}}})
+	arguments, invalid := windowReadArguments(request)
+	if invalid != nil {
+		return nil, invalid, true
+	}
+	if _, present := arguments["target"]; present && !s.SupportsWindowTarget() {
+		return nil, jsonrpc.NewInvalidParamsError("window target selection unsupported", nil), true
+	}
+	result, protocolErr := entry.Handler(ctx, &schema.CallToolRequest{Method: schema.MethodToolsCall, Params: schema.CallToolRequestParams{Name: "resource/get", Arguments: arguments}})
 	if protocolErr != nil {
 		return nil, protocolErr, true
 	}
