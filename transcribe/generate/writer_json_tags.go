@@ -115,6 +115,10 @@ func writerScalarJSONTag(plan *Plan, name, raw string) string {
 }
 
 // Preserve exact option-only JSON authority from the existing canonical owner.
+// Use the component's caseFormat for response casing. Filling an authored
+// json:",omitempty" name with an inferred name seals that casing into the Go
+// shape instead of leaving presentation to caseFormat. Keep the empty name and
+// options intact; direct encoding/json callers then retain the Go field name.
 // Nullability may have synthesized an identical tag on Field, so inspect the
 // column source before synthesis rather than guessing from the final tag.
 func authoredEmptyJSONName(source []*spec.View, field string) bool {
