@@ -141,8 +141,9 @@ func (input *Input) validateLifecycleTarget(mutation, pendingDiscovery bool) err
 				return fmt.Errorf("writer_identity requires PATCH operation policy")
 			}
 			for _, route := range input.Component.Routes {
-				if route != nil && !strings.EqualFold(route.Method, "PATCH") {
-					return fmt.Errorf("writer_identity requires PATCH routes")
+				// PATCH mutation policy also supports an authored PUT transport.
+				if route != nil && !strings.EqualFold(route.Method, "PATCH") && !strings.EqualFold(route.Method, "PUT") {
+					return fmt.Errorf("writer_identity requires PATCH or PUT routes")
 				}
 			}
 			if len(view.Relations) > 0 {

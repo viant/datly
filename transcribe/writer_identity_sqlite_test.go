@@ -10,36 +10,41 @@ import (
 )
 
 func TestGeneratedAssignedUpdateIdentitySQLite(t *testing.T) {
-	ctx := context.Background()
-	db := testharness.NewSQLiteHarness(t)
-	if err := db.ExecStatements(ctx, "CREATE TABLE records(id INTEGER PRIMARY KEY,name TEXT)"); err != nil {
-		t.Fatal(err)
-	}
-	root := t.TempDir()
-	(testharness.GeneratedModule{Path: "github.com/viant/datly/identityfixture"}).Write(t, root)
-	source := `#package('github.com/viant/datly/identityfixture/generated')
+	for _, method := range []string{"PATCH", "PUT"} {
+		t.Run(method, func(t *testing.T) {
+			ctx := context.Background()
+			db := testharness.NewSQLiteHarness(t)
+			if err := db.ExecStatements(ctx, "CREATE TABLE records(id INTEGER PRIMARY KEY,name TEXT)"); err != nil {
+				t.Fatal(err)
+			}
+			root := t.TempDir()
+			(testharness.GeneratedModule{Path: "github.com/viant/datly/identityfixture"}).Write(t, root)
+			source := `#package('github.com/viant/datly/identityfixture/generated')
 #setting($_ = $connector('main'))
 #setting($_ = $route('/records','PATCH'))
 #setting($_ = $input_type('Input'))
 #setting($_ = $output_type('Output'))
 #define($_ = $Data<[]*Record>(output/body))
 SELECT r.id,r.name,type(r,'Record'),writer_identity(r,'assigned-update'),CAST(r.id AS *int),CAST(r.name AS *string),tag(r.id,'sqlx:"id,primaryKey=true,autoincrement=true"') FROM (SELECT id,name FROM records) r`
-	request := GenerationRequest{Destination: root, Source: &Source{Name: "records", Scope: "github.com/viant/datly/identityfixture/source", Text: source, Connector: "main", ColumnRefiner: column.New(column.Connections{"main": db.DB})}}
-	if _, err := (Generator{Operation: "patch"}).Generate(ctx, request); err != nil {
-		t.Fatal(err)
-	}
-	for _, operation := range []string{"get", "post", "put"} {
-		copy := *request.Source
-		copy.Text = strings.Replace(source, "'/records','PATCH'", "'/records','"+strings.ToUpper(operation)+"'", 1)
-		if _, err := (Generator{Operation: operation}).Generate(ctx, GenerationRequest{Destination: t.TempDir(), Source: &copy}); err == nil {
-			t.Fatal("unsupported operation accepted", operation)
-		}
-	}
-	writeSourceFile(t, root, "generated/identity_test.go", identityGeneratedRuntime)
-	command := exec.Command("go", "test", "-mod=mod", "-count=1", "./generated")
-	command.Dir = root
-	if output, err := command.CombinedOutput(); err != nil {
-		t.Fatalf("generated identity runtime %v\n%s", err, output)
+			source = strings.Replace(source, "'/records','PATCH'", "'/records','"+method+"'", 1)
+			request := GenerationRequest{Destination: root, Source: &Source{Name: "records", Scope: "github.com/viant/datly/identityfixture/source", Text: source, Connector: "main", ColumnRefiner: column.New(column.Connections{"main": db.DB})}}
+			if _, err := (Generator{Operation: "patch"}).Generate(ctx, request); err != nil {
+				t.Fatal(err)
+			}
+			for _, operation := range []string{"get", "post", "put"} {
+				copy := *request.Source
+				copy.Text = strings.Replace(source, "'/records','"+method+"'", "'/records','"+strings.ToUpper(operation)+"'", 1)
+				if _, err := (Generator{Operation: operation}).Generate(ctx, GenerationRequest{Destination: t.TempDir(), Source: &copy}); err == nil {
+					t.Fatal("unsupported operation accepted", operation)
+				}
+			}
+			writeSourceFile(t, root, "generated/identity_test.go", strings.ReplaceAll(identityGeneratedRuntime, `"PATCH"`, `"`+method+`"`))
+			command := exec.Command("go", "test", "-mod=mod", "-count=1", "./generated")
+			command.Dir = root
+			if output, err := command.CombinedOutput(); err != nil {
+				t.Fatalf("generated identity runtime %v\n%s", err, output)
+			}
+		})
 	}
 }
 
