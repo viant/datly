@@ -141,21 +141,9 @@ func reconcileReaderGraphColumns(typed, canonical []*data.Column) ([]*data.Colum
 		if column == nil {
 			return nil, fmt.Errorf("nil reader metadata column")
 		}
-		var match *data.Column
-		// The result alias owns the scanner binding. A physical source may have
-		// the same name as another result column, so use it only as a fallback.
-		for _, identity := range []*data.Column{{Name: column.Name}, column} {
-			for _, candidate := range typed {
-				if matchingColumn([]*data.Column{identity}, candidate) != nil {
-					if match != nil {
-						return nil, fmt.Errorf("ambiguous reader metadata column %s", column.Name)
-					}
-					match = candidate
-				}
-			}
-			if match != nil {
-				break
-			}
+		match, err := readerGraphColumnMatch(typed, column)
+		if err != nil {
+			return nil, err
 		}
 		if match == nil || seen[match.Name] {
 			return nil, fmt.Errorf("reader metadata column %s has no unique Go layout", column.Name)
@@ -169,4 +157,26 @@ func reconcileReaderGraphColumns(typed, canonical []*data.Column) ([]*data.Colum
 		result = append(result, &copy)
 	}
 	return result, nil
+}
+
+// readerGraphColumnMatch shares the canonical scanner layout association with
+// public selector compilation, keeping result aliases ahead of physical sources.
+func readerGraphColumnMatch(typed []*data.Column, column *data.Column) (*data.Column, error) {
+	var match *data.Column
+	// The result alias owns the scanner binding. A physical source may have
+	// the same name as another result column, so use it only as a fallback.
+	for _, identity := range []*data.Column{{Name: column.Name}, column} {
+		for _, candidate := range typed {
+			if matchingColumn([]*data.Column{identity}, candidate) != nil {
+				if match != nil {
+					return nil, fmt.Errorf("ambiguous reader metadata column %s", column.Name)
+				}
+				match = candidate
+			}
+		}
+		if match != nil {
+			break
+		}
+	}
+	return match, nil
 }

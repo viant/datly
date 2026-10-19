@@ -28,14 +28,36 @@ func (b *planCompiler) compilePublicFields(views *viewSet, rootPath string) erro
 		if err != nil {
 			return err
 		}
+		var typedColumns []*data.Column
+		authoritative := b.input.Component != nil && b.input.Component.ReaderGraph != nil
+		if authoritative {
+			typedColumns, err = columnsFromType(rowType)
+			if err != nil {
+				return err
+			}
+		}
 		view.SelectorFieldsBound = names != nil
 		for _, field := range names {
 			matched := false
 			for _, column := range view.Columns {
-				if column != nil && column.Name == field.GoName {
+				if column == nil {
+					continue
+				}
+				goName := column.Name
+				if authoritative {
+					layout, err := readerGraphColumnMatch(typedColumns, column)
+					if err != nil {
+						return err
+					}
+					if layout == nil {
+						continue
+					}
+					goName = layout.Name
+				}
+				if goName == field.GoName {
 					matched = true
 					source := column.Column
-					if source == "" {
+					if authoritative || source == "" {
 						source = column.Name
 					}
 					alternatives, verified := selectorColumnAliases(rowType, field.Index, source)
