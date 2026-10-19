@@ -180,7 +180,7 @@ func (c *Compiler) Compile(input Input) (*Plan, error) {
 			property["examples"] = []interface{}{argument.example}
 		}
 		inputSchema.Properties[argument.publicName] = property
-		if argument.required || argument.schemaRequired {
+		if argument.schemaRequired {
 			inputSchema.Required = append(inputSchema.Required, argument.publicName)
 		}
 		bindingArguments[index] = mcpinput.Argument{
@@ -278,10 +278,15 @@ func (c *Compiler) compileExternal(inputField registry.InputField, field reflect
 		sourceType: inputField.SourceType(), destinationType: inputField.DestinationType(),
 		wireSchema: inputField.WireSchema(), wireSchemas: inputField.WireSchemas(), wireType: inputField.WireType(), required: required, bodyNullPolicy: binding.BodyNullPolicy,
 	}
+	// Discovery follows the original synthetic field tags independently of
+	// runtime requiredness. Route filtering has already selected this binding.
+	sourceTag := string(field.Tag)
 	if param, ok := binding.Extension.(*spec.Parameter); ok && param != nil {
+		sourceTag = param.Tag
 		argument.description = strings.TrimSpace(param.Description)
 		argument.example = strings.TrimSpace(param.Example)
 	}
+	argument.schemaRequired = legacyNamedSchemaRequired(argument.sourceKind, binding.URI != "", inputField.DestinationType(), sourceTag)
 	return argument, true, nil
 }
 
@@ -337,4 +342,24 @@ func validateToolName(name string) error {
 		return fmt.Errorf("MCP tool name %q contains unsupported character %q", name, char)
 	}
 	return nil
+}
+
+// legacyNamedSchemaRequired reproduces the original adapter's synthetic tag
+// before asking its existing reflector for advertised requiredness. In
+// particular, a URI-associated pointer is not made required by json:"" alone.
+func legacyNamedSchemaRequired(kind string, uriAssociated bool, typ reflect.Type, sourceTag string) bool {
+	if typ == nil {
+		return false
+	}
+	force := kind == "path" && uriAssociated
+	tag := `json:",omitempty"`
+	if force {
+		tag = `json:""`
+	}
+	if !force && (typ.Kind() == reflect.Slice || kind == "query" || kind == "form" || strings.Contains(sourceTag, "optional") || strings.Contains(sourceTag, `required:"false"`)) {
+		tag += ` optional:"true"`
+	}
+	projected := reflect.StructOf([]reflect.StructField{{Name: "Value", Type: typ, Tag: reflect.StructTag(tag)}})
+	_, required := schema.StructToProperties(projected)
+	return len(required) > 0
 }

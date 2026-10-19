@@ -27,7 +27,7 @@ func TestRequiredNullableBodyPolicyMCPSchemaAndRuntime(t *testing.T) {
 			t.Fatal(err)
 		}
 		schema := plan.Metadata().InputSchema
-		if len(schema.Required) != 1 || schema.Required[0] != "view" {
+		if len(schema.Required) != 0 {
 			t.Fatalf("schema=%+v", schema)
 		}
 		if policy == "" {
