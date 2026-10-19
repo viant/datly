@@ -465,8 +465,8 @@ prefix applies to defaults; explicit DQL filename overrides take precedence:
 | `lifecycle.go` | Create-once methods for the explicitly named local lifecycle structs: edit this file. |
 | `entities.go` | Setters, presence synchronization and invariant helpers. |
 | `indexes.go` | Detached typed read collections, canonical key/link maps and on-demand business constructors. |
-| `mutation.go`, `frames.go`, `previous.go`, `layout.go`, `actions.go`, `mutation_output.go`, `validation.go`, `hooks.go`, `invariants.go` | Generated orchestration, capture, Previous matching, validation and queued actions. |
-| `router.go`, `links.go`, `resources.go`, `datly_sql/` | Component registration, linked types and embedded SQL resources. |
+| Generated support files, when needed | Concrete component support methods and hook adapters. Capture, Previous matching, validation and action execution use the shared writer runtime; empty phase files are not emitted. |
+| `router.go`, `resources.go`, SQL assets | Component registration and embedded SQL resources; linked-type support is emitted only when required. |
 
 Optional `$file_prefix('orders_')` prefixes defaults; explicit DQL file overrides
 remain exact. See [filename settings](dql.md#generated-filenames-and-destinations).
