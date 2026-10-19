@@ -1713,7 +1713,10 @@ func (p *Program) validationOptionsWithReferences(frame *Frame, transactionStart
 		// checks use the existing no-Previous validation contract; this does
 		// not classify the row as an insert or authorize persistence.
 		options := xhandler.ValidationOptions{Action: xhandler.WriteInsert, Shallow: true, Location: frame.Location, CheckUnique: &unique, CheckRef: &refs}
-		if frame.Record.InsertValidationPresence && !transactionStarted {
+		// No values are written for a missing-identity no-op. Preserve the
+		// opted-in supplied-field checks in both passes; actual INSERTs below
+		// still receive complete final validation.
+		if frame.Record.InsertValidationPresence {
 			options.HonorPresence, options.Fields = true, frame.Fields
 		}
 		return options

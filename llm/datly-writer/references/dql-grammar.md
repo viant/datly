@@ -1128,3 +1128,9 @@ repeated syntax.
 Verified regressions cover default HTTP int/string CSV and repeated lists,
 numeric scalar wrapping, native MCP arrays with comma-containing string items,
 and a generated reader executing against SQLite.
+
+When `assigned-update` selects an unmatched identity and queues no mutation,
+`insert_validation_presence(view,true)` preserves supplied-field validation in
+both passes. Omitted insert-only fields are not required for this no-op; supplied
+null/zero/invalid fields and business hooks remain checked. This exception does
+not change complete final validation for actual INSERTs or database constraints.

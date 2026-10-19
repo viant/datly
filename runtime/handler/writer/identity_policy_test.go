@@ -153,3 +153,58 @@ func TestAssignedUpdateMixedInsertDoesNotSequenceNoopIdentity(t *testing.T) {
 		t.Fatal("missing assigned row persisted")
 	}
 }
+
+type identityPresenceHas struct{ ID, Name, Note bool }
+type identityPresenceRow struct {
+	ID   *int                 `sqlx:"id,primaryKey=true"`
+	Name *string              `sqlx:"name,required=true"`
+	Note *string              `sqlx:"note"`
+	Has  *identityPresenceHas `setMarker:"true" sqlx:"-"`
+}
+type identityPresenceInput struct {
+	Rows        []*identityPresenceRow `parameter:"Rows,kind=body,in=data" view:"Rows,table=parents"`
+	CurrentRows []*identityPresenceRow `parameter:"CurrentRows,kind=view" view:"CurrentRows,table=parents"`
+}
+type identityPresenceOutput struct {
+	Data []*identityPresenceRow `parameter:"Data,kind=output,in=body"`
+}
+
+func TestMissingIdentityPresenceSQLite(t *testing.T) {
+	for _, tc := range []struct {
+		name                                    string
+		presence, suppliedNull, insert, failure bool
+	}{
+		{name: "sparse no-op", presence: true},
+		{name: "default complete check", failure: true},
+		{name: "explicit null still rejected", presence: true, suppliedNull: true, failure: true},
+		{name: "actual insert still complete", presence: true, insert: true, failure: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			db := sqlite.New(t)
+			ctx := context.Background()
+			if err := db.ExecStatements(ctx, "CREATE TABLE parents(id INTEGER PRIMARY KEY,name TEXT NOT NULL,note TEXT)", "INSERT INTO parents VALUES(1,'old','unchanged')"); err != nil {
+				t.Fatal(err)
+			}
+			component := assignedComponent(assignedUpdateIdentity)
+			component.RootView.InsertValidationPresence = tc.presence
+			component.RootView.Columns = append(component.RootView.Columns, &spec.Column{Name: "note", Source: "note"})
+			id := 999
+			if tc.insert {
+				id = 0
+			}
+			input := &identityPresenceInput{Rows: []*identityPresenceRow{{ID: ptr(id), Note: ptr("supplied"), Has: &identityPresenceHas{ID: true, Name: tc.suppliedNull, Note: true}}}}
+			_, err := runSQLiteWriter(t, ctx, db, component, input, &identityPresenceOutput{}, "patch")
+			if (err != nil) != tc.failure {
+				t.Fatalf("failure=%v error=%v", tc.failure, err)
+			}
+			var count int
+			if err := db.DB.QueryRow("SELECT COUNT(*) FROM parents").Scan(&count); err != nil || count != 1 {
+				t.Fatalf("database changed count=%d err=%v", count, err)
+			}
+			var note string
+			if err := db.DB.QueryRow("SELECT note FROM parents WHERE id=1").Scan(&note); err != nil || note != "unchanged" {
+				t.Fatalf("stored note=%q err=%v", note, err)
+			}
+		})
+	}
+}
