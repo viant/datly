@@ -123,3 +123,36 @@ SELECT * FROM (SELECT`,
 		t.Fatalf("unselected component was published: %v", err)
 	}
 }
+
+func TestTranscribeRespectsModuleGoIgnore(t *testing.T) {
+	root := t.TempDir()
+	(testharness.GeneratedModule{Path: "example.com/app"}).Write(t, root)
+	for _, directory := range []string{"source", "archived"} {
+		if err := os.MkdirAll(filepath.Join(root, directory), 0755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for name, content := range map[string]string{
+		".goignore":           "# Old authoring artifacts\narchived\n",
+		"archived/broken.dql": "SELECT * FROM (SELECT",
+		"source/selected.dql": `#package('example.com/app/api/selected')
+#setting($_ = $input_type('Input'))
+#setting($_ = $output_type('Output'))
+#setting($_ = $route('/selected','GET'))
+#define($_ = $Data<[]*Row>(output/view))
+SELECT r.*, type(r,'Row'), CAST(r.ID AS int)
+FROM (SELECT 1 AS ID) r`,
+	} {
+		if err := os.WriteFile(filepath.Join(root, name), []byte(content), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var output, diagnostic bytes.Buffer
+	status := Run(context.Background(), []string{"transcribe", "get", "-dir", root, "example.com/app/..."}, &output, &diagnostic)
+	if status != 0 {
+		t.Fatalf("ignored artifact prevented transcription: %d %s", status, diagnostic.String())
+	}
+	if files, err := os.ReadDir(filepath.Join(root, "api", "selected")); err != nil || len(files) == 0 {
+		t.Fatalf("selected component missing: %v", err)
+	}
+}
