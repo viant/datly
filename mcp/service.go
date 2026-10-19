@@ -4,6 +4,7 @@ package mcp
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	bindresource "github.com/viant/bindly/resource"
@@ -72,6 +73,15 @@ type Service struct {
 
 func (s *Service) ReadResource(ctx context.Context, request *schema.ReadResourceRequest) (*schema.ReadResourceResult, *jsonrpc.Error) {
 	if s != nil && s.lazy != nil {
+		// Exact native mappings retain priority, including their terminal errors.
+		active := s.lazy.service()
+		if ctx != nil && request != nil && active.catalog != nil && active.catalog.resources != nil {
+			if _, err := active.catalog.resources.Resolve(request.Params.Uri); errors.Is(err, mcpresource.ErrNotFound) {
+				if err := s.PrepareTool(ctx, "resource/get"); err != nil {
+					return nil, jsonrpc.NewInternalError("prepare resource resolver", nil)
+				}
+			}
+		}
 		return s.lazy.service().ReadResource(ctx, request)
 	}
 	if s == nil || s.resources == nil {
@@ -80,6 +90,13 @@ func (s *Service) ReadResource(ctx context.Context, request *schema.ReadResource
 	if s.authorizeResource != nil {
 		if request == nil || s.authorizeResource(ctx, request.Params.Uri) != nil {
 			return nil, jsonrpc.NewInvalidRequest("MCP resource authorization denied", nil)
+		}
+	}
+	if ctx != nil && request != nil && s.catalog != nil && s.catalog.resources != nil {
+		if _, err := s.catalog.resources.Resolve(request.Params.Uri); errors.Is(err, mcpresource.ErrNotFound) {
+			if result, protocolErr, handled := s.readNamespaceResource(ctx, request); handled {
+				return result, protocolErr
+			}
 		}
 	}
 	return s.resources.Handle(ctx, request)
