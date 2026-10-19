@@ -92,11 +92,11 @@ func authoredInputViewReferences(ctx context.Context, result *Result) (gen.ViewR
 			return nil, nil, nil
 		}
 		records := declarations.types[name]
-		if len(records) != 1 || records[0].generated || !records[0].concreteStruct || records[0].typeSpec == nil {
+		if len(records) != 1 || records[0].generated || records[0].typeSpec == nil {
 			continue
 		}
 		descriptor, err := result.TypeResolver.Descriptor(base)
-		if err != nil || !authoredInputDeclaration(records[0], descriptor, pkg, name) || !authoredInputClosure(declarations, result.TypeResolver, pkg, descriptor) {
+		if err != nil || !authoredInputReadDeclaration(declarations, result.TypeResolver, descriptor, pkg, excluded) || !authoredInputClosure(declarations, result.TypeResolver, pkg, descriptor) {
 			continue
 		}
 		admitted[name] = true
@@ -185,8 +185,39 @@ func authoredInputDeclaration(record factoryDeclaration, descriptor *x.Type, pkg
 	return authoredInputDeclarationMatch(record, descriptor, pkg, name)
 }
 
+func authoredInputReadDeclaration(declarations *factoryDeclarations, resolver *typecatalog.Resolver, descriptor *x.Type, pkg string, excluded map[string]string) bool {
+	seen := map[string]bool{}
+	for descriptor != nil && descriptor.PkgPath == pkg && !seen[descriptor.Key()] {
+		if excluded[descriptor.Key()] != "" {
+			return false
+		}
+		seen[descriptor.Key()] = true
+		records := declarations.types[descriptor.Name]
+		if len(records) != 1 || records[0].generated || !authoredInputDeclarationMatch(records[0], descriptor, pkg, descriptor.Name) {
+			return false
+		}
+		selected := records[0].typeSpec
+		if !selected.Assign.IsValid() {
+			_, ok := selected.Type.(*ast.StructType)
+			return ok
+		}
+		// Preserve the public alias identity while proving its authored local
+		// concrete row. The terminal may be private, as in type Row = row.
+		target, ok := selected.Type.(*ast.Ident)
+		if !ok {
+			return false
+		}
+		var err error
+		descriptor, err = resolver.Descriptor(pkg + "." + target.Name)
+		if err != nil {
+			return false
+		}
+	}
+	return false
+}
+
 // Helper aliases and named scalars retain their exact authored declarations;
-// only the independently borrowed root must be a concrete nonalias struct.
+// an independently borrowed root must resolve to an authored concrete struct.
 func authoredInputDeclarationMatch(record factoryDeclaration, descriptor *x.Type, pkg, name string) bool {
 	if descriptor == nil || descriptor.Key() != pkg+"."+name || descriptor.Name != name || descriptor.PkgPath != pkg || descriptor.SynteticType == nil {
 		return false
