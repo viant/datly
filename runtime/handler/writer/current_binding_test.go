@@ -77,3 +77,59 @@ func TestAuxiliaryCurrentUsesCanonicalGeneratedRoleName(t *testing.T) {
 		t.Fatalf("writable role adopted auxiliary Current: index=%d err=%v", index, err)
 	}
 }
+
+// Candidate projections deliberately omit writer IDs. POST must not index them
+// as Previous, including when more than one read uses the mutation table.
+type postCandidate struct{ Label string }
+type postCandidateInput struct {
+	Rows            []*sqPlainParent `parameter:"Rows,kind=body,in=data" view:"Rows,table=parents"`
+	Candidates      []*postCandidate `parameter:"Candidates,kind=view" view:"Candidates,table=parents"`
+	ChildCandidates []*postCandidate `parameter:"ChildCandidates,kind=view" view:"ChildCandidates,table=children"`
+}
+type postAmbiguousCandidateInput struct {
+	Rows           []*sqPlainParent `parameter:"Rows,kind=body,in=data" view:"Rows,table=parents"`
+	First          []*postCandidate `parameter:"First,kind=view" view:"First,table=parents"`
+	Second         []*postCandidate `parameter:"Second,kind=view" view:"Second,table=parents"`
+	FirstChildren  []*postCandidate `parameter:"FirstChildren,kind=view" view:"FirstChildren,table=children"`
+	SecondChildren []*postCandidate `parameter:"SecondChildren,kind=view" view:"SecondChildren,table=children"`
+}
+
+func TestSQLitePostDoesNotAdoptIndependentCandidateReads(t *testing.T) {
+	for _, ambiguous := range []bool{false, true} {
+		name := "single"
+		if ambiguous {
+			name = "ambiguous"
+		}
+		t.Run(name, func(t *testing.T) {
+			ctx := context.Background()
+			db := sqlite.New(t)
+			if err := db.ExecStatements(ctx, strings.Split(sqSchema, "\n")...); err != nil {
+				t.Fatal(err)
+			}
+			rows := []*sqPlainParent{{Name: ptr("inserted"), Has: &sqPlainParentHas{Name: true, Children: true}, Children: []*sqPlainChild{{Label: ptr("child"), Has: &sqPlainChildHas{Label: true}}}}}
+			candidates := []*postCandidate{{Label: "one"}, {Label: "two"}}
+			var input any = &postCandidateInput{Rows: rows, Candidates: candidates, ChildCandidates: candidates}
+			if ambiguous {
+				input = &postAmbiguousCandidateInput{Rows: rows, First: candidates, Second: candidates, FirstChildren: candidates, SecondChildren: candidates}
+			}
+			out := &sqPlainOutput{}
+			component := sqComponent("post-candidates", "post", "")
+			metadata, err := Compile(component, reflect.TypeOf(input).Elem(), reflect.TypeOf(out).Elem(), "post")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if metadata.CurrentField != -1 || metadata.CurrentType != nil || metadata.Root.CurrentField != -1 || metadata.Root.Relations[0].Child.CurrentField != -1 {
+				t.Fatal("POST adopted candidate Current")
+			}
+			if _, err = runSQLiteWriter(t, ctx, db, component, input, out, "post"); err != nil {
+				t.Fatal(err)
+			}
+			if got := sqParents(t, ctx, db); len(got) != 1 || got[0].Label == nil || *got[0].Label != "inserted" {
+				t.Fatalf("parents: %+v", got)
+			}
+			if got := sqChildren(t, ctx, db); len(got) != 1 || got[0].Label == nil || *got[0].Label != "child" {
+				t.Fatalf("children: %+v", got)
+			}
+		})
+	}
+}

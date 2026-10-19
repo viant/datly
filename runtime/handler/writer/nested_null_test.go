@@ -167,7 +167,7 @@ func TestNestedNullEntityInitAndTargetRestrictions(t *testing.T) {
 func TestNestedNullPolicyGeneratedTagCarrier(t *testing.T) {
 	component := sqComponent(reflect.TypeFor[sqPlainParent]().PkgPath(), "patch", "")
 	for _, view := range []*spec.View{nil, {Name: "Children"}} {
-		record, err := compileRecord(component, reflect.TypeFor[sqPlainInput](), "Children", "Rows/Children", reflect.TypeFor[sqPlainChild](), view, "Children,table=children,nestedNullPolicy=initial-validation")
+		record, err := compileRecord(component, reflect.TypeFor[sqPlainInput](), "Children", "Rows/Children", reflect.TypeFor[sqPlainChild](), view, "Children,table=children,nestedNullPolicy=initial-validation", "patch")
 		if err != nil || record.NestedNullPolicy != "initial-validation" || record.RootNullPolicy != "" {
 			t.Fatalf("generated tag lost when relation metadata is absent: %v", err)
 		}

@@ -2542,9 +2542,14 @@ func CompileWithIdentifierProducts(component *spec.Component, inputType, outputT
 	}
 	metadata.Table = tagOption(rootViewTag, "table")
 	auxiliaryRoot := component.RootView.Auxiliary || strings.EqualFold(tagOption(rootViewTag, "auxiliary"), "true")
-	currentIndex, currentType, currentErr := currentInputField(inputType, metadata.Table, auxiliaryRoot, component.RootView.CanonicalName(), metadata.EntityType.Name())
-	if currentErr != nil {
-		return nil, currentErr
+	currentIndex := -1
+	var currentType reflect.Type
+	if operation != "post" {
+		var currentErr error
+		currentIndex, currentType, currentErr = currentInputField(inputType, metadata.Table, auxiliaryRoot, component.RootView.CanonicalName(), metadata.EntityType.Name())
+		if currentErr != nil {
+			return nil, currentErr
+		}
 	}
 	metadata.CurrentField, metadata.CurrentType = currentIndex, currentType
 	if currentIndex >= 0 {
@@ -2668,7 +2673,7 @@ func CompileWithIdentifierProducts(component *spec.Component, inputType, outputT
 	if metadata.Sequence != nil {
 		root.Selector = metadata.Sequence.Name
 	}
-	if err := compileRelations(component, inputType, root, component.RootView, renderer); err != nil {
+	if err := compileRelations(component, inputType, root, component.RootView, operation, renderer); err != nil {
 		return nil, err
 	}
 	if root.Auxiliary && len(root.Relations) == 0 && hookName != "" {
@@ -2773,7 +2778,7 @@ func describeFields(typeOf reflect.Type) string {
 	return strings.Join(parts, ";")
 }
 
-func compileRelations(component *spec.Component, inputType reflect.Type, parent *Record, view *spec.View, renderer identifier.Renderer) error {
+func compileRelations(component *spec.Component, inputType reflect.Type, parent *Record, view *spec.View, operation string, renderer identifier.Renderer) error {
 	for i := 0; i < parent.EntityType.NumField(); i++ {
 		structField := parent.EntityType.Field(i)
 		viewTag := structField.Tag.Get("view")
@@ -2789,7 +2794,7 @@ func compileRelations(component *spec.Component, inputType reflect.Type, parent 
 			name = structField.Name
 		}
 		childView := relationView(view, structField.Name, name)
-		child, err := compileRecord(component, inputType, name, parent.Path+"/"+structField.Name, childType, childView, viewTag, renderer)
+		child, err := compileRecord(component, inputType, name, parent.Path+"/"+structField.Name, childType, childView, viewTag, operation, renderer)
 		if err != nil {
 			return err
 		}
@@ -2874,7 +2879,7 @@ func unqualifiedIdentity(name string) bool {
 	return true
 }
 
-func compileRecord(component *spec.Component, inputType reflect.Type, name, path string, entityType reflect.Type, view *spec.View, viewTag string, renderers ...identifier.Renderer) (*Record, error) {
+func compileRecord(component *spec.Component, inputType reflect.Type, name, path string, entityType reflect.Type, view *spec.View, viewTag string, operation string, renderers ...identifier.Renderer) (*Record, error) {
 	renderer := identifier.Renderer{}
 	if len(renderers) != 0 {
 		renderer = renderers[0]
@@ -2978,11 +2983,14 @@ func compileRecord(component *spec.Component, inputType reflect.Type, name, path
 	if err := compileScopedSequences(record); err != nil {
 		return nil, err
 	}
-	currentIndex, _, currentErr := currentInputField(inputType, record.Table, record.Auxiliary, name)
-	if currentErr != nil {
-		return nil, currentErr
+	// POST rows always insert; independent read candidates are not Previous.
+	if operation != "post" {
+		currentIndex, _, currentErr := currentInputField(inputType, record.Table, record.Auxiliary, name)
+		if currentErr != nil {
+			return nil, currentErr
+		}
+		record.CurrentField = currentIndex
 	}
-	record.CurrentField = currentIndex
 	if record.Sequence != nil {
 		record.Selector = strings.TrimPrefix(strings.TrimPrefix(path, component.RootView.CanonicalName()+"/"), "/")
 		if record.Selector != "" {
@@ -2990,7 +2998,7 @@ func compileRecord(component *spec.Component, inputType reflect.Type, name, path
 		}
 		record.Selector += record.Sequence.Name
 	}
-	if err := compileRelations(component, inputType, record, view, renderer); err != nil {
+	if err := compileRelations(component, inputType, record, view, operation, renderer); err != nil {
 		return nil, err
 	}
 	return record, nil
