@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-func TestInvariantIndexIsRemovedWithLastInvariant(t *testing.T) {
+func TestCommentOnlyInvariantIndexIsNotEmitted(t *testing.T) {
 	dir := t.TempDir()
 	file := &ast.File{Name: ast.NewIdent("records")}
 	plan := &Plan{ComponentName: "Records", RouterDest: "router.go", Input: generatedContract("Input", "input.go"), Output: generatedContract("Output", "output.go"), EntitySupport: &EntitySupportPlan{File: file, Destination: "setters.go", Invariants: []EntityInvariant{{Identity: "root", Group: "Window"}}}, Views: []ViewPlan{{Identity: "root", Name: "Row", Type: "Row", Destination: "views.go", Ownership: ViewGenerated, Fields: []Field{{Name: "Start", Type: "int", Tag: `invariant:"Window"`}}}}}
@@ -15,7 +15,11 @@ func TestInvariantIndexIsRemovedWithLastInvariant(t *testing.T) {
 		t.Fatal(err)
 	}
 	path := filepath.Join(dir, "invariants.go")
-	if _, err := os.Stat(path); err != nil {
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatalf("comment-only invariant index emitted: %v", err)
+	}
+	// Existing comment-only indexes retire through ordinary generated ownership.
+	if err := os.WriteFile(path, []byte(generatedHeader("Records")+"package records\n// BackfillWindowIfNeeded\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
 	plan.Views[0].Fields[0].Tag = ""
