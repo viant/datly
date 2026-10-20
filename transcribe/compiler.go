@@ -112,6 +112,7 @@ func (c *Compiler) Compile(ctx context.Context, source *Source) (*Result, error)
 	if err := compilation.refine(ctx); err != nil {
 		return nil, err
 	}
+	compilation.selectNativeComponentLifecycle()
 	if err := compilation.compileHandler(); err != nil {
 		return nil, err
 	}

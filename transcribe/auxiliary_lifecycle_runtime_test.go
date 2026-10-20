@@ -4,15 +4,23 @@ import (
 	"context"
 	"github.com/viant/datly/internal/testharness"
 	"github.com/viant/datly/internal/testharness/sqlite"
+	"github.com/viant/datly/spec"
 	tcolumn "github.com/viant/datly/transcribe/column"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
 func TestLeafAuxiliaryRootLifecycle(t *testing.T) {
 	runLeafAuxiliaryRootLifecycle(t, "SELECT e.*,lifecycle_type(e,'BatchLifecycle') FROM (events) e")
+}
+
+func TestLeafAuxiliaryRootLifecycleReplacesFactory(t *testing.T) {
+	runLeafAuxiliaryRootLifecycleMethod(t, "SELECT e.*,lifecycle_type(e,'BatchLifecycle') FROM (events) e", "PATCH", func(source *Source) {
+		source.PackageComponent = &spec.Component{Name: "Events", Routes: []*spec.Route{{Method: "PATCH", Path: "/events", Handler: "OldFactory"}}}
+	})
 }
 
 func TestKeylessAggregateLeafAuxiliaryRootLifecycle(t *testing.T) {
@@ -28,7 +36,7 @@ func runLeafAuxiliaryRootLifecycle(t *testing.T, graph string) {
 	runLeafAuxiliaryRootLifecycleMethod(t, graph, "PATCH")
 }
 
-func runLeafAuxiliaryRootLifecycleMethod(t *testing.T, graph, method string) {
+func runLeafAuxiliaryRootLifecycleMethod(t *testing.T, graph, method string, configure ...func(*Source)) {
 	t.Helper()
 	db := sqlite.New(t)
 	ctx := context.Background()
@@ -42,10 +50,20 @@ func runLeafAuxiliaryRootLifecycleMethod(t *testing.T, graph, method string) {
 #define($_ = $Data<[]*EventsView>(output/body))
 #define($_ = $Status<string>(output/status))
 ` + graph}
+	for _, apply := range configure {
+		apply(source)
+	}
 	request := Request{Source: source, Destination: root, Options: Options{Handler: HandlerOptions{Target: HandlerGo, Operation: WritePatch, Go: GoHandlerOptions{Execution: GoExecutionMutation, Factory: "NewEventsHandler"}, Hooks: HookOptions{Scaffold: true}}}}
-	_, err := NewCompiler().Transcribe(ctx, request)
+	generated, err := NewCompiler().Transcribe(ctx, request)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if len(configure) != 0 {
+		for _, file := range generated.Result.Files {
+			if strings.Contains(file.Content, "OldFactory") || strings.Contains(file.Content, "customhandler.Factory") {
+				t.Fatalf("native lifecycle retained factory execution in %s", file.Path)
+			}
+		}
 	}
 	if _, err = os.Stat(filepath.Join(root, "generated", "lifecycle.go")); err != nil {
 		t.Fatalf("native auxiliary lifecycle scaffold missing: %v", err)
@@ -63,6 +81,22 @@ func runLeafAuxiliaryRootLifecycleMethod(t *testing.T, graph, method string) {
 	command.Dir = root
 	if output, err := command.CombinedOutput(); err != nil {
 		t.Fatalf("auxiliary lifecycle: %v\n%s", err, output)
+	}
+	if len(configure) != 0 {
+		// A stale factory must not hide an invalid authored native lifecycle.
+		invalid := `package events
+import("context";handler "github.com/viant/xdatly/handler")
+type BatchLifecycle struct{}
+func(*BatchLifecycle)Init(context.Context,*EventsView,handler.LifecycleContext[EventsInput,handler.NoParent,EventsOutput])error{return nil}
+`
+		if err := os.WriteFile(filepath.Join(root, "generated", "lifecycle.go"), []byte(invalid), 0600); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := NewCompiler().Transcribe(ctx, request); err == nil {
+			t.Fatal("invalid native lifecycle accepted under inherited factory")
+		} else if !strings.Contains(err.Error(), "BatchLifecycle") {
+			t.Fatalf("expected native lifecycle diagnostic: %v", err)
+		}
 	}
 }
 
