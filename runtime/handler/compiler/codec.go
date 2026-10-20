@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/viant/datly/spec"
+	xshape "github.com/viant/x/shape"
 	xcodec "github.com/viant/xdatly/codec"
 	"github.com/viant/xreflect"
 )
@@ -94,7 +95,18 @@ func (c ParamCodecCompiler) sourceType(fields *contractFields, param *spec.Param
 				return c.LookupType(name)
 			}))
 		}
-		sourceType, err := xreflect.Parse(expression, options...)
+		// Native metadata carries canonical import-path identities. Shape owns
+		// their syntax and wrappers; retain the legacy parser's short-name
+		// standard types and lookup ordering at the named-leaf boundary.
+		sourceType, err := (xshape.Runtime{Lookup: func(name string) (reflect.Type, error) {
+			if strings.Contains(name, "/") {
+				if c.LookupType == nil {
+					return nil, fmt.Errorf("canonical type %q requires component type lookup", name)
+				}
+				return c.LookupType(name)
+			}
+			return xreflect.Parse(name, options...)
+		}}).Type(expression)
 		if err != nil {
 			return nil, fmt.Errorf("codec param %q source type %q: %w", param.Name, expression, err)
 		}

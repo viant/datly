@@ -51,6 +51,30 @@ func (p *planResolver) concretizeFields(fields []Field, output bool) error {
 		if param == nil {
 			continue
 		}
+		if strings.TrimSpace(param.TypeExpr) != "" && !fields[index].Anonymous {
+			// Parameter metadata survives package reload, where authored import
+			// aliases (especially a self import omitted from Go) no longer exist.
+			// Canonicalize the wire declaration, never a codec's output type.
+			authority := *p.plan
+			defaultPackage := p.input.TargetPackage
+			if context := p.input.Component.TypeContext; context != nil {
+				authority.Imports = context.Imports
+				if context.DefaultPackage != "" {
+					defaultPackage = context.DefaultPackage
+				}
+			}
+			canonical, err := authority.CanonicalType(defaultPackage, param.TypeExpr)
+			if err != nil {
+				return fmt.Errorf("parameter %s dataType: %w", param.Name, err)
+			}
+			detached := *param
+			detached.TypeExpr = canonical
+			metadata, _, err := resolveField(&detached, Declarations{})
+			if err != nil {
+				return err
+			}
+			fields[index].Tag = replaceStructTag(fields[index].Tag, "parameter", reflect.StructTag(metadata.Tag).Get("parameter"))
+		}
 		authored := strings.TrimSpace(param.OutputTypeExpr)
 		if authored == "" {
 			authored = strings.TrimSpace(param.TypeExpr)

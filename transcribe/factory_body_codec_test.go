@@ -172,14 +172,15 @@ func(c *Child)UnmarshalJSON(raw []byte)error{
 const factoryBodyCodecRuntime = `package archive
 import("encoding/json";"fmt";"reflect";"testing";
 "github.com/stretchr/testify/require";"github.com/viant/bindly";"github.com/viant/bindly/provider/body";
-"github.com/viant/datly/spec";"github.com/viant/datly/bootstrap";dtag "github.com/viant/datly/tag";"github.com/viant/datly/runtime/handler/compiler";"github.com/viant/xdatly/codec")
+"github.com/viant/datly/spec";"github.com/viant/datly/typecatalog";"github.com/viant/datly/bootstrap";dtag "github.com/viant/datly/tag";"github.com/viant/datly/runtime/handler/compiler";"github.com/viant/xdatly/codec")
 func bindRecord(t *testing.T,raw string)(*ArchiveInput,error){
  t.Helper(); provider,err:=body.New([]byte("{\"data\":"+raw+"}"),"application/json",nil);require.NoError(t,err)
  holder:=reflect.TypeFor[ArchiveComponent]();field,ok:=holder.FieldByName("Contract");require.True(t,ok);metadata,present,err:=dtag.ParseComponent(field.Tag);require.NoError(t,err);require.True(t,present)
  component,err:=(&bootstrap.RouteSource{HolderType:holder.Name(),FieldName:field.Name,PackageName:"archive",PackagePath:holder.PkgPath(),Tag:metadata,InputType:"ArchiveInput",OutputType:"ArchiveOutput"}).Resolve(reflect.TypeFor[ArchiveInput](),reflect.TypeFor[ArchiveOutput]());require.NoError(t,err)
  require.Nil(t,component.RootView);require.Empty(t,component.Views);require.Empty(t,component.Settings.Mutation)
  require.NotNil(t,component.Parameters[0].Codec);require.Equal(t,"github.com/viant/datly/handlerfixture/archive.RecordJSON",component.Parameters[0].Codec.Body)
- binding:=compiler.New(compiler.Input{Component:component,InputType:reflect.TypeFor[ArchiveInput](),CodecFactory:RecordJSON{},TypeLookup:func(name string)(reflect.Type,error){if name=="json.RawMessage"{return reflect.TypeFor[json.RawMessage](),nil};return nil,fmt.Errorf("unknown source %s",name)}})
+ resolver,err:=typecatalog.NewResolver(typecatalog.NewCatalog(),typecatalog.PackageAuthority,&typecatalog.ResolutionContext{Imports:[]typecatalog.PackageImport{{Alias:"json",Package:"encoding/json"}}});require.NoError(t,err)
+ binding:=compiler.New(compiler.Input{Component:component,InputType:reflect.TypeFor[ArchiveInput](),CodecFactory:RecordJSON{},TypeLookup:resolver.Type})
  bindings,err:=binding.CompileBindings();require.NoError(t,err);require.Len(t,bindings,1);require.Equal(t,reflect.TypeFor[json.RawMessage](),bindings[0].SourceType);require.NotNil(t,bindings[0].Transformer)
  injector,err:=bindly.NewInjector(bindly.WithProviders(provider));require.NoError(t,err);plan,err:=injector.CompilePlan(reflect.TypeFor[ArchiveInput](),bindings...);require.NoError(t,err)
  input:=&ArchiveInput{};err=injector.Bind(t.Context(),input,bindly.WithPlan(plan),bindly.WithSource(input));return input,err
