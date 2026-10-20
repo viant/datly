@@ -51,7 +51,7 @@ func (g *Generation) prepareMutation(semantic *plan.Plan, config handlergo.Confi
 			Source: gen.MutationSource{Role: "indexes", Destination: "indexes.go", File: indexes.File},
 		}
 	}
-	setters, err := handlergo.EntitySupport(semantic, config)
+	setters, err := g.entitySetters(semantic, config, contracts)
 	if err != nil {
 		return err
 	}
