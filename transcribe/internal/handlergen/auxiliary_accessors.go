@@ -62,7 +62,9 @@ func (g *Generation) entitySetters(semantic *plan.Plan, config handlergo.Config,
 			}
 			planned := plan.EntityField{Name: name, Path: plan.FieldPath{name}, Type: spec.TypeRef{Name: field.Type}, Writable: true}
 			if _, relation := reflect.StructTag(field.Tag).Lookup(tag.ViewName); relation {
-				planned.Relation, planned.Writable = true, false
+				// This accessor-only record preserves marked relation setters;
+				// it does not grant the auxiliary relation persistence ownership.
+				planned.Relation = true
 			}
 			if _, self := reflect.StructTag(field.Tag).Lookup(tag.SelfName); self {
 				planned.Relation, planned.Self, planned.Writable = true, true, true
