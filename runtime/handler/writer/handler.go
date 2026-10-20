@@ -1242,8 +1242,10 @@ func (p *Program) prepare(ctx context.Context, binder xhandler.Binder) (err erro
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		entities := reflect.ValueOf(p.input).Elem().Field(p.metadata.InputField)
-		reflect.ValueOf(p.output).Elem().Field(p.metadata.OutputField).Set(entities)
+		if p.metadata.OutputField >= 0 {
+			entities := reflect.ValueOf(p.input).Elem().Field(p.metadata.InputField)
+			reflect.ValueOf(p.output).Elem().Field(p.metadata.OutputField).Set(entities)
+		}
 		frame := &Frame{Entity: reflect.ValueOf(p.input), Hook: p.hook, Record: p.metadata.Root}
 		if err := p.callEntityHook(ctx, "Init", frame); err != nil {
 			return err
@@ -2632,7 +2634,7 @@ func CompileWithIdentifierProducts(component *spec.Component, inputType, outputT
 			break
 		}
 	}
-	if metadata.OutputField < 0 {
+	if metadata.OutputField < 0 && !componentLifecycle {
 		return nil, fmt.Errorf("writer output has no entity collection for %s", metadata.EntityType)
 	}
 	if component.RootView.Source != nil {
