@@ -10,7 +10,10 @@ import (
 	"github.com/viant/datly/constant/identifier"
 	plan "github.com/viant/datly/transcribe/handler/ast"
 	"github.com/viant/sqlparser"
+	sqlexpr "github.com/viant/sqlparser/expr"
+	"github.com/viant/sqlparser/node"
 	sqlsource "github.com/viant/sqlparser/source"
+	"github.com/viant/sqlx"
 	"github.com/viant/velty/ast/expr"
 	"github.com/viant/velty/ast/stmt"
 	veltyparser "github.com/viant/velty/parser"
@@ -122,10 +125,9 @@ func (c *Compiler) CompileStatement(source string, authority map[string]plan.Sta
 		switch sqlText[pos] {
 		case '$', '#':
 			return nil, fmt.Errorf("statement SQL requires static executable text")
-		case '?':
-			bindings++
 		}
 	}
+	bindings = sqlx.ParseParameters(sqlText).PositionalCount()
 	if bindings != len(call.Args)-argumentOffset {
 		return nil, fmt.Errorf("statement has %d placeholders but %d arguments", bindings, len(call.Args)-argumentOffset)
 	}
@@ -145,7 +147,13 @@ func (c *Compiler) CompileStatement(source string, authority map[string]plan.Sta
 		if err != nil {
 			return nil, fmt.Errorf("statement argument %d: %w", i+1, err)
 		}
-		if !statementScalar(field.Type.Name) {
+		if field.Type.Name == "[]int" {
+			if method.ID != "Execute" || kind != sqlparser.KindUpdate || result.CollectionOrdinal != nil || !statementCollectionPosition(sqlText, i) {
+				return nil, fmt.Errorf("statement argument %d must be a typed scalar field or the sole []int binding in a positive UPDATE IN predicate", i+1)
+			}
+			ordinal := i
+			result.CollectionOrdinal = &ordinal
+		} else if !statementScalar(field.Type.Name) {
 			return nil, fmt.Errorf("statement argument %d must be a typed scalar field", i+1)
 		}
 		result.Arguments = append(result.Arguments, field)
@@ -235,4 +243,46 @@ func statementScalar(name string) bool {
 		return true
 	}
 	return false
+}
+
+// Mark positional placeholders through SQLX so protected text and named parameters
+// cannot shift their ordinals. Only an IN predicate with a single placeholder
+// value and scalar identifier left operand grants collection authority.
+func statementCollectionPosition(sql string, ordinal int) bool {
+	marker := "datlyNativeCollection"
+	for strings.Contains(sql, marker) {
+		marker += "_"
+	}
+	marked := sqlx.ParseParameters(sql).RewritePositional(func(i int) string {
+		if i == ordinal {
+			return ":" + marker
+		}
+		return "?"
+	})
+	parsed, err := sqlparser.ParseUpdate(marked)
+	if err != nil || parsed.Qualify == nil {
+		return false
+	}
+	var visit func(node.Node) bool
+	visit = func(n node.Node) bool {
+		switch actual := n.(type) {
+		case *sqlexpr.Parenthesis:
+			return visit(actual.X)
+		case *sqlexpr.Binary:
+			if strings.EqualFold(actual.Op, "AND") || strings.EqualFold(actual.Op, "OR") {
+				return visit(actual.X) || visit(actual.Y)
+			}
+			if !strings.EqualFold(actual.Op, "IN") || sqlexpr.Identity(actual.X) == nil {
+				return false
+			}
+			right, ok := actual.Y.(*sqlexpr.Parenthesis)
+			if !ok {
+				return false
+			}
+			placeholder, ok := right.X.(*sqlexpr.Placeholder)
+			return ok && strings.TrimPrefix(placeholder.Name, ":") == marker
+		}
+		return false
+	}
+	return visit(parsed.Qualify.X)
 }

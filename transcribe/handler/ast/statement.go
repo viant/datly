@@ -14,19 +14,21 @@ type StatementSelector struct {
 // Execution, allocation, batching and transaction policies remain service-owned.
 type StatementPlan struct {
 	// Method selects an existing buffered DML operation. Empty retains ExecuteWithResult.
-	Method        string
-	SQL           string
-	SQLConstants  []string
-	Arguments     []StatementSelector
-	LastInsertID  StatementSelector
-	MergeTable    StatementSelector
-	MergeRows     StatementSelector
-	MergeConfig   StatementSelector
-	MergeResult   StatementSelector
-	BatchTable    StatementSelector
-	BatchRows     StatementSelector
-	BatchSize     StatementSelector
-	BatchAffected StatementSelector
+	// CollectionOrdinal is the zero-based positional binding expanded for []int.
+	CollectionOrdinal *int
+	Method            string
+	SQL               string
+	SQLConstants      []string
+	Arguments         []StatementSelector
+	LastInsertID      StatementSelector
+	MergeTable        StatementSelector
+	MergeRows         StatementSelector
+	MergeConfig       StatementSelector
+	MergeResult       StatementSelector
+	BatchTable        StatementSelector
+	BatchRows         StatementSelector
+	BatchSize         StatementSelector
+	BatchAffected     StatementSelector
 
 	// BatchOnDuplicateKeySQL is present only for an authored fifth string literal.
 	BatchOnDuplicateKeySQL *string

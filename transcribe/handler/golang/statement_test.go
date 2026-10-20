@@ -52,3 +52,54 @@ if p.calls!=2{t.Fatal("rejected operation executed")}
 		t.Fatalf("typed generated statement: %v\n%s", err, output)
 	}
 }
+
+func TestLowerCollectionStatement(t *testing.T) {
+	ordinal := 1
+	value := &plan.StatementPlan{Method: "Execute", SQL: "UPDATE records SET enabled=?, note='?' WHERE id IN (?) AND owner_id=? /* ? */", CollectionOrdinal: &ordinal}
+	for _, field := range []struct{ name, typ string }{{"Enabled", "int"}, {"IDs", "[]int"}, {"OwnerID", "int"}} {
+		value.Arguments = append(value.Arguments, plan.StatementSelector{Path: plan.FieldPath{"Input", field.name}, Type: spec.TypeRef{Name: field.typ}})
+	}
+	file, err := StatementQueue(value, Config{Package: "example", Factory: "NewRecord", InputType: "Input", OutputType: "Output"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var source bytes.Buffer
+	if err := format.Node(&source, token.NewFileSet(), file); err != nil {
+		t.Fatal(err)
+	}
+	// Compile and run the emitted code against the same SQLX source used by this module.
+	dir := t.TempDir()
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	root := filepath.Clean(filepath.Join(cwd, "../../.."))
+	module, err := os.ReadFile(filepath.Join(root, "go.mod"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, content := range map[string]string{"go.mod": string(module), "statement.go": source.String(), "statement_test.go": `package example
+import("testing";"reflect";"strings";"errors")
+type Input struct{Enabled,OwnerID int;IDs []int};type Output struct{}
+type probe struct{sql string;args []any;calls int;err error}
+func(p *probe)Execute(sql string,args ...any)error{p.sql,p.args=sql,args;p.calls++;return p.err}
+func TestBinding(t *testing.T){for _,n:=range []int{0,1,3,101}{in:=&Input{Enabled:0,OwnerID:77};for i:=0;i<n;i++{in.IDs=append(in.IDs,i%3)};p:=&probe{};err:=NewRecordQueueStatement(p,in,&Output{});if n==0 {if err==nil||p.calls!=0{t.Fatal("empty queued")};continue};if err!=nil{t.Fatal(err)};want:="UPDATE records SET enabled=?, note='?' WHERE id IN ("+strings.TrimSuffix(strings.Repeat("?,",n),",")+") AND owner_id=? /* ? */";args:=[]any{0};for _,id:=range in.IDs{args=append(args,id)};args=append(args,77);if p.calls!=1||p.sql!=want||!reflect.DeepEqual(p.args,args){t.Fatalf("binding mismatch: %s %#v",p.sql,p.args)};failure:=errors.New("driver");p.err=failure;if !errors.Is(NewRecordQueueStatement(p,in,&Output{}),failure){t.Fatal("driver error swallowed")}}}
+`} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	sum, err := os.ReadFile(filepath.Join(root, "go.sum"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(filepath.Join(dir, "go.sum"), sum, 0644); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command("go", "test", "-mod=readonly", "-count=1", ".")
+	cmd.Dir = dir
+	cmd.Env = append(os.Environ(), "GOWORK=off", "GO111MODULE=on")
+	if output, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("generated collection: %v\n%s\n%s", err, output, source.String())
+	}
+}

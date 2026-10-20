@@ -124,6 +124,13 @@ func StatementQueue(value *plan.StatementPlan, config Config) (*ast.File, error)
 		queueParams = append(queueParams, namedField("statementSQL", ast.NewIdent("string")))
 		args[0] = ast.NewIdent("statementSQL")
 	}
+	if value.CollectionOrdinal != nil {
+		collectionBody, err := statementCollectionBody(value, l, args[0])
+		if err != nil {
+			return nil, err
+		}
+		body = append(body[:len(body)-1], collectionBody...)
+	}
 	function := &ast.FuncDecl{Name: ast.NewIdent(config.Factory + "QueueStatement"), Type: &ast.FuncType{Params: &ast.FieldList{List: queueParams}, Results: &ast.FieldList{List: []*ast.Field{{Type: ast.NewIdent("error")}}}}, Body: &ast.BlockStmt{List: body}}
 	paths := make([]string, 0, len(l.usedImports))
 	for path := range l.usedImports {
