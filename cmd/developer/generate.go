@@ -44,6 +44,7 @@ func Transcribe(ctx context.Context, args []string, stdout, stderr io.Writer, ha
 	constantURL := flags.String("const", "", "instance constants YAML/JSON file")
 	directory := flags.String("dir", ".", "project root; DQL/package metadata controls artifact destinations")
 	sourceFile := flags.String("source", "", "component source filename within the selected package, for example lookup.dql")
+	sourceName := flags.String("source-name", "", "component name for exactly one selected source; preserves source path and artifact destinations")
 	operation := &operationValue
 	language := flags.String("lang", "go", "handler language: go or velty")
 	var schema schemaOptions
@@ -80,7 +81,7 @@ func Transcribe(ctx context.Context, args []string, stdout, stderr io.Writer, ha
 		return 1
 	}
 	schema.Const = instance
-	discovery := &transcribe.Discovery{Const: instance, BaseDir: resolvedDirectory, GoBuild: &gobuild.Context{Dir: resolvedDirectory}, Include: flags.Args(), SourceFile: *sourceFile}
+	discovery := &transcribe.Discovery{Const: instance, BaseDir: resolvedDirectory, GoBuild: &gobuild.Context{Dir: resolvedDirectory}, Include: flags.Args(), SourceFile: *sourceFile, SourceName: *sourceName}
 	discovery.HandlerBindings = handlers
 	if *operation == "handler" {
 		discovery.Connector = schema.connector

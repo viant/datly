@@ -44,6 +44,25 @@ successfully without adding files or updating dependencies. This recognizes
 `pkg/dependency` and the generated `internal/datlylink` package. Subsequent
 dependency changes belong to Go module commands.
 
+## Selecting a component name during transcription
+
+Use `-source` to select an authored file and optional `-source-name` to supply
+its component name before canonical discovery and compilation:
+
+```sh
+datly transcribe patch -dir . -source patch.dql -source-name LocationListPatch \
+  example.com/app/dql/locationlist
+```
+
+The name controls component identity and generated support symbols, including
+native read-index prefixes and resource namespaces. It uses the existing
+`transcribe.Source.Name` semantics; it does not supply a custom handler factory.
+Keep the option in the regeneration command. An explicit name requires exactly
+one selected source file; ambiguous selections fail before artifact publication.
+Source paths, package destinations, filename settings and adjacent SQL resources
+retain their authored locations. Omitting the option preserves filename-derived
+defaults.
+
 ## Explicit linking and dynamic discovery
 
 Init scaffolds `cmd/datly`, `internal/dependencylink`, `dql`, `generated`, `hooks`,
