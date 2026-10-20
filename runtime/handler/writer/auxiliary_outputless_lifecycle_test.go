@@ -258,3 +258,47 @@ func TestOutputlessAuxiliaryCapturedErrorOutput(t *testing.T) {
 		t.Fatalf("canonical business output lost: %+v", result)
 	}
 }
+
+type outputlessCollectionInput struct {
+	Data []*outputlessAuxiliaryBody `parameter:"Data,kind=body,in=data" view:"Request,table=parents,auxiliary=true"`
+}
+type outputlessCollectionHook struct{}
+
+var outputlessCollectionLinked = reflect.TypeFor[outputlessCollectionHook]()
+
+func (*outputlessCollectionHook) Init(_ context.Context, input *outputlessCollectionInput, state h.LifecycleContext[outputlessCollectionInput, h.NoParent, outputlessAuxiliaryOutput]) error {
+	state.Output.Entity = int64(len(input.Data))
+	state.Output.Messages = []string{"collection admitted"}
+	return nil
+}
+func (*outputlessCollectionHook) Validate(context.Context, *outputlessCollectionInput, h.LifecycleContext[outputlessCollectionInput, h.NoParent, outputlessAuxiliaryOutput]) error {
+	return nil
+}
+
+type outputlessCollectionBinder struct{}
+
+func (*outputlessCollectionBinder) Bind(context.Context, any) error { return nil }
+func (*outputlessCollectionBinder) Lookup(context.Context, h.ValueKey) (any, bool, error) {
+	return nil, false, fmt.Errorf("unexpected physical capability")
+}
+func TestOutputlessAuxiliaryEmptyCollection(t *testing.T) {
+	for _, rows := range [][]*outputlessAuxiliaryBody{nil, {}} {
+		native, err := New(outputlessAuxiliaryComponent(outputlessCollectionLinked.Name()), reflect.TypeFor[outputlessCollectionInput](), reflect.TypeFor[outputlessAuxiliaryOutput](), "post")
+		if err != nil {
+			t.Fatal(err)
+		}
+		input := &outputlessCollectionInput{Data: rows}
+		snapshot, err := native.CaptureInput(t.Context(), input)
+		if err != nil {
+			t.Fatal(err)
+		}
+		result, err := native.Execute(t.Context(), rhandler.Invocation{Input: input, Snapshot: snapshot, Binder: &outputlessCollectionBinder{}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		output := result.(*outputlessAuxiliaryOutput)
+		if output.Entity != 0 || !reflect.DeepEqual(output.Messages, []string{"collection admitted"}) {
+			t.Fatalf("empty collection lifecycle skipped: %+v", output)
+		}
+	}
+}
