@@ -48,7 +48,8 @@ func binaryCapabilities(args []Argument) (files, raw bool) {
 	return
 }
 func descriptorSchema() map[string]interface{} {
-	return map[string]interface{}{"type": "object", "properties": map[string]interface{}{"data": map[string]interface{}{"type": "string"}, "filename": map[string]interface{}{"type": "string"}, "mimeType": map[string]interface{}{"type": "string"}}}
+	// Original MCP blob descriptors require data; filename and MIME type are optional.
+	return map[string]interface{}{"type": "object", "required": []string{"data"}, "properties": map[string]interface{}{"data": map[string]interface{}{"type": "string"}, "filename": map[string]interface{}{"type": "string"}, "mimeType": map[string]interface{}{"type": "string"}}}
 }
 func projectBinarySchema(args []Argument, s *schema.ToolInputSchema) {
 	files, raw := binaryCapabilities(args)
