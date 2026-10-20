@@ -28,3 +28,23 @@ func TestPlanCanonicalTypeUsesEmittedImportAuthority(t *testing.T) {
 		})
 	}
 }
+
+func TestPlanCanonicalTypeActualLocalPackageName(t *testing.T) {
+	for _, tc := range []struct {
+		name, destination, local, want string
+		imports                        []spec.ImportSpec
+	}{
+		{"actual package alias", "example.com/generated", "patch", "[]*example.com/generated.Creative", nil},
+		{"explicit import precedence", "example.com/generated", "patch", "[]*example.com/foreign.Creative", []spec.ImportSpec{{Alias: "patch", Package: "example.com/foreign"}}},
+		{"foreign destination", "example.com/other", "patch", "[]*patch.Creative", nil},
+		{"unknown actual package", "example.com/generated", "", "[]*patch.Creative", nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p := &Plan{Package: "example.com/generated", GoPackage: tc.local, Imports: tc.imports}
+			got, err := p.CanonicalType(tc.destination, "[]*patch.Creative")
+			if err != nil || got != tc.want {
+				t.Fatalf("canonical=%s err=%v want=%s", got, err, tc.want)
+			}
+		})
+	}
+}
