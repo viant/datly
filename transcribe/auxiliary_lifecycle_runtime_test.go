@@ -12,6 +12,15 @@ import (
 )
 
 func TestLeafAuxiliaryRootLifecycle(t *testing.T) {
+	runLeafAuxiliaryRootLifecycle(t, "SELECT e.*,lifecycle_type(e,'BatchLifecycle') FROM (events) e")
+}
+
+func TestKeylessAggregateLeafAuxiliaryRootLifecycle(t *testing.T) {
+	runLeafAuxiliaryRootLifecycle(t, "SELECT e.*,CAST(e.IDS AS []int),lifecycle_type(e,'BatchLifecycle') FROM (SELECT json_group_array(id) AS IDS FROM (events)) e")
+}
+
+func runLeafAuxiliaryRootLifecycle(t *testing.T, graph string) {
+	t.Helper()
 	db := sqlite.New(t)
 	ctx := context.Background()
 	if err := db.ExecStatements(ctx, "CREATE TABLE events(id INTEGER PRIMARY KEY,name TEXT)"); err != nil {
@@ -23,7 +32,7 @@ func TestLeafAuxiliaryRootLifecycle(t *testing.T) {
 #define($_ = $Events<[]*EventsView>(body/data))
 #define($_ = $Data<[]*EventsView>(output/body))
 #define($_ = $Status<string>(output/status))
-SELECT e.*,lifecycle_type(e,'BatchLifecycle') FROM (events) e`}
+` + graph}
 	request := Request{Source: source, Destination: root, Options: Options{Handler: HandlerOptions{Target: HandlerGo, Operation: WritePatch, Go: GoHandlerOptions{Execution: GoExecutionMutation, Factory: "NewEventsHandler"}, Hooks: HookOptions{Scaffold: true}}}}
 	_, err := NewCompiler().Transcribe(ctx, request)
 	if err != nil {

@@ -2691,7 +2691,10 @@ func CompileWithIdentifierProducts(component *spec.Component, inputType, outputT
 			metadata.Invariants[invariant] = append(metadata.Invariants[invariant], compiled)
 		}
 	}
-	if len(metadata.Keys) == 0 {
+	// A leaf auxiliary lifecycle acts on the canonical Input, not an entity
+	// identity. Keep ordinary writer key requirements; reflected relations are
+	// checked again below before admitting this component-only exception.
+	if len(metadata.Keys) == 0 && !(auxiliaryRoot && len(component.RootView.Relations) == 0 && hookName != "") {
 		return nil, fmt.Errorf("writer entity %s has no primary key", metadata.EntityType)
 	}
 	if !auxiliaryRoot && metadata.Sequence == nil && len(metadata.Keys) == 1 && numericField(metadata.EntityType, metadata.Keys[0]) {
@@ -2720,6 +2723,9 @@ func CompileWithIdentifierProducts(component *spec.Component, inputType, outputT
 	}
 	if err := compileRelations(component, inputType, root, component.RootView, operation, renderer); err != nil {
 		return nil, err
+	}
+	if len(metadata.Keys) == 0 && len(root.Relations) != 0 {
+		return nil, fmt.Errorf("writer entity %s has no primary key", metadata.EntityType)
 	}
 	if root.Auxiliary && len(root.Relations) == 0 && hookName != "" {
 		if root.HookType == nil {
