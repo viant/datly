@@ -253,6 +253,24 @@ including rollback if a later chunk fails. Explicit batch size does not create
 an independent commit per chunk. Existing two-argument DML calls retain their
 existing handling.
 
+For a MySQL conflict update, Insert accepts an optional fifth SQL string literal:
+
+```sql
+$dml.Insert($Input.Table, $Input.Rows, $Input.BatchSize, $Output.Affected, "ON DUPLICATE KEY UPDATE VALUE = VALUES(VALUE), UPDATED = CURRENT_TIMESTAMP")
+```
+
+SQLX renders and binds the batch; the literal suffix selects the conflict behavior.
+The suffix cannot come from a request field or dynamically constructed expression.
+The four-argument Insert and Delete forms remain unchanged. Use a typed row with
+only the intended insert columns so omitted timestamp columns retain database
+defaults. Fields absent from the conflict clause retain their existing values.
+
+When preserving a single multirow statement, set BatchSize to the complete
+qualifying row count after business filtering, and retain source row order.
+Do not split it into per-row calls or read/diff updates: those can change conflict,
+trigger and timestamp behavior. Preceding and following buffered writes share
+the same transaction; an explicit batch does not flush or commit early.
+
 Consider three tables:
 
 | Table | Role | Relationship |
