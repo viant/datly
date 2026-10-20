@@ -57,6 +57,34 @@ func TestDeleteStagingRejectsAuxiliaryOnlyAndExplicitInconsistentPolicy(t *testi
 	}
 }
 
+func TestAuxiliaryLifecycleDeleteRoute(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		view  *spec.View
+		valid bool
+	}{
+		{"component lifecycle", &spec.View{Auxiliary: true, EntityHooks: "Lifecycle"}, true},
+		{"no lifecycle", &spec.View{Auxiliary: true}, false},
+		{"physical lifecycle without marker", &spec.View{EntityHooks: "Lifecycle"}, false},
+		{"relation", &spec.View{Auxiliary: true, EntityHooks: "Lifecycle", Relations: []*spec.Relation{{View: &spec.View{}}}}, false},
+		{"marker", &spec.View{Auxiliary: true, EntityHooks: "Lifecycle", Columns: []*spec.Column{{DeleteMarker: true}}}, false},
+		{"concurrency", &spec.View{Auxiliary: true, EntityHooks: "Lifecycle", Columns: []*spec.Column{{ConcurrencyToken: true}}}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, operation := range []string{"patch", "put", "post"} {
+				valid := tc.valid && operation != "post"
+				if err := validateWriterRoute(operation, "DELETE", tc.view); (err == nil) != valid {
+					t.Fatalf("%s route valid=%v: %v", operation, valid, err)
+				}
+				component := &spec.Component{Settings: &spec.Settings{Mutation: operation}, Routes: []*spec.Route{{Method: "DELETE"}}, RootView: tc.view}
+				if err := (&gen.Input{Component: component}).ValidateLifecycleTarget(true); (err == nil) != valid && tc.view.EntityHooks != "" {
+					t.Fatalf("%s lifecycle valid=%v: %v", operation, valid, err)
+				}
+			}
+		})
+	}
+}
+
 func TestWriterRouteCompatibilityMatrix(t *testing.T) {
 	marked := &spec.View{Columns: []*spec.Column{{Name: "Remove", DeleteMarker: true}}}
 	auxiliary := &spec.View{Auxiliary: true, Columns: marked.Columns}

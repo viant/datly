@@ -240,8 +240,8 @@ func validateWriterRoute(operation, method string, root *spec.View) error {
 	if operation == "patch" && strings.EqualFold(method, "PUT") {
 		return nil
 	}
-	if strings.EqualFold(method, "DELETE") && (operation == "patch" || operation == "put") && gen.HasWritableDeleteMarker(root) {
+	if strings.EqualFold(method, "DELETE") && (operation == "patch" || operation == "put") && gen.SupportsDeleteWriter(root) {
 		return nil
 	}
-	return fmt.Errorf("transcribe operation %q conflicts with authored route method %q; DELETE requires explicit PATCH/PUT delete-marker semantics", operation, method)
+	return fmt.Errorf("transcribe operation %q conflicts with authored route method %q; DELETE requires explicit PATCH/PUT delete-marker semantics or an auxiliary leaf component lifecycle", operation, method)
 }

@@ -19,7 +19,16 @@ func TestKeylessAggregateLeafAuxiliaryRootLifecycle(t *testing.T) {
 	runLeafAuxiliaryRootLifecycle(t, "SELECT e.*,CAST(e.IDS AS []int),lifecycle_type(e,'BatchLifecycle') FROM (SELECT json_group_array(id) AS IDS FROM (events)) e")
 }
 
+func TestDeleteKeylessAggregateLeafAuxiliaryRootLifecycle(t *testing.T) {
+	runLeafAuxiliaryRootLifecycleMethod(t, "SELECT e.*,CAST(e.IDS AS []int),lifecycle_type(e,'BatchLifecycle') FROM (SELECT json_group_array(id) AS IDS FROM (events)) e", "DELETE")
+}
+
 func runLeafAuxiliaryRootLifecycle(t *testing.T, graph string) {
+	t.Helper()
+	runLeafAuxiliaryRootLifecycleMethod(t, graph, "PATCH")
+}
+
+func runLeafAuxiliaryRootLifecycleMethod(t *testing.T, graph, method string) {
 	t.Helper()
 	db := sqlite.New(t)
 	ctx := context.Background()
@@ -28,7 +37,7 @@ func runLeafAuxiliaryRootLifecycle(t *testing.T, graph string) {
 	}
 	root := t.TempDir()
 	testharness.WriteGeneratedGoMod(t, root)
-	source := &Source{Name: "Events", Scope: "example.com/auxiliary", Connector: "main", ColumnRefiner: tcolumn.New(tcolumn.Connections{"main": db.DB}), Text: `#setting($_ = $route('/events','PATCH'))
+	source := &Source{Name: "Events", Scope: "example.com/auxiliary", Connector: "main", ColumnRefiner: tcolumn.New(tcolumn.Connections{"main": db.DB}), Text: `#setting($_ = $route('/events','` + method + `'))
 #define($_ = $Events<[]*EventsView>(body/data))
 #define($_ = $Data<[]*EventsView>(output/body))
 #define($_ = $Status<string>(output/status))

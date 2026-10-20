@@ -36,7 +36,7 @@ func (input *Input) validateLifecycleTarget(mutation, pendingDiscovery bool) err
 	if input.Component.Settings != nil {
 		policy = input.Component.Settings.Mutation
 	}
-	deleteRouteSupported := mutation && (policy == "" || policy == "patch" || policy == "put") && HasWritableDeleteMarker(input.Component.RootView)
+	deleteRouteSupported := mutation && (policy == "" || policy == "patch" || policy == "put") && SupportsDeleteWriter(input.Component.RootView)
 	supported := mutation
 	for _, route := range input.Component.Routes {
 		if route != nil && !strings.EqualFold(route.Method, "POST") && !strings.EqualFold(route.Method, "PUT") && !strings.EqualFold(route.Method, "PATCH") && !(strings.EqualFold(route.Method, "DELETE") && deleteRouteSupported) {
@@ -230,6 +230,25 @@ func (input *Input) validateLifecycleTarget(mutation, pendingDiscovery bool) err
 		}
 	}
 	return nil
+}
+
+// SupportsDeleteWriter preserves physical marker semantics and permits an
+// auxiliary component lifecycle to compose deletes through the caller's buffer.
+// It admits the transport only; lifecycle linking and policy validation still
+// run normally. Auxiliary graphs do not acquire automatic row deletion.
+func SupportsDeleteWriter(root *spec.View) bool {
+	if HasWritableDeleteMarker(root) {
+		return true
+	}
+	if root == nil || !root.Auxiliary || len(root.Relations) != 0 || strings.TrimSpace(root.EntityHooks) == "" {
+		return false
+	}
+	for _, column := range root.Columns {
+		if column != nil && (column.DeleteMarker || column.ConcurrencyToken) {
+			return false
+		}
+	}
+	return true
 }
 
 // HasWritableDeleteMarker addresses explicit graph policy, not transport verbs.
