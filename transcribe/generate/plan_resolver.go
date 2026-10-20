@@ -131,8 +131,12 @@ func (r *planResolver) resolve() (*Plan, error) {
 	if err = r.concretizeFields(r.plan.Input.Fields, false); err != nil {
 		return nil, err
 	}
-	if err = r.concretizeFields(r.plan.Output.Fields, true); err != nil {
-		return nil, err
+	// Column discovery materializes input only. Non-row output DTOs are
+	// validated by the complete owner/final plan, not provisional SQL input.
+	if !r.input.columnDiscovery {
+		if err = r.concretizeFields(r.plan.Output.Fields, true); err != nil {
+			return nil, err
+		}
 	}
 	r.resolveUniversalOutputs()
 	// Generated envelopes also travel through encoding/json on typed errors.

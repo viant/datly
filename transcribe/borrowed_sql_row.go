@@ -134,14 +134,15 @@ func borrowedConnector(c *spec.Component, v *spec.View) string {
 // freshBorrowedSource has no body/package overlay or generated row catalog.
 // The filesystem resources are captured as immutable bytes before discovery.
 func freshBorrowedSource(ctx context.Context, source *Source, text string, files []gen.BorrowedAuthorityFile, dependencies ...*typecatalog.Catalog) (*Result, error) {
-	foreign, err := freshBorrowedForeignTypes(ctx, source, text)
+	var outputs *borrowedOutputDependencies
+	foreign, err := freshBorrowedForeignTypes(ctx, source, text, &outputs)
 	if err != nil {
 		return nil, err
 	}
-	return compileBorrowedSource(ctx, source, text, files, foreign, dependencies...)
+	return compileBorrowedSource(ctx, source, text, files, foreign, outputs, dependencies...)
 }
 
-func compileBorrowedSource(ctx context.Context, source *Source, text string, files []gen.BorrowedAuthorityFile, foreign *typecatalog.Catalog, dependencies ...*typecatalog.Catalog) (*Result, error) {
+func compileBorrowedSource(ctx context.Context, source *Source, text string, files []gen.BorrowedAuthorityFile, foreign *typecatalog.Catalog, outputs *borrowedOutputDependencies, dependencies ...*typecatalog.Catalog) (*Result, error) {
 	copy := *source
 	copy.Text = text
 	copy.PackageComponent = nil
@@ -176,7 +177,8 @@ func compileBorrowedSource(ctx context.Context, source *Source, text string, fil
 	}
 	result, err := (&Compiler{comparisonOnly: true}).Compile(ctx, &copy)
 	if err == nil {
-		result.borrowedPreparation = &borrowedPreparation{foreign: foreign}
+		result.borrowedPreparation = &borrowedPreparation{foreign: foreign, outputs: outputs}
+		err = outputs.apply(result)
 	}
 	return result, err
 }
@@ -531,7 +533,7 @@ func (c *Compiler) admitBorrowedSQLRows(ctx context.Context, result *Result) err
 			if !reflect.DeepEqual(admittedDependencies, currentNamed) {
 				return fmt.Errorf("borrow_sql_row fresh named dependency contracts differ")
 			}
-			currentBorrower, err := compileBorrowedSource(ctx, &borrowerCopy, borrowerCopy.Text, frozen, freshBorrower.borrowedPreparation.foreign, currentDependencies)
+			currentBorrower, err := compileBorrowedSource(ctx, &borrowerCopy, borrowerCopy.Text, frozen, freshBorrower.borrowedPreparation.foreign, freshBorrower.borrowedPreparation.outputs, currentDependencies)
 			if err == nil {
 				input := rebindBorrowedInput(*freshBorrower.borrowedPreparation.input, currentBorrower)
 				currentBorrower.borrowedPreparation.input = &input
@@ -593,6 +595,13 @@ func sealBorrowedOwnerFiles(proof *gen.BorrowedRowAuthority, owners ...*Result) 
 	scalars, err := borrowedScalarDependencies(proof.Expected, foreign)
 	if err != nil {
 		return err
+	}
+	for _, owner := range owners {
+		if owner != nil && owner.borrowedPreparation != nil && owner.borrowedPreparation.outputs != nil {
+			for name := range owner.borrowedPreparation.outputs.names {
+				scalars[name] = true
+			}
+		}
 	}
 	entries, err := os.ReadDir(proof.OwnerDirectory)
 	if err != nil {
@@ -774,6 +783,7 @@ type borrowedPreparation struct {
 	input        *gen.Input
 	plan         *gen.Plan
 	foreign      *typecatalog.Catalog
+	outputs      *borrowedOutputDependencies
 	owners       map[string]*borrowedOwnerPreparation
 	dependencies *typecatalog.Catalog
 	baseDir      string
@@ -1026,7 +1036,7 @@ func borrowedNamedContracts(catalog *typecatalog.Catalog) (map[string][]gen.Fiel
 // Load explicit imports through native package authority. Keep owner-authored
 // named scalars, while fresh DQL remains the only authority for owner row/Has
 // and structured dependencies. The captured snapshot is reused at revalidation.
-func freshBorrowedForeignTypes(ctx context.Context, source *Source, text string) (*typecatalog.Catalog, error) {
+func freshBorrowedForeignTypes(ctx context.Context, source *Source, text string, outputDependencies ...**borrowedOutputDependencies) (*typecatalog.Catalog, error) {
 	prepared := dql.PrepareSource(text)
 	if err := prepared.Err(); err != nil {
 		return nil, err
@@ -1064,6 +1074,12 @@ func freshBorrowedForeignTypes(ctx context.Context, source *Source, text string)
 		}
 		if location != nil {
 			ownerDirectory = location.Dir
+		}
+	}
+	if len(outputDependencies) > 0 {
+		*outputDependencies[0], err = borrowedAuthoredOutputs(source, prepared, ownerDirectory, staged)
+		if err != nil {
+			return nil, err
 		}
 	}
 	scalars := borrowedAuthoredScalarNames(source.dependencySnapshot, owner, ownerDirectory)
@@ -1135,7 +1151,7 @@ func (p *borrowedPreparation) refresh(ctx context.Context, files []gen.BorrowedA
 		entry := refreshed.owners[key]
 		if entry == nil {
 			captured := p.owners[key]
-			result, err := compileBorrowedSource(ctx, &captured.source, captured.source.Text, files, captured.result.borrowedPreparation.foreign)
+			result, err := compileBorrowedSource(ctx, &captured.source, captured.source.Text, files, captured.result.borrowedPreparation.foreign, captured.result.borrowedPreparation.outputs)
 			if err != nil {
 				return nil, err
 			}
