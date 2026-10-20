@@ -875,6 +875,9 @@ func borrowedPhysicalProjection(view *spec.View) error {
 	for _, c := range view.Columns {
 		if c != nil && sqlio.ParseTag(reflect.StructTag(c.Tag)).Transient {
 			transient[strings.ToLower(c.Name)] = true
+			if output := strings.TrimSpace(c.Output); output != "" {
+				transient[strings.ToLower(output)] = true
+			}
 			continue
 		}
 		persisted = append(persisted, c)
