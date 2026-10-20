@@ -363,6 +363,8 @@ type Program struct {
 	finalized                   bool
 	componentHookAttempted      bool
 	structuralError             error
+	parentScopeError            error
+	finishScopeDiagnostics      func() error
 	queueItems                  []*Action
 	queueObserverPanic          bool
 	queueInvocationID           uint64
@@ -1193,7 +1195,23 @@ func (p *Program) prepareHooks(record *Record) {
 	}
 }
 
-func (p *Program) prepare(ctx context.Context, binder xhandler.Binder) error {
+// guardScopeDiagnostics reuses the invocation's managed read-only boundary.
+// It permits validation reads, not mutation attempts discarded by callbacks.
+// Arbitrary Go and external side effects are outside this boundary.
+func (p *Program) guardScopeDiagnostics(ctx context.Context) error {
+	if p.finishScopeDiagnostics != nil {
+		return nil
+	}
+	finish, err := handlerengine.BeginWriteEligibility(ctx)
+	if err != nil {
+		// Direct adapters without an invocation-owned boundary fail closed.
+		return errors.Join(p.parentScopeError, err)
+	}
+	p.finishScopeDiagnostics = finish
+	return nil
+}
+
+func (p *Program) prepare(ctx context.Context, binder xhandler.Binder) (err error) {
 	if p.afterValidateInputStarted {
 		return fmt.Errorf("AfterValidateInput execution already attempted; fresh capture required")
 	}
@@ -1237,6 +1255,21 @@ func (p *Program) prepare(ctx context.Context, binder xhandler.Binder) error {
 	entities := input.Field(p.metadata.InputField)
 	if p.metadata.Root == nil {
 		return fmt.Errorf("writer root metadata is unavailable")
+	}
+	defer func() {
+		if finish := p.finishScopeDiagnostics; finish != nil {
+			p.finishScopeDiagnostics = nil
+			if boundaryErr := finish(); boundaryErr != nil {
+				// Do not join Validation: outcome projection must not mask a
+				// prohibited mutation as an ordinary invalid-input response.
+				err = boundaryErr
+			}
+		}
+	}()
+	if p.parentScopeError != nil {
+		if err := p.guardScopeDiagnostics(ctx); err != nil {
+			return err
+		}
 	}
 	if err := p.indexRecordCurrent(input, p.metadata.Root); err != nil {
 		return err
@@ -1361,6 +1394,9 @@ func (p *Program) prepare(ctx context.Context, binder xhandler.Binder) error {
 			}
 		} else if initialError != nil {
 			return initialError
+		}
+		if p.parentScopeError != nil {
+			return p.parentScopeError
 		}
 		for _, frame := range p.frames.Rows {
 			if !frame.Record.Auxiliary && frame.Action == xhandler.WriteInsert {
@@ -2285,7 +2321,16 @@ func (p *Program) buildEntityFrame(ctx context.Context, binder xhandler.Binder, 
 				parentValue := parent.Entity.Elem().FieldByIndex(link.Parent.Index)
 				previousValue := previous.Elem().FieldByIndex(link.Child.Index)
 				if !linkedEqual(parentValue, previousValue) {
-					return fmt.Errorf("writer relation %s matched Previous outside parent scope", record.Path)
+					// Keep the real Previous and the first failure across Init and
+					// frame rebuilding. Diagnostics never admit a foreign child.
+					if p.parentScopeError == nil {
+						p.parentScopeError = fmt.Errorf("writer relation %s matched Previous outside parent scope", record.Path)
+					}
+					// Framing later rows can evaluate managed predicates. Guard
+					// immediately, including mismatches introduced by Init.
+					if err := p.guardScopeDiagnostics(ctx); err != nil {
+						return err
+					}
 				}
 			}
 		}

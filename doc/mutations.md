@@ -1287,6 +1287,18 @@ That key propagation does not permit reparenting an existing child. A completed
 child identity remains INSERT even if it collides with a database row; the write
 fails rather than switching to UPDATE.
 
+When Current matches a child under a different parent, native input validation
+can report ordinary field or business violations before the retained scope
+error. Such a graph never reaches sequencing or mutation queueing. Initialization
+and validation run inside the existing managed read-only boundary, so attempted
+DML, allocation, flushes and mutating child calls remain fatal even if a hook
+discards their errors. Initialization may therefore run on a graph that will be
+rejected; hooks must not rely on structural rejection to prevent arbitrary Go or
+external side effects. The boundary protects managed capabilities, not arbitrary
+code. Clearing or moving the child during initialization does not clear the
+captured scope failure. Direct adapters without an invocation-owned boundary
+continue to reject the graph before running these diagnostic callbacks.
+
 Deferring a database reference check for a parent row that does not yet exist is
 a separate case: it requires the exact captured parent INSERT, unchanged topology,
 parent-before-child order and native matching of the actual SQL-bound values.
