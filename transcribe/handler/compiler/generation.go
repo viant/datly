@@ -64,6 +64,9 @@ func (c *Compiler) BuildInput(request Request, rootType string) (Request, error)
 		return Request{}, fmt.Errorf("generation input %q conflicts with body %q", request.Input, body.Name)
 	}
 	b.request.Input = body.Name
+	if auxiliaryComponentLifecycle(b.request.Component.RootView) && strings.TrimSpace(request.Current) == "" && len(request.Currents) == 0 {
+		return b.request, nil
+	}
 	output, err := (&compiler{}).selectOutput(b.request.Component, request.Output)
 	if err != nil {
 		return Request{}, err
@@ -73,9 +76,6 @@ func (c *Compiler) BuildInput(request Request, rootType string) (Request, error)
 		b.request.Component.Parameters = append(b.request.Component.Parameters, output)
 	}
 	b.request.Output = output.Name
-	if auxiliaryComponentLifecycle(b.request.Component.RootView) && strings.TrimSpace(request.Current) == "" && len(request.Currents) == 0 {
-		return b.request, nil
-	}
 	if request.Operation == plan.OperationPatch || request.Operation == plan.OperationPut {
 		if err := b.record(b.request.Component.RootView, body.Name, nil, nil); err != nil {
 			return Request{}, err
