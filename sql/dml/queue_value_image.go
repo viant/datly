@@ -1,12 +1,15 @@
 package dml
 
 import (
+	"database/sql"
 	"database/sql/driver"
 	"encoding"
 	"encoding/json"
 	"fmt"
+	sqlxtypes "github.com/viant/sqlx/types"
 	"math"
 	"reflect"
+	"time"
 )
 
 // Pure detached comparison evidence. Execution payloads remain shallow.
@@ -33,19 +36,38 @@ func captureQueueValueForEncoding(v reflect.Value, depth int, csv bool) (*queueV
 	if !v.IsValid() {
 		return &queueValueImage{}, nil
 	}
-	for _, callback := range []reflect.Type{reflect.TypeFor[driver.Valuer](), reflect.TypeFor[json.Marshaler](), reflect.TypeFor[encoding.TextMarshaler]()} {
-		if v.Type().Implements(callback) || reflect.PointerTo(v.Type()).Implements(callback) {
-			return nil, fmt.Errorf("queue SQL value callback %v requires explicit pure native mapping support", callback)
-		}
+	// Approved native scalars have fixed pure representations. Their pointer
+	// holders still traverse normally, preserving nilness and exact identity.
+	nativeType := v.Type()
+	if v.Kind() == reflect.Interface && !v.IsNil() {
+		nativeType = v.Elem().Type()
 	}
-	if csv {
-		for _, callback := range []reflect.Type{reflect.TypeFor[fmt.Stringer](), reflect.TypeFor[error](), reflect.TypeFor[fmt.Formatter]()} {
+	pure := pureQueueScalarType(nativeType)
+	if nativeType.Kind() == reflect.Pointer {
+		pure = pureQueueScalarType(nativeType.Elem())
+	}
+	if !pure {
+		for _, callback := range []reflect.Type{reflect.TypeFor[driver.Valuer](), reflect.TypeFor[json.Marshaler](), reflect.TypeFor[encoding.TextMarshaler]()} {
 			if v.Type().Implements(callback) || reflect.PointerTo(v.Type()).Implements(callback) {
-				return nil, fmt.Errorf("queue CSV value formatting callback %v requires explicit pure native mapping support", callback)
+				return nil, fmt.Errorf("queue SQL value callback %v requires explicit pure native mapping support", callback)
+			}
+		}
+		if csv {
+			for _, callback := range []reflect.Type{reflect.TypeFor[fmt.Stringer](), reflect.TypeFor[error](), reflect.TypeFor[fmt.Formatter]()} {
+				if v.Type().Implements(callback) || reflect.PointerTo(v.Type()).Implements(callback) {
+					return nil, fmt.Errorf("queue CSV value formatting callback %v requires explicit pure native mapping support", callback)
+				}
 			}
 		}
 	}
 	r := &queueValueImage{typ: v.Type()}
+	if v.Type() == reflect.TypeFor[time.Time]() {
+		if !v.CanInterface() {
+			return nil, fmt.Errorf("queue native time value is inaccessible")
+		}
+		r.scalar = v.Interface().(time.Time)
+		return r, nil
+	}
 	child := func(value reflect.Value) error {
 		n, e := captureQueueValueForEncoding(value, depth+1, csv)
 		if e == nil {
@@ -132,6 +154,9 @@ func (r *queueValueImage) equal(v reflect.Value, depth int) bool {
 	if !v.IsValid() || v.Type() != r.typ {
 		return false
 	}
+	if r.typ == reflect.TypeFor[time.Time]() {
+		return v.CanInterface() && r.scalar.(time.Time) == v.Interface().(time.Time)
+	}
 	switch v.Kind() {
 	case reflect.Bool:
 		return r.scalar == v.Bool()
@@ -208,4 +233,18 @@ func (r *queueValueImage) equal(v reflect.Value, depth int) bool {
 		return false
 	}
 	return true
+}
+
+// Exact identities only: no named/custom wrappers, convertibility or generic
+// sql.Null[T] admits callbacks through this native representation exception.
+func pureQueueScalarType(typ reflect.Type) bool {
+	switch typ {
+	case reflect.TypeFor[time.Time](), reflect.TypeFor[sqlxtypes.BitBool](),
+		reflect.TypeFor[sql.NullString](), reflect.TypeFor[sql.NullInt64](),
+		reflect.TypeFor[sql.NullInt32](), reflect.TypeFor[sql.NullInt16](),
+		reflect.TypeFor[sql.NullByte](), reflect.TypeFor[sql.NullFloat64](),
+		reflect.TypeFor[sql.NullBool](), reflect.TypeFor[sql.NullTime]():
+		return true
+	}
+	return false
 }
