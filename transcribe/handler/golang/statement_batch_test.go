@@ -19,7 +19,7 @@ func TestLowerBatchConflictCapabilityLiteral(t *testing.T) {
 		return plan.StatementSelector{Path: plan.FieldPath{root, name}, Type: spec.TypeRef{Name: typ}, Addressable: true}
 	}
 	suffix := "ON DUPLICATE KEY UPDATE WEIGHT = VALUES(WEIGHT), UPDATED_USER = VALUES(UPDATED_USER), UPDATED = CURRENT_TIMESTAMP"
-	for _, method := range []string{"Insert", "Delete", "InsertConflict"} {
+	for _, method := range []string{"Insert", "Delete", "InsertIgnore", "InsertConflict"} {
 		p := &plan.StatementPlan{Method: strings.TrimSuffix(method, "Conflict"), BatchTable: field("Input", "Table", "string"), BatchRows: field("Input", "Rows", "[]*Record"), BatchSize: field("Input", "BatchSize", "int"), BatchAffected: field("Output", "Affected", "int64")}
 		name := p.Method + "WithBatchSize"
 		if method == "InsertConflict" {
@@ -50,6 +50,7 @@ import "testing"
 type Record struct{ID int};type Input struct{Table string;Rows []*Record;BatchSize int};type Output struct{Affected int64}
 type probe struct{method string;suffix string;rows any;size int;dest *int64}
 func(p *probe)InsertWithBatchSize(table string,rows any,size int,dest *int64)error{p.method="Insert";p.rows=rows;p.size=size;p.dest=dest;return nil}
+func(p *probe)InsertIgnoreWithBatchSize(table string,rows any,size int,dest *int64)error{p.method="InsertIgnore";p.rows=rows;p.size=size;p.dest=dest;return nil}
 func(p *probe)DeleteWithBatchSize(table string,rows any,size int,dest *int64)error{p.method="Delete";p.rows=rows;p.size=size;p.dest=dest;return nil}
 func(p *probe)InsertWithBatchSizeAndOnDuplicateKeySQL(table string,rows any,size int,dest *int64,suffix string)error{p.method="InsertConflict";p.rows=rows;p.size=size;p.dest=dest;p.suffix=suffix;return nil}
 func TestGeneratedBatch(t *testing.T){in:=&Input{Table:"weights",Rows:[]*Record{{1}},BatchSize:137};out:=&Output{};p:=&probe{}

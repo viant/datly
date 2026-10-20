@@ -7,6 +7,8 @@ func TestBufferedBatchClassification(t *testing.T) {
 		description, source string
 		expected            bool
 	}{
+		{"insert ignore", `$dml.InsertIgnore($Input.Table,$Input.Rows,$Input.Size,$Output.Affected)`, true},
+		{"insert ignore suffix unsupported", `$dml.InsertIgnore($Input.Table,$Input.Rows,$Input.Size,$Output.Affected,"suffix")`, false},
 		{"insert", `$dml.Insert($Input.Table,$Input.Rows,$Input.Size,$Output.Affected)`, true},
 		{"insert conflict", `$dml.Insert($Input.Table,$Input.Rows,$Input.Size,$Output.Affected,"ON DUPLICATE KEY UPDATE weight=VALUES(weight)")`, true},
 		{"invalid conflict reaches native validation", `$dml.Insert($Input.Table,$Input.Rows,$Input.Size,$Output.Affected,$Input.SQL)`, true},

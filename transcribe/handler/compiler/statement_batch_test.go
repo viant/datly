@@ -14,7 +14,7 @@ func batchAuthority() map[string]plan.StatementSelector {
 	return a
 }
 func TestCompileBatchStatementCanonicalContracts(t *testing.T) {
-	for _, method := range []string{"Insert", "Delete"} {
+	for _, method := range []string{"Insert", "Delete", "InsertIgnore"} {
 		source := `$dml.` + method + `($Input.Table,$Input.Rows,$Input.BatchSize,$Output.Affected)`
 		got, err := (&Compiler{}).CompileStatement(source, batchAuthority())
 		if err != nil {
@@ -48,7 +48,7 @@ func TestCompileBatchInsertLiteralConflictSuffix(t *testing.T) {
 	if got.BatchOnDuplicateKeySQL == nil || *got.BatchOnDuplicateKeySQL != suffix {
 		t.Fatalf("suffix=%v", got.BatchOnDuplicateKeySQL)
 	}
-	for _, source := range []string{prefix + `,$Input.Table)`, prefix + `,1)`, prefix + `,"suffix","extra")`, strings.Replace(prefix, "Insert", "Delete", 1) + `,"suffix")`, `$dml.Insert($Input.Table,$Input.Rows,$Input.BatchSize)`} {
+	for _, source := range []string{prefix + `,$Input.Table)`, prefix + `,1)`, prefix + `,"suffix","extra")`, strings.Replace(prefix, "Insert", "Delete", 1) + `,"suffix")`, strings.Replace(prefix, "Insert", "InsertIgnore", 1) + `,"suffix")`, `$dml.Insert($Input.Table,$Input.Rows,$Input.BatchSize)`} {
 		if _, err = (&Compiler{}).CompileStatement(source, batchAuthority()); err == nil {
 			t.Fatalf("invalid suffix contract accepted: %s", source)
 		}

@@ -49,6 +49,7 @@ type dataOperation struct {
 
 	// SQLX constructor suffix belongs to this source-slice operation.
 	onDuplicateKeySQL string
+	insertIgnore      bool
 }
 
 func (d *Data) Insert(tableName string, data any) error {

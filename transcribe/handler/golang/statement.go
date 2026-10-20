@@ -15,7 +15,7 @@ import (
 // operation. The surrounding native program retains binding, lifecycle and
 // transaction ownership; this function never obtains a connection or drains.
 func StatementQueue(value *plan.StatementPlan, config Config) (*ast.File, error) {
-	if value == nil || (value.SQL == "" && value.Method != "Merge" && value.Method != "Insert" && value.Method != "Delete") {
+	if value == nil || (value.SQL == "" && value.Method != "Merge" && value.Method != "Insert" && value.Method != "Delete" && value.Method != "InsertIgnore") {
 		return nil, fmt.Errorf("canonical statement plan is required")
 	}
 	if !token.IsIdentifier(config.Package) || token.Lookup(config.Package).IsKeyword() || !token.IsIdentifier(config.Factory) {
@@ -66,7 +66,7 @@ func StatementQueue(value *plan.StatementPlan, config Config) (*ast.File, error)
 	if method == "" {
 		method = "ExecuteWithResult"
 	}
-	if method != "Execute" && method != "ExecuteWithResult" && method != "Merge" && method != "Insert" && method != "Delete" {
+	if method != "Execute" && method != "ExecuteWithResult" && method != "Merge" && method != "Insert" && method != "Delete" && method != "InsertIgnore" {
 		return nil, fmt.Errorf("unsupported buffered statement method %q", method)
 	}
 	args := []ast.Expr{&ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(value.SQL)}}
@@ -102,7 +102,7 @@ func StatementQueue(value *plan.StatementPlan, config Config) (*ast.File, error)
 			return nil, err
 		}
 	}
-	if method == "Insert" || method == "Delete" {
+	if method == "Insert" || method == "Delete" || method == "InsertIgnore" {
 		var err error
 		args, capability, err = statementBatchCall(value, selector)
 		if err != nil {

@@ -253,6 +253,24 @@ including rollback if a later chunk fails. Explicit batch size does not create
 an independent commit per chunk. Existing two-argument DML calls retain their
 existing handling.
 
+For MySQL's fixed `INSERT IGNORE` behavior, use the same four selectors:
+
+```sql
+$dml.InsertIgnore($Input.Table, $Input.Rows, $Input.BatchSize, $Output.Affected)
+```
+
+This emits `INSERT IGNORE INTO` through SQLX's existing row/column binder and
+requires MySQL; other dialects reject the mode. It accepts no fifth conflict
+suffix. Ordinary `Insert` continues to emit `INSERT INTO`. Map only the intended
+insert columns: when the database owns an omitted AUTO_INCREMENT ID, leave that
+ID out of the row type. A mapped identity still follows the existing source-slice
+requirement for a native allocated identity before queue admission. Perform
+business filtering and first-occurrence deduplication before queueing, retain
+row order, and set BatchSize to the complete qualifying row count to preserve
+one multirow statement. Empty rows remain a no-op and completion remains with
+the caller. `ON DUPLICATE KEY UPDATE`, including a no-op update, does not preserve
+IGNORE's warning, trigger, or timestamp behavior and is not a substitute.
+
 For a MySQL conflict update, Insert accepts an optional fifth SQL string literal:
 
 ```sql

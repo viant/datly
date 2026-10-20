@@ -42,10 +42,10 @@ func (c *Compiler) CompileStatement(source string, authority map[string]plan.Sta
 		return nil, fmt.Errorf("statement program requires dml.Execute, dml.ExecuteWithResult, dml.Merge, dml.Insert or dml.Delete")
 	}
 	method, ok := service.X.(*expr.Select)
-	if !ok || (method.ID != "ExecuteWithResult" && method.ID != "Execute" && method.ID != "Merge" && method.ID != "Insert" && method.ID != "Delete") {
+	if !ok || (method.ID != "ExecuteWithResult" && method.ID != "Execute" && method.ID != "Merge" && method.ID != "Insert" && method.ID != "Delete" && method.ID != "InsertIgnore") {
 		return nil, fmt.Errorf("statement program requires dml.Execute, dml.ExecuteWithResult, dml.Merge, dml.Insert or dml.Delete")
 	}
-	if method.ID == "Insert" || method.ID == "Delete" {
+	if method.ID == "Insert" || method.ID == "Delete" || method.ID == "InsertIgnore" {
 		return compileBatchStatement(method, authority)
 	}
 	if method.ID == "Merge" {

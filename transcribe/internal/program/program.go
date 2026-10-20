@@ -83,7 +83,7 @@ func BufferedBatch(source string) bool {
 		return false
 	}
 	method, ok := service.X.(*expr.Select)
-	if !ok || (method.ID != "Insert" && method.ID != "Delete") {
+	if !ok || (method.ID != "Insert" && method.ID != "Delete" && method.ID != "InsertIgnore") {
 		return false
 	}
 	call, ok := method.X.(*expr.Call)

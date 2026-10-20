@@ -55,13 +55,18 @@ func (d *Data) Dialect(ctx context.Context) (*info.Dialect, error) {
 	return d.dialectFor(ctx, d.db)
 }
 
-func (d *Data) inserter(ctx context.Context, db *sql.DB, table string, conflict string) (*insert.Service, error) {
+func (d *Data) inserter(ctx context.Context, db *sql.DB, table string, conflict string, ignore ...bool) (*insert.Service, error) {
 	if d.insertServices == nil {
 		d.insertServices = map[string]*insert.Service{}
 	}
 	// Suffixed operations are deliberately uncached: SQLX constructor options
 	// belong to the service and must never contaminate plain table services.
-	service, ok := d.insertServices[table]
+	cacheKey := table
+	insertIgnore := len(ignore) > 0 && ignore[0]
+	if insertIgnore {
+		cacheKey += "\x00insert-ignore"
+	}
+	service, ok := d.insertServices[cacheKey]
 	if ok && conflict == "" {
 		return service, nil
 	}
@@ -76,12 +81,15 @@ func (d *Data) inserter(ctx context.Context, db *sql.DB, table string, conflict 
 	if conflict != "" {
 		options = append(options, option.OnDuplicateKeySql(conflict))
 	}
+	if insertIgnore {
+		options = append(options, option.InsertIgnore(true))
+	}
 	service, err = insert.New(ctx, db, table, options...)
 	if err != nil {
 		return nil, err
 	}
 	if conflict == "" {
-		d.insertServices[table] = service
+		d.insertServices[cacheKey] = service
 	}
 	return service, nil
 }

@@ -82,6 +82,7 @@ func (d *Data) appendWithQueueContract(table string, data any, kind dataOperatio
 	if len(batch) == 1 {
 		operation.batchSize, operation.affected = batch[0].size, batch[0].affected
 		operation.onDuplicateKeySQL = batch[0].suffix
+		operation.insertIgnore = batch[0].ignore
 	}
 	owner := d.owner()
 	owner.mu.Lock()
