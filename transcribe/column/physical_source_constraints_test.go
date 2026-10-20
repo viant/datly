@@ -363,8 +363,11 @@ func TestPhysicalTableConstraintsNonuniquePrefixIsExactRawEvidence(t *testing.T)
 	again, err := r.PhysicalTableConstraints(context.Background(), "main", "records")
 	require.NoError(t, err)
 	require.Equal(t, sealed, again)
-	_, err = r.PhysicalSourceConstraints(context.Background(), "main", v)
-	require.Error(t, err, "same complete table remains unsupported generated leaf")
+	projected, err := r.PhysicalSourceConstraints(context.Background(), "main", v)
+	require.NoError(t, err, "known nonunique prefix retains ordinary projection admission")
+	require.NotEmpty(t, projected.Projection)
+	projected.Projection = nil
+	require.Equal(t, sealed, projected)
 	for _, prefix := range []int64{512, 0} {
 		c.rows["members"].values[0][7] = prefix
 		fresh, err := r.PhysicalTableConstraints(context.Background(), "main", "records")

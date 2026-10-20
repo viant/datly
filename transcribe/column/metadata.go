@@ -439,10 +439,10 @@ func (r *Refiner) physicalSourceConstraints(ctx context.Context, connector strin
 				return fail(fmt.Errorf("physical index member identity/collation unavailable"))
 			}
 			if product.Name == "MySQL" {
-				// Complete owner sealing records known nonunique prefixes without
+				// Physical sealing records known nonunique prefixes without
 				// granting projection or full-column uniqueness authority.
 				prefixAllowed := member.IndexPrefixLength != nil && *member.IndexPrefixLength >= 0 &&
-					(*member.IndexPrefixLength == 0 || (!projectionRequired && idx.Unique == "1" && !unique && !strings.EqualFold(idx.Name, "PRIMARY")))
+					(*member.IndexPrefixLength == 0 || (idx.Unique == "1" && !unique && !strings.EqualFold(idx.Name, "PRIMARY")))
 				if !prefixAllowed || (*member.Collation != "A" && *member.Collation != "D") {
 					return fail(fmt.Errorf("physical index prefix/direction unsupported: table %s index %s column %s prefix %v direction %s", table, idx.Name, member.Name, physicalIndexPrefixDiagnostic(member.IndexPrefixLength), *member.Collation))
 				}

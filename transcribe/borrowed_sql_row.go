@@ -865,22 +865,28 @@ func borrowedPhysicalProjection(view *spec.View) error {
 		}
 		persisted = append(persisted, c)
 	}
-	if len(transient) == 0 && !view.Auxiliary {
-		return nil
-	}
 	_, query, err := sqlanalysis.Checked(view.Source.SQL, nil)
 	if err != nil {
 		return err
 	}
 	// The compiler retains a pass-through SELECT * wrapper around an authored
-	// SQL body. Peel only that exact projection; arbitrary nested SQL is still
+	// SQL body. A sole qualified star must name that exact derived FROM alias.
+	// Peel only those projections; arbitrary nested SQL is still
 	// rejected by PhysicalSourceConstraints.
 	for len(query.List) == 1 && len(query.Joins) == 0 && query.Union == nil && len(query.WithSelects) == 0 && !query.WithRecursive && query.Kind == "" && query.Qualify == nil && len(query.GroupBy) == 0 && query.Having == nil && query.QualifyClause == nil && query.Window == nil && len(query.OrderBy) == 0 && query.Limit == nil && query.Offset == nil {
 		star, ok := query.List[0].Expr.(*sqlexpr.Star)
 		if !ok || len(star.Except) != 0 {
 			break
 		}
-		if name, ok := star.X.(*sqlexpr.Ident); !ok || name.Name != "*" {
+		transparentStar := false
+		switch projection := star.X.(type) {
+		case *sqlexpr.Ident:
+			transparentStar = projection.Name == "*"
+		case *sqlexpr.Selector:
+			name, plain := projection.X.(*sqlexpr.Ident)
+			transparentStar = plain && name.Name == "*" && projection.Expression == "" && query.From.Alias != "" && projection.Name == query.From.Alias
+		}
+		if !transparentStar || query.List[0].Alias != "" {
 			break
 		}
 		nested := query.NestedSelect()
