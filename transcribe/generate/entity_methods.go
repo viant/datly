@@ -27,6 +27,7 @@ func (p *scaffoldPersistence) preserveEntityMethods(target, existing string) err
 	if p.plan == nil || p.plan.EntitySupport == nil || len(p.plan.EntitySupport.Methods) == 0 {
 		return nil
 	}
+	p.authoredEntitySources = nil
 	p.plan.accessorValidationNeeded = false
 	p.plan.accessorSourceValidationNeeded = false
 	p.plan.handlerGoFiles = nil
@@ -194,6 +195,12 @@ func (p *scaffoldPersistence) preserveEntityMethods(target, existing string) err
 	}
 	if policy.convenienceAccessor && p.plan.accessorBuild != nil {
 		p.plan.accessorValidationNeeded = true
+	}
+	for _, path := range policy.claimed {
+		if p.authoredEntitySources == nil {
+			p.authoredEntitySources = map[string]bool{}
+		}
+		p.authoredEntitySources[path] = true
 	}
 	if len(policy.claimed) == 0 {
 		return nil

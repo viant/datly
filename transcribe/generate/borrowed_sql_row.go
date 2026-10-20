@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -86,14 +87,7 @@ func BorrowedLeafContractFor(component *spec.Component, view *spec.View, package
 	copy.RootView = view.Clone()
 	copy.RootView.TypeName = name
 	copy.RootView.Dest = ""
-	copy.RootView.RootNullPolicy = ""
-	copy.RootView.InsertValidationPresence = false
-	copy.RootView.WriterIdentityPolicy = ""
-	copy.RootView.WriterActionPolicy = ""
-	copy.RootView.OnDeleteNotFound = ""
-	copy.RootView.MutationPredicateGroup = nil
-	copy.RootView.Reconciliation = nil
-	copy.RootView.QueueContract = ""
+	normalizeBorrowedComparisonRoot(copy.RootView)
 
 	// Retain independent SQL-generated named dependencies for structured transients.
 	// Only the selected row is compared; its source remains authoritative.
@@ -445,13 +439,71 @@ func validateBorrowedStruct(ts *ast.TypeSpec, imports map[string]string, pkg str
 // BorrowedNativeOwnerArtifacts derives the native owner view/route/resource
 // declarations without staging or publication. Their bytes must already exist.
 func BorrowedNativeOwnerArtifacts(input Input, dir string) ([]BorrowedAuthorityFile, error) {
+	selection, err := SelectBorrowedNativeOwner(input, dir)
+	if err != nil {
+		return nil, err
+	}
+	return selection.Artifacts, nil
+}
+
+// BorrowedNativeOwnerSelection is one invocation-local, validated generation
+// selection. Its generated helpers are the remainder after canonical authored
+// accessor ownership; selected authored sources are retained in Artifacts.
+type BorrowedNativeOwnerSelection struct {
+	Artifacts []BorrowedAuthorityFile
+	entities  *EntitySupportAsset
+}
+
+func (s *BorrowedNativeOwnerSelection) Helpers(row string, auxiliary bool) ([]BorrowedHelper, error) {
+	if s == nil {
+		return nil, fmt.Errorf("borrow_sql_row native owner selection is missing")
+	}
+	return borrowedNativeHelpers(s.entities, row, auxiliary, false)
+}
+
+func SelectBorrowedNativeOwner(input Input, dir string) (*BorrowedNativeOwnerSelection, error) {
+	if input.EntitySupport != nil {
+		if err := input.ValidateLifecycleTarget(true); err != nil {
+			return nil, err
+		}
+	}
 	plan, err := New(input).Plan()
 	if err != nil {
 		return nil, err
 	}
-	files, _, _, err := scaffoldArtifacts(dir, plan)
+	files, userFiles, removals, err := scaffoldArtifacts(dir, plan)
 	if err != nil {
 		return nil, err
+	}
+	persistence := &scaffoldPersistence{dir: dir, owner: plan.ComponentName, plan: plan, files: files, userFiles: userFiles, removals: removals, renames: map[string]bool{}}
+	if plan.EntitySupport != nil {
+		if err := persistence.preserveEntityMethods(dir, dir); err != nil {
+			return nil, err
+		}
+		if plan.stagedBuild() != nil {
+			if err := persistence.validateHandlerStage(dir, dir); err != nil {
+				return nil, err
+			}
+		}
+	}
+	files = persistence.files
+	selection := &BorrowedNativeOwnerSelection{}
+	if input.EntitySupport != nil {
+		entities := *input.EntitySupport
+		for _, file := range files {
+			if file.Path != filepath.Join(dir, plan.EntitySupport.Destination) {
+				continue
+			}
+			entities.File, err = parser.ParseFile(token.NewFileSet(), file.Path, file.Content, parser.ParseComments)
+			if err != nil {
+				return nil, err
+			}
+			selection.entities = &entities
+			break
+		}
+		if selection.entities == nil {
+			return nil, fmt.Errorf("borrow_sql_row selected entity support artifact is missing")
+		}
 	}
 	selected := map[string]bool{filepath.Join(dir, plan.ViewDest): true, filepath.Join(dir, plan.RouterDest): true}
 	for _, view := range plan.Views {
@@ -492,7 +544,24 @@ func BorrowedNativeOwnerArtifacts(input Input, dir string) ([]BorrowedAuthorityF
 		}
 		result = append(result, sealed)
 	}
-	return result, nil
+	// Preserve the exact selected source bytes checked by the canonical accessor
+	// build. Generated sources retain their existing header/equality proof below.
+	authored := make([]string, 0, len(persistence.authoredEntitySources))
+	for name := range persistence.authoredEntitySources {
+		authored = append(authored, name)
+	}
+	sort.Strings(authored)
+	for _, name := range authored {
+		file, err := SealBorrowedAuthorityFile(filepath.Join(dir, name))
+		if err != nil {
+			return nil, err
+		}
+		if generatedOwner(file.Bytes) == "" {
+			result = append(result, file)
+		}
+	}
+	selection.Artifacts = result
+	return selection, nil
 }
 
 // BorrowedHelper retains a freshly generated row method and its exact owner.
@@ -501,11 +570,15 @@ type BorrowedHelper struct{ Receiver, Name, Source, Path string }
 // BorrowedNativeHelpers selects canonical row methods from an existing native
 // generator asset. It does not generate or publish a component.
 func BorrowedNativeHelpers(asset *EntitySupportAsset, row string, auxiliary ...bool) ([]BorrowedHelper, error) {
+	return borrowedNativeHelpers(asset, row, len(auxiliary) > 0 && auxiliary[0], true)
+}
+
+func borrowedNativeHelpers(asset *EntitySupportAsset, row string, auxiliary, requireGeneratedReceiver bool) ([]BorrowedHelper, error) {
 	if asset == nil || asset.File == nil {
 		return nil, fmt.Errorf("borrow_sql_row native owner helper contract is missing")
 	}
 	receivers := map[string]bool{row: true}
-	if len(auxiliary) > 0 && auxiliary[0] {
+	if auxiliary {
 		for _, method := range asset.Methods {
 			if method.FieldAccessor {
 				receivers[method.Receiver] = true
@@ -535,11 +608,18 @@ func BorrowedNativeHelpers(asset *EntitySupportAsset, row string, auxiliary ...b
 		result = append(result, BorrowedHelper{Receiver: receiver.Name, Name: method.Name.Name, Source: out.String()})
 	}
 	for receiver := range receivers {
-		if !found[receiver] {
+		declared := false
+		for _, method := range asset.Methods {
+			if method.Receiver == receiver {
+				declared = true
+				break
+			}
+		}
+		if (!requireGeneratedReceiver && !declared) || (requireGeneratedReceiver && !found[receiver]) {
 			return nil, fmt.Errorf("borrow_sql_row native owner row helpers are missing for %s", receiver)
 		}
 	}
-	if len(result) == 0 {
+	if requireGeneratedReceiver && len(result) == 0 {
 		return nil, fmt.Errorf("borrow_sql_row native owner row helpers are missing")
 	}
 	return result, nil
@@ -862,6 +942,7 @@ func borrowedReceiptFiles(dir string, plan *Plan) ([]EmittedFile, error) {
 // declarations, not runtime types or authority borrowed from prior Go files.
 func BorrowedOwnerPlan(input Input) (*Plan, error) {
 	input.Component = input.Component.Clone()
+	normalizeBorrowedComparisonRoot(input.Component.RootView)
 	if input.Component.Settings == nil {
 		input.Component.Settings = &spec.Settings{}
 	}
@@ -875,6 +956,20 @@ func BorrowedOwnerPlan(input Input) (*Plan, error) {
 		return nil, err
 	}
 	return New(input).Plan()
+}
+
+// normalizeBorrowedComparisonRoot removes occurrence-only write policy from
+// an already detached comparison root. Actual target validation and row shape
+// (including markers, SQL and lifecycle authority) remain unchanged.
+func normalizeBorrowedComparisonRoot(root *spec.View) {
+	root.RootNullPolicy = ""
+	root.InsertValidationPresence = false
+	root.WriterIdentityPolicy = ""
+	root.WriterActionPolicy = ""
+	root.OnDeleteNotFound = ""
+	root.MutationPredicateGroup = nil
+	root.Reconciliation = nil
+	root.QueueContract = ""
 }
 
 func BorrowedNamedDependencies(input Input, name string) ([]*x.Type, error) {

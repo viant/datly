@@ -495,18 +495,17 @@ func (c *Compiler) admitBorrowedSQLRows(ctx context.Context, result *Result) err
 			if err := helperGeneration.Prepare(); err != nil {
 				return fmt.Errorf("borrow_sql_row native owner helper derivation: %w", err)
 			}
-			entry.helperInput = &helperInput
-			entry.artifacts, err = gen.BorrowedNativeOwnerArtifacts(helperInput, location.Dir)
+			entry.selection, err = gen.SelectBorrowedNativeOwner(helperInput, location.Dir)
 			if err != nil {
 				return err
 			}
+			entry.helperInput = &helperInput
 		}
-		helperInput := *entry.helperInput
-		proof.Helpers, err = gen.BorrowedNativeHelpers(helperInput.EntitySupport, declaration.Type, owner.Auxiliary)
+		proof.Helpers, err = entry.selection.Helpers(declaration.Type, owner.Auxiliary)
 		if err != nil {
 			return err
 		}
-		validatedArtifacts := entry.artifacts
+		validatedArtifacts := entry.selection.Artifacts
 		for _, file := range validatedArtifacts {
 			if err = gen.RetainBorrowedSeal(proof, file); err != nil {
 				return err
@@ -771,7 +770,7 @@ type borrowedOwnerPreparation struct {
 	input       gen.Input
 	plan        *gen.Plan
 	helperInput *gen.Input
-	artifacts   []gen.BorrowedAuthorityFile
+	selection   *gen.BorrowedNativeOwnerSelection
 }
 
 func borrowedOwnerKey(baseDir string, d spec.BorrowedSQLRow) string {

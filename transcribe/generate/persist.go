@@ -21,7 +21,9 @@ type scaffoldPersistence struct {
 	userFiles []EmittedFile
 	removals  []string
 	plan      *Plan
-	renames   map[string]bool
+	// Exact authored files claimed by canonical entity-method selection.
+	authoredEntitySources map[string]bool
+	renames               map[string]bool
 	// Pristine current render stays distinct from retained publication bytes.
 	contractProposals map[string]contractArtifactProposal
 	retainedContracts map[string]string
