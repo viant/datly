@@ -116,7 +116,11 @@ func (d *Data) checkBufferedParentLocked(parent *dataOperation, referenceColumn 
 		return fmt.Errorf("buffered parent no longer precedes child")
 	}
 	seen := false
-	for _, operation := range flattenData(owner) {
+	// The proof covers the path to this consumer and its complete subtree.
+	// Caller work queued after the component executes later and cannot alter
+	// the reference before this consumer uses it. Keep checking the subtree
+	// itself, including barriers appended after validation or its INSERT.
+	for _, operation := range append(prefix, flattenData(d)...) {
 		if operation == parent {
 			seen = true
 			continue
