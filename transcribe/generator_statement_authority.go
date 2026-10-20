@@ -8,6 +8,7 @@ import (
 	gen "github.com/viant/datly/transcribe/generate"
 	plan "github.com/viant/datly/transcribe/handler/ast"
 	"github.com/viant/datly/transcribe/handler/compiler"
+	"github.com/viant/datly/transcribe/internal/program"
 	"github.com/viant/datly/typecatalog"
 	xshape "github.com/viant/x/shape"
 )
@@ -18,6 +19,11 @@ func extendStatementAuthority(source string, authority map[string]plan.Statement
 	imports := map[string]string{}
 	for _, item := range contracts.Imports {
 		imports[item.Alias] = item.Package
+	}
+	paths := compiler.StatementSelectorPaths(source)
+	updateRow := ""
+	if program.BufferedUpdate(source) && len(paths) == 2 {
+		updateRow = strings.Join(paths[1], ".")
 	}
 	canonical := xshape.Resolver{Package: contracts.Package, Imports: imports}
 	for _, path := range compiler.StatementSelectorPaths(source) {
@@ -83,7 +89,7 @@ func extendStatementAuthority(source string, authority map[string]plan.Statement
 			identity, descriptor = resolved.Identity, resolved.Descriptor
 			shape = xshape.New(descriptor, types.Descriptor)
 		}
-		if !compiler.StatementScalarType(identity) {
+		if !compiler.StatementScalarType(identity) && !(key == updateRow && compiler.StatementRecordType(identity)) {
 			return fmt.Errorf("statement selector %s requires a scalar leaf, got %s", key, identity)
 		}
 		authority[key] = plan.StatementSelector{Path: append(plan.FieldPath(nil), path...), Type: spec.TypeRef{Name: identity}, Addressable: true, PointerParents: parents}

@@ -39,11 +39,14 @@ func (c *Compiler) CompileStatement(source string, authority map[string]plan.Sta
 		service = selector
 	}
 	if service == nil || service.ID != "dml" {
-		return nil, fmt.Errorf("statement program requires dml.Execute, dml.ExecuteWithResult, dml.ExecuteWithOptionalResult, dml.Merge, dml.Insert, dml.InsertIgnore or dml.Delete")
+		return nil, fmt.Errorf("statement program requires dml.Execute, dml.ExecuteWithResult, dml.ExecuteWithOptionalResult, dml.Merge, dml.Insert, dml.InsertIgnore, dml.Update or dml.Delete")
 	}
 	method, ok := service.X.(*expr.Select)
-	if !ok || (method.ID != "ExecuteWithResult" && method.ID != "ExecuteWithOptionalResult" && method.ID != "Execute" && method.ID != "Merge" && method.ID != "Insert" && method.ID != "Delete" && method.ID != "InsertIgnore") {
-		return nil, fmt.Errorf("statement program requires dml.Execute, dml.ExecuteWithResult, dml.ExecuteWithOptionalResult, dml.Merge, dml.Insert, dml.InsertIgnore or dml.Delete")
+	if !ok || (method.ID != "ExecuteWithResult" && method.ID != "ExecuteWithOptionalResult" && method.ID != "Execute" && method.ID != "Merge" && method.ID != "Insert" && method.ID != "Delete" && method.ID != "InsertIgnore" && method.ID != "Update") {
+		return nil, fmt.Errorf("statement program requires dml.Execute, dml.ExecuteWithResult, dml.ExecuteWithOptionalResult, dml.Merge, dml.Insert, dml.InsertIgnore, dml.Update or dml.Delete")
+	}
+	if method.ID == "Update" {
+		return compileUpdateStatement(method, authority)
 	}
 	if method.ID == "Insert" || method.ID == "Delete" || method.ID == "InsertIgnore" {
 		return compileBatchStatement(method, authority)

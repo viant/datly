@@ -16,7 +16,7 @@ import (
 // operation. The surrounding native program retains binding, lifecycle and
 // transaction ownership; this function never obtains a connection or drains.
 func StatementQueue(value *plan.StatementPlan, config Config) (*ast.File, error) {
-	if value == nil || (value.SQL == "" && value.Method != "Merge" && value.Method != "Insert" && value.Method != "Delete" && value.Method != "InsertIgnore") {
+	if value == nil || (value.SQL == "" && value.Method != "Merge" && value.Method != "Insert" && value.Method != "Delete" && value.Method != "InsertIgnore" && value.Method != "Update") {
 		return nil, fmt.Errorf("canonical statement plan is required")
 	}
 	if !token.IsIdentifier(config.Package) || token.Lookup(config.Package).IsKeyword() || !token.IsIdentifier(config.Factory) {
@@ -67,7 +67,7 @@ func StatementQueue(value *plan.StatementPlan, config Config) (*ast.File, error)
 	if method == "" {
 		method = "ExecuteWithResult"
 	}
-	if method != "Execute" && method != "ExecuteWithResult" && method != "ExecuteWithOptionalResult" && method != "Merge" && method != "Insert" && method != "Delete" && method != "InsertIgnore" {
+	if method != "Execute" && method != "ExecuteWithResult" && method != "ExecuteWithOptionalResult" && method != "Merge" && method != "Insert" && method != "Delete" && method != "InsertIgnore" && method != "Update" {
 		return nil, fmt.Errorf("unsupported buffered statement method %q", method)
 	}
 	args := []ast.Expr{&ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(value.SQL)}}
@@ -96,6 +96,13 @@ func StatementQueue(value *plan.StatementPlan, config Config) (*ast.File, error)
 		return returnStmt(callExpr(selectExpr(ast.NewIdent(fmtAlias), "Errorf"), &ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(message)}))
 	}
 	var capability ast.Expr = &ast.InterfaceType{Methods: &ast.FieldList{List: []*ast.Field{{Names: []*ast.Ident{ast.NewIdent(method)}, Type: &ast.FuncType{Params: &ast.FieldList{List: params}, Results: &ast.FieldList{List: []*ast.Field{{Type: ast.NewIdent("error")}}}}}}}}
+	if method == "Update" {
+		if len(value.Arguments) != 2 {
+			return nil, fmt.Errorf("Update requires table and record selectors")
+		}
+		args = args[1:]
+		capability = &ast.InterfaceType{Methods: &ast.FieldList{List: []*ast.Field{{Names: []*ast.Ident{ast.NewIdent("Update")}, Type: &ast.FuncType{Params: &ast.FieldList{List: []*ast.Field{{Type: ast.NewIdent("string")}, {Type: ast.NewIdent("any")}}}, Results: &ast.FieldList{List: []*ast.Field{{Type: ast.NewIdent("error")}}}}}}}}
+	}
 	if method == "Merge" {
 		var err error
 		args, capability, err = statementMergeCall(value, l, selector)

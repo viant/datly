@@ -67,6 +67,23 @@ type Left struct{ Id int };type Right struct{ Id int };type Ambiguous struct {Le
 		t.Fatal(err)
 	}
 	contracts := &gen.Plan{Package: "example.com/app/generated", Imports: []spec.ImportSpec{{Alias: "shared", Package: model}}}
+	t.Run("typed Update record leaf", func(t *testing.T) {
+		authority := map[string]plan.StatementSelector{
+			"Input.Table": {Path: plan.FieldPath{"Input", "Table"}, Type: spec.TypeRef{Name: "string"}},
+			"Input.Row":   {Path: plan.FieldPath{"Input", "Row"}, Type: spec.TypeRef{Name: "*shared.LinkedRow"}},
+		}
+		source := `$dml.Update($Input.Table,$Input.Row.Next)`
+		if err := extendStatementAuthority(source, authority, contracts, resolver); err != nil {
+			t.Fatal(err)
+		}
+		field, ok := authority["Input.Row.Next"]
+		if !ok || !compiler.StatementRecordType(field.Type.Name) || !reflect.DeepEqual(field.PointerParents, []plan.FieldPath{{"Input", "Row"}}) {
+			t.Fatalf("field=%+v", field)
+		}
+		if _, err := (&compiler.Compiler{}).CompileStatement(source, authority); err != nil {
+			t.Fatal(err)
+		}
+	})
 	for _, tc := range []struct {
 		typ, path, want string
 		parents         []plan.FieldPath
