@@ -177,6 +177,17 @@ func (a Arguments) resolve(argument Argument) (resolvedValue, bool, error) {
 	if !found {
 		return resolvedValue{}, false, nil
 	}
+	// Legacy MCP omits null and empty-string query arguments before native
+	// binding, so defaults and required checks see absence. Do not apply this
+	// to bodies or converted values: false, zero and explicit body null matter.
+	if argument.Source.Kind == requestprovider.QueryKind {
+		if raw == nil {
+			return resolvedValue{}, false, nil
+		}
+		if text, ok := raw.(string); ok && text == "" {
+			return resolvedValue{}, false, nil
+		}
+	}
 	encoded, err := json.Marshal(raw)
 	if err != nil {
 		return resolvedValue{}, false, fmt.Errorf("encode MCP argument %q: %w", argument.PublicName, err)

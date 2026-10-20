@@ -88,6 +88,9 @@ func TestGoShapeEmptyQueryPolicyHTTPAndMCP(t *testing.T) {
 					}
 				}
 				result, err := native.CallTool(context.Background(), &schema.CallToolRequestParams{Name: "records", Arguments: map[string]any{"tenant": value}})
+				// Original MCP omits empty query arguments before HTTP binding;
+				// the ordinary HTTP empty-query policy above remains independent.
+				wantMCP := []row{{ID: wantID}}
 				failed := err != nil || result == nil || result.IsError != nil && *result.IsError
 				if failed {
 					t.Fatalf("MCP ignore=%t value=%q result=%+v error=%v", ignore, value, result, err)
@@ -101,7 +104,7 @@ func TestGoShapeEmptyQueryPolicyHTTPAndMCP(t *testing.T) {
 					if err := json.Unmarshal(encoded, &actual); err != nil {
 						t.Fatal(err)
 					}
-					if len(actual.Rows) != len(want) || len(want) > 0 && !reflect.DeepEqual(actual.Rows, want) {
+					if !reflect.DeepEqual(actual.Rows, wantMCP) {
 						t.Fatalf("MCP rows=%+v", actual.Rows)
 					}
 				}
