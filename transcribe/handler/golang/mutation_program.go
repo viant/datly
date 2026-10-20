@@ -34,6 +34,9 @@ func MutationProgram(value *plan.Plan, config Config) (*MutationProgramAsset, er
 	if err := l.prepare(); err != nil {
 		return nil, err
 	}
+	if err := l.validateCommandMutationTarget(); err != nil {
+		return nil, err
+	}
 	asset := &MutationProgramAsset{Factory: l.factory, Definition: strings.TrimPrefix(l.factory, "New") + "Definition", Program: "_" + lowerInitial(l.factory) + "Program"}
 	var err error
 	if asset.Entities, err = (&mutationIdentityPolicy{}).entities(value, config); err != nil {

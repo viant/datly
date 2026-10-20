@@ -47,8 +47,20 @@ func compileWriterActionPolicy(record *plan.RecordPlan, view *spec.View, operati
 	if view.WriterActionPolicy == "" {
 		return nil
 	}
+	if view.WriterActionPolicy == "update" {
+		if operation != plan.OperationPatch || record.Auxiliary || record.Table == "" || len(record.Keys) == 0 || record.Current != nil || record.Sequence != nil || len(view.Relations) != 0 || len(record.SelfRelations) != 0 {
+			return fmt.Errorf("writer_action_policy update requires a PATCH physical leaf with keys and no Current or sequence")
+		}
+		if view.WriterIdentityPolicy != "" || view.MutationPredicateGroup != nil || record.Write.ConcurrencyToken.Field != "" || record.Write.DeleteMarker.Field != "" || view.QueueContract != "" || view.Reconciliation != nil || view.OnDeleteNotFound != "" {
+			return fmt.Errorf("writer_action_policy update does not support Previous-dependent controls or queue contracts")
+		}
+		record.Write.ActionPolicy = "update"
+		record.Write.Existing, record.Write.Missing = plan.ActionUpdate, plan.ActionUpdate
+		record.Write.Allowed = []plan.Action{plan.ActionUpdate}
+		return nil
+	}
 	if view.WriterActionPolicy != "insert-delete" {
-		return fmt.Errorf("writer_action_policy must be insert-delete")
+		return fmt.Errorf("writer_action_policy must be insert-delete or update")
 	}
 	if operation != plan.OperationPatch || record.Auxiliary || record.Table == "" || record.Current == nil || len(record.Keys) == 0 || record.Write.DeleteMarker.Field == "" {
 		return fmt.Errorf("writer_action_policy insert-delete requires a PATCH physical leaf with Current, keys and delete marker")

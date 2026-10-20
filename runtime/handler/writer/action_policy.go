@@ -8,6 +8,7 @@ import (
 )
 
 const insertDeleteActionPolicy = "insert-delete"
+const updateActionPolicy = "update"
 
 func isPolicyInsert(frame *Frame) bool {
 	return frame != nil && frame.Record != nil && frame.Record.WriterActionPolicy == insertDeleteActionPolicy && frame.Action == xhandler.WriteInsert
@@ -20,9 +21,16 @@ func validateWriterActionPolicy(record *Record, operation string) error {
 	if hasWriterActionPolicy(record) && hasScopedSequences(record) {
 		return fmt.Errorf("writerActionPolicy insert-delete does not support graph-wide scoped recovery")
 	}
-	if record.WriterActionPolicy != "" {
+	if record.WriterActionPolicy == updateActionPolicy {
+		if operation != "patch" || record.Auxiliary || record.Table == "" || len(record.Keys) == 0 || record.CurrentField >= 0 || record.Sequence != nil || len(record.Relations) != 0 {
+			return fmt.Errorf("writerActionPolicy update requires a PATCH physical leaf with keys and no Current or sequence")
+		}
+		if record.WriterIdentityPolicy != "" || record.ConcurrencyToken != nil || record.DeleteMarker != nil || record.MutationPredicateGroup != nil || len(record.ScopedSequences) != 0 || record.QueueContract != "" || record.reconciliation != nil || record.OnDeleteNotFound != "" {
+			return fmt.Errorf("writerActionPolicy update does not support Previous-dependent controls or queue contracts")
+		}
+	} else if record.WriterActionPolicy != "" {
 		if record.WriterActionPolicy != insertDeleteActionPolicy {
-			return fmt.Errorf("writerActionPolicy must be insert-delete")
+			return fmt.Errorf("writerActionPolicy must be insert-delete or update")
 		}
 		if operation != "patch" || record.Auxiliary || record.Table == "" || record.CurrentField < 0 || len(record.Keys) == 0 || record.DeleteMarker == nil {
 			return fmt.Errorf("writerActionPolicy insert-delete requires a PATCH physical leaf with Current, keys and delete marker")
@@ -106,6 +114,9 @@ func (p *Program) validateActionPolicyActions() error {
 			if prior.record != record {
 				return fmt.Errorf("physical identity collides between writer roles")
 			}
+			if record.WriterActionPolicy == updateActionPolicy && prior.mask == 4 && mask == 4 {
+				continue
+			}
 			if record.WriterActionPolicy != insertDeleteActionPolicy || prior.mask&mask != 0 || prior.mask|mask != 3 {
 				return fmt.Errorf("duplicate physical writer action in role %s", record.Path)
 			}
@@ -179,7 +190,7 @@ func (p *Program) freezeActionPolicyParticipants() {
 	}
 	for _, action := range p.actions.Rows {
 		frame := p.actionFrame(action)
-		if frame == nil || frame.Record.Auxiliary {
+		if frame == nil || frame.Record.Auxiliary || frame.Record.WriterActionPolicy == updateActionPolicy {
 			continue
 		}
 		facts := p.capturePhysicalActionFacts(frame.Record, frame.Entity)

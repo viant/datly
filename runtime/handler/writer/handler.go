@@ -1420,7 +1420,7 @@ func (p *Program) prepare(ctx context.Context, binder xhandler.Binder) (err erro
 		if frame.Record.Auxiliary || frame.SkippedDelete || frame.NoopMissingIdentity {
 			continue
 		}
-		if frame.Action == xhandler.WriteUpdate && !hasMutableFields(frame) {
+		if frame.Action == xhandler.WriteUpdate && frame.Record.WriterActionPolicy != updateActionPolicy && !hasMutableFields(frame) {
 			if p.queueObserver() != nil && frame.Previous.IsValid() {
 				p.queueItems = append(p.queueItems, &Action{Kind: frame.Action, Entity: frame.Entity, frame: frame})
 			}
@@ -1934,7 +1934,9 @@ func (p *Program) validateFrameSubset(ctx context.Context, validator xhandler.Va
 	groups := map[*Record][]*Frame{}
 	var order []*Record
 	for _, frame := range selected {
-		if frame == nil || frame.Record == nil || frame.Record.Auxiliary || frame.Action == xhandler.WriteDelete && !(transactionStarted && hasReconciliation(p.metadata.Root)) {
+		// Explicit SQLX UPDATE commands have no hydrated Previous. Business
+		// hooks still run; schema constraints belong to the database at drain.
+		if frame == nil || frame.Record == nil || frame.Record.Auxiliary || frame.Record.WriterActionPolicy == updateActionPolicy || frame.Action == xhandler.WriteDelete && !(transactionStarted && hasReconciliation(p.metadata.Root)) {
 			continue
 		}
 		// An identity-only update writes nothing, so there is nothing for the
@@ -2350,20 +2352,24 @@ func (p *Program) buildEntityFrame(ctx context.Context, binder xhandler.Binder, 
 			skipDelete = criteria == nil
 		}
 		action := xhandler.WriteInsert
-		switch p.metadata.Operation {
-		case "post":
-			action = xhandler.WriteInsert
-		case "put":
-			if !previous.IsValid() && !skipDelete {
-				return fmt.Errorf("put requires a matched complete identity")
-			}
+		if record.WriterActionPolicy == updateActionPolicy {
 			action = xhandler.WriteUpdate
-		case "patch":
-			if previous.IsValid() && record.WriterActionPolicy != insertDeleteActionPolicy {
+		} else {
+			switch p.metadata.Operation {
+			case "post":
+				action = xhandler.WriteInsert
+			case "put":
+				if !previous.IsValid() && !skipDelete {
+					return fmt.Errorf("put requires a matched complete identity")
+				}
 				action = xhandler.WriteUpdate
+			case "patch":
+				if previous.IsValid() && record.WriterActionPolicy != insertDeleteActionPolicy {
+					action = xhandler.WriteUpdate
+				}
+			default:
+				return fmt.Errorf("unsupported writer operation %q", p.metadata.Operation)
 			}
-		default:
-			return fmt.Errorf("unsupported writer operation %q", p.metadata.Operation)
 		}
 		noopMissing := p.metadata.Operation == "patch" && record.WriterIdentityPolicy == assignedUpdateIdentity && !previous.IsValid() && requestedNonzeroIdentity(record, entity.Elem()) && !deleteRequested
 		if noopMissing {
@@ -2594,10 +2600,11 @@ func CompileWithIdentifierProducts(component *spec.Component, inputType, outputT
 	// A component lifecycle consumes canonical Input, never row Previous. Its
 	// independent reads may legitimately use the same table. Reflected graphs
 	// still need ordinary Current matching, even when absent from the spec.
+	updateCommand := component.RootView.WriterActionPolicy == updateActionPolicy
 	componentLifecycle := auxiliaryRoot && len(component.RootView.Relations) == 0 && hookName != "" && !hasReflectedRelations(metadata.EntityType)
 	currentIndex := -1
 	var currentType reflect.Type
-	if operation != "post" && !componentLifecycle {
+	if operation != "post" && !componentLifecycle && !updateCommand {
 		var currentErr error
 		currentIndex, currentType, currentErr = currentInputField(inputType, metadata.Table, auxiliaryRoot, component.RootView.CanonicalName(), metadata.EntityType.Name())
 		if currentErr != nil {
@@ -2608,7 +2615,7 @@ func CompileWithIdentifierProducts(component *spec.Component, inputType, outputT
 	if currentIndex >= 0 {
 		metadata.Table = tagOption(inputType.Field(currentIndex).Tag.Get("view"), "table")
 	}
-	if metadata.CurrentField < 0 && operation != "post" && !(auxiliaryRoot && len(component.RootView.Relations) == 0 && hookName != "") {
+	if metadata.CurrentField < 0 && operation != "post" && !updateCommand && !(auxiliaryRoot && len(component.RootView.Relations) == 0 && hookName != "") {
 		return nil, fmt.Errorf("writer input has no current-state collection for %s in %s", metadata.EntityType, describeFields(inputType))
 	}
 	for i := 0; i < outputType.NumField(); i++ {
@@ -2678,7 +2685,7 @@ func CompileWithIdentifierProducts(component *spec.Component, inputType, outputT
 		if typecatalog.SQLXPrimaryKey(field.Tag, column != nil && column.PrimaryKey) {
 			metadata.Keys = append(metadata.Keys, compiled)
 		}
-		if !auxiliaryRoot && (column != nil && column.AutoIncrement || strings.Contains(strings.ToLower(sqlx), "autoincrement")) {
+		if !auxiliaryRoot && !updateCommand && (column != nil && column.AutoIncrement || strings.Contains(strings.ToLower(sqlx), "autoincrement")) {
 			compiled.AutoIncrement = true
 			copy := compiled
 			metadata.Sequence = &copy
@@ -2701,7 +2708,7 @@ func CompileWithIdentifierProducts(component *spec.Component, inputType, outputT
 	if len(metadata.Keys) == 0 && !(auxiliaryRoot && len(component.RootView.Relations) == 0 && hookName != "") {
 		return nil, fmt.Errorf("writer entity %s has no primary key", metadata.EntityType)
 	}
-	if !auxiliaryRoot && metadata.Sequence == nil && len(metadata.Keys) == 1 && numericField(metadata.EntityType, metadata.Keys[0]) {
+	if !auxiliaryRoot && !updateCommand && metadata.Sequence == nil && len(metadata.Keys) == 1 && numericField(metadata.EntityType, metadata.Keys[0]) {
 		copy := metadata.Keys[0]
 		metadata.Sequence = &copy
 	}
@@ -3047,16 +3054,19 @@ func compileRecord(component *spec.Component, inputType reflect.Type, name, path
 	if len(record.Keys) == 0 {
 		return nil, fmt.Errorf("writer entity %s has no primary key", entityType)
 	}
-	if !record.Auxiliary && record.Sequence == nil && len(record.Keys) == 1 && numericField(entityType, record.Keys[0]) {
+	if !record.Auxiliary && record.WriterActionPolicy != updateActionPolicy && record.Sequence == nil && len(record.Keys) == 1 && numericField(entityType, record.Keys[0]) {
 		copy := record.Keys[0]
 		record.Sequence = &copy
+	}
+	if record.WriterActionPolicy == updateActionPolicy {
+		record.Sequence = nil
 	}
 	record.indexFields()
 	if err := compileScopedSequences(record); err != nil {
 		return nil, err
 	}
 	// POST rows always insert; independent read candidates are not Previous.
-	if operation != "post" {
+	if operation != "post" && record.WriterActionPolicy != updateActionPolicy {
 		currentIndex, _, currentErr := currentInputField(inputType, record.Table, record.Auxiliary, name)
 		if currentErr != nil {
 			return nil, currentErr

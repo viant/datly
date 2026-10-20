@@ -68,7 +68,7 @@ func (l *lowerer) compileRecord(record *plan.RecordPlan, configured map[string]R
 	if binding.Identity != identity {
 		return fmt.Errorf("generated Go record path %q is bound to identity %q instead of %q", path, binding.Identity, identity)
 	}
-	if l.plan.Operation == plan.OperationPatch && !record.Auxiliary && record.Current == nil {
+	if l.plan.Operation == plan.OperationPatch && !record.Auxiliary && record.Current == nil && record.Write.ActionPolicy != "update" {
 		return fmt.Errorf("Go PATCH record %q requires a planned current input", identity)
 	}
 	if record.Cardinality != spec.CardinalityOne && record.Cardinality != spec.CardinalityMany {
@@ -239,6 +239,12 @@ func validateRecordPolicy(operation plan.Operation, record *plan.RecordPlan) err
 		return nil
 	}
 
+	if record.Write.ActionPolicy == "update" {
+		if operation != plan.OperationPatch || record.Table == "" || len(record.Keys) == 0 || record.Current != nil || record.Sequence != nil || len(record.Relations) != 0 || len(record.SelfRelations) != 0 || record.Write.DeleteMarker.Field != "" || record.Write.ConcurrencyToken.Field != "" || record.Write.QueueContract != "" || record.Write.Reconciliation != nil || record.Write.Existing != plan.ActionUpdate || record.Write.Missing != plan.ActionUpdate || len(record.Write.Allowed) != 1 || !containsAction(record.Write.Allowed, plan.ActionUpdate) {
+			return fmt.Errorf("Go PATCH update command requires a physical leaf, keys and update-only actions without Previous-dependent controls")
+		}
+		return nil
+	}
 	markerActions := 0
 	if record.Write.ActionPolicy != "" && (operation != plan.OperationPatch || record.Write.ActionPolicy != "insert-delete") {
 		return fmt.Errorf("writer action policy requires PATCH insert-delete")
@@ -339,4 +345,16 @@ func (l *lowerer) usesSequencer() bool {
 		}
 	}
 	return false
+}
+
+// The component-specific mutation program freezes hydrated payloads and identity
+// evidence. SQLX commands instead use the canonical universal writer or direct
+// typed Lower path, preserving live caller pointers and database validation.
+func (l *lowerer) validateCommandMutationTarget() error {
+	for _, record := range l.records {
+		if record.plan.Write.ActionPolicy == "update" {
+			return fmt.Errorf("writer_action_policy update requires the universal writer or direct typed Go lowering; component-specific mutation programs are unsupported")
+		}
+	}
+	return nil
 }

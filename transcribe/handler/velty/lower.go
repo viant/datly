@@ -47,6 +47,9 @@ func lower(value *plan.Plan) (block, error) {
 }
 
 func appendSequences(program *block, record *plan.RecordPlan) error {
+	if record != nil && record.Write.ActionPolicy == "update" {
+		return fmt.Errorf("writer_action_policy update requires the universal writer or direct typed Go lowering; Velty is unsupported")
+	}
 	if record == nil {
 		return fmt.Errorf("Velty sequence lowering received a nil record plan")
 	}

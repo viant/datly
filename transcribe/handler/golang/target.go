@@ -126,7 +126,7 @@ func (l *lowerer) prepare() error {
 	default:
 		return fmt.Errorf("unsupported generated Go write operation %q", l.plan.Operation)
 	}
-	if l.plan.Operation == plan.OperationPatch && !l.plan.Root.Auxiliary && l.plan.Root.Current == nil {
+	if l.plan.Operation == plan.OperationPatch && !l.plan.Root.Auxiliary && l.plan.Root.Current == nil && l.plan.Root.Write.ActionPolicy != "update" {
 		return fmt.Errorf("Go PATCH lowering requires a planned current input")
 	}
 	packageName := strings.TrimSpace(l.config.Package)

@@ -923,6 +923,44 @@ invocation enrolled in these captured execution guards, including earlier use
 in that invocation. Native typed transaction-aware Current reads remain
 supported. This restriction does not change ordinary writer invocations.
 
+## Explicit SQLX UPDATE command leaf
+
+A SQL-derived PATCH physical leaf may opt into `writer_action_policy(row,
+'update')` when the application needs an ordered SQLX UPDATE command rather than
+Previous-based matching:
+
+```sql
+SELECT r.*, type(r, 'Record'), writer_action_policy(r, 'update')
+FROM RECORDS r
+```
+
+This mode always queues typed `DML.Update` using the discovered SQLX primary keys
+and sparse Has markers. It does not infer or read Current, fabricate Previous,
+insert on a miss, delete, allocate an identity, or require positive keys or
+Has.Id. A missing database row is an ordinary zero-effect UPDATE. Repeated and
+equal-value updates preserve their order and physically execute where SQLX would.
+Even an identity-only row enters the journal; SQLX owns empty SET behavior.
+
+This is an explicit command contract: no hydrated framework schema validation
+or existence check runs before queueing. Authored lifecycle/business hooks still
+run with no Previous, and database constraints are checked when the shared
+journal drains. Errors retain the existing shared transaction rollback and
+completion behavior. Ordinary PATCH, PUT, assigned-update and insert-delete
+policies retain their existing validation and matching semantics.
+
+The caller owns capture semantics. To preserve a scalar write point while
+retaining live pointer fields and Has, pass a shallow struct copy there. The
+writer passes that typed payload to the existing DML journal; it does not add a
+new capture mode or freeze those aliases.
+
+The policy requires a physical leaf with keys. Auxiliary targets, descendants,
+Previous-dependent concurrency/deletion/predicate/identity controls,
+reconciliation, scoped recovery and source-row/source-slice queue contracts are
+unsupported. Canonical native generation uses the universal writer. Direct typed
+Go lowering also emits UPDATE only; legacy component-specific MutationProgram,
+MutationActionSupport/MutationValidationSupport and Velty reject this policy
+explicitly because their snapshot/Previous contracts differ.
+
 ## Backfill invariant groups
 
 The outer `invariant` annotations place WINDOW_START and WINDOW_END in the

@@ -444,7 +444,7 @@ func (g *Generation) appendRecordType(result *[]handlergo.RecordType, semantic *
 		if err != nil {
 			return err
 		}
-	} else if semantic.Operation == handlerplan.OperationPatch && !record.Auxiliary {
+	} else if semantic.Operation == handlerplan.OperationPatch && !record.Auxiliary && record.Write.ActionPolicy != "update" {
 		return fmt.Errorf("generated Go PATCH record requires current input authority")
 	}
 	*result = append(*result, handlergo.RecordType{

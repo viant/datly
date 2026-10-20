@@ -33,6 +33,9 @@ func newMutationActionEmitter(value *plan.Plan, config Config, entities *EntityA
 	if err := l.prepare(); err != nil {
 		return nil, err
 	}
+	if err := l.validateCommandMutationTarget(); err != nil {
+		return nil, err
+	}
 	if entities == nil || frames == nil || frames.Layout == nil || frames.VerifyMethod == "" || frames.Layout.OrderField == "" {
 		return nil, fmt.Errorf("mutation actions require entity and frame products")
 	}

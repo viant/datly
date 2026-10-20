@@ -99,8 +99,8 @@ func (input *Input) validateLifecycleTarget(mutation, pendingDiscovery bool) err
 			}
 		}
 		if view.WriterActionPolicy != "" {
-			if view.WriterActionPolicy != "insert-delete" {
-				return fmt.Errorf("writer_action_policy must be insert-delete")
+			if view.WriterActionPolicy != "insert-delete" && view.WriterActionPolicy != "update" {
+				return fmt.Errorf("writer_action_policy must be insert-delete or update")
 			}
 			if !mutation || !mutationViews[view] || view.Auxiliary || policy != "" && policy != "patch" {
 				return fmt.Errorf("writer_action_policy requires a generated PATCH writable view")
@@ -126,7 +126,10 @@ func (input *Input) validateLifecycleTarget(mutation, pendingDiscovery bool) err
 					return fmt.Errorf("writer_action_policy does not support concurrency tokens")
 				}
 			}
-			if !pendingDiscovery && !marker {
+			if view.WriterActionPolicy == "update" && (marker || view.OnDeleteNotFound != "" || view.QueueContract != "" || view.Reconciliation != nil || view.SelfReference != nil) {
+				return fmt.Errorf("writer_action_policy update does not support deletion, queue contracts, reconciliation or self references")
+			}
+			if view.WriterActionPolicy == "insert-delete" && !pendingDiscovery && !marker {
 				return fmt.Errorf("writer_action_policy requires delete_marker")
 			}
 		}

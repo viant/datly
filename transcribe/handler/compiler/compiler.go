@@ -192,7 +192,10 @@ func (c *compiler) compileRoot(request Request, operation plan.Operation, input 
 		root.Write.Missing = plan.ActionInsert
 		root.Write.Allowed = []plan.Action{plan.ActionInsert, plan.ActionUpdate}
 	}
-	if operation == plan.OperationPatch || operation == plan.OperationPut {
+	if view.WriterActionPolicy == "update" && strings.TrimSpace(request.Current) != "" {
+		return nil, fmt.Errorf("writer_action_policy update does not use Current bindings")
+	}
+	if (operation == plan.OperationPatch || operation == plan.OperationPut) && view.WriterActionPolicy != "update" {
 		current := strings.TrimSpace(request.Current)
 		if bound, ok := c.currentByView[identity]; ok {
 			if current != "" {
@@ -219,7 +222,9 @@ func (c *compiler) compileRoot(request Request, operation plan.Operation, input 
 	if root.Auxiliary {
 		root.Write = plan.WritePolicy{ValuePath: clonePath(input.Path), Order: root.Write.Order}
 	} else {
-		root.Sequence, err = sequencePlan(view, request.Key, operation, input.Path, nil)
+		if view.WriterActionPolicy != "update" {
+			root.Sequence, err = sequencePlan(view, request.Key, operation, input.Path, nil)
+		}
 		if err != nil {
 			return nil, err
 		}

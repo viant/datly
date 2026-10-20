@@ -372,8 +372,8 @@ func applyViewDirectives(root *spec.View, directives []viewDirective) error {
 			}
 			target.QueueContract = directive.value
 		case spec.ViewControlWriterActionPolicy:
-			if directive.value != "insert-delete" || target.Auxiliary {
-				return &Error{Code: CodeViewDirective, Cause: fmt.Errorf("writer_action_policy requires insert-delete on a physical role")}
+			if (directive.value != "insert-delete" && directive.value != "update") || target.Auxiliary {
+				return &Error{Code: CodeViewDirective, Cause: fmt.Errorf("writer_action_policy requires insert-delete or update on a physical role")}
 			}
 			target.WriterActionPolicy = directive.value
 		case spec.ViewControlWriterIdentity:

@@ -31,8 +31,8 @@ func (v View) Value() (string, error) {
 	if v.QueueContract != "" && v.QueueContract != "source-row" && v.QueueContract != "source-slice" {
 		return "", fmt.Errorf("queueContract requires source-row or source-slice")
 	}
-	if v.WriterActionPolicy != "" && v.WriterActionPolicy != "insert-delete" {
-		return "", fmt.Errorf("writerActionPolicy must be insert-delete")
+	if v.WriterActionPolicy != "" && v.WriterActionPolicy != "insert-delete" && v.WriterActionPolicy != "update" {
+		return "", fmt.Errorf("writerActionPolicy must be insert-delete or update")
 	}
 	if v.WriterIdentityPolicy != "" && v.WriterIdentityPolicy != "assigned-update" {
 		return "", fmt.Errorf("writerIdentity must be assigned-update")

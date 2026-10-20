@@ -123,6 +123,12 @@ func (b *inputGeneration) record(view *spec.View, body string, path []string, sc
 	// A leaf auxiliary root supplies a body shape, not an implicit database
 	// lookup. Explicit Current authority and relation-bearing roots retain
 	// their existing generation path, including writable descendants.
+	if view.WriterActionPolicy == "update" {
+		if currentName != "" {
+			return fmt.Errorf("writer_action_policy update does not use Current bindings")
+		}
+		return nil
+	}
 	if view.Auxiliary && len(view.Relations) == 0 && currentName == "" {
 		return nil
 	}

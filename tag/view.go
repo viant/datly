@@ -110,8 +110,8 @@ func ParseView(value string) (*View, error) {
 			}
 			result.QueueContract = value
 		case "writeractionpolicy":
-			if result.WriterActionPolicy != "" || value != "insert-delete" {
-				return fmt.Errorf("writerActionPolicy requires one insert-delete value")
+			if result.WriterActionPolicy != "" || (value != "insert-delete" && value != "update") {
+				return fmt.Errorf("writerActionPolicy requires one insert-delete or update value")
 			}
 			result.WriterActionPolicy = value
 		case "writeridentity":

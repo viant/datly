@@ -193,6 +193,10 @@ func (l *lowerer) relationLinkStatements(relation *plan.RelationPlan, parent, ch
 }
 
 func (l *lowerer) recordWriteStatements(record *recordLowering, value ast.Expr) ([]ast.Stmt, error) {
+	if record.plan.Write.ActionPolicy == "update" {
+		write, err := l.dmlGuard(record, value, plan.ActionUpdate)
+		return []ast.Stmt{write}, err
+	}
 	switch l.plan.Operation {
 	case plan.OperationPost:
 		write, err := l.dmlGuard(record, value, record.plan.Write.Missing)
