@@ -254,6 +254,15 @@ func (u URI) validate(arguments []Argument) error {
 }
 
 func decodeSourceValue(raw []byte, targetType reflect.Type) (interface{}, error) {
+	if targetType.Kind() == reflect.Slice && targetType.Elem().Kind() == reflect.String && len(raw) > 0 && raw[0] == '"' {
+		var text string
+		if err := json.Unmarshal(raw, &text); err != nil {
+			return nil, err
+		}
+		converted := reflect.MakeSlice(targetType, 1, 1)
+		converted.Index(0).SetString(text)
+		return converted.Interface(), nil
+	}
 	if targetType == reflect.TypeOf(json.RawMessage{}) {
 		return append(json.RawMessage(nil), raw...), nil
 	}

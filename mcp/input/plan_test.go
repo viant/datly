@@ -57,6 +57,18 @@ func TestScopeExposesCanonicalIndependentProviders(t *testing.T) {
 	assertValue(t, scope.Form(), reflect.TypeOf([]string{}), "label", []string{"a", "b"})
 }
 
+func TestScalarStringListArgumentPreservesLiteralCommas(t *testing.T) {
+	plan, err := NewCompiler().Compile([]Argument{{PublicName: "Names", Source: bindstate.Location{Kind: "form", In: "names"}, SourceType: reflect.TypeOf([]string{})}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	scope, err := plan.Scope(Arguments{"Names": "Acme, Inc."})
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertValue(t, scope.Form(), reflect.TypeOf([]string{}), "names", []string{"Acme, Inc."})
+}
+
 func TestScopeNamedBodyUsesExactCanonicalName(t *testing.T) {
 	plan, err := NewCompiler().Compile([]Argument{{
 		PublicName: "payload", Source: bindstate.Location{Kind: requestprovider.BodyKind, In: "order"}, SourceType: reflect.TypeOf(struct {
