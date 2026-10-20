@@ -295,17 +295,17 @@ func (c *Compiler) compileExternal(inputField registry.InputField, field reflect
 		sourceType: inputField.SourceType(), destinationType: inputField.DestinationType(),
 		wireSchema: inputField.WireSchema(), wireSchemas: inputField.WireSchemas(), wireType: inputField.WireType(), required: required, bodyNullPolicy: binding.BodyNullPolicy,
 	}
-	// Discovery follows the original synthetic field tags independently of
-	// runtime requiredness. Route filtering has already selected this binding.
+	// Preserve inferred discovery requiredness, while honoring an explicit
+	// required binding from the exact route contract.
 	sourceTag := string(field.Tag)
 	if param, ok := binding.Extension.(*spec.Parameter); ok && param != nil {
 		sourceTag = param.Tag
 		argument.description = strings.TrimSpace(param.Description)
 		argument.example = strings.TrimSpace(param.Example)
 	}
-	argument.schemaRequired = legacyNamedSchemaRequired(argument.sourceKind, binding.URI != "", inputField.DestinationType(), sourceTag)
-	if required, associated := wholeBodyMemberSchemaRequired(argument); associated {
-		argument.schemaRequired = required
+	argument.schemaRequired = required || legacyNamedSchemaRequired(argument.sourceKind, binding.URI != "", inputField.DestinationType(), sourceTag)
+	if memberRequired, associated := wholeBodyMemberSchemaRequired(argument); associated {
+		argument.schemaRequired = required || memberRequired
 	}
 	return argument, true, nil
 }

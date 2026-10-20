@@ -109,10 +109,10 @@ func TestMCPSparseUpdateSQLite(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				// Original discovery advertises this named body as optional; the
-				// authored runtime requirement must still reject an omitted patch.
-				if required := plan.Metadata().InputSchema.Required; len(required) != 0 {
-					t.Fatalf("named body must retain original advertised optionality: %v", required)
+				// The authored runtime requirement is also advertised for the named
+				// body; sparse members remain independently optional.
+				if required := plan.Metadata().InputSchema.Required; !reflect.DeepEqual(required, []string{"patch"}) {
+					t.Fatalf("named body requirement must be advertised: %v", required)
 				}
 				arguments := plan.Arguments()
 				if len(arguments) != 1 || arguments[0].PublicName() != "patch" || !arguments[0].Required() {
@@ -151,7 +151,7 @@ func TestMCPSparseUpdateSQLite(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				if !bytes.Equal(expectedProperties, wireJSON) || wireSchema.Type != "object" || len(wireSchema.Required) != 0 {
+				if !bytes.Equal(expectedProperties, wireJSON) || wireSchema.Type != "object" || !reflect.DeepEqual(wireSchema.Required, []string{"patch"}) {
 					t.Fatalf("wire schema differs from compiled business schema: %s vs %s", wireJSON, expectedProperties)
 				}
 				properties := wireSchema.Properties["patch"]["properties"].(map[string]any)
