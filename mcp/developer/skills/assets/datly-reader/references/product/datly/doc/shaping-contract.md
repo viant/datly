@@ -4,6 +4,15 @@ DQL defines generated shapes. Explicitly linked Go contracts define application
 shapes. Go identifiers, vendor SQL result columns, physical DML columns, and JSON
 names are separate identities; preserve the mapping between them.
 
+## Generated Go tag literals
+
+Generated struct tags use Go raw backtick literals whenever the tag bytes can be
+represented safely. A tag containing a literal backtick, such as a BigQuery
+`` `project.dataset.table` `` reference, uses an escaped double-quoted Go literal.
+Control characters that cannot round-trip through a raw literal use the same
+fallback. This changes source spelling only: reflected tag values, SQL identifiers,
+JSON names, field types and presence semantics stay unchanged.
+
 ## Outer field rename versus inner SQL alias
 
 The outer projection of a named view graph is component configuration. A direct
@@ -59,6 +68,14 @@ resolution belongs to the compiled plan and does not inspect runtime row values.
 - `format:"name=DisplayName"` controls public serialization naming. Global
   `case_format('lc')` then produces `displayName`; it does not change SQL columns.
 - A nonempty `json` name is an exact public-name override.
+- Generated writer/body fields leave inferred JSON names empty so native
+  `case_format` controls presentation. Authored names and omission options remain
+  authoritative; this does not make nonnullable fields optional. Ordinary readers,
+  generated outputs and client input contracts retain their existing inference.
+  Direct `encoding/json` uses Go names for empty-name tags, so applications that
+  persist generated rows or implement custom marshalers must check saved-data
+  compatibility when regenerating. Native case formatting does not rewrite bytes
+  owned by a custom marshaler.
 - SQL-nullable scalars in native writer shapes and SQL-derived generated
   handler-factory body graphs infer `omitempty`. Independent Current/read views
   retain their own policy. Explicit JSON tags override this default; nonnullable
