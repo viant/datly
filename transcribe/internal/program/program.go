@@ -87,10 +87,12 @@ func BufferedBatch(source string) bool {
 		return false
 	}
 	call, ok := method.X.(*expr.Call)
-	if !ok || call.X != nil || len(call.Args) != 4 {
+	if !ok || call.X != nil || (len(call.Args) != 4 && !(method.ID == "Insert" && len(call.Args) == 5)) {
 		return false
 	}
-	for _, argument := range call.Args {
+	// The optional Insert conflict clause is validated by the native statement
+	// compiler; it is not an Input/Output selector like the four batch operands.
+	for _, argument := range call.Args[:4] {
 		field, ok := argument.(*expr.Select)
 		if !ok || (field.ID != "Input" && field.ID != "Output") {
 			return false
