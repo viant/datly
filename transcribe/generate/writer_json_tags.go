@@ -16,6 +16,15 @@ import (
 // Case formatting can collapse distinct Go names; preserve their original tags
 // so projection can still select canonical fields before runtime formatting.
 func applyInferredJSONTags(plan *Plan, fields []Field, source ...*spec.View) error {
+	return applyJSONTags(plan, fields, false, source...)
+}
+
+// Body owners leave inferred names to native caseFormat; authored tags remain authoritative.
+func applyBodyJSONTags(plan *Plan, fields []Field, source *spec.View) error {
+	return applyJSONTags(plan, fields, true, source)
+}
+
+func applyJSONTags(plan *Plan, fields []Field, body bool, source ...*spec.View) error {
 	original := make([]string, len(fields))
 	for i := range fields {
 		field := &fields[i]
@@ -24,9 +33,11 @@ func applyInferredJSONTags(plan *Plan, fields []Field, source ...*spec.View) err
 			continue
 		}
 		if field.RelationHolder {
-			if format := text.NewCaseFormat(plan.Settings.CaseFormat); format != text.CaseFormatUndefined && !hasStructTag(field.Tag, "json") {
+			if format := text.NewCaseFormat(plan.Settings.CaseFormat); !body && format != text.CaseFormatUndefined && !hasStructTag(field.Tag, "json") {
 				field.Tag = appendStructTag(field.Tag, "json", text.DetectCaseFormat(field.Name).Format(field.Name, format))
 			}
+		} else if body {
+			field.Tag = bodyScalarJSONTag(plan, field.Tag)
 		} else if !authoredEmptyJSONName(source, field.Name) {
 			field.Tag = writerScalarJSONTag(plan, field.Name, field.Tag)
 		}
@@ -134,4 +145,19 @@ func authoredEmptyJSONName(source []*spec.View, field string) bool {
 		return present && name == ""
 	}
 	return false
+}
+
+// bodyScalarJSONTag changes names only: inferred nullable omission was already
+// selected by the view planner, and authored JSON options are preserved verbatim.
+func bodyScalarJSONTag(plan *Plan, raw string) string {
+	if _, present := reflect.StructTag(raw).Lookup("json"); present {
+		return raw
+	}
+	if reflect.StructTag(raw).Get("internal") == "true" {
+		return raw
+	}
+	if plan != nil && strings.TrimSpace(plan.Settings.Mutation) != "" && plan.Generation != nil && plan.Generation.WriterOmitEmpty {
+		return appendStructTag(raw, "json", ",omitempty")
+	}
+	return raw
 }
