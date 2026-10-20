@@ -147,11 +147,40 @@ func (c *PackageCompilation) Compile(ctx context.Context) (*Result, error) {
 	return result, nil
 }
 
+// canonicalPackageViewTypes resolves reflected local package qualifiers before
+// discovery loses the selected package's actual Go name. Only the detached base
+// contract changes; explicit DQL types still replace it in the normal overlay.
+func (a *packageAuthority) canonicalPackageViewTypes(component *spec.Component) error {
+	plan := &gen.Plan{Package: a.route.PackagePath, GoPackage: a.route.PackageName}
+	if component.TypeContext != nil {
+		plan.Imports = component.TypeContext.Imports
+	}
+	for _, param := range spec.EffectiveParameters(component.Parameters) {
+		if param == nil || !strings.EqualFold(strings.TrimSpace(param.Source.Kind), "view") {
+			continue
+		}
+		for _, expression := range []*string{&param.TypeExpr, &param.OutputTypeExpr} {
+			if strings.TrimSpace(*expression) == "" {
+				continue
+			}
+			canonical, err := plan.CanonicalType(a.route.PackagePath, *expression)
+			if err != nil {
+				return fmt.Errorf("canonicalize package view %q: %w", param.Name, err)
+			}
+			*expression = canonical
+		}
+	}
+	return nil
+}
+
 func (a *packageAuthority) compile(ctx context.Context) (*Result, error) {
 	if a == nil || a.source == nil || a.route == nil || a.component == nil || a.catalog == nil {
 		return nil, fmt.Errorf("complete package compilation authority is required")
 	}
 	component := a.component.Clone()
+	if err := a.canonicalPackageViewTypes(component); err != nil {
+		return nil, err
+	}
 	// A Go holder declares the component scope; imported contract types never
 	// choose the component destination.
 	if strings.TrimSpace(a.source.Text) == "" && a.route.Dir != "" && component.Key.Scope != "" {
