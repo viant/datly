@@ -43,7 +43,7 @@ func TestGeneratorEmitsSetMarkersForGeneratedWritableViews(t *testing.T) {
 	}
 	text := string(content)
 	for _, expected := range []string{
-		`Has *OrdersViewHas ` + "`" + `setMarker:"true" format:"-" sqlx:"-" diff:"-" json:"-" typeName:"OrdersViewHas"` + "`",
+		`Has *OrdersViewHas ` + "`" + `diff:"-" format:"-" json:"-" setMarker:"true" sqlx:"-" typeName:"OrdersViewHas"` + "`",
 		"type OrdersViewHas struct {\n\tId bool\n\tName bool\n\tInternal bool\n\tItems bool\n}",
 		"type ItemsViewHas struct {\n\tId bool\n\tOrderId bool\n}",
 	} {

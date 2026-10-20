@@ -1646,7 +1646,7 @@ func TestEmitScaffold_WritesNestedPatchBodyOutputField(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to read generated output file: %v", err)
 	}
-	assertly.AssertValues(t, "package nested_patch_body_out\n\n// NestedPatchBodyOutOutput is the generated output scaffold for NestedPatchBodyOut.\ntype NestedPatchBodyOutOutput struct {\n\tFoos Foos `parameter:\"Foos,kind=output,in=body\" anonymous:\"true\" typeName:\"Foos\"`\n}\n", strings.TrimPrefix(string(outputBytes), generatedHeader(plan.ComponentName)))
+	assertly.AssertValues(t, "package nested_patch_body_out\n\n// NestedPatchBodyOutOutput is the generated output scaffold for NestedPatchBodyOut.\ntype NestedPatchBodyOutOutput struct {\n\tFoos Foos `anonymous:\"true\" parameter:\"Foos,kind=output,in=body\" typeName:\"Foos\"`\n}\n", strings.TrimPrefix(string(outputBytes), generatedHeader(plan.ComponentName)))
 }
 
 func TestEmitScaffold_WritesReferencedBodyPlaceholderTypes(t *testing.T) {

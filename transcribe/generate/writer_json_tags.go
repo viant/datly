@@ -111,7 +111,7 @@ func writerScalarJSONTag(plan *Plan, name, raw string) string {
 		parts = append(parts, "omitempty")
 	}
 	parsed.Set("json", strings.Join(parts, ","))
-	return parsed.Stringify()
+	return parsed.Literal()
 }
 
 // Preserve exact option-only JSON authority from the existing canonical owner.
