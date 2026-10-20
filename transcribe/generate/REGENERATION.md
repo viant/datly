@@ -32,6 +32,12 @@ query-result nullability: a nullable Go pointer can still have a NOT NULL
 validation constraint. Missing metadata does not imply a required or UNIQUE
 constraint. Authored native SQLX tags remain authoritative.
 
+Generated struct tags use lexicographic outer-key order after field rewrites.
+Tag values, explicit empty values, and option order inside each value are retained.
+Replacing an existing tag preserves its key position until emission; replacing
+it with the same value leaves its bytes unchanged. This normalization does not
+rewrite application-owned contracts or source-selected members.
+
 ## Resources and reload
 
 Generated holders expose `EmbedFS()` and `EmbedNamespace()`. Source discovery

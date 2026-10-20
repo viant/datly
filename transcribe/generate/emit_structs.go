@@ -146,6 +146,7 @@ func viewFileContent(packageName string, plan *Plan, views []ViewPlan, includeSu
 
 func appendFields(b *strings.Builder, fields []Field) {
 	for _, field := range fields {
+		field.Tag = generatedStructTag(field.Tag)
 		b.WriteString("\t")
 		if !field.Anonymous {
 			b.WriteString(field.Name)

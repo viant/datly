@@ -120,7 +120,7 @@ func contractFieldTags(raw string) string {
 		}
 		filtered = append(filtered, item)
 	}
-	return filtered.Stringify()
+	return filtered.Literal()
 }
 
 func isCanonicalParameterTag(name string) bool {
@@ -145,7 +145,7 @@ func withoutStructTags(raw string, names ...string) string {
 		}
 		filtered = append(filtered, item)
 	}
-	return filtered.Stringify()
+	return filtered.Literal()
 }
 
 func defaultTagTypeName(tag string) string {

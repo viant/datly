@@ -38,11 +38,11 @@ func scalarColumnFieldTag(column *spec.Column, source string, includeVelty bool)
 		sqlxTag = parsed.Lookup(sqlio.TagSqlx)
 	}
 	if sqlxTag == nil {
-		return withVeltyNames(parsed.Stringify(), source, typecatalog.FieldName(column.Name), includeVelty)
+		return withVeltyNames(parsed.Literal(), source, typecatalog.FieldName(column.Name), includeVelty)
 	}
-	metadata := sqlio.ParseTag(reflect.StructTag(parsed.Stringify()))
+	metadata := sqlio.ParseTag(reflect.StructTag(parsed.Literal()))
 	if metadata.Transient {
-		return parsed.Stringify()
+		return parsed.Literal()
 	}
 	if column.NotNull && !metadata.Required && !hasSQLXOption(sqlxTag.Values, "required") {
 		sqlxTag.Append("required=true")
@@ -60,7 +60,7 @@ func scalarColumnFieldTag(column *spec.Column, source string, includeVelty bool)
 	if strings.Contains(databaseType, "JSON") && metadata.Encoding == "" && !hasSQLXOption(sqlxTag.Values, "enc") {
 		sqlxTag.Append("enc=JSON")
 	}
-	return withVeltyNames(parsed.Stringify(), source, typecatalog.FieldName(column.Name), includeVelty)
+	return withVeltyNames(parsed.Literal(), source, typecatalog.FieldName(column.Name), includeVelty)
 }
 
 func hasSQLXOption(values tags.Values, names ...string) bool {

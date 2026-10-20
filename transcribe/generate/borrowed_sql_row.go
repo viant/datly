@@ -429,7 +429,10 @@ func validateBorrowedStruct(ts *ast.TypeSpec, imports map[string]string, pkg str
 		return fmt.Errorf("borrow_sql_row declaration %s has stale field membership", ts.Name)
 	}
 	for i, f := range actual {
-		if f.Name != want[i].Name || f.Type != want[i].Type || f.Tag != dtag.CanonicalFieldTag(want[i].Tag) {
+		// Existing owners may retain the pre-normalization spelling. Fresh
+		// generator-owned rows use sorted keys; neither spelling changes values.
+		wantTag := dtag.CanonicalFieldTag(want[i].Tag)
+		if f.Name != want[i].Name || f.Type != want[i].Type || (f.Tag != wantTag && f.Tag != generatedStructTag(wantTag)) {
 			return fmt.Errorf("borrow_sql_row declaration %s field %d %s differs from fresh SQL contract", ts.Name, i, f.Name)
 		}
 	}

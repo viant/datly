@@ -68,7 +68,7 @@ func TestProjectionMetadataRegeneration(t *testing.T) {
 				t.Fatal(err)
 			}
 			data, err = os.ReadFile(path)
-			if err != nil || strings.Contains(string(data), "// authored method") || !strings.Contains(string(data), field.Tag) || !strings.Contains(string(data), "Start "+field.Type) {
+			if err != nil || strings.Contains(string(data), "// authored method") || !strings.Contains(string(data), generatedStructTag(field.Tag)) || !strings.Contains(string(data), "Start "+field.Type) {
 				t.Fatalf("updated source: %s\n%v", data, err)
 			}
 			before, err = readScaffoldSnapshot(dir)

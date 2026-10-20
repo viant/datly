@@ -1000,8 +1000,30 @@ func appendStructTag(fieldTag, name, value string) string {
 }
 
 func replaceStructTag(fieldTag, name, value string) string {
-	filtered := withoutStructTags(fieldTag, name)
-	return appendStructTag(filtered, name, value)
+	parsed := tags.NewTags(fieldTag)
+	filtered := parsed[:0]
+	found := false
+	count := 0
+	unchanged := false
+	for _, item := range parsed {
+		if item.Name == name {
+			count++
+			if found {
+				continue
+			}
+			unchanged = string(item.Values) == value
+			item.Values = tags.Values(value)
+			found = true
+		}
+		filtered = append(filtered, item)
+	}
+	if !found {
+		return appendStructTag(fieldTag, name, value)
+	}
+	if count == 1 && unchanged {
+		return fieldTag
+	}
+	return filtered.Literal()
 }
 
 func relationOutputTag(column, output string) string {
