@@ -19,6 +19,7 @@ import (
 
 type viewPlanner struct {
 	ordinaryBodyRoot *spec.View
+	auxiliaryRoot    *spec.View
 	ordinaryGraph    map[*spec.View]bool
 	ordinaryReads    map[*spec.View]bool
 	nativeMutation   bool
@@ -54,6 +55,7 @@ func (r *planResolver) resolveViews() (map[string]int, error) {
 	}
 	planner := &viewPlanner{
 		ordinaryBodyRoot: r.ordinaryBodyRoot(),
+		auxiliaryRoot:    r.auxiliaryBodyRoot(),
 		ordinaryGraph:    ordinaryBodyGraph(r.ordinaryBodyRoot()),
 		ordinaryReads:    map[*spec.View]bool{},
 		nativeMutation:   r.input.nativeMutationTargetSelected,
@@ -584,6 +586,14 @@ func (p *viewPlanner) assign(view *spec.View, typeName, destination string) erro
 			return fmt.Errorf("generated body views %q and %q compete for type %q", owner.Name, view.Name, typeName)
 		}
 		if p.factoryBodyViews[ownerIdentity] && p.explicitReads[view] {
+			if err := p.shareBodyRow(view, owner, destination); err != nil {
+				return err
+			}
+			p.names[view] = typeName
+			p.sharedBodyRows[view] = owner
+			return nil
+		}
+		if owner == p.auxiliaryRoot && p.ordinaryReads[view] && p.explicitReads[view] {
 			if err := p.shareBodyRow(view, owner, destination); err != nil {
 				return err
 			}

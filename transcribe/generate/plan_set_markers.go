@@ -14,6 +14,26 @@ import (
 // types selected by the target-neutral mutation plan. Package-linked types remain
 // under package authority.
 func (r *planResolver) applySetMarkerViews() error {
+	if root := r.auxiliaryBodyRoot(); root != nil && r.input.nativeMutationTargetSelected {
+		identity, err := root.Identity()
+		if err != nil {
+			return err
+		}
+		for _, view := range r.plan.Views {
+			if view.Ownership != ViewSharedBody || view.SharedBodyIdentity != identity {
+				continue
+			}
+			// Only the shared request-row owner needs presence. A standalone
+			// auxiliary command retains its existing marker-free shape.
+			selected := make(map[string]bool, len(r.input.SetMarkerViews)+1)
+			for key, enabled := range r.input.SetMarkerViews {
+				selected[key] = enabled
+			}
+			selected[identity] = true
+			r.input.SetMarkerViews = selected
+			break
+		}
+	}
 	if len(r.input.SetMarkerViews) == 0 {
 		return nil
 	}
