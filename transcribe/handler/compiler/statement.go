@@ -148,11 +148,10 @@ func (c *Compiler) CompileStatement(source string, authority map[string]plan.Sta
 			return nil, fmt.Errorf("statement argument %d: %w", i+1, err)
 		}
 		if field.Type.Name == "[]int" {
-			if method.ID != "Execute" || kind != sqlparser.KindUpdate || result.CollectionOrdinal != nil || !statementCollectionPosition(sqlText, i) {
-				return nil, fmt.Errorf("statement argument %d must be a typed scalar field or the sole []int binding in a positive UPDATE IN predicate", i+1)
+			if method.ID != "Execute" || (kind != sqlparser.KindUpdate && kind != sqlparser.KindDelete) || !statementCollectionPosition(sqlText, i) {
+				return nil, fmt.Errorf("statement argument %d must be a typed scalar field or a []int binding in a positive UPDATE or DELETE IN predicate", i+1)
 			}
-			ordinal := i
-			result.CollectionOrdinal = &ordinal
+			result.CollectionOrdinals = append(result.CollectionOrdinals, i)
 		} else if !statementScalar(field.Type.Name) {
 			return nil, fmt.Errorf("statement argument %d must be a typed scalar field", i+1)
 		}
@@ -259,8 +258,24 @@ func statementCollectionPosition(sql string, ordinal int) bool {
 		}
 		return "?"
 	})
-	parsed, err := sqlparser.ParseUpdate(marked)
-	if err != nil || parsed.Qualify == nil {
+	var qualify *sqlexpr.Qualify
+	switch sqlparser.ParseKind(marked) {
+	case sqlparser.KindUpdate:
+		parsed, err := sqlparser.ParseUpdate(marked)
+		if err != nil {
+			return false
+		}
+		qualify = parsed.Qualify
+	case sqlparser.KindDelete:
+		parsed, err := sqlparser.ParseDelete(marked)
+		if err != nil {
+			return false
+		}
+		qualify = parsed.Qualify
+	default:
+		return false
+	}
+	if qualify == nil {
 		return false
 	}
 	var visit func(node.Node) bool
@@ -269,6 +284,13 @@ func statementCollectionPosition(sql string, ordinal int) bool {
 		case *sqlexpr.Parenthesis:
 			return visit(actual.X)
 		case *sqlexpr.Binary:
+			// A wholly parenthesized WHERE is represented by the parser as a
+			// transparent binary shell around its parenthesis node.
+			if actual.Op == "" && actual.Y == nil {
+				if _, ok := actual.X.(*sqlexpr.Parenthesis); ok {
+					return visit(actual.X)
+				}
+			}
 			if strings.EqualFold(actual.Op, "AND") || strings.EqualFold(actual.Op, "OR") {
 				return visit(actual.X) || visit(actual.Y)
 			}
@@ -284,5 +306,5 @@ func statementCollectionPosition(sql string, ordinal int) bool {
 		}
 		return false
 	}
-	return visit(parsed.Qualify.X)
+	return visit(qualify.X)
 }

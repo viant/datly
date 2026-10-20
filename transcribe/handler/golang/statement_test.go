@@ -54,8 +54,7 @@ if p.calls!=2{t.Fatal("rejected operation executed")}
 }
 
 func TestLowerCollectionStatement(t *testing.T) {
-	ordinal := 1
-	value := &plan.StatementPlan{Method: "Execute", SQL: "UPDATE records SET enabled=?, note='?' WHERE id IN (?) AND owner_id=? /* ? */", CollectionOrdinal: &ordinal}
+	value := &plan.StatementPlan{Method: "Execute", SQL: "UPDATE records SET enabled=?, note='?' WHERE id IN (?) AND owner_id=? /* ? */", CollectionOrdinals: []int{1}}
 	for _, field := range []struct{ name, typ string }{{"Enabled", "int"}, {"IDs", "[]int"}, {"OwnerID", "int"}} {
 		value.Arguments = append(value.Arguments, plan.StatementSelector{Path: plan.FieldPath{"Input", field.name}, Type: spec.TypeRef{Name: field.typ}})
 	}
@@ -101,5 +100,14 @@ func TestBinding(t *testing.T){for _,n:=range []int{0,1,3,101}{in:=&Input{Enable
 	cmd.Env = append(os.Environ(), "GOWORK=off", "GO111MODULE=on")
 	if output, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("generated collection: %v\n%s\n%s", err, output, source.String())
+	}
+}
+
+func TestLowerInvalidCollectionOrdinals(t *testing.T) {
+	for _, ordinals := range [][]int{{-1}, {1}, {0, 0}} {
+		value := &plan.StatementPlan{Method: "Execute", SQL: "DELETE FROM records WHERE id IN (?)", CollectionOrdinals: ordinals, Arguments: []plan.StatementSelector{{Path: plan.FieldPath{"Input", "IDs"}, Type: spec.TypeRef{Name: "[]int"}}}}
+		if _, err := StatementQueue(value, Config{Package: "example", Factory: "NewRecord", InputType: "Input", OutputType: "Output"}); err == nil {
+			t.Fatalf("invalid ordinals accepted: %v", ordinals)
+		}
 	}
 }

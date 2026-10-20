@@ -124,7 +124,7 @@ func StatementQueue(value *plan.StatementPlan, config Config) (*ast.File, error)
 		queueParams = append(queueParams, namedField("statementSQL", ast.NewIdent("string")))
 		args[0] = ast.NewIdent("statementSQL")
 	}
-	if value.CollectionOrdinal != nil {
+	if len(value.CollectionOrdinals) > 0 {
 		collectionBody, err := statementCollectionBody(value, l, args[0])
 		if err != nil {
 			return nil, err

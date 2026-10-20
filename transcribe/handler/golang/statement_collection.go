@@ -12,9 +12,15 @@ import (
 )
 
 func statementCollectionBody(value *plan.StatementPlan, l *lowerer, sql ast.Expr) ([]ast.Stmt, error) {
-	ordinal := *value.CollectionOrdinal
-	if value.Method != "Execute" || ordinal < 0 || ordinal >= len(value.Arguments) || value.Arguments[ordinal].Type.Name != "[]int" {
+	if value.Method != "Execute" || len(value.CollectionOrdinals) == 0 {
 		return nil, fmt.Errorf("invalid collection statement plan")
+	}
+	collections := make(map[int]bool, len(value.CollectionOrdinals))
+	for _, ordinal := range value.CollectionOrdinals {
+		if ordinal < 0 || ordinal >= len(value.Arguments) || value.Arguments[ordinal].Type.Name != "[]int" || collections[ordinal] {
+			return nil, fmt.Errorf("invalid collection statement plan")
+		}
+		collections[ordinal] = true
 	}
 	for _, path := range []string{"github.com/viant/sqlx", "strings"} {
 		alias := l.importsByPath[path]
@@ -35,20 +41,30 @@ func statementCollectionBody(value *plan.StatementPlan, l *lowerer, sql ast.Expr
 		}
 		return root + "." + strings.Join(field.Path[1:], ".")
 	}
-	ids := fieldText(value.Arguments[ordinal])
-	fmt.Fprintf(&source, "if len(%s)==0 { return %s.Errorf(\"statement collection must not be empty\") }; statementArgs := make([]any,0,%d+len(%s));", ids, l.importsByPath["fmt"], len(value.Arguments)-1, ids)
+	capacity := strconv.Itoa(len(value.Arguments) - len(collections))
+	for _, ordinal := range value.CollectionOrdinals {
+		ids := fieldText(value.Arguments[ordinal])
+		fmt.Fprintf(&source, "if len(%s)==0 { return %s.Errorf(\"statement collection must not be empty\") };", ids, l.importsByPath["fmt"])
+		capacity += "+len(" + ids + ")"
+	}
+	fmt.Fprintf(&source, "statementArgs := make([]any,0,%s);", capacity)
 	for i, field := range value.Arguments {
-		if i == ordinal {
-			fmt.Fprintf(&source, "for _, statementID := range %s { statementArgs=append(statementArgs,statementID) };", ids)
+		if collections[i] {
+			fmt.Fprintf(&source, "for _, statementID := range %s { statementArgs=append(statementArgs,statementID) };", fieldText(field))
 		} else {
 			fmt.Fprintf(&source, "statementArgs=append(statementArgs,%s);", fieldText(field))
 		}
 	}
+
 	sqlText := strconv.Quote(value.SQL)
 	if _, ok := sql.(*ast.Ident); ok {
 		sqlText = "statementSQL"
 	}
-	fmt.Fprintf(&source, "expandedSQL := %s.ParseParameters(%s).RewritePositional(func(ordinal int)string {if ordinal==%d {return %s.TrimSuffix(%s.Repeat(\"?,\",len(%s)),\",\")};return \"?\" }); return capability.Execute(expandedSQL,statementArgs...)", l.importsByPath["github.com/viant/sqlx"], sqlText, ordinal, l.importsByPath["strings"], l.importsByPath["strings"], ids)
+	fmt.Fprintf(&source, "expandedSQL := %s.ParseParameters(%s).RewritePositional(func(ordinal int)string {switch ordinal {", l.importsByPath["github.com/viant/sqlx"], sqlText)
+	for _, ordinal := range value.CollectionOrdinals {
+		fmt.Fprintf(&source, "case %d:return %s.TrimSuffix(%s.Repeat(\"?,\",len(%s)),\",\");", ordinal, l.importsByPath["strings"], l.importsByPath["strings"], fieldText(value.Arguments[ordinal]))
+	}
+	source.WriteString("};return \"?\" }); return capability.Execute(expandedSQL,statementArgs...)")
 	file, err := parser.ParseFile(token.NewFileSet(), "", "package generated;func generated(){"+source.String()+"}", 0)
 	if err != nil {
 		return nil, err
