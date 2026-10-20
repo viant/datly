@@ -79,6 +79,11 @@ func (p *Plan) scope(source Source, request *http.Request, requestOptions []requ
 		encodedForm = media == "multipart/form-data"
 	}
 	for _, argument := range p.arguments {
+		// Omitted optional query values still belong to this invocation's
+		// native query source, including deferred selector companions.
+		if argument.Source.Kind == requestprovider.QueryKind && queryValues == nil {
+			queryValues = make(url.Values)
+		}
 		if request != nil && (encodedForm && argument.Source.Kind == requestprovider.FormKind || argument.Source.Kind == requestprovider.BodyKind) {
 			continue
 		}
