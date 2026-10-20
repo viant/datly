@@ -148,6 +148,20 @@ func (w *Warmup) execute(ctx context.Context, prepare bool) (int, error) {
 	return total, nil
 }
 
+// warmupSelection is private dispatcher evidence for one server-selected target.
+// Preparation clears ComponentRequest.Warmup, so its selected child view cannot
+// be recovered from the request alone. Never use an inherited selection for a
+// dependency or an unrelated route.
+type warmupSelectionKey struct{}
+
+type warmupSelection struct {
+	registered     *registry.RegisteredComponent
+	target         dexec.ComponentTarget
+	view           string
+	indexColumn    string
+	indexParameter string
+}
+
 func (w *Warmup) executeTarget(ctx context.Context, prepare bool, fields map[string]registry.InputField, required map[string]bool, warmupTarget dexec.ReaderWarmupTarget) (int, error) {
 	registered, target := w.registered, w.target
 	settings := warmupTarget.Settings
@@ -213,7 +227,9 @@ func (w *Warmup) executeTarget(ctx context.Context, prepare bool, fields map[str
 			request.Warmup = nil
 			request.PrepareQuery = true
 		}
-		result, err := w.runtime.invokeComponent(ctx, request, scope)
+		selected := warmupSelection{registered: registered, target: target, view: warmupTarget.View, indexColumn: policy.IndexColumn, indexParameter: policy.IndexParameter}
+		caseCtx := context.WithValue(ctx, warmupSelectionKey{}, selected)
+		result, err := w.runtime.invokeComponent(caseCtx, request, scope)
 		if prepare {
 			return err
 		}

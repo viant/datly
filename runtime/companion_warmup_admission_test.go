@@ -88,5 +88,45 @@ func TestCanonicalCompanionWarmupAdmission(t *testing.T) {
 			t.Fatal("ambiguous root inventory admitted")
 		}
 		reader.targets = reader.targets[:1]
+		// Unlike an inventory-only request, a server-selected child target retains
+		// its exact identity through preparation, where Warmup itself is cleared.
+		reader.targets = []dexec.ReaderWarmupTarget{{View: "children", Settings: policy}, {View: "otherChildren", Settings: policy}}
+		childRequest := request
+		childRequest.Target = dexec.ComponentTarget{Component: component.Key, Route: route.Route()}
+		if childRequest.Warmup != nil {
+			childRequest.Warmup = &dexec.ReaderWarmupRequest{View: "children", Settings: policy}
+		}
+		selected := warmupSelection{registered: registered, target: childRequest.Target, view: "children", indexColumn: "id", indexParameter: "ID"}
+		selectedCtx := context.WithValue(ctx, warmupSelectionKey{}, selected)
+		if !canonicalCompanionWarmup(selectedCtx, registered, childRequest, route, prepared) {
+			t.Fatal("exact server-selected child request rejected")
+		}
+		if canonicalCompanionWarmup(ctx, registered, childRequest, route, prepared) {
+			t.Fatal("child selection without server evidence admitted")
+		}
+		for name, change := range map[string]func(*warmupSelection){
+			"different component": func(s *warmupSelection) { s.registered = &RegisteredComponent{} },
+			"different route":     func(s *warmupSelection) { s.target.Route.Path = "/another" },
+			"different index":     func(s *warmupSelection) { s.indexParameter = "other" },
+			"missing column":      func(s *warmupSelection) { s.indexColumn = "" },
+		} {
+			t.Run("child "+name, func(t *testing.T) {
+				bad := selected
+				change(&bad)
+				badCtx := context.WithValue(ctx, warmupSelectionKey{}, bad)
+				if canonicalCompanionWarmup(badCtx, registered, childRequest, route, prepared) {
+					t.Fatal("incompatible child selection admitted")
+				}
+			})
+		}
+		if childRequest.Warmup != nil {
+			bad := childRequest
+			bad.Warmup = &dexec.ReaderWarmupRequest{View: "otherChildren", Settings: policy}
+			if canonicalCompanionWarmup(selectedCtx, registered, bad, route, prepared) {
+				t.Fatal("different selected child admitted")
+			}
+		}
+		reader.targets = []dexec.ReaderWarmupTarget{{Settings: policy}}
+
 	}
 }
