@@ -109,6 +109,9 @@ func StatementQueue(value *plan.StatementPlan, config Config) (*ast.File, error)
 			return nil, err
 		}
 		method += "WithBatchSize"
+		if value.BatchOnDuplicateKeySQL != nil {
+			method += "AndOnDuplicateKeySQL"
+		}
 	}
 	body := []ast.Stmt{
 		&ast.IfStmt{Cond: &ast.BinaryExpr{X: &ast.BinaryExpr{X: ast.NewIdent("input"), Op: token.EQL, Y: nilExpr}, Op: token.LOR, Y: &ast.BinaryExpr{X: ast.NewIdent("output"), Op: token.EQL, Y: nilExpr}}, Body: &ast.BlockStmt{List: []ast.Stmt{fail("statement contracts are required")}}},

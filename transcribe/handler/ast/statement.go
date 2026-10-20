@@ -27,4 +27,7 @@ type StatementPlan struct {
 	BatchRows     StatementSelector
 	BatchSize     StatementSelector
 	BatchAffected StatementSelector
+
+	// BatchOnDuplicateKeySQL is present only for an authored fifth string literal.
+	BatchOnDuplicateKeySQL *string
 }

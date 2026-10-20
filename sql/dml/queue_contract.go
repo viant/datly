@@ -81,6 +81,7 @@ func (d *Data) appendWithQueueContract(table string, data any, kind dataOperatio
 	operation := dataOperation{kind: kind, table: table, data: payload.Interface(), queueContract: contract, appendBarrier: true, payloadEvidence: evidence}
 	if len(batch) == 1 {
 		operation.batchSize, operation.affected = batch[0].size, batch[0].affected
+		operation.onDuplicateKeySQL = batch[0].suffix
 	}
 	owner := d.owner()
 	owner.mu.Lock()

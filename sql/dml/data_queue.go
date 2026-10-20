@@ -46,6 +46,9 @@ type dataOperation struct {
 	mergeConfig     info.MergeConfig
 	mergeOptions    []moption.Option
 	mergeResult     *info.MergeResult
+
+	// SQLX constructor suffix belongs to this source-slice operation.
+	onDuplicateKeySQL string
 }
 
 func (d *Data) Insert(tableName string, data any) error {

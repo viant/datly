@@ -33,7 +33,7 @@ func (d *Data) executePlanStep(ctx context.Context, db *sql.DB, tx *sql.Tx, step
 
 func (d *Data) executeInsertStep(ctx context.Context, db *sql.DB, tx *sql.Tx, step executionStep) error {
 	metric := step.beginMetric(ctx)
-	service, err := d.inserter(ctx, db, step.table)
+	service, err := d.inserter(ctx, db, step.table, step.operations[0].onDuplicateKeySQL)
 	if err != nil {
 		return err
 	}

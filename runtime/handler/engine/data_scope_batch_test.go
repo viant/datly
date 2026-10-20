@@ -51,3 +51,30 @@ func TestBatchCapabilityHonorsMutationGuard(t *testing.T) {
 		})
 	}
 }
+
+func (p *batchGuardProbe) InsertWithBatchSizeAndOnDuplicateKeySQL(string, any, int, *int64, string) error {
+	p.mutations++
+	return nil
+}
+func TestBatchConflictCapabilityHonorsMutationGuard(t *testing.T) {
+	probe := &batchGuardProbe{}
+	guard := &mutationGuard{depth: 1}
+	c := dmlCapability{service: probe, guard: guard}
+	var affected int64
+	if err := c.InsertWithBatchSizeAndOnDuplicateKeySQL("records", nil, 137, &affected, "suffix"); !errors.Is(err, ErrWriteEligibilityMutation) {
+		t.Fatalf("guard error=%v", err)
+	}
+	if probe.mutations != 0 {
+		t.Fatal("guarded capability reached service")
+	}
+	guard.depth = 0
+	if err := c.InsertWithBatchSizeAndOnDuplicateKeySQL("records", nil, 137, &affected, "suffix"); err != nil {
+		t.Fatal(err)
+	}
+	if probe.mutations != 1 {
+		t.Fatal("capability not delegated once")
+	}
+	if err := (dmlCapability{service: &guardProbe{}}).InsertWithBatchSizeAndOnDuplicateKeySQL("records", nil, 137, &affected, "suffix"); err == nil {
+		t.Fatal("missing optional capability accepted")
+	}
+}

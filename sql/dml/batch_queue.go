@@ -9,20 +9,21 @@ import (
 type batchQueueOptions struct {
 	size     int
 	affected *int64
+	suffix   string
 }
 
 // InsertWithBatchSize queues a source slice with SQLX's explicit batch option.
 // The existing owner controls execution and completion; results appear at drain.
 func (d *Data) InsertWithBatchSize(table string, rows any, size int, affected *int64) error {
-	return d.appendBatch(table, rows, size, affected, dataOpInsert)
+	return d.appendBatch(table, rows, size, affected, dataOpInsert, "")
 }
 
 // DeleteWithBatchSize retains SQLX's composite-key batch deletion mechanism.
 func (d *Data) DeleteWithBatchSize(table string, rows any, size int, affected *int64) error {
-	return d.appendBatch(table, rows, size, affected, dataOpDelete)
+	return d.appendBatch(table, rows, size, affected, dataOpDelete, "")
 }
 
-func (d *Data) appendBatch(table string, rows any, size int, affected *int64, kind dataOperationKind) error {
+func (d *Data) appendBatch(table string, rows any, size int, affected *int64, kind dataOperationKind, suffix string) error {
 	if size <= 0 || affected == nil {
 		return fmt.Errorf("batch size must be positive and affected-row destination nonnil")
 	}
@@ -31,5 +32,10 @@ func (d *Data) appendBatch(table string, rows any, size int, affected *int64, ki
 	if value.IsValid() && value.Kind() == reflect.Slice && value.Len() > 0 && size > value.Len() {
 		size = value.Len()
 	}
-	return d.appendWithQueueContract(table, rows, kind, rhandler.SourceSlice, batchQueueOptions{size, affected})
+	return d.appendWithQueueContract(table, rows, kind, rhandler.SourceSlice, batchQueueOptions{size: size, affected: affected, suffix: suffix})
+}
+
+// InsertWithBatchSizeAndOnDuplicateKeySQL queues one source slice with an immutable SQLX constructor suffix.
+func (d *Data) InsertWithBatchSizeAndOnDuplicateKeySQL(table string, rows any, size int, affected *int64, suffix string) error {
+	return d.appendBatch(table, rows, size, affected, dataOpInsert, suffix)
 }
