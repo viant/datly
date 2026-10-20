@@ -15,9 +15,10 @@ import (
 )
 
 type viewDeriver struct {
-	authoritative bool
-	rowTypes      map[*data.View]reflect.Type
-	active        map[reflect.Type]string
+	sharedBodyTypes map[reflect.Type]bool
+	authoritative   bool
+	rowTypes        map[*data.View]reflect.Type
+	active          map[reflect.Type]string
 }
 
 func newViewDeriver(rowTypes map[*data.View]reflect.Type) *viewDeriver {
@@ -54,14 +55,14 @@ func (d *viewDeriver) enrich(view *data.View, outputType reflect.Type) error {
 	if err != nil {
 		return err
 	}
-	if selfReference != nil && !d.authoritative {
+	if selfReference != nil && !d.authoritative && !d.sharedBodyTypes[outputType] {
 		view.Spec.SelfReference = selfReference
 	}
 	if err := d.enrichPlannedRelations(view, outputType); err != nil {
 		return err
 	}
 	for _, field := range reflect.VisibleFields(outputType) {
-		if d.authoritative {
+		if d.authoritative || d.sharedBodyTypes[outputType] {
 			break
 		}
 		if !field.IsExported() {

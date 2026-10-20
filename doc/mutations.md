@@ -860,6 +860,16 @@ changes are not partially applied when synchronization fails. Hooks running afte
 this phase should use the generated marker-aware setters for business changes;
 do not expect a later hidden SyncPresence pass to repair arbitrary direct writes.
 
+### Shared body rows in independent Current reads
+
+A native writer with an auxiliary root may explicitly reuse its generated body
+row types for independent Current reads, including rows beneath that root. The
+body owns the Go type and relations; each Current read keeps its own flat query
+and does not infer the body's child reads. Reuse requires matching physical table,
+connector, scalar coverage, types, tags and destination. Keep real nullable-to-value
+compatibility casts explicit. Current reads cannot add fields or relations to the
+shared body type, and auxiliary parents receive no DML.
+
 ## Explicit insert/delete leaf policy
 
 A PATCH physical leaf can opt into insert/delete semantics when an update would

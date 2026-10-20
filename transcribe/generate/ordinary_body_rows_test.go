@@ -155,3 +155,51 @@ func TestOrdinarySharedBodyNullableUpdatedPresentation(t *testing.T) {
 		})
 	}
 }
+
+func TestOrdinarySharedAuxiliaryBodyOwnership(t *testing.T) {
+	p, owner, current := ordinaryBodyPlanner()
+	root := &spec.View{Name: "Scope", Auxiliary: true, Relations: []*spec.Relation{{View: owner}}}
+	owner.Relations = []*spec.Relation{{Holder: "Children", View: &spec.View{Name: "Children", Source: &spec.ViewSource{Table: "children"}}}}
+	p.names[owner.Relations[0].View] = "Child"
+	p.ordinaryGraph = ordinaryBodyGraph(root)
+	if err := p.shareOrdinaryBodyRow(current, owner, "record.go"); err != nil {
+		t.Fatal(err)
+	}
+	// Merely adding a body relation to an unrelated row does not admit sharing.
+	p.ordinaryGraph = ordinaryBodyGraph(&spec.View{Name: "Other", Auxiliary: true})
+	if err := p.shareOrdinaryBodyRow(current, owner, "record.go"); err == nil {
+		t.Fatal("unreachable owner admitted")
+	}
+	if !ordinaryBodyDeleteMarker(root) {
+		t.Fatal("writable descendant delete marker not found")
+	}
+	if HasWritableDeleteMarker(root) {
+		t.Fatal("global DELETE eligibility was broadened")
+	}
+	owner.Auxiliary = true
+	if ordinaryBodyDeleteMarker(root) {
+		t.Fatal("auxiliary marker used as writable witness")
+	}
+}
+
+func TestOrdinarySharedBodyEmptyJSONNamePolicy(t *testing.T) {
+	for _, tc := range []struct {
+		name, body, read, explicitRead string
+		want                           bool
+	}{
+		{"inferred name without omission", `json:",omitempty"`, `json:"channels"`, "", true},
+		{"inferred name with omission", `json:",omitempty"`, `json:"channels,omitempty"`, "", true},
+		{"explicit non-omission", `json:""`, `json:"channels,omitempty"`, "", true},
+		{"other option retained", `json:",omitempty"`, `json:"channels,string,omitempty"`, "", false},
+		{"explicit read stays strict", `json:",omitempty"`, `json:"channels"`, `json:"channels"`, false},
+		{"nonempty owner rename stays strict", `json:"other,omitempty"`, `json:"channels,omitempty"`, "", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			body := ordinaryBodyColumn{column: &spec.Column{Tag: tc.body}, field: Field{Name: "Channels", Tag: tc.body}}
+			read := ordinaryBodyColumn{column: &spec.Column{Tag: tc.explicitRead}, field: Field{Name: "Channels", Tag: tc.read}}
+			if got := ordinaryBodyTags(body, read); got != tc.want {
+				t.Fatalf("tag compatibility=%v want %v", got, tc.want)
+			}
+		})
+	}
+}

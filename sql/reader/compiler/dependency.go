@@ -8,6 +8,7 @@ import (
 	"github.com/viant/bindly"
 	"github.com/viant/datly/spec"
 	sqlreader "github.com/viant/datly/sql/reader"
+	dtag "github.com/viant/datly/tag"
 )
 
 // CompileViewDependencies compiles independent canonical views referenced by
@@ -50,6 +51,10 @@ func CompileViewDependencies(input Input) ([]*sqlreader.ViewDependency, error) {
 		component := componentWithRootView(input.Component, view)
 
 		viewInput := input
+		viewInput.sharedBodyTypes, err = independentBodyTypes(input.Component, input.InputType, targetType)
+		if err != nil {
+			return nil, err
+		}
 		viewInput.Component = component
 		viewInput.OutputType = targetType
 		viewInput.DirectViewField = ""
@@ -129,4 +134,79 @@ func componentWithRootView(source *spec.Component, view *spec.View) *spec.Compon
 		result.Parameters = append(result.Parameters, param)
 	}
 	return &result
+}
+
+// The native body contract is selected before the independent read replaces its
+// root. Follow only declared view/on edges, using exact reflected row identity.
+func independentBodyTypes(component *spec.Component, inputType, targetType reflect.Type) (map[reflect.Type]bool, error) {
+	if component == nil || component.Settings == nil || component.RootView == nil {
+		return nil, nil
+	}
+	switch component.Settings.Mutation {
+	case "patch", "post", "put":
+	default:
+		return nil, nil
+	}
+	for _, route := range component.Routes {
+		if route != nil && route.Handler != "" {
+			return nil, nil
+		}
+	}
+	target, err := directViewElemType(targetType)
+	if err != nil {
+		return nil, err
+	}
+	for inputType != nil && inputType.Kind() == reflect.Pointer {
+		inputType = inputType.Elem()
+	}
+	if inputType == nil || inputType.Kind() != reflect.Struct {
+		return nil, nil
+	}
+	rows := map[reflect.Type]bool{}
+	var visit func(reflect.Type) error
+	visit = func(row reflect.Type) error {
+		row, err := directViewElemType(row)
+		if err != nil {
+			return err
+		}
+		if rows[row] {
+			return nil
+		}
+		rows[row] = true
+		for _, field := range reflect.VisibleFields(row) {
+			metadata, err := dtag.ParseField(field)
+			if err != nil {
+				return err
+			}
+			if metadata.View != nil && len(metadata.Relation) > 0 {
+				if err = visit(field.Type); err != nil {
+					return err
+				}
+			}
+		}
+		return nil
+	}
+	for _, param := range spec.EffectiveParameters(component.Parameters) {
+		if param == nil || !param.IsMutationInput() {
+			continue
+		}
+		field, ok := inputType.FieldByName(param.Name)
+		if !ok {
+			continue
+		}
+		metadata, err := dtag.ParseField(field)
+		if err != nil {
+			return nil, err
+		}
+		if metadata.View == nil || metadata.View.Name != component.RootView.Name {
+			continue
+		}
+		if err = visit(field.Type); err != nil {
+			return nil, err
+		}
+	}
+	if rows[target] {
+		return rows, nil
+	}
+	return nil, nil
 }

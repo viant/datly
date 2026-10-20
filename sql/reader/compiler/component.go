@@ -24,7 +24,7 @@ func buildDirectDataViews(component *spec.Component, directType reflect.Type) (*
 	return buildDataViewsWithType(component, nil, "", directType)
 }
 
-func buildDataViewsWithType(component *spec.Component, outputType reflect.Type, directViewField string, directType reflect.Type) (*viewSet, error) {
+func buildDataViewsWithType(component *spec.Component, outputType reflect.Type, directViewField string, directType reflect.Type, sharedBodyTypes ...map[reflect.Type]bool) (*viewSet, error) {
 	view := data.FromComponent(component)
 	if view == nil {
 		view = &data.View{Relations: []*data.Relation{}}
@@ -41,6 +41,9 @@ func buildDataViewsWithType(component *spec.Component, outputType reflect.Type, 
 	rowRelations, outputRelations := splitOutputRelations(view.Relations)
 	view.Relations = rowRelations
 	deriver := newViewDeriver(result.rowTypes)
+	if len(sharedBodyTypes) > 0 {
+		deriver.sharedBodyTypes = sharedBodyTypes[0]
+	}
 	deriver.authoritative = component != nil && component.ReaderGraph != nil
 	if directType != nil {
 		elemType, err := directViewElemType(directType)
