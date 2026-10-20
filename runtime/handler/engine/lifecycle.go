@@ -198,7 +198,7 @@ type lifecycleCallContext struct {
 
 func (c lifecycleCallContext) Value(key any) any {
 	switch key.(type) {
-	case dataScopeContextKey, componentScopeKey, readerInvocationKey, responsebinding.Key, responsebinding.ChildKey:
+	case dataScopeContextKey, componentScopeKey, readerInvocationKey, responsebinding.Key, responsebinding.ChildKey, readOnlyDependencyKey:
 		return c.Context.Value(key)
 	}
 	if value := c.call.Value(key); value != nil {

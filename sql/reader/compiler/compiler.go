@@ -29,6 +29,8 @@ import (
 )
 
 type Input struct {
+	// sharedBodyTypes keeps independent reads from inheriting mutation-only relations.
+	sharedBodyTypes map[reflect.Type]bool
 	// AuthoredComponent is the checked predecessor of the shared runtime graph.
 	AuthoredComponent *spec.Component
 	// IdentifierProducts resolves trusted connector products without database I/O.
@@ -129,7 +131,7 @@ func (b *planCompiler) prepareViews() (*viewSet, string, error) {
 		if directViewField != "" {
 			return nil, "", fmt.Errorf("direct view field and direct view type are mutually exclusive")
 		}
-		views, err = buildDirectDataViews(b.input.Component, b.input.DirectViewType)
+		views, err = buildDataViewsWithType(b.input.Component, nil, "", b.input.DirectViewType, b.input.sharedBodyTypes)
 	}
 	if err != nil {
 		return nil, "", err

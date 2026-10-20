@@ -22,10 +22,10 @@ func (r *planResolver) ordinaryBodyRoot() *spec.View {
 		return nil
 	}
 	root := c.RootView
-	if root.Auxiliary || root.InMemory || strings.TrimSpace(root.TypeName) == "" {
+	if root.InMemory || strings.TrimSpace(root.TypeName) == "" {
 		return nil
 	}
-	if !r.input.nativeMutationTargetSelected && !HasWritableDeleteMarker(root) {
+	if !r.input.nativeMutationTargetSelected && !ordinaryBodyDeleteMarker(root) {
 		return nil
 	}
 	canonical, err := r.plan.CanonicalType(r.plan.Package, root.TypeName)
@@ -77,10 +77,10 @@ func (p *viewPlanner) shareOrdinaryBodyRow(current, owner *spec.View, destinatio
 	if p.requireConcrete && !p.nativeMutation {
 		return fail("requires normalized native mutation selection")
 	}
-	if !p.requireConcrete && !p.nativeMutation && !HasWritableDeleteMarker(owner) {
+	if !p.requireConcrete && !p.nativeMutation && !HasWritableDeleteMarker(owner) && !p.ordinaryGraph[owner] {
 		return fail("provisional owner requires native delete metadata")
 	}
-	if len(owner.Relations) != 0 || owner.SelfReference != nil {
+	if owner.SelfReference != nil || (len(owner.Relations) != 0 && !p.ordinaryGraph[owner]) {
 		return fail("body must remain an independent leaf")
 	}
 	if current.Auxiliary || current.InMemory || len(current.Relations) != 0 || current.SelfReference != nil {
@@ -105,7 +105,7 @@ func (p *viewPlanner) shareOrdinaryBodyRow(current, owner *spec.View, destinatio
 	// The existing discovery input is materialized before independent-read
 	// columns are refined. Stage only its type/destination edge here; the same
 	// precheck runs with complete columns and concrete target before emission.
-	if !p.requireConcrete && len(current.Columns) == 0 {
+	if !p.requireConcrete {
 		return p.shareBodyRow(current, owner, destination)
 	}
 	reads, err := p.ordinaryColumns(current, false)
@@ -216,6 +216,24 @@ func ordinaryBodyTags(body, read ordinaryBodyColumn) bool {
 	delete(reader, "sqlx")
 	delete(owner, "validate")
 	delete(reader, "validate")
+	if value, authored := rawBody.Lookup("json"); authored {
+		if _, explicitRead := rawRead.Lookup("json"); !explicitRead && strings.Split(value, ",")[0] == "" {
+			parts := strings.Split(reader["json"], ",")
+			parts[0] = ""
+			normalized := parts[:1]
+			for _, option := range parts[1:] {
+				if option != "omitempty" {
+					normalized = append(normalized, option)
+				}
+			}
+			for _, option := range strings.Split(value, ",")[1:] {
+				if option == "omitempty" {
+					normalized = append(normalized, option)
+				}
+			}
+			reader["json"] = strings.Join(normalized, ",")
+		}
+	}
 	if _, explicitRead := rawRead.Lookup("json"); !explicitRead && owner["json"] != reader["json"] {
 		// The one emitted body owns presentation. Compare names/options exactly
 		// after removing only the optional inference on the read side.
@@ -234,6 +252,7 @@ func ordinaryBodyTags(body, read ordinaryBodyColumn) bool {
 			}
 		}
 	}
+
 	if owner["json"] != reader["json"] {
 		_, explicitRead := rawRead.Lookup("json")
 		if rawBody.Get("internal") != "true" || rawBody.Get("json") != "-" || explicitRead || rawRead.Get("internal") != "" {
@@ -244,4 +263,54 @@ func ordinaryBodyTags(body, read ordinaryBodyColumn) bool {
 		delete(owner, "internal")
 	}
 	return reflect.DeepEqual(owner, reader)
+}
+
+// ordinaryBodyDeleteMarker proves only provisional row ownership. Auxiliary
+// containers may hold writable descendants; this must not widen DELETE routing.
+func ordinaryBodyDeleteMarker(view *spec.View) bool {
+	seen := map[*spec.View]bool{}
+	var visit func(*spec.View) bool
+	visit = func(v *spec.View) bool {
+		if v == nil || seen[v] || v.InMemory {
+			return false
+		}
+		seen[v] = true
+		if !v.Auxiliary {
+			for _, col := range v.Columns {
+				if col != nil && col.DeleteMarker {
+					return true
+				}
+			}
+		}
+		for _, rel := range v.Relations {
+			if rel != nil && rel.Kind != spec.RelationKindDerived && visit(rel.View) {
+				return true
+			}
+		}
+		return false
+	}
+	return visit(view)
+}
+
+// Only generated nodes in the declared auxiliary body graph may share a row.
+// Independent views are deliberately absent from this ownership set.
+func ordinaryBodyGraph(root *spec.View) map[*spec.View]bool {
+	if root == nil || !root.Auxiliary {
+		return nil
+	}
+	result := map[*spec.View]bool{}
+	var visit func(*spec.View)
+	visit = func(v *spec.View) {
+		if v == nil || result[v] || v.InMemory {
+			return
+		}
+		result[v] = true
+		for _, rel := range v.Relations {
+			if rel != nil && rel.Kind != spec.RelationKindDerived {
+				visit(rel.View)
+			}
+		}
+	}
+	visit(root)
+	return result
 }

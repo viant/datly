@@ -465,8 +465,8 @@ prefix applies to defaults; explicit DQL filename overrides take precedence:
 | `lifecycle.go` | Create-once methods for the explicitly named local lifecycle structs: edit this file. |
 | `entities.go` | Setters, presence synchronization and invariant helpers. |
 | `indexes.go` | Detached typed read collections, canonical key/link maps and on-demand business constructors. |
-| `mutation.go`, `frames.go`, `previous.go`, `layout.go`, `actions.go`, `mutation_output.go`, `validation.go`, `hooks.go`, `invariants.go` | Generated orchestration, capture, Previous matching, validation and queued actions. |
-| `router.go`, `links.go`, `resources.go`, `datly_sql/` | Component registration, linked types and embedded SQL resources. |
+| Generated support files, when needed | Concrete component support methods and hook adapters. Capture, Previous matching, validation and action execution use the shared writer runtime; empty phase files are not emitted. |
+| `router.go`, `resources.go`, SQL assets | Component registration and embedded SQL resources; linked-type support is emitted only when required. |
 
 Optional `$file_prefix('orders_')` prefixes defaults; explicit DQL file overrides
 remain exact. See [filename settings](dql.md#generated-filenames-and-destinations).
@@ -859,6 +859,16 @@ topology. It does not silently rematch by an incomplete identity prefix. Marker
 changes are not partially applied when synchronization fails. Hooks running after
 this phase should use the generated marker-aware setters for business changes;
 do not expect a later hidden SyncPresence pass to repair arbitrary direct writes.
+
+### Shared body rows in independent Current reads
+
+A native writer with an auxiliary root may explicitly reuse its generated body
+row types for independent Current reads, including rows beneath that root. The
+body owns the Go type and relations; each Current read keeps its own flat query
+and does not infer the body's child reads. Reuse requires matching physical table,
+connector, scalar coverage, types, tags and destination. Keep real nullable-to-value
+compatibility casts explicit. Current reads cannot add fields or relations to the
+shared body type, and auxiliary parents receive no DML.
 
 ## Explicit insert/delete leaf policy
 
@@ -1276,6 +1286,18 @@ existing UPDATE parent or from an INSERT parent whose key is ready before Queue.
 That key propagation does not permit reparenting an existing child. A completed
 child identity remains INSERT even if it collides with a database row; the write
 fails rather than switching to UPDATE.
+
+When Current matches a child under a different parent, native input validation
+can report ordinary field or business violations before the retained scope
+error. Such a graph never reaches sequencing or mutation queueing. Initialization
+and validation run inside the existing managed read-only boundary, so attempted
+DML, allocation, flushes and mutating child calls remain fatal even if a hook
+discards their errors. Initialization may therefore run on a graph that will be
+rejected; hooks must not rely on structural rejection to prevent arbitrary Go or
+external side effects. The boundary protects managed capabilities, not arbitrary
+code. Clearing or moving the child during initialization does not clear the
+captured scope failure. Direct adapters without an invocation-owned boundary
+continue to reject the graph before running these diagnostic callbacks.
 
 Deferring a database reference check for a parent row that does not yet exist is
 a separate case: it requires the exact captured parent INSERT, unchanged topology,

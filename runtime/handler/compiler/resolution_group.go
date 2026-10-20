@@ -12,7 +12,7 @@ func compileResolutionGroup(param *spec.Parameter, tagged bindly.BindingSpec, ha
 	var result *bindly.ResolutionGroupSpec
 	if param.ResolutionGroup != nil {
 		group := param.ResolutionGroup
-		result = &bindly.ResolutionGroupSpec{Name: group.Name, After: append([]string(nil), group.After...), DependsOn: append([]string(nil), group.DependsOn...)}
+		result = &bindly.ResolutionGroupSpec{Name: group.Name, Mode: bindly.ResolutionGroupMode(group.Mode), After: append([]string(nil), group.After...), DependsOn: append([]string(nil), group.DependsOn...)}
 	}
 	if hasTag && (result != nil || tagged.ResolutionGroup != nil) && !reflect.DeepEqual(result, tagged.ResolutionGroup) {
 		return nil, fmt.Errorf("parameter %s resolution group disagrees with generated binding tag", param.Name)

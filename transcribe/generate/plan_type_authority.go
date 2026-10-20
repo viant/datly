@@ -34,6 +34,12 @@ func (p *Plan) CanonicalType(packagePath, expression string) (string, error) {
 		}
 		resolver.Imports[alias] = item.Package
 	}
+	// Reflection may qualify a local row with its real Go package name even
+	// when DQL authors use another alias. Match the source resolver's authority
+	// without inventing an import or overriding an explicit foreign alias.
+	if local := strings.TrimSpace(p.GoPackage); packagePath != "" && packagePath == p.Package && local != "" && resolver.Imports[local] == "" {
+		resolver.Imports[local] = packagePath
+	}
 	canonical, err := resolver.Canonical(expression)
 	if err != nil {
 		return "", err

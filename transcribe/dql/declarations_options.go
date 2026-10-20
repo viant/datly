@@ -56,14 +56,27 @@ func (p *declarationOptionParser) parse() (declarationOptions, error) {
 		name, args := cursor.option()
 		key := strings.ToLower(strings.TrimSpace(name))
 		switch key {
-		case "withresolutiongroup":
-			if err := p.single(cursor, key, args, 2, -1); err != nil {
+		case "withresolutiongroup", "withreadonlygroup":
+			minimum := 2
+			if key == "withreadonlygroup" {
+				minimum = 1
+			}
+			if err := p.single(cursor, key, args, minimum, -1); err != nil {
 				return declarationOptions{}, err
 			}
 			if p.result.resolutionGroup == nil {
 				p.result.resolutionGroup = &spec.ResolutionGroupSpec{}
 			}
+			if p.result.resolutionGroup.Name != "" {
+				return declarationOptions{}, p.fail(cursor, "resolution group is already declared")
+			}
+			if key == "withreadonlygroup" {
+				p.result.resolutionGroup.Mode = "dependencies"
+			}
 			p.result.resolutionGroup.Name = strings.TrimSpace(trimQuote(args[0]))
+			if p.result.resolutionGroup.Name == "" {
+				return declarationOptions{}, p.fail(cursor, "resolution group name is required")
+			}
 			for _, arg := range args[1:] {
 				p.result.resolutionGroup.After = append(p.result.resolutionGroup.After, strings.TrimSpace(trimQuote(arg)))
 			}

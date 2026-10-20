@@ -860,8 +860,9 @@ Syntax fragment; adapt within the [complete reader contract](dql.md#a-shared-vie
 #setting($_ = $support_dest('frames','state.go'))
 ```
 
-This emits `request.go` in `contracts`, `business.go` in the component package,
-and `state.go` for mutation frames. Other emitted roles use the explicit prefix.
+This names `request.go` in `contracts` and `business.go` in the component package.
+The frames override selects `state.go` if that role emits an implementation; it
+does not create an empty file. Other emitted roles use the explicit prefix.
 `dest`, `input_dest`, and `output_dest` retain their package-splitting behavior.
 Other Go destinations are visible package-local `.go` filenames; directory
 traversal, hidden files and `_test.go` destinations are rejected.  The exact-arity filename settings require nonempty quoted
@@ -871,10 +872,12 @@ Use `$support_dest('role','filename.go')` for separate support products. Support
 roles are `entities`, `entity_methods`, `types` (cross-package shape aliases),
 `frames`, `previous`, `layout`, `actions`, `mutation_output`, `validation`, `hooks`,
 `invariants`, and `indexes`. Role names are case-sensitive; a `type:` role requires
-an exported Go identifier after the colon. Their defaults are `<role>.go`. Generated `hooks.go` contains
-mutation hook adapters; application edits belong in create-once `lifecycle.go`.
-`mutation_output.go` contains mutation result logic; `output.go` owns the output
-contract. `$support_dest('type:CubeInput','cube.go')` selects the filename for a
+an exported Go identifier after the colon. Their defaults are `<role>.go`.
+A supported filename role is not a promise that every component emits that file.
+Only concrete generated support is written; empty phase placeholders are omitted.
+Application hook edits belong in create-once `lifecycle.go`; `output.go` owns the
+output contract. Shared writer runtime behavior does not require per-component
+frames, Previous, action or validation files. `$support_dest('type:CubeInput','cube.go')` selects the filename for a
 separately generated named type; otherwise its snake-case type name supplies the
 default filename. Support overrides apply in each package that owns that role,
 including relocated entity methods.

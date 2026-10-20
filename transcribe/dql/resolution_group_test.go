@@ -23,3 +23,24 @@ func TestResolutionGroupMalformedAuthoringRejected(t *testing.T) {
 		}
 	}
 }
+
+func TestReadOnlyGroupAuthoring(t *testing.T) {
+	prepared := PrepareSource("#define($_ = $Audiences<string>(component/GET:/audiences).Optional().WithReadOnlyGroup('subject'))\n#define($_ = $Creatives<string>(component/GET:/creatives).Optional().WithReadOnlyGroup('subject').DependsOn('Audiences'))\nSELECT 1")
+	if err := prepared.Err(); err != nil {
+		t.Fatal(err)
+	}
+	for _, parameter := range prepared.Directives.Params {
+		if parameter.ResolutionGroup == nil || parameter.ResolutionGroup.Mode != "dependencies" || parameter.ResolutionGroup.Name != "subject" || len(parameter.ResolutionGroup.After) != 0 {
+			t.Fatalf("read-only metadata lost: %+v", parameter)
+		}
+	}
+	for _, tail := range []string{".WithReadOnlyGroup()", ".WithReadOnlyGroup(' ')", ".WithReadOnlyGroup('a').WithResolutionGroup('b','Jwt')", ".WithResolutionGroup('b','Jwt').WithReadOnlyGroup('a')"} {
+		if _, err := (&declarationOptionParser{paramName: "ID", tail: tail}).parse(); err == nil {
+			t.Fatalf("invalid group accepted: %s", tail)
+		}
+	}
+	options, err := (&declarationOptionParser{paramName: "Child", tail: ".WithReadOnlyGroup('subject','Jwt')"}).parse()
+	if err != nil || options.resolutionGroup.After[0] != "Jwt" {
+		t.Fatalf("explicit barrier lost: %+v %v", options, err)
+	}
+}

@@ -186,6 +186,11 @@ over source-preserved SQL/CTEs and literal defaults.
 
 ## Filename controls
 
+Emit generated support files only when they contain an implementation. Do not
+add package-only phase placeholders; capture, Previous matching, validation and
+action execution use the shared writer runtime. Filename overrides select where
+an emitted role belongs, and do not force an empty artifact.
+
 Use prefix-free default filenames with no `_gen` suffix. Application lifecycle
 edits belong in create-once `lifecycle.go`; generated support remains separate.
 Use explicit `$file_prefix('orders_')` only when requested or needed for chosen

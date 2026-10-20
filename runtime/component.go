@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/viant/bindly"
 	"github.com/viant/bindly/locator"
 	requestprovider "github.com/viant/bindly/provider/request"
 	dexec "github.com/viant/datly/exec"
@@ -99,6 +100,9 @@ func (i *scopedComponentInvoker) InvokeComponent(ctx context.Context, request de
 	}
 	if i.authority != nil {
 		ctx = i.authority(ctx)
+	}
+	if handlerengine.ReadOnlyDependency(ctx) && request.IndependentChildTransactions {
+		return nil, handlerengine.RejectReadOnlyDependency(ctx, "independent child transactions")
 	}
 	observeChildFailure, _ := ctx.Value(responsebinding.ChildKey{}).(func())
 	defer func() {
@@ -196,6 +200,12 @@ func (r *Runtime) InvokeComponent(ctx context.Context, request dexec.ComponentRe
 }
 
 func (r *Runtime) invokeComponent(ctx context.Context, request dexec.ComponentRequest, scope dexec.ProviderScope) (_ any, err error) {
+	readOnlyContext := ctx
+	defer func() {
+		if err != nil {
+			handlerengine.RecordReadOnlyFailure(readOnlyContext, err)
+		}
+	}()
 	if r == nil || r.invoker == nil || r.injector == nil {
 		return nil, fmt.Errorf("runtime component invocation is not configured")
 	}
@@ -251,6 +261,15 @@ func (r *Runtime) invokeComponent(ctx context.Context, request dexec.ComponentRe
 	}
 	if registered == nil || registered.Component == nil {
 		return nil, fmt.Errorf("registered component not found: %s", identity)
+	}
+	if handlerengine.ReadOnlyDependency(ctx) {
+		if !readOnlyGroupReader(registered, route) || request.IndependentChildTransactions || len(request.Providers) != 0 || request.Completion != nil || request.BindingOutput != nil || request.ExtraInput != nil || request.Replay != nil || request.Warmup != nil || request.PrepareQuery || request.DryRun || len(request.WarmupOmitInput) != 0 {
+			return nil, handlerengine.RejectReadOnlyDependency(ctx, "child requires a native reader without provider overrides, independent transactions, or post-commit callbacks")
+		}
+		ctx, err = handlerengine.AdmitReadOnlyDependency(ctx, route.String(), true)
+		if err != nil {
+			return nil, err
+		}
 	}
 	if err := registered.Component.Settings.ValidateComponentCallPolicy(); err != nil {
 		return nil, err
@@ -466,7 +485,7 @@ func (r *Runtime) invokeComponent(ctx context.Context, request dexec.ComponentRe
 		return nil, err
 	}
 	ctx = constant.WithContext(ctx, values)
-	return r.invoker.Execute(ctx, handlerengine.Request{
+	execution := handlerengine.Request{
 		IndependentChildTransactions: request.IndependentChildTransactions || (registered.Component.Settings != nil && registered.Component.Settings.IndependentChildTransactions),
 		SequenceStrategy:             sequenceStrategy,
 		BufferedComponentCalls:       buffered,
@@ -492,7 +511,14 @@ func (r *Runtime) invokeComponent(ctx context.Context, request dexec.ComponentRe
 		DataSource:           dataSource,
 		Handler:              handler,
 		Completion:           request.Completion,
+	}
+	var value any
+	err = bindly.RunResolutionGroupPhase(ctx, func(phaseCtx context.Context) error {
+		var executeErr error
+		value, executeErr = r.invoker.Execute(phaseCtx, execution)
+		return executeErr
 	})
+	return value, err
 }
 
 func componentBindingOrder(parent *spec.Component, source string) string {

@@ -93,6 +93,10 @@ func terminalBindingFailure(cause error) bool {
 	}
 	return errors.As(cause, &cleanup) || errors.As(cause, &network) || errors.As(cause, &panicError)
 }
+
+// IsTerminalBindingFailure shares the existing cancellation/transaction/panic
+// classification with other engine-owned dependency scheduling policies.
+func IsTerminalBindingFailure(cause error) bool { return terminalBindingFailure(cause) }
 func groupFailureLocked(ledger *activityLedger, group *bindingGroupCell) error {
 	for _, entry := range ledger.entries {
 		if entry.terminal || entry.group != group {
