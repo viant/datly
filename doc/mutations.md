@@ -61,12 +61,18 @@ The usual combinations are:
 | `patch` | `PATCH` | Apply supplied fields while preserving omitted values. |
 | `post` | `POST` | Insert the writable graph. |
 | `put` | `PUT` | Apply the generated update policy for the writable graph. |
+| `patch` or `put` | `DELETE` | Use an explicit physical delete marker, or compose deletes from a relation-free auxiliary root's component lifecycle. |
 
 Generation emits Go and creates the request/output contracts and state reads
 needed by the operation. The route method alone does not generate that code. Native `post` generation
 also supports an authored `PATCH` route when the application requires insert-only
 behavior under that transport. It retains POST mutation semantics: an existing
 identity does not turn the request into an update.
+An auxiliary DELETE root declares `lifecycle_type` and has no delete or
+concurrency markers. Its lifecycle validates the canonical input and invokes
+child writers through the shared buffer; the parent performs no automatic row
+DML. The selected PATCH/PUT policy and normal lifecycle linking and signature
+checks still apply. The DELETE transport does not imply deletion by omission.
 For a sparse update, Datly matches the authorized previous database rows using
 complete identities; the application authors the graph and lifecycle behavior.
 
@@ -204,6 +210,12 @@ reconciliation, identity/action policies, entity hooks and mutation tokens.
 It does not allocate IDs, classify inserts versus updates, retry statements,
 or query an identity afterward. Other writable graphs continue to use their
 existing generated mutation policy.
+
+Arguments may also be one pointer to a supported scalar, including `*time.Time`.
+A nil pointer binds SQL NULL; a nonnil pointer binds its value, including zero.
+The original pointer is queued without dereferencing or snapshotting, so keep
+its target stable until the caller completes the buffer. Pointer identity
+destinations, double pointers, records and collections remain unsupported.
 
 Buffered statements can use declared immutable identifier constants with the
 same quoted identifier notation as reader SQL. For example, a declared

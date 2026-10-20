@@ -224,6 +224,9 @@ func signedStatementInteger(name string) bool {
 	return false
 }
 func statementScalar(name string) bool {
+	// Nullable arguments retain their pointer selectors for database/sql. Strip
+	// exactly one level; pointer results and non-scalar pointees stay invalid.
+	name = strings.TrimPrefix(name, "*")
 	if signedStatementInteger(name) {
 		return true
 	}
