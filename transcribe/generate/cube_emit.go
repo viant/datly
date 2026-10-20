@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/viant/datly/report"
+	"github.com/viant/datly/transcribe/internal/goliteral"
 	"reflect"
 	"sort"
 	"strconv"
@@ -63,7 +64,7 @@ func (p *Plan) cubeFileText() (string, error) {
 							fmt.Fprintf(&sections, "type %s %s\n", markerName, markerType)
 							memberType = "*" + markerName
 						}
-						fmt.Fprintf(&section, "%s %s %s\n", member.Name, memberType, strconv.Quote(generatedStructTag(string(member.Tag))))
+						fmt.Fprintf(&section, "%s %s %s\n", member.Name, memberType, goliteral.StructTag(generatedStructTag(string(member.Tag))))
 					}
 					section.WriteString("}\n")
 					sections.WriteString(section.String())
@@ -102,7 +103,7 @@ func (p *Plan) cubeFileText() (string, error) {
 						break
 					}
 				}
-				fmt.Fprintf(&body, "%s %s %s\n", field.Name, expression, strconv.Quote(generatedStructTag(tag)))
+				fmt.Fprintf(&body, "%s %s %s\n", field.Name, expression, goliteral.StructTag(generatedStructTag(tag)))
 			}
 			body.WriteString("}\n")
 			body.WriteString(sections.String())
@@ -121,7 +122,7 @@ func (p *Plan) cubeFileText() (string, error) {
 		if err != nil {
 			return "", err
 		}
-		fmt.Fprintf(&body, "type %s struct { Contract %s.Component[%s,%s] %s }\n", holder, componentAlias, inputName, outputName, strconv.Quote(generatedStructTag(tag)))
+		fmt.Fprintf(&body, "type %s struct { Contract %s.Component[%s,%s] %s }\n", holder, componentAlias, inputName, outputName, goliteral.StructTag(generatedStructTag(tag)))
 		encoded, err := json.Marshal(cube.Definition)
 		if err != nil {
 			return "", err
@@ -200,7 +201,7 @@ func cubeTypeExpression(typ reflect.Type, localPackage string, add func(string, 
 			}
 			b.WriteString(expression)
 			if field.Tag != "" {
-				b.WriteString(" " + strconv.Quote(generatedStructTag(string(field.Tag))))
+				b.WriteString(" " + goliteral.StructTag(generatedStructTag(string(field.Tag))))
 			}
 			b.WriteString("\n")
 		}

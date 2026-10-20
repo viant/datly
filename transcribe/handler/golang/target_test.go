@@ -29,8 +29,8 @@ func TestLowerRootPatchGeneratesCompilableTypedHandler(t *testing.T) {
 	text := string(source)
 	for _, expected := range []string{
 		"map[int64]*CurrentEvent",
-		`"parameter:\",kind=dml\""`,
-		`"parameter:\",kind=sequencer\""`,
+		"`parameter:\",kind=dml\"`",
+		"`parameter:\",kind=sequencer\"`",
 		"dependencies.Sequencer.Allocate(ctx, \"EVENTS\", input.Events, \"Id\")",
 		"dependencies.DML.Update(\"EVENTS\", record0)",
 		"dependencies.DML.Insert(\"EVENTS\", record0)",

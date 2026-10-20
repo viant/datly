@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	plan "github.com/viant/datly/transcribe/handler/ast"
+	"github.com/viant/datly/transcribe/internal/goliteral"
 	xhandler "github.com/viant/xdatly/handler"
 )
 
@@ -47,7 +48,7 @@ func StatementContract(value *plan.StatementPlan, config Config) (*ast.File, err
 		&ast.GenDecl{Tok: token.TYPE, Specs: []ast.Spec{&ast.TypeSpec{Name: ast.NewIdent(handler), Type: &ast.StructType{Fields: &ast.FieldList{}}}}},
 		&ast.FuncDecl{Name: ast.NewIdent(config.Factory), Type: &ast.FuncType{Results: &ast.FieldList{List: []*ast.Field{{Type: contract}}}}, Body: &ast.BlockStmt{List: []ast.Stmt{returnStmt(&ast.UnaryExpr{Op: token.AND, X: &ast.CompositeLit{Type: ast.NewIdent(handler)}})}}},
 	)
-	dependencies := &ast.StructType{Fields: &ast.FieldList{List: []*ast.Field{{Names: []*ast.Ident{ast.NewIdent("DML")}, Type: selectExpr(ast.NewIdent(handlerAlias), "DML"), Tag: &ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(capabilityTag(xhandler.DMLKey))}}}}}
+	dependencies := &ast.StructType{Fields: &ast.FieldList{List: []*ast.Field{{Names: []*ast.Ident{ast.NewIdent("DML")}, Type: selectExpr(ast.NewIdent(handlerAlias), "DML"), Tag: &ast.BasicLit{Kind: token.STRING, Value: goliteral.StructTag(capabilityTag(xhandler.DMLKey))}}}}}
 	body := []ast.Stmt{
 		&ast.DeclStmt{Decl: &ast.GenDecl{Tok: token.VAR, Specs: []ast.Spec{&ast.ValueSpec{Names: []*ast.Ident{ast.NewIdent("dependencies")}, Type: dependencies}}}},
 		errorGuard(callExpr(selectExpr(callExpr(selectExpr(ast.NewIdent("session"), "Binder")), "Bind"), ast.NewIdent("ctx"), &ast.UnaryExpr{Op: token.AND, X: ast.NewIdent("dependencies")})),
@@ -59,7 +60,7 @@ func StatementContract(value *plan.StatementPlan, config Config) (*ast.File, err
 		entries := []ast.Expr{}
 		for i, name := range value.SQLConstants {
 			field := "SQLConst" + strconv.Itoa(i)
-			dependencies.Fields.List = append(dependencies.Fields.List, &ast.Field{Names: []*ast.Ident{ast.NewIdent(field)}, Type: ast.NewIdent("string"), Tag: &ast.BasicLit{Kind: token.STRING, Value: strconv.Quote("parameter:\"" + field + ",kind=const,in=" + name + ",required=true\"")}})
+			dependencies.Fields.List = append(dependencies.Fields.List, &ast.Field{Names: []*ast.Ident{ast.NewIdent(field)}, Type: ast.NewIdent("string"), Tag: &ast.BasicLit{Kind: token.STRING, Value: goliteral.StructTag("parameter:\"" + field + ",kind=const,in=" + name + ",required=true\"")}})
 			entries = append(entries, &ast.KeyValueExpr{Key: &ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(name)}, Value: selectExpr(ast.NewIdent("dependencies"), field)})
 		}
 		body = append(body, &ast.AssignStmt{Lhs: []ast.Expr{ast.NewIdent("constants"), ast.NewIdent("err")}, Tok: token.DEFINE, Rhs: []ast.Expr{callExpr(selectExpr(ast.NewIdent(constantAlias), "New"), &ast.CompositeLit{Type: &ast.MapType{Key: ast.NewIdent("string"), Value: ast.NewIdent("string")}, Elts: entries})}}, &ast.IfStmt{Cond: &ast.BinaryExpr{X: ast.NewIdent("err"), Op: token.NEQ, Y: ast.NewIdent("nil")}, Body: &ast.BlockStmt{List: []ast.Stmt{returnStmt(ast.NewIdent("err"))}}})
