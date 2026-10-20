@@ -20,7 +20,7 @@ func BufferedStatement(prepared *dql.PreparedSource, hasHandler bool) (string, e
 			continue
 		}
 		batchStatement := (strings.EqualFold(item.Operation, "Insert") || strings.EqualFold(item.Operation, "Delete") || strings.EqualFold(item.Operation, "InsertIgnore")) && BufferedBatch(prepared.SQL[item.Start:item.End])
-		if item.Kind == statement.KindService && (batchStatement || strings.EqualFold(item.Operation, "ExecuteWithResult") || strings.EqualFold(item.Operation, "Execute") || strings.EqualFold(item.Operation, "Merge")) {
+		if item.Kind == statement.KindService && (batchStatement || strings.EqualFold(item.Operation, "ExecuteWithResult") || strings.EqualFold(item.Operation, "ExecuteWithOptionalResult") || strings.EqualFold(item.Operation, "Execute") || strings.EqualFold(item.Operation, "Merge")) {
 			shapeOnly := len(prepared.Statements) == 2
 			if shapeOnly {
 				for _, other := range prepared.Statements {

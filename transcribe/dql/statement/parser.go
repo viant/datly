@@ -328,7 +328,7 @@ func matchVeltyOperation(matchedText string, cursor *parsly.Cursor) (Kind, strin
 func IsDMLServiceMethod(name string) bool {
 	switch {
 	case strings.EqualFold(name, "Insert"), strings.EqualFold(name, "InsertIgnore"), strings.EqualFold(name, "Update"),
-		strings.EqualFold(name, "Delete"), strings.EqualFold(name, "Execute"), strings.EqualFold(name, "ExecuteWithResult"), strings.EqualFold(name, "Merge"):
+		strings.EqualFold(name, "Delete"), strings.EqualFold(name, "Execute"), strings.EqualFold(name, "ExecuteWithResult"), strings.EqualFold(name, "ExecuteWithOptionalResult"), strings.EqualFold(name, "Merge"):
 		return true
 	default:
 		return false

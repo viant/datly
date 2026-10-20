@@ -14,6 +14,11 @@ import (
 )
 
 func TestGeneratorNestedStatementResultSQLite(t *testing.T) {
+	for _, method := range []string{"ExecuteWithResult", "ExecuteWithOptionalResult"} {
+		t.Run(method, func(t *testing.T) { testGeneratorNestedStatementResultSQLite(t, method) })
+	}
+}
+func testGeneratorNestedStatementResultSQLite(t *testing.T, method string) {
 	ctx := context.Background()
 	root := t.TempDir()
 	(testharness.GeneratedModule{Path: "github.com/viant/datly/genfixture"}).Write(t, root)
@@ -31,12 +36,13 @@ func TestGeneratorNestedStatementResultSQLite(t *testing.T) {
 	if err = catalog.RegisterPackage(typecatalog.TypeOriginPackage, pkg); err != nil {
 		t.Fatal(err)
 	}
-	const source = `#package('pkg/records')
+	source := `#package('pkg/records')
 #import('shared','github.com/viant/datly/genfixture/model')
 #setting($_ = $route('/records','POST'))
 #define($_ = $Request<*shared.Row>(body/data).Required())
 #define($_ = $Row<*shared.Row>(output/body))
 $dml.ExecuteWithResult("INSERT INTO records(name, metadata) VALUES (?, ?)", $Output.Row.Id, $Input.Request.Name, $Input.Request.Metadata)`
+	source = strings.ReplaceAll(source, "ExecuteWithResult", method)
 	request := GenerationRequest{Destination: root, Source: &Source{Name: "Records", Scope: "github.com/viant/datly/genfixture/pkg/records", Connector: "main", Text: source, Types: catalog}}
 	generated, err := (Generator{Operation: "post"}).Generate(ctx, request)
 	if err != nil {

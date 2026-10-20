@@ -39,11 +39,11 @@ func (c *Compiler) CompileStatement(source string, authority map[string]plan.Sta
 		service = selector
 	}
 	if service == nil || service.ID != "dml" {
-		return nil, fmt.Errorf("statement program requires dml.Execute, dml.ExecuteWithResult, dml.Merge, dml.Insert or dml.Delete")
+		return nil, fmt.Errorf("statement program requires dml.Execute, dml.ExecuteWithResult, dml.ExecuteWithOptionalResult, dml.Merge, dml.Insert, dml.InsertIgnore or dml.Delete")
 	}
 	method, ok := service.X.(*expr.Select)
-	if !ok || (method.ID != "ExecuteWithResult" && method.ID != "Execute" && method.ID != "Merge" && method.ID != "Insert" && method.ID != "Delete" && method.ID != "InsertIgnore") {
-		return nil, fmt.Errorf("statement program requires dml.Execute, dml.ExecuteWithResult, dml.Merge, dml.Insert or dml.Delete")
+	if !ok || (method.ID != "ExecuteWithResult" && method.ID != "ExecuteWithOptionalResult" && method.ID != "Execute" && method.ID != "Merge" && method.ID != "Insert" && method.ID != "Delete" && method.ID != "InsertIgnore") {
+		return nil, fmt.Errorf("statement program requires dml.Execute, dml.ExecuteWithResult, dml.ExecuteWithOptionalResult, dml.Merge, dml.Insert, dml.InsertIgnore or dml.Delete")
 	}
 	if method.ID == "Insert" || method.ID == "Delete" || method.ID == "InsertIgnore" {
 		return compileBatchStatement(method, authority)
@@ -52,7 +52,7 @@ func (c *Compiler) CompileStatement(source string, authority map[string]plan.Sta
 		return compileMergeStatement(method, authority)
 	}
 	argumentOffset := 1
-	if method.ID == "ExecuteWithResult" {
+	if method.ID == "ExecuteWithResult" || method.ID == "ExecuteWithOptionalResult" {
 		argumentOffset = 2
 	}
 	call, ok := method.X.(*expr.Call)
@@ -96,7 +96,7 @@ func (c *Compiler) CompileStatement(source string, authority map[string]plan.Sta
 	}
 	// LastInsertId is an insertion result. DDL, transaction control, and other
 	// statement kinds cannot acquire this capability through authoring.
-	if method.ID == "ExecuteWithResult" && !kind.IsInsert() {
+	if (method.ID == "ExecuteWithResult" || method.ID == "ExecuteWithOptionalResult") && !kind.IsInsert() {
 		return nil, fmt.Errorf("LastInsertId requires an INSERT statement")
 	}
 	switch kind {
@@ -105,7 +105,7 @@ func (c *Compiler) CompileStatement(source string, authority map[string]plan.Sta
 		if err != nil {
 			return nil, fmt.Errorf("statement INSERT: %w", err)
 		}
-		if method.ID == "ExecuteWithResult" && (len(parsed.Columns) == 0 || len(parsed.Values) != len(parsed.Columns)) {
+		if (method.ID == "ExecuteWithResult" || method.ID == "ExecuteWithOptionalResult") && (len(parsed.Columns) == 0 || len(parsed.Values) != len(parsed.Columns)) {
 			return nil, fmt.Errorf("statement result requires one explicit INSERT row; batching is unsupported")
 		}
 	case sqlparser.KindUpdate:
@@ -132,7 +132,7 @@ func (c *Compiler) CompileStatement(source string, authority map[string]plan.Sta
 		return nil, fmt.Errorf("statement has %d placeholders but %d arguments", bindings, len(call.Args)-argumentOffset)
 	}
 	result := &plan.StatementPlan{SQL: literal.Value, Method: method.ID, SQLConstants: constantNames}
-	if method.ID == "ExecuteWithResult" {
+	if method.ID == "ExecuteWithResult" || method.ID == "ExecuteWithOptionalResult" {
 		dest, err := resolveStatementSelector(call.Args[1], authority)
 		if err != nil {
 			return nil, fmt.Errorf("result destination: %w", err)

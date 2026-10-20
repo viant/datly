@@ -165,6 +165,9 @@ func (d *Data) executeSQLStep(ctx context.Context, tx *sql.Tx, step executionSte
 		}
 		if operation.lastInsertID != nil {
 			id, err := result.LastInsertId()
+			if operation.optionalLastInsertID && (err != nil || id <= 0) {
+				continue
+			}
 			if err != nil {
 				return err
 			}

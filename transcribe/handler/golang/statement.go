@@ -67,12 +67,12 @@ func StatementQueue(value *plan.StatementPlan, config Config) (*ast.File, error)
 	if method == "" {
 		method = "ExecuteWithResult"
 	}
-	if method != "Execute" && method != "ExecuteWithResult" && method != "Merge" && method != "Insert" && method != "Delete" && method != "InsertIgnore" {
+	if method != "Execute" && method != "ExecuteWithResult" && method != "ExecuteWithOptionalResult" && method != "Merge" && method != "Insert" && method != "Delete" && method != "InsertIgnore" {
 		return nil, fmt.Errorf("unsupported buffered statement method %q", method)
 	}
 	args := []ast.Expr{&ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(value.SQL)}}
 	params := []*ast.Field{{Type: ast.NewIdent("string")}}
-	if method == "ExecuteWithResult" {
+	if method == "ExecuteWithResult" || method == "ExecuteWithOptionalResult" {
 		dest, err := selector(value.LastInsertID)
 		if err != nil {
 			return nil, err

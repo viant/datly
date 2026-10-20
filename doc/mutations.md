@@ -211,6 +211,15 @@ It does not allocate IDs, classify inserts versus updates, retry statements,
 or query an identity afterward. Other writable graphs continue to use their
 existing generated mutation policy.
 
+Use `ExecuteWithOptionalResult` only when the source contract permits an
+unavailable inserted identity. It accepts the same static INSERT and destination
+as `ExecuteWithResult`. A `LastInsertId` extraction error or nonpositive ID leaves
+the destination unchanged; a positive ID uses the same checked assignment.
+SQL execution, overflow, cancellation and transaction completion errors still
+fail normally. The default `ExecuteWithResult` remains strict. Optional result
+handling adds no identity query or retry; any existing conditional fallback
+belongs to the application after successful completion.
+
 Arguments may also be one pointer to a supported scalar, including `*time.Time`.
 A nil pointer binds SQL NULL; a nonnil pointer binds its value, including zero.
 The original pointer is queued without dereferencing or snapshotting, so keep
