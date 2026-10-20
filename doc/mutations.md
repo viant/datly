@@ -226,6 +226,28 @@ The original pointer is queued without dereferencing or snapshotting, so keep
 its target stable until the caller completes the buffer. Pointer identity
 destinations, double pointers, records and collections remain unsupported.
 
+### Typed buffered updates
+
+For an existing typed record update, use the canonical two-selector statement:
+
+```sql
+$dml.Update($Input.Table, $Input.Row)
+```
+
+Declare Table as a string input and Row as a pointer to the existing named record
+using its qualified type/import. Transcription generates a call to the existing
+`Update(string, any) error` capability, retaining the original record pointer,
+SQLX mapping, sparse Has markers and NULL values. It adds no reads, allocation,
+classification, flush or transaction owner. The queued record is observed using
+the existing runtime timing; do not mutate it after the application has finalized
+its intended values.
+
+Prefer this form over expanding a typed update into a column list and opaque
+`Execute` SQL. Typed operations preserve buffered record metadata used by later
+reference validation; an opaque SQL statement intentionally cannot provide that
+proof. Never compensate by flushing the caller early or weakening validation.
+Existing legacy Update syntax retains its original transcription path.
+
 Buffered statements can use declared immutable identifier constants with the
 same quoted identifier notation as reader SQL. For example, a declared
 `$const('Table','CONSTRAINTS')` permits:
