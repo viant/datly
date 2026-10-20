@@ -910,8 +910,13 @@ func (h *Handler) CaptureInput(ctx context.Context, input any) (any, error) {
 		return nil, err
 	}
 	program.usePhaseObserver(ctx)
-	if err = prepareReadIndexes(ctx, input); err != nil {
-		return nil, err
+	// Whole-component auxiliary lifecycles own their input processing. Their
+	// independent reads need not have unique keys (for example a joined read).
+	// Keep generated indexes available explicitly without eagerly requiring them.
+	if !h.metadata.componentLifecycle {
+		if err = prepareReadIndexes(ctx, input); err != nil {
+			return nil, err
+		}
 	}
 	return program, nil
 }
