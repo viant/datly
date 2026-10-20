@@ -195,6 +195,8 @@ for support files, split destinations, collision rules and safe regeneration.
 
 ## Application and runtime boundary
 
+For ordered UPDATE-only persistence, see [explicit UPDATE commands](references/writer-contract.md#explicit-update-commands). Prefer ordinary PATCH matching unless the source contract specifically requires command semantics.
+
 Application components, inputs and lifecycle hooks depend on Xdatly public interfaces; Datly supplies their implementations. Use `handler.ComponentInvoker` from `github.com/viant/xdatly/handler`; prefer the explicit lifecycle arguments described below for prerequisite and dependent work. Use `handler.WithInput` for an explicitly marked reader seed; preserve the distinction from a trusted typed writer `Input`. Provider overlays and completion callbacks retain the caller's canonical binding, authorization, shared buffered writes and transaction owner. Use Xdatly contracts for DML, sequencing, validation, differ, logger and mutation reporting. Do not instantiate Datly runtime implementations inside business hooks or expose runtime-only invocation controls in application contracts. Datly bootstrap/registration adapters may depend on Datly. The older Datly invocation interface remains supported for existing consumers; new application examples use Xdatly.
 
 For binding reviews, check application DI fields and imports against Xdatly contracts, including `handler.MutationReporter` and `differ.Differ`. Preserve binding kinds and scoped behavior; regenerate generated Inputs/setters from DQL rather than replacing their Go imports by hand. Treat Datly-specific request options as runtime-adapter controls, not public Xdatly request fields.
