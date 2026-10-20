@@ -99,7 +99,17 @@ func resolveProjectedLinks(view *data.View, links data.Links, rewrite bool) (err
 		}
 		matched := false
 		sqlColumn := link.Column
+		// A declared SQL output is already authoritative. Physical SQLX aliases
+		// are a fallback for Go field references; using them first can redirect
+		// one projected alias to another output sharing the same source column.
+		declaredOutput, _, err := projection.HasOutput(sqlColumn)
+		if err != nil {
+			return err
+		}
 		for _, metadata := range view.Columns {
+			if declaredOutput {
+				break
+			}
 			if metadata == nil || metadata.Column == "" || (!strings.EqualFold(metadata.Name, link.Column) && !strings.EqualFold(metadata.Name, link.Field)) {
 				continue
 			}
