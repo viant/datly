@@ -16,8 +16,9 @@ type keylessAuxiliaryBody struct {
 	Ids []int `sqlx:"ids,enc=JSON"`
 }
 type keylessAuxiliaryInput struct {
-	Data       *keylessAuxiliaryBody   `parameter:"Data,kind=body,in=data" view:"Request,table=parents,auxiliary=true"`
-	CurParents []*keylessAuxiliaryBody `parameter:"CurParents,kind=view,in=CurParents" view:"CurParents,table=parents"`
+	Data         *keylessAuxiliaryBody   `parameter:"Data,kind=body,in=data" view:"Request,table=parents,auxiliary=true"`
+	CurParents   []*keylessAuxiliaryBody `parameter:"CurParents,kind=view,in=CurParents" view:"CurParents,table=parents"`
+	OtherParents []*keylessAuxiliaryBody `parameter:"OtherParents,kind=view,in=OtherParents" view:"OtherParents,table=parents"`
 }
 type keylessAuxiliaryOutput struct {
 	Writes *keylessAuxiliaryBody `parameter:"Writes,kind=output,in=body" json:"-"`
@@ -107,8 +108,9 @@ func TestKeylessAuxiliaryLeafLifecycleCanonicalInput(t *testing.T) {
 			}
 			if mode == "same table Current" {
 				input.CurParents = []*keylessAuxiliaryBody{{Ids: []int{99}}}
-				if native.metadata.CurrentField < 0 {
-					t.Fatal("fixture must select same-table Current before bypassing row work")
+				input.OtherParents = []*keylessAuxiliaryBody{{Ids: []int{100}}}
+				if native.metadata.CurrentField != -1 || native.metadata.CurrentType != nil {
+					t.Fatal("component lifecycle must not select row Current")
 				}
 			}
 			snapshot, err := native.CaptureInput(context.Background(), input)
@@ -125,6 +127,9 @@ func TestKeylessAuxiliaryLeafLifecycleCanonicalInput(t *testing.T) {
 			}
 			if result != output || output.Writes != input.Data || !reflect.DeepEqual(output.Result, []int{42}) {
 				t.Fatalf("output/input holder changed: result=%+v input=%+v", result, input)
+			}
+			if mode == "same table Current" && (input.CurParents[0].Ids[0] != 99 || input.OtherParents[0].Ids[0] != 100) {
+				t.Fatal("component lifecycle changed independent same-table reads")
 			}
 			if err := native.FinalizeOutcome(context.Background(), invocation, result, h.Outcome{}); err != nil {
 				t.Fatal(err)
@@ -197,5 +202,30 @@ func TestKeylessAuxiliaryLifecycleRejectsReflectedRelation(t *testing.T) {
 	_, err := New(component, reflect.TypeFor[keylessAuxiliaryGraphInput](), reflect.TypeFor[keylessAuxiliaryGraphOutput](), "post")
 	if err == nil || !strings.Contains(err.Error(), "no primary key") {
 		t.Fatalf("reflected relation must retain root identity guard: %v", err)
+	}
+}
+
+func TestComponentLifecycleDoesNotBypassGraphCurrentAmbiguity(t *testing.T) {
+	for _, reflected := range []bool{false, true} {
+		component := keylessAuxiliaryComponent(keylessAuxiliaryLinked.Name())
+		component.RootView.Auxiliary = reflected
+		input := reflect.TypeOf(struct {
+			Data   *keylessAuxiliaryBody   `parameter:"Data,kind=body,in=data" view:"Request,table=parents"`
+			First  []*keylessAuxiliaryBody `parameter:"First,kind=view" view:"First,table=parents"`
+			Second []*keylessAuxiliaryBody `parameter:"Second,kind=view" view:"Second,table=parents"`
+		}{})
+		output := reflect.TypeFor[keylessAuxiliaryOutput]()
+		if reflected {
+			input = reflect.TypeOf(struct {
+				Data   *keylessAuxiliaryGraphBody `parameter:"Data,kind=body,in=data" view:"Request,table=parents,auxiliary=true"`
+				First  []*keylessAuxiliaryBody    `parameter:"First,kind=view" view:"First,table=parents"`
+				Second []*keylessAuxiliaryBody    `parameter:"Second,kind=view" view:"Second,table=parents"`
+			}{})
+			output = reflect.TypeFor[keylessAuxiliaryGraphOutput]()
+		}
+		_, err := New(component, input, output, "patch")
+		if err == nil || !strings.Contains(err.Error(), "ambiguous current-state inputs First and Second") {
+			t.Fatalf("reflected=%v must retain graph Current inference: %v", reflected, err)
+		}
 	}
 }

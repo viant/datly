@@ -2587,9 +2587,17 @@ func CompileWithIdentifierProducts(component *spec.Component, inputType, outputT
 	}
 	metadata.Table = tagOption(rootViewTag, "table")
 	auxiliaryRoot := component.RootView.Auxiliary || strings.EqualFold(tagOption(rootViewTag, "auxiliary"), "true")
+	hookName := strings.TrimSpace(component.RootView.EntityHooks)
+	if hookName == "" {
+		hookName = tagOption(rootViewTag, "entityHooks")
+	}
+	// A component lifecycle consumes canonical Input, never row Previous. Its
+	// independent reads may legitimately use the same table. Reflected graphs
+	// still need ordinary Current matching, even when absent from the spec.
+	componentLifecycle := auxiliaryRoot && len(component.RootView.Relations) == 0 && hookName != "" && !hasReflectedRelations(metadata.EntityType)
 	currentIndex := -1
 	var currentType reflect.Type
-	if operation != "post" {
+	if operation != "post" && !componentLifecycle {
 		var currentErr error
 		currentIndex, currentType, currentErr = currentInputField(inputType, metadata.Table, auxiliaryRoot, component.RootView.CanonicalName(), metadata.EntityType.Name())
 		if currentErr != nil {
@@ -2599,10 +2607,6 @@ func CompileWithIdentifierProducts(component *spec.Component, inputType, outputT
 	metadata.CurrentField, metadata.CurrentType = currentIndex, currentType
 	if currentIndex >= 0 {
 		metadata.Table = tagOption(inputType.Field(currentIndex).Tag.Get("view"), "table")
-	}
-	hookName := strings.TrimSpace(component.RootView.EntityHooks)
-	if hookName == "" {
-		hookName = tagOption(rootViewTag, "entityHooks")
 	}
 	if metadata.CurrentField < 0 && operation != "post" && !(auxiliaryRoot && len(component.RootView.Relations) == 0 && hookName != "") {
 		return nil, fmt.Errorf("writer input has no current-state collection for %s in %s", metadata.EntityType, describeFields(inputType))
@@ -2833,11 +2837,8 @@ func compileRelations(component *spec.Component, inputType reflect.Type, parent 
 	for i := 0; i < parent.EntityType.NumField(); i++ {
 		structField := parent.EntityType.Field(i)
 		viewTag := structField.Tag.Get("view")
-		if viewTag == "" {
-			continue
-		}
-		childType := dereference(structField.Type)
-		if childType == nil || childType.Kind() != reflect.Struct {
+		childType := reflectedRelationType(structField)
+		if childType == nil {
 			continue
 		}
 		name := strings.TrimSpace(strings.Split(viewTag, ",")[0])
@@ -2871,6 +2872,26 @@ func compileRelations(component *spec.Component, inputType reflect.Type, parent 
 		parent.Relations = append(parent.Relations, relation)
 	}
 	return nil
+}
+
+func reflectedRelationType(field reflect.StructField) reflect.Type {
+	if field.Tag.Get("view") == "" {
+		return nil
+	}
+	child := dereference(field.Type)
+	if child == nil || child.Kind() != reflect.Struct {
+		return nil
+	}
+	return child
+}
+
+func hasReflectedRelations(entity reflect.Type) bool {
+	for i := 0; i < entity.NumField(); i++ {
+		if reflectedRelationType(entity.Field(i)) != nil {
+			return true
+		}
+	}
+	return false
 }
 
 // A shared primary key inherits its identity from the immediate parent. Keep
