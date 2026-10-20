@@ -41,3 +41,18 @@ func (c dmlCapability) InsertWithBatchSizeAndOnDuplicateKeySQL(table string, row
 	}
 	return service.InsertWithBatchSizeAndOnDuplicateKeySQL(table, rows, size, affected, suffix)
 }
+
+// InsertIgnoreWithBatchSize retains the mutation guard when a native handler
+// requests MySQL INSERT IGNORE through the injected DML capability.
+func (c dmlCapability) InsertIgnoreWithBatchSize(table string, rows any, size int, affected *int64) error {
+	if err := c.guard.check("InsertIgnoreWithBatchSize"); err != nil {
+		return err
+	}
+	service, ok := c.service.(interface {
+		InsertIgnoreWithBatchSize(string, any, int, *int64) error
+	})
+	if !ok {
+		return fmt.Errorf("native buffered insert ignore batch capability unavailable")
+	}
+	return service.InsertIgnoreWithBatchSize(table, rows, size, affected)
+}
