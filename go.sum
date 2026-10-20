@@ -1095,6 +1095,8 @@ github.com/viant/bindly v0.4.1-0.20261018155557-9d28a71d691c h1:CUALl8+f0MWbAfT4
 github.com/viant/bindly v0.4.1-0.20261018155557-9d28a71d691c/go.mod h1:2S+CsLqdGI1+s7BSuEWx/+ew8p+/Ax7Xi3HKGiE3/O8=
 github.com/viant/bindly v0.4.1-0.20261019214243-0a0ac77b49fe h1:+7/7BHyJOfxMoeZvyn+Vd/IiUxj52y77DR2ApW7C/0Q=
 github.com/viant/bindly v0.4.1-0.20261019214243-0a0ac77b49fe/go.mod h1:2S+CsLqdGI1+s7BSuEWx/+ew8p+/Ax7Xi3HKGiE3/O8=
+github.com/viant/bindly v0.4.1-0.20261020114552-79f0b7e785ef h1:xumfBbaADGUvSXe/vPvR6oamQ8c+BDqwZQdeAYcUO2M=
+github.com/viant/bindly v0.4.1-0.20261020114552-79f0b7e785ef/go.mod h1:2S+CsLqdGI1+s7BSuEWx/+ew8p+/Ax7Xi3HKGiE3/O8=
 github.com/viant/gmetric v0.3.2 h1:zTdW9QrPk2P0i/do9fokxtHesFQCvYqIc5Yktzmyxtg=
 github.com/viant/gmetric v0.3.2/go.mod h1:3WGxSMCL+owUb0HewYXMLxkoen8e8MlX1Vd2C6tJ5qw=
 github.com/viant/godiff v0.4.3-0.20260914060527-9f2005ca82e8 h1:PCgpoW8IwGsYDs805dCXp25vLTWkakpfvIYll0Twir4=

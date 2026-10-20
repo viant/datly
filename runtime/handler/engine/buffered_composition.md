@@ -116,3 +116,20 @@ started work is joined before returning. Existing batching is unchanged.
 MDP adoption requires explicit group declarations and regeneration. Its complete
 Index response/publication comparison and scheduling-only latency A/B remain
 application-level acceptance checks; unit overlap is not a latency claim.
+
+An ordinary native reader declaring dependency-mode groups may receive a trusted
+`ExtraInput` seed for non-group fields. Only explicitly marked values are selected.
+All marked paths are checked before eligibility filtering or cloning, including
+nil/zero values. Group outputs, their ancestors/descendants and presence markers
+cannot be supplied. JWT-verifying bindings and bindings with authorization status
+401/403 cannot be seeded: their normal verification/barriers must still run.
+Custom authentication without such metadata must remain explicitly authored and
+cannot be inferred from a seed. Bindly rechecks canonical plan identity and
+structural non-overlap, binds selected values before opening groups, and leaves
+unselected derived loaders and grouped readers on their normal lifecycle.
+
+This is not support for seeded calls from a grouped child: its existing provider
+override and seed restrictions remain unchanged. Parent-provided ordinary lookup
+providers retain their existing scope. Legacy groups, `BoundInput`, replay and
+independent transaction combinations retain their existing restrictions. No
+request selectors, compiled metadata or caller-owned seeds are mutated.

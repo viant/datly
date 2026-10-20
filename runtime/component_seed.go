@@ -11,6 +11,7 @@ import (
 	dexec "github.com/viant/datly/exec"
 	"github.com/viant/datly/runtime/handler/compiler"
 	"github.com/viant/datly/runtime/handler/custom"
+	"github.com/viant/datly/runtime/handler/engine"
 	"github.com/viant/datly/runtime/registry"
 	"github.com/viant/datly/spec"
 	xshape "github.com/viant/x/shape"
@@ -69,13 +70,35 @@ func (r *Runtime) prepareReaderSeed(ctx context.Context, component *RegisteredCo
 	if !actual.IsValid() || actual.Type() != reflect.PointerTo(typ) || actual.IsNil() {
 		return nil, nil, fmt.Errorf("extra reader input must be non-nil *%s", typ)
 	}
+	// Validate all explicit marks before eligibility filtering can discard a
+	// forbidden group output, including nil values and non-cacheable bindings.
+	fields := contract.Fields()
+	grouped := false
+	for _, field := range fields {
+		grouped = grouped || field.Binding().ResolutionGroup != nil
+	}
+	if grouped {
+		var marked []string
+		for _, field := range fields {
+			present, marker, err := contract.Plan().ExplicitPresence(value, field.Path())
+			if err != nil {
+				return nil, nil, err
+			}
+			if marker && present {
+				marked = append(marked, field.Path())
+			}
+		}
+		if err := engine.ValidateGroupedSeedPaths(contract, marked); err != nil {
+			return nil, nil, err
+		}
+	}
 	selection := xshape.CloneOptions{}
 	if err := selection.Select(typ); err != nil {
 		return nil, nil, err
 	}
 	var paths []string
 	borrowed := map[string]any{}
-	for _, field := range contract.Fields() {
+	for _, field := range fields {
 		binding := field.Binding()
 		kind := strings.ToLower(strings.TrimSpace(binding.Location.Kind))
 		if !readerSeedDataKind(kind) || readerSeedCapabilityType(field.DestinationType()) || binding.Scope != "" || (binding.Cacheable != nil && !*binding.Cacheable) || (kind == "state" && binding.Cacheable == nil) {

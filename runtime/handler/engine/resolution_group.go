@@ -17,8 +17,14 @@ type resolutionGroupController struct {
 type resolutionGroupRun struct{ group drainowner.BindingGroup }
 
 func (c resolutionGroupController) Open(ctx context.Context, plan bindly.ResolutionGroupPlan) (bindly.ResolutionGroupRun, error) {
-	if c.scope == nil || !c.request.BufferedComponentCalls || !drainowner.IsBindingGroupProvider(c.request.Components) || c.request.BoundInput != nil || c.request.Replay != nil || c.request.ResolvedInput != nil {
+	if c.scope == nil || !c.request.BufferedComponentCalls || !drainowner.IsBindingGroupProvider(c.request.Components) || c.request.BoundInput != nil || c.request.Replay != nil {
 		return nil, fmt.Errorf("resolution groups require canonical buffered input and native component authority")
+	}
+	if c.request.ResolvedInput != nil && plan.Mode() != bindly.ResolutionGroupDependencies {
+		return nil, fmt.Errorf("reader seeds require dependency-mode resolution groups")
+	}
+	if err := validateGroupedInputRequest(c.request); err != nil {
+		return nil, err
 	}
 	if plan.Mode() == bindly.ResolutionGroupDependencies {
 		return c.openReadOnly(plan)
@@ -128,10 +134,21 @@ func (r *resolutionGroupRun) Observe(_ context.Context, outcome bindly.Resolutio
 func (r *resolutionGroupRun) Close(context.Context) error { return r.group.Close() }
 
 func validateGroupedInputRequest(request Request) error {
+	grouped := false
 	for _, field := range request.Input.Fields() {
-		if field.Binding().ResolutionGroup != nil && (request.BoundInput != nil || request.Replay != nil || request.ResolvedInput != nil || request.IndependentChildTransactions) {
+		if field.Binding().ResolutionGroup == nil {
+			continue
+		}
+		grouped = true
+		if request.BoundInput != nil || request.Replay != nil || request.IndependentChildTransactions {
 			return fmt.Errorf("resolution groups require fresh canonical input binding")
 		}
+	}
+	if grouped && request.ResolvedInput != nil {
+		if !request.CanonicalReader {
+			return fmt.Errorf("resolution group seeds require a canonical native reader")
+		}
+		return ValidateGroupedSeedPaths(request.Input, request.ResolvedPaths)
 	}
 	return nil
 }
