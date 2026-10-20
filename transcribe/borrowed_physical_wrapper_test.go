@@ -13,13 +13,13 @@ import (
 func TestBorrowedPurePhysicalTransparentWrapper(t *testing.T) {
 	result, leaf, declaration := borrowedAuxiliaryNullComparisonFixture(t)
 	leaf.Auxiliary = false
-	direct, err := borrowedLeafContract(t.Context(), result, leaf, declaration)
+	direct, err := borrowedLeafContract(t.Context(), result, leaf, declaration, false)
 	require.NoError(t, err)
 	original := leaf.Source.SQL
 	leaf.Source.SQL = "SELECT * FROM (SELECT * FROM (" + original + ") inner_body) outer_body"
 	before, err := json.Marshal(result.Component)
 	require.NoError(t, err)
-	wrapped, err := borrowedLeafContract(t.Context(), result, leaf, declaration)
+	wrapped, err := borrowedLeafContract(t.Context(), result, leaf, declaration, false)
 	require.NoError(t, err, "physical leaves must use the same exact transparent wrapper proof")
 	require.NoError(t, gen.CompareBorrowedLeafContracts(direct, wrapped))
 	after, err := json.Marshal(result.Component)
@@ -50,7 +50,7 @@ func TestBorrowedPurePhysicalWrapperRetainsNontransparentClauses(t *testing.T) {
 			leaf.Source.SQL = fmt.Sprintf(tc.template, leaf.Source.SQL)
 			before, err := json.Marshal(result.Component)
 			require.NoError(t, err)
-			_, err = borrowedLeafContract(t.Context(), result, leaf, declaration)
+			_, err = borrowedLeafContract(t.Context(), result, leaf, declaration, false)
 			require.Error(t, err, "nontransparent wrapper semantics were discarded")
 			after, err := json.Marshal(result.Component)
 			require.NoError(t, err)
@@ -68,14 +68,14 @@ func TestBorrowedQualifiedPhysicalTransparentWrapper(t *testing.T) {
 				leaf.Source.SQL = "SELECT r.id,r.parent_id,r.name,NULL AS note FROM records r"
 				leaf.Columns = append(leaf.Columns, &spec.Column{Name: "note", Source: "note", Type: spec.TypeRef{Name: "*string"}, Nullable: true, Tag: `sqlx:"-"`})
 			}
-			direct, err := borrowedLeafContract(t.Context(), result, leaf, declaration)
+			direct, err := borrowedLeafContract(t.Context(), result, leaf, declaration, false)
 			require.NoError(t, err)
 			// Flight-shaped generated outer alias keeps the inner restricted projection.
 			inner := leaf.Source.SQL
 			leaf.Source.SQL = "SELECT f.* FROM (" + inner + ") f"
 			before, err := json.Marshal(result.Component)
 			require.NoError(t, err)
-			wrapped, err := borrowedLeafContract(t.Context(), result, leaf, declaration)
+			wrapped, err := borrowedLeafContract(t.Context(), result, leaf, declaration, false)
 			require.NoError(t, err)
 			require.NoError(t, gen.CompareBorrowedLeafContracts(direct, wrapped))
 			after, err := json.Marshal(result.Component)
@@ -105,7 +105,7 @@ func TestBorrowedQualifiedPhysicalWrapperRetainsNontransparentClauses(t *testing
 			leaf.Source.SQL = fmt.Sprintf(template, leaf.Source.SQL)
 			before, err := json.Marshal(result.Component)
 			require.NoError(t, err)
-			_, err = borrowedLeafContract(t.Context(), result, leaf, declaration)
+			_, err = borrowedLeafContract(t.Context(), result, leaf, declaration, false)
 			require.Error(t, err, "qualified nontransparent wrapper was peeled")
 			after, err := json.Marshal(result.Component)
 			require.NoError(t, err)

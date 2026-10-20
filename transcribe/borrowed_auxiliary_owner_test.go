@@ -192,14 +192,14 @@ func TestBorrowedPhysicalProjectionRetainsNontransparentClauses(t *testing.T) {
 			result, leaf, declaration := borrowedAuxiliaryNullComparisonFixture(t)
 			original := leaf.Source.SQL
 			leaf.Source.SQL = "SELECT * FROM (" + original + ") wrapped " + clause
-			_, err := borrowedLeafContract(t.Context(), result, leaf, declaration)
+			_, err := borrowedLeafContract(t.Context(), result, leaf, declaration, false)
 			require.ErrorContains(t, err, "physical projection requires", "nontransparent wrapper clause was discarded")
 			require.Equal(t, "SELECT * FROM ("+original+") wrapped "+clause, leaf.Source.SQL)
 		})
 	}
 	result, leaf, declaration := borrowedAuxiliaryNullComparisonFixture(t)
 	leaf.Source.SQL = "SELECT DISTINCT * FROM (" + leaf.Source.SQL + ") wrapped"
-	_, err := borrowedLeafContract(t.Context(), result, leaf, declaration)
+	_, err := borrowedLeafContract(t.Context(), result, leaf, declaration, false)
 	require.ErrorContains(t, err, "physical projection requires")
 }
 

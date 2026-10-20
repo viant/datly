@@ -44,7 +44,7 @@ func authoredBorrowedSQLRows(c *spec.Component) []spec.BorrowedSQLRow {
 	return append([]spec.BorrowedSQLRow(nil), c.Settings.Generation.BorrowedSQLRows...)
 }
 
-func borrowedLeafContract(ctx context.Context, result *Result, view *spec.View, declaration spec.BorrowedSQLRow) (gen.BorrowedLeafContract, error) {
+func borrowedLeafContract(ctx context.Context, result *Result, view *spec.View, declaration spec.BorrowedSQLRow, owner bool) (gen.BorrowedLeafContract, error) {
 	if result == nil || result.Source == nil || result.Source.ColumnRefiner == nil || view == nil || view.Source == nil {
 		return gen.BorrowedLeafContract{}, fmt.Errorf("borrow_sql_row requires fresh physical source discovery")
 	}
@@ -107,7 +107,7 @@ func borrowedLeafContract(ctx context.Context, result *Result, view *spec.View, 
 		return contract, err
 	}
 	path := declaration.BodyPath
-	if result.Source.Name == declaration.OwnerName {
+	if owner {
 		path = declaration.OwnerBodyPath
 	}
 	if result.borrowedPreparation != nil && result.borrowedPreparation.plan != nil {
@@ -374,11 +374,11 @@ func (c *Compiler) admitBorrowedSQLRows(ctx context.Context, result *Result) err
 		if err := column.ApplyWriterMetadata(freshBorrower.Component); err != nil {
 			return err
 		}
-		expected, err := borrowedLeafContract(ctx, freshOwner, owner, declaration)
+		expected, err := borrowedLeafContract(ctx, freshOwner, owner, declaration, true)
 		if err != nil {
 			return err
 		}
-		wanted, err := borrowedLeafContract(ctx, freshBorrower, borrower, declaration)
+		wanted, err := borrowedLeafContract(ctx, freshBorrower, borrower, declaration, false)
 		if err != nil {
 			return err
 		}
@@ -553,11 +553,11 @@ func (c *Compiler) admitBorrowedSQLRows(ctx context.Context, result *Result) err
 			if err := column.ApplyWriterMetadata(currentBorrower.Component); err != nil {
 				return err
 			}
-			oe, err := borrowedLeafContract(ctx, currentOwner, o, declaration)
+			oe, err := borrowedLeafContract(ctx, currentOwner, o, declaration, true)
 			if err != nil {
 				return err
 			}
-			be, err := borrowedLeafContract(ctx, currentBorrower, b, declaration)
+			be, err := borrowedLeafContract(ctx, currentBorrower, b, declaration, false)
 			if err != nil {
 				return err
 			}
@@ -795,6 +795,32 @@ func borrowedOwnerKey(baseDir string, d spec.BorrowedSQLRow) string {
 func prepareBorrowedOwners(ctx context.Context, source *Source, component *spec.Component, files []gen.BorrowedAuthorityFile) (*borrowedPreparation, error) {
 	preparation := &borrowedPreparation{owners: map[string]*borrowedOwnerPreparation{}, dependencies: typecatalog.NewCatalog(), baseDir: source.BaseDir()}
 	catalog := preparation.dependencies
+	workspace, err := (xmodule.LocalWorkspace{BaseDir: source.BaseDir()}).Resolve(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if component.TypeContext == nil || component.TypeContext.PackagePath == "" {
+		return nil, fmt.Errorf("borrow_sql_row canonical package authority is missing")
+	}
+	location, err := workspace.Package(component.TypeContext.PackagePath)
+	if err != nil {
+		return nil, err
+	}
+	if location == nil {
+		return nil, fmt.Errorf("borrow_sql_row destination package is unavailable")
+	}
+	pairingWorkspace, err := (xmodule.LocalWorkspace{BaseDir: location.Dir}).Resolve(ctx)
+	if err != nil {
+		return nil, err
+	}
+	pairingCatalog := typecatalog.NewCatalog()
+	if source.Types != nil {
+		pairingCatalog, err = source.Types.Clone()
+		if err != nil {
+			return nil, err
+		}
+	}
+	pairing := &discoveryCompilation{workspace: pairingWorkspace, catalog: pairingCatalog, discovery: &Discovery{BaseDir: location.Dir, GoBuild: source.GoBuild}}
 
 	for _, declaration := range authoredBorrowedSQLRows(component) {
 		if err := declaration.Validate(); err != nil {
@@ -826,6 +852,12 @@ func prepareBorrowedOwners(ctx context.Context, source *Source, component *spec.
 			}
 			if relative != "." {
 				ownerSource.Scope = strings.TrimSuffix(source.Scope, "/") + "/" + filepath.ToSlash(relative)
+			}
+			// A DQL filename locates the source, while the existing generated
+			// holder owns its component identity. Use ordinary contract/route
+			// pairing without admitting that holder's old executable graph.
+			if _, err := pairing.declaredPackageSource(ctx, &ownerSource); err != nil {
+				return nil, err
 			}
 			owner, err := freshBorrowedSource(ctx, &ownerSource, string(ownerBytes), files)
 			if err != nil {

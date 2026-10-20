@@ -40,12 +40,12 @@ func borrowedAuxiliaryNullComparisonFixture(t *testing.T) (*Result, *spec.View, 
 
 func TestBorrowedAuxiliaryNestedNullComparisonClone(t *testing.T) {
 	result, leaf, declaration := borrowedAuxiliaryNullComparisonFixture(t)
-	withoutPolicy, err := borrowedLeafContract(context.Background(), result, leaf, declaration)
+	withoutPolicy, err := borrowedLeafContract(context.Background(), result, leaf, declaration, false)
 	require.NoError(t, err)
 	leaf.NestedNullPolicy = "skip-auxiliary"
 	before, err := json.Marshal(result.Component)
 	require.NoError(t, err)
-	withPolicy, err := borrowedLeafContract(context.Background(), result, leaf, declaration)
+	withPolicy, err := borrowedLeafContract(context.Background(), result, leaf, declaration, false)
 	require.NoError(t, err)
 	require.NoError(t, gen.CompareBorrowedLeafContracts(withoutPolicy, withPolicy))
 	require.Equal(t, "skip-auxiliary", leaf.NestedNullPolicy)
@@ -88,7 +88,7 @@ func TestBorrowedAuxiliaryNestedNullComparisonRejectsMisuse(t *testing.T) {
 			}
 			before, err := json.Marshal(result.Component)
 			require.NoError(t, err)
-			_, err = borrowedLeafContract(context.Background(), result, leaf, declaration)
+			_, err = borrowedLeafContract(context.Background(), result, leaf, declaration, false)
 			require.Error(t, err, "invalid canonical role policy was normalized")
 			after, err := json.Marshal(result.Component)
 			require.NoError(t, err)
@@ -130,7 +130,7 @@ func TestBorrowedAuxiliaryNestedNullResolvedSourcesAndPhysicalGuards(t *testing.
 				}
 				before, err := json.Marshal(result.Component)
 				require.NoError(t, err)
-				_, err = borrowedLeafContract(context.Background(), result, leaf, declaration)
+				_, err = borrowedLeafContract(context.Background(), result, leaf, declaration, false)
 				if sourceKind == "direct" {
 					require.NoError(t, err)
 				} else {
@@ -150,7 +150,7 @@ func TestBorrowedAuxiliaryNestedNullResolvedSourcesAndPhysicalGuards(t *testing.
 func TestBorrowedAuxiliaryNestedNullRetainsComparisonAuthority(t *testing.T) {
 	result, leaf, declaration := borrowedAuxiliaryNullComparisonFixture(t)
 	leaf.NestedNullPolicy = "skip-auxiliary"
-	actual, err := borrowedLeafContract(context.Background(), result, leaf, declaration)
+	actual, err := borrowedLeafContract(context.Background(), result, leaf, declaration, false)
 	require.NoError(t, err)
 	for _, name := range []string{"physical", "omission", "package", "name", "connector", "schema", "table", "fields", "type", "tag", "has", "wrapper", "root-policy", "initial-validation", "cardinality", "writer-policy"} {
 		t.Run(name, func(t *testing.T) {
@@ -236,7 +236,7 @@ func TestBorrowedResolvedResourceAuthority(t *testing.T) {
 			before := view.Clone()
 			resourceBefore, err := fs.ReadFile(result.Source.Resources, "queries/records.sql")
 			require.NoError(t, err)
-			actual, err := borrowedLeafContract(ctx, result, view, declaration)
+			actual, err := borrowedLeafContract(ctx, result, view, declaration, false)
 			require.NoError(t, err)
 			require.Equal(t, before, view, "comparison changed authored provenance or discovered columns")
 			resourceAfter, err := fs.ReadFile(result.Source.Resources, "queries/records.sql")
@@ -253,7 +253,7 @@ func TestBorrowedResolvedResourceAuthority(t *testing.T) {
 			require.Equal(t, "record_key", facts.Projection[0].Result)
 			view.Columns[1].Name = "ExternalParentKey"
 			before = view.Clone()
-			_, err = borrowedLeafContract(ctx, result, view, declaration)
+			_, err = borrowedLeafContract(ctx, result, view, declaration, false)
 			require.NoError(t, err)
 			require.Equal(t, before, view)
 		})
@@ -278,7 +278,7 @@ func TestBorrowedResolvedResourceAuthority(t *testing.T) {
 					view.Source.SQL = query
 				}
 				before := view.Clone()
-				_, err = borrowedLeafContract(ctx, result, view, declaration)
+				_, err = borrowedLeafContract(ctx, result, view, declaration, false)
 				if name == "join" || name == "cte" {
 					require.ErrorContains(t, err, "physical projection requires one direct unqualified source")
 				} else {
@@ -295,7 +295,7 @@ func TestBorrowedResolvedResourceAuthority(t *testing.T) {
 		for _, encoding := range []string{"inline", "uri", "embed"} {
 			t.Run("fresh_discovery/"+name+"/"+encoding, func(t *testing.T) {
 				result := makeResult(t, encoding, query)
-				_, err := borrowedLeafContract(ctx, result, result.Component.RootView, declaration)
+				_, err := borrowedLeafContract(ctx, result, result.Component.RootView, declaration, false)
 				require.ErrorContains(t, err, "physical projection requires one direct unqualified source")
 			})
 		}
@@ -306,13 +306,13 @@ func TestBorrowedResolvedResourceAuthority(t *testing.T) {
 			empty, err := resource.New().WithDefault(fstest.MapFS{})
 			require.NoError(t, err)
 			result.Source.Resources = empty
-			_, err = borrowedLeafContract(ctx, result, result.Component.RootView, declaration)
+			_, err = borrowedLeafContract(ctx, result, result.Component.RootView, declaration, false)
 			require.ErrorContains(t, err, "read SQL resource")
 		})
 		t.Run("missing_resource_fs/"+missing, func(t *testing.T) {
 			result := makeResult(t, missing, direct)
 			result.Source.Resources = nil
-			_, err := borrowedLeafContract(ctx, result, result.Component.RootView, declaration)
+			_, err := borrowedLeafContract(ctx, result, result.Component.RootView, declaration, false)
 			require.ErrorContains(t, err, "resource filesystem is required")
 		})
 	}
