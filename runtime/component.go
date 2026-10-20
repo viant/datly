@@ -562,8 +562,8 @@ func enterComponent(ctx context.Context, target dexec.ComponentTarget) (context.
 	return context.WithValue(ctx, componentStackKey{}, path), nil
 }
 
-// canonicalCompanionWarmup admits root-index contracts retaining canonical selector authority.
-// Relation inventories are excluded even during preparation, which clears Warmup.
+// canonicalCompanionWarmup admits indexed contracts retaining canonical selector authority.
+// Child selections require private evidence from the server-owned warmup operation.
 func canonicalCompanionWarmup(ctx context.Context, registered *RegisteredComponent, request dexec.ComponentRequest, original, current *registry.RouteInputContract) bool {
 	if registered == nil || registered.Handler != nil || registered.Reader == nil || original == nil || current == nil || current.Route() != original.Route() || current.Type() != original.Type() || !current.SelectorPlan().SameAuthority(original.SelectorPlan()) || request.Input != nil || request.ExtraInput != nil || request.Replay != nil || request.DryRun || request.ReaderOptions != nil || request.BindingOutput != nil || len(request.WarmupOmitInput) != 1 {
 		return false
@@ -578,10 +578,22 @@ func canonicalCompanionWarmup(ctx context.Context, registered *RegisteredCompone
 			return false
 		}
 	case handlerexec.WarmupPhaseFill:
-		if request.Warmup == nil || request.PrepareQuery || request.Warmup.View != "" || request.Warmup.Settings == nil {
+		if request.Warmup == nil || request.PrepareQuery || request.Warmup.Settings == nil {
 			return false
 		}
 	default:
+		return false
+	}
+	if selected, ok := ctx.Value(warmupSelectionKey{}).(warmupSelection); ok && selected.registered == registered && selected.target == request.Target {
+		if selected.indexColumn == "" || selected.indexParameter != request.WarmupOmitInput[0] {
+			return false
+		}
+		if request.Warmup != nil && (request.Warmup.View != selected.view || request.Warmup.Settings.IndexColumn != selected.indexColumn || request.Warmup.Settings.IndexParameter != selected.indexParameter) {
+			return false
+		}
+		return true
+	}
+	if request.Warmup != nil && request.Warmup.View != "" {
 		return false
 	}
 	targets, err := warmupTargets(registered)
