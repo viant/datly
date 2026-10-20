@@ -4,6 +4,15 @@ DQL defines generated shapes. Explicitly linked Go contracts define application
 shapes. Go identifiers, vendor SQL result columns, physical DML columns, and JSON
 names are separate identities; preserve the mapping between them.
 
+## Generated Go tag literals
+
+Generated struct tags use Go raw backtick literals whenever the tag bytes can be
+represented safely. A tag containing a literal backtick, such as a BigQuery
+`` `project.dataset.table` `` reference, uses an escaped double-quoted Go literal.
+Control characters that cannot round-trip through a raw literal use the same
+fallback. This changes source spelling only: reflected tag values, SQL identifiers,
+JSON names, field types and presence semantics stay unchanged.
+
 ## Outer field rename versus inner SQL alias
 
 The outer projection of a named view graph is component configuration. A direct
