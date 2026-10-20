@@ -152,7 +152,7 @@ func (c *Compiler) CompileStatement(source string, authority map[string]plan.Sta
 				return nil, fmt.Errorf("statement argument %d must be a typed scalar field or a []int binding in a positive UPDATE or DELETE IN predicate", i+1)
 			}
 			result.CollectionOrdinals = append(result.CollectionOrdinals, i)
-		} else if !statementScalar(field.Type.Name) {
+		} else if !StatementScalarType(field.Type.Name) {
 			return nil, fmt.Errorf("statement argument %d must be a typed scalar field", i+1)
 		}
 		result.Arguments = append(result.Arguments, field)
@@ -191,23 +191,9 @@ func staticStatementCount(text string) int {
 }
 
 func resolveStatementSelector(value any, authority map[string]plan.StatementSelector) (plan.StatementSelector, error) {
-	selector, ok := value.(*expr.Select)
-	if !ok {
-		return plan.StatementSelector{}, fmt.Errorf("a canonical field selector is required")
-	}
-	var parts []string
-	for selector != nil {
-		if !token.IsIdentifier(selector.ID) || token.Lookup(selector.ID).IsKeyword() {
-			return plan.StatementSelector{}, fmt.Errorf("invalid selector %q", selector.ID)
-		}
-		parts = append(parts, selector.ID)
-		if selector.X == nil {
-			break
-		}
-		selector, ok = selector.X.(*expr.Select)
-		if !ok {
-			return plan.StatementSelector{}, fmt.Errorf("calls, indexing and dynamic selectors are unsupported")
-		}
+	parts, err := statementSelectorPath(value)
+	if err != nil {
+		return plan.StatementSelector{}, err
 	}
 	key := strings.Join(parts, ".")
 	field, ok := authority[key]
@@ -230,7 +216,9 @@ func signedStatementInteger(name string) bool {
 	}
 	return false
 }
-func statementScalar(name string) bool {
+
+// StatementScalarType reports the existing scalar argument boundary for canonical metadata consumers.
+func StatementScalarType(name string) bool {
 	// Nullable arguments retain their pointer selectors for database/sql. Strip
 	// exactly one level; pointer results and non-scalar pointees stay invalid.
 	name = strings.TrimPrefix(name, "*")
@@ -307,4 +295,57 @@ func statementCollectionPosition(sql string, ordinal int) bool {
 		return false
 	}
 	return visit(qualify.X)
+}
+
+// StatementSelectorPaths returns only static selector arguments referenced by a
+// direct statement call. It grants no authority; CompileStatement still validates
+// the complete program and every resolved selector.
+func StatementSelectorPaths(source string) []plan.FieldPath {
+	root, _, err := veltyparser.ParseWithSpansDetailed([]byte(source))
+	if err != nil {
+		return nil
+	}
+	var paths []plan.FieldPath
+	for _, node := range root.Statements() {
+		service, ok := node.(*expr.Select)
+		if !ok || service.ID != "dml" {
+			continue
+		}
+		method, ok := service.X.(*expr.Select)
+		if !ok {
+			continue
+		}
+		call, ok := method.X.(*expr.Call)
+		if !ok {
+			continue
+		}
+		for _, argument := range call.Args {
+			if path, err := statementSelectorPath(argument); err == nil {
+				paths = append(paths, path)
+			}
+		}
+	}
+	return paths
+}
+
+func statementSelectorPath(value any) (plan.FieldPath, error) {
+	selector, ok := value.(*expr.Select)
+	if !ok {
+		return nil, fmt.Errorf("a canonical field selector is required")
+	}
+	var parts []string
+	for selector != nil {
+		if !token.IsIdentifier(selector.ID) || token.Lookup(selector.ID).IsKeyword() {
+			return nil, fmt.Errorf("invalid selector %q", selector.ID)
+		}
+		parts = append(parts, selector.ID)
+		if selector.X == nil {
+			break
+		}
+		selector, ok = selector.X.(*expr.Select)
+		if !ok {
+			return nil, fmt.Errorf("calls, indexing and dynamic selectors are unsupported")
+		}
+	}
+	return parts, nil
 }

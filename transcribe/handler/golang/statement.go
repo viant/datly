@@ -7,6 +7,7 @@ import (
 	"go/token"
 	"sort"
 	"strconv"
+	"strings"
 
 	plan "github.com/viant/datly/transcribe/handler/ast"
 )
@@ -131,6 +132,26 @@ func StatementQueue(value *plan.StatementPlan, config Config) (*ast.File, error)
 		}
 		body = append(body[:len(body)-1], collectionBody...)
 	}
+	var pointerGuards []ast.Stmt
+	seenParents := map[string]bool{}
+	selectors := []plan.StatementSelector{value.LastInsertID, value.MergeTable, value.MergeRows, value.MergeConfig, value.MergeResult, value.BatchTable, value.BatchRows, value.BatchSize, value.BatchAffected}
+	selectors = append(selectors, value.Arguments...)
+	for _, field := range selectors {
+		for _, parent := range field.PointerParents {
+			key := strings.Join(parent, ".")
+			if seenParents[key] {
+				continue
+			}
+			seenParents[key] = true
+			expression, err := selector(plan.StatementSelector{Path: parent})
+			if err != nil {
+				return nil, err
+			}
+			pointerGuards = append(pointerGuards, &ast.IfStmt{Cond: &ast.BinaryExpr{X: expression, Op: token.EQL, Y: nilExpr}, Body: &ast.BlockStmt{List: []ast.Stmt{fail("statement selector " + key + " is nil")}}})
+		}
+	}
+	// Contract-root guard precedes all typed dereferences and enqueue work.
+	body = append(body[:1], append(pointerGuards, body[1:]...)...)
 	function := &ast.FuncDecl{Name: ast.NewIdent(config.Factory + "QueueStatement"), Type: &ast.FuncType{Params: &ast.FieldList{List: queueParams}, Results: &ast.FieldList{List: []*ast.Field{{Type: ast.NewIdent("error")}}}}, Body: &ast.BlockStmt{List: body}}
 	paths := make([]string, 0, len(l.usedImports))
 	for path := range l.usedImports {

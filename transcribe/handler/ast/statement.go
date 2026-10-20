@@ -8,6 +8,8 @@ type StatementSelector struct {
 	Path        FieldPath
 	Type        spec.TypeRef
 	Addressable bool
+	// PointerParents are proven pointer prefixes dereferenced by this selector.
+	PointerParents []FieldPath
 }
 
 // StatementPlan preserves one authored buffered operation and its ordered bindings.
