@@ -46,6 +46,7 @@ func TestSelectorSideInputsMCP(t *testing.T) {
 		label     string
 	}{
 		{map[string]any{"Fields": []string{"label"}, "Page": 1}, 0, "one"},
+		{map[string]any{"Fields": "label", "Page": 1}, 0, "one"},
 		{map[string]any{}, 1, "one"},
 		{map[string]any{"Fields": []string{"id"}, "Page": 1}, 1, ""},
 	} {
