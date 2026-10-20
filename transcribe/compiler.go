@@ -47,6 +47,7 @@ type Result struct {
 	ContractTypeOverrides   ContractTypeOverrides
 	AuthoredBorrowedSQLRows []spec.BorrowedSQLRow
 	borrowedConsumedFiles   []gen.BorrowedAuthorityFile
+	borrowedPreparation     *borrowedPreparation
 	// generatedOutputRows retains exact SQL-owned output admission for the next linking pass.
 	generatedOutputRows map[*spec.View]bool
 	Diagnostics         []*Diagnostic
@@ -102,7 +103,7 @@ func (c *Compiler) Compile(ctx context.Context, source *Source) (*Result, error)
 		result.TypeContext = compileTypeContext(result.Source, result.Component.TypeContext)
 		return result, nil
 	}
-	if err := compilation.loadMetadata(c.comparisonOnly); err != nil {
+	if err := compilation.loadMetadata(ctx, c.comparisonOnly); err != nil {
 		return nil, err
 	}
 	if err := compilation.compileViews(ctx); err != nil {
@@ -183,7 +184,7 @@ func prepareCompilation(ctx context.Context, source *Source) (*componentCompilat
 	}, nil
 }
 
-func (c *componentCompilation) loadMetadata(comparisonOnly bool) error {
+func (c *componentCompilation) loadMetadata(ctx context.Context, comparisonOnly bool) error {
 	source, component, prepared := c.result.Source, c.authored, c.prepared
 	var err error
 	contractTypeOverrides := authoredContractTypeOverrides(component)
@@ -204,6 +205,18 @@ func (c *componentCompilation) loadMetadata(comparisonOnly bool) error {
 		sourceCopy := *source
 		sourceCopy.Resources = captured
 		source = &sourceCopy
+	}
+
+	if len(authoredBorrowedRows) > 0 && !comparisonOnly && source.ColumnRefiner != nil {
+		preparation, prepareErr := prepareBorrowedOwners(ctx, source, component, borrowedConsumed)
+		if prepareErr != nil {
+			return prepareErr
+		}
+		c.result.borrowedPreparation = preparation
+		source.Types, err = mergeBorrowedOwnerDependencies(source.Types, preparation.dependencies)
+		if err != nil {
+			return err
+		}
 	}
 
 	loader := &link.Loader{PackageComponent: source.PackageComponent, AuthoredComponent: component, DQLAuthored: strings.TrimSpace(source.Text) != ""}

@@ -167,6 +167,11 @@ func (d *Discovery) Compile(ctx context.Context) (*ProjectGeneration, error) {
 			// remain independently selected.
 			compiledPackages[packageSourceIdentity(compiled.TypeContext.PackagePath, compiled.Component.Name)] = true
 		}
+		if len(compiled.AuthoredBorrowedSQLRows) != 0 && compiled.Component.TypeContext != nil {
+			// An explicitly authored borrower owns its generated holder. The
+			// source scope stays physical; the destination is declared separately.
+			compiledPackages[packageSourceIdentity(compiled.Component.TypeContext.PackagePath, compiled.Component.Name)] = true
+		}
 	}
 	if err = compilation.compilePackages(ctx, project, compiledPackages); err != nil {
 		return nil, err
@@ -230,14 +235,16 @@ func (c *discoveryCompilation) compileFile(ctx context.Context, file xmodule.Fil
 	if err != nil {
 		return nil, fmt.Errorf("prepare component source %q: %w", file.Path, err)
 	}
-	// Authored native factories are complete source authority. A holder left
-	// by their previous generation must never turn them into DQL overlays.
+	// Authored native factories and explicit SQL borrowers are complete source
+	// authority. Their previous holders must not turn them into DQL overlays.
 	nativeFactory := preparation.prepared.Directives.HandlerFactory != ""
+	authoredBorrower := preparation.prepared.Directives.Settings != nil && preparation.prepared.Directives.Settings.Generation != nil && len(preparation.prepared.Directives.Settings.Generation.BorrowedSQLRows) != 0
+	nativeSource := nativeFactory || authoredBorrower
 	var packageSource *bootstrap.PackageComponentSource
-	if !nativeFactory {
+	if !nativeSource {
 		packageSource = c.packages[packageSourceIdentity(file.ImportPath, source.Name)]
 	}
-	if !nativeFactory && packageSource == nil {
+	if !nativeSource && packageSource == nil {
 		packageSource, err = c.declaredPackageSource(ctx, source)
 		if err != nil {
 			return nil, fmt.Errorf("pair component source %q: %w", file.Path, err)

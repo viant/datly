@@ -18,7 +18,9 @@ import (
 
 	"github.com/viant/datly/spec"
 	dtag "github.com/viant/datly/tag"
+	sqlio "github.com/viant/sqlx/io"
 	"github.com/viant/x"
+	smodel "github.com/viant/x/syntetic/model"
 )
 
 // BorrowedLeafContract is detached comparison evidence, never an execution plan.
@@ -73,25 +75,31 @@ type BorrowedRowAuthority struct {
 	ReceiptGuard   *BorrowedReceiptGuard `json:"-"`
 }
 
-func BorrowedLeafContractFor(component *spec.Component, view *spec.View, packagePath, name, connector, catalog, schema, table string) (BorrowedLeafContract, error) {
-	if component == nil || view == nil || view.Source == nil || len(view.Relations) != 0 || view.SelfReference != nil {
+func BorrowedLeafContractFor(component *spec.Component, view *spec.View, packagePath, name, connector, catalog, schema, table string, options ...Input) (BorrowedLeafContract, error) {
+	if component == nil {
 		return BorrowedLeafContract{}, fmt.Errorf("borrow_sql_row requires a SQL-derived leaf")
 	}
-	if connector == "" || schema == "" || table != view.Source.Table || table == "" {
-		return BorrowedLeafContract{}, fmt.Errorf("borrow_sql_row physical connector/schema/table origin is unknown or conflicts with canonical leaf")
-	}
-
-	for _, col := range view.Columns {
-		if col == nil || col.NameInferred || col.Type.Name == "" || col.Type.Name == "any" || col.Expression != "" {
-			return BorrowedLeafContract{}, fmt.Errorf("borrow_sql_row requires fresh SQL-derived direct columns")
-		}
+	if err := validateBorrowedLeafView(view, connector, schema, table); err != nil {
+		return BorrowedLeafContract{}, err
 	}
 	copy := component.Clone()
 	copy.RootView = view.Clone()
 	copy.RootView.TypeName = name
 	copy.RootView.Dest = ""
-	copy.Views = nil
-	copy.Parameters = nil
+	copy.RootView.RootNullPolicy = ""
+	copy.RootView.InsertValidationPresence = false
+	copy.RootView.WriterIdentityPolicy = ""
+	copy.RootView.WriterActionPolicy = ""
+	copy.RootView.OnDeleteNotFound = ""
+	copy.RootView.MutationPredicateGroup = nil
+	copy.RootView.Reconciliation = nil
+	copy.RootView.QueueContract = ""
+
+	// Retain independent SQL-generated named dependencies for structured transients.
+	// Only the selected row is compared; its source remains authoritative.
+	if !view.Auxiliary {
+		copy.Parameters = nil
+	}
 	copy.Name = "BorrowedLeafComparison"
 	if copy.Settings == nil {
 		copy.Settings = &spec.Settings{}
@@ -104,12 +112,58 @@ func BorrowedLeafContractFor(component *spec.Component, view *spec.View, package
 		copy.Settings.Generation.BorrowedSQLRows = nil
 	}
 	copy.Settings.Mutation = "post"
-	copy.RootView.EntityHooks = ""
+	if !view.Auxiliary {
+		copy.RootView.EntityHooks = ""
+	}
 	id, err := copy.RootView.Identity()
 	if err != nil {
 		return BorrowedLeafContract{}, err
 	}
-	plan, err := New(Input{Component: copy, TargetPackage: packagePath, SetMarkerViews: map[string]bool{id: true}}).Plan()
+	input := Input{}
+	if len(options) > 0 {
+		input = options[0]
+	}
+	input.Component = copy
+	input.TargetPackage = packagePath
+	input.SetMarkerViews = map[string]bool{id: true}
+	if !view.Auxiliary {
+		input.ViewBindings = nil
+	}
+
+	if view.Auxiliary {
+		if err := input.ValidateLifecycleTarget(true); err != nil {
+			return BorrowedLeafContract{}, err
+		}
+	}
+	plan, err := New(input).Plan()
+	if err != nil {
+		return BorrowedLeafContract{}, fmt.Errorf("borrow_sql_row row comparison plan: %w", err)
+	}
+	return BorrowedLeafContractFromPlan(plan, view, packagePath, name, connector, catalog, schema, table)
+}
+
+func validateBorrowedLeafView(view *spec.View, connector, schema, table string) error {
+	if view == nil || view.Source == nil || len(view.Relations) != 0 || view.SelfReference != nil {
+		return fmt.Errorf("borrow_sql_row requires a SQL-derived leaf")
+	}
+	if connector == "" || schema == "" || table != view.Source.Table || table == "" {
+		return fmt.Errorf("borrow_sql_row physical connector/schema/table origin is unknown or conflicts with canonical leaf")
+	}
+
+	for _, col := range view.Columns {
+		if col == nil || col.NameInferred || col.Type.Name == "" || col.Type.Name == "any" || (col.Expression != "" && !dtagTransient(col.Tag)) {
+			return fmt.Errorf("borrow_sql_row requires fresh SQL-derived direct columns")
+		}
+	}
+	return nil
+}
+
+// BorrowedLeafContractFromPlan compares the already prepared SQL-owned row.
+func BorrowedLeafContractFromPlan(plan *Plan, view *spec.View, packagePath, name, connector, catalog, schema, table string) (BorrowedLeafContract, error) {
+	if err := validateBorrowedLeafView(view, connector, schema, table); err != nil {
+		return BorrowedLeafContract{}, err
+	}
+	id, err := view.Identity()
 	if err != nil {
 		return BorrowedLeafContract{}, err
 	}
@@ -138,13 +192,20 @@ func BorrowedLeafContractFor(component *spec.Component, view *spec.View, package
 	metadata.Name, metadata.Namespace, metadata.TypeName, metadata.Dest = "", "", "", ""
 	metadata.Auxiliary, metadata.QueueContract = false, ""
 	metadata.Reconciliation = nil
+	// These belong to an occurrence, never to the reusable row declaration.
+	metadata.RootNullPolicy, metadata.NestedNullPolicy = "", ""
+	metadata.InsertValidationPresence = false
+	metadata.WriterIdentityPolicy, metadata.WriterActionPolicy, metadata.OnDeleteNotFound = "", "", ""
+	metadata.MutationPredicateGroup = nil
+	metadata.EntityHooks = ""
+
 	metadata.Columns = nil
 	metadata.Source = &spec.ViewSource{Table: table, Controls: view.Source.Controls.Clone(), Bindings: view.Source.Bindings.Clone()}
 	if metadata.Source.Bindings == nil {
 		metadata.Source.Bindings = &spec.ViewBindings{}
 	}
 	metadata.Source.Bindings.Connector = connector
-	result := BorrowedLeafContract{WriterOmitEmpty: copy.Settings.Generation != nil && copy.Settings.Generation.WriterOmitEmpty, Metadata: metadata, Package: packagePath, Name: name, Connector: connector, Catalog: catalog, Schema: schema, Table: table, Fields: fields, MarkerFields: markers}
+	result := BorrowedLeafContract{WriterOmitEmpty: plan.Generation != nil && plan.Generation.WriterOmitEmpty, Metadata: metadata, Package: packagePath, Name: name, Connector: connector, Catalog: catalog, Schema: schema, Table: table, Fields: fields, MarkerFields: markers}
 	for _, column := range view.Columns {
 		cloned := column.Clone()
 		cloned.Tag = dtag.CanonicalFieldTag(cloned.Tag)
@@ -155,11 +216,36 @@ func BorrowedLeafContractFor(component *spec.Component, view *spec.View, package
 
 // BorrowedBodyWrapper uses native generated contract fields to retain the exact
 // terminal pointer/container expression at a resolved body holder path.
-func BorrowedBodyWrapper(component *spec.Component, bodyPath, packagePath string) (string, error) {
-	plan, err := New(Input{Component: component, TargetPackage: packagePath}).Plan()
+func BorrowedBodyWrapper(component *spec.Component, bodyPath, packagePath string, options ...Input) (string, error) {
+	if component == nil {
+		return "", fmt.Errorf("borrow_sql_row component is required")
+	}
+	component = component.Clone()
+	if component.Settings == nil {
+		component.Settings = &spec.Settings{}
+	}
+	component.Settings.Mutation = "post"
+	input := Input{}
+	if len(options) > 0 {
+		input = options[0]
+	}
+	input.Component = component
+	input.TargetPackage = packagePath
+
+	if component.RootView != nil && component.RootView.Auxiliary && component.RootView.EntityHooks != "" {
+		if err := input.ValidateLifecycleTarget(true); err != nil {
+			return "", err
+		}
+	}
+	plan, err := New(input).Plan()
 	if err != nil {
 		return "", err
 	}
+	return BorrowedBodyWrapperFromPlan(plan, bodyPath, packagePath)
+}
+
+// BorrowedBodyWrapperFromPlan retains the terminal wrapper from the prepared input.
+func BorrowedBodyWrapperFromPlan(plan *Plan, bodyPath, packagePath string) (string, error) {
 	parts := strings.Split(bodyPath, "/")
 	fields := plan.Input.Fields
 	var expression string
@@ -314,28 +400,36 @@ func ValidateBorrowedDescriptor(contract BorrowedLeafContract, row, marker *x.Ty
 	return nil
 }
 
-func validateBorrowedStruct(ts *ast.TypeSpec, imports map[string]string, pkg string, want []Field) error {
+func borrowedStructFields(ts *ast.TypeSpec, imports map[string]string, pkg string) ([]Field, error) {
 	structure, ok := ts.Type.(*ast.StructType)
 	if !ok || ts.Assign.IsValid() || ts.TypeParams != nil {
-		return fmt.Errorf("borrow_sql_row declaration %s must own an ordinary struct", ts.Name)
+		return nil, fmt.Errorf("borrow_sql_row declaration %s must own an ordinary struct", ts.Name)
 	}
 	var actual []Field
 	for _, field := range structure.Fields.List {
 		if len(field.Names) != 1 {
-			return fmt.Errorf("borrow_sql_row declaration %s has anonymous/grouped fields", ts.Name)
+			return nil, fmt.Errorf("borrow_sql_row declaration %s has anonymous/grouped fields", ts.Name)
 		}
 		typ, err := canonicalType(field.Type, imports, pkg)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		tag := ""
 		if field.Tag != nil {
 			tag, err = strconv.Unquote(field.Tag.Value)
 			if err != nil {
-				return err
+				return nil, err
 			}
 		}
 		actual = append(actual, Field{Name: field.Names[0].Name, Type: typ, Tag: dtag.CanonicalFieldTag(tag)})
+	}
+	return actual, nil
+}
+
+func validateBorrowedStruct(ts *ast.TypeSpec, imports map[string]string, pkg string, want []Field) error {
+	actual, err := borrowedStructFields(ts, imports, pkg)
+	if err != nil {
+		return err
 	}
 	if len(actual) != len(want) {
 		return fmt.Errorf("borrow_sql_row declaration %s has stale field membership", ts.Name)
@@ -406,10 +500,19 @@ type BorrowedHelper struct{ Receiver, Name, Source, Path string }
 
 // BorrowedNativeHelpers selects canonical row methods from an existing native
 // generator asset. It does not generate or publish a component.
-func BorrowedNativeHelpers(asset *EntitySupportAsset, row string) ([]BorrowedHelper, error) {
+func BorrowedNativeHelpers(asset *EntitySupportAsset, row string, auxiliary ...bool) ([]BorrowedHelper, error) {
 	if asset == nil || asset.File == nil {
 		return nil, fmt.Errorf("borrow_sql_row native owner helper contract is missing")
 	}
+	receivers := map[string]bool{row: true}
+	if len(auxiliary) > 0 && auxiliary[0] {
+		for _, method := range asset.Methods {
+			if method.FieldAccessor {
+				receivers[method.Receiver] = true
+			}
+		}
+	}
+	found := map[string]bool{}
 	var result []BorrowedHelper
 	for _, decl := range asset.File.Decls {
 		method, ok := decl.(*ast.FuncDecl)
@@ -421,14 +524,20 @@ func BorrowedNativeHelpers(asset *EntitySupportAsset, row string) ([]BorrowedHel
 			typ = ptr.X
 		}
 		receiver, ok := typ.(*ast.Ident)
-		if !ok || receiver.Name != row {
+		if !ok || !receivers[receiver.Name] {
 			continue
 		}
 		var out bytes.Buffer
 		if err := format.Node(&out, token.NewFileSet(), method); err != nil {
 			return nil, err
 		}
-		result = append(result, BorrowedHelper{Receiver: row, Name: method.Name.Name, Source: out.String()})
+		found[receiver.Name] = true
+		result = append(result, BorrowedHelper{Receiver: receiver.Name, Name: method.Name.Name, Source: out.String()})
+	}
+	for receiver := range receivers {
+		if !found[receiver] {
+			return nil, fmt.Errorf("borrow_sql_row native owner row helpers are missing for %s", receiver)
+		}
 	}
 	if len(result) == 0 {
 		return nil, fmt.Errorf("borrow_sql_row native owner row helpers are missing")
@@ -746,4 +855,134 @@ func borrowedReceiptFiles(dir string, plan *Plan) ([]EmittedFile, error) {
 		authority.ReceiptGuard = guard
 	}
 	return []EmittedFile{{Path: path, Content: string(guard.Expected)}}, nil
+}
+
+// BorrowedNamedDependencies materializes only freshly SQL-generated named rows
+// reachable from the shared row. The catalog entries are compilation-local
+// declarations, not runtime types or authority borrowed from prior Go files.
+func BorrowedOwnerPlan(input Input) (*Plan, error) {
+	input.Component = input.Component.Clone()
+	if input.Component.Settings == nil {
+		input.Component.Settings = &spec.Settings{}
+	}
+	input.Component.Settings.Mutation = "post"
+	id, err := input.Component.RootView.Identity()
+	if err != nil {
+		return nil, err
+	}
+	input.SetMarkerViews = map[string]bool{id: true}
+	if err := input.ValidateLifecycleTarget(true); err != nil {
+		return nil, err
+	}
+	return New(input).Plan()
+}
+
+func BorrowedNamedDependencies(input Input, name string) ([]*x.Type, error) {
+	planned, err := BorrowedOwnerPlan(input)
+	if err != nil {
+		return nil, err
+	}
+	return BorrowedNamedDependenciesFromPlan(planned, input.TargetPackage, name)
+}
+
+func BorrowedNamedDependenciesFromPlan(planned *Plan, packagePath, name string) ([]*x.Type, error) {
+	byName := map[string]ViewPlan{}
+	for _, v := range planned.Views {
+		if v.Ownership == ViewGenerated && (v.Package == "" || v.Package == packagePath) {
+			byName[v.Type] = v
+		}
+	}
+	visited := map[string]bool{}
+	var selected []ViewPlan
+	var visit func(string) error
+	visit = func(key string) error {
+		if visited[key] {
+			return nil
+		}
+		visited[key] = true
+		v, ok := byName[key]
+		if !ok {
+			return nil
+		}
+		if key != name {
+			selected = append(selected, v)
+		}
+		for _, f := range v.Fields {
+			expression, err := parser.ParseExpr(f.Type)
+			if err != nil {
+				return err
+			}
+			var failure error
+			ast.Inspect(expression, func(n ast.Node) bool {
+				if _, ok := n.(*ast.SelectorExpr); ok {
+					return false
+				}
+				if ident, ok := n.(*ast.Ident); ok && ident.Name != "Has" {
+					if err := visit(ident.Name); err != nil {
+						failure = err
+					}
+				}
+				return failure == nil
+			})
+			if failure != nil {
+				return failure
+			}
+		}
+		return nil
+	}
+	if err := visit(name); err != nil {
+		return nil, err
+	}
+	if len(selected) == 0 {
+		return nil, nil
+	}
+	source := viewFileContent(planned.PackageName(), planned, selected, false)
+	file, err := parser.ParseFile(token.NewFileSet(), "fresh_named_dependencies.go", source, 0)
+	if err != nil {
+		return nil, err
+	}
+	imports := map[string]*smodel.ImportRef{}
+	for _, imp := range file.Imports {
+		path, err := strconv.Unquote(imp.Path.Value)
+		if err != nil {
+			return nil, err
+		}
+		alias := filepath.Base(path)
+		if imp.Name != nil {
+			alias = imp.Name.Name
+		}
+		imports[alias] = &smodel.ImportRef{Path: path, Alias: alias}
+	}
+	var result []*x.Type
+	for _, decl := range file.Decls {
+		group, ok := decl.(*ast.GenDecl)
+		if !ok {
+			continue
+		}
+		for _, entry := range group.Specs {
+			typ, ok := entry.(*ast.TypeSpec)
+			if !ok {
+				continue
+			}
+			result = append(result, &x.Type{Name: typ.Name.Name, PkgPath: packagePath, SynteticType: &smodel.Type{Name: typ.Name.Name, PkgPath: packagePath, TypeSpec: typ, Imports: imports}})
+		}
+	}
+	return result, nil
+}
+
+func dtagTransient(tag string) bool { return sqlio.ParseTag(reflect.StructTag(tag)).Transient }
+
+// BorrowedNamedFields uses the same canonical declaration comparison as the
+// shared row/marker admission, including exact marker membership and tags.
+func BorrowedNamedFields(descriptor *x.Type) ([]Field, error) {
+	if descriptor == nil || descriptor.SynteticType == nil || descriptor.SynteticType.TypeSpec == nil {
+		return nil, fmt.Errorf("borrow_sql_row named dependency requires a source declaration")
+	}
+	imports := map[string]string{}
+	for alias, imp := range descriptor.SynteticType.Imports {
+		if imp != nil {
+			imports[alias] = imp.Path
+		}
+	}
+	return borrowedStructFields(descriptor.SynteticType.TypeSpec, imports, descriptor.PkgPath)
 }

@@ -212,7 +212,28 @@ func TestBorrowedAdditionalMetadataAndReceiptOwnership(t *testing.T) {
 			case "actionPolicy":
 				v.WriterActionPolicy = "insert-delete"
 			}
+			before, marshalErr := json.Marshal(changed)
+			if marshalErr != nil {
+				t.Fatal(marshalErr)
+			}
 			actual, err := BorrowedLeafContractFor(changed, v, "example.com/api", "Row", "main", "", "main", "records")
+			if change == "hooks" || change == "nullPolicy" || change == "actionPolicy" {
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := CompareBorrowedLeafContracts(expected, actual); err != nil {
+					t.Fatal(err)
+				}
+				after, marshalErr := json.Marshal(changed)
+				if marshalErr != nil {
+					t.Fatal(marshalErr)
+				}
+				if !bytes.Equal(before, after) {
+					t.Fatal("row comparison mutated canonical occurrence metadata")
+				}
+				return
+			}
+
 			if err == nil && CompareBorrowedLeafContracts(expected, actual) == nil {
 				t.Fatal("view metadata difference accepted")
 			}

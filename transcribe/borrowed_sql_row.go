@@ -18,16 +18,22 @@ import (
 	"github.com/viant/bindly/resource"
 	"github.com/viant/datly/bootstrap"
 	"github.com/viant/datly/internal/packageasset"
+	"github.com/viant/datly/internal/sqlanalysis"
 	"github.com/viant/datly/spec"
 	dsql "github.com/viant/datly/sql"
 	"github.com/viant/datly/transcribe/column"
+	"github.com/viant/datly/transcribe/dql"
 	gen "github.com/viant/datly/transcribe/generate"
 	handlercompiler "github.com/viant/datly/transcribe/handler/compiler"
 	"github.com/viant/datly/transcribe/internal/bodygraph"
 	"github.com/viant/datly/transcribe/internal/dependency"
 	"github.com/viant/datly/transcribe/internal/handlergen"
+	"github.com/viant/datly/transcribe/internal/link"
 	"github.com/viant/datly/typecatalog"
+	"github.com/viant/sqlparser"
+	sqlexpr "github.com/viant/sqlparser/expr"
 	sqlio "github.com/viant/sqlx/io"
+	"github.com/viant/x"
 	xmodule "github.com/viant/x/module"
 )
 
@@ -52,6 +58,9 @@ func borrowedLeafContract(ctx context.Context, result *Result, view *spec.View, 
 	if err := dsql.ResolveSource(view.Name, physicalView.Source, resources); err != nil {
 		return gen.BorrowedLeafContract{}, err
 	}
+	if err := borrowedPhysicalProjection(physicalView); err != nil {
+		return gen.BorrowedLeafContract{}, err
+	}
 	facts, err := result.Source.ColumnRefiner.PhysicalSourceConstraints(ctx, borrowedConnector(result.Component, view), physicalView)
 	if err != nil {
 		return gen.BorrowedLeafContract{}, err
@@ -70,7 +79,27 @@ func borrowedLeafContract(ctx context.Context, result *Result, view *spec.View, 
 		comparisonView = view.Clone()
 		comparisonView.NestedNullPolicy = ""
 	}
-	contract, err := gen.BorrowedLeafContractFor(result.Component, comparisonView, declaration.Package, declaration.Type, origin.Connector, origin.Catalog, origin.Schema, origin.Table)
+	comparisonInput, err := borrowedGenerationInput(ctx, result, declaration.Package)
+	if err != nil {
+		return gen.BorrowedLeafContract{}, err
+	}
+	var contract gen.BorrowedLeafContract
+	if result.borrowedPreparation != nil && result.borrowedPreparation.input != nil {
+		plan := result.borrowedPreparation.plan
+		if plan == nil {
+			plan, err = gen.BorrowedOwnerPlan(comparisonInput)
+			if err == nil {
+				result.borrowedPreparation.plan = plan
+			}
+		}
+		if err != nil {
+			return contract, err
+		}
+		contract, err = gen.BorrowedLeafContractFromPlan(plan, comparisonView, declaration.Package, declaration.Type, origin.Connector, origin.Catalog, origin.Schema, origin.Table)
+	} else {
+		contract, err = gen.BorrowedLeafContractFor(result.Component, comparisonView, declaration.Package, declaration.Type, origin.Connector, origin.Catalog, origin.Schema, origin.Table, comparisonInput)
+	}
+
 	if err != nil {
 		return contract, err
 	}
@@ -81,8 +110,15 @@ func borrowedLeafContract(ctx context.Context, result *Result, view *spec.View, 
 	if result.Source.Name == declaration.OwnerName {
 		path = declaration.OwnerBodyPath
 	}
-	contract.Wrapper, err = gen.BorrowedBodyWrapper(result.Component, path, declaration.Package)
-	return contract, err
+	if result.borrowedPreparation != nil && result.borrowedPreparation.plan != nil {
+		contract.Wrapper, err = gen.BorrowedBodyWrapperFromPlan(result.borrowedPreparation.plan, path, declaration.Package)
+	} else {
+		contract.Wrapper, err = gen.BorrowedBodyWrapper(result.Component, path, declaration.Package, comparisonInput)
+	}
+	if err != nil {
+		return contract, fmt.Errorf("borrow_sql_row wrapper: %w", err)
+	}
+	return contract, nil
 }
 
 func borrowedConnector(c *spec.Component, v *spec.View) string {
@@ -97,13 +133,32 @@ func borrowedConnector(c *spec.Component, v *spec.View) string {
 
 // freshBorrowedSource has no body/package overlay or generated row catalog.
 // The filesystem resources are captured as immutable bytes before discovery.
-func freshBorrowedSource(ctx context.Context, source *Source, text string, files []gen.BorrowedAuthorityFile) (*Result, error) {
+func freshBorrowedSource(ctx context.Context, source *Source, text string, files []gen.BorrowedAuthorityFile, dependencies ...*typecatalog.Catalog) (*Result, error) {
+	foreign, err := freshBorrowedForeignTypes(ctx, source, text)
+	if err != nil {
+		return nil, err
+	}
+	return compileBorrowedSource(ctx, source, text, files, foreign, dependencies...)
+}
+
+func compileBorrowedSource(ctx context.Context, source *Source, text string, files []gen.BorrowedAuthorityFile, foreign *typecatalog.Catalog, dependencies ...*typecatalog.Catalog) (*Result, error) {
 	copy := *source
 	copy.Text = text
 	copy.PackageComponent = nil
 	copy.LinkedInputType = nil
 	copy.LinkedOutputType = nil
-	copy.Types = typecatalog.NewCatalog()
+	var err error
+	copy.Types, err = foreign.Clone()
+	if err != nil {
+		return nil, err
+	}
+	if len(dependencies) > 0 && dependencies[0] != nil {
+		var err error
+		copy.Types, err = mergeBorrowedOwnerDependencies(copy.Types, dependencies[0])
+		if err != nil {
+			return nil, err
+		}
+	}
 	var captured []packageasset.File
 	for _, f := range files {
 		rel, err := filepath.Rel(source.BaseDir(), f.Path)
@@ -111,7 +166,6 @@ func freshBorrowedSource(ctx context.Context, source *Source, text string, files
 			captured = append(captured, packageasset.File{Path: filepath.ToSlash(rel), Data: append([]byte(nil), f.Bytes...)})
 		}
 	}
-	var err error
 	snapshot, err := (packageasset.Snapshotter{Overlay: captured}).All(ctx)
 	if err != nil {
 		return nil, err
@@ -120,7 +174,11 @@ func freshBorrowedSource(ctx context.Context, source *Source, text string, files
 	if err != nil {
 		return nil, err
 	}
-	return (&Compiler{comparisonOnly: true}).Compile(ctx, &copy)
+	result, err := (&Compiler{comparisonOnly: true}).Compile(ctx, &copy)
+	if err == nil {
+		result.borrowedPreparation = &borrowedPreparation{foreign: foreign}
+	}
+	return result, err
 }
 
 func validateBorrowedSourceText(source *Source, files []gen.BorrowedAuthorityFile) error {
@@ -224,7 +282,16 @@ func (c *Compiler) admitBorrowedSQLRows(ctx context.Context, result *Result) err
 	if err = validateBorrowedSourceText(source, files); err != nil {
 		return err
 	}
-	freshBorrower, err := freshBorrowedSource(ctx, source, source.Text, files)
+	preparation := result.borrowedPreparation
+	if preparation == nil {
+		return fmt.Errorf("borrow_sql_row owner preparation is missing")
+	}
+	freshDependencies := preparation.dependencies
+	admittedDependencies, err := borrowedNamedContracts(freshDependencies)
+	if err != nil {
+		return err
+	}
+	freshBorrower, err := freshBorrowedSource(ctx, source, source.Text, files, freshDependencies)
 	if err != nil {
 		return err
 	}
@@ -246,30 +313,12 @@ func (c *Compiler) admitBorrowedSQLRows(ctx context.Context, result *Result) err
 		if filepath.Clean(ownerPath) == filepath.Clean(source.Path) || strings.TrimSuffix(filepath.Base(ownerPath), filepath.Ext(ownerPath)) != declaration.OwnerName {
 			return fmt.Errorf("borrow_sql_row owner must identify a different exact Source.Name and resource")
 		}
-		var ownerBytes []byte
-		for _, f := range files {
-			if f.Path == ownerPath {
-				ownerBytes = f.Bytes
-			}
+		entry := preparation.owners[borrowedOwnerKey(source.BaseDir(), declaration)]
+		if entry == nil {
+			return fmt.Errorf("borrow_sql_row exact owner preparation is missing")
 		}
-		if ownerBytes == nil {
-			return fmt.Errorf("borrow_sql_row owner DQL resource is missing")
-		}
-		ownerSource := *source
-		ownerSource.Name = declaration.OwnerName
-		ownerRelative, err := filepath.Rel(source.BaseDir(), filepath.Dir(ownerPath))
-		if err != nil {
-			return err
-		}
-		if ownerRelative != "." {
-			ownerSource.Scope = strings.TrimSuffix(source.Scope, "/") + "/" + filepath.ToSlash(ownerRelative)
-		}
-		ownerSource.Path = ownerPath
-		ownerSource.Text = string(ownerBytes)
-		freshOwner, err := freshBorrowedSource(ctx, &ownerSource, string(ownerBytes), files)
-		if err != nil {
-			return err
-		}
+		ownerSource := entry.source
+		freshOwner := entry.result
 		if len(authoredBorrowedSQLRows(freshOwner.Component)) != 0 {
 			return fmt.Errorf("borrow_sql_row borrowed owners/cyclic dependencies are unsupported")
 		}
@@ -281,7 +330,12 @@ func (c *Compiler) admitBorrowedSQLRows(ctx context.Context, result *Result) err
 			return err
 		}
 		if owner.Auxiliary {
-			return fmt.Errorf("borrow_sql_row initial authority requires a physical SQL-generated leaf owner")
+			if owner != freshOwner.Component.RootView {
+				return fmt.Errorf("borrow_sql_row auxiliary owner requires its canonical lifecycle body leaf")
+			}
+			if err := (&gen.Input{Component: freshOwner.Component}).ValidateLifecycleTarget(true); err != nil {
+				return err
+			}
 		}
 		borrower, borrowerGraph, err := bodygraph.ResolveBorrowed(freshBorrower.Component, declaration.BodyPath)
 		if err != nil {
@@ -297,8 +351,22 @@ func (c *Compiler) admitBorrowedSQLRows(ctx context.Context, result *Result) err
 		if actualSlot.Dest != "" || borrower.Dest != "" {
 			return fmt.Errorf("borrow_sql_row borrowed slot cannot declare dest")
 		}
-		if owner.TypeName != declaration.Type || (borrower.TypeName != "" && borrower.TypeName != declaration.Type) || (actualSlot.TypeName != "" && actualSlot.TypeName != declaration.Type) {
-			return fmt.Errorf("borrow_sql_row explicit canonical row type differs")
+		canonicalRow := declaration.Package + "." + declaration.Type
+		for _, occurrence := range []struct {
+			result   *Result
+			view     *spec.View
+			required bool
+		}{{freshOwner, owner, true}, {freshBorrower, borrower, false}, {result, actualSlot, false}} {
+			if occurrence.view.TypeName == "" && !occurrence.required {
+				continue
+			}
+			canonical, err := occurrence.result.TypeResolver.CanonicalDeclaration(occurrence.view.TypeName, declaration.Package)
+			if err != nil {
+				return err
+			}
+			if canonical != canonicalRow {
+				return fmt.Errorf("borrow_sql_row explicit canonical row type differs")
+			}
 		}
 		if err := column.ApplyWriterMetadata(freshOwner.Component); err != nil {
 			return err
@@ -401,47 +469,44 @@ func (c *Compiler) admitBorrowedSQLRows(ctx context.Context, result *Result) err
 		if matches != len(freshOwner.Component.Routes) {
 			return fmt.Errorf("borrow_sql_row complete owner component holder is missing/ambiguous: %d holders for %d canonical routes", matches, len(freshOwner.Component.Routes))
 		}
-		helperPackage, err := existingPrimaryPackageName(location.Dir)
+		if entry.helperInput == nil {
+			helperInput := entry.input
+			helperInput.Component = entry.input.Component.Clone()
+			if err := helperInput.ValidateLifecycleTarget(true); err != nil {
+				return err
+			}
+			initialHelpers := entry.plan
+			derivedHelpers, err := (&handlercompiler.Compiler{}).BuildInput(handlercompiler.Request{Component: helperInput.Component, ViewBindings: helperInput.ViewBindings, Operation: WriteOperation(ownerMutation)}, initialHelpers.RootViewType)
+			if err != nil {
+				return err
+			}
+			helperCopy := *freshOwner
+			helperCopy.Component, helperCopy.ViewBindings = derivedHelpers.Component, derivedHelpers.ViewBindings
+
+			helperDeclarations, err := newDeclarationCompiler(helperCopy.Component, nil).compile()
+			if err != nil {
+				return err
+			}
+			helperCopy.Declarations = helperDeclarations.generation
+			helperInput = rebindBorrowedInput(entry.input, &helperCopy)
+			helperOptions := Options{Contracts: ContractsAuto, Handler: HandlerOptions{Target: HandlerGo, Operation: WriteOperation(ownerMutation), Input: derivedHelpers.Input, Output: derivedHelpers.Output, Currents: derivedHelpers.Currents, Go: GoHandlerOptions{Execution: GoExecutionMutation}}}
+			helperGeneration := handlergen.New((&helperCopy).handlerContext(), &helperInput, helperOptions)
+			helperGeneration.Directory = location.Dir
+			if err := helperGeneration.Prepare(); err != nil {
+				return fmt.Errorf("borrow_sql_row native owner helper derivation: %w", err)
+			}
+			entry.helperInput = &helperInput
+			entry.artifacts, err = gen.BorrowedNativeOwnerArtifacts(helperInput, location.Dir)
+			if err != nil {
+				return err
+			}
+		}
+		helperInput := *entry.helperInput
+		proof.Helpers, err = gen.BorrowedNativeHelpers(helperInput.EntitySupport, declaration.Type, owner.Auxiliary)
 		if err != nil {
 			return err
 		}
-		helperInput := gen.Input{Component: freshOwner.Component.Clone(), Resources: freshOwner.Source.Resources, TargetPackage: declaration.Package, PackageName: helperPackage, SQLResources: true, TypeResolver: freshOwner.TypeResolver}
-		// Native generation resolves the detached input before deriving Current
-		// views. Use the same stage on captured resources so helper/resource
-		// expectations match stock emission without changing authored provenance.
-		if err := resolveComponentSources(helperInput.Component, freshOwner.Source.Resources); err != nil {
-			return err
-		}
-		initialHelpers, err := gen.New(helperInput).Plan()
-		if err != nil {
-			return err
-		}
-		derivedHelpers, err := (&handlercompiler.Compiler{}).BuildInput(handlercompiler.Request{Component: helperInput.Component, Operation: WriteOperation(ownerMutation)}, initialHelpers.RootViewType)
-		if err != nil {
-			return err
-		}
-		helperCopy := *freshOwner
-		helperCopy.Component, helperCopy.ViewBindings = derivedHelpers.Component, derivedHelpers.ViewBindings
-		helperDeclarations, err := newDeclarationCompiler(helperCopy.Component, nil).compile()
-		if err != nil {
-			return err
-		}
-		helperInput.Declarations = helperDeclarations.generation
-		helperInput.Component, helperInput.ViewBindings = derivedHelpers.Component, derivedHelpers.ViewBindings
-		helperOptions := Options{Contracts: ContractsAuto, Handler: HandlerOptions{Target: HandlerGo, Operation: WriteOperation(ownerMutation), Input: derivedHelpers.Input, Output: derivedHelpers.Output, Currents: derivedHelpers.Currents, Go: GoHandlerOptions{Execution: GoExecutionMutation}}}
-		helperGeneration := handlergen.New((&helperCopy).handlerContext(), &helperInput, helperOptions)
-		helperGeneration.Directory = location.Dir
-		if err := helperGeneration.Prepare(); err != nil {
-			return fmt.Errorf("borrow_sql_row native owner helper derivation: %w", err)
-		}
-		proof.Helpers, err = gen.BorrowedNativeHelpers(helperInput.EntitySupport, declaration.Type)
-		if err != nil {
-			return err
-		}
-		validatedArtifacts, err := gen.BorrowedNativeOwnerArtifacts(helperInput, location.Dir)
-		if err != nil {
-			return err
-		}
+		validatedArtifacts := entry.artifacts
 		for _, file := range validatedArtifacts {
 			if err = gen.RetainBorrowedSeal(proof, file); err != nil {
 				return err
@@ -451,14 +516,27 @@ func (c *Compiler) admitBorrowedSQLRows(ctx context.Context, result *Result) err
 			return err
 		}
 		proof.OwnerOperation = ownerMutation
-		ownerCopy, borrowerCopy := ownerSource, *source
+		borrowerCopy := *source
 		frozen := append([]gen.BorrowedAuthorityFile(nil), files...)
 		proof.ValidateSchema = func() error {
-			currentOwner, err := freshBorrowedSource(ctx, &ownerCopy, ownerCopy.Text, frozen)
+			refreshed, err := preparation.refresh(ctx, frozen, declarations)
 			if err != nil {
 				return err
 			}
-			currentBorrower, err := freshBorrowedSource(ctx, &borrowerCopy, borrowerCopy.Text, frozen)
+			currentOwner := refreshed.owners[borrowedOwnerKey(source.BaseDir(), declaration)].result
+			currentDependencies := refreshed.dependencies
+			currentNamed, err := borrowedNamedContracts(currentDependencies)
+			if err != nil {
+				return err
+			}
+			if !reflect.DeepEqual(admittedDependencies, currentNamed) {
+				return fmt.Errorf("borrow_sql_row fresh named dependency contracts differ")
+			}
+			currentBorrower, err := compileBorrowedSource(ctx, &borrowerCopy, borrowerCopy.Text, frozen, freshBorrower.borrowedPreparation.foreign, currentDependencies)
+			if err == nil {
+				input := rebindBorrowedInput(*freshBorrower.borrowedPreparation.input, currentBorrower)
+				currentBorrower.borrowedPreparation.input = &input
+			}
 			if err != nil {
 				return err
 			}
@@ -674,4 +752,339 @@ func applyBorrowedPhysicalFacts(contract *gen.BorrowedLeafContract, facts column
 	}
 	contract.Physical = serialized
 	return nil
+}
+
+// borrowedPreparation retains invocation-local owner products. Publication refreshes
+// schema facts from captured authoring and destination context, never success state.
+type borrowedPreparation struct {
+	input        *gen.Input
+	plan         *gen.Plan
+	foreign      *typecatalog.Catalog
+	owners       map[string]*borrowedOwnerPreparation
+	dependencies *typecatalog.Catalog
+	baseDir      string
+}
+
+type borrowedOwnerPreparation struct {
+	source      Source
+	result      *Result
+	input       gen.Input
+	plan        *gen.Plan
+	helperInput *gen.Input
+	artifacts   []gen.BorrowedAuthorityFile
+}
+
+func borrowedOwnerKey(baseDir string, d spec.BorrowedSQLRow) string {
+	return d.Package + "\x00" + filepath.Join(baseDir, filepath.FromSlash(d.OwnerURI)) + "\x00" + d.OwnerName
+}
+
+func prepareBorrowedOwners(ctx context.Context, source *Source, component *spec.Component, files []gen.BorrowedAuthorityFile) (*borrowedPreparation, error) {
+	preparation := &borrowedPreparation{owners: map[string]*borrowedOwnerPreparation{}, dependencies: typecatalog.NewCatalog(), baseDir: source.BaseDir()}
+	catalog := preparation.dependencies
+
+	for _, declaration := range authoredBorrowedSQLRows(component) {
+		if err := declaration.Validate(); err != nil {
+			return nil, err
+		}
+		key := borrowedOwnerKey(source.BaseDir(), declaration)
+		entry := preparation.owners[key]
+		if entry == nil {
+			ownerPath := filepath.Join(source.BaseDir(), filepath.FromSlash(declaration.OwnerURI))
+			if filepath.Clean(ownerPath) == filepath.Clean(source.Path) || strings.TrimSuffix(filepath.Base(ownerPath), filepath.Ext(ownerPath)) != declaration.OwnerName {
+				return nil, fmt.Errorf("borrow_sql_row owner must identify a different exact Source.Name and resource")
+			}
+			var ownerBytes []byte
+			for _, file := range files {
+				if file.Path == ownerPath {
+					ownerBytes = file.Bytes
+				}
+			}
+			if ownerBytes == nil {
+				return nil, fmt.Errorf("borrow_sql_row owner DQL resource is missing")
+			}
+			ownerSource := *source
+			ownerSource.Name = declaration.OwnerName
+			ownerSource.Path = ownerPath
+			ownerSource.Text = string(ownerBytes)
+			relative, err := filepath.Rel(source.BaseDir(), filepath.Dir(ownerPath))
+			if err != nil {
+				return nil, err
+			}
+			if relative != "." {
+				ownerSource.Scope = strings.TrimSuffix(source.Scope, "/") + "/" + filepath.ToSlash(relative)
+			}
+			owner, err := freshBorrowedSource(ctx, &ownerSource, string(ownerBytes), files)
+			if err != nil {
+				return nil, err
+			}
+			if len(authoredBorrowedSQLRows(owner.Component)) != 0 {
+				return nil, fmt.Errorf("borrow_sql_row borrowed owners/cyclic dependencies are unsupported")
+			}
+			if owner.Component.TypeContext == nil || owner.Component.TypeContext.PackagePath != declaration.Package {
+				return nil, fmt.Errorf("borrow_sql_row owner canonical package differs")
+			}
+			input, err := borrowedGenerationInput(ctx, owner, declaration.Package)
+			if err != nil {
+				return nil, err
+			}
+			plan, err := gen.BorrowedOwnerPlan(input)
+			if err != nil {
+				return nil, err
+			}
+			owner.borrowedPreparation.input = &input
+			owner.borrowedPreparation.plan = plan
+			entry = &borrowedOwnerPreparation{source: ownerSource, result: owner, input: input, plan: plan}
+			preparation.owners[key] = entry
+		}
+		types, err := gen.BorrowedNamedDependenciesFromPlan(entry.plan, entry.input.TargetPackage, declaration.Type)
+		if err != nil {
+			return nil, fmt.Errorf("borrow_sql_row fresh owner named closure: %w", err)
+		}
+		for _, typ := range types {
+			if err := catalog.Register(typecatalog.TypeOriginDQL, typ); err != nil {
+				return nil, err
+			}
+		}
+	}
+	return preparation, nil
+}
+
+// borrowedPhysicalProjection removes explicitly transient outputs from a
+// detached analysis projection only. Their exact types/tags/expressions remain
+// in the row comparison; they supply no physical lineage evidence.
+func borrowedPhysicalProjection(view *spec.View) error {
+	if strings.TrimSpace(view.Source.SQL) == "" {
+		return nil
+	}
+	transient := map[string]bool{}
+	var persisted []*spec.Column
+	for _, c := range view.Columns {
+		if c != nil && sqlio.ParseTag(reflect.StructTag(c.Tag)).Transient {
+			transient[strings.ToLower(c.Name)] = true
+			continue
+		}
+		persisted = append(persisted, c)
+	}
+	if len(transient) == 0 && !view.Auxiliary {
+		return nil
+	}
+	_, query, err := sqlanalysis.Checked(view.Source.SQL, nil)
+	if err != nil {
+		return err
+	}
+	// The compiler retains a pass-through SELECT * wrapper around an authored
+	// SQL body. Peel only that exact projection; arbitrary nested SQL is still
+	// rejected by PhysicalSourceConstraints.
+	for len(query.List) == 1 && len(query.Joins) == 0 && query.Union == nil && len(query.WithSelects) == 0 && !query.WithRecursive && query.Kind == "" && query.Qualify == nil && len(query.GroupBy) == 0 && query.Having == nil && query.QualifyClause == nil && query.Window == nil && len(query.OrderBy) == 0 && query.Limit == nil && query.Offset == nil {
+		star, ok := query.List[0].Expr.(*sqlexpr.Star)
+		if !ok || len(star.Except) != 0 {
+			break
+		}
+		if name, ok := star.X.(*sqlexpr.Ident); !ok || name.Name != "*" {
+			break
+		}
+		nested := query.NestedSelect()
+		if nested == nil {
+			break
+		}
+		query = nested
+	}
+	if view.Auxiliary {
+		table, parenthesized, err := sqlparser.SourceTable(query.From.X)
+		if err != nil {
+			return err
+		}
+		if parenthesized && table == view.Source.Table {
+			query.From.X = &sqlexpr.Ident{Name: table}
+		}
+	}
+	filtered := query.List[:0]
+	for _, item := range query.List {
+		if item == nil {
+			return fmt.Errorf("borrow_sql_row physical projection item is absent")
+		}
+		column := sqlparser.NewColumn(item)
+		if transient[strings.ToLower(column.Identity())] {
+			continue
+		}
+		filtered = append(filtered, item)
+	}
+	query.List = filtered
+	view.Source.SQL = sqlparser.Stringify(query)
+	view.Columns = persisted
+	return nil
+}
+
+func mergeBorrowedOwnerDependencies(existing, fresh *typecatalog.Catalog) (*typecatalog.Catalog, error) {
+	merged := typecatalog.NewCatalog()
+	if existing != nil {
+		var err error
+		merged, err = existing.Clone()
+		if err != nil {
+			return nil, err
+		}
+	}
+	registry, err := fresh.Registry(typecatalog.TranscribeAuthority)
+	if err != nil {
+		return nil, err
+	}
+	registry.ForEach(func(key string, typ *x.Type) bool {
+		origin, _, originErr := fresh.Origin(typecatalog.TranscribeAuthority, key)
+		if originErr != nil {
+			err = originErr
+			return false
+		}
+		if origin == typecatalog.TypeOriginDQL {
+			err = merged.Register(origin, typ)
+		}
+		return err == nil
+	})
+	return merged, err
+}
+
+func borrowedNamedContracts(catalog *typecatalog.Catalog) (map[string][]gen.Field, error) {
+	registry, err := catalog.Registry(typecatalog.TranscribeAuthority)
+	if err != nil {
+		return nil, err
+	}
+	result := map[string][]gen.Field{}
+	registry.ForEach(func(key string, typ *x.Type) bool {
+		origin, _, originErr := catalog.Origin(typecatalog.TranscribeAuthority, key)
+		if originErr != nil {
+			err = originErr
+			return false
+		}
+		if origin == typecatalog.TypeOriginDQL {
+			result[key], err = gen.BorrowedNamedFields(typ)
+		}
+		return err == nil
+	})
+	return result, err
+}
+
+// Load only explicitly declared foreign authority through the ordinary import
+// and codec resolver. Stage the recursive package closure, then filter it: no
+// owning-package declaration may supply a fresh SQL row or its dependencies.
+func freshBorrowedForeignTypes(ctx context.Context, source *Source, text string) (*typecatalog.Catalog, error) {
+	prepared := dql.PrepareSource(text)
+	if err := prepared.Err(); err != nil {
+		return nil, err
+	}
+	catalog := typecatalog.NewCatalog()
+	if prepared.TypeContext == nil {
+		return catalog, nil
+	}
+	owner := prepared.TypeContext.PackagePath
+	workspace, err := (xmodule.LocalWorkspace{BaseDir: source.BaseDir()}).Resolve(ctx)
+	if err != nil {
+		return nil, err
+	}
+	staged := typecatalog.NewCatalog()
+	loader := dependency.Loader{Workspace: workspace, Catalog: staged}
+	imports := map[string]bool{}
+	for _, imp := range prepared.TypeContext.Imports {
+		if imp.Package != owner {
+			imports[imp.Package] = true
+		}
+	}
+	if _, err := loader.LoadImports(ctx, imports); err != nil {
+		return nil, err
+	}
+	component := (&spec.Component{Parameters: prepared.Directives.Params, Views: prepared.Directives.Views}).Clone()
+	if err := loader.LoadCodecs(ctx, component, link.TypeContext(source.Scope, "", prepared.TypeContext)); err != nil {
+		return nil, err
+	}
+	registry, err := staged.Registry(typecatalog.TranscribeAuthority)
+	if err != nil {
+		return nil, err
+	}
+	registry.ForEach(func(key string, typ *x.Type) bool {
+		if typ.PkgPath == owner {
+			return true
+		}
+		origin, _, originErr := staged.Origin(typecatalog.TranscribeAuthority, key)
+		if originErr != nil {
+			err = originErr
+			return false
+		}
+		err = catalog.Register(origin, typ)
+		return err == nil
+	})
+	return catalog, err
+}
+
+// Reuse ordinary destination, contract-name and resource preparation for every
+// fresh owner proof plan. Direct metadata-only tests have no project destination.
+func borrowedGenerationInput(ctx context.Context, result *Result, packagePath string) (gen.Input, error) {
+	if result.borrowedPreparation != nil && result.borrowedPreparation.input != nil {
+		return rebindBorrowedInput(*result.borrowedPreparation.input, result), nil
+	}
+	if result.Source.BaseDir() == "" || result.Component.TypeContext == nil || result.Component.TypeContext.PackagePath == "" {
+		return gen.Input{Component: result.Component, TargetPackage: packagePath, TypeResolver: result.TypeResolver, Declarations: result.Declarations, ViewBindings: result.ViewBindings}, nil
+	}
+	workspace, err := (xmodule.LocalWorkspace{BaseDir: result.Source.BaseDir()}).Resolve(ctx)
+	if err != nil {
+		return gen.Input{}, err
+	}
+	location, err := workspace.Package(packagePath)
+	if err != nil {
+		return gen.Input{}, err
+	}
+	if location == nil {
+		return gen.Input{}, fmt.Errorf("borrow_sql_row owner package destination is missing")
+	}
+	relative, err := filepath.Rel(location.Module.Dir, location.Dir)
+	if err != nil {
+		return gen.Input{}, err
+	}
+	input, _, err := generationInput(location.Module.Dir, relative, result)
+	if err == nil {
+		if result.borrowedPreparation == nil {
+			result.borrowedPreparation = &borrowedPreparation{}
+		}
+		result.borrowedPreparation.input = &input
+	}
+	return input, err
+}
+
+func rebindBorrowedInput(input gen.Input, result *Result) gen.Input {
+	input.Component = result.Component.Clone()
+	input.TypeResolver = result.TypeResolver
+	input.Declarations = result.Declarations
+	input.ViewBindings = result.ViewBindings
+	return input
+}
+
+func (p *borrowedPreparation) refresh(ctx context.Context, files []gen.BorrowedAuthorityFile, declarations []spec.BorrowedSQLRow) (*borrowedPreparation, error) {
+	refreshed := &borrowedPreparation{owners: map[string]*borrowedOwnerPreparation{}, dependencies: typecatalog.NewCatalog(), baseDir: p.baseDir}
+	for _, declaration := range declarations {
+		key := borrowedOwnerKey(p.baseDir, declaration)
+		entry := refreshed.owners[key]
+		if entry == nil {
+			captured := p.owners[key]
+			result, err := compileBorrowedSource(ctx, &captured.source, captured.source.Text, files, captured.result.borrowedPreparation.foreign)
+			if err != nil {
+				return nil, err
+			}
+			input := rebindBorrowedInput(captured.input, result)
+			result.borrowedPreparation.input = &input
+			plan, err := gen.BorrowedOwnerPlan(input)
+			if err != nil {
+				return nil, err
+			}
+			result.borrowedPreparation.plan = plan
+			entry = &borrowedOwnerPreparation{source: captured.source, result: result, input: input, plan: plan}
+			refreshed.owners[key] = entry
+		}
+		types, err := gen.BorrowedNamedDependenciesFromPlan(entry.plan, entry.input.TargetPackage, declaration.Type)
+		if err != nil {
+			return nil, err
+		}
+		for _, typ := range types {
+			if err := refreshed.dependencies.Register(typecatalog.TypeOriginDQL, typ); err != nil {
+				return nil, err
+			}
+		}
+	}
+	return refreshed, nil
 }
