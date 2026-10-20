@@ -33,23 +33,24 @@ import (
 // Metadata is the immutable, component-specific plan interpreted by Handler.
 // It contains no generated executable phase code.
 type Metadata struct {
-	Predicates       *predicate.Program
-	Component        *spec.Component
-	Operation        string
-	InputField       int
-	CurrentField     int
-	OutputField      int
-	EntityType       reflect.Type
-	CurrentType      reflect.Type
-	Table            string
-	Keys             []Field
-	Fields           []Field
-	Sequence         *Field
-	DeleteMarker     *Field
-	ConcurrencyToken *Field
-	Invariants       map[string][]Field
-	HookType         reflect.Type
-	Root             *Record
+	componentLifecycle bool
+	Predicates         *predicate.Program
+	Component          *spec.Component
+	Operation          string
+	InputField         int
+	CurrentField       int
+	OutputField        int
+	EntityType         reflect.Type
+	CurrentType        reflect.Type
+	Table              string
+	Keys               []Field
+	Fields             []Field
+	Sequence           *Field
+	DeleteMarker       *Field
+	ConcurrencyToken   *Field
+	Invariants         map[string][]Field
+	HookType           reflect.Type
+	Root               *Record
 }
 
 // Field is one compiled entity field.
@@ -96,6 +97,7 @@ func entityMarker(entityType reflect.Type) *structology.Marker {
 
 // Record is one writable role in a component graph.
 type Record struct {
+	componentLifecycle       bool
 	reconciliation           *reconciliationMetadata
 	writeEligibility         bool
 	RootNullPolicy           string
@@ -1657,7 +1659,7 @@ func (p *Program) queuePhysical(ctx context.Context, binder xhandler.Binder, dml
 }
 
 func (p *Program) componentHook() bool {
-	return p != nil && p.metadata != nil && p.metadata.Root != nil && p.metadata.Root.Auxiliary && len(p.metadata.Root.Relations) == 0 && p.hook.IsValid()
+	return p != nil && p.metadata != nil && p.metadata.Root != nil && p.metadata.componentLifecycle && p.hook.IsValid()
 }
 
 type frameIdentity struct {
@@ -2598,10 +2600,10 @@ func CompileWithIdentifierProducts(component *spec.Component, inputType, outputT
 		hookName = tagOption(rootViewTag, "entityHooks")
 	}
 	// A component lifecycle consumes canonical Input, never row Previous. Its
-	// independent reads may legitimately use the same table. Reflected graphs
-	// still need ordinary Current matching, even when absent from the spec.
+	// independent reads may legitimately use the same table. Only a wholly
+	// auxiliary reflected body extends the existing leaf dispatch.
 	updateCommand := component.RootView.WriterActionPolicy == updateActionPolicy
-	componentLifecycle := auxiliaryRoot && len(component.RootView.Relations) == 0 && hookName != "" && !hasReflectedRelations(metadata.EntityType)
+	componentLifecycle := auxiliaryRoot && hookName != "" && ((len(component.RootView.Relations) == 0 && !hasReflectedRelations(metadata.EntityType)) || auxiliaryComponentGraph(component.RootView, metadata.EntityType, auxiliaryRoot))
 	currentIndex := -1
 	var currentType reflect.Type
 	if operation != "post" && !componentLifecycle && !updateCommand {
@@ -2615,7 +2617,7 @@ func CompileWithIdentifierProducts(component *spec.Component, inputType, outputT
 	if currentIndex >= 0 {
 		metadata.Table = tagOption(inputType.Field(currentIndex).Tag.Get("view"), "table")
 	}
-	if metadata.CurrentField < 0 && operation != "post" && !updateCommand && !(auxiliaryRoot && len(component.RootView.Relations) == 0 && hookName != "") {
+	if metadata.CurrentField < 0 && operation != "post" && !updateCommand && !componentLifecycle {
 		return nil, fmt.Errorf("writer input has no current-state collection for %s in %s", metadata.EntityType, describeFields(inputType))
 	}
 	for i := 0; i < outputType.NumField(); i++ {
@@ -2702,10 +2704,9 @@ func CompileWithIdentifierProducts(component *spec.Component, inputType, outputT
 			metadata.Invariants[invariant] = append(metadata.Invariants[invariant], compiled)
 		}
 	}
-	// A leaf auxiliary lifecycle acts on the canonical Input, not an entity
-	// identity. Keep ordinary writer key requirements; reflected relations are
-	// checked again below before admitting this component-only exception.
-	if len(metadata.Keys) == 0 && !(auxiliaryRoot && len(component.RootView.Relations) == 0 && hookName != "") {
+	// An auxiliary component lifecycle acts on canonical Input, not a row
+	// identity. The compiled graph is checked again below before publication.
+	if len(metadata.Keys) == 0 && !componentLifecycle {
 		return nil, fmt.Errorf("writer entity %s has no primary key", metadata.EntityType)
 	}
 	if !auxiliaryRoot && !updateCommand && metadata.Sequence == nil && len(metadata.Keys) == 1 && numericField(metadata.EntityType, metadata.Keys[0]) {
@@ -2732,15 +2733,20 @@ func CompileWithIdentifierProducts(component *spec.Component, inputType, outputT
 	if metadata.Sequence != nil {
 		root.Selector = metadata.Sequence.Name
 	}
-	if err := compileRelations(component, inputType, root, component.RootView, operation, renderer); err != nil {
+	if err := compileRelations(component, inputType, root, component.RootView, operation, renderer, componentLifecycle); err != nil {
 		return nil, err
 	}
-	if len(metadata.Keys) == 0 && len(root.Relations) != 0 {
+	if len(metadata.Keys) == 0 && len(root.Relations) != 0 && !componentLifecycle {
 		return nil, fmt.Errorf("writer entity %s has no primary key", metadata.EntityType)
 	}
-	if root.Auxiliary && len(root.Relations) == 0 && hookName != "" {
+	if componentLifecycle && hasWritableRole(root) {
+		return nil, fmt.Errorf("auxiliary component lifecycle requires an all-auxiliary compiled body graph")
+	}
+	metadata.componentLifecycle = componentLifecycle
+	root.componentLifecycle = componentLifecycle
+	if componentLifecycle {
 		if root.HookType == nil {
-			return nil, fmt.Errorf("auxiliary lifecycle requires a linked leaf root hook")
+			return nil, fmt.Errorf("auxiliary lifecycle requires a linked canonical root hook")
 		}
 		hook := reflect.New(root.HookType)
 		for _, name := range []string{"AfterSequence", "AfterQueue", "Recover", "RetryTransaction"} {
@@ -2840,7 +2846,8 @@ func describeFields(typeOf reflect.Type) string {
 	return strings.Join(parts, ";")
 }
 
-func compileRelations(component *spec.Component, inputType reflect.Type, parent *Record, view *spec.View, operation string, renderer identifier.Renderer) error {
+func compileRelations(component *spec.Component, inputType reflect.Type, parent *Record, view *spec.View, operation string, renderer identifier.Renderer, componentMode ...bool) error {
+	componentLifecycle := len(componentMode) > 0 && componentMode[0]
 	for i := 0; i < parent.EntityType.NumField(); i++ {
 		structField := parent.EntityType.Field(i)
 		viewTag := structField.Tag.Get("view")
@@ -2853,7 +2860,7 @@ func compileRelations(component *spec.Component, inputType reflect.Type, parent 
 			name = structField.Name
 		}
 		childView := relationView(view, structField.Name, name)
-		child, err := compileRecord(component, inputType, name, parent.Path+"/"+structField.Name, childType, childView, viewTag, operation, renderer)
+		child, err := compileRecordMode(component, inputType, name, parent.Path+"/"+structField.Name, childType, childView, viewTag, operation, renderer, componentLifecycle)
 		if err != nil {
 			return err
 		}
@@ -2963,6 +2970,10 @@ func compileRecord(component *spec.Component, inputType reflect.Type, name, path
 	if len(renderers) != 0 {
 		renderer = renderers[0]
 	}
+	return compileRecordMode(component, inputType, name, path, entityType, view, viewTag, operation, renderer, false)
+}
+
+func compileRecordMode(component *spec.Component, inputType reflect.Type, name, path string, entityType reflect.Type, view *spec.View, viewTag, operation string, renderer identifier.Renderer, componentLifecycle bool) (*Record, error) {
 	renderer = renderer.ForView(view)
 	record := &Record{Name: name, Path: path, EntityType: entityType, CurrentField: -1, Table: tagOption(viewTag, "table"), Auxiliary: strings.EqualFold(tagOption(viewTag, "auxiliary"), "true"), Invariants: map[string][]Field{}}
 	record.RootNullPolicy = tagOption(viewTag, "rootNullPolicy")
@@ -3066,7 +3077,7 @@ func compileRecord(component *spec.Component, inputType reflect.Type, name, path
 		return nil, err
 	}
 	// POST rows always insert; independent read candidates are not Previous.
-	if operation != "post" && record.WriterActionPolicy != updateActionPolicy {
+	if operation != "post" && record.WriterActionPolicy != updateActionPolicy && !componentLifecycle {
 		currentIndex, _, currentErr := currentInputField(inputType, record.Table, record.Auxiliary, name)
 		if currentErr != nil {
 			return nil, currentErr
@@ -3080,7 +3091,7 @@ func compileRecord(component *spec.Component, inputType reflect.Type, name, path
 		}
 		record.Selector += record.Sequence.Name
 	}
-	if err := compileRelations(component, inputType, record, view, operation, renderer); err != nil {
+	if err := compileRelations(component, inputType, record, view, operation, renderer, componentLifecycle); err != nil {
 		return nil, err
 	}
 	return record, nil
@@ -3424,4 +3435,48 @@ func hasOnDeleteNotFoundPolicy(record *Record) bool {
 		}
 	}
 	return false
+}
+
+// auxiliaryComponentGraph recognizes the declared body and its actual reflected
+// holders using ordinary relation resolution, including package-linked rows.
+func auxiliaryComponentGraph(root *spec.View, entity reflect.Type, auxiliaryRoot bool) bool {
+	active := map[reflect.Type]bool{}
+	var visit func(*spec.View, reflect.Type, bool) bool
+	visit = func(view *spec.View, row reflect.Type, auxiliary bool) bool {
+		if active[row] || !auxiliary || view != nil && view.SelfReference != nil {
+			return false
+		}
+		active[row] = true
+		defer delete(active, row)
+		matched := map[*spec.View]bool{}
+		for i := 0; i < row.NumField(); i++ {
+			field := row.Field(i)
+			child := reflectedRelationType(field)
+			if child == nil {
+				continue
+			}
+			name := strings.TrimSpace(strings.Split(field.Tag.Get("view"), ",")[0])
+			if name == "" {
+				name = field.Name
+			}
+			childView := relationView(view, field.Name, name)
+			childAuxiliary := strings.EqualFold(tagOption(field.Tag.Get("view"), "auxiliary"), "true")
+			if childView != nil {
+				childAuxiliary = childAuxiliary || childView.Auxiliary
+			}
+			if !visit(childView, child, childAuxiliary) {
+				return false
+			}
+			matched[childView] = true
+		}
+		if view != nil {
+			for _, relation := range view.Relations {
+				if relation == nil || relation.View == nil || relation.Kind == spec.RelationKindDerived || !matched[relation.View] {
+					return false
+				}
+			}
+		}
+		return true
+	}
+	return visit(root, entity, auxiliaryRoot)
 }

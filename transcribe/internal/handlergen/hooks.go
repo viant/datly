@@ -88,8 +88,8 @@ func (c *entityHookCompilation) apply(record *plan.RecordPlan, parent string) er
 	}
 	if view := c.views[record.Identity]; view != nil && strings.TrimSpace(view.EntityHooks) != "" {
 		if record.Auxiliary && !hasWritableDescendant(record) {
-			if parent != "" || len(record.Relations) != 0 || c.generation.options.Handler.Go.Execution != GoExecutionMutation {
-				return fmt.Errorf("auxiliary view %s cannot declare mutation entity hooks outside a leaf mutation root", record.Identity)
+			if parent != "" || len(record.Relations) != 0 && !allAuxiliaryHookGraph(record) || c.generation.options.Handler.Go.Execution != GoExecutionMutation {
+				return fmt.Errorf("auxiliary view %s cannot declare mutation entity hooks outside a canonical auxiliary mutation root", record.Identity)
 			}
 			record.Entity = &plan.EntityPlan{HooksComponent: true}
 		}
@@ -349,4 +349,23 @@ func (c *entityHookCompilation) identity(record *plan.RecordPlan) (string, error
 		return "", fmt.Errorf("linked entity type %s was not found", base)
 	}
 	return resolved.Identity, nil
+}
+
+// Only a wholly auxiliary native body can reuse the canonical Input lifecycle.
+func allAuxiliaryHookGraph(root *plan.RecordPlan) bool {
+	seen := map[*plan.RecordPlan]bool{}
+	var visit func(*plan.RecordPlan) bool
+	visit = func(record *plan.RecordPlan) bool {
+		if record == nil || seen[record] || !record.Auxiliary || len(record.SelfRelations) != 0 {
+			return false
+		}
+		seen[record] = true
+		for _, relation := range record.Relations {
+			if relation == nil || !visit(relation.Child) {
+				return false
+			}
+		}
+		return true
+	}
+	return visit(root)
 }

@@ -29,7 +29,7 @@ func validateAfterValidateInputHooks(root *Record, inputType, outputType reflect
 		if record.HookType != nil {
 			method := reflect.New(record.HookType).MethodByName("AfterValidateInput")
 			if method.IsValid() {
-				if record != root || root.Auxiliary && len(root.Relations) == 0 {
+				if record != root || root.componentLifecycle || root.Auxiliary && len(root.Relations) == 0 {
 					return fmt.Errorf("AfterValidateInput is only supported on the writer root")
 				}
 				typ := method.Type()

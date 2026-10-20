@@ -1150,7 +1150,8 @@ writes. `entity_hooks` is unsupported DQL and produces an explicit diagnostic.
 `lifecycle_type` is accepted only for generated Go mutation writers. GET readers
 and other lowering modes reject the declaration before generating files.
 
-A leaf auxiliary root may explicitly declare a component lifecycle. Its SQL graph
+An auxiliary root with a wholly auxiliary body relation graph may explicitly
+declare a component lifecycle. Its SQL graph
 still generates the body, while `Init` and `Validate` receive the canonical Input
 once per request, including a nil or empty body:
 
@@ -1169,7 +1170,10 @@ ordinary writer behavior and the invocation owner owns transaction completion.
 Hook failures stop subsequent work and preserve Output. Optional
 `Finalize(context.Context, *Input, *Output, handler.Outcome) error` observes
 completion once. Row signatures, AfterSequence, AfterQueue and Recover are rejected
-for this role. Relation-bearing roots retain their existing entity lifecycle.
+for this role, as are AfterValidateInput and AfterQueueInput. Mixed graphs retain
+their existing entity lifecycle. Independent Current queries bind on Input and may
+share SQL-derived local body rows without owning their relation, transient or Has
+fields. Package-linked children retain their package-owned types and markers.
 
 Reader request initialization belongs to the explicitly named `input_type`
 (`OrdersInput.Init`), and response finalization belongs to the named `output_type`

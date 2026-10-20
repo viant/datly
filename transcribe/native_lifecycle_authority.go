@@ -1,6 +1,9 @@
 package transcribe
 
-import "strings"
+import (
+	"github.com/viant/datly/transcribe/internal/bodygraph"
+	"strings"
+)
 
 // selectNativeComponentLifecycle runs after graph and column refinement.
 // Reuse that graph: embedded resources can establish auxiliary intent only
@@ -13,7 +16,7 @@ func (c *componentCompilation) selectNativeComponentLifecycle() {
 	}
 	component := c.result.Component
 	root := component.RootView
-	if root == nil || !root.Auxiliary || strings.TrimSpace(root.EntityHooks) == "" || len(root.Relations) != 0 || root.SelfReference != nil {
+	if root == nil || !root.Auxiliary || strings.TrimSpace(root.EntityHooks) == "" || root.SelfReference != nil || len(root.Relations) != 0 && !bodygraph.AllAuxiliary(root) {
 		return // Physical row/child hooks retain ordinary handler inheritance.
 	}
 	count := 0

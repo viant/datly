@@ -11,6 +11,7 @@ import (
 
 	"github.com/viant/datly/spec"
 	plan "github.com/viant/datly/transcribe/handler/ast"
+	"github.com/viant/datly/transcribe/internal/bodygraph"
 	"github.com/viant/datly/typecatalog"
 )
 
@@ -518,4 +519,11 @@ func effectivePrimaryKey(column *spec.Column) bool {
 		return false
 	}
 	return typecatalog.SQLXPrimaryKey(reflect.StructTag(column.Tag), column.PrimaryKey)
+}
+
+func auxiliaryComponentLifecycle(root *spec.View) bool {
+	if root == nil || strings.TrimSpace(root.EntityHooks) == "" {
+		return false
+	}
+	return bodygraph.AllAuxiliary(root)
 }

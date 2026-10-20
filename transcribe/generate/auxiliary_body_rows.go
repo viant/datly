@@ -17,7 +17,7 @@ func (r *planResolver) auxiliaryBodyRoot() *spec.View {
 		return nil
 	}
 	root := c.RootView
-	if root.InMemory || root.Source == nil || len(root.Relations) != 0 || root.SelfReference != nil || strings.TrimSpace(root.EntityHooks) == "" || strings.TrimSpace(root.TypeName) == "" {
+	if root.InMemory || root.Source == nil || root.SelfReference != nil || strings.TrimSpace(root.EntityHooks) == "" || strings.TrimSpace(root.TypeName) == "" {
 		return nil
 	}
 	if !root.Auxiliary && (r.requireConcreteHelpers || !pendingAuxiliarySource(root)) {
@@ -60,5 +60,37 @@ func (r *planResolver) auxiliaryBodyRoot() *spec.View {
 	if !matched {
 		return nil
 	}
+	if r.auxiliaryBodyGraph(root) == nil {
+		return nil
+	}
 	return root
+}
+
+// auxiliaryBodyGraph admits only the declared all-auxiliary body tree. Pending
+// SQL is provisional; final emission requires normalized auxiliary metadata.
+func (r *planResolver) auxiliaryBodyGraph(root *spec.View) map[*spec.View]bool {
+	if root == nil {
+		return nil
+	}
+	result := map[*spec.View]bool{}
+	var visit func(*spec.View) bool
+	visit = func(view *spec.View) bool {
+		if view == nil || result[view] || view.InMemory || view.SelfReference != nil || view.Source == nil {
+			return false
+		}
+		if !view.Auxiliary && (r.requireConcreteHelpers || !pendingAuxiliarySource(view)) {
+			return false
+		}
+		result[view] = true
+		for _, relation := range view.Relations {
+			if relation == nil || relation.Kind == spec.RelationKindDerived || !visit(relation.View) {
+				return false
+			}
+		}
+		return true
+	}
+	if !visit(root) {
+		return nil
+	}
+	return result
 }

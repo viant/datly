@@ -28,7 +28,7 @@ func validateAfterQueueInputHooks(root *Record, inputType, outputType reflect.Ty
 		if record.HookType != nil {
 			method := reflect.New(record.HookType).MethodByName("AfterQueueInput")
 			if method.IsValid() {
-				if record != root || root.Auxiliary && len(root.Relations) == 0 {
+				if record != root || root.componentLifecycle || root.Auxiliary && len(root.Relations) == 0 {
 					return fmt.Errorf("AfterQueueInput is only supported on the writer root")
 				}
 				typ := method.Type()

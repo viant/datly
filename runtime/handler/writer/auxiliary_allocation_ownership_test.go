@@ -92,17 +92,37 @@ func TestAuxiliaryAllocationPhysicalProducerAdmissionSQLite(t *testing.T) {
 }
 
 func TestAuxiliaryAllocationRootMetadataKeepsSQLIdentity(t *testing.T) {
-	for _, operation := range []string{"patch", "post", "put"} {
-		t.Run(operation, func(t *testing.T) {
+	useCases := []struct {
+		description     string
+		input           reflect.Type
+		operation       string
+		expectedCurrent int
+	}{
+		{description: "PATCH preserves Current metadata", input: reflect.TypeFor[unitInput](), operation: "patch", expectedCurrent: 1},
+		{description: "POST independent reads are not Previous", input: reflect.TypeFor[unitInput](), operation: "post", expectedCurrent: -1},
+		{description: "PUT preserves Current metadata", input: reflect.TypeFor[unitInput](), operation: "put", expectedCurrent: 1},
+	}
+	for _, useCase := range useCases {
+		t.Run(useCase.description, func(t *testing.T) {
 			component := unitComponent()
 			component.RootView.Auxiliary = true
 			before := *component.RootView.Columns[0]
-			metadata, e := Compile(component, reflect.TypeFor[unitInput](), reflect.TypeFor[unitOutput](), operation)
+			metadata, e := Compile(component, useCase.input, reflect.TypeFor[unitOutput](), useCase.operation)
 			if e != nil {
 				t.Fatal(e)
 			}
-			if metadata.Sequence != nil || metadata.Root.Sequence != nil || metadata.Root.Selector != "" || len(metadata.Root.Keys) != 1 || metadata.Root.CurrentField < 0 {
+			if metadata.Sequence != nil || metadata.Root.Sequence != nil || metadata.Root.Selector != "" || len(metadata.Root.Keys) != 1 {
 				t.Fatalf("auxiliary executable plan remains: %+v", metadata.Root)
+			}
+			if metadata.CurrentField != useCase.expectedCurrent || metadata.Root.CurrentField != useCase.expectedCurrent {
+				t.Fatalf("Current metadata=%d root=%d, want %d", metadata.CurrentField, metadata.Root.CurrentField, useCase.expectedCurrent)
+			}
+			var expectedType reflect.Type
+			if useCase.expectedCurrent >= 0 {
+				expectedType = dereference(useCase.input.Field(useCase.expectedCurrent).Type)
+			}
+			if metadata.CurrentType != expectedType {
+				t.Fatalf("Current type=%v, want %v", metadata.CurrentType, expectedType)
 			}
 			if *component.RootView.Columns[0] != before || !before.PrimaryKey || !before.AutoIncrement || !strings.Contains(metadata.EntityType.Field(0).Tag.Get("sqlx"), "autoincrement=true") {
 				t.Fatal("truthful SQL identity/Current metadata changed")
@@ -110,6 +130,7 @@ func TestAuxiliaryAllocationRootMetadataKeepsSQLIdentity(t *testing.T) {
 		})
 	}
 }
+
 func TestAuxiliaryAllocationNestedNumericMetadata(t *testing.T) {
 	component := &spec.Component{Key: spec.Key{Kind: spec.KindComponent, Scope: reflect.TypeFor[auxiliaryChildParent]().PkgPath(), Name: "Rows"}, Name: "Rows", Settings: &spec.Settings{Mutation: "post"}, RootView: &spec.View{Name: "Rows", Source: &spec.ViewSource{Table: "parents"}, Columns: []*spec.Column{{Name: "id", Source: "id", PrimaryKey: true}}}}
 	metadata, e := Compile(component, reflect.TypeFor[auxiliaryChildInput](), reflect.TypeFor[auxiliaryChildOutput](), "post")

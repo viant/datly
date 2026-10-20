@@ -170,3 +170,39 @@ func TestBuildInputAuxiliaryRootPreservesWritableDescendant(t *testing.T) {
 		t.Fatal("auxiliary ancestry altered writable descendant generation")
 	}
 }
+
+func TestBuildInputAuxiliaryLifecycleGraphKeepsIndependentReads(t *testing.T) {
+	root := &spec.View{Name: "Parents", Auxiliary: true, EntityHooks: "BatchLifecycle", Source: &spec.ViewSource{Table: "parents"}, Columns: []*spec.Column{{Name: "ID", Source: "ID", PrimaryKey: true, Type: spec.TypeRef{Name: "int"}}}}
+	child := &spec.View{Name: "Children", Auxiliary: true, Source: &spec.ViewSource{Table: "children"}, Columns: []*spec.Column{{Name: "ID", Source: "ID", PrimaryKey: true, Type: spec.TypeRef{Name: "int"}}, {Name: "PARENT_ID", Source: "PARENT_ID", Type: spec.TypeRef{Name: "int"}}}}
+	root.Relations = []*spec.Relation{{Name: "Children", Holder: "Children", Cardinality: spec.CardinalityMany, View: child, On: []*spec.RelationLink{{ParentColumn: "ID", ChildColumn: "PARENT_ID"}}}}
+	current := &spec.View{Name: "Before", Source: &spec.ViewSource{Table: "parents", SQL: "SELECT ID FROM parents WHERE ID=1"}, Columns: root.Columns}
+	identity, err := current.Identity()
+	if err != nil {
+		t.Fatal(err)
+	}
+	param := &spec.Parameter{Name: "Before", Source: spec.BindSource{Kind: "view", Name: "Before"}, TypeExpr: "[]*Parent", Cardinality: "Many"}
+	request := Request{Component: &spec.Component{Name: "Parents", RootView: root, Views: []*spec.View{current}, Parameters: []*spec.Parameter{param}}, Operation: plan.OperationPatch, ViewBindings: map[string]string{param.Identity(): identity}}
+	got, err := (&Compiler{}).BuildInput(request, "Parent")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Currents) != 0 || got.Current != "" || len(got.Component.Views) != 1 || got.Component.Views[0].Source.SQL != current.Source.SQL || got.ViewBindings[param.Identity()] != identity {
+		t.Fatal("independent read became row mutation authority")
+	}
+	semantic, err := (&Compiler{}).Compile(got)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if semantic.Root.Current != nil || semantic.Root.Relations[0].Child.Current != nil {
+		t.Fatal("component graph selected row Previous")
+	}
+	// Explicit caller-selected mutation authority retains the existing path.
+	request.Current = "Before"
+	explicit, err := (&Compiler{}).BuildInput(request, "Parent")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(explicit.Currents) == 0 || explicit.Current != "Before" {
+		t.Fatal("explicit row Current was discarded")
+	}
+}

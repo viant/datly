@@ -97,28 +97,43 @@ func component(policy string) *spec.Component {
 	return &spec.Component{Key: spec.Key{Kind: spec.KindComponent, Scope: "allocator.audit", Name: "Rows"}, Settings: &spec.Settings{Mutation: "post"}, RootView: &spec.View{Name: "Rows", Source: &spec.ViewSource{Table: "parents"}, Columns: []*spec.Column{{Name: "id", Source: "id", PrimaryKey: true, AutoIncrement: true}}, Relations: []*spec.Relation{{Name: "Child", Holder: "Child", View: &spec.View{Name: "Child", WriterIdentityPolicy: policy, Source: &spec.ViewSource{Table: "children"}, Columns: []*spec.Column{{Name: "parent_id", Source: "parent_id", PrimaryKey: true, AutoIncrement: false}, {Name: "deleted", Source: "deleted", DeleteMarker: true}}}}}}}
 }
 func TestNativeInheritedSharedKeyPreservesIdentityMetadata(t *testing.T) {
-	for _, operation := range []string{"post", "patch", "put"} {
-		input, output := contracts("parent_id,primaryKey=true,refTable=parents,refColumn=id")
-		c := component("")
-		c.Settings.Mutation = operation
-		m, err := writer.Compile(c, input, output, operation)
-		if err != nil {
-			t.Fatal(err)
-		}
-		root := m.Root
-		child := root.Relations[0].Child
-		if root.Sequence == nil || !root.Sequence.AutoIncrement || root.Sequence.Name != "Id" {
-			t.Fatal("genuine parent allocator metadata lost")
-		}
-		if child.Sequence != nil || child.Selector != "" {
-			t.Fatal("inherited identity still allocated", child.Sequence, child.Selector)
-		}
-		if len(child.Keys) != 1 || child.Keys[0].RefTable != "parents" || child.Keys[0].RefColumn != "id" || child.CurrentField < 0 || child.DeleteMarker == nil {
-			t.Fatal("source identity/current/delete metadata lost")
-		}
-
+	input, output := contracts("parent_id,primaryKey=true,refTable=parents,refColumn=id")
+	useCases := []struct {
+		description     string
+		input, output   reflect.Type
+		operation       string
+		expectedCurrent int
+	}{
+		{description: "POST independent reads are not Previous", input: input, output: output, operation: "post", expectedCurrent: -1},
+		{description: "PATCH preserves child Current metadata", input: input, output: output, operation: "patch", expectedCurrent: 2},
+		{description: "PUT preserves child Current metadata", input: input, output: output, operation: "put", expectedCurrent: 2},
+	}
+	for _, useCase := range useCases {
+		t.Run(useCase.description, func(t *testing.T) {
+			c := component("")
+			c.Settings.Mutation = useCase.operation
+			m, err := writer.Compile(c, useCase.input, useCase.output, useCase.operation)
+			if err != nil {
+				t.Fatal(err)
+			}
+			root := m.Root
+			child := root.Relations[0].Child
+			if root.Sequence == nil || !root.Sequence.AutoIncrement || root.Sequence.Name != "Id" {
+				t.Fatal("genuine parent allocator metadata lost")
+			}
+			if child.Sequence != nil || child.Selector != "" {
+				t.Fatal("inherited identity still allocated", child.Sequence, child.Selector)
+			}
+			if len(child.Keys) != 1 || child.Keys[0].RefTable != "parents" || child.Keys[0].RefColumn != "id" || child.DeleteMarker == nil {
+				t.Fatal("source identity/delete metadata lost")
+			}
+			if child.CurrentField != useCase.expectedCurrent {
+				t.Fatalf("child Current metadata=%d, want %d", child.CurrentField, useCase.expectedCurrent)
+			}
+		})
 	}
 }
+
 func TestExistingPoliciesCannotSuppressPostChildSequence(t *testing.T) {
 	input, output := contracts("parent_id,primaryKey=true,refTable=parents,refColumn=id")
 	_, err := writer.Compile(component("assigned-update"), input, output, "post")

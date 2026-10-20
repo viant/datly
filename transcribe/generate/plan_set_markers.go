@@ -14,22 +14,27 @@ import (
 // types selected by the target-neutral mutation plan. Package-linked types remain
 // under package authority.
 func (r *planResolver) applySetMarkerViews() error {
-	if root := r.auxiliaryBodyRoot(); root != nil && r.input.nativeMutationTargetSelected {
-		identity, err := root.Identity()
-		if err != nil {
-			return err
+	auxiliaryGraph := r.auxiliaryBodyGraph(r.auxiliaryBodyRoot())
+	if len(auxiliaryGraph) > 0 && r.input.nativeMutationTargetSelected {
+		identities := map[string]bool{}
+		for body := range auxiliaryGraph {
+			identity, err := body.Identity()
+			if err != nil {
+				return err
+			}
+			identities[identity] = true
 		}
 		for _, view := range r.plan.Views {
-			if view.Ownership != ViewSharedBody || view.SharedBodyIdentity != identity {
+			if view.Ownership != ViewSharedBody || !identities[view.SharedBodyIdentity] {
 				continue
 			}
-			// Only the shared request-row owner needs presence. A standalone
-			// auxiliary command retains its existing marker-free shape.
-			selected := make(map[string]bool, len(r.input.SetMarkerViews)+1)
+			selected := make(map[string]bool, len(r.input.SetMarkerViews)+len(identities))
 			for key, enabled := range r.input.SetMarkerViews {
 				selected[key] = enabled
 			}
-			selected[identity] = true
+			for identity := range identities {
+				selected[identity] = true
+			}
 			r.input.SetMarkerViews = selected
 			break
 		}
@@ -182,6 +187,7 @@ func (r *planResolver) addNativeBodyPresenceEdges(planned map[string]*ViewPlan, 
 		view := planned[identity]
 		return view != nil && view.Ownership == ViewGenerated && !linked[identity] && r.input.Views[identity] == nil
 	}
+	auxiliaryGraph := r.auxiliaryBodyGraph(r.auxiliaryBodyRoot())
 	visited := map[*spec.View]bool{}
 	var visit func(*spec.View) error
 	visit = func(view *spec.View) error {
@@ -204,7 +210,7 @@ func (r *planResolver) addNativeBodyPresenceEdges(planned map[string]*ViewPlan, 
 			if err != nil {
 				return err
 			}
-			if !generated(child) {
+			if !generated(child) && !(auxiliaryGraph[view] && auxiliaryGraph[relation.View] && linked[child]) {
 				continue
 			}
 			holder := relation.Holder
