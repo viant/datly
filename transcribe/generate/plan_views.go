@@ -73,7 +73,7 @@ func (r *planResolver) resolveViews() (map[string]int, error) {
 		reuseLeafTypes: len(r.input.SetMarkerViews) == 0,
 	}
 	if planner.nativeMutation {
-		planner.writerBodyGraph = ordinaryBodyGraph(root)
+		planner.writerBodyGraph = nativeWriterPresentationGraph(root)
 	}
 	borrowedPaths := make([]string, 0, len(r.input.Views))
 	for identity, reference := range r.input.Views {

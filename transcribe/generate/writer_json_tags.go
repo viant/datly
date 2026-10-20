@@ -161,3 +161,23 @@ func bodyScalarJSONTag(plan *Plan, raw string) string {
 	}
 	return raw
 }
+
+// Native writer presentation includes physical roots as well as auxiliary ones.
+// This graph does not grant ordinary shared-row ownership or reader eligibility.
+func nativeWriterPresentationGraph(root *spec.View) map[*spec.View]bool {
+	result := map[*spec.View]bool{}
+	var visit func(*spec.View)
+	visit = func(view *spec.View) {
+		if view == nil || result[view] || view.InMemory {
+			return
+		}
+		result[view] = true
+		for _, relation := range view.Relations {
+			if relation != nil && relation.Kind != spec.RelationKindDerived {
+				visit(relation.View)
+			}
+		}
+	}
+	visit(root)
+	return result
+}
