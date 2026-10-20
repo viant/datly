@@ -16,6 +16,8 @@ import (
 func (r *planResolver) applySetMarkerViews() error {
 	auxiliaryGraph := r.auxiliaryBodyGraph(r.auxiliaryBodyRoot())
 	if len(auxiliaryGraph) > 0 && r.input.nativeMutationTargetSelected {
+		// Lifecycle bodies need sparse presence even when Current has a separate
+		// type. Selecting markers does not make auxiliary views writable.
 		identities := map[string]bool{}
 		for body := range auxiliaryGraph {
 			identity, err := body.Identity()
@@ -24,20 +26,14 @@ func (r *planResolver) applySetMarkerViews() error {
 			}
 			identities[identity] = true
 		}
-		for _, view := range r.plan.Views {
-			if view.Ownership != ViewSharedBody || !identities[view.SharedBodyIdentity] {
-				continue
-			}
-			selected := make(map[string]bool, len(r.input.SetMarkerViews)+len(identities))
-			for key, enabled := range r.input.SetMarkerViews {
-				selected[key] = enabled
-			}
-			for identity := range identities {
-				selected[identity] = true
-			}
-			r.input.SetMarkerViews = selected
-			break
+		selected := make(map[string]bool, len(r.input.SetMarkerViews)+len(identities))
+		for key, enabled := range r.input.SetMarkerViews {
+			selected[key] = enabled
 		}
+		for identity := range identities {
+			selected[identity] = true
+		}
+		r.input.SetMarkerViews = selected
 	}
 	if len(r.input.SetMarkerViews) == 0 {
 		return nil
