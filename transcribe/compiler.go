@@ -341,6 +341,20 @@ func (c *componentCompilation) compileViews(ctx context.Context) error {
 	}
 	c.result.Declarations = declarations.generation
 	c.result.ViewBindings, c.result.Views = gen.ViewBindings(viewBindings), packageViews
+	if typeResolver != nil && component.TypeContext != nil && strings.TrimSpace(component.TypeContext.PackagePath) != "" {
+		rows, err := newPackageViewResolver(component, typeResolver).externalInputDescriptors(component.TypeContext.PackagePath, c.result.ViewBindings)
+		if err != nil {
+			return err
+		}
+		foreign := gen.ViewReferences{}
+		for _, row := range rows {
+			foreign[row.identity] = &gen.ViewReference{DescriptorKey: row.descriptor.Key()}
+		}
+		c.result.Views, err = mergeInputViewReferences(c.result.Views, foreign)
+		if err != nil {
+			return err
+		}
+	}
 	authoredViews, proof, err := authoredInputViewReferences(ctx, c.result, c.authored)
 	if err != nil {
 		return err

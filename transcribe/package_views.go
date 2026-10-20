@@ -427,3 +427,24 @@ func packageInputViewReferences(component, packaged *spec.Component, types *type
 	}
 	return result, nil
 }
+
+// mergeInputViewReferences keeps validated row ownership through provisional
+// discovery. A package overlay must not erase an independently linked read.
+func mergeInputViewReferences(sources ...generate.ViewReferences) (generate.ViewReferences, error) {
+	var result generate.ViewReferences
+	for _, source := range sources {
+		for identity, reference := range source {
+			if reference == nil {
+				continue
+			}
+			if result == nil {
+				result = generate.ViewReferences{}
+			}
+			if prior := result[identity]; prior != nil && prior.DescriptorKey != reference.DescriptorKey {
+				return nil, fmt.Errorf("independent view %q has conflicting type ownership", identity)
+			}
+			result[identity] = reference
+		}
+	}
+	return result, nil
+}
