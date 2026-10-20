@@ -165,3 +165,31 @@ func TestCustomSelectorTransportRetainsErrorAndCountBindings(t *testing.T) {
 		}
 	}
 }
+
+func TestOrdinaryReaderRetainsFormAndCodecSelectorBindings(t *testing.T) {
+	component := &spec.Component{Name: "Rows", Routes: []*spec.Route{{Method: "GET", Path: "/rows"}}, Parameters: []*spec.Parameter{
+		{Name: "Page", TypeExpr: "int", Source: spec.BindSource{Kind: "query", Name: "page"}, QuerySelector: &spec.QuerySelectorBinding{View: "rows", Property: spec.SelectorPropertyPage}},
+		{Name: "FormFields", TypeExpr: "[]string", Source: spec.BindSource{Kind: "form", Name: "form_fields"}, QuerySelector: &spec.QuerySelectorBinding{View: "form_rows", Property: spec.SelectorPropertyFields}},
+		{Name: "CodecFields", TypeExpr: "[]string", Source: spec.BindSource{Kind: "query", Name: "codec_fields"}, Codec: &spec.Codec{Body: "ProjectionFields"}, QuerySelector: &spec.QuerySelectorBinding{View: "codec_rows", Property: spec.SelectorPropertyFields}},
+	}}
+	plan, err := New(Input{Component: component, PackageName: "rows"}).Plan()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(plan.QuerySelectors) != 1 || plan.QuerySelectors[0].Name != "Page" {
+		t.Fatalf("unsupported fields moved into companion: %+v", plan.QuerySelectors)
+	}
+	for _, name := range []string{"FormFields", "CodecFields"} {
+		if _, ok := plan.Input.Field(name); !ok {
+			t.Fatalf("original input binding %s removed", name)
+		}
+	}
+	field, _ := plan.Input.Field("CodecFields")
+	if !strings.Contains(field.Tag, "ProjectionFields") {
+		t.Fatal("projection codec was discarded")
+	}
+	side, err := New(Input{Component: component}).SelectorSideParameters()
+	if err != nil || len(side) != 1 || side[0].Name != "Page" {
+		t.Fatalf("discovery and generation disagree: %+v %v", side, err)
+	}
+}

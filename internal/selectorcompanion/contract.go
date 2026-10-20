@@ -133,7 +133,7 @@ func Resolve(holder *x.Type, fieldName string, lookup xshape.Lookup) (*Contract,
 		if metadata.QuerySelector == nil || binding == nil || binding.Location.Kind != "query" || strings.TrimSpace(binding.Location.In) == "" {
 			return nil, fmt.Errorf("selector companion field %s requires a plain query selector", field.Name)
 		}
-		if metadata.Codec != nil || len(metadata.Predicates) != 0 || metadata.View != nil || metadata.SQL != nil || len(metadata.Relation) != 0 || metadata.Self != nil || metadata.FormatSelector || binding.Transformer != nil || binding.ResolutionGroup != nil || binding.Scope != "" || binding.When != "" || binding.With != "" || binding.URI != "" || binding.ResourceRef != "" || binding.Async {
+		if !PlainField(metadata) {
 			return nil, fmt.Errorf("selector companion field %s has unsupported binding responsibilities", field.Name)
 		}
 		if component.Handler != "" && !TransportField(metadata) {
@@ -200,9 +200,19 @@ func componentField(holder *x.Type, field xshape.Field) bool {
 // TransportField admits only metadata whose binding responsibilities can remain
 // with a downstream reader receiving the unchanged native query provider.
 func TransportField(metadata *tag.Field) bool {
+	if !PlainField(metadata) {
+		return false
+	}
+	b := metadata.Binding
+	return b.DefaultValue == nil && b.ErrorCode == 0 && b.ErrorMessage == "" && b.MinAllowedRecords == nil && b.MaxAllowedRecords == nil && b.ExpectedReturned == nil && (b.Required == nil || !*b.Required)
+}
+
+// PlainField is shared by companion generation and runtime validation. Binding
+// work such as codecs and form inputs stays in the original input contract.
+func PlainField(metadata *tag.Field) bool {
 	if metadata == nil || metadata.Binding == nil || metadata.QuerySelector == nil {
 		return false
 	}
 	b := metadata.Binding
-	return b.Location.Kind == "query" && strings.TrimSpace(b.Location.In) != "" && b.DefaultValue == nil && b.ErrorCode == 0 && b.ErrorMessage == "" && b.MinAllowedRecords == nil && b.MaxAllowedRecords == nil && b.ExpectedReturned == nil && (b.Required == nil || !*b.Required) && metadata.Codec == nil && len(metadata.Predicates) == 0 && metadata.View == nil && metadata.SQL == nil && len(metadata.Relation) == 0 && metadata.Self == nil && !metadata.FormatSelector && b.Transformer == nil && b.ResolutionGroup == nil && b.Scope == "" && b.When == "" && b.With == "" && b.URI == "" && b.ResourceRef == "" && !b.Async
+	return b.Location.Kind == "query" && strings.TrimSpace(b.Location.In) != "" && metadata.Codec == nil && len(metadata.Predicates) == 0 && metadata.View == nil && metadata.SQL == nil && len(metadata.Relation) == 0 && metadata.Self == nil && !metadata.FormatSelector && b.Transformer == nil && b.ResolutionGroup == nil && b.Scope == "" && b.When == "" && b.With == "" && b.URI == "" && b.ResourceRef == "" && !b.Async
 }

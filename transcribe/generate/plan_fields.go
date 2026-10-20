@@ -438,9 +438,6 @@ func selectorStorageParameter(component *spec.Component, parameter *spec.Paramet
 	if !selectorSideParameter(parameter) {
 		return false, nil
 	}
-	if len(component.Routes) == 0 || component.Routes[0] == nil || component.Routes[0].Handler == "" {
-		return true, nil
-	}
 	metadata, err := canonicalFieldMetadata(parameter)
 	if err != nil {
 		return false, err
@@ -448,6 +445,9 @@ func selectorStorageParameter(component *spec.Component, parameter *spec.Paramet
 	parsed, err := dtag.ParseField(reflect.StructField{Name: generatedParameterName(parameter), Tag: reflect.StructTag(fieldTag(parameter, parameter.Name, metadata))})
 	if err != nil {
 		return false, err
+	}
+	if len(component.Routes) == 0 || component.Routes[0] == nil || component.Routes[0].Handler == "" {
+		return selectorcompanion.PlainField(parsed), nil
 	}
 	return selectorcompanion.TransportField(parsed), nil
 }
