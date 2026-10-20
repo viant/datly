@@ -43,7 +43,12 @@ func (r *planResolver) auxiliaryBodyRoot() *spec.View {
 		if kind != "body" && !(kind == "output" && param.Source.Name == "body") {
 			continue
 		}
-		expression := strings.TrimSpace(param.TypeExpr)
+		// The decoded field owns the body row; a codec's raw provider type
+		// (for example json.RawMessage) does not describe that SQL shape.
+		expression := strings.TrimSpace(param.OutputTypeExpr)
+		if expression == "" {
+			expression = strings.TrimSpace(param.TypeExpr)
+		}
 		if expression == "" || expression == "?" {
 			continue
 		}
