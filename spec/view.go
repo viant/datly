@@ -8,6 +8,10 @@ import (
 type View struct {
 	projectionOrigins *projectionOrigins
 
+	// DefaultProjection is transient parser provenance for a pure outer wildcard.
+	// Linked ownership must independently authorize report default ordering.
+	DefaultProjection bool `json:"-" yaml:"-"`
+
 	Key       Key    `json:"key"`
 	Name      string `json:"name,omitempty"`
 	Namespace string `json:"namespace,omitempty"`

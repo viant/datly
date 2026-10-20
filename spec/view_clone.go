@@ -13,9 +13,9 @@ func cloneView(source *View, cloned map[*View]*View) *View {
 	}
 	result := &View{
 		Key: source.Key, Name: source.Name, Namespace: source.Namespace, TypeName: source.TypeName, Dest: source.Dest, EntityHooks: source.EntityHooks, OnDeleteNotFound: source.OnDeleteNotFound, WriterIdentityPolicy: source.WriterIdentityPolicy, WriterActionPolicy: source.WriterActionPolicy, QueueContract: source.QueueContract, Reconciliation: source.Reconciliation.Clone(), InsertValidationPresence: source.InsertValidationPresence, RootNullPolicy: source.RootNullPolicy, NestedNullPolicy: source.NestedNullPolicy,
-		Cardinality: source.Cardinality,
-		InMemory:    source.InMemory,
-		RowLock:     source.RowLock, RowLockOrder: source.RowLockOrder,
+		Cardinality: source.Cardinality, DefaultProjection: source.DefaultProjection,
+		InMemory: source.InMemory,
+		RowLock:  source.RowLock, RowLockOrder: source.RowLockOrder,
 		AllowNulls: cloneBool(source.AllowNulls), Groupable: cloneBool(source.Groupable), Auxiliary: source.Auxiliary,
 		Columns: cloneColumns(source.Columns),
 		Source:  source.Source.Clone(), Selector: source.Selector.Clone(),
