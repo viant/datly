@@ -303,6 +303,30 @@ func (r *planResolver) prepareReaderMetadata() error {
 				continue
 			}
 			if column != nil {
+				// SQL inference describes the source; an established linked scalar
+				// pointer is also a valid Go destination for the same base type.
+				// Preserve physical nullability and explicit CAST authority.
+				typ := column.EffectiveType()
+				if !column.ExplicitType && !typ.Pointer && !typ.SlicePointer && typ.Cardinality != spec.CardinalityMany {
+					expression := typ.Name
+					if typ.Package != "" {
+						expression = typ.Package + "." + expression
+					}
+					scope := xshape.Resolver{Package: descriptor.PkgPath}
+					if reference, referenceErr := scope.Reference(expression); referenceErr == nil && len(reference.Wrappers) == 0 {
+						canonical, canonicalErr := scope.Canonical(expression)
+						if canonicalErr != nil {
+							return canonicalErr
+						}
+						field, fieldErr := readergraph.ResolveRowColumn(shape, column)
+						if fieldErr != nil {
+							return fieldErr
+						}
+						if field.Identity == "*"+canonical && readerMetadataScalar(field.Descriptor, r.types.Descriptor, map[string]bool{}) {
+							column.Type.Pointer = true
+						}
+					}
+				}
 				column.Tag = withoutStructTags(column.Tag, tag.SQLName, tag.ViewName, tag.RelationName, "self", "groupable", "codec")
 			}
 			columns = append(columns, column)
@@ -791,4 +815,44 @@ func (r *planResolver) readerMetadataCapability() (string, error) {
 		return "", nil
 	}
 	return visit(c.RootView, field.Descriptor, uri)
+}
+
+// Named collections retain their identity, so syntax alone cannot distinguish
+// them from SQL scalar destinations. Follow their existing type declaration.
+func readerMetadataScalar(descriptor *x.Type, lookup xshape.Lookup, seen map[string]bool) bool {
+	if descriptor == nil || seen[descriptor.Key()] {
+		return false
+	}
+	seen[descriptor.Key()] = true
+	if descriptor.Type != nil {
+		switch descriptor.Type.Kind() {
+		case reflect.Bool, reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+			reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
+			reflect.Float32, reflect.Float64, reflect.String, reflect.Struct:
+			return true
+		}
+		return false
+	}
+	declaration := descriptor.SynteticType
+	if declaration == nil || declaration.TypeSpec == nil {
+		return false
+	}
+	switch expression := declaration.TypeSpec.Type.(type) {
+	case *ast.StructType:
+		return true
+	case *ast.Ident, *ast.SelectorExpr:
+		imports := map[string]string{}
+		for alias, imported := range declaration.Imports {
+			if imported != nil {
+				imports[alias] = imported.Path
+			}
+		}
+		canonical, err := canonicalType(expression, imports, descriptor.PkgPath)
+		if err != nil {
+			return false
+		}
+		target, err := lookup(canonical)
+		return err == nil && readerMetadataScalar(target, lookup, seen)
+	}
+	return false
 }
