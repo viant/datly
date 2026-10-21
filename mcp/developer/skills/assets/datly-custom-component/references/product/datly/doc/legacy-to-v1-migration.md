@@ -136,10 +136,60 @@ empty collection remains distinguishable from a missing or forbidden scope.
 Prove both shapes, including omitted child work, missing targets, and viewer
 permissions, with the generated runtime rather than comparing SQL text alone.
 
+`QuerySelector(view)` is a typed side input for the selected view, not a
+business Input or Output field. Keep its canonical `#define` declaration,
+query key and type; native generation owns its separate selector metadata.
+Do not add a public Input field or change an integer Page to a string to
+compensate for selector binding. HTTP and MCP still expose the declared typed
+selector arguments. Existing explicitly authored Go input fields remain
+supported; their compatibility does not require new generated readers to copy
+selectors into business inputs.
+
+Custom handlers may declare plain optional, default-free query selectors for an
+already served view through the same private companion. These declarations
+provide transport metadata; the parent does not convert or carry their values.
+The custom handler must forward the native query provider to its existing child
+reader, which owns selector conversion, authorization order and view policy.
+Required or defaulted side bindings are not supported on this transport path.
+Business Input and Has contracts remain unchanged.
+
 Aggregates assembled from several legacy service calls should normally become
 one reader graph with related and DerivedView outputs. Do not preserve a
 service-local fan-out of raw SELECTs merely because the public response is an
 aggregate.
+
+
+### Composition patterns and anti-patterns
+
+- Keep one caller-owned buffered write scope across component calls. Reuse the
+  injected Xdatly invoker and scoped DML services; do not create a second runtime,
+  session or transaction inside a business hook.
+- Put prerequisites in the existing input `Init` hook and dependent composition
+  in the invoker-aware output `Finalize` hook. Keep commit-dependent publication
+  in outcome finalization after commit confirmation. These callbacks have
+  different timing; a method named `Finalize` alone does not establish timing.
+- Treat typed `ComponentRequest.Input` as already bound for readers and writers.
+  Preserve generated presence markers and the child's validation and authority
+  checks. Do not rebind a separate capability struct through the canonical input
+  binder; use the existing scoped capability lookup or lifecycle argument.
+- Keep query selectors in their generated side companion. Do not change numeric
+  selector types to strings, add them to business `Input`/`Has`, or invent a view
+  solely to carry tool metadata.
+- Keep one authoritative DQL/SQL graph and regenerate affected native artifacts.
+  Do not copy SQL into hooks, reparse it per request, or hand-edit generated
+  fields to repair discovery. Check the public Go shape and rebuilt generation
+  repeat as well as compilation.
+- Keep reusable runtime types linked with fully qualified imports and native
+  retention anchors, including named container representations. An anchor keeps
+  a type discoverable; it is not a registration API or permission bypass.
+- Separate codec input representation, destination type and discovery schema.
+  Preserve the codec's conversion, null/presence and error behavior when repairing
+  metadata. Do not erase an explicit destination or replace a custom decoder just
+  to make schema comparison pass.
+- Keep lifecycle methods focused on their phase and extract cohesive helpers
+  when business logic becomes hard to follow. Test meaningful hook behavior,
+  error ordering and buffer ownership; avoid duplicating unchanged original E2E
+  assertions with an unrelated acceptance matrix.
 
 ### Mark presence in internal component calls
 
@@ -154,9 +204,6 @@ Populating a struct literal alone does not mark the field present:
 ```go
 input := &recordread.ReadInput{}
 input.SetTenantID(tenantID) // generated setter marks Has.TenantID
-if fields != nil {
-    input.SetFields(fields) // omit this call when the selector is absent
-}
 value, err := invoker.Invoke(ctx, handler.ComponentRequest{
     Target: target,
     Input:  input,
@@ -167,8 +214,10 @@ Prefer generated setters for every supplied query/path/header/body parameter
 in internal readers, writers, and cubes. A trusted Go literal may equivalently
 initialize the generated presence type explicitly, for example
 `&recordread.ReadInput{TenantID: tenantID, Has: &recordread.ReadInputHas{TenantID: true}}`.
-Mark every supplied field, including optional selectors; do not mark omitted
-fields. An explicit zero or empty value can still be present; a nonzero literal
+Mark every supplied regular input field; do not mark omitted fields. Query
+selector side inputs use the invocation's selector binding, not InputHas.
+For existing Go contracts that explicitly keep selectors in Input, retain
+their normal field-presence handling. An explicit zero or empty value can still be present; a nonzero literal
 without its marker is not. In particular,
 do not weaken required-input validation or infer presence from Go zero values
 to make old callers pass: that can suppress a required authorization scope.

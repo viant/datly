@@ -276,7 +276,8 @@ Syntax fragment; adapt within the [complete reader contract](dql-grammar.md#a-sh
 Head: `$_ = $Name[<InputType[,OutputType]>](kind/location)`.
 `model.Record` is a linked row type from the declared import; name row types
 explicitly in authored examples. The grammar also accepts `?` for inference
-(it is not Go `any`). The second type is meaningful for conversion/codec authoring.
+(it is not Go `any`). The second type supplies the Go destination for
+conversion/codec authoring or an explicit scalar wire presentation.
 
 #define establishes declared authority. Use `.Value(...)` for declared defaults. Reject conflicting definitions.
 
@@ -301,6 +302,57 @@ SQL column name and JSON name are separate identities. Do not automatically
 rename aliases or manufacture casing/spelling variants to repair a failed lookup.
 
 Independent view/data_view declarations use the declaration holder as canonical lookup identity. A trailing /* SELECT ... */ is declaration SQL. An implicit declaration omits (kind/location), must carry SQL, and uses supported inference; prefer explicit sources in new components.
+
+### Explicit scalar wire presentation
+
+Use an explicit type pair when a query, form or path parameter needs a scalar
+wire nullability that differs from its Go destination. The first type declares
+the wire identity; the second preserves the actual Go field type:
+
+```sql
+#define($_ = $Count<*int,int>(query/count).Optional())
+#define($_ = $Active<bool,*bool>(query/active).Optional())
+```
+
+`Count` advertises integer or null while binding to `int`. `Active` advertises
+boolean while binding to `*bool`; an omitted value can still leave the pointer
+nil, and an explicit false remains a nonnil false pointer. This is presentation
+authority, not a conversion or a new suppliedness rule.
+
+For a handwritten linked Input, retain the same wire declaration in its existing
+`parameter` tag and keep the business field type:
+
+```go
+type Input struct {
+    Count  int   `parameter:",kind=query,in=count,dataType=*int"`
+    Active *bool `parameter:",kind=query,in=active,dataType=bool"`
+}
+```
+
+Generation persists this authority through `dataType` and recovers the exact
+Go destination on reload. Authored DQL and linked tags must agree. Named string,
+boolean and integer types are supported only when both declarations resolve to
+the same canonical leaf, including package identity; use normal declared imports,
+and let generation retain canonical package names. A true Go alias may resolve
+to that same leaf. Two distinct named types or integer widths are not a
+nullability-only pair.
+
+Each side may have zero or one pointer wrapper. The rule applies to string,
+boolean and integer leaves without competing JSON/Text serialization, codec,
+`wireType`, source override, transformer or explicit schema authority. Those
+existing mechanisms keep their own contracts. Collections, objects, floating
+point types and deeper pointers retain their ordinary handling.
+
+Keep existing defaults, Has markers, validation and request binding behavior.
+Wire nullability does not make explicit null equivalent to omission or change
+query/form empty-value handling. Path parameters must still match route
+placeholders; effective binding/route requiredness and the existing MCP
+required-property and null-removal policy remain in force. Do not add
+`.Optional()` to a path merely to obtain a nullable schema.
+
+Most fields need no alternate type declaration. Ordinary same-type declarations
+and inferred bindings keep their existing discovery behavior; `.Optional()`
+alone does not request a different wire type or blanket nullable schema.
 
 ### Complete fluent option catalog
 
@@ -1128,3 +1180,23 @@ repeated syntax.
 Verified regressions cover default HTTP int/string CSV and repeated lists,
 numeric scalar wrapping, native MCP arrays with comma-containing string items,
 and a generated reader executing against SQLite.
+
+When `assigned-update` selects an unmatched identity and queues no mutation,
+`insert_validation_presence(view,true)` preserves supplied-field validation in
+both passes. Omitted insert-only fields are not required for this no-op; supplied
+null/zero/invalid fields and business hooks remain checked. This exception does
+not change complete final validation for actual INSERTs or database constraints.
+
+## Server-prepared writer rows
+
+An optional unnamed `internal/` input supplies mutation rows prepared by application
+`Input.Init`, without a request-body binding or client schema field. It supports
+the same native operation/transport combinations as body-backed writers, including
+POST insertion policy over PATCH transport. Keep candidate selection in declared
+view parameters; do not synthesize client body fields for query-driven mutations.
+The writer still owns sequencing, validation, buffering and transaction completion.
+When business output differs from the private write rows, declare the actual
+write-result carrier as `output/body` with `json:"-" internal:"true"`, and retain
+the business field under `output/result` with its original JSON name. Lifecycle
+hooks prepare that business result. This uses existing output projection behavior;
+private rows are not exposed as public JSON/MCP fields.

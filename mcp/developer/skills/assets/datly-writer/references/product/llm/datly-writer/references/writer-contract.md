@@ -52,6 +52,26 @@ Direct edits inside those files are overwritten.
 | `patch` | Match resolved complete tuples against authorized Previous and apply declared existing/missing actions. |
 | `get` | Generate the reader graph; no mutation traversal. |
 
+### Explicit UPDATE commands
+
+Use `writer_action_policy(row,'update')` only for a SQL-derived physical PATCH
+leaf whose contract is an ordered SQLX UPDATE command. This is useful when a
+caller queues an INSERT and later updates that same row before the shared buffer
+drains. Keep ordinary PATCH matching when Previous-based validation, matching or
+diffing is required; do not fabricate Current to make a pending INSERT visible.
+
+The command uses discovered keys and sparse Has markers, without inferred Current,
+Previous, allocation, INSERT or DELETE. Zero/composite keys, repeated physical
+updates and SQL no-match behavior remain SQLX semantics. Authored business hooks
+run, but hydrated framework schema/existence validation does not; database
+constraints apply when the caller's shared journal drains. Preserve source scalar
+capture by passing a shallow row copy when needed, keeping pointer fields and Has
+shared. Do not combine this mode with source-row/source-slice queue contracts or
+Previous-dependent concurrency, deletion, identity, predicate or reconciliation
+controls. Canonical native generation supports it; legacy MutationProgram and
+Velty lowering reject it explicitly. Check the installed SDK before using this
+opt-in mode.
+
 Route method and operation must agree. Custom Go orchestration is an explicit
 application choice; it is not a replacement for missing high-level generation.
 Discover connected `transcribe` support as described in
@@ -584,3 +604,9 @@ Regenerate through the same high-level command and preserve create-once lifecycl
 edits. Verify mixed mutations, identity-only deletes, omissions/false flags,
 parent/composite scope, token presence and instant equality, validation order,
 rollback/caller-owned transactions, and regeneration in the generated package.
+
+When `assigned-update` selects an unmatched identity and queues no mutation,
+`insert_validation_presence(view,true)` preserves supplied-field validation in
+both passes. Omitted insert-only fields are not required for this no-op; supplied
+null/zero/invalid fields and business hooks remain checked. This exception does
+not change complete final validation for actual INSERTs or database constraints.

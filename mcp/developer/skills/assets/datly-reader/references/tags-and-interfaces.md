@@ -46,6 +46,12 @@ parameter is the application declaration spelling; bind supplies scoped field bi
 
 Common facets: name/leading name, kind, in, required, cacheable, uri and supported error-code/message metadata. Use the advertised binding schema for additional options. Request kinds include query, path, header, cookie, form, body and http_request; named providers cover constants/resources/views/components and services. Never assume a provider exists because a tag can be parsed.
 
+Use `parameter`'s existing `dataType` only when authoring an explicit wire
+identity distinct from the actual Go destination. Scalar nullability pairs
+such as `*int,int` or `bool,*bool` preserve the same exact canonical leaf and
+change discovery only; the second type remains the Go destination.
+Ordinary fields need no alternate wire declaration; Optional does not imply one.
+
 A view dependency can use:
 ~~~~text
 parameter:"Existing,kind=view,in=Existing"

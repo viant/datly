@@ -604,3 +604,9 @@ Regenerate through the same high-level command and preserve create-once lifecycl
 edits. Verify mixed mutations, identity-only deletes, omissions/false flags,
 parent/composite scope, token presence and instant equality, validation order,
 rollback/caller-owned transactions, and regeneration in the generated package.
+
+When `assigned-update` selects an unmatched identity and queues no mutation,
+`insert_validation_presence(view,true)` preserves supplied-field validation in
+both passes. Omitted insert-only fields are not required for this no-op; supplied
+null/zero/invalid fields and business hooks remain checked. This exception does
+not change complete final validation for actual INSERTs or database constraints.
