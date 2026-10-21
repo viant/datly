@@ -53,6 +53,9 @@ func TestArtifactPredicateTypeAuthority(t *testing.T) {
 				canonical, diagnostic string
 			}{
 				{name: "import alias", class: "handler", args: []string{"security.OrderScope"}, canonical: security + ".OrderScope"},
+				{name: "pointer import alias", class: "handler", args: []string{"*security.OrderScope"}, canonical: security + ".OrderScope"},
+				{name: "pointer explicit canonical", class: "handler", args: []string{"*" + security + ".OrderScope"}, canonical: security + ".OrderScope"},
+				{name: "pointer to collection is not handler", class: "handler", args: []string{"*[]security.OrderScope"}, diagnostic: "was not found"},
 				{name: "explicit canonical", class: "handler", args: []string{security + ".OrderScope"}, canonical: security + ".OrderScope"},
 				{name: "class normalization", class: " Handler ", args: []string{"security.OrderScope"}, canonical: security + ".OrderScope"},
 				{name: "same short name other import", class: "handler", args: []string{"other.OrderScope"}, diagnostic: "does not implement predicate.Handler"},
