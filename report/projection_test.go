@@ -52,7 +52,7 @@ func TestCubeDeclaredOutputMetadata(t *testing.T) {
 			require.True(t, ok)
 			public, ok := dimension.Type.FieldByName("AccountID")
 			require.True(t, ok)
-			require.Equal(t, `accountID,omitempty`, public.Tag.Get("json"))
+			require.Equal(t, `accountId,omitempty`, public.Tag.Get("json"))
 			h := derived[1].Handler.(*composeHandler)
 			field, ok := h.catalog.Lookup(tc.source)
 			require.True(t, ok)

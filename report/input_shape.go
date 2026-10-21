@@ -8,6 +8,7 @@ import (
 
 	"github.com/viant/datly/spec"
 	"github.com/viant/datly/typecatalog"
+	"github.com/viant/tagly/format/text"
 	xshape "github.com/viant/x/shape"
 )
 
@@ -137,7 +138,7 @@ func lowerCamel(value string) string {
 	if value == "" {
 		return ""
 	}
-	return strings.ToLower(value[:1]) + value[1:]
+	return text.CaseFormatUpperCamel.Format(value, text.CaseFormatLowerCamel)
 }
 
 func (c *inputCompiler) resolutionContext() *typecatalog.ResolutionContext {
