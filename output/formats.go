@@ -7,7 +7,7 @@ import (
 	"reflect"
 	"sync"
 
-	"github.com/viant/sqlx/io/load/reader/csv"
+	"github.com/viant/structology/encoding/csv"
 	"github.com/viant/structology/encoding/jsontab"
 	"github.com/viant/xlsy"
 	"github.com/viant/xmlify"
@@ -39,7 +39,7 @@ func (p *Plan) marshalCSV(value any) ([]byte, error) {
 		}
 	}
 	p.csvEncoder.once.Do(func() {
-		p.csvEncoder.encoder, p.csvEncoder.err = csv.NewMarshaller(rows.Type(), &csv.Config{FieldSeparator: ",", ObjectSeparator: "\n", EncloseBy: `"`, EscapeBy: "\\", NullValue: "null"})
+		p.csvEncoder.encoder, p.csvEncoder.err = csv.NewMarshaller(rows.Type(), nil)
 	})
 	if p.csvEncoder.err != nil {
 		return nil, p.csvEncoder.err
