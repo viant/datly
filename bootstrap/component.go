@@ -446,8 +446,8 @@ func (r *packageComponentResolver) resolveParamType(role contractRole, field xsh
 		}
 		param.OutputTypeExpr = destination
 	}
-	// Recover the business destination from the persisted, explicit query split.
-	if param != nil && role == inputContract && param.Codec == nil && param.Source.Kind == "query" && (param.Required == nil || !*param.Required) && strings.TrimSpace(param.TypeExpr) == "*string" && param.WireTypeExpr == "" && strings.TrimSpace(param.OutputTypeExpr) == "" {
+	// Recover the business destination from the persisted, explicit query/form split.
+	if param != nil && role == inputContract && param.Codec == nil && (param.Source.Kind == "query" || param.Source.Kind == "form") && (param.Required == nil || !*param.Required) && strings.TrimSpace(param.TypeExpr) == "*string" && param.WireTypeExpr == "" && strings.TrimSpace(param.OutputTypeExpr) == "" {
 		destination, err := r.fieldTypeExpression(field)
 		if err != nil {
 			return err

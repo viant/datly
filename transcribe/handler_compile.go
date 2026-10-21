@@ -173,7 +173,7 @@ func validateHandlerParameters(binding *HandlerBinding, authored, bound []*spec.
 			if err != nil {
 				return err
 			}
-			if !found || (typ != field.Type && !backedQueryStringSplit(param, actual, field.Type == reflect.TypeOf(""))) {
+			if !found || (typ != field.Type && !backedStringWireSplit(param, actual, field.Type == reflect.TypeOf(""))) {
 				return fmt.Errorf("handler parameter %q type conflicts with linked contract", param.Name)
 			}
 		}
@@ -214,7 +214,7 @@ func validateHandlerParameters(binding *HandlerBinding, authored, bound []*spec.
 		remainder := *param
 		remainder.Name, remainder.TypeExpr, remainder.Raw = "", "", ""
 		remainder.WireTypeExpr, remainder.Tag = "", ""
-		if backedQueryStringSplit(param, actual, true) {
+		if backedStringWireSplit(param, actual, true) {
 			remainder.OutputTypeExpr = ""
 		}
 		remainder.Source, remainder.Required, remainder.Declaration = spec.BindSource{}, nil, ""

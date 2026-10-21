@@ -402,7 +402,7 @@ func validateSourceHandlerParameters(loader types.Importer, fields, outputs map[
 			return fmt.Errorf("handler parameter %q requiredness conflicts with source contract", param.Name)
 		}
 		typeExpr := param.TypeExpr
-		backedSplit := backedQueryStringSplit(param, &spec.Parameter{TypeExpr: binding.DataType, Source: spec.BindSource{Kind: binding.Location.Kind}, Required: binding.Required, WireTypeExpr: field.tags.Get("wireType")}, types.Identical(field.typ, types.Typ[types.String])) && field.tags.Get("codec") == ""
+		backedSplit := backedStringWireSplit(param, &spec.Parameter{TypeExpr: binding.DataType, Source: spec.BindSource{Kind: binding.Location.Kind}, Required: binding.Required, WireTypeExpr: field.tags.Get("wireType")}, types.Identical(field.typ, types.Typ[types.String])) && field.tags.Get("codec") == ""
 		if backedSplit {
 			typeExpr = "string"
 		}

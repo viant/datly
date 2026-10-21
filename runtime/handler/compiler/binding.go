@@ -67,7 +67,7 @@ func BuildBindingSpecs(component *spec.Component, inputType reflect.Type, codecs
 				if err := tagged.ValidateBodyNullPolicy(field.Type); err != nil {
 					return nil, err
 				}
-				if err := applyExplicitQueryWire(field, &tagged); err != nil {
+				if err := applyExplicitStringWire(field, &tagged); err != nil {
 					return nil, err
 				}
 				result = append(result, tagged)
@@ -91,7 +91,7 @@ func BuildBindingSpecs(component *spec.Component, inputType reflect.Type, codecs
 			if err := compiled.ValidateBodyNullPolicy(field.Type); err != nil {
 				return nil, err
 			}
-			if err := applyExplicitQueryWire(field, &compiled); err != nil {
+			if err := applyExplicitStringWire(field, &compiled); err != nil {
 				return nil, err
 			}
 			result = append(result, compiled)
@@ -234,9 +234,9 @@ func (t *codecTransformer) Transform(ctx context.Context, resolver locator.Resol
 	}))
 }
 
-// applyExplicitQueryWire lowers persisted dataType discovery authority only.
-func applyExplicitQueryWire(field reflect.StructField, binding *bindly.BindingSpec) error {
-	if binding.Location.Kind != "query" || (binding.Required != nil && *binding.Required) || strings.TrimSpace(binding.DataType) != "*string" || field.Type != reflect.TypeOf("") || binding.Transformer != nil || binding.SourceType != nil {
+// applyExplicitStringWire lowers persisted dataType discovery authority only.
+func applyExplicitStringWire(field reflect.StructField, binding *bindly.BindingSpec) error {
+	if (binding.Location.Kind != "query" && binding.Location.Kind != "form") || (binding.Required != nil && *binding.Required) || strings.TrimSpace(binding.DataType) != "*string" || field.Type != reflect.TypeOf("") || binding.Transformer != nil || binding.SourceType != nil {
 		return nil
 	}
 	param, _ := binding.Extension.(*spec.Parameter)
