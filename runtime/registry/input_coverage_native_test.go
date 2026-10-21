@@ -301,3 +301,117 @@ func TestScopedTransportRejectsOfficialUnverifiedAndCodecArguments(t *testing.T)
 		})
 	}
 }
+
+func TestScopedTransportJWTAuthorizationVisibility(t *testing.T) {
+	for _, tc := range []struct {
+		name, kind, in                                                                 string
+		parentInternal, childInternal, ordinary, jsonDifference, unverified, wantError bool
+	}{
+		{name: "parent internal", kind: "header", in: "Authorization", parentInternal: true},
+		{name: "child internal", kind: "header", in: "Authorization", childInternal: true},
+		{name: "both internal", kind: "header", in: "Authorization", parentInternal: true, childInternal: true},
+		{name: "ordinary Authorization", kind: "header", in: "Authorization", parentInternal: true, ordinary: true, wantError: true},
+		{name: "JWT custom header", kind: "header", in: "X-JWT", parentInternal: true, wantError: true},
+		{name: "JWT query", kind: "query", in: "jwt", parentInternal: true, wantError: true},
+		{name: "JWT other JSON tag", kind: "header", in: "Authorization", parentInternal: true, jsonDifference: true, wantError: true},
+		{name: "JWT unverified", kind: "header", in: "Authorization", parentInternal: true, unverified: true, wantError: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			factory := coverageFactory(t)
+			var codecs interface {
+				New(*xcodec.Config, ...xcodec.Option) (xcodec.Instance, error)
+			} = factory
+			if tc.unverified {
+				codecs = nonVerifierFactory{}
+			}
+			parentRoute := spec.RouteRef{Method: "GET", Path: "/visibility"}
+			childRoute := spec.RouteRef{Method: "GET", Path: "/visibility-child"}
+			fieldType := reflect.TypeFor[*jwt.Claims]()
+			if tc.ordinary {
+				fieldType = reflect.TypeFor[string]()
+			}
+			var entries []*registry.RegisteredComponent
+			for _, parent := range []bool{true, false} {
+				internal := tc.childInternal
+				route := childRoute
+				scope := "private"
+				name := "Child"
+				required := false
+				if parent {
+					internal = tc.parentInternal
+					route = parentRoute
+					scope = "public"
+					name = "Parent"
+					required = true
+				}
+				tag := `json:"credential"`
+				if internal {
+					tag += ` internal:"true"`
+				}
+				if !parent && tc.jsonDifference {
+					tag = `json:"different"`
+				}
+				fields := []reflect.StructField{{Name: "Jwt", Type: fieldType, Tag: reflect.StructTag(tag)}}
+				parameter := &spec.Parameter{Name: "Jwt", TypeExpr: "string", Source: spec.BindSource{Kind: tc.kind, Name: tc.in}, Required: &required}
+				if !tc.ordinary {
+					parameter.Codec = &spec.Codec{Body: "JwtClaim"}
+					parameter.ErrorStatusCode = 401
+				}
+				component := &spec.Component{Key: spec.Key{Kind: spec.KindComponent, Scope: scope, Name: name}, Routes: []*spec.Route{{Method: route.Method, Path: route.Path}}, Parameters: []*spec.Parameter{parameter}}
+				if parent {
+					fields = append(fields, reflect.StructField{Name: "Lazy", Type: reflect.TypeFor[*coverageResult]()})
+					component.Parameters = append(component.Parameters, &spec.Parameter{Name: "Lazy", Source: spec.BindSource{Kind: "component", Name: "GET:/visibility-child"}, Scope: "lazy"})
+				}
+				input := reflect.StructOf(fields)
+				artifact, err := bootstrap.BuildArtifact(bootstrap.ArtifactInput{Component: component, InputType: input, OutputType: reflect.TypeFor[coverageResult](), CodecFactory: codecs})
+				if err != nil {
+					t.Fatal(err)
+				}
+				entry, err := artifact.Registration(registry.RegisteredComponent{Handler: handler.HandlerFunc(func(context.Context, handler.Invocation) (any, error) {
+					t.Fatal("coverage executed handler")
+					return nil, nil
+				})})
+				if err != nil {
+					t.Fatal(err)
+				}
+				entries = append(entries, entry)
+			}
+			parentContract, _ := entries[0].Input.ForRoute(parentRoute)
+			childContract, _ := entries[1].Input.ForRoute(childRoute)
+			beforeParent := parentContract.Fields()[0]
+			beforeChild := childContract.Fields()[0]
+			parentInternal, err := beforeParent.Internal()
+			if err != nil {
+				t.Fatal(err)
+			}
+			childInternal, err := beforeChild.Internal()
+			if err != nil {
+				t.Fatal(err)
+			}
+			catalog, err := registry.NewInputCatalog(entries)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, err = catalog.Fields(parentRoute)
+			if (err != nil) != tc.wantError {
+				t.Fatalf("coverage error=%v, wantError=%t", err, tc.wantError)
+			}
+			afterParent, err := beforeParent.Internal()
+			if err != nil {
+				t.Fatal(err)
+			}
+			afterChild, err := beforeChild.Internal()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if parentInternal != afterParent || childInternal != afterChild {
+				t.Fatal("coverage mutated retained visibility")
+			}
+			pf, _ := beforeParent.StructField()
+			cf, _ := beforeChild.StructField()
+			if pf.Tag.Get("json") != "credential" || (tc.jsonDifference && cf.Tag.Get("json") != "different") {
+				t.Fatal("coverage mutated retained JSON tags")
+			}
+		})
+	}
+}

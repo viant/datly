@@ -134,7 +134,7 @@ func TestBackedQueryStringSplit(t *testing.T) {
 		{"single", "*string", "", "*string", "query", false, true, true},
 		{"unbacked", "*string", "string", "string", "query", false, true, false},
 		{"scalar", "string", "", "string", "query", false, true, false},
-		{"required", "*string", "string", "*string", "query", true, true, false},
+		{"required", "*string", "string", "*string", "query", true, true, true},
 		{"body", "*string", "string", "*string", "body", false, true, false},
 		{"int", "*int", "int", "*int", "query", false, false, false},
 		{"bad-output", "*string", "int", "*string", "query", false, true, false},
@@ -142,7 +142,7 @@ func TestBackedQueryStringSplit(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			a := &spec.Parameter{TypeExpr: tc.expr, OutputTypeExpr: tc.output, Source: spec.BindSource{Kind: tc.kind}, Required: &tc.required}
 			b := &spec.Parameter{TypeExpr: tc.persisted, Source: a.Source, Required: &tc.required}
-			require.Equal(t, tc.want, backedQueryStringSplit(a, b, tc.destination))
+			require.Equal(t, tc.want, backedScalarWireSplit(a, b, tc.destination && tc.expr == tc.persisted && tc.expr != "string" && tc.output != "int"))
 		})
 	}
 }

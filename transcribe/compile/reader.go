@@ -151,6 +151,7 @@ func (r *Reader) Compile(input ReadInput) (*spec.View, error) {
 	if err != nil {
 		return nil, &Error{Code: CodeViewDirective, Cause: err}
 	}
+	root.DefaultProjection = defaultRootProjection(parsed, root)
 	if err := lowerLinkedHookKeys(root, directives, input.Types); err != nil {
 		return nil, err
 	}
@@ -429,4 +430,27 @@ func terminalName(value node.Node) string {
 	default:
 		return ""
 	}
+}
+
+// Metadata declarations have already been lowered from this parser-owned list.
+func defaultRootProjection(parsed *query.Select, root *spec.View) bool {
+	wildcard := false
+	for _, item := range parsed.List {
+		if item == nil {
+			continue
+		}
+		column := sqlparser.NewColumn(item)
+		namespace := column.Namespace
+		if namespace == "" || namespace == "*" {
+			namespace = root.Namespace
+		}
+		if !strings.EqualFold(namespace, root.Namespace) {
+			continue
+		}
+		if _, star := projectionStar(item); !star {
+			return false
+		}
+		wildcard = true
+	}
+	return wildcard
 }

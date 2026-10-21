@@ -446,14 +446,47 @@ func (r *packageComponentResolver) resolveParamType(role contractRole, field xsh
 		}
 		param.OutputTypeExpr = destination
 	}
-	// Recover the business destination from the persisted, explicit query split.
-	if param != nil && role == inputContract && param.Codec == nil && param.Source.Kind == "query" && (param.Required == nil || !*param.Required) && strings.TrimSpace(param.TypeExpr) == "*string" && param.WireTypeExpr == "" && strings.TrimSpace(param.OutputTypeExpr) == "" {
-		destination, err := r.fieldTypeExpression(field)
-		if err != nil {
-			return err
-		}
-		if destination == "string" {
-			param.OutputTypeExpr = "string"
+	// Recover exact business destination using the existing package type owner.
+	if param != nil && role == inputContract && param.Codec == nil && param.WireTypeExpr == "" && param.OutputTypeExpr == "" && strings.TrimSpace(param.TypeExpr) != "" && param.WireSchema == nil && len(param.WireSchemas) == 0 && field.ReflectedType != nil {
+		switch param.Source.Kind {
+		case "query", "form", "path":
+			imports := map[string]string{}
+			if r.component.TypeContext != nil {
+				for _, imported := range r.component.TypeContext.Imports {
+					imports[imported.Alias] = imported.Package
+				}
+			}
+			canonical, err := (xshape.Resolver{Imports: imports}).Canonical(param.TypeExpr)
+			if err != nil {
+				break // Optional discovery must not reject ordinary input declarations.
+			}
+			leaf := field.ReflectedType
+			if leaf.Kind() == reflect.Pointer {
+				leaf = leaf.Elem()
+			}
+			wire, err := (xshape.Runtime{Lookup: func(name string) (reflect.Type, error) {
+				if r.types != nil {
+					if resolved, err := r.types.Type(name); err == nil && resolved != nil {
+						return resolved, nil
+					}
+				}
+				if leaf.PkgPath() != "" && name == leaf.PkgPath()+"."+leaf.Name() {
+					return leaf, nil
+				}
+				return nil, fmt.Errorf("unresolved scalar identity %q", name)
+			}}).Type(canonical)
+			if err == nil {
+				if _, ok := typeidentity.ReflectScalarPair(wire, field.ReflectedType); ok {
+					destination, err := r.fieldTypeExpression(field)
+					if err != nil {
+						return err
+					}
+					param.OutputTypeExpr = destination
+					if err := typeidentity.NormalizeDestination(param, r.component.Key.Scope, r.component.TypeContext, nil); err != nil {
+						return err
+					}
+				}
+			}
 		}
 	}
 	// Persisted metadata and plain Go inputs must publish the same codec

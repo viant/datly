@@ -49,7 +49,7 @@ func binaryCapabilities(args []Argument) (files, raw bool) {
 }
 func descriptorSchema() map[string]interface{} {
 	// Original MCP blob descriptors require data; filename and MIME type are optional.
-	return map[string]interface{}{"type": "object", "required": []string{"data"}, "properties": map[string]interface{}{"data": map[string]interface{}{"type": "string"}, "filename": map[string]interface{}{"type": "string"}, "mimeType": map[string]interface{}{"type": "string"}}}
+	return map[string]interface{}{"type": "object", "required": []string{"data"}, "properties": map[string]interface{}{"data": map[string]interface{}{"type": "string", "description": "Base64-encoded blob data"}, "filename": map[string]interface{}{"type": "string", "description": "Multipart filename"}, "mimeType": map[string]interface{}{"type": "string", "description": "Blob media type"}}}
 }
 func projectBinarySchema(args []Argument, s *schema.ToolInputSchema) {
 	files, raw := binaryCapabilities(args)
@@ -68,12 +68,13 @@ func projectBinarySchema(args []Argument, s *schema.ToolInputSchema) {
 	}
 	if files {
 		if _, exists := s.Properties["Payload"]; !exists {
-			s.Properties["Payload"] = map[string]interface{}{"type": "object"}
+			s.Properties["Payload"] = map[string]interface{}{"type": "object", "additionalProperties": true, "description": "Optional action-specific multipart form fields. Each member is written as a separate form field alongside Files."}
 		}
 	}
 	if raw {
 		if _, exists := s.Properties["Blob"]; !exists {
 			s.Properties["Blob"] = descriptorSchema()
+			s.Properties["Blob"]["description"] = "Base64-encoded binary request body; use instead of JSON when supported"
 		}
 	}
 	if files || raw {

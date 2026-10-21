@@ -2,9 +2,11 @@ package report
 
 import (
 	"context"
+	"errors"
 	"reflect"
 	"testing"
 
+	"github.com/viant/bindly"
 	"github.com/viant/bindly/locator"
 	"github.com/viant/datly/bootstrap"
 	"github.com/viant/datly/exec"
@@ -159,7 +161,10 @@ func TestHandlerLeavesRequiredFilterFailureToSourceBinding(t *testing.T) {
 		},
 		Input: input.Interface(),
 	})
-	if err == nil || xresponse.ErrorStatusCode(err, 500) != 400 || err.Error() != "Bad Request" {
+	// Bindly reports the absent source parameter directly; retain both its
+	// public 400 diagnostic and the source binding identity.
+	var bindingError *bindly.BindingError
+	if err == nil || xresponse.ErrorStatusCode(err, 500) != 400 || !errors.As(err, &bindingError) || bindingError.Path != "AccountIDs" || bindingError.Name != "AccountIDs" || bindingError.Kind != "query" || bindingError.In != "accountID" || err.Error() != "parameter AccountIDs is required" {
 		t.Fatalf("InvokeComponent() error = %v, want required source filter failure", err)
 	}
 }

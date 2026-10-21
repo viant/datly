@@ -174,6 +174,13 @@ func compatibleTransportCoverage(authority, child InputField) error {
 	if err != nil {
 		return err
 	}
+	// Constructed Authorization JWTs are already hidden by both protocols.
+	// Normalize comparison copies only; retain each owner's visibility metadata.
+	authorizationJWT := authority.verifiedJWT && child.verifiedJWT && transportCoverageKey(authority) == "header:authorization" && transportCoverageKey(child) == "header:authorization"
+	if authorizationJWT {
+		delete(leftTags, "internal")
+		delete(rightTags, "internal")
+	}
 	if !reflect.DeepEqual(leftTags, rightTags) {
 		return fmt.Errorf("different public field tags")
 	}
@@ -199,7 +206,7 @@ func compatibleTransportCoverage(authority, child InputField) error {
 	if e != nil {
 		return e
 	}
-	if ah != ch {
+	if ah != ch && !authorizationJWT {
 		return fmt.Errorf("different public visibility")
 	}
 	return nil

@@ -84,6 +84,7 @@ func TestOriginalMCPMultipartToolSchemaOffersBlobAlongsideJSON(t *testing.T) {
 	require.Contains(t, properties, "Data")
 	require.Contains(t, properties, "Payload")
 	require.Equal(t, "object", properties["Payload"].(map[string]interface{})["type"])
+	require.Equal(t, true, properties["Payload"].(map[string]interface{})["additionalProperties"])
 	require.NotContains(t, schema["required"], "Data")
 	require.NotContains(t, schema["required"], "Payload")
 }
@@ -145,6 +146,7 @@ func TestOriginalMCPHybridBodySchemaOffersEitherJSONOrRawBlob(t *testing.T) {
 	properties := schema["properties"].(map[string]interface{})
 	require.Contains(t, properties, "Body")
 	require.Contains(t, properties, "Blob")
+	require.Equal(t, "Base64-encoded binary request body; use instead of JSON when supported", properties["Blob"].(map[string]interface{})["description"])
 	require.Equal(t, []interface{}{"data"}, properties["Blob"].(map[string]interface{})["required"])
 	require.NotContains(t, schema["required"], "Body")
 	require.NotContains(t, schema["required"], "Blob")

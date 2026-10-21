@@ -3,6 +3,7 @@ package generate
 import (
 	"fmt"
 	"reflect"
+	"sort"
 	"strings"
 
 	"github.com/viant/datly/bootstrap"
@@ -81,6 +82,20 @@ func (r *planResolver) resolveCubes() error {
 	if err != nil {
 		return err
 	}
+	if r.input.Component.RootView.DefaultProjection {
+		identity, identityErr := r.input.Component.RootView.Identity()
+		if identityErr != nil {
+			return identityErr
+		}
+		for _, planned := range p.Views {
+			if planned.Identity == identity && planned.Ownership == ViewLinked {
+				if err = linkedReportDefaultOrder(component, output); err != nil {
+					return err
+				}
+				break
+			}
+		}
+	}
 	// A generated reader's root selector fields live on its companion, not
 	// its business Input. The cube has its own projection and paging controls;
 	// omit only those exact side declarations from this authoring description.
@@ -142,5 +157,53 @@ func (r *planResolver) resolveCubes() error {
 		p.CubeDestination = p.Generation.File("cube", lowerSnake(p.ComponentName)+"_cube.go")
 		p.Report.LinkedFacade = true
 	}
+	return nil
+}
+
+// Only the detached report projection adopts linked defaults. The canonical
+// reader projection and its SQL scan order retain discovery authority.
+func linkedReportDefaultOrder(component *spec.Component, output reflect.Type) error {
+	linked := component.Clone()
+	linked.ReaderGraph = nil
+	linked.RootView.Columns = nil
+	if err := bootstrap.CompileOutputColumns(linked, output); err != nil {
+		return err
+	}
+	defaults, err := (bootstrap.ViewProjection{View: linked.RootView}).Columns()
+	if err != nil {
+		return err
+	}
+	projection, err := (bootstrap.ViewProjection{View: component.RootView}).Columns()
+	if err != nil {
+		return err
+	}
+	ranks := map[string]int{}
+	for i, item := range defaults {
+		ranks[strings.ToLower(item.Name)] = i
+	}
+	var positions []int
+	var matched []bootstrap.OutputColumn
+	for i, item := range projection {
+		if _, ok := ranks[strings.ToLower(item.Name)]; ok {
+			positions = append(positions, i)
+			matched = append(matched, item)
+		}
+	}
+	sort.SliceStable(matched, func(i, j int) bool {
+		return ranks[strings.ToLower(matched[i].Name)] < ranks[strings.ToLower(matched[j].Name)]
+	})
+	// ViewProjection omits empty columns. Associate the selected original pointers
+	// rather than treating its compacted indexes as canonical column indexes.
+	ordered := make(map[*spec.Column]*spec.Column, len(positions))
+	for i, position := range positions {
+		ordered[projection[position].Column] = matched[i].Column
+	}
+	columns := append([]*spec.Column(nil), component.RootView.Columns...)
+	for i, column := range columns {
+		if replacement, ok := ordered[column]; ok {
+			columns[i] = replacement
+		}
+	}
+	component.RootView.Columns = columns
 	return nil
 }

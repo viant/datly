@@ -13,6 +13,7 @@ import (
 	"github.com/viant/bindly"
 	"github.com/viant/datly/bootstrap"
 	"github.com/viant/datly/bootstrap/routes"
+	"github.com/viant/datly/internal/typeidentity"
 	"github.com/viant/datly/spec"
 	"github.com/viant/datly/tag"
 	"github.com/viant/datly/transcribe/dql"
@@ -402,9 +403,17 @@ func validateSourceHandlerParameters(loader types.Importer, fields, outputs map[
 			return fmt.Errorf("handler parameter %q requiredness conflicts with source contract", param.Name)
 		}
 		typeExpr := param.TypeExpr
-		backedSplit := backedQueryStringSplit(param, &spec.Parameter{TypeExpr: binding.DataType, Source: spec.BindSource{Kind: binding.Location.Kind}, Required: binding.Required, WireTypeExpr: field.tags.Get("wireType")}, types.Identical(field.typ, types.Typ[types.String])) && field.tags.Get("codec") == ""
+		declared, declaredErr := types.Eval(token.NewFileSet(), scope, token.NoPos, param.TypeExpr)
+		persistedType, persistedErr := sourcePersistedScalarType(loader, scope, field.pkg, binding.DataType)
+		_, pair := typeidentity.SourceScalarPair(declared.Type, field.typ)
+		outputMatches := true
+		if param.OutputTypeExpr != "" {
+			output, err := types.Eval(token.NewFileSet(), scope, token.NoPos, param.OutputTypeExpr)
+			outputMatches = err == nil && types.Identical(output.Type, field.typ)
+		}
+		backedSplit := backedScalarWireSplit(param, &spec.Parameter{TypeExpr: binding.DataType, Source: spec.BindSource{Kind: binding.Location.Kind}, Required: binding.Required, WireTypeExpr: field.tags.Get("wireType")}, pair && declaredErr == nil && persistedErr == nil && types.Identical(declared.Type, persistedType) && outputMatches) && field.tags.Get("codec") == ""
 		if backedSplit {
-			typeExpr = "string"
+			typeExpr = ""
 		}
 
 		if param.Codec != nil {
@@ -656,3 +665,25 @@ func (c *Compiler) compileGeneratedPostFactory(ctx context.Context, source *Sour
 }
 
 // Go's selected source list is available before the generated contracts exist.
+
+// Persisted dataType uses canonical package paths, while DQL expressions use the
+// source scope's imports. Resolve that persisted leaf with the same importer.
+func sourcePersistedScalarType(loader types.Importer, scope, owner *types.Package, expression string) (types.Type, error) {
+	if value, err := types.Eval(token.NewFileSet(), scope, token.NoPos, expression); err == nil && value.IsType() {
+		return value.Type, nil
+	}
+	pointer := strings.HasPrefix(expression, "*")
+	leaf := strings.TrimPrefix(expression, "*")
+	if strings.HasPrefix(leaf, "*") {
+		return nil, fmt.Errorf("nested scalar pointer")
+	}
+	object, err := sourceHandlerNamedType(loader, owner, nil, leaf)
+	if err != nil {
+		return nil, err
+	}
+	result := object.Type()
+	if pointer {
+		result = types.NewPointer(result)
+	}
+	return result, nil
+}

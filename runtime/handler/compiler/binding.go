@@ -11,7 +11,9 @@ import (
 	bindstate "github.com/viant/bindly/state"
 	"github.com/viant/bindly/xform"
 	"github.com/viant/datly/internal/codeclookup"
+	"github.com/viant/datly/internal/typeidentity"
 	"github.com/viant/datly/spec"
+	xshape "github.com/viant/x/shape"
 	xcodec "github.com/viant/xdatly/codec"
 )
 
@@ -20,6 +22,10 @@ import (
 // overrides matching tag metadata; tags can complete an omitted source name
 // only when both sources use the same kind.
 func BuildBindingSpecs(component *spec.Component, inputType reflect.Type, codecs map[string]ParamCodec) ([]bindly.BindingSpec, error) {
+	return buildBindingSpecs(component, inputType, codecs, nil)
+}
+
+func buildBindingSpecs(component *spec.Component, inputType reflect.Type, codecs map[string]ParamCodec, lookup func(string) (reflect.Type, error)) ([]bindly.BindingSpec, error) {
 	if inputType == nil || inputType.Kind() != reflect.Struct {
 		return nil, nil
 	}
@@ -67,7 +73,7 @@ func BuildBindingSpecs(component *spec.Component, inputType reflect.Type, codecs
 				if err := tagged.ValidateBodyNullPolicy(field.Type); err != nil {
 					return nil, err
 				}
-				if err := applyExplicitQueryWire(field, &tagged); err != nil {
+				if err := applyExplicitScalarWireResolved(field, &tagged, lookup); err != nil {
 					return nil, err
 				}
 				result = append(result, tagged)
@@ -91,7 +97,7 @@ func BuildBindingSpecs(component *spec.Component, inputType reflect.Type, codecs
 			if err := compiled.ValidateBodyNullPolicy(field.Type); err != nil {
 				return nil, err
 			}
-			if err := applyExplicitQueryWire(field, &compiled); err != nil {
+			if err := applyExplicitScalarWireResolved(field, &compiled, lookup); err != nil {
 				return nil, err
 			}
 			result = append(result, compiled)
@@ -234,9 +240,29 @@ func (t *codecTransformer) Transform(ctx context.Context, resolver locator.Resol
 	}))
 }
 
-// applyExplicitQueryWire lowers persisted dataType discovery authority only.
-func applyExplicitQueryWire(field reflect.StructField, binding *bindly.BindingSpec) error {
-	if binding.Location.Kind != "query" || (binding.Required != nil && *binding.Required) || strings.TrimSpace(binding.DataType) != "*string" || field.Type != reflect.TypeOf("") || binding.Transformer != nil || binding.SourceType != nil {
+// applyExplicitScalarWire canonicalizes explicit dataType discovery authority only.
+func applyExplicitScalarWire(field reflect.StructField, binding *bindly.BindingSpec) error {
+	return applyExplicitScalarWireResolved(field, binding, nil)
+}
+
+func applyExplicitScalarWireResolved(field reflect.StructField, binding *bindly.BindingSpec, lookup func(string) (reflect.Type, error)) error {
+	if binding.Transformer != nil || binding.SourceType != nil {
+		return nil
+	}
+	switch binding.Location.Kind {
+	case "query", "form", "path":
+	default:
+		return nil
+	}
+	if strings.TrimSpace(binding.DataType) == "" {
+		return nil
+	}
+	wire, err := (xshape.Runtime{Lookup: lookup}).Type(binding.DataType)
+	if err != nil {
+		return nil
+	} // Discovery must not reject an ordinary binding.
+	_, ok := typeidentity.ReflectScalarPair(wire, field.Type)
+	if !ok {
 		return nil
 	}
 	param, _ := binding.Extension.(*spec.Parameter)
@@ -249,13 +275,13 @@ func applyExplicitQueryWire(field reflect.StructField, binding *bindly.BindingSp
 	if param != nil && (param.WireSchema != nil || len(param.WireSchemas) != 0) {
 		return nil
 	}
-	if param == nil {
-		param = &spec.Parameter{}
-	} else {
-		copy := *param
-		param = &copy
+	// The canonical Extension pointer belongs to selector ownership checks.
+	// Persist only the resolved wire spelling in the existing DataType carrier;
+	// immutable route discovery derives its schema without replacing Extension.
+	canonical, err := (xshape.Resolver{Qualifier: func(pkg, _ string) string { return pkg }}).Expression(wire)
+	if err != nil {
+		return nil
 	}
-	param.WireSchema = &spec.WireSchema{Type: "string", Nullable: true}
-	binding.Extension = param
+	binding.DataType = canonical
 	return nil
 }

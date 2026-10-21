@@ -10,6 +10,7 @@ import (
 	"github.com/viant/bindly"
 	docs "github.com/viant/datly/documentation"
 	"github.com/viant/datly/internal/selectorcompanion"
+	"github.com/viant/datly/internal/typeidentity"
 	"github.com/viant/datly/runtime/auth"
 	"github.com/viant/datly/spec"
 	xshape "github.com/viant/x/shape"
@@ -109,6 +110,7 @@ func NewInputContract(inputType reflect.Type, projection *bindly.Projection, rou
 			if err != nil {
 				return nil, fmt.Errorf("route input contract %s field %s: %w", key, binding.Path, err)
 			}
+			scalarSchema := bindingScalarWireSchema(destinationField, binding)
 			binding = cloneBindingSpec(binding)
 			if binding.SourceType == nil && binding.BodyNullPolicy == "" {
 				binding.SourceType = destinationType
@@ -128,6 +130,9 @@ func NewInputContract(inputType reflect.Type, projection *bindly.Projection, rou
 			wireSchema, wireSchemas, err := bindingWireSchema(binding)
 			if err != nil {
 				return nil, fmt.Errorf("route input contract %s field %s: %w", key, binding.Path, err)
+			}
+			if wireSchema == nil && len(wireSchemas) == 0 && route.WireTypes[binding.Path] == nil {
+				wireSchema = scalarSchema
 			}
 			wireType := route.WireTypes[binding.Path]
 			if wireType != nil && (wireSchema != nil || len(wireSchemas) != 0) {
@@ -443,6 +448,11 @@ func validateWireSchema(schema *spec.WireSchema) error {
 	}
 	switch schema.Type {
 	case "string":
+	case "boolean", "integer":
+		if schema.Format != "" {
+			return fmt.Errorf("%s wire schema does not support format %q", schema.Type, schema.Format)
+		}
+		return nil
 	default:
 		return fmt.Errorf("unsupported wire schema type %q", schema.Type)
 	}
@@ -569,4 +579,43 @@ func (c *RouteInputContract) selectorFields() []InputField {
 		result = append(result, InputField{owner: c.selectors.Type(), origin: c.route, path: binding.Path, destinationType: field.Type, binding: binding})
 	}
 	return result
+}
+
+// bindingScalarWireSchema consumes only canonical explicit wire authority.
+// It runs before registry SourceType defaults and never mutates canonical metadata.
+func bindingScalarWireSchema(field reflect.StructField, binding bindly.BindingSpec) *spec.WireSchema {
+	if binding.SourceType != nil || binding.Transformer != nil {
+		return nil
+	}
+	switch binding.Location.Kind {
+	case "query", "form", "path":
+	default:
+		return nil
+	}
+	if binding.DataType == "" || field.Tag.Get("codec") != "" || field.Tag.Get("wireType") != "" {
+		return nil
+	}
+	if param, ok := binding.Extension.(*spec.Parameter); ok && param != nil {
+		if param.Codec != nil || param.WireTypeExpr != "" || reflect.StructTag(param.Tag).Get("wireType") != "" || param.WireSchema != nil || len(param.WireSchemas) != 0 {
+			return nil
+		}
+	}
+	leaf := field.Type
+	if leaf.Kind() == reflect.Pointer {
+		leaf = leaf.Elem()
+	}
+	wire, err := (xshape.Runtime{Lookup: func(name string) (reflect.Type, error) {
+		if leaf.PkgPath() != "" && name == leaf.PkgPath()+"."+leaf.Name() {
+			return leaf, nil
+		}
+		return nil, fmt.Errorf("unresolved scalar identity %q", name)
+	}}).Type(binding.DataType)
+	if err != nil {
+		return nil
+	}
+	pair, ok := typeidentity.ReflectScalarPair(wire, field.Type)
+	if !ok {
+		return nil
+	}
+	return &spec.WireSchema{Type: pair.Type, Nullable: pair.Nullable}
 }

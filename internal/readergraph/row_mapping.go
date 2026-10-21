@@ -10,9 +10,9 @@ import (
 	xshape "github.com/viant/x/shape"
 )
 
-// Projection names may be native SQLX aliases rather than Go identifiers.
+// ResolveRowColumn matches projection names through native SQLX aliases or Go identifiers.
 // Only the actual row declaration grants field authority; document tags do not.
-func resolveRowColumn(shape *xshape.Type, column *spec.Column) (*xshape.Resolution, error) {
+func ResolveRowColumn(shape *xshape.Type, column *spec.Column) (*xshape.Resolution, error) {
 	fields, err := shape.Fields()
 	if err != nil {
 		return nil, err
