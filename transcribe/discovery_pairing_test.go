@@ -169,3 +169,29 @@ func TestDiscoveryDeclaredPackageWithoutHolderRemainsStandalone(t *testing.T) {
 		t.Fatalf("standalone source changed: %+v", project.Components)
 	}
 }
+
+func TestDiscoverySourceNamePreservesPhysicalResourcesAndPairing(t *testing.T) {
+	base, discovery := declaredPackageProject(t, declaredPackageFixture, declaredPackageDQL)
+	discovery.SourceName = "Records"
+	discovery.Include = append(discovery.Include, "example.com/generated/api/records")
+	for i := 0; i < 2; i++ {
+		project, err := discovery.Compile(context.Background())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(project.Components) != 1 {
+			t.Fatalf("selected source duplicated or renamed sibling: %d", len(project.Components))
+		}
+		result := project.Components[0]
+		if result.Component.Name != "Records" || result.Source.Name != "Records" || result.Source.Path != filepath.Join(base, "source/query.dql") {
+			t.Fatalf("source identity changed: %+v", result.Source)
+		}
+		if result.Component.Routes[0].Path != "/records" {
+			t.Fatalf("route changed: %+v", result.Component.Routes)
+		}
+		adjacent, err := result.Source.Resources.ReadFile("sql/records.sql")
+		if err != nil || string(adjacent) != "SELECT id FROM records WHERE id > 17" {
+			t.Fatalf("source resource changed: %s %v", adjacent, err)
+		}
+	}
+}

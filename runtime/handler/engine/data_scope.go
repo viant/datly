@@ -286,6 +286,20 @@ func (c dmlCapability) ExecuteWithResult(statement string, dest any, args ...any
 	return service.ExecuteWithResult(statement, dest, args...)
 }
 
+// ExecuteWithOptionalResult forwards the fixed optional identity policy under the mutation guard.
+func (c dmlCapability) ExecuteWithOptionalResult(statement string, dest any, args ...any) error {
+	if err := c.guard.check("ExecuteWithOptionalResult"); err != nil {
+		return err
+	}
+	service, ok := c.service.(interface {
+		ExecuteWithOptionalResult(string, any, ...any) error
+	})
+	if !ok {
+		return fmt.Errorf("native buffered statement optional result capability unavailable")
+	}
+	return service.ExecuteWithOptionalResult(statement, dest, args...)
+}
+
 // sequencerCapability exposes allocation and optional pending-ID reservation
 // under the focused sequencer key, without exposing database ownership.
 type sequencerCapability struct {

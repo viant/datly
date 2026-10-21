@@ -10,7 +10,10 @@ import (
 	"github.com/viant/datly/constant/identifier"
 	plan "github.com/viant/datly/transcribe/handler/ast"
 	"github.com/viant/sqlparser"
+	sqlexpr "github.com/viant/sqlparser/expr"
+	"github.com/viant/sqlparser/node"
 	sqlsource "github.com/viant/sqlparser/source"
+	"github.com/viant/sqlx"
 	"github.com/viant/velty/ast/expr"
 	"github.com/viant/velty/ast/stmt"
 	veltyparser "github.com/viant/velty/parser"
@@ -36,20 +39,23 @@ func (c *Compiler) CompileStatement(source string, authority map[string]plan.Sta
 		service = selector
 	}
 	if service == nil || service.ID != "dml" {
-		return nil, fmt.Errorf("statement program requires dml.Execute, dml.ExecuteWithResult, dml.Merge, dml.Insert or dml.Delete")
+		return nil, fmt.Errorf("statement program requires dml.Execute, dml.ExecuteWithResult, dml.ExecuteWithOptionalResult, dml.Merge, dml.Insert, dml.InsertIgnore, dml.Update or dml.Delete")
 	}
 	method, ok := service.X.(*expr.Select)
-	if !ok || (method.ID != "ExecuteWithResult" && method.ID != "Execute" && method.ID != "Merge" && method.ID != "Insert" && method.ID != "Delete") {
-		return nil, fmt.Errorf("statement program requires dml.Execute, dml.ExecuteWithResult, dml.Merge, dml.Insert or dml.Delete")
+	if !ok || (method.ID != "ExecuteWithResult" && method.ID != "ExecuteWithOptionalResult" && method.ID != "Execute" && method.ID != "Merge" && method.ID != "Insert" && method.ID != "Delete" && method.ID != "InsertIgnore" && method.ID != "Update") {
+		return nil, fmt.Errorf("statement program requires dml.Execute, dml.ExecuteWithResult, dml.ExecuteWithOptionalResult, dml.Merge, dml.Insert, dml.InsertIgnore, dml.Update or dml.Delete")
 	}
-	if method.ID == "Insert" || method.ID == "Delete" {
+	if method.ID == "Update" {
+		return compileUpdateStatement(method, authority)
+	}
+	if method.ID == "Insert" || method.ID == "Delete" || method.ID == "InsertIgnore" {
 		return compileBatchStatement(method, authority)
 	}
 	if method.ID == "Merge" {
 		return compileMergeStatement(method, authority)
 	}
 	argumentOffset := 1
-	if method.ID == "ExecuteWithResult" {
+	if method.ID == "ExecuteWithResult" || method.ID == "ExecuteWithOptionalResult" {
 		argumentOffset = 2
 	}
 	call, ok := method.X.(*expr.Call)
@@ -93,7 +99,7 @@ func (c *Compiler) CompileStatement(source string, authority map[string]plan.Sta
 	}
 	// LastInsertId is an insertion result. DDL, transaction control, and other
 	// statement kinds cannot acquire this capability through authoring.
-	if method.ID == "ExecuteWithResult" && !kind.IsInsert() {
+	if (method.ID == "ExecuteWithResult" || method.ID == "ExecuteWithOptionalResult") && !kind.IsInsert() {
 		return nil, fmt.Errorf("LastInsertId requires an INSERT statement")
 	}
 	switch kind {
@@ -102,7 +108,7 @@ func (c *Compiler) CompileStatement(source string, authority map[string]plan.Sta
 		if err != nil {
 			return nil, fmt.Errorf("statement INSERT: %w", err)
 		}
-		if method.ID == "ExecuteWithResult" && (len(parsed.Columns) == 0 || len(parsed.Values) != len(parsed.Columns)) {
+		if (method.ID == "ExecuteWithResult" || method.ID == "ExecuteWithOptionalResult") && (len(parsed.Columns) == 0 || len(parsed.Values) != len(parsed.Columns)) {
 			return nil, fmt.Errorf("statement result requires one explicit INSERT row; batching is unsupported")
 		}
 	case sqlparser.KindUpdate:
@@ -122,15 +128,14 @@ func (c *Compiler) CompileStatement(source string, authority map[string]plan.Sta
 		switch sqlText[pos] {
 		case '$', '#':
 			return nil, fmt.Errorf("statement SQL requires static executable text")
-		case '?':
-			bindings++
 		}
 	}
+	bindings = sqlx.ParseParameters(sqlText).PositionalCount()
 	if bindings != len(call.Args)-argumentOffset {
 		return nil, fmt.Errorf("statement has %d placeholders but %d arguments", bindings, len(call.Args)-argumentOffset)
 	}
 	result := &plan.StatementPlan{SQL: literal.Value, Method: method.ID, SQLConstants: constantNames}
-	if method.ID == "ExecuteWithResult" {
+	if method.ID == "ExecuteWithResult" || method.ID == "ExecuteWithOptionalResult" {
 		dest, err := resolveStatementSelector(call.Args[1], authority)
 		if err != nil {
 			return nil, fmt.Errorf("result destination: %w", err)
@@ -145,7 +150,12 @@ func (c *Compiler) CompileStatement(source string, authority map[string]plan.Sta
 		if err != nil {
 			return nil, fmt.Errorf("statement argument %d: %w", i+1, err)
 		}
-		if !statementScalar(field.Type.Name) {
+		if field.Type.Name == "[]int" {
+			if method.ID != "Execute" || (kind != sqlparser.KindUpdate && kind != sqlparser.KindDelete) || !statementCollectionPosition(sqlText, i) {
+				return nil, fmt.Errorf("statement argument %d must be a typed scalar field or a []int binding in a positive UPDATE or DELETE IN predicate", i+1)
+			}
+			result.CollectionOrdinals = append(result.CollectionOrdinals, i)
+		} else if !StatementScalarType(field.Type.Name) {
 			return nil, fmt.Errorf("statement argument %d must be a typed scalar field", i+1)
 		}
 		result.Arguments = append(result.Arguments, field)
@@ -184,23 +194,9 @@ func staticStatementCount(text string) int {
 }
 
 func resolveStatementSelector(value any, authority map[string]plan.StatementSelector) (plan.StatementSelector, error) {
-	selector, ok := value.(*expr.Select)
-	if !ok {
-		return plan.StatementSelector{}, fmt.Errorf("a canonical field selector is required")
-	}
-	var parts []string
-	for selector != nil {
-		if !token.IsIdentifier(selector.ID) || token.Lookup(selector.ID).IsKeyword() {
-			return plan.StatementSelector{}, fmt.Errorf("invalid selector %q", selector.ID)
-		}
-		parts = append(parts, selector.ID)
-		if selector.X == nil {
-			break
-		}
-		selector, ok = selector.X.(*expr.Select)
-		if !ok {
-			return plan.StatementSelector{}, fmt.Errorf("calls, indexing and dynamic selectors are unsupported")
-		}
+	parts, err := statementSelectorPath(value)
+	if err != nil {
+		return plan.StatementSelector{}, err
 	}
 	key := strings.Join(parts, ".")
 	field, ok := authority[key]
@@ -223,7 +219,9 @@ func signedStatementInteger(name string) bool {
 	}
 	return false
 }
-func statementScalar(name string) bool {
+
+// StatementScalarType reports the existing scalar argument boundary for canonical metadata consumers.
+func StatementScalarType(name string) bool {
 	// Nullable arguments retain their pointer selectors for database/sql. Strip
 	// exactly one level; pointer results and non-scalar pointees stay invalid.
 	name = strings.TrimPrefix(name, "*")
@@ -235,4 +233,122 @@ func statementScalar(name string) bool {
 		return true
 	}
 	return false
+}
+
+// Mark positional placeholders through SQLX so protected text and named parameters
+// cannot shift their ordinals. Only an IN predicate with a single placeholder
+// value and scalar identifier left operand grants collection authority.
+func statementCollectionPosition(sql string, ordinal int) bool {
+	marker := "datlyNativeCollection"
+	for strings.Contains(sql, marker) {
+		marker += "_"
+	}
+	marked := sqlx.ParseParameters(sql).RewritePositional(func(i int) string {
+		if i == ordinal {
+			return ":" + marker
+		}
+		return "?"
+	})
+	var qualify *sqlexpr.Qualify
+	switch sqlparser.ParseKind(marked) {
+	case sqlparser.KindUpdate:
+		parsed, err := sqlparser.ParseUpdate(marked)
+		if err != nil {
+			return false
+		}
+		qualify = parsed.Qualify
+	case sqlparser.KindDelete:
+		parsed, err := sqlparser.ParseDelete(marked)
+		if err != nil {
+			return false
+		}
+		qualify = parsed.Qualify
+	default:
+		return false
+	}
+	if qualify == nil {
+		return false
+	}
+	var visit func(node.Node) bool
+	visit = func(n node.Node) bool {
+		switch actual := n.(type) {
+		case *sqlexpr.Parenthesis:
+			return visit(actual.X)
+		case *sqlexpr.Binary:
+			// A wholly parenthesized WHERE is represented by the parser as a
+			// transparent binary shell around its parenthesis node.
+			if actual.Op == "" && actual.Y == nil {
+				if _, ok := actual.X.(*sqlexpr.Parenthesis); ok {
+					return visit(actual.X)
+				}
+			}
+			if strings.EqualFold(actual.Op, "AND") || strings.EqualFold(actual.Op, "OR") {
+				return visit(actual.X) || visit(actual.Y)
+			}
+			if !strings.EqualFold(actual.Op, "IN") || sqlexpr.Identity(actual.X) == nil {
+				return false
+			}
+			right, ok := actual.Y.(*sqlexpr.Parenthesis)
+			if !ok {
+				return false
+			}
+			placeholder, ok := right.X.(*sqlexpr.Placeholder)
+			return ok && strings.TrimPrefix(placeholder.Name, ":") == marker
+		}
+		return false
+	}
+	return visit(qualify.X)
+}
+
+// StatementSelectorPaths returns only static selector arguments referenced by a
+// direct statement call. It grants no authority; CompileStatement still validates
+// the complete program and every resolved selector.
+func StatementSelectorPaths(source string) []plan.FieldPath {
+	root, _, err := veltyparser.ParseWithSpansDetailed([]byte(source))
+	if err != nil {
+		return nil
+	}
+	var paths []plan.FieldPath
+	for _, node := range root.Statements() {
+		service, ok := node.(*expr.Select)
+		if !ok || service.ID != "dml" {
+			continue
+		}
+		method, ok := service.X.(*expr.Select)
+		if !ok {
+			continue
+		}
+		call, ok := method.X.(*expr.Call)
+		if !ok {
+			continue
+		}
+		for _, argument := range call.Args {
+			if path, err := statementSelectorPath(argument); err == nil {
+				paths = append(paths, path)
+			}
+		}
+	}
+	return paths
+}
+
+func statementSelectorPath(value any) (plan.FieldPath, error) {
+	selector, ok := value.(*expr.Select)
+	if !ok {
+		return nil, fmt.Errorf("a canonical field selector is required")
+	}
+	var parts []string
+	for selector != nil {
+		if !token.IsIdentifier(selector.ID) || token.Lookup(selector.ID).IsKeyword() {
+			return nil, fmt.Errorf("invalid selector %q", selector.ID)
+		}
+		parts = append(parts, selector.ID)
+		if selector.X == nil {
+			break
+		}
+		selector, ok = selector.X.(*expr.Select)
+		if !ok {
+			return nil, fmt.Errorf("calls, indexing and dynamic selectors are unsupported")
+		}
+	}
+	return parts, nil
 }

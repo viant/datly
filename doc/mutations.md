@@ -211,11 +211,42 @@ It does not allocate IDs, classify inserts versus updates, retry statements,
 or query an identity afterward. Other writable graphs continue to use their
 existing generated mutation policy.
 
+Use `ExecuteWithOptionalResult` only when the source contract permits an
+unavailable inserted identity. It accepts the same static INSERT and destination
+as `ExecuteWithResult`. A `LastInsertId` extraction error or nonpositive ID leaves
+the destination unchanged; a positive ID uses the same checked assignment.
+SQL execution, overflow, cancellation and transaction completion errors still
+fail normally. The default `ExecuteWithResult` remains strict. Optional result
+handling adds no identity query or retry; any existing conditional fallback
+belongs to the application after successful completion.
+
 Arguments may also be one pointer to a supported scalar, including `*time.Time`.
 A nil pointer binds SQL NULL; a nonnil pointer binds its value, including zero.
 The original pointer is queued without dereferencing or snapshotting, so keep
 its target stable until the caller completes the buffer. Pointer identity
 destinations, double pointers, records and collections remain unsupported.
+
+### Typed buffered updates
+
+For an existing typed record update, use the canonical two-selector statement:
+
+```sql
+$dml.Update($Input.Table, $Input.Row)
+```
+
+Declare Table as a string input and Row as a pointer to the existing named record
+using its qualified type/import. Transcription generates a call to the existing
+`Update(string, any) error` capability, retaining the original record pointer,
+SQLX mapping, sparse Has markers and NULL values. It adds no reads, allocation,
+classification, flush or transaction owner. The queued record is observed using
+the existing runtime timing; do not mutate it after the application has finalized
+its intended values.
+
+Prefer this form over expanding a typed update into a column list and opaque
+`Execute` SQL. Typed operations preserve buffered record metadata used by later
+reference validation; an opaque SQL statement intentionally cannot provide that
+proof. Never compensate by flushing the caller early or weakening validation.
+Existing legacy Update syntax retains its original transcription path.
 
 Buffered statements can use declared immutable identifier constants with the
 same quoted identifier notation as reader SQL. For example, a declared
@@ -252,6 +283,24 @@ execution. Empty slices queue no write. Root completion owns the transaction,
 including rollback if a later chunk fails. Explicit batch size does not create
 an independent commit per chunk. Existing two-argument DML calls retain their
 existing handling.
+
+For MySQL's fixed `INSERT IGNORE` behavior, use the same four selectors:
+
+```sql
+$dml.InsertIgnore($Input.Table, $Input.Rows, $Input.BatchSize, $Output.Affected)
+```
+
+This emits `INSERT IGNORE INTO` through SQLX's existing row/column binder and
+requires MySQL; other dialects reject the mode. It accepts no fifth conflict
+suffix. Ordinary `Insert` continues to emit `INSERT INTO`. Map only the intended
+insert columns: when the database owns an omitted AUTO_INCREMENT ID, leave that
+ID out of the row type. A mapped identity still follows the existing source-slice
+requirement for a native allocated identity before queue admission. Perform
+business filtering and first-occurrence deduplication before queueing, retain
+row order, and set BatchSize to the complete qualifying row count to preserve
+one multirow statement. Empty rows remain a no-op and completion remains with
+the caller. `ON DUPLICATE KEY UPDATE`, including a no-op update, does not preserve
+IGNORE's warning, trigger, or timestamp behavior and is not a substitute.
 
 For a MySQL conflict update, Insert accepts an optional fifth SQL string literal:
 

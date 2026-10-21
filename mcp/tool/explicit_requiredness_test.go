@@ -9,10 +9,10 @@ import (
 	"github.com/viant/datly/spec"
 )
 
-// Discovery must retain explicit requiredness even where legacy inference treats
-// pointers, query parameters and slices as optional. Aliases share the canonical
-// required argument; discovery advertises it only once.
-func TestCompilerAdvertisesExplicitRequiredNamedArguments(t *testing.T) {
+// Legacy discovery leaves these pointer and slice fields optional, even when
+// runtime binding requires them. Preserve omission rejection and alias handling
+// independently of the advertised required list.
+func TestCompilerSeparatesLegacyDiscoveryFromRuntimeRequiredness(t *testing.T) {
 	type input struct {
 		Value *string `json:"value,omitempty" mcp:"name=Value,aliases=value"`
 	}
@@ -38,7 +38,7 @@ func TestCompilerAdvertisesExplicitRequiredNamedArguments(t *testing.T) {
 					t.Fatal(err)
 				}
 				metadata := plan.Metadata().InputSchema
-				if !reflect.DeepEqual(metadata.Required, []string{"Value"}) || len(metadata.Properties) != 1 || metadata.Properties["Value"] == nil {
+				if len(metadata.Required) != 0 || len(metadata.Properties) != 1 || metadata.Properties["Value"] == nil {
 					t.Fatalf("schema = %+v", metadata)
 				}
 				if _, err := plan.Scope(nil); err == nil {

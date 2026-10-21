@@ -389,10 +389,12 @@ func CheckRows(d *Document, lookup xshape.Lookup) error {
 				expression = "*" + expression
 			}
 			if typ.Cardinality == spec.CardinalityMany {
-				if typ.SlicePointer {
-					expression = "*" + expression
-				}
 				expression = "[]" + expression
+			}
+			// SlicePointer wraps the collection; Pointer wraps its element.
+			// Preserve *[]T rather than interpreting it as []*T.
+			if typ.SlicePointer {
+				expression = "*" + expression
 			}
 			canonical, err := (xshape.Resolver{Package: row.PkgPath}).Canonical(expression)
 			if err != nil {

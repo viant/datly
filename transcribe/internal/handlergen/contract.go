@@ -2,15 +2,23 @@ package handlergen
 
 import (
 	"fmt"
+	"strings"
 
 	gen "github.com/viant/datly/transcribe/generate"
 	plan "github.com/viant/datly/transcribe/handler/ast"
+ "github.com/viant/datly/transcribe/internal/bodygraph"
 	xshape "github.com/viant/x/shape"
 )
 
 // Generated write handlers copy the selected body into the selected output.
 // Validate that assignment under final package/type authority before emitting.
 func (g *Generation) validateContractAssignment(semantic *plan.Plan, generated *gen.Plan) error {
+	// Native auxiliary component hooks own their result. The runtime copies a
+	// body only when the canonical output actually has an entity-compatible slot.
+	root := g.compiled.Component.RootView
+	if g.options.Handler.Target == HandlerGo && g.options.Handler.Go.Execution == GoExecutionMutation && root != nil && strings.TrimSpace(root.EntityHooks) != "" && bodygraph.AllAuxiliary(root) {
+		return nil
+	}
 	if semantic.Output == nil {
 		return nil
 	}

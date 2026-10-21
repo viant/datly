@@ -79,6 +79,11 @@ func (p *Plan) scope(source Source, request *http.Request, requestOptions []requ
 		encodedForm = media == "multipart/form-data"
 	}
 	for _, argument := range p.arguments {
+		// Omitted optional query values still belong to this invocation's
+		// native query source, including deferred selector companions.
+		if argument.Source.Kind == requestprovider.QueryKind && queryValues == nil {
+			queryValues = make(url.Values)
+		}
 		if request != nil && (encodedForm && argument.Source.Kind == requestprovider.FormKind || argument.Source.Kind == requestprovider.BodyKind) {
 			continue
 		}
@@ -171,6 +176,17 @@ func (a Arguments) resolve(argument Argument) (resolvedValue, bool, error) {
 	raw, found := a[argument.PublicName]
 	if !found {
 		return resolvedValue{}, false, nil
+	}
+	// Legacy MCP omits null and empty-string query arguments before native
+	// binding, so defaults and required checks see absence. Do not apply this
+	// to bodies or converted values: false, zero and explicit body null matter.
+	if argument.Source.Kind == requestprovider.QueryKind {
+		if raw == nil {
+			return resolvedValue{}, false, nil
+		}
+		if text, ok := raw.(string); ok && text == "" {
+			return resolvedValue{}, false, nil
+		}
 	}
 	encoded, err := json.Marshal(raw)
 	if err != nil {

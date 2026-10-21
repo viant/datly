@@ -76,6 +76,7 @@ func TestOriginalMCPMultipartToolSchemaOffersBlobAlongsideJSON(t *testing.T) {
 	files := properties["Files"].(map[string]interface{})
 	require.Equal(t, "array", files["type"])
 	item := files["items"].(map[string]interface{})
+	require.Equal(t, []interface{}{"data"}, item["required"])
 	fields := item["properties"].(map[string]interface{})
 	require.Contains(t, fields, "data")
 	require.Contains(t, fields, "filename")
@@ -144,6 +145,7 @@ func TestOriginalMCPHybridBodySchemaOffersEitherJSONOrRawBlob(t *testing.T) {
 	properties := schema["properties"].(map[string]interface{})
 	require.Contains(t, properties, "Body")
 	require.Contains(t, properties, "Blob")
+	require.Equal(t, []interface{}{"data"}, properties["Blob"].(map[string]interface{})["required"])
 	require.NotContains(t, schema["required"], "Body")
 	require.NotContains(t, schema["required"], "Blob")
 }

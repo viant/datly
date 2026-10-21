@@ -76,7 +76,7 @@ func TestCompilerBuildsSchemaAndBindingFromRouteContract(t *testing.T) {
 	metadata := plan.Metadata()
 	if metadata.Name != "search.run" || metadata.Description == nil || *metadata.Description != "Run search" ||
 		metadata.InputSchema.Type != "object" || len(metadata.InputSchema.Properties) != 3 ||
-		!reflect.DeepEqual(metadata.InputSchema.Required, []string{"search_terms"}) {
+		len(metadata.InputSchema.Required) != 0 {
 		t.Fatalf("metadata = %+v", metadata)
 	}
 	search := metadata.InputSchema.Properties["search_terms"]

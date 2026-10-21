@@ -67,6 +67,9 @@ func BuildBindingSpecs(component *spec.Component, inputType reflect.Type, codecs
 				if err := tagged.ValidateBodyNullPolicy(field.Type); err != nil {
 					return nil, err
 				}
+				if err := applyExplicitQueryWire(field, &tagged); err != nil {
+					return nil, err
+				}
 				result = append(result, tagged)
 			}
 			continue
@@ -86,6 +89,9 @@ func BuildBindingSpecs(component *spec.Component, inputType reflect.Type, codecs
 				return nil, err
 			}
 			if err := compiled.ValidateBodyNullPolicy(field.Type); err != nil {
+				return nil, err
+			}
+			if err := applyExplicitQueryWire(field, &compiled); err != nil {
 				return nil, err
 			}
 			result = append(result, compiled)
@@ -226,4 +232,30 @@ func (t *codecTransformer) Transform(ctx context.Context, resolver locator.Resol
 			return resolver.Value(ctx, &bindstate.Location{Kind: "param", In: name})
 		})
 	}))
+}
+
+// applyExplicitQueryWire lowers persisted dataType discovery authority only.
+func applyExplicitQueryWire(field reflect.StructField, binding *bindly.BindingSpec) error {
+	if binding.Location.Kind != "query" || (binding.Required != nil && *binding.Required) || strings.TrimSpace(binding.DataType) != "*string" || field.Type != reflect.TypeOf("") || binding.Transformer != nil || binding.SourceType != nil {
+		return nil
+	}
+	param, _ := binding.Extension.(*spec.Parameter)
+	if field.Tag.Get("codec") != "" || field.Tag.Get("wireType") != "" {
+		return nil
+	}
+	if param != nil && (param.Codec != nil || param.WireTypeExpr != "" || reflect.StructTag(param.Tag).Get("wireType") != "") {
+		return nil
+	}
+	if param != nil && (param.WireSchema != nil || len(param.WireSchemas) != 0) {
+		return nil
+	}
+	if param == nil {
+		param = &spec.Parameter{}
+	} else {
+		copy := *param
+		param = &copy
+	}
+	param.WireSchema = &spec.WireSchema{Type: "string", Nullable: true}
+	binding.Extension = param
+	return nil
 }

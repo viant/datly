@@ -390,7 +390,7 @@ func (p *Program) fieldsOf(typeOf reflect.Type) fieldSet {
 }
 
 // graphIndex answers "which earlier insert produces this foreign-key value"
-// in constant time. It is rebuilt whenever the frame list changes, replacing
+// in constant time. It is rebuilt when frames or phase-owned link values change, replacing
 // the previous frame-by-frame scans that made ordering and validation
 // quadratic in the batch size.
 type graphIndex struct {
@@ -648,6 +648,11 @@ func (p *Program) allocate(ctx context.Context, sequencer xhandler.Sequencer, re
 }
 
 func (p *Program) reconcileLinks(requireResolved bool) error {
+	// Allocation and AfterSequence can replace producer key values in place,
+	// while this pass can update FK values without replacing the frame slice.
+	// Refresh their value-keyed evidence once at the phase boundary; subsequent
+	// reference validation still shares one index for the complete graph.
+	p.graph = nil
 	if err := p.validateActionPolicyFacts(); err != nil {
 		return err
 	}
@@ -905,8 +910,13 @@ func (h *Handler) CaptureInput(ctx context.Context, input any) (any, error) {
 		return nil, err
 	}
 	program.usePhaseObserver(ctx)
-	if err = prepareReadIndexes(ctx, input); err != nil {
-		return nil, err
+	// Whole-component auxiliary lifecycles own their input processing. Their
+	// independent reads need not have unique keys (for example a joined read).
+	// Keep generated indexes available explicitly without eagerly requiring them.
+	if !h.metadata.componentLifecycle {
+		if err = prepareReadIndexes(ctx, input); err != nil {
+			return nil, err
+		}
 	}
 	return program, nil
 }
@@ -1237,8 +1247,10 @@ func (p *Program) prepare(ctx context.Context, binder xhandler.Binder) (err erro
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		entities := reflect.ValueOf(p.input).Elem().Field(p.metadata.InputField)
-		reflect.ValueOf(p.output).Elem().Field(p.metadata.OutputField).Set(entities)
+		if p.metadata.OutputField >= 0 {
+			entities := reflect.ValueOf(p.input).Elem().Field(p.metadata.InputField)
+			reflect.ValueOf(p.output).Elem().Field(p.metadata.OutputField).Set(entities)
+		}
 		frame := &Frame{Entity: reflect.ValueOf(p.input), Hook: p.hook, Record: p.metadata.Root}
 		if err := p.callEntityHook(ctx, "Init", frame); err != nil {
 			return err
@@ -2627,7 +2639,7 @@ func CompileWithIdentifierProducts(component *spec.Component, inputType, outputT
 			break
 		}
 	}
-	if metadata.OutputField < 0 {
+	if metadata.OutputField < 0 && !componentLifecycle {
 		return nil, fmt.Errorf("writer output has no entity collection for %s", metadata.EntityType)
 	}
 	if component.RootView.Source != nil {

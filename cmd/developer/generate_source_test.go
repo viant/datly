@@ -156,3 +156,24 @@ FROM (SELECT 1 AS ID) r`,
 		t.Fatalf("selected component missing: %v", err)
 	}
 }
+
+func TestTranscribeSourceNameRejectsAmbiguousSelection(t *testing.T) {
+	root := t.TempDir()
+	(testharness.GeneratedModule{Path: "example.com/app"}).Write(t, root)
+	for _, dir := range []string{"source", "source/nested"} {
+		if err := os.MkdirAll(filepath.Join(root, dir), 0700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(root, dir, "patch.dql"), []byte("#setting($_ = $route('/records','GET'))\nSELECT 1 AS ID"), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var out, diagnostic bytes.Buffer
+	status := Run(context.Background(), []string{"transcribe", "get", "-dir", root, "-source", "patch.dql", "-source-name", "LocationListPatch", "example.com/app/source/..."}, &out, &diagnostic)
+	if status == 0 || !strings.Contains(diagnostic.String(), "source-name requires exactly one selected source file") {
+		t.Fatalf("ambiguous name accepted: %d %s", status, diagnostic.String())
+	}
+	if _, err := os.Stat(filepath.Join(root, "api")); !os.IsNotExist(err) {
+		t.Fatalf("failed selection published artifacts: %v", err)
+	}
+}

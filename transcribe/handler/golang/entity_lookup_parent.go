@@ -8,6 +8,7 @@ import (
 	"go/token"
 
 	plan "github.com/viant/datly/transcribe/handler/ast"
+	"github.com/viant/datly/transcribe/internal/goliteral"
 )
 
 func (e *entityEmitter) parentLookupMethod(parent *recordLowering, relation *plan.RelationPlan) (ast.Decl, error) {
@@ -36,7 +37,7 @@ func (e *entityEmitter) parentLookupMethod(parent *recordLowering, relation *pla
 			return nil, err
 		}
 		field := namedField(link.Child.Field, typ)
-		field.Tag = stringExpr(`sqlx:"` + lookup.Columns[i] + `"`).(*ast.BasicLit)
+		field.Tag = &ast.BasicLit{Kind: token.STRING, Value: goliteral.StructTag(`sqlx:"` + lookup.Columns[i] + `"`)}
 		fields = append(fields, field)
 		value := selectExpr(id("row"), source.Field)
 		values = append(values, &ast.KeyValueExpr{Key: id(link.Child.Field), Value: value})

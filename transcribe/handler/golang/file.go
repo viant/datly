@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	plan "github.com/viant/datly/transcribe/handler/ast"
+	"github.com/viant/datly/transcribe/internal/goliteral"
 	xhandler "github.com/viant/xdatly/handler"
 )
 
@@ -92,7 +93,7 @@ func (l *lowerer) dependenciesDeclaration() ast.Decl {
 	fields := []*ast.Field{{
 		Names: []*ast.Ident{ast.NewIdent("DML")},
 		Type:  selectExpr(ast.NewIdent(l.handlerAlias), "DML"),
-		Tag:   &ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(capabilityTag(xhandler.DMLKey))},
+		Tag:   &ast.BasicLit{Kind: token.STRING, Value: goliteral.StructTag(capabilityTag(xhandler.DMLKey))},
 	}}
 	if l.plan.Root.Auxiliary {
 		fields = nil
@@ -101,7 +102,7 @@ func (l *lowerer) dependenciesDeclaration() ast.Decl {
 		fields = append(fields, &ast.Field{
 			Names: []*ast.Ident{ast.NewIdent("Sequencer")},
 			Type:  selectExpr(ast.NewIdent(l.handlerAlias), "Sequencer"),
-			Tag:   &ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(capabilityTag(xhandler.SequencerKey))},
+			Tag:   &ast.BasicLit{Kind: token.STRING, Value: goliteral.StructTag(capabilityTag(xhandler.SequencerKey))},
 		})
 	}
 	return &ast.GenDecl{Tok: token.TYPE, Specs: []ast.Spec{&ast.TypeSpec{

@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"go/ast"
 	"go/parser"
-	"strconv"
 	"strings"
 
 	"github.com/viant/datly/spec"
+	"github.com/viant/datly/transcribe/internal/goliteral"
 )
 
 func scaffoldFile(packageName string, comment string, body string) string {
@@ -154,14 +154,8 @@ func appendFields(b *strings.Builder, fields []Field) {
 		}
 		b.WriteString(field.Type)
 		if field.Tag != "" {
-			if strings.ContainsRune(field.Tag, '`') {
-				b.WriteString(" ")
-				b.WriteString(strconv.Quote(field.Tag))
-			} else {
-				b.WriteString(" `")
-				b.WriteString(field.Tag)
-				b.WriteString("`")
-			}
+			b.WriteString(" ")
+			b.WriteString(goliteral.StructTag(field.Tag))
 		}
 		b.WriteString("\n")
 	}

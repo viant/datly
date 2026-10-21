@@ -18,6 +18,7 @@ import (
 )
 
 type viewPlanner struct {
+	writerBodyGraph  map[*spec.View]bool
 	ordinaryBodyRoot *spec.View
 	auxiliaryGraph   map[*spec.View]bool
 	ordinaryGraph    map[*spec.View]bool
@@ -70,6 +71,9 @@ func (r *planResolver) resolveViews() (map[string]int, error) {
 		parents: map[*spec.View]string{}, dests: map[*spec.View]string{}, visiting: map[*spec.View]bool{},
 		outputs:        map[*spec.Relation]*spec.Parameter{},
 		reuseLeafTypes: len(r.input.SetMarkerViews) == 0,
+	}
+	if planner.nativeMutation {
+		planner.writerBodyGraph = nativeWriterPresentationGraph(root)
 	}
 	borrowedPaths := make([]string, 0, len(r.input.Views))
 	for identity, reference := range r.input.Views {
@@ -730,7 +734,13 @@ func (p *viewPlanner) fields(view *spec.View) ([]Field, error) {
 		selfTag := appendStructTag(`sqlx:"-"`, tag.SelfName, selfValue)
 		fields = append(fields, Field{Name: holder, Type: "[]*" + p.names[view], Tag: selfTag})
 	}
-	if err := applyInferredJSONTags(p.plan, fields, view); err != nil {
+	var presentationErr error
+	if p.factoryBodyViews[identity] || p.auxiliaryGraph[view] || p.writerBodyGraph[view] {
+		presentationErr = applyBodyJSONTags(p.plan, fields, view)
+	} else {
+		presentationErr = applyInferredJSONTags(p.plan, fields, view)
+	}
+	if err := presentationErr; err != nil {
 		return nil, fmt.Errorf("generated view %q: %w", view.Name, err)
 	}
 	return fields, nil

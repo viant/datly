@@ -216,8 +216,10 @@ func ordinaryBodyTags(body, read ordinaryBodyColumn) bool {
 	delete(reader, "sqlx")
 	delete(owner, "validate")
 	delete(reader, "validate")
-	if value, authored := rawBody.Lookup("json"); authored {
-		if _, explicitRead := rawRead.Lookup("json"); !explicitRead && strings.Split(value, ",")[0] == "" {
+	// A shared read uses the body's presentation policy even when its empty
+	// name is inferred. Do not turn that read into a body or relax authored tags.
+	if value := owner["json"]; strings.Split(value, ",")[0] == "" {
+		if _, explicitRead := rawRead.Lookup("json"); !explicitRead {
 			parts := strings.Split(reader["json"], ",")
 			parts[0] = ""
 			normalized := parts[:1]
@@ -232,6 +234,9 @@ func ordinaryBodyTags(body, read ordinaryBodyColumn) bool {
 				}
 			}
 			reader["json"] = strings.Join(normalized, ",")
+			if _, present := owner["json"]; !present && reader["json"] == "" {
+				delete(reader, "json")
+			}
 		}
 	}
 	if _, explicitRead := rawRead.Lookup("json"); !explicitRead && owner["json"] != reader["json"] {

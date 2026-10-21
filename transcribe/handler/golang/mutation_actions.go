@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	plan "github.com/viant/datly/transcribe/handler/ast"
+	"github.com/viant/datly/transcribe/internal/goliteral"
 	xhandler "github.com/viant/xdatly/handler"
 )
 
@@ -118,11 +119,11 @@ func (e *actionEmitter) file() (*ast.File, error) {
 	file := &ast.File{Name: ast.NewIdent(e.l.config.Package)}
 	fields := []*ast.Field{namedField("stage", ast.NewIdent("int")), namedField("failed", ast.NewIdent("bool")), namedField("frames", &ast.StarExpr{X: ast.NewIdent(e.frames.TypeName)}), namedField("previousCaptured", ast.NewIdent("bool"))}
 	input := namedField("Input", &ast.StarExpr{X: parseExpr(e.l.config.InputType)})
-	input.Tag = &ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(capabilityTag(xhandler.InputKey))}
+	input.Tag = &ast.BasicLit{Kind: token.STRING, Value: goliteral.StructTag(capabilityTag(xhandler.InputKey))}
 	fields = append(fields, input)
 	fields = append(fields, namedField("validationState", &ast.StarExpr{X: parseExpr(e.l.config.InputType)}))
 	dml := namedField("DML", selectExpr(ast.NewIdent(e.l.handlerAlias), "DML"))
-	dml.Tag = &ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(capabilityTag(xhandler.DMLKey))}
+	dml.Tag = &ast.BasicLit{Kind: token.STRING, Value: goliteral.StructTag(capabilityTag(xhandler.DMLKey))}
 	fields = append(fields, dml)
 	sequence := false
 	for _, role := range e.roles {
@@ -132,7 +133,7 @@ func (e *actionEmitter) file() (*ast.File, error) {
 	}
 	if sequence {
 		field := namedField("Sequencer", selectExpr(ast.NewIdent(e.l.handlerAlias), "Sequencer"))
-		field.Tag = &ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(capabilityTag(xhandler.SequencerKey))}
+		field.Tag = &ast.BasicLit{Kind: token.STRING, Value: goliteral.StructTag(capabilityTag(xhandler.SequencerKey))}
 		fields = append(fields, field)
 	}
 	for _, role := range e.roles {

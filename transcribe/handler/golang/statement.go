@@ -7,6 +7,7 @@ import (
 	"go/token"
 	"sort"
 	"strconv"
+	"strings"
 
 	plan "github.com/viant/datly/transcribe/handler/ast"
 )
@@ -15,7 +16,7 @@ import (
 // operation. The surrounding native program retains binding, lifecycle and
 // transaction ownership; this function never obtains a connection or drains.
 func StatementQueue(value *plan.StatementPlan, config Config) (*ast.File, error) {
-	if value == nil || (value.SQL == "" && value.Method != "Merge" && value.Method != "Insert" && value.Method != "Delete") {
+	if value == nil || (value.SQL == "" && value.Method != "Merge" && value.Method != "Insert" && value.Method != "Delete" && value.Method != "InsertIgnore" && value.Method != "Update") {
 		return nil, fmt.Errorf("canonical statement plan is required")
 	}
 	if !token.IsIdentifier(config.Package) || token.Lookup(config.Package).IsKeyword() || !token.IsIdentifier(config.Factory) {
@@ -66,12 +67,12 @@ func StatementQueue(value *plan.StatementPlan, config Config) (*ast.File, error)
 	if method == "" {
 		method = "ExecuteWithResult"
 	}
-	if method != "Execute" && method != "ExecuteWithResult" && method != "Merge" && method != "Insert" && method != "Delete" {
+	if method != "Execute" && method != "ExecuteWithResult" && method != "ExecuteWithOptionalResult" && method != "Merge" && method != "Insert" && method != "Delete" && method != "InsertIgnore" && method != "Update" {
 		return nil, fmt.Errorf("unsupported buffered statement method %q", method)
 	}
 	args := []ast.Expr{&ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(value.SQL)}}
 	params := []*ast.Field{{Type: ast.NewIdent("string")}}
-	if method == "ExecuteWithResult" {
+	if method == "ExecuteWithResult" || method == "ExecuteWithOptionalResult" {
 		dest, err := selector(value.LastInsertID)
 		if err != nil {
 			return nil, err
@@ -95,6 +96,13 @@ func StatementQueue(value *plan.StatementPlan, config Config) (*ast.File, error)
 		return returnStmt(callExpr(selectExpr(ast.NewIdent(fmtAlias), "Errorf"), &ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(message)}))
 	}
 	var capability ast.Expr = &ast.InterfaceType{Methods: &ast.FieldList{List: []*ast.Field{{Names: []*ast.Ident{ast.NewIdent(method)}, Type: &ast.FuncType{Params: &ast.FieldList{List: params}, Results: &ast.FieldList{List: []*ast.Field{{Type: ast.NewIdent("error")}}}}}}}}
+	if method == "Update" {
+		if len(value.Arguments) != 2 {
+			return nil, fmt.Errorf("Update requires table and record selectors")
+		}
+		args = args[1:]
+		capability = &ast.InterfaceType{Methods: &ast.FieldList{List: []*ast.Field{{Names: []*ast.Ident{ast.NewIdent("Update")}, Type: &ast.FuncType{Params: &ast.FieldList{List: []*ast.Field{{Type: ast.NewIdent("string")}, {Type: ast.NewIdent("any")}}}, Results: &ast.FieldList{List: []*ast.Field{{Type: ast.NewIdent("error")}}}}}}}}
+	}
 	if method == "Merge" {
 		var err error
 		args, capability, err = statementMergeCall(value, l, selector)
@@ -102,7 +110,7 @@ func StatementQueue(value *plan.StatementPlan, config Config) (*ast.File, error)
 			return nil, err
 		}
 	}
-	if method == "Insert" || method == "Delete" {
+	if method == "Insert" || method == "Delete" || method == "InsertIgnore" {
 		var err error
 		args, capability, err = statementBatchCall(value, selector)
 		if err != nil {
@@ -124,6 +132,33 @@ func StatementQueue(value *plan.StatementPlan, config Config) (*ast.File, error)
 		queueParams = append(queueParams, namedField("statementSQL", ast.NewIdent("string")))
 		args[0] = ast.NewIdent("statementSQL")
 	}
+	if len(value.CollectionOrdinals) > 0 {
+		collectionBody, err := statementCollectionBody(value, l, args[0])
+		if err != nil {
+			return nil, err
+		}
+		body = append(body[:len(body)-1], collectionBody...)
+	}
+	var pointerGuards []ast.Stmt
+	seenParents := map[string]bool{}
+	selectors := []plan.StatementSelector{value.LastInsertID, value.MergeTable, value.MergeRows, value.MergeConfig, value.MergeResult, value.BatchTable, value.BatchRows, value.BatchSize, value.BatchAffected}
+	selectors = append(selectors, value.Arguments...)
+	for _, field := range selectors {
+		for _, parent := range field.PointerParents {
+			key := strings.Join(parent, ".")
+			if seenParents[key] {
+				continue
+			}
+			seenParents[key] = true
+			expression, err := selector(plan.StatementSelector{Path: parent})
+			if err != nil {
+				return nil, err
+			}
+			pointerGuards = append(pointerGuards, &ast.IfStmt{Cond: &ast.BinaryExpr{X: expression, Op: token.EQL, Y: nilExpr}, Body: &ast.BlockStmt{List: []ast.Stmt{fail("statement selector " + key + " is nil")}}})
+		}
+	}
+	// Contract-root guard precedes all typed dereferences and enqueue work.
+	body = append(body[:1], append(pointerGuards, body[1:]...)...)
 	function := &ast.FuncDecl{Name: ast.NewIdent(config.Factory + "QueueStatement"), Type: &ast.FuncType{Params: &ast.FieldList{List: queueParams}, Results: &ast.FieldList{List: []*ast.Field{{Type: ast.NewIdent("error")}}}}, Body: &ast.BlockStmt{List: body}}
 	paths := make([]string, 0, len(l.usedImports))
 	for path := range l.usedImports {

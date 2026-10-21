@@ -33,7 +33,7 @@ func (d *Data) executePlanStep(ctx context.Context, db *sql.DB, tx *sql.Tx, step
 
 func (d *Data) executeInsertStep(ctx context.Context, db *sql.DB, tx *sql.Tx, step executionStep) error {
 	metric := step.beginMetric(ctx)
-	service, err := d.inserter(ctx, db, step.table, step.operations[0].onDuplicateKeySQL)
+	service, err := d.inserter(ctx, db, step.table, step.operations[0].onDuplicateKeySQL, step.operations[0].insertIgnore)
 	if err != nil {
 		return err
 	}
@@ -165,6 +165,9 @@ func (d *Data) executeSQLStep(ctx context.Context, tx *sql.Tx, step executionSte
 		}
 		if operation.lastInsertID != nil {
 			id, err := result.LastInsertId()
+			if operation.optionalLastInsertID && (err != nil || id <= 0) {
+				continue
+			}
 			if err != nil {
 				return err
 			}

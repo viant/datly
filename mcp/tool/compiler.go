@@ -295,17 +295,18 @@ func (c *Compiler) compileExternal(inputField registry.InputField, field reflect
 		sourceType: inputField.SourceType(), destinationType: inputField.DestinationType(),
 		wireSchema: inputField.WireSchema(), wireSchemas: inputField.WireSchemas(), wireType: inputField.WireType(), required: required, bodyNullPolicy: binding.BodyNullPolicy,
 	}
-	// Preserve inferred discovery requiredness, while honoring an explicit
-	// required binding from the exact route contract.
+	// Match original discovery tags independently of runtime requiredness.
+	// A required binding still rejects omission at invocation; it must not
+	// override legacy optional query fields or whole-body member tags.
 	sourceTag := string(field.Tag)
 	if param, ok := binding.Extension.(*spec.Parameter); ok && param != nil {
 		sourceTag = param.Tag
 		argument.description = strings.TrimSpace(param.Description)
 		argument.example = strings.TrimSpace(param.Example)
 	}
-	argument.schemaRequired = required || legacyNamedSchemaRequired(argument.sourceKind, binding.URI != "", inputField.DestinationType(), sourceTag)
+	argument.schemaRequired = legacyNamedSchemaRequired(argument.sourceKind, binding.URI != "", inputField.DestinationType(), sourceTag)
 	if memberRequired, associated := wholeBodyMemberSchemaRequired(argument); associated {
-		argument.schemaRequired = required || memberRequired
+		argument.schemaRequired = memberRequired
 	}
 	return argument, true, nil
 }

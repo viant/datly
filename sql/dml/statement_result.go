@@ -6,11 +6,22 @@ import "fmt"
 // The statement's identity is assigned during drain, independently of affected
 // rows. It neither executes eagerly nor allocates or retries an identity.
 func (d *Data) ExecuteWithResult(statement string, lastInsertID any, args ...any) error {
+	return d.executeWithResult(statement, lastInsertID, false, args...)
+}
+
+// ExecuteWithOptionalResult queues an INSERT whose positive LastInsertId is optional.
+// Extraction errors and nonpositive IDs leave the destination unchanged; execution,
+// assignment and completion errors retain their ordinary behavior.
+func (d *Data) ExecuteWithOptionalResult(statement string, lastInsertID any, args ...any) error {
+	return d.executeWithResult(statement, lastInsertID, true, args...)
+}
+
+func (d *Data) executeWithResult(statement string, lastInsertID any, optional bool, args ...any) error {
 	if err := validateLastInsertID(lastInsertID); err != nil {
 		return err
 	}
 	return d.append(dataOperation{kind: dataOpExecute, dml: statement,
-		args: append([]any(nil), args...), lastInsertID: lastInsertID})
+		args: append([]any(nil), args...), lastInsertID: lastInsertID, optionalLastInsertID: optional})
 }
 
 func validateLastInsertID(dest any) error {

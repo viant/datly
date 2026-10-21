@@ -14,6 +14,7 @@ func TestParse(t *testing.T) {
 	}{
 		{name: "read", source: "SELECT id FROM orders", wantKinds: []Kind{KindRead}, operations: []string{"SELECT"}},
 		{name: "SQL exec", source: "INSERT INTO orders(id) VALUES (1);\nUPDATE orders SET name = 'x'", wantKinds: []Kind{KindExec, KindExec}, operations: []string{"INSERT", "UPDATE"}},
+		{name: "insert ignore batch service", source: `$dml.InsertIgnore($Input.Table,$Input.Rows,$Input.Size,$Output.Affected)`, wantKinds: []Kind{KindService}, operations: []string{"InsertIgnore"}},
 		{name: "insert service", source: `$dml.Insert("ORDERS", $rec)`, wantKinds: []Kind{KindService}, operations: []string{"Insert"}},
 		{name: "update service", source: `$dml.Update("ORDERS", $rec)`, wantKinds: []Kind{KindService}, operations: []string{"Update"}},
 		{name: "delete service", source: `$dml.Delete("ORDERS", $rec)`, wantKinds: []Kind{KindService}, operations: []string{"Delete"}},

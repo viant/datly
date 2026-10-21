@@ -49,6 +49,13 @@ func (v dataValidation) Validate(ctx context.Context, value any, options ...any)
 	if !open {
 		return nil, ErrComponentSealed
 	}
+	// Resolve immutable owner identity before bufferedParents takes owner.mu.
+	// Distinct typed-delete evidence must not infer a missing database dialect.
+	if owner.db != nil {
+		if _, err := owner.dialectFor(ctx, owner.db); err != nil {
+			return nil, err
+		}
+	}
 	parents := v.data.bufferedParents()
 	if len(parents) != 0 {
 		prepared, checks, err := v.service.PrepareBufferedValidation(ctx, value, options, parents)

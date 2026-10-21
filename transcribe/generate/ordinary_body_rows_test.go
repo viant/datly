@@ -187,6 +187,10 @@ func TestOrdinarySharedBodyEmptyJSONNamePolicy(t *testing.T) {
 		name, body, read, explicitRead string
 		want                           bool
 	}{
+		{"absent owner name", "", `json:"channels"`, "", true},
+		{"absent owner with inferred read omission", "", `json:"channels,omitempty"`, "", true},
+		{"absent owner keeps other options strict", "", `json:"channels,string"`, "", false},
+		{"absent owner rejects explicit read", "", `json:"channels"`, `json:"channels"`, false},
 		{"inferred name without omission", `json:",omitempty"`, `json:"channels"`, "", true},
 		{"inferred name with omission", `json:",omitempty"`, `json:"channels,omitempty"`, "", true},
 		{"explicit non-omission", `json:""`, `json:"channels,omitempty"`, "", true},

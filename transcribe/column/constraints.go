@@ -385,7 +385,7 @@ func applyTableConstraints(columns []*spec.Column, constraints map[string]tableC
 			parsed := tags.NewTags(strings.TrimSpace(column.Tag))
 			if parsed.Lookup(sqlio.TagSqlx) == nil {
 				parsed.Set(sqlio.TagSqlx, physicalResultMapping(column, resultName))
-				column.Tag = parsed.Stringify()
+				column.Tag = parsed.Literal()
 			}
 		}
 		applyReferenceConstraint(column, constraint.reference, resultName)
@@ -435,7 +435,7 @@ func applyUniqueTableConstraint(column *spec.Column, table, resultName string) {
 		sqlxTag = parsed.Lookup(sqlio.TagSqlx)
 	}
 	sqlxTag.Append("table=" + table)
-	column.Tag = parsed.Stringify()
+	column.Tag = parsed.Literal()
 }
 
 func applyReferenceConstraint(column *spec.Column, reference *tableReference, resultName string) {
@@ -466,7 +466,9 @@ func applyReferenceConstraint(column *spec.Column, reference *tableReference, re
 	if authored.RefColumn == "" {
 		sqlxTag.Append("refColumn=" + reference.column)
 	}
-	column.Tag = parsed.Stringify()
+	// Preserve authored empty values such as json:"": they suppress inferred
+	// omission without fixing a public name. Stringify would discard them.
+	column.Tag = parsed.Literal()
 }
 
 func lineageNamespaceAllowed(namespace string, allowed map[string]bool, requireQualifier bool) bool {

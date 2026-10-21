@@ -7,7 +7,10 @@ import (
 	"strings"
 
 	"github.com/viant/datly/sql/validation"
+	"github.com/viant/sqlparser"
 	"github.com/viant/sqlx/io"
+	sqlvalidator "github.com/viant/sqlx/io/validator"
+	"github.com/viant/sqlx/metadata/info"
 	xhandler "github.com/viant/xdatly/handler"
 )
 
@@ -126,6 +129,9 @@ func (d *Data) checkBufferedParentLocked(parent *dataOperation, referenceColumn 
 			continue
 		}
 		if seen && operation.kind != dataOpInsert {
+			if operation.kind == dataOpDelete && distinctBufferedDeleteTarget(parent.table, operation.table, owner.dialect) {
+				continue
+			}
 			if operation.kind == dataOpUpdate && (referenceColumn == "" || updatePreservesReference(operation.data, referenceColumn)) {
 				continue
 			}
@@ -176,4 +182,36 @@ func updatePreservesReference(payload any, column string) bool {
 		}
 	}
 	return true
+}
+
+// distinctBufferedDeleteTarget proves only direct typed targets in one owner.
+// Missing/default-schema qualification and case aliases remain conservative.
+// The existing typed-DML proof model does not infer trigger/cascade effects.
+func distinctBufferedDeleteTarget(parent, deleted string, dialect *info.Dialect) bool {
+	if dialect == nil || (!strings.EqualFold(dialect.Name, "MySQL") && !strings.EqualFold(dialect.Name, "SQLite")) {
+		return false
+	}
+	if strings.Contains(parent, "$") || strings.Contains(deleted, "$") {
+		return false
+	}
+	// Equivalence is useful for rejection, never sufficient for disjointness.
+	same, err := (sqlvalidator.Reference{Table: parent}).MatchesTarget(sqlvalidator.Reference{Table: deleted}, dialect)
+	if err != nil || same {
+		return false
+	}
+	parser := sqlparser.TableIdentifierParser{Product: dialect.Name}
+	left, err := parser.Parts(parent)
+	if err != nil {
+		return false
+	}
+	right, err := parser.Parts(deleted)
+	if err != nil || len(left) != len(right) || len(left) < 1 || len(left) > 2 {
+		return false
+	}
+	// Both unqualified targets share this transaction's default namespace.
+	// Qualified targets are comparable only inside the same explicit namespace.
+	if len(left) == 2 && left[0] != right[0] {
+		return false
+	}
+	return !strings.EqualFold(left[len(left)-1], right[len(right)-1])
 }

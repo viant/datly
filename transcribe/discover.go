@@ -43,6 +43,9 @@ type Discovery struct {
 	// SourceFile restricts component compilation to this source basename.
 	// Package resource snapshots retain the entire original source directory.
 	SourceFile string
+	// SourceName overrides the selected source component name before compilation.
+	// It requires exactly one selected source file; physical paths and resources stay unchanged.
+	SourceName string
 	// TypeInclude loads package-level type authority without selecting those
 	// packages for component discovery or resource loading.
 	TypeInclude     []string
@@ -124,6 +127,9 @@ func (d *Discovery) Compile(ctx context.Context) (*ProjectGeneration, error) {
 	})
 	if err != nil {
 		return nil, err
+	}
+	if d.SourceName != "" && len(files) != 1 {
+		return nil, fmt.Errorf("source-name requires exactly one selected source file; found %d (use source selection)", len(files))
 	}
 	dependencySource := &Source{GoBuild: d.GoBuild}
 	for _, file := range files {
@@ -231,6 +237,9 @@ func (c *discoveryCompilation) compileFile(ctx context.Context, file xmodule.Fil
 		Types:              c.catalog,
 		ColumnRefiner:      c.discovery.ColumnRefiner,
 		PreparedColumns:    c.discovery.PreparedColumns,
+	}
+	if c.discovery.SourceName != "" {
+		source.Name = c.discovery.SourceName
 	}
 	var result *Result
 	preparation, err := prepareSourceCompilation(ctx, source)

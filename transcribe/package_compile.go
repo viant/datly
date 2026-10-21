@@ -3,6 +3,7 @@ package transcribe
 import (
 	"context"
 	"fmt"
+	"go/token"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -155,15 +156,56 @@ func (a *packageAuthority) canonicalPackageViewTypes(component *spec.Component) 
 	if component.TypeContext != nil {
 		plan.Imports = component.TypeContext.Imports
 	}
+	views := newPackageViewResolver(component, nil)
 	for _, param := range spec.EffectiveParameters(component.Parameters) {
 		if param == nil || !strings.EqualFold(strings.TrimSpace(param.Source.Kind), "view") {
 			continue
 		}
-		for _, expression := range []*string{&param.TypeExpr, &param.OutputTypeExpr} {
+		name := strings.TrimSpace(param.Source.Name)
+		if name == "" {
+			name = strings.TrimSpace(param.Name)
+		}
+		view, lookupErr := views.independent(name)
+		var row *x.Type
+		if lookupErr == nil && view != nil {
+			identity, identityErr := view.Identity()
+			if identityErr == nil {
+				for _, linked := range a.inputViews {
+					if linked.identity == identity {
+						row = linked.descriptor
+						break
+					}
+				}
+			}
+		}
+		canonicalize := func(expression string) (string, error) {
+			packagePath := a.route.PackagePath
+			// Only bare row names borrow reflected ownership; wrappers and
+			// explicitly qualified import authority retain their meaning.
+			base := strings.TrimSpace(expression)
+			for strings.HasPrefix(base, "[]") || strings.HasPrefix(base, "*") {
+				if strings.HasPrefix(base, "[]") {
+					base = strings.TrimSpace(base[2:])
+				} else {
+					base = strings.TrimSpace(base[1:])
+				}
+			}
+			if token.IsIdentifier(base) && row != nil && row.Name == base && row.PkgPath != "" {
+				packagePath = row.PkgPath
+			}
+			return plan.CanonicalType(packagePath, expression)
+		}
+		expressions := []*string{&param.TypeExpr, &param.OutputTypeExpr}
+		// The matched view is detached component metadata, not the retained
+		// linkedInputView.view. Leave all explicit or unmatched view types alone.
+		if row != nil && row.PkgPath != "" && view != nil && strings.TrimSpace(view.TypeName) == row.Name && token.IsIdentifier(row.Name) {
+			expressions = append(expressions, &view.TypeName)
+		}
+		for _, expression := range expressions {
 			if strings.TrimSpace(*expression) == "" {
 				continue
 			}
-			canonical, err := plan.CanonicalType(a.route.PackagePath, *expression)
+			canonical, err := canonicalize(*expression)
 			if err != nil {
 				return fmt.Errorf("canonicalize package view %q: %w", param.Name, err)
 			}
@@ -361,6 +403,12 @@ func (c *descriptorPackageCompilation) compile(ctx context.Context) (*Result, er
 		return nil, err
 	}
 	if err = c.catalog.LinkRuntimeAll(typecatalog.TypeOriginPackage, packageRuntime...); err != nil {
+		return nil, err
+	}
+	// Normalize a detached base before descriptor lookup, using the exact
+	// linked rows already discovered above rather than the holder package.
+	component = component.Clone()
+	if err = (&packageAuthority{route: c.packageSource.Routes[0], inputViews: linkedInputs}).canonicalPackageViewTypes(component); err != nil {
 		return nil, err
 	}
 	resolvedContext := compileTypeContext(c.source, component.TypeContext)

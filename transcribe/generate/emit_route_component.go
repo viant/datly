@@ -8,6 +8,7 @@ import (
 
 	"github.com/viant/datly/spec"
 	dtag "github.com/viant/datly/tag"
+	"github.com/viant/datly/transcribe/internal/goliteral"
 )
 
 func componentFileText(packageName string, plan *Plan) (string, error) {
@@ -107,7 +108,7 @@ func componentFileText(packageName string, plan *Plan) (string, error) {
 		name := strings.ToLower(plan.HolderName()[:1]) + plan.HolderName()[1:] + "Selectors"
 		b.WriteString("\ntype " + name + " struct {\n")
 		for _, field := range plan.QuerySelectors {
-			fmt.Fprintf(&b, "\t%s %s %s\n", field.Name, field.Type, strconv.Quote(generatedStructTag(field.Tag)))
+			fmt.Fprintf(&b, "\t%s %s %s\n", field.Name, field.Type, goliteral.StructTag(generatedStructTag(field.Tag)))
 		}
 		b.WriteString("}\n")
 		fmt.Fprintf(&b, "\nfunc (%s) DatlyQuerySelectors() %s { return %s{} }\n", plan.HolderName(), name, name)
@@ -289,7 +290,7 @@ func writeComponentHolderField(builder *strings.Builder, name string, plan *Plan
 	builder.WriteString("]")
 	if structTag != "" {
 		builder.WriteString(" ")
-		builder.WriteString(strconv.Quote(generatedStructTag(structTag)))
+		builder.WriteString(goliteral.StructTag(generatedStructTag(structTag)))
 	}
 	builder.WriteString("\n")
 }

@@ -446,6 +446,16 @@ func (r *packageComponentResolver) resolveParamType(role contractRole, field xsh
 		}
 		param.OutputTypeExpr = destination
 	}
+	// Recover the business destination from the persisted, explicit query split.
+	if param != nil && role == inputContract && param.Codec == nil && param.Source.Kind == "query" && (param.Required == nil || !*param.Required) && strings.TrimSpace(param.TypeExpr) == "*string" && param.WireTypeExpr == "" && strings.TrimSpace(param.OutputTypeExpr) == "" {
+		destination, err := r.fieldTypeExpression(field)
+		if err != nil {
+			return err
+		}
+		if destination == "string" {
+			param.OutputTypeExpr = "string"
+		}
+	}
 	// Persisted metadata and plain Go inputs must publish the same codec
 	// destination identity without changing wire or verification contracts.
 	if param != nil && role == inputContract && param.Codec != nil {

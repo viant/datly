@@ -129,10 +129,10 @@ func TestGeneratedFactoryBodyNullableOmissionScope(t *testing.T) {
 	row := reflect.New(typ).Elem()
 	raw, err := json.Marshal(row.Interface())
 	require.NoError(t, err)
-	require.JSONEq(t, `{"id":0}`, string(raw))
+	require.JSONEq(t, `{"Id":0}`, string(raw))
 	empty := ""
 	row.Field(0).Set(reflect.ValueOf(&empty))
 	raw, err = json.Marshal(row.Interface())
 	require.NoError(t, err)
-	require.JSONEq(t, `{"label":"","id":0}`, string(raw))
+	require.JSONEq(t, `{"Label":"","Id":0}`, string(raw))
 }

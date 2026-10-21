@@ -24,31 +24,33 @@ const (
 )
 
 type dataOperation struct {
-	queueContract   rhandler.QueueContract
-	appendBarrier   bool
-	payloadEvidence *queuePayloadEvidence
-	id              uint64
-	frame           *Data
-	journalFrame    *drainowner.Frame
-	kind            dataOperationKind
-	table           string
-	data            any
-	dml             string
-	args            []any
-	lastInsertID    any
-	batchSize       int
-	affected        *int64
-	match           *xhandler.Match
-	criteria        *sqlx.Criteria
-	executed        bool
-	executionTx     *sql.Tx
-	reserved        bool
-	mergeConfig     info.MergeConfig
-	mergeOptions    []moption.Option
-	mergeResult     *info.MergeResult
+	queueContract        rhandler.QueueContract
+	appendBarrier        bool
+	payloadEvidence      *queuePayloadEvidence
+	id                   uint64
+	frame                *Data
+	journalFrame         *drainowner.Frame
+	kind                 dataOperationKind
+	table                string
+	data                 any
+	dml                  string
+	args                 []any
+	lastInsertID         any
+	optionalLastInsertID bool
+	batchSize            int
+	affected             *int64
+	match                *xhandler.Match
+	criteria             *sqlx.Criteria
+	executed             bool
+	executionTx          *sql.Tx
+	reserved             bool
+	mergeConfig          info.MergeConfig
+	mergeOptions         []moption.Option
+	mergeResult          *info.MergeResult
 
 	// SQLX constructor suffix belongs to this source-slice operation.
 	onDuplicateKeySQL string
+	insertIgnore      bool
 }
 
 func (d *Data) Insert(tableName string, data any) error {

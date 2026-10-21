@@ -174,7 +174,13 @@ Return the component's purpose, public input/output contract, DQL/Go files, hook
 Use separate reader/writer DQL with required `#package`. Declare `input_type`,
 `output_type`, outer `type(view,'Entity')` names, a typed main output holder
 (`$Data<[]*Entity>(output/body)` for generated writes), and global
-`#setting($_ = $case_format('lc'))`. Generated writer JSON tags also honor this policy.
+`#setting($_ = $case_format('lc'))`. Generated writer/body shapes leave
+inferred JSON names empty so native caseFormat owns presentation; explicit
+source names and omission options remain authoritative. Do not add per-column
+lowerCamel JSON names or blanket `omitempty` to repair MCP discovery: naming,
+omission and runtime validation are separate contracts. When regenerating a body
+used by direct `encoding/json` or a custom marshaler, compare its saved-data and
+wire behavior because native caseFormat does not transform custom-owned bytes.
 Use `#setting($_ = $writer_omit_empty(true))` to opt a component into omitted
 zero values without repetitive column tags; explicit JSON names/options remain
 authoritative. Presence markers and internal/ignored fields retain their policy.
