@@ -68,12 +68,13 @@ func projectBinarySchema(args []Argument, s *schema.ToolInputSchema) {
 	}
 	if files {
 		if _, exists := s.Properties["Payload"]; !exists {
-			s.Properties["Payload"] = map[string]interface{}{"type": "object", "description": "Optional action-specific multipart form fields. Each member is written as a separate form field alongside Files."}
+			s.Properties["Payload"] = map[string]interface{}{"type": "object", "additionalProperties": true, "description": "Optional action-specific multipart form fields. Each member is written as a separate form field alongside Files."}
 		}
 	}
 	if raw {
 		if _, exists := s.Properties["Blob"]; !exists {
 			s.Properties["Blob"] = descriptorSchema()
+			s.Properties["Blob"]["description"] = "Base64-encoded binary request body; use instead of JSON when supported"
 		}
 	}
 	if files || raw {
