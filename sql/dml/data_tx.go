@@ -7,6 +7,7 @@ import (
 	"fmt"
 	dexec "github.com/viant/datly/exec"
 	"github.com/viant/datly/internal/drainowner"
+	"github.com/viant/sqlx/io/update"
 	xhandler "github.com/viant/xdatly/handler"
 )
 
@@ -278,58 +279,80 @@ func (d *Data) executePendingLocked(ctx context.Context, matched []*dataOperatio
 			owner.mu.Unlock()
 		}
 	}()
-	for _, step := range buildExecutionPlan(matched) {
-		if len(prefix) != 0 {
-			lifetime, err := drainowner.PrefixTransactionContext(owner, prefix[0])
-			if err == nil {
-				err = lifetime.Err()
-			}
-			if err != nil {
-				owner.markFailed(err)
-				return err
-			}
-		}
+	err = completeOperation("DML statement drain", func() error {
+		return update.WithStatementRunner(tx, func(runner *update.StatementRunner) error {
+			for _, step := range buildExecutionPlan(matched) {
+				if step.kind != dataOpUpdate || step.appendBarrier {
+					if err := runner.Reset(); err != nil {
+						return err
+					}
+				}
+				if len(prefix) != 0 {
+					lifetime, err := drainowner.PrefixTransactionContext(owner, prefix[0])
+					if err == nil {
+						err = lifetime.Err()
+					}
+					if err != nil {
+						return err
+					}
+				}
 
-		if err := drainowner.ProtectedOwnerFailure(owner); err != nil {
-			return err
-		}
-		if hasQueuePayloadEvidence(step.operations) {
-			if err := owner.validateExecutionGuardsLocked(ctx); err != nil {
-				return err
+				if err := drainowner.ProtectedOwnerFailure(owner); err != nil {
+					return err
+				}
+				if hasQueuePayloadEvidence(step.operations) {
+					if err := owner.validateExecutionGuardsLocked(ctx); err != nil {
+						return err
+					}
+				}
+				for _, operation := range step.operations {
+					if err := operation.validatePayload(); err != nil {
+						return err
+					}
+				}
+				if err := owner.executePlanStepWithRunner(ctx, db, tx, step, runner); err != nil {
+					return err
+				}
+				if step.appendBarrier {
+					if err := runner.Reset(); err != nil {
+						return err
+					}
+				}
+				owner.mu.Lock()
+				for _, operation := range step.operations {
+					operation.executed = true
+					operation.executionTx = tx
+					operation.reserved = false
+				}
+				owner.mu.Unlock()
+				if len(prefix) != 0 {
+					records := make([]drainowner.JournalRecord, len(step.operations))
+					for i, operation := range step.operations {
+						records[i] = drainowner.JournalRecord{Record: operation, Frame: operation.journalFrame, ID: operation.id, Executed: true}
+					}
+					if err := drainowner.RecordPrefixStep(owner, prefix[0], records); err != nil {
+						return err
+					}
+				} else {
+					drainowner.NoteJournalDrain(owner)
+				}
+				if err := drainowner.ProtectedOwnerFailure(owner); err != nil {
+					return err
+				}
 			}
-		}
-		for _, operation := range step.operations {
-			if err := operation.validatePayload(); err != nil {
-				owner.markFailed(err)
-				return err
-			}
-		}
-		if err := owner.executePlanStep(ctx, db, tx, step); err != nil {
-			owner.markFailed(err)
-			return err
-		}
+			return nil
+		})
+	})
+	if err != nil {
+		// Retain the final error chain, including statement cleanup, even when
+		// the caller catches a failed flush and later completes without a cause.
 		owner.mu.Lock()
-		for _, operation := range step.operations {
-			operation.executed = true
-			operation.executionTx = tx
-			operation.reserved = false
+		if owner.failed != nil && !errors.Is(err, owner.failed) {
+			err = errors.Join(owner.failed, err)
 		}
+		owner.failed = err
 		owner.mu.Unlock()
-		if len(prefix) != 0 {
-			records := make([]drainowner.JournalRecord, len(step.operations))
-			for i, operation := range step.operations {
-				records[i] = drainowner.JournalRecord{Record: operation, Frame: operation.journalFrame, ID: operation.id, Executed: true}
-			}
-			if err := drainowner.RecordPrefixStep(owner, prefix[0], records); err != nil {
-				owner.markFailed(err)
-				return err
-			}
-		} else {
-			drainowner.NoteJournalDrain(owner)
-		}
-		if err := drainowner.ProtectedOwnerFailure(owner); err != nil {
-			return err
-		}
+		return err
 	}
 	if managedTx {
 		if err := tx.Commit(); err != nil {
