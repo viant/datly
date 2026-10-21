@@ -19,17 +19,18 @@ import (
 
 // Argument is an immutable public projection of one canonical input field.
 type Argument struct {
-	documentation   *docs.Snapshot
-	publicName      string
-	aliases         []string
-	path            string
-	sourceKind      string
-	sourceName      string
-	sourceType      reflect.Type
-	destinationType reflect.Type
-	wireSchema      *spec.WireSchema
-	wireSchemas     map[string]*spec.WireSchema
-	wireType        reflect.Type
+	documentation    *docs.Snapshot
+	publicName       string
+	aliases          []string
+	path             string
+	sourceKind       string
+	sourceName       string
+	sourceType       reflect.Type
+	querySelectorCSV bool
+	destinationType  reflect.Type
+	wireSchema       *spec.WireSchema
+	wireSchemas      map[string]*spec.WireSchema
+	wireType         reflect.Type
 	// Anonymous JSON fields retain their whole-body owner for XLS decoding.
 	parentBodyType   reflect.Type
 	parentBodySource string

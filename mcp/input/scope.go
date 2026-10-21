@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"reflect"
 	"strconv"
+	"strings"
 
 	bindinput "github.com/viant/bindly/input"
 	bodyprovider "github.com/viant/bindly/provider/body"
@@ -186,6 +187,16 @@ func (a Arguments) resolve(argument Argument) (resolvedValue, bool, error) {
 		}
 		if text, ok := raw.(string); ok && text == "" {
 			return resolvedValue{}, false, nil
+		}
+	}
+	if argument.SplitCSVString && argument.Source.Kind == requestprovider.QueryKind {
+		if text, ok := raw.(string); ok {
+			// Mirror the canonical HTTP string-list enclosure/token rules. Do not
+			// split native JSON arrays, whose commas are literal element content.
+			if len(text) >= 2 && text[0] == '[' && text[len(text)-1] == ']' {
+				text = text[1 : len(text)-1]
+			}
+			return resolvedValue{wire: strings.Split(text, ",")}, true, nil
 		}
 	}
 	encoded, err := json.Marshal(raw)
