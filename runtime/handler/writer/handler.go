@@ -572,6 +572,8 @@ type Hooks struct{}
 type Stage uint8
 
 type Frame struct {
+	// A hint, never membership authority: actionFrame checks the live slot.
+	rowIndex                     int
 	framedEntity                 reflect.Value
 	holderPosition               int
 	holderIndexed, holderTracked bool
@@ -1689,15 +1691,19 @@ func identityOfFrame(frame *Frame) frameIdentity {
 // actionFrame retains the native action's authoritative role, never a
 // last-wins entity-pointer lookup. An uncaptured association fails closed.
 func (p *Program) actionFrame(action *Action) *Frame {
-	if action == nil || action.frame == nil || !action.Entity.IsValid() || action.Entity.Kind() != reflect.Pointer || action.Entity.IsNil() {
+	if p.frames == nil || action == nil || action.frame == nil || !action.Entity.IsValid() || action.Entity.Kind() != reflect.Pointer || action.Entity.IsNil() {
 		return nil
 	}
 	frame := action.frame
 	if !frame.Entity.IsValid() || frame.Entity.Kind() != reflect.Pointer || frame.Entity.IsNil() || frame.Entity.Pointer() != action.Entity.Pointer() {
 		return nil
 	}
-	for _, owned := range p.frames.Rows {
+	if index := frame.rowIndex; index >= 0 && index < len(p.frames.Rows) && p.frames.Rows[index] == frame {
+		return frame
+	}
+	for index, owned := range p.frames.Rows {
 		if owned == frame {
+			frame.rowIndex = index
 			return frame
 		}
 	}
@@ -1927,6 +1933,11 @@ func (p *Program) orderFramesByReferences() error {
 		return fmt.Errorf("writer graph has cyclic insert references")
 	}
 	p.frames.Rows = ordered
+	for index, frame := range ordered {
+		if frame != nil {
+			frame.rowIndex = index
+		}
+	}
 	p.graph = nil
 	return nil
 }
@@ -2400,7 +2411,7 @@ func (p *Program) buildEntityFrame(ctx context.Context, binder xhandler.Binder, 
 			action = xhandler.WriteDelete
 		}
 		original := p.captureEntityOriginal(record, entity)
-		frame := &Frame{framedEntity: reflect.ValueOf(entity.Interface()), holderPosition: position, holderIndexed: indexed, holderTracked: true, Entity: entity, Previous: previous, ExpectedToken: original.token, Fields: fields, SkippedDelete: skipDelete, NoopMissingIdentity: noopMissing, Action: action, Record: record, Location: p.rowLocation(record, parent, position, indexed), Parent: parent, Original: original, Hook: p.hooksByRecord[record]}
+		frame := &Frame{rowIndex: len(p.frames.Rows), framedEntity: reflect.ValueOf(entity.Interface()), holderPosition: position, holderIndexed: indexed, holderTracked: true, Entity: entity, Previous: previous, ExpectedToken: original.token, Fields: fields, SkippedDelete: skipDelete, NoopMissingIdentity: noopMissing, Action: action, Record: record, Location: p.rowLocation(record, parent, position, indexed), Parent: parent, Original: original, Hook: p.hooksByRecord[record]}
 		p.captureActionPolicyOwner(frame)
 		p.frames.Rows = append(p.frames.Rows, frame)
 		for _, relation := range record.Relations {
