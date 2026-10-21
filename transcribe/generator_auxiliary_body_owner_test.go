@@ -261,7 +261,7 @@ func(*WrongLifecycle)Validate(context.Context,*OtherInput,h.LifecycleContext[Oth
 	}
 }
 
-func TestGeneratorAuxiliaryUnsharedKeylessBodyKeepsNoHas(t *testing.T) {
+func TestGeneratorAuxiliaryUnsharedKeylessBodyKeepsPresence(t *testing.T) {
 	const text = `#package('github.com/viant/datly/auxownerfixture/generated')
 #setting($_ = $connector('main'))
 #setting($_ = $route('/records','PATCH'))
@@ -277,21 +277,38 @@ FROM (SELECT json_group_array(id) AS IDS,0 AS CAMPAIGN_ID FROM (records)) r`
 	if err != nil {
 		t.Fatal(err)
 	}
+	bodyFound, evidenceFound := false, false
 	for _, view := range generated.Result.Plan.Views {
-		if view.Name == "Request" && len(view.SetMarkerFields) != 0 {
-			t.Fatal("standalone auxiliary command gained Has")
+		switch view.Name {
+		case "Request":
+			bodyFound = true
+			// Standalone lifecycle commands still distinguish omitted fields from
+			// explicit empty/zero values, independently of read/body type sharing.
+			if !reflect.DeepEqual(view.SetMarkerFields, []string{"Ids", "CampaignId"}) {
+				t.Fatalf("keyless command presence changed: %v", view.SetMarkerFields)
+			}
+		case "Evidence":
+			evidenceFound = true
+			if len(view.SetMarkerFields) != 0 {
+				t.Fatal("independent evidence read gained body presence")
+			}
 		}
 	}
+	if !bodyFound || !evidenceFound {
+		t.Fatalf("missing body or evidence plan: body=%t evidence=%t", bodyFound, evidenceFound)
+	}
+	markers := 0
 	for _, file := range generated.Result.Files {
 		if strings.HasSuffix(file.Path, ".go") {
 			data, err := os.ReadFile(file.Path)
 			if err != nil {
 				t.Fatal(err)
 			}
-			if strings.Contains(string(data), "type RequestHas struct") {
-				t.Fatal("keyless auxiliary command gained public marker")
-			}
+			markers += strings.Count(string(data), "type RequestHas struct")
 		}
+	}
+	if markers != 1 {
+		t.Fatalf("expected one command presence type, got %d", markers)
 	}
 }
 

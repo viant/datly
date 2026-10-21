@@ -195,6 +195,11 @@ func BorrowedLeafContractFromPlan(plan *Plan, view *spec.View, packagePath, name
 
 	metadata.Columns = nil
 	metadata.Source = &spec.ViewSource{Table: table, Controls: view.Source.Controls.Clone(), Bindings: view.Source.Bindings.Clone()}
+	// Projection attribution belongs to the original query occurrence, just like
+	// its SQL. Recompute after replacing the source so a cloned lineage cache
+	// cannot make identical physical row contracts compare differently.
+	metadata.CompileProjectionOrigins()
+	metadata.DefaultProjection = false
 	if metadata.Source.Bindings == nil {
 		metadata.Source.Bindings = &spec.ViewBindings{}
 	}
