@@ -925,28 +925,9 @@ func isTruthy(v interface{}) bool {
 	}
 }
 
-// collectToolParameters aggregates component input parameters with selector pagination (limit/offset) when available.
+// collectToolParameters uses the same bound selector projection as MCP discovery.
 func (r *Router) collectToolParameters(component *repository.Component) []*state.Parameter {
-	var all []*state.Parameter
-	all = append(all, component.Input.Type.Parameters...)
-	if component.View != nil && component.View.Selector != nil {
-		if p := component.View.Selector.LimitParameter; p != nil {
-			all = append(all, p)
-		}
-		if p := component.View.Selector.OffsetParameter; p != nil {
-			all = append(all, p)
-		}
-		if p := component.View.Selector.FieldsParameter; p != nil {
-			all = append(all, p)
-		}
-		if p := component.View.Selector.OrderByParameter; p != nil {
-			all = append(all, p)
-		}
-		if p := component.View.Selector.PageParameter; p != nil {
-			all = append(all, p)
-		}
-	}
-	return all
+	return mcpComponentParameters(component)
 }
 
 // coerceNumericValue normalizes numeric values to integers when appropriate.
@@ -993,16 +974,8 @@ func (r *Router) applyParamToRequest(baseURL string, values url.Values, p *state
 			return baseURL, body, nil
 		}
 		var encodedValue string
-		if slice, ok := value.([]interface{}); ok {
-			var items []string
-			for _, item := range slice {
-				if f, ok := item.(float64); ok {
-					items = append(items, fmt.Sprintf("%v", int64(f)))
-				} else {
-					items = append(items, fmt.Sprintf("%v", item))
-				}
-			}
-			encodedValue = strings.Join(items, ",")
+		if values, ok := mcpQueryList(value); ok {
+			encodedValue = strings.Join(values, ",")
 		} else {
 			encodedValue = fmt.Sprintf("%v", value)
 		}
@@ -1606,7 +1579,7 @@ func (r *Router) buildToolInputTypeForPath(components *repository.Component, too
 		inputFields = append(inputFields, reflect.StructField{Name: name, Type: fieldType, Tag: tag})
 	}
 	// Include component input parameters
-	for _, parameter := range components.Input.Type.Parameters {
+	for _, parameter := range r.collectToolParameters(components) {
 		name := strings.Title(parameter.Name)
 		switch parameter.In.Kind {
 		case state.KindPath:
@@ -1645,41 +1618,6 @@ func (r *Router) buildToolInputTypeForPath(components *repository.Component, too
 	}
 	if hasMultipartFiles {
 		appendField("Payload", reflect.TypeOf(mcpMultipartPayload{}), reflect.StructTag(`json:",omitempty" optional:"true" description:"Optional action-specific multipart form fields. Each member is written as a separate form field alongside Files."`))
-	}
-
-	// Include selector (limit/offset/fields/page) for read components when available
-	if components.View != nil && components.View.Selector != nil {
-		if p := components.View.Selector.LimitParameter; p != nil && p.In != nil && p.In.Name != "" {
-			if !uniqueQuery[p.In.Name] { // avoid duplicates
-				uniqueQuery[p.In.Name] = true
-				appendField(strings.Title(p.Name), p.Schema.Type(), `json:",omitempty"`)
-			}
-		}
-		if p := components.View.Selector.OffsetParameter; p != nil && p.In != nil && p.In.Name != "" {
-			if !uniqueQuery[p.In.Name] {
-				uniqueQuery[p.In.Name] = true
-				appendField(strings.Title(p.Name), p.Schema.Type(), `json:",omitempty"`)
-			}
-		}
-		if p := components.View.Selector.FieldsParameter; p != nil && p.In != nil && p.In.Name != "" {
-			if !uniqueQuery[p.In.Name] {
-				uniqueQuery[p.In.Name] = true
-				// Fields is a []string – ensure optional in schema
-				appendField(strings.Title(p.Name), p.Schema.Type(), `json:",omitempty" optional:"true"`)
-			}
-		}
-		if p := components.View.Selector.OrderByParameter; p != nil && p.In != nil && p.In.Name != "" {
-			if !uniqueQuery[p.In.Name] {
-				uniqueQuery[p.In.Name] = true
-				appendField(strings.Title(p.Name), p.Schema.Type(), `json:",omitempty" optional:"true"`)
-			}
-		}
-		if p := components.View.Selector.PageParameter; p != nil && p.In != nil && p.In.Name != "" {
-			if !uniqueQuery[p.In.Name] {
-				uniqueQuery[p.In.Name] = true
-				appendField(strings.Title(p.Name), p.Schema.Type(), `json:",omitempty"`)
-			}
-		}
 	}
 
 	return reflect.StructOf(inputFields)
@@ -1899,23 +1837,18 @@ func (r *Router) buildTemplateResourceIntegration(item *dpath.Item, aPath *dpath
 			parameterNames = append(parameterNames, parameter.In.Name)
 		}
 	}
-	// Also expose view selector pagination controls in URI template if present
+	// Resource templates and tools describe the same actual HTTP bindings.
 	if provider != nil {
-		if comp, err := provider.Component(context.Background()); err == nil && comp.View != nil && comp.View.Selector != nil {
-			if p := comp.View.Selector.LimitParameter; p != nil && p.In != nil && p.In.Name != "" {
-				parameterNames = append(parameterNames, p.In.Name)
+		if comp, err := provider.Component(context.Background()); err == nil {
+			seen := map[string]bool{}
+			for _, name := range parameterNames {
+				seen[name] = true
 			}
-			if p := comp.View.Selector.OffsetParameter; p != nil && p.In != nil && p.In.Name != "" {
-				parameterNames = append(parameterNames, p.In.Name)
-			}
-			if p := comp.View.Selector.FieldsParameter; p != nil && p.In != nil && p.In.Name != "" {
-				parameterNames = append(parameterNames, p.In.Name)
-			}
-			if p := comp.View.Selector.OrderByParameter; p != nil && p.In != nil && p.In.Name != "" {
-				parameterNames = append(parameterNames, p.In.Name)
-			}
-			if p := comp.View.Selector.PageParameter; p != nil && p.In != nil && p.In.Name != "" {
-				parameterNames = append(parameterNames, p.In.Name)
+			for _, p := range mcpSelectorParameters(comp.View) {
+				if !seen[p.In.Name] {
+					parameterNames = append(parameterNames, p.In.Name)
+					seen[p.In.Name] = true
+				}
 			}
 		}
 	}
