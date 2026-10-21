@@ -25,6 +25,10 @@ func applyColumnDiscoveryPolicy(result *plan.Result, compileOptions *shape.Compi
 		if item == nil || !isQueryLikeMode(item.Mode) {
 			continue
 		}
+		if len(item.PreparedColumns) > 0 {
+			item.ColumnsDiscovery = false
+			continue
+		}
 		required := mode == shape.CompileColumnDiscoveryOn
 		if requiresColumnDiscovery(item) {
 			required = true

@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/viant/datly/repository/shape"
+	"github.com/viant/datly/repository/shape/column"
 	"github.com/viant/datly/repository/shape/compile/pipeline"
 	dqlshape "github.com/viant/datly/repository/shape/dql/shape"
 	"github.com/viant/datly/repository/shape/plan"
@@ -158,6 +159,18 @@ func (l *Loader) materialize(ctx context.Context, planned *shape.PlanResult, loa
 		resource.AddViews(aView)
 	}
 	materializeConcreteViewSchemas(resource, planned.Source, pResult.TypeContext)
+	// Prepared results are complete contracts. Linked schemas must not widen them.
+	for _, item := range pResult.Views {
+		if item == nil || len(item.PreparedColumns) == 0 {
+			continue
+		}
+		aView, err := resource.Views.Index().Lookup(item.Name)
+		if err != nil {
+			return nil, nil, err
+		}
+		aView.Schema.SetType(synthesizeViewSchemaType(aView))
+		aView.Schema.EnsurePointer()
+	}
 	refineViewColumnConfigTypes(resource, planned.Source, pResult.TypeContext)
 	enrichConcreteViewColumns(resource)
 	assignViewSummarySchemas(resource, pResult, planned.Source)
@@ -1529,6 +1542,9 @@ func materializeView(item *plan.View) (*view.View, error) {
 	}
 
 	schemaType := bestSchemaType(item)
+	if len(item.PreparedColumns) > 0 {
+		schemaType = nil
+	}
 	mode := view.ModeQuery
 	switch strings.TrimSpace(item.Mode) {
 	case string(view.ModeExec):
@@ -1541,7 +1557,7 @@ func materializeView(item *plan.View) (*view.View, error) {
 	if shouldDeferQuerySchemaType(schemaType, mode) {
 		schemaType = nil
 	}
-	if schemaType == nil && !allowsDeferredSchema(item, mode) {
+	if schemaType == nil && len(item.PreparedColumns) == 0 && !allowsDeferredSchema(item, mode) {
 		return nil, fmt.Errorf("shape load: missing schema type for view %q", item.Name)
 	}
 
@@ -1681,6 +1697,14 @@ func materializeView(item *plan.View) (*view.View, error) {
 		}
 		if aView.Schema.Name == "" {
 			aView.Schema.Name = strings.Trim(strings.TrimSpace(item.SchemaType), "*")
+		}
+	}
+	if len(item.PreparedColumns) > 0 {
+		aView.Columns = column.MaterializePrepared(item.PreparedColumns)
+		for _, col := range aView.Columns {
+			if cfg := lookupColumnConfig(aView.ColumnsConfig, col.Name); cfg != nil {
+				col.ApplyConfig(cfg)
+			}
 		}
 	}
 	// Populate columns from statically-inferred struct type so that xgen can

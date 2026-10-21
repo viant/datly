@@ -48,6 +48,9 @@ func (c *DQLCompiler) Compile(ctx context.Context, source *shape.Source, opts ..
 		return nil, shape.ErrNilSource
 	}
 	compileOptions := applyCompileOptions(opts)
+	if compileOptions.PreparedColumns != nil && compileOptions.ColumnDiscoveryMode == shape.CompileColumnDiscoveryOn {
+		return nil, fmt.Errorf("prepared columns and forced live discovery are mutually exclusive")
+	}
 	pathLayout := newCompilePathLayout(compileOptions)
 	enforceStrict := compileOptions.Strict || normalizeCompileProfile(compileOptions.Profile) == shape.CompileProfileStrict
 
@@ -70,6 +73,12 @@ func (c *DQLCompiler) Compile(ctx context.Context, source *shape.Source, opts ..
 	}
 
 	result := c.assembleResult(source, root, prepared, compileOptions, pathLayout, allDiags)
+	if compileOptions.PreparedColumns != nil {
+		if err := applyPreparedColumns(ctx, source, result, compileOptions.PreparedColumns); err != nil {
+			return nil, err
+		}
+	}
+	result.Diagnostics = append(result.Diagnostics, applyColumnDiscoveryPolicy(result, compileOptions)...)
 	if enforceStrict && hasEscalationWarnings(result.Diagnostics) {
 		return nil, &CompileError{Diagnostics: filterEscalationDiagnostics(result.Diagnostics)}
 	}
@@ -158,7 +167,6 @@ func (c *DQLCompiler) assembleResult(
 	if compileOptions.UseLinkedTypes == nil || *compileOptions.UseLinkedTypes {
 		applyLinkedTypeSupport(result, source)
 	}
-	result.Diagnostics = append(result.Diagnostics, applyColumnDiscoveryPolicy(result, compileOptions)...)
 	return result
 }
 

@@ -1,6 +1,10 @@
 package shape
 
-import "context"
+import (
+	"context"
+
+	"github.com/viant/datly/repository/shape/column"
+)
 
 type (
 	CompileMixedMode           string
@@ -42,6 +46,7 @@ type (
 		UseTypeContextPackages bool
 	}
 	CompileOptions struct {
+		PreparedColumns     column.PreparedResolver
 		Strict              bool
 		Profile             CompileProfile
 		MixedMode           CompileMixedMode
@@ -235,6 +240,7 @@ func (e *Engine) compile(ctx context.Context, source *Source) (*PlanResult, erro
 		WithMixedMode(e.options.CompileMixedMode),
 		WithUnknownNonReadMode(e.options.UnknownNonReadMode),
 		WithColumnDiscoveryMode(e.options.ColumnDiscoveryMode),
+		WithPreparedColumns(e.options.PreparedColumns),
 	)
 }
 

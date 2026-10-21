@@ -1,7 +1,10 @@
 package shape
 
+import "github.com/viant/datly/repository/shape/column"
+
 // Options stores shape facade dependencies and behavior flags.
 type Options struct {
+	PreparedColumns     column.PreparedResolver
 	Mode                Mode
 	Strict              bool
 	Name                string
@@ -247,4 +250,15 @@ func WithLinkedTypes(enabled bool) CompileOption {
 		}
 		o.UseLinkedTypes = &enabled
 	}
+}
+
+// WithPreparedColumns supplies trusted offline result metadata during DQL compile.
+// It is mutually exclusive with forced live discovery (ColumnDiscoveryOn).
+func WithPreparedColumns(resolve column.PreparedResolver) CompileOption {
+	return func(o *CompileOptions) { o.PreparedColumns = resolve }
+}
+
+// WithPreparedColumnsDefault configures the Engine's DQL compile provider.
+func WithPreparedColumnsDefault(resolve column.PreparedResolver) Option {
+	return func(o *Options) { o.PreparedColumns = resolve }
 }

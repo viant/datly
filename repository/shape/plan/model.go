@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/viant/datly/repository/shape/column"
 	dqlshape "github.com/viant/datly/repository/shape/dql/shape"
 	"github.com/viant/datly/repository/shape/typectx"
 	"github.com/viant/datly/view/state"
@@ -69,6 +70,7 @@ type Field struct {
 
 // View is a normalized view field plan.
 type View struct {
+	PreparedColumns        []column.PreparedColumn
 	Path                   string
 	Name                   string
 	Ref                    string
