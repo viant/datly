@@ -41,6 +41,10 @@ type Source struct {
 	// ColumnRefiner explicitly enables compile-time SQLX column discovery.
 	// A nil refiner keeps ordinary transcription DB-free.
 	ColumnRefiner *column.Refiner
+	// PreparedColumns supplies trusted compile-time result/table metadata without
+	// opening a database. It is mutually exclusive with ColumnRefiner and must
+	// never be populated from runtime request arguments.
+	PreparedColumns column.PreparedColumnResolver
 	// PackageComponent is optional package-authority canonical metadata used as
 	// the base for DQL+package transcription. Authored DQL overlays this graph;
 	// ordinary package-only bootstrap does not enter transcribe.

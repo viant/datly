@@ -45,11 +45,12 @@ type Discovery struct {
 	SourceFile string
 	// TypeInclude loads package-level type authority without selecting those
 	// packages for component discovery or resource loading.
-	TypeInclude   []string
-	Exclude       []string
-	Connector     string
-	Types         *typecatalog.Catalog
-	ColumnRefiner *column.Refiner
+	TypeInclude     []string
+	Exclude         []string
+	Connector       string
+	Types           *typecatalog.Catalog
+	ColumnRefiner   *column.Refiner
+	PreparedColumns column.PreparedColumnResolver
 	// Registry is trusted compiled package authority. Selected source descriptors
 	// retain linked types so lifecycle methods and typed factories remain executable.
 	Registry *x.Registry
@@ -229,6 +230,7 @@ func (c *discoveryCompilation) compileFile(ctx context.Context, file xmodule.Fil
 		Resources:          resources,
 		Types:              c.catalog,
 		ColumnRefiner:      c.discovery.ColumnRefiner,
+		PreparedColumns:    c.discovery.PreparedColumns,
 	}
 	var result *Result
 	preparation, err := prepareSourceCompilation(ctx, source)

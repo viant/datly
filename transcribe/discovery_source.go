@@ -75,6 +75,9 @@ func (d *Discovery) CompileSource(ctx context.Context, source *Source) (*Result,
 	if compiledSource.ColumnRefiner == nil {
 		compiledSource.ColumnRefiner = staged.ColumnRefiner
 	}
+	if compiledSource.PreparedColumns == nil {
+		compiledSource.PreparedColumns = staged.PreparedColumns
+	}
 	if compiledSource.Resources == nil {
 		compiledSource.Resources = assets.Store
 	}
