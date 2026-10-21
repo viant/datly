@@ -49,7 +49,7 @@ require (
 	github.com/golang-jwt/jwt/v5 v5.2.2
 	github.com/viant/aerospike v0.2.11-0.20241108195857-ed524b97800d
 	github.com/viant/firebase v0.1.1
-	github.com/viant/jsonrpc v0.24.0
+	github.com/viant/jsonrpc v0.25.1-0.20261021031150-a24a3b9ae218
 	github.com/viant/mcp v0.19.1-0.20260810230811-de146552d03f
 	github.com/viant/mcp-protocol v0.16.0
 	github.com/viant/structology v0.10.1-0.20260915165514-89d421971772
