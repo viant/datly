@@ -1,6 +1,7 @@
 package json
 
 import (
+	stdjson "encoding/json"
 	"github.com/francoispqt/gojay"
 	"github.com/viant/xunsafe"
 	"unsafe"
@@ -14,12 +15,16 @@ func newRawMessageMarshaller() *rawMessageMarshaller {
 
 func (r *rawMessageMarshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *gojay.Decoder, auxiliaryDecoder *gojay.Decoder, session *UnmarshalSession) error {
 	bytesPtr := xunsafe.AsBytesPtr(pointer)
-	dst := ""
-	if err := decoder.DecodeString(&dst); err != nil {
+	// Decode arbitrary JSON value into interface{}, then re-marshal to raw bytes.
+	var val interface{}
+	if err := decoder.AddInterface(&val); err != nil {
 		return err
 	}
-
-	*bytesPtr = []byte(dst)
+	data, err := stdjson.Marshal(val)
+	if err != nil {
+		return err
+	}
+	*bytesPtr = data
 	return nil
 }
 

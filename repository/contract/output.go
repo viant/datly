@@ -315,6 +315,20 @@ func UpdateOutputParameterType(parameter *state.Parameter) {
 	key := strings.ToLower(parameter.In.Name)
 	if rType, ok := outputkeys.Types[key]; ok {
 		updateParameterType(parameter, rType)
+		// Code generation represents anonymous output structs (notably
+		// response.Status) as embedded Go fields. An embedded field's runtime
+		// name is the type name, regardless of the DQL variable name. Keep the
+		// route parameter aligned with the generated field so declarations such
+		// as $ResponseStatus<?>(output/status).Tag('anonymous:"true"') do not
+		// produce an impossible ResponseStatus lookup against response.Status.
+		if strings.Contains(parameter.Tag, `anonymous:"true"`) {
+			if rType.Kind() == reflect.Ptr {
+				rType = rType.Elem()
+			}
+			if rType.Name() != "" {
+				parameter.Name = rType.Name()
+			}
+		}
 	}
 }
 

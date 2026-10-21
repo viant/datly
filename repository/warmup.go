@@ -10,8 +10,7 @@ func (s *Service) updateCacheConnectorRef(aResource *view.Resource, aView *view.
 	if prefix == "" {
 		return nil
 	}
-	cacheWarmup := aView.Warmup()
-	if cacheWarmup != nil {
+	for _, cacheWarmup := range aView.Warmups() {
 		if cacheWarmup.Connector != nil && cacheWarmup.Connector.Ref != "" {
 			cacheConnectorName := prefix + cacheWarmup.Connector.Ref
 			if aResource.ExistsConnector(cacheConnectorName) {

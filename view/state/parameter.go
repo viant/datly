@@ -3,6 +3,11 @@ package state
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"reflect"
+	"strconv"
+	"strings"
+
 	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/utils/types"
@@ -11,10 +16,6 @@ import (
 	"github.com/viant/structology"
 	"github.com/viant/xreflect"
 	"github.com/viant/xunsafe"
-	"net/http"
-	"reflect"
-	"strconv"
-	"strings"
 )
 
 type (
@@ -50,8 +51,11 @@ type (
 		When            string `json:",omitempty" yaml:"When"`
 		With            string `json:",omitempty" yaml:"With"`
 		URI             string `json:",omitempty" yaml:"URI"`
+		MCP             *bool  `json:",omitempty" yaml:"MCP"`
+		PathMCP         *bool  `json:",omitempty" yaml:"PathMCP"`
 		Cacheable       *bool  `json:",omitempty" yaml:"Cacheable"`
 		Async           bool   `json:",omitempty" yaml:"Async"`
+		PreserveSchema  bool   `json:",omitempty" yaml:"PreserveSchema"`
 		isOutputType    bool
 		_timeLayout     string
 		_selector       *structology.Selector
@@ -512,7 +516,12 @@ func (p *Parameter) initCodec(resource Resource) error {
 	if p.Output == nil {
 		return nil
 	}
-
+	stateTag, _ := tags.ParseStateTags(reflect.StructTag(p.Tag), resource.EmbedFS())
+	if stateTag != nil {
+		if stateTag.Codec != nil && stateTag.Codec.Body != "" {
+			p.Output.Body = stateTag.Codec.Body
+		}
+	}
 	inputType := p.Schema.Type()
 	if err := p.Output.Init(resource, inputType); err != nil {
 		return err
@@ -520,10 +529,9 @@ func (p *Parameter) initCodec(resource Resource) error {
 	if p.Output.Schema == nil {
 		return nil
 	}
-
 	if !p.Output.Schema.IsNamed() {
 		fieldTag := reflect.StructTag(p.Tag)
-		if stateTag, _ := tags.ParseStateTags(fieldTag, nil); stateTag != nil {
+		if stateTag != nil {
 			stateTag.TypeName = SanitizeTypeName(p.Output.Schema.Name)
 			p.Tag = string(stateTag.UpdateTag(fieldTag))
 		}
@@ -541,6 +549,11 @@ func (p *Parameter) OutputType() reflect.Type {
 }
 
 func (p *Parameter) initParamBasedParameter(ctx context.Context, resource Resource) error {
+	if p.Schema != nil {
+		if p.Schema.Type() != nil {
+			return nil
+		}
+	}
 	if p.Schema.Type() != nil {
 		return nil
 	}

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/viant/datly/view/state/kind"
 	"github.com/viant/structology"
+	"reflect"
 )
 
 type State struct {
@@ -14,7 +15,7 @@ type State struct {
 func (p *State) Names() []string {
 	return nil
 }
-func (p *State) Value(ctx context.Context, name string) (interface{}, bool, error) {
+func (p *State) Value(ctx context.Context, _ reflect.Type, name string) (interface{}, bool, error) {
 	_, err := p.State.Selector(name)
 	if err != nil {
 		return nil, false, nil

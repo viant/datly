@@ -2,6 +2,7 @@ package jobs
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/viant/datly/service/dbms"
 	"github.com/viant/datly/service/reader"
@@ -44,7 +45,7 @@ func (s *Service) matchFailedJob(matchKey string) (*async.Job, error) {
 		if candidate.MatchKey == matchKey {
 			var err error
 			if candidate.Error != nil {
-				err = fmt.Errorf(*candidate.Error)
+				err = errors.New(*candidate.Error)
 			} else {
 				err = fmt.Errorf("job has status %s", candidate.Status)
 			}

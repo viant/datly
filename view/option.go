@@ -50,6 +50,56 @@ func WithColumns(columns Columns) Option {
 	}
 }
 
+func WithGroupable(groupable bool) Option {
+	return func(v *View) error {
+		v.Groupable = groupable
+		return nil
+	}
+}
+
+func WithSummary(summary *TemplateSummary) Option {
+	return func(v *View) error {
+		v.EnsureTemplate()
+		v.Template.Summary = summary
+		return nil
+	}
+}
+
+func WithSummaryURI(sourceURL string) Option {
+	return func(v *View) error {
+		v.EnsureTemplate()
+		if v.Template.Summary == nil {
+			v.Template.Summary = &TemplateSummary{}
+		}
+		v.Template.Summary.SourceURL = sourceURL
+		return nil
+	}
+}
+
+func WithTemplateParameterStateType(enabled bool) Option {
+	return func(v *View) error {
+		v.EnsureTemplate()
+		v.Template.UseParameterStateType = enabled
+		return nil
+	}
+}
+
+func WithDeclaredTemplateParametersOnly(enabled bool) Option {
+	return func(v *View) error {
+		v.EnsureTemplate()
+		v.Template.DeclaredParametersOnly = enabled
+		return nil
+	}
+}
+
+func WithResourceParameterLookup(enabled bool) Option {
+	return func(v *View) error {
+		v.EnsureTemplate()
+		v.Template.UseResourceParameterLookup = enabled
+		return nil
+	}
+}
+
 // WithFS creates fs options
 func WithFS(fs *embed.FS) Option {
 	return func(v *View) error {

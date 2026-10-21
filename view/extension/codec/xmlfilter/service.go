@@ -42,7 +42,7 @@ func (t *Service) Transfer(aStruct interface{}) (*xml.FilterHolder, error) {
 			xFilterPtr = *(*unsafe.Pointer)(ownerAddr)
 			fieldType = fieldType.Elem()
 		} else {
-			xFilterPtr = unsafe.Pointer(uintptr(ptr) + field.Offset)
+			xFilterPtr = unsafe.Add(ptr, field.Offset)
 		}
 
 		if fieldType.Kind() != reflect.Struct {

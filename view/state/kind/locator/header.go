@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/viant/datly/view/state/kind"
 	"net/http"
+	"reflect"
 )
 
 type Header struct {
@@ -20,7 +21,7 @@ func (q *Header) Names() []string {
 	return result
 }
 
-func (q *Header) Value(ctx context.Context, name string) (interface{}, bool, error) {
+func (q *Header) Value(ctx context.Context, _ reflect.Type, name string) (interface{}, bool, error) {
 	value, ok := q.header[name]
 	if !ok {
 		return nil, false, nil

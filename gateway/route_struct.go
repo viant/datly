@@ -7,6 +7,7 @@ import (
 	"github.com/viant/xreflect"
 	"net/http"
 	"reflect"
+	"strings"
 )
 
 func (r *Router) NewStructRoute(URL string, provider *repository.Provider) *Route {
@@ -45,5 +46,10 @@ func (r *Router) generateGoStruct(component *repository.Component) (int, []byte)
 			fieldTag, _ = xreflect.RemoveTag(fieldTag, "sql")
 			*tag = fieldTag
 		}))
+	structContent = legacyStructFormatting(structContent)
 	return http.StatusOK, []byte(structContent)
+}
+
+func legacyStructFormatting(content string) string {
+	return strings.ReplaceAll(content, ` internal:"true"`, `  internal:"true"`)
 }
