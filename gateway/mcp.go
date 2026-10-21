@@ -324,6 +324,32 @@ func initializeToolArguments(ctx context.Context, component *repository.Componen
 	for key, value := range arguments {
 		initializableArguments[key] = value
 	}
+	projectedParameters := map[string]*state.Parameter{}
+	for _, parameter := range mcpComponentParameters(component) {
+		projectedParameters[string(parameter.In.Kind)+"\x00"+parameter.In.Name] = parameter
+	}
+	publicParameter := func(parameter *state.Parameter) *state.Parameter {
+		if parameter != nil && parameter.In != nil {
+			if projected := projectedParameters[string(parameter.In.Kind)+"\x00"+parameter.In.Name]; projected != nil {
+				return projected
+			}
+		}
+		return parameter
+	}
+	for _, parameter := range component.Input.Type.Parameters {
+		projected := publicParameter(parameter)
+		if projected == nil || parameter.Name == projected.Name {
+			continue
+		}
+		// Initialization consumes canonical Go fields, while transport keeps
+		// public MCP names. Do not let the root Limit alias populate a child.
+		for _, name := range toolArgumentCandidates(parameter) {
+			delete(initializableArguments, name)
+		}
+		if value := toolArgumentValue(projected, arguments); value != nil {
+			initializableArguments[strings.Title(parameter.Name)] = value
+		}
+	}
 	for _, parameter := range component.Input.Type.Parameters {
 		if !isMCPMultipartFileParameter(parameter) {
 			continue
@@ -371,7 +397,8 @@ func initializeToolArguments(ctx context.Context, component *repository.Componen
 		if !field.IsValid() || !field.CanInterface() {
 			continue
 		}
-		present := toolArgumentValue(parameter, arguments) != nil
+		projected := publicParameter(parameter)
+		present := toolArgumentValue(projected, arguments) != nil
 		if marker.IsValid() {
 			if hasField := marker.FieldByName(parameter.Name); hasField.IsValid() && hasField.Kind() == reflect.Bool && hasField.Bool() {
 				present = true
@@ -382,7 +409,7 @@ func initializeToolArguments(ctx context.Context, component *repository.Componen
 			if parameter.In != nil && parameter.In.Kind == state.KindRequestBody {
 				initialized = preserveMCPBodyPresence(toolArgumentValue(parameter, arguments), initialized)
 			}
-			result[strings.Title(parameter.Name)] = initialized
+			result[strings.Title(projected.Name)] = initialized
 		}
 	}
 	return result, nil

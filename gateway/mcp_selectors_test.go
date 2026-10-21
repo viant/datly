@@ -2,6 +2,7 @@ package gateway
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/url"
 	"reflect"
@@ -17,6 +18,27 @@ import (
 
 func selectorTestParameter(name, bound string, typ reflect.Type) *state.Parameter {
 	return state.NewParameter(name, state.NewQueryLocation(bound), state.WithParameterSchema(state.NewSchema(typ)))
+}
+
+type mcpChildSelectorInitializer struct{ ChildLimit int }
+
+func (i *mcpChildSelectorInitializer) Init(context.Context) error {
+	if i.ChildLimit != 3 {
+		return fmt.Errorf("child selector did not reach canonical initializer: %d", i.ChildLimit)
+	}
+	return nil
+}
+
+func TestMCPRelationSelectorAliasReachesCanonicalInitializer(t *testing.T) {
+	parameter := selectorTestParameter("ChildLimit", "match_limit", reflect.TypeOf(0))
+	input := state.Type{Schema: state.NewSchema(reflect.TypeOf(mcpChildSelectorInitializer{})), Parameters: state.Parameters{parameter}}
+	input.SetType(reflect.TypeOf(mcpChildSelectorInitializer{}))
+	component := &repository.Component{Contract: contract.Contract{Input: contract.Input{Type: input}}, View: &view.View{Selector: &view.Config{Constraints: &view.Constraints{Limit: true}}, With: []*view.Relation{{Holder: "Match", Of: &view.ReferenceView{View: view.View{Selector: &view.Config{LimitParameter: parameter}}}}}}}
+	actual, err := initializeToolArguments(context.Background(), component, map[string]interface{}{"Limit": 11.0, "MatchLimit": 3.0})
+	require.NoError(t, err)
+	require.Equal(t, 11.0, actual["Limit"], "canonical child initialization must preserve the root wire value")
+	require.Equal(t, 3, actual["MatchLimit"])
+	require.NotContains(t, actual, "ChildLimit")
 }
 
 func TestMCPRelationSelectorsDiscoverAndRouteWithoutChangingRoot(t *testing.T) {
