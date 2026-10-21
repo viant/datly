@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/viant/datly/bootstrap"
+	"github.com/viant/datly/internal/typeidentity"
 	"github.com/viant/datly/spec"
 	"github.com/viant/datly/tag"
 	"github.com/viant/datly/transcribe/dql"
@@ -174,7 +175,16 @@ func validateHandlerParameters(binding *HandlerBinding, authored, bound []*spec.
 			if err != nil {
 				return err
 			}
-			backedSplit = found && backedScalarWireSplit(param, actual, (strings.TrimSpace(param.TypeExpr) == "*string" && field.Type == reflect.TypeFor[string]()) || (strings.TrimSpace(param.TypeExpr) == "*bool" && field.Type == reflect.TypeFor[bool]()))
+			if found {
+				_, pair := typeidentity.ReflectScalarPair(typ, field.Type)
+				persisted, persistedErr := (xshape.Runtime{Lookup: resolver.Type}).Type(actual.TypeExpr)
+				outputMatches := true
+				if param.OutputTypeExpr != "" {
+					output, err := (xshape.Runtime{Lookup: resolver.Type}).Type(param.OutputTypeExpr)
+					outputMatches = err == nil && output == field.Type
+				}
+				backedSplit = backedScalarWireSplit(param, actual, pair && persistedErr == nil && persisted == typ && outputMatches)
+			}
 			if !found || (typ != field.Type && !backedSplit) {
 				return fmt.Errorf("handler parameter %q type conflicts with linked contract", param.Name)
 			}

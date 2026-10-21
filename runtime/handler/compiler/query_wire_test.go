@@ -28,26 +28,26 @@ func TestPersistedQueryStringWireBoundaries(t *testing.T) {
 		{"explicit form", "form", "*string", nil, reflect.TypeFor[string](), "", true},
 		{"explicit bool query", "query", "*bool", nil, reflect.TypeFor[bool](), "", true},
 		{"plain optional bool", "query", "bool", nil, reflect.TypeFor[bool](), "", false},
-		{"required bool query", "query", "*bool", &required, reflect.TypeFor[bool](), "", false},
+		{"required bool query", "query", "*bool", &required, reflect.TypeFor[bool](), "", true},
 		{"named bool query", "query", "*bool", nil, reflect.TypeFor[namedQueryBool](), "", false},
 		{"pointer bool query", "query", "*bool", nil, reflect.TypeFor[*bool](), "", false},
-		{"bool form exclusion", "form", "*bool", nil, reflect.TypeFor[bool](), "", false},
-		{"bool path exclusion", "path", "*bool", nil, reflect.TypeFor[bool](), "", false},
+		{"bool form exclusion", "form", "*bool", nil, reflect.TypeFor[bool](), "", true},
+		{"bool path exclusion", "path", "*bool", nil, reflect.TypeFor[bool](), "", true},
 		{"bool body exclusion", "body", "*bool", nil, reflect.TypeFor[bool](), "", false},
 		{"bool codec exclusion", "query", "*bool", nil, reflect.TypeFor[bool](), `codec:"json"`, false},
 		{"bool wireType exclusion", "query", "*bool", nil, reflect.TypeFor[bool](), `wireType:"model.Value"`, false},
 		{"plain optional form", "form", "string", nil, reflect.TypeFor[string](), "", false},
-		{"required form", "form", "*string", &required, reflect.TypeFor[string](), "", false},
+		{"required form", "form", "*string", &required, reflect.TypeFor[string](), "", true},
 		{"named form", "form", "*string", nil, reflect.TypeFor[namedFormString](), "", false},
-		{"int form", "form", "*int", nil, reflect.TypeFor[int](), "", false},
-		{"bool form", "form", "*bool", nil, reflect.TypeFor[bool](), "", false},
+		{"int form", "form", "*int", nil, reflect.TypeFor[int](), "", true},
+		{"bool form", "form", "*bool", nil, reflect.TypeFor[bool](), "", true},
 		{"file form", "form", "*string", nil, reflect.TypeFor[[]*multipart.FileHeader](), "", false},
 		{"codec form", "form", "*string", nil, reflect.TypeFor[string](), `codec:"json"`, false},
 		{"wireType form", "form", "*string", nil, reflect.TypeFor[string](), `wireType:"model.Value"`, false},
-		{"path", "path", "*string", nil, reflect.TypeFor[string](), "", false},
+		{"path", "path", "*string", nil, reflect.TypeFor[string](), "", true},
 		{"optional scalar default", "query", "string", nil, reflect.TypeFor[string](), `value:"ui"`, false},
-		{"required", "query", "*string", &required, reflect.TypeFor[string](), "", false},
-		{"integer", "query", "*int", nil, reflect.TypeFor[int](), "", false},
+		{"required", "query", "*string", &required, reflect.TypeFor[string](), "", true},
+		{"integer", "query", "*int", nil, reflect.TypeFor[int](), "", true},
 		{"collection", "query", "[]string", nil, reflect.TypeFor[[]string](), "", false},
 		{"body", "body", "*string", nil, reflect.TypeFor[string](), "", false},
 		{"codec", "query", "*string", nil, reflect.TypeFor[string](), `codec:"json"`, false},
@@ -61,6 +61,9 @@ func TestPersistedQueryStringWireBoundaries(t *testing.T) {
 				schemaType := "string"
 				if tc.typ == reflect.TypeFor[bool]() {
 					schemaType = "boolean"
+				}
+				if tc.typ == reflect.TypeFor[int]() {
+					schemaType = "integer"
 				}
 				require.Equal(t, &spec.WireSchema{Type: schemaType, Nullable: true}, p.WireSchema)
 			} else {

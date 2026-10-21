@@ -59,7 +59,7 @@ func (c *Compiler) CompileBindings() ([]bindly.BindingSpec, error) {
 	if err != nil {
 		return nil, err
 	}
-	return BuildBindingSpecs(c.publicComponent, input.InputType, codecs)
+	return buildBindingSpecs(c.publicComponent, input.InputType, codecs, input.TypeLookup)
 }
 
 func (c *Compiler) Compile() (*Result, error) { return c.compile(false) }
@@ -81,7 +81,7 @@ func (c *Compiler) compile(describe bool) (*Result, error) {
 		var codecs map[string]ParamCodec
 		codecs, err = (ParamCodecCompiler{Component: c.input.Component, InputType: c.input.InputType, LookupType: c.input.TypeLookup}).Describe()
 		if err == nil {
-			bindings, err = BuildBindingSpecs(c.publicComponent, c.input.InputType, codecs)
+			bindings, err = buildBindingSpecs(c.publicComponent, c.input.InputType, codecs, c.input.TypeLookup)
 		}
 	} else {
 		bindings, err = c.CompileBindings()
@@ -104,7 +104,7 @@ func (c *Compiler) compile(describe bool) (*Result, error) {
 	if c.selection != nil {
 		companion := *c.input.Component
 		companion.Parameters = c.selection.Parameters
-		bindings, bindErr := BuildBindingSpecs(&companion, c.selection.Type, nil)
+		bindings, bindErr := buildBindingSpecs(&companion, c.selection.Type, nil, c.input.TypeLookup)
 		if bindErr != nil {
 			return nil, bindErr
 		}
