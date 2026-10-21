@@ -9,17 +9,22 @@ import (
 	"strings"
 
 	rhandler "github.com/viant/datly/runtime/handler"
+	"github.com/viant/sqlx/io/update"
 	"github.com/viant/sqlx/metadata/info"
 	"github.com/viant/sqlx/option"
 	xhandler "github.com/viant/xdatly/handler"
 )
 
 func (d *Data) executePlanStep(ctx context.Context, db *sql.DB, tx *sql.Tx, step executionStep) error {
+	return d.executePlanStepWithRunner(ctx, db, tx, step, nil)
+}
+
+func (d *Data) executePlanStepWithRunner(ctx context.Context, db *sql.DB, tx *sql.Tx, step executionStep, runner *update.StatementRunner) error {
 	switch step.kind {
 	case dataOpInsert:
 		return d.executeInsertStep(ctx, db, tx, step)
 	case dataOpUpdate:
-		return d.executeUpdateStep(ctx, db, tx, step)
+		return d.executeUpdateStepWithRunner(ctx, db, tx, step, runner)
 	case dataOpDelete:
 		return d.executeDeleteStep(ctx, db, tx, step)
 	case dataOpExecute:
@@ -84,6 +89,10 @@ func (d *Data) executeInsertStep(ctx context.Context, db *sql.DB, tx *sql.Tx, st
 }
 
 func (d *Data) executeUpdateStep(ctx context.Context, db *sql.DB, tx *sql.Tx, step executionStep) error {
+	return d.executeUpdateStepWithRunner(ctx, db, tx, step, nil)
+}
+
+func (d *Data) executeUpdateStepWithRunner(ctx context.Context, db *sql.DB, tx *sql.Tx, step executionStep, runner *update.StatementRunner) error {
 	metric := step.beginMetric(ctx)
 	service, err := d.updater(ctx, db, step.table)
 	if err != nil {
@@ -101,7 +110,13 @@ func (d *Data) executeUpdateStep(ctx context.Context, db *sql.DB, tx *sql.Tx, st
 		if operation.criteria != nil {
 			writeOptions = append(append([]option.Option(nil), writeOptions...), operation.criteria)
 		}
-		count, err := service.Exec(ctx, operation.data, writeOptions...)
+		var count int64
+		var err error
+		if runner != nil {
+			count, err = runner.Exec(ctx, service, operation.data, writeOptions...)
+		} else {
+			count, err = service.Exec(ctx, operation.data, writeOptions...)
+		}
 		if (operation.match != nil || operation.criteria != nil) && errors.Is(err, option.ErrNoMatch) {
 			err = &xhandler.Conflict{Entity: step.table, Field: operationConflictField(operation), Reason: "mutation predicate no longer matches persisted row"}
 		}

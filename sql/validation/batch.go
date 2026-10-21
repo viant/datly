@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"strconv"
+	"strings"
 
 	"github.com/viant/govalidator"
 	"github.com/viant/sqlx/io"
@@ -19,7 +21,6 @@ type validationBatch struct {
 	at             io.ValueAccessor
 	policies       []xhandler.ValidationOptions
 	compiled       *plan
-	locations      map[string]string
 	nativePolicies []sqlvalidator.CandidatePolicy
 	goPlans        []*govalidator.Prepared
 	references     bool
@@ -49,7 +50,7 @@ func (s *Service) batch(ctx context.Context, value any, policies []xhandler.Vali
 	if count != len(policies) {
 		return nil, fmt.Errorf("validation policy count %d does not match candidate count %d", len(policies), count)
 	}
-	batch := &validationBatch{values: value, at: at, policies: make([]xhandler.ValidationOptions, count), locations: make(map[string]string)}
+	batch := &validationBatch{values: value, at: at, policies: make([]xhandler.ValidationOptions, count)}
 	// Validate every option before native plan construction or connection access.
 	for i, policy := range policies {
 		if batch.policies[i], err = s.options(at(i), []any{policy}); err != nil {
@@ -84,11 +85,6 @@ func (s *Service) batch(ctx context.Context, value any, policies []xhandler.Vali
 	for i, policy := range batch.policies {
 		if err = batch.compiled.checkCoverage(policy); err != nil {
 			return nil, fmt.Errorf("validation candidate %d: %w", i, err)
-		}
-		for _, column := range batch.compiled.columns {
-			fields := column.(io.Fielder).Fields()
-			field := fields[len(fields)-1].Name
-			batch.locations[fmt.Sprintf("_batch[%d].%s", i, field)] = policy.Location + "." + field
 		}
 	}
 	return batch, nil
@@ -133,7 +129,7 @@ func (s *Service) validateBatch(ctx context.Context, value any, policies []xhand
 		return nil, fmt.Errorf("SQL validation: %w", err)
 	}
 	for _, violation := range sqlResult.Violations {
-		location, ok := batch.locations[violation.Location]
+		location, ok := batch.location(violation.Location)
 		if !ok {
 			return nil, fmt.Errorf("native validation returned an unrecognized candidate location")
 		}
@@ -145,4 +141,36 @@ func (s *Service) validateBatch(ctx context.Context, value any, policies []xhand
 	}
 	result.Failed = len(result.Violations) > 0
 	return result, nil
+}
+
+// Accept exactly the locations formerly present in the eager candidate/field
+// map. Do not accept alternative integer spellings or arbitrary field paths.
+func (b *validationBatch) location(raw string) (string, bool) {
+	const prefix = "_batch["
+	if !strings.HasPrefix(raw, prefix) {
+		return "", false
+	}
+	rest := raw[len(prefix):]
+	end := strings.Index(rest, "].")
+	if end < 1 {
+		return "", false
+	}
+	digits := rest[:end]
+	if len(digits) > 1 && digits[0] == '0' {
+		return "", false
+	}
+	for _, digit := range digits {
+		if digit < '0' || digit > '9' {
+			return "", false
+		}
+	}
+	index, err := strconv.Atoi(digits)
+	if err != nil || index >= len(b.policies) {
+		return "", false
+	}
+	field := rest[end+2:]
+	if !b.compiled.locationFields[field] {
+		return "", false
+	}
+	return b.policies[index].Location + "." + field, true
 }
