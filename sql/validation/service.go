@@ -41,13 +41,16 @@ type Service struct {
 	mappings     sync.Map
 }
 type plan struct {
-	sqlType      reflect.Type
-	sqlIndexes   [][]int
-	columns      []io.Column
-	bind         io.PlaceholderBinder
-	nativeChecks *sqlvalidator.Checks
-	goChecks     *govalidator.Checks
-	fields       []string
+	sqlType        reflect.Type
+	sqlIndexes     [][]int
+	columns        []io.Column
+	bind           io.PlaceholderBinder
+	nativeChecks   *sqlvalidator.Checks
+	goChecks       *govalidator.Checks
+	fields         []string
+	fieldIndexes   map[string]int
+	columnFields   map[string]string
+	locationFields map[string]bool
 }
 
 func New(source Source) *Service {
@@ -186,6 +189,18 @@ func (s *Service) plan(ctx context.Context, typ reflect.Type, connectors ...stri
 		return nil, fmt.Errorf("Go validation plan: %w", err)
 	}
 	compiled := &plan{columns: mapping.columns, bind: mapping.bind, goChecks: goChecks}
+	compiled.columnFields = make(map[string]string, len(mapping.columns))
+	compiled.locationFields = make(map[string]bool, len(mapping.columns))
+	for _, column := range mapping.columns {
+		fielder, ok := column.(io.Fielder)
+		if !ok || len(fielder.Fields()) == 0 {
+			return nil, fmt.Errorf("validation column %s has no canonical Go field", column.Name())
+		}
+		path := fielder.Fields()
+		name := path[len(path)-1].Name
+		compiled.columnFields[column.Name()] = name
+		compiled.locationFields[name] = true
+	}
 	if err := compiled.resolveSQLShape(typ, values, product); err != nil {
 		return nil, err
 	}
@@ -206,6 +221,10 @@ func (s *Service) plan(ctx context.Context, typ reflect.Type, connectors ...stri
 		compiled.fields = append(compiled.fields, name)
 	}
 	sort.Strings(compiled.fields)
+	compiled.fieldIndexes = make(map[string]int, len(compiled.fields))
+	for index, name := range compiled.fields {
+		compiled.fieldIndexes[name] = index
+	}
 	actual, _ := s.plans.LoadOrStore(key, compiled)
 	return actual.(*plan), nil
 }

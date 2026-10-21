@@ -14,17 +14,42 @@ type preparedCandidate struct {
 	native sqlvalidator.CandidatePolicy
 }
 
-type fieldSnapshot map[string]bool
+// Names are immutable schema authority; bits are captured anew for each phase.
+type fieldSnapshot struct {
+	indexes  map[string]int
+	bits     uint64
+	overflow []uint64
+}
 
-func (s fieldSnapshot) Has(name string) bool { return s[name] }
+func (s fieldSnapshot) Has(name string) bool {
+	index, ok := s.indexes[name]
+	if !ok {
+		return false
+	}
+	if index < 64 {
+		return s.bits&(uint64(1)<<uint(index)) != 0
+	}
+	index -= 64
+	return s.overflow[index/64]&(uint64(1)<<uint(index%64)) != 0
+}
 
 func (p *plan) snapshot(fields xhandler.FieldSet) xhandler.FieldSet {
 	if fields == nil {
 		return nil
 	}
-	result := make(fieldSnapshot, len(p.fields))
-	for _, name := range p.fields {
-		result[name] = fields.Has(name)
+	result := fieldSnapshot{indexes: p.fieldIndexes}
+	if len(p.fields) > 64 {
+		result.overflow = make([]uint64, (len(p.fields)-64+63)/64)
+	}
+	for index, name := range p.fields {
+		if !fields.Has(name) {
+			continue
+		}
+		if index < 64 {
+			result.bits |= uint64(1) << uint(index)
+		} else {
+			result.overflow[(index-64)/64] |= uint64(1) << uint((index-64)%64)
+		}
 	}
 	return result
 }
