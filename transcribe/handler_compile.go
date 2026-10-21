@@ -164,6 +164,7 @@ func validateHandlerParameters(binding *HandlerBinding, authored, bound []*spec.
 		if param.Source != actual.Source {
 			return fmt.Errorf("handler parameter %q binding conflicts with linked contract", param.Name)
 		}
+		backedSplit := false
 		if param.TypeExpr != "" && param.TypeExpr != "?" {
 			typ, err := (xshape.Runtime{Lookup: resolver.Type}).Type(param.TypeExpr)
 			if err != nil {
@@ -173,7 +174,8 @@ func validateHandlerParameters(binding *HandlerBinding, authored, bound []*spec.
 			if err != nil {
 				return err
 			}
-			if !found || (typ != field.Type && !backedStringWireSplit(param, actual, field.Type == reflect.TypeOf(""))) {
+			backedSplit = found && backedScalarWireSplit(param, actual, (strings.TrimSpace(param.TypeExpr) == "*string" && field.Type == reflect.TypeFor[string]()) || (strings.TrimSpace(param.TypeExpr) == "*bool" && field.Type == reflect.TypeFor[bool]()))
+			if !found || (typ != field.Type && !backedSplit) {
 				return fmt.Errorf("handler parameter %q type conflicts with linked contract", param.Name)
 			}
 		}
@@ -214,7 +216,7 @@ func validateHandlerParameters(binding *HandlerBinding, authored, bound []*spec.
 		remainder := *param
 		remainder.Name, remainder.TypeExpr, remainder.Raw = "", "", ""
 		remainder.WireTypeExpr, remainder.Tag = "", ""
-		if backedStringWireSplit(param, actual, true) {
+		if backedSplit {
 			remainder.OutputTypeExpr = ""
 		}
 		remainder.Source, remainder.Required, remainder.Declaration = spec.BindSource{}, nil, ""

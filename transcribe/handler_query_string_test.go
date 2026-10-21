@@ -142,7 +142,7 @@ func TestBackedQueryStringSplit(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			a := &spec.Parameter{TypeExpr: tc.expr, OutputTypeExpr: tc.output, Source: spec.BindSource{Kind: tc.kind}, Required: &tc.required}
 			b := &spec.Parameter{TypeExpr: tc.persisted, Source: a.Source, Required: &tc.required}
-			require.Equal(t, tc.want, backedStringWireSplit(a, b, tc.destination))
+			require.Equal(t, tc.want, backedScalarWireSplit(a, b, tc.destination))
 		})
 	}
 }

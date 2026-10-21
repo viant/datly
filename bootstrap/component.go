@@ -447,13 +447,13 @@ func (r *packageComponentResolver) resolveParamType(role contractRole, field xsh
 		param.OutputTypeExpr = destination
 	}
 	// Recover the business destination from the persisted, explicit query/form split.
-	if param != nil && role == inputContract && param.Codec == nil && (param.Source.Kind == "query" || param.Source.Kind == "form") && (param.Required == nil || !*param.Required) && strings.TrimSpace(param.TypeExpr) == "*string" && param.WireTypeExpr == "" && strings.TrimSpace(param.OutputTypeExpr) == "" {
+	if param != nil && role == inputContract && param.Codec == nil && ((strings.TrimSpace(param.TypeExpr) == "*string" && (param.Source.Kind == "query" || param.Source.Kind == "form")) || (strings.TrimSpace(param.TypeExpr) == "*bool" && param.Source.Kind == "query")) && (param.Required == nil || !*param.Required) && param.WireTypeExpr == "" && strings.TrimSpace(param.OutputTypeExpr) == "" {
 		destination, err := r.fieldTypeExpression(field)
 		if err != nil {
 			return err
 		}
-		if destination == "string" {
-			param.OutputTypeExpr = "string"
+		if destination == strings.TrimPrefix(strings.TrimSpace(param.TypeExpr), "*") {
+			param.OutputTypeExpr = destination
 		}
 	}
 	// Persisted metadata and plain Go inputs must publish the same codec
