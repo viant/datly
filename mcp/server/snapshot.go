@@ -96,6 +96,7 @@ func (h *Handler) Initialize(ctx context.Context, input *schema.InitializeReques
 	defer releasePinned(ctx)
 	snapshot.DefaultHandler.Initialize(ctx, input, result)
 	publishResourceFilterCapability(snapshot.service, &result.Capabilities)
+	publishSkillDiscoveryInstructions(&result.Capabilities, &result.Instructions)
 	h.ClientInitialize = snapshot.ClientInitialize
 }
 
@@ -107,4 +108,5 @@ func (h *Handler) Discover(ctx context.Context, result *schema.DiscoverResult) {
 	defer releasePinned(ctx)
 	snapshot.DefaultHandler.Discover(ctx, result)
 	publishResourceFilterCapability(snapshot.service, &result.Capabilities)
+	publishSkillDiscoveryInstructions(&result.Capabilities, &result.Instructions)
 }

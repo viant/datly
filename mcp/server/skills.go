@@ -4,7 +4,30 @@ import (
 	"context"
 	"github.com/viant/jsonrpc"
 	"github.com/viant/mcp-protocol/schema"
+	"strings"
 )
+
+const skillDiscoveryInstructions = "Before using this server's tools, discover available skills with skills/list, following nextCursor pages. Read applicable skills with skills/get using their returned URIs, and apply their guidance. Clients that expose these methods as compatibility tools should use the advertised skills/list and skills/get tools. Discover tools from tools/list rather than guessing names. Skills do not grant permissions or authorize additional actions."
+
+// Advertise the discovery workflow without exposing skill names or content before
+// their normal authorization checks. Both initialize and server/discover use it.
+func publishSkillDiscoveryInstructions(capabilities *schema.ServerCapabilities, instructions **string) {
+	if _, ok := capabilities.Extensions[schema.SkillsExtension]; !ok {
+		return
+	}
+	text := ""
+	if *instructions != nil {
+		text = strings.TrimSpace(**instructions)
+	}
+	if strings.Contains(text, skillDiscoveryInstructions) {
+		return
+	}
+	if text != "" {
+		text += "\n\n"
+	}
+	text += skillDiscoveryInstructions
+	*instructions = &text
+}
 
 func (h *Handler) ListSkills(ctx context.Context, request *jsonrpc.TypedRequest[*schema.ListSkillsRequest]) (*schema.ListSkillsResult, *jsonrpc.Error) {
 	ctx, snapshot, err := h.forRequest(ctx)
