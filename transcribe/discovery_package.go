@@ -36,7 +36,7 @@ func (c *discoveryCompilation) compilePackages(ctx context.Context, project *Pro
 			return err
 		}
 		source := &Source{Const: c.discovery.Const, Scope: route.PackagePath, Name: pkg.ComponentName(), Path: route.SourceFile,
-			Connector: c.discovery.Connector, Resources: resources, Types: c.catalog, ColumnRefiner: c.discovery.ColumnRefiner}
+			Connector: c.discovery.Connector, Resources: resources, Types: c.catalog, ColumnRefiner: c.discovery.ColumnRefiner, PreparedColumns: c.discovery.PreparedColumns}
 		result, err := (&descriptorPackageCompilation{source: source, packageSource: pkg, catalog: c.catalog}).compile(ctx)
 		if err != nil {
 			return fmt.Errorf("compile package component %q: %w", identity, err)

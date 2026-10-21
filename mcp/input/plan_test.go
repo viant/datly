@@ -411,3 +411,29 @@ func TestScopeRequestRetainsCompiledNonBodySources(t *testing.T) {
 	assertValue(t, scope.Header(), reflect.TypeOf(""), "Authorization", "Bearer token")
 	assertValue(t, scope.Cookie(), reflect.TypeOf(""), "session", "abc")
 }
+
+func TestSelectorCSVStringsPreserveArrayAndOrdinaryListSemantics(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		csv   bool
+		value any
+		want  []string
+	}{
+		{name: "selector CSV", csv: true, value: "id,label", want: []string{"id", "label"}},
+		{name: "selector bracket CSV", csv: true, value: "[id,label]", want: []string{"id", "label"}},
+		{name: "selector native array", csv: true, value: []string{"id,label"}, want: []string{"id,label"}},
+		{name: "ordinary query string", value: "Acme, Inc.", want: []string{"Acme, Inc."}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			plan, err := NewCompiler().Compile([]Argument{{PublicName: "Projection", Source: bindstate.Location{Kind: "query", In: "matches.details.fields"}, SourceType: reflect.TypeOf([]string{}), SplitCSVString: tc.csv}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			scope, err := plan.Scope(Arguments{"Projection": tc.value})
+			if err != nil {
+				t.Fatal(err)
+			}
+			assertValue(t, scope.Query(), reflect.TypeOf([]string{}), "matches.details.fields", tc.want)
+		})
+	}
+}

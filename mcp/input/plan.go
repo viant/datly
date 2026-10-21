@@ -19,6 +19,9 @@ type Argument struct {
 	Aliases    []string
 	Source     bindstate.Location
 	SourceType reflect.Type
+	// SplitCSVString preserves the HTTP CSV form of explicitly compiled selector
+	// arguments. Native arrays retain each element exactly as supplied.
+	SplitCSVString bool
 }
 
 // Plan is an immutable argument-to-provider projection.

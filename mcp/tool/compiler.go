@@ -201,10 +201,11 @@ func (c *Compiler) Compile(input Input) (*Plan, error) {
 			inputSchema.Required = append(inputSchema.Required, argument.publicName)
 		}
 		bindingArguments[index] = mcpinput.Argument{
-			PublicName: argument.publicName,
-			Aliases:    argument.aliases,
-			Source:     bindstate.Location{Kind: argument.sourceKind, In: argument.sourceName},
-			SourceType: argument.sourceType,
+			PublicName:     argument.publicName,
+			Aliases:        argument.aliases,
+			Source:         bindstate.Location{Kind: argument.sourceKind, In: argument.sourceName},
+			SourceType:     argument.sourceType,
+			SplitCSVString: argument.querySelectorCSV,
 		}
 	}
 	projectBinarySchema(arguments, &inputSchema)
@@ -301,6 +302,10 @@ func (c *Compiler) compileExternal(inputField registry.InputField, field reflect
 	sourceTag := string(field.Tag)
 	if param, ok := binding.Extension.(*spec.Parameter); ok && param != nil {
 		sourceTag = param.Tag
+		// Fields accepts HTTP-style CSV strings as well as native MCP arrays.
+		// Use canonical selector metadata: relation-specific public names need not
+		// be named Fields and unrelated string lists may contain literal commas.
+		argument.querySelectorCSV = argument.sourceKind == "query" && param.QuerySelector != nil && param.QuerySelector.Property == spec.SelectorPropertyFields
 		argument.description = strings.TrimSpace(param.Description)
 		argument.example = strings.TrimSpace(param.Example)
 	}

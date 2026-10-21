@@ -126,7 +126,7 @@ require (
 	github.com/viant/afs v1.30.1-0.20260914155934-90e95d483861
 	github.com/viant/bindly v0.4.1-0.20261020114552-79f0b7e785ef
 	github.com/viant/godiff v0.4.3-0.20260914060527-9f2005ca82e8
-	github.com/viant/jsonrpc v0.25.1-0.20261017043720-5809a36c92af
+	github.com/viant/jsonrpc v0.25.1-0.20261021031150-a24a3b9ae218
 	github.com/viant/scy v0.35.1-0.20260914041206-699e6c909726
 	github.com/viant/toolbox v0.39.0
 	github.com/viant/xlsy v0.3.1

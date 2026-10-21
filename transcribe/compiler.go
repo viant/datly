@@ -77,6 +77,9 @@ func (c *Compiler) Compile(ctx context.Context, source *Source) (*Result, error)
 	if source == nil {
 		return nil, ErrNilSource
 	}
+	if source.PreparedColumns != nil && source.ColumnRefiner != nil {
+		return nil, fmt.Errorf("prepared columns and database column discovery are mutually exclusive")
+	}
 	// Source-owner evidence belongs to this compilation; reusable compilers must
 	// not attach a previous source's closure to another generated component.
 	c.factoryReferences = nil
@@ -498,6 +501,21 @@ func refineComponentColumnsWithOwnerProof(ctx context.Context, component *spec.C
 }
 
 func refineComponentColumnsWithFactoryProof(ctx context.Context, component *spec.Component, source *Source, declarations gen.Declarations, viewBindings gen.ViewBindings, typeResolver *typecatalog.Resolver, ownerProof func(*spec.Component) error, composition *authoring.FactoryComposition, factoryInputs ...gen.Input) error {
+	if source.PreparedColumns != nil {
+		if source.ColumnRefiner != nil {
+			return fmt.Errorf("prepared columns and database column discovery are mutually exclusive")
+		}
+		if len(authoredBorrowedSQLRows(component)) != 0 || composition != nil {
+			return fmt.Errorf("prepared columns do not provide borrowed-source or factory composition proof")
+		}
+		if err := column.RefinePrepared(ctx, component, source.Const.Resources(source.Resources), source.PreparedColumns, typeResolver); err != nil {
+			return err
+		}
+		if ownerProof != nil {
+			return ownerProof(component)
+		}
+		return nil
+	}
 	var factoryShape *gen.ExternalHandler
 	var linkedViews gen.ViewReferences
 	if len(factoryInputs) != 0 {
