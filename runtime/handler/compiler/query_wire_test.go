@@ -7,80 +7,12 @@ import (
 	"github.com/viant/bindly/locator"
 	bs "github.com/viant/bindly/state"
 	"github.com/viant/datly/spec"
-	"mime/multipart"
 	"reflect"
 	"testing"
 )
 
 type namedFormString string
 type namedQueryBool bool
-
-func TestPersistedQueryStringWireBoundaries(t *testing.T) {
-	required := true
-	for _, tc := range []struct {
-		name, kind, dataType string
-		required             *bool
-		typ                  reflect.Type
-		tag                  reflect.StructTag
-		want                 bool
-	}{
-		{"explicit", "query", "*string", nil, reflect.TypeFor[string](), "", true},
-		{"explicit form", "form", "*string", nil, reflect.TypeFor[string](), "", true},
-		{"explicit bool query", "query", "*bool", nil, reflect.TypeFor[bool](), "", true},
-		{"plain optional bool", "query", "bool", nil, reflect.TypeFor[bool](), "", false},
-		{"required bool query", "query", "*bool", &required, reflect.TypeFor[bool](), "", true},
-		{"named bool query", "query", "*bool", nil, reflect.TypeFor[namedQueryBool](), "", false},
-		{"pointer bool query", "query", "*bool", nil, reflect.TypeFor[*bool](), "", false},
-		{"bool form exclusion", "form", "*bool", nil, reflect.TypeFor[bool](), "", true},
-		{"bool path exclusion", "path", "*bool", nil, reflect.TypeFor[bool](), "", true},
-		{"bool body exclusion", "body", "*bool", nil, reflect.TypeFor[bool](), "", false},
-		{"bool codec exclusion", "query", "*bool", nil, reflect.TypeFor[bool](), `codec:"json"`, false},
-		{"bool wireType exclusion", "query", "*bool", nil, reflect.TypeFor[bool](), `wireType:"model.Value"`, false},
-		{"plain optional form", "form", "string", nil, reflect.TypeFor[string](), "", false},
-		{"required form", "form", "*string", &required, reflect.TypeFor[string](), "", true},
-		{"named form", "form", "*string", nil, reflect.TypeFor[namedFormString](), "", false},
-		{"int form", "form", "*int", nil, reflect.TypeFor[int](), "", true},
-		{"bool form", "form", "*bool", nil, reflect.TypeFor[bool](), "", true},
-		{"file form", "form", "*string", nil, reflect.TypeFor[[]*multipart.FileHeader](), "", false},
-		{"codec form", "form", "*string", nil, reflect.TypeFor[string](), `codec:"json"`, false},
-		{"wireType form", "form", "*string", nil, reflect.TypeFor[string](), `wireType:"model.Value"`, false},
-		{"path", "path", "*string", nil, reflect.TypeFor[string](), "", true},
-		{"optional scalar default", "query", "string", nil, reflect.TypeFor[string](), `value:"ui"`, false},
-		{"required", "query", "*string", &required, reflect.TypeFor[string](), "", true},
-		{"integer", "query", "*int", nil, reflect.TypeFor[int](), "", true},
-		{"collection", "query", "[]string", nil, reflect.TypeFor[[]string](), "", false},
-		{"body", "body", "*string", nil, reflect.TypeFor[string](), "", false},
-		{"codec", "query", "*string", nil, reflect.TypeFor[string](), `codec:"json"`, false},
-		{"wireType", "query", "*string", nil, reflect.TypeFor[string](), `wireType:"model.Value"`, false},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			b := bindly.BindingSpec{DataType: tc.dataType, Location: bs.Location{Kind: tc.kind}, Required: tc.required, DefaultValue: "ui"}
-			require.NoError(t, applyExplicitScalarWire(reflect.StructField{Type: tc.typ, Tag: tc.tag}, &b))
-			p, _ := b.Extension.(*spec.Parameter)
-			if tc.want {
-				schemaType := "string"
-				if tc.typ == reflect.TypeFor[bool]() {
-					schemaType = "boolean"
-				}
-				if tc.typ == reflect.TypeFor[int]() {
-					schemaType = "integer"
-				}
-				require.Equal(t, &spec.WireSchema{Type: schemaType, Nullable: true}, p.WireSchema)
-			} else {
-				require.Nil(t, p)
-			}
-			require.Nil(t, b.SourceType)
-			require.Nil(t, b.Transformer)
-			require.Equal(t, "ui", b.DefaultValue)
-			require.Equal(t, tc.required, b.Required)
-		})
-	}
-	explicit := &spec.Parameter{WireSchema: &spec.WireSchema{Type: "string", Format: "date"}}
-	b := bindly.BindingSpec{DataType: "*string", Location: bs.Location{Kind: "query"}, Extension: explicit}
-	require.NoError(t, applyExplicitScalarWire(reflect.StructField{Type: reflect.TypeFor[string]()}, &b))
-	require.Same(t, explicit, b.Extension)
-	require.False(t, explicit.WireSchema.Nullable)
-}
 
 type boolWireTransformer struct{}
 

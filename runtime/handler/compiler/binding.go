@@ -240,7 +240,7 @@ func (t *codecTransformer) Transform(ctx context.Context, resolver locator.Resol
 	}))
 }
 
-// applyExplicitScalarWire lowers persisted dataType discovery authority only.
+// applyExplicitScalarWire canonicalizes explicit dataType discovery authority only.
 func applyExplicitScalarWire(field reflect.StructField, binding *bindly.BindingSpec) error {
 	return applyExplicitScalarWireResolved(field, binding, nil)
 }
@@ -261,7 +261,7 @@ func applyExplicitScalarWireResolved(field reflect.StructField, binding *bindly.
 	if err != nil {
 		return nil
 	} // Discovery must not reject an ordinary binding.
-	pair, ok := typeidentity.ReflectScalarPair(wire, field.Type)
+	_, ok := typeidentity.ReflectScalarPair(wire, field.Type)
 	if !ok {
 		return nil
 	}
@@ -275,13 +275,13 @@ func applyExplicitScalarWireResolved(field reflect.StructField, binding *bindly.
 	if param != nil && (param.WireSchema != nil || len(param.WireSchemas) != 0) {
 		return nil
 	}
-	if param == nil {
-		param = &spec.Parameter{}
-	} else {
-		copy := *param
-		param = &copy
+	// The canonical Extension pointer belongs to selector ownership checks.
+	// Persist only the resolved wire spelling in the existing DataType carrier;
+	// immutable route discovery derives its schema without replacing Extension.
+	canonical, err := (xshape.Resolver{Qualifier: func(pkg, _ string) string { return pkg }}).Expression(wire)
+	if err != nil {
+		return nil
 	}
-	param.WireSchema = &spec.WireSchema{Type: pair.Type, Nullable: pair.Nullable}
-	binding.Extension = param
+	binding.DataType = canonical
 	return nil
 }
