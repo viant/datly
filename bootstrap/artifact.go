@@ -41,7 +41,9 @@ type ArtifactInput struct {
 	// reader declarations into a component whose handler produces that output.
 	// Enabled reports resolve those declarations into separate metadata only.
 	HandlerOwnedOutput bool
-	DirectViewField    string
+	// SelectableOutput marks handler-owned row projections for output discovery.
+	SelectableOutput bool
+	DirectViewField  string
 	// Resources is the same Bindly store supplied to runtime composition. SQL,
 	// reader, and codec compilers consume it only through the fs.FS contract.
 	Resources *resource.Store
@@ -209,7 +211,7 @@ func (c *artifactCompiler) compile() (*Artifact, error) {
 	if readerPlan != nil {
 		dataField = readerPlan.OutputViewField
 	}
-	outputContract, err := (output.Compiler{Lookup: c.lookupType}).Compile(output.CompileInput{Component: component, Type: input.OutputType, DataField: dataField})
+	outputContract, err := (output.Compiler{Lookup: c.lookupType}).Compile(output.CompileInput{Component: component, Type: input.OutputType, DataField: dataField, SelectableRows: input.SelectableOutput})
 	if err != nil {
 		return nil, err
 	}

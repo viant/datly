@@ -25,6 +25,8 @@ type CompileInput struct {
 	Component *spec.Component
 	Type      reflect.Type
 	DataField string
+	// SelectableRows describes handlers that return a requested subset of row fields.
+	SelectableRows bool
 }
 
 type Compiler struct {
@@ -40,6 +42,7 @@ type Plan struct {
 	caseFormat          text.CaseFormat
 	timeLayout          string
 	custom              Marshaller
+	selectableRows      bool
 	rows                *rowsPlan
 	exclude             exclusions
 	jsonEncoder         *structjson.Marshaller
@@ -62,7 +65,10 @@ type Result struct {
 }
 
 func (c Compiler) Compile(input CompileInput) (*Plan, error) {
-	p := &Plan{typeOf: input.Type, format: "json"}
+	p := &Plan{typeOf: input.Type, format: "json", selectableRows: input.SelectableRows}
+	if input.Component != nil && input.Component.RootView != nil && input.Component.RootView.Selector != nil && input.Component.RootView.Selector.AllowFields {
+		p.selectableRows = true
+	}
 	settings := (*spec.Settings)(nil)
 	if input.Component != nil {
 		settings = input.Component.Settings

@@ -14,6 +14,7 @@ import (
 	"github.com/viant/datly/spec"
 	dsql "github.com/viant/datly/sql"
 	"github.com/viant/mcp-protocol/schema"
+	"github.com/xeipuuv/gojsonschema"
 )
 
 type projectedMCPRow struct {
@@ -80,6 +81,10 @@ func TestReportMCPOutputSelectionPreservesNullZeroAndMetadata(t *testing.T) {
 	require.NoError(t, err)
 	want := `{"data":[{"id":0,"enabled":false,"count":0,"price":null,"label":""}],"status":"ok","metadata":{"source":"fixture"}}`
 	require.JSONEq(t, want, string(encoded))
+	checked, err := gojsonschema.Validate(gojsonschema.NewGoLoader(tool.Metadata.OutputSchema), gojsonschema.NewBytesLoader(encoded))
+	require.NoError(t, err)
+	require.True(t, checked.Valid(), "projected output must satisfy advertised MCP schema: %v", checked.Errors())
+
 	require.NotEmpty(t, result.Content)
 	text, ok := result.Content[0].(schema.TextContent)
 	require.True(t, ok)

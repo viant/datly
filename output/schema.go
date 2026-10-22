@@ -113,7 +113,7 @@ func (b *jsonSchemaBuilder) value(t reflect.Type, ref, path string) (map[string]
 				item["description"] = description
 			}
 			properties[field.name] = item
-			if field.required {
+			if field.required && !b.plan.selectableRowPath(path) {
 				required = append(required, field.name)
 			}
 		}
@@ -215,4 +215,14 @@ func (p *Plan) standardSchemaFields(t reflect.Type, path string) ([]jsonSchemaFi
 			path: schemaFieldPath(path, field.Field.Name), required: !field.MayOmit(), quoted: field.Quoted})
 	}
 	return result, nil
+}
+
+// Only selectable data rows may omit fields. Envelope and metadata contracts
+// retain their required fields and every advertised property keeps its type.
+func (p *Plan) selectableRowPath(path string) bool {
+	if !p.selectableRows || p.rows == nil {
+		return false
+	}
+	root := p.rows.name
+	return root == "" || path == root || strings.HasPrefix(path, root+".")
 }
