@@ -91,15 +91,11 @@ func (m rootCacheMatcher) apply(ctx context.Context, connection dsql.Connection)
 	if input.Kind() != reflect.Pointer || input.IsNil() || input.Elem().Type() != m.session.InputType {
 		return fmt.Errorf("cache identity input must be *%s", m.session.InputType)
 	}
-	selector := m.selectors.forView(view).Clone()
-	projection := viewProjection(view, selector)
+	requestedSelector := m.selectors.forView(view)
+	projection := viewProjection(view, requestedSelector)
 	// Warmup's authored projection determines cache identity. Invocation fields
 	// only describe the requested native replay; they never rename that entry.
-	if selector == nil {
-		selector = &xstate.Selector{}
-	}
-	selector.Fields = append([]string(nil), settings.FieldNames...)
-	selector.Columns = nil
+	selector := canonicalWarmupSelector(requestedSelector, settings.FieldNames)
 	// This isolated key-render context grants no row authorization bypass. An
 	// opt-in predicate validates its sealed scope and retained values. Ordinary
 	// input preparation, actual/fallback SQL and other predicates stay filtered.
@@ -137,6 +133,9 @@ func (m rootCacheMatcher) apply(ctx context.Context, connection dsql.Connection)
 	} else if !compatible {
 		return nil
 	}
+	if !warmupOrderingReplayable(requestedSelector) {
+		return nil
+	}
 	// Native indexed replay applies its window per index value. A root SQL
 	// window is global, so multiple index values must use the ordinary query.
 	if len(values) > 1 && (identity.Limit > 0 || identity.Offset > 0) {
@@ -155,6 +154,26 @@ func (m rootCacheMatcher) apply(ctx context.Context, connection dsql.Connection)
 		m.query.RequestedFields = append(m.query.RequestedFields, field)
 	}
 	return nil
+}
+
+// Canonical identity belongs to the warmup projection, not the request's sort.
+// Keep source-authored ordering in SQL and preserve the selector's window so
+// CacheSQL retains its existing pagination validation and matcher semantics.
+func canonicalWarmupSelector(requested *xstate.Selector, fields []string) *xstate.Selector {
+	selector := requested.Clone()
+	if selector == nil {
+		selector = &xstate.Selector{}
+	}
+	selector.Fields = append([]string(nil), fields...)
+	selector.Columns = nil
+	selector.OrderBy = ""
+	return selector
+}
+
+func warmupOrderingReplayable(requested *xstate.Selector) bool {
+	// Native warmup replay does not prove request ordering before its window.
+	// Leave the exact-query matcher intact rather than returning a wrong top-N.
+	return requested == nil || strings.TrimSpace(requested.OrderBy) == ""
 }
 
 // selectWarmup picks the most restrictive supplied index: warmups whose index

@@ -14,7 +14,6 @@ import (
 	"github.com/viant/sqlx/io/read/cache"
 	xhandler "github.com/viant/xdatly/handler"
 	xreader "github.com/viant/xdatly/reader"
-	xstate "github.com/viant/xdatly/state"
 )
 
 type relationRead struct {
@@ -222,13 +221,9 @@ func (r *relationRead) applyWarmupMatcher(ctx context.Context, query, matcher *c
 	if settings == nil {
 		return nil
 	}
-	selector := r.selector.forView(view).Clone()
-	projection := relationProjection(view, selector, r.child.Relation())
-	if selector == nil {
-		selector = &xstate.Selector{}
-	}
-	selector.Fields = append([]string(nil), settings.FieldNames...)
-	selector.Columns = nil
+	requestedSelector := r.selector.forView(view)
+	projection := relationProjection(view, requestedSelector, r.child.Relation())
+	selector := canonicalWarmupSelector(requestedSelector, settings.FieldNames)
 	identity, err := rsql.NewBuilder().CacheSQL(ctx,
 		rsql.WithBuilderComponent(r.session.Component), rsql.WithBuilderView(view), rsql.WithBuilderCriteriaCompiler(r.plan.Criteria),
 		rsql.WithBuilderSelector(selector), rsql.WithBuilderProjection(viewProjection(view, selector)),
@@ -251,6 +246,9 @@ func (r *relationRead) applyWarmupMatcher(ctx context.Context, query, matcher *c
 	if _, compatible, _, err := (cache.Projection{Stored: stored}).Indexes(requested); err != nil {
 		return err
 	} else if !compatible {
+		return nil
+	}
+	if !warmupOrderingReplayable(requestedSelector) {
 		return nil
 	}
 	if indexColumn := strings.TrimSpace(settings.IndexColumn); indexColumn != "" {
