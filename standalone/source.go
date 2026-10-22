@@ -217,7 +217,8 @@ func (s *source) compileLinked(ctx context.Context, types *typecatalog.Catalog) 
 		}
 		// Source compilation applies the instance connector to components that
 		// omit one in their tag. Preserve that contract for reflected packages.
-		if component.Settings != nil && component.Settings.DefaultConnector == "" {
+		// Independent child orchestrators deliberately own no root data source.
+		if component.Settings != nil && component.Settings.DefaultConnector == "" && !component.Settings.IndependentChildTransactions {
 			component.Settings.DefaultConnector = strings.TrimSpace(s.config.Connector)
 		}
 		key := component.Key.String()
