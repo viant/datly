@@ -3,7 +3,6 @@ package validation
 import (
 	"database/sql/driver"
 	"fmt"
-	"github.com/viant/sqlx/io"
 	xhandler "github.com/viant/xdatly/handler"
 )
 
@@ -11,16 +10,9 @@ func (p *plan) checkCoverage(policy xhandler.ValidationOptions) error {
 	if policy.CheckOnly || policy.Action == xhandler.WriteInsert {
 		return nil
 	}
-	byColumn := make(map[string]string, len(p.columns))
 	keys := 0
 	for index, column := range p.columns {
-		fields, ok := column.(io.Fielder)
-		if !ok {
-			return fmt.Errorf("validation column %s has no canonical Go field", column.Name())
-		}
-		path := fields.Fields()
-		name := path[len(path)-1].Name
-		byColumn[column.Name()] = name
+		name := p.columnFields[column.Name()]
 		if tag := column.Tag(); tag != nil && tag.PrimaryKey {
 			keys++
 			if !policy.PreviousFields.Has(name) {
@@ -51,7 +43,7 @@ func (p *plan) checkCoverage(policy xhandler.ValidationOptions) error {
 		if tag == nil || tag.UniqueDep == "" {
 			continue
 		}
-		name, dependency := byColumn[column.Name()], byColumn[tag.UniqueDep]
+		name, dependency := p.columnFields[column.Name()], p.columnFields[tag.UniqueDep]
 		if dependency == "" {
 			return fmt.Errorf("unique dependency column %s is not mapped", tag.UniqueDep)
 		}

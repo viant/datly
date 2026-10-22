@@ -6,7 +6,7 @@ import (
 
 	gen "github.com/viant/datly/transcribe/generate"
 	plan "github.com/viant/datly/transcribe/handler/ast"
- "github.com/viant/datly/transcribe/internal/bodygraph"
+	"github.com/viant/datly/transcribe/internal/bodygraph"
 	xshape "github.com/viant/x/shape"
 )
 

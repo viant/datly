@@ -254,15 +254,22 @@ func (p *Program) validateQueuedContractState(ctx context.Context, binder xhandl
 // sourceSliceEnd preserves captured parent/role and action boundaries. It never
 // coalesces different parents or skips an intervening action, even for one table.
 func (p *Program) sourceSliceEnd(start int) int {
-	first := p.actionFrame(p.actions.Rows[start])
-	if first == nil || first.Record.QueueContract != "source-slice" || p.actions.Rows[start].Kind != xhandler.WriteInsert {
+	action := p.actions.Rows[start]
+	if action == nil || action.Kind != xhandler.WriteInsert {
+		return start
+	}
+	first := p.actionFrame(action)
+	if first == nil || first.Record.QueueContract != "source-slice" {
 		return start
 	}
 	end := start + 1
 	for end < len(p.actions.Rows) {
 		action := p.actions.Rows[end]
+		if action == nil || action.Kind != xhandler.WriteInsert {
+			break
+		}
 		frame := p.actionFrame(action)
-		if frame == nil || action.Kind != xhandler.WriteInsert || frame.Record != first.Record || frame.Parent != first.Parent {
+		if frame == nil || frame.Record != first.Record || frame.Parent != first.Parent {
 			break
 		}
 		end++

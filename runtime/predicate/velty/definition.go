@@ -62,6 +62,16 @@ func (c DefinitionCompiler) Compile(component *spec.Component) error {
 			if err != nil {
 				return fmt.Errorf("compile predicate %s for %s: %w", definition.Name, param.Name, err)
 			}
+			// Handler construction already owns pointer allocation. Catalog keys
+			// identify declarations, so imported and absolute pointer spellings
+			// must use the same identity as their value form. Do not unwrap
+			// slices or other structural expressions into a handler declaration.
+			if strings.HasPrefix(name, "*") {
+				declaration, namedErr := (shape.Resolver{}).Named(name)
+				if namedErr == nil && strings.TrimLeft(name, "*") == declaration {
+					name = declaration
+				}
+			}
 			if c.RequireAvailable {
 				if c.Catalog == nil {
 					return fmt.Errorf("compile predicate %s for %s: type authority is required", definition.Name, param.Name)

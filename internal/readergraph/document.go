@@ -154,14 +154,9 @@ func Contracts(c *spec.Component, input, output *x.Type, lookup xshape.Lookup) e
 		if err != nil {
 			return err
 		}
-		var field *xshape.Field
-		for i := range fields {
-			if strings.EqualFold(fields[i].Name, p.Name) {
-				if field != nil {
-					return fmt.Errorf("ambiguous reader parameter %s", p.Name)
-				}
-				field = &fields[i]
-			}
+		field, err := ParameterField(fields, p)
+		if err != nil {
+			return err
 		}
 		if field == nil {
 			if p.QuerySelector != nil {

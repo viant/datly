@@ -125,9 +125,9 @@ func (r *planResolver) prepareReaderMetadata() error {
 		if view == nil {
 			continue
 		}
-		field, ok := contract.Field(param.Name)
-		if !ok {
-			return fmt.Errorf("reader metadata missing exact resource field %s", param.Name)
+		field, err := r.readerParameterField(contract, param)
+		if err != nil {
+			return err
 		}
 		metadata, err := tag.ParseField(reflect.StructField{Name: field.Name, Tag: reflect.StructTag(field.Tag)})
 		if err != nil {
@@ -711,29 +711,29 @@ func (r *planResolver) readerMetadataCapability() (string, error) {
 	if p.Resources == nil || p.Resources.authoredSource() {
 		return "no generator-owned resource declaration capability", nil
 	}
-	var rootHolder string
+	var rootParameter *spec.Parameter
 	for _, parameter := range spec.EffectiveParameters(c.Parameters) {
 		if parameter != nil && parameter.Source.Kind == "output" && parameter.Source.Name == "view" {
-			if rootHolder != "" {
+			if rootParameter != nil {
 				return "", fmt.Errorf("reader metadata ambiguous root holder")
 			}
-			rootHolder = parameter.Name
+			rootParameter = parameter
 		}
 	}
-	if rootHolder == "" {
+	if rootParameter == nil {
 		return "no established root URI holder capability", nil
 	}
 	output, err := r.types.Descriptor(p.Output.DescriptorKey)
 	if err != nil {
 		return "", err
 	}
-	field, err := xshape.New(output, r.types.Descriptor).ResolveField(rootHolder)
+	metadataField, err := r.readerParameterField(p.Output, rootParameter)
 	if err != nil {
 		return "", err
 	}
-	metadataField, ok := p.Output.Field(rootHolder)
-	if !ok {
-		return "", fmt.Errorf("reader metadata exact root contract field is missing")
+	field, err := xshape.New(output, r.types.Descriptor).ResolveField(metadataField.Name)
+	if err != nil {
+		return "", err
 	}
 	metadata, err := tag.ParseField(reflect.StructField{Name: metadataField.Name, Tag: reflect.StructTag(metadataField.Tag)})
 	if err != nil {
@@ -855,4 +855,23 @@ func readerMetadataScalar(descriptor *x.Type, lookup xshape.Lookup, seen map[str
 		return err == nil && readerMetadataScalar(target, lookup, seen)
 	}
 	return false
+}
+
+func (r *planResolver) readerParameterField(contract ContractPlan, parameter *spec.Parameter) (*xshape.Field, error) {
+	descriptor, err := r.types.Descriptor(contract.DescriptorKey)
+	if err != nil {
+		return nil, err
+	}
+	fields, err := xshape.New(descriptor, r.types.Descriptor).Fields()
+	if err != nil {
+		return nil, err
+	}
+	field, err := readergraph.ParameterField(fields, parameter)
+	if err != nil {
+		return nil, err
+	}
+	if field == nil {
+		return nil, fmt.Errorf("reader metadata parameter %s has no contract field", parameter.Name)
+	}
+	return field, nil
 }

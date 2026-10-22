@@ -116,7 +116,7 @@ func TestGeneratorAuxiliaryCanonicalBodyGraph(t *testing.T) {
 			if strings.Contains(string(data), "type Flight struct") || strings.Contains(string(data), "type FlightHas struct") {
 				t.Fatal("external definition emitted")
 			}
-			if strings.HasSuffix(file.Path, "router.go") && (strings.Contains(string(data), "handler=") || !strings.Contains(string(data), `mutation:\"patch\"`)) {
+			if strings.HasSuffix(file.Path, "router.go") && (strings.Contains(string(data), "handler=") || !strings.Contains(string(data), `mutation:"patch"`)) {
 				t.Fatalf("route not native: %s", data)
 			}
 			snapshot[file.Path] = string(data)

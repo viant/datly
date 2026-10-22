@@ -129,6 +129,9 @@ func (d *Data) checkBufferedParentLocked(parent *dataOperation, referenceColumn 
 			continue
 		}
 		if seen && operation.kind != dataOpInsert {
+			if operation.kind == dataOpExecute && distinctBufferedUpdateSQL(parent.table, operation.dml, owner.dialect) {
+				continue
+			}
 			if operation.kind == dataOpDelete && distinctBufferedDeleteTarget(parent.table, operation.table, owner.dialect) {
 				continue
 			}

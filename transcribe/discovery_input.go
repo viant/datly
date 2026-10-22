@@ -79,10 +79,19 @@ func (c *discoveryInputCompiler) compile() (*column.TemplateInput, error) {
 			}
 		}
 		if !c.linkedInputAllowed() {
-			// Refresh only the prospective side projection. The admitted holder
-			// remains the exact business contract for ordinary field discovery.
-			if _, err := c.inputType(); err != nil {
-				return nil, err
+			// Current DQL may add ordinary inputs while retaining selectors.
+			// Discover against that prospective input, not the stale linked
+			// business shape; selector contract validation above still applies.
+			prospective, inputErr := c.inputType()
+			if inputErr != nil {
+				return nil, inputErr
+			}
+			resolved, resolveErr := c.resolver.ResolveWithProvenance(c.component.Settings.InputType)
+			if resolveErr != nil {
+				return nil, resolveErr
+			}
+			if resolved != nil && resolved.Origin == typecatalog.TypeOriginGenerated {
+				selectedInput = prospective
 			}
 		}
 	}
