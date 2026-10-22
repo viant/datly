@@ -182,7 +182,7 @@ func TestLinkedCubeRegistrationMCPAndDependency(t *testing.T) {
  ctx:=context.Background()
  dimensions,_:=reflect.TypeFor[SpendCubeInput]().FieldByName("Dimensions")
  account,_:=dimensions.Type.FieldByName("AccountID")
- if strings.Split(account.Tag.Get("json"),",")[0]!="accountID"{t.Fatalf("reader serialization leaked into cube discovery: %s",account.Tag)}
+ if strings.Split(account.Tag.Get("json"),",")[0]!="accountId"{t.Fatalf("reader serialization leaked into cube discovery: %s",account.Tag)}
  if _,found:=dimensions.Type.FieldByName("Hidden");found{t.Fatal("json:- selection exposed")}
  measures,_:=reflect.TypeFor[SpendCubeInput]().FieldByName("Measures")
  amount,_:=measures.Type.FieldByName("Amount")
@@ -190,7 +190,7 @@ func TestLinkedCubeRegistrationMCPAndDependency(t *testing.T) {
  if _,found:=reflect.TypeFor[SpendRow]().FieldByName("DaysRemaining");!found{t.Fatal("transient computed field removed from regular reader output")}
  if strings.Split(amount.Tag.Get("json"),",")[0]!="amount"{t.Fatalf("reader measure serialization leaked into cube: %s",amount.Tag)}
  var bound SpendCubeInput
- if err:=json.Unmarshal([]byte("{\"dimensions\":{\"accountID\":true},\"measures\":{\"amount\":true}}"),&bound);err!=nil{t.Fatal(err)}
+ if err:=json.Unmarshal([]byte("{\"dimensions\":{\"accountId\":true},\"measures\":{\"amount\":true}}"),&bound);err!=nil{t.Fatal(err)}
  if !bound.Dimensions.AccountID||!bound.Measures.Amount{t.Fatal("lower-camel linked selections did not bind")}
  base:=resolve(t,reflect.TypeFor[Component](),reflect.TypeFor[SpendInput](),reflect.TypeFor[SpendOutput]())
  cube:=resolve(t,reflect.TypeFor[SpendCubeComponent](),reflect.TypeFor[SpendCubeInput](),reflect.TypeFor[SpendCubeOutput]())
@@ -219,7 +219,7 @@ func TestLinkedCubeRegistrationMCPAndDependency(t *testing.T) {
  reg,err:=parent.Registration(registry.RegisteredComponent{});if err!=nil{t.Fatal(err)};registered=append(registered,reg)
  rt,err:=runtime.NewRuntime(registered);if err!=nil{t.Fatal(err)};defer rt.Shutdown(ctx)
  for _,path:=range []string{"/spend/cube","/parent"} {
-  req:=httptest.NewRequest("POST",path,strings.NewReader("{\"dimensions\":{\"accountID\":true},\"filters\":{\"accountID\":0}}"));req.Header.Set("Content-Type","application/json")
+  req:=httptest.NewRequest("POST",path,strings.NewReader("{\"dimensions\":{\"accountId\":true},\"filters\":{\"accountId\":0}}"));req.Header.Set("Content-Type","application/json")
   scope,err:=requestprovider.New(req);if err!=nil{t.Fatal(err)}
   _,err=rt.ExecuteRoute(ctx,"POST",path,scope);scope.Close();if err!=nil{t.Fatalf("%s: %v",path,err)}
  }
@@ -228,13 +228,13 @@ func TestLinkedCubeRegistrationMCPAndDependency(t *testing.T) {
  toolPlan,_:=service.Catalog().Tool("SpendCube")
  wire,_:=json.Marshal(toolPlan.Metadata().InputSchema)
  if strings.Contains(string(wire),"\"period\":"){t.Fatalf("mcp:- nested cube filter entered discovery: %s",wire)}
- if !strings.Contains(string(wire),"\"accountID\":")||!strings.Contains(string(wire),"\"amount\":")||strings.Contains(string(wire),"\"AccountID\":")||strings.Contains(string(wire),"\"reader_amount\":")||strings.Contains(string(wire),"\"Hidden\":"){t.Fatalf("MCP cube discovery changed selection names or exposed a hidden column: %s",wire)}
+ if !strings.Contains(string(wire),"\"accountId\":")||!strings.Contains(string(wire),"\"amount\":")||strings.Contains(string(wire),"\"AccountID\":")||strings.Contains(string(wire),"\"reader_amount\":")||strings.Contains(string(wire),"\"Hidden\":"){t.Fatalf("MCP cube discovery changed selection names or exposed a hidden column: %s",wire)}
  if strings.Contains(string(wire),"\"Has\"")||strings.Contains(string(wire),"\"has\""){t.Fatalf("presence marker exposed: %s",wire)}
- result,protocolErr:=tool.Handler(ctx,&schema.CallToolRequest{Params:schema.CallToolRequestParams{Name:"SpendCube",Arguments:map[string]any{"dimensions":map[string]any{"accountID":true},"filters":map[string]any{"accountID":0}}}})
+ result,protocolErr:=tool.Handler(ctx,&schema.CallToolRequest{Params:schema.CallToolRequestParams{Name:"SpendCube",Arguments:map[string]any{"dimensions":map[string]any{"accountId":true},"filters":map[string]any{"accountId":0}}}})
  if protocolErr!=nil||result==nil||result.IsError!=nil&&*result.IsError{t.Fatalf("MCP: %+v %v",result,protocolErr)}
  if calls!=3{t.Fatalf("source call count %d",calls)}
  wantPeriod="quarter"
- req:=httptest.NewRequest("POST","/spend/cube",strings.NewReader("{\"dimensions\":{\"accountID\":true},\"filters\":{\"accountID\":0,\"period\":\"quarter\"}}"));req.Header.Set("Content-Type","application/json")
+ req:=httptest.NewRequest("POST","/spend/cube",strings.NewReader("{\"dimensions\":{\"accountId\":true},\"filters\":{\"accountId\":0,\"period\":\"quarter\"}}"));req.Header.Set("Content-Type","application/json")
  scope,err:=requestprovider.New(req);if err!=nil{t.Fatal(err)}
  _,err=rt.ExecuteRoute(ctx,"POST","/spend/cube",scope);scope.Close();if err!=nil{t.Fatal(err)}
  if calls!=4{t.Fatalf("HTTP hidden filter did not execute source: %d",calls)}

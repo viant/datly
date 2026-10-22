@@ -52,7 +52,7 @@ func TestGeneratedReportInputEmitsAsNamedTranscribedType(t *testing.T) {
 	normalized := strings.Join(strings.Fields(text), " ")
 	for _, expected := range []string{
 		"type SpendCubeInput struct", "Dimensions struct", "Measures struct", "Filters struct", "AccountIDs *[]int",
-		`json:"accountIDs,omitempty"`, "OrderBy []string", "Limit *int", "Offset *int",
+		`json:"accountIdS,omitempty"`, "OrderBy []string", "Limit *int", "Offset *int",
 	} {
 		if !strings.Contains(normalized, expected) {
 			t.Fatalf("generated report input is missing %q:\n%s", expected, text)

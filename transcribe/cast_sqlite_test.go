@@ -206,9 +206,22 @@ func TestCASTNamedPseudoViewOwnershipSQLite(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			child := compiled.Component.RootView.Relations[0].View
-			if len(compiled.Component.RootView.Columns) != 1 || len(child.Columns) != 2 || child.Columns[0].Name != "bounds" || child.Columns[0].Type.Name != "int" || !child.Columns[0].ExplicitType {
-				t.Fatalf("declaration reached wrong view: %+v", compiled.Component.RootView)
+			root := compiled.Component.RootView
+			if len(root.Columns) != 1 || root.Columns[0].Name != "id" || root.Columns[0].ExplicitType {
+				t.Fatalf("child declaration changed root columns: %+v", root.Columns)
+			}
+			if len(root.Relations) != 1 {
+				t.Fatalf("expected one child relation, got %d", len(root.Relations))
+			}
+			child := root.Relations[0].View
+			// CAST is column metadata, so it must not move bounds ahead of id
+			// in the SQL projection or authorize the same name in another view.
+			if len(child.Columns) != 2 || child.Columns[0].Name != "id" || child.Columns[1].Name != "bounds" {
+				t.Fatalf("child projection order changed: %+v", child.Columns)
+			}
+			bounds := child.Columns[1]
+			if bounds.Type.Name != "int" || !bounds.ExplicitType || bounds.Tag != `sqlx:"-"` || child.Columns[0].ExplicitType {
+				t.Fatalf("child declaration metadata changed: id=%+v bounds=%+v", child.Columns[0], bounds)
 			}
 		})
 	}

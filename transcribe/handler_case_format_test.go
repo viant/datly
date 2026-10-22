@@ -41,7 +41,7 @@ func TestHandlerOnlyCaseFormat(t *testing.T) {
 		require.Equal(t, generate.ContractLinked, result.Result.Plan.Output.Ownership)
 		router, err := os.ReadFile(filepath.Join(root, "registration", "router.go"))
 		require.NoError(t, err)
-		require.Contains(t, string(router), `caseFormat:\"lc\"`)
+		require.Contains(t, string(router), `caseFormat:"lc"`)
 		require.Contains(t, string(router), "handleronly.CaseOutput")
 		require.NotContains(t, string(router), "view=")
 	}

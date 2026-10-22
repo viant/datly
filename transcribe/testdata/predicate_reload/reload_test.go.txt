@@ -161,7 +161,9 @@ func (c publicClient) schema(t *testing.T) {
 		t.Fatalf("business tools: %+v", listed.Tools)
 	}
 	tool := listed.Tools[0]
-	want := schema.ToolInputSchema{Type: "object", Required: []string{"minimum"}, Properties: map[string]map[string]any{"minimum": {"type": "integer"}}}
+	// Legacy discovery omits query-required flags; required() below separately
+	// verifies that runtime binding still rejects the missing business input.
+	want := schema.ToolInputSchema{Type: "object", Properties: map[string]map[string]any{"minimum": {"type": "integer"}}}
 	actual := tool.InputSchema
 	// The native decoder retains absent extension keys as an empty map;
 	// direct registry values use nil. Preserve all nonempty extensions.

@@ -108,7 +108,7 @@ func TestReaderMetadataNativeNoSelectorDQLRefresh(t *testing.T) {
 }
 func testPackageOverlayNativeGenerationReload(t *testing.T, withoutSelector bool, generatedOrigin ...bool) {
 	root := t.TempDir()
-	(testharness.GeneratedModule{Path: "github.com/viant/datly/transcribe/testdata"}).Write(t, root)
+	writeOutputOverlayModule(t, root)
 	for _, path := range []string{"fixture.go", "holder.go", "sql/records.sql", "sql/metric.sql"} {
 		data, err := os.ReadFile(filepath.Join("testdata/outputoverlay", path))
 		require.NoError(t, err)

@@ -19,7 +19,7 @@ import (
 func TestDiscoveryRefreshAfterAuthoredLinkedFieldRename(t *testing.T) {
 	ctx := context.Background()
 	root := t.TempDir()
-	(testharness.GeneratedModule{Path: "github.com/viant/datly/transcribe/testdata"}).Write(t, root)
+	writeOutputOverlayModule(t, root)
 	for _, path := range []string{"fixture.go", "holder.go", "sql/records.sql", "sql/metric.sql"} {
 		b, e := os.ReadFile(filepath.Join("testdata/outputoverlay", path))
 		if e != nil {
@@ -230,4 +230,44 @@ func TestPackageDeclarationsKeepOriginalReaderLocator(t *testing.T) {
 	if _, err = grouped[0].ResolveDescriptors(nil); err == nil {
 		t.Fatal("ordinary descriptor resolution bypassed missing old metadata")
 	}
+}
+
+// The fixture owns the nested testdata module. Its SDK dependency must not also
+// export that package: Go rejects two modules containing the same import path.
+// Link the SDK sources read-only, excluding only the fixture-owned subtree.
+func writeOutputOverlayModule(t *testing.T, root string) {
+	t.Helper()
+	sdk, err := filepath.Abs("..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	shadow := t.TempDir()
+	var link func(string, string)
+	link = func(source, target string) {
+		entries, err := os.ReadDir(source)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, entry := range entries {
+			if entry.Name() == ".git" {
+				continue
+			}
+			from, to := filepath.Join(source, entry.Name()), filepath.Join(target, entry.Name())
+			if from == filepath.Join(sdk, "transcribe", "testdata") {
+				continue
+			}
+			if from == filepath.Join(sdk, "transcribe") {
+				if err := os.Mkdir(to, 0700); err != nil {
+					t.Fatal(err)
+				}
+				link(from, to)
+				continue
+			}
+			if err := os.Symlink(from, to); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	link(sdk, shadow)
+	(testharness.GeneratedModule{Path: "github.com/viant/datly/transcribe/testdata", SourceRoot: shadow}).Write(t, root)
 }

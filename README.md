@@ -95,6 +95,31 @@ author each component for its own operation.
 [See reader and writer execution flows](doc/hooks.md) ·
 [Understand generated mutators and Has markers](doc/generated-mutator.md)
 
+### Atomic writes, deletes, and invariants
+
+Native writers queue inserts, updates, and explicitly requested deletes in the
+invocation's shared transaction. Composed child writes retain the same transaction
+owner; a failure rolls back a framework-owned transaction rather than committing
+a partial graph. Caller-supplied transactions remain caller-owned. Omitting a child or
+collection does not request deletion: use an explicit `delete_marker` and the
+authorized Previous row's identity.
+
+For optimistic concurrency, opt into `concurrency_token`. Updates and versioned
+deletes compare the expected token with Previous, then include the token and
+complete primary key in the mutation's SQL predicate. Exactly one row must match;
+a stale token produces a typed conflict (HTTP 409). Application hooks or the
+database must advance the token—Datly does not increment it automatically.
+
+Use `invariant(view.column, 'GroupName')` when a sparse update must validate related
+fields together, such as a start/end date pair. Known Previous values fill omitted
+members for validation without marking them as client-supplied. Invariants do not
+replace business validation, database constraints, or concurrency checks.
+
+See [native mutation policies and concurrency tokens](doc/mutations.md#explicit-deletion-and-token-validation)
+and [invariant backfill](doc/mutations.md#backfill-invariant-groups) for declarations
+and execution details. These features are opt-in; migrating a writer does not
+automatically enable version checks or invariant groups.
+
 Use it to:
 
 - **Turn database queries into useful API responses.** Return typed records,

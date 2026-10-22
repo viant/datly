@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/viant/datly/internal/readergraph"
 	"github.com/viant/datly/spec"
 	dtag "github.com/viant/datly/tag"
 	sqlxio "github.com/viant/sqlx/io"
@@ -215,6 +216,11 @@ func CompileReaderGraphColumns(component *spec.Component, input, output *x.Type,
 			return nil
 		}
 		seen[view] = row.Key()
+		// Go-only discovery may leave the view type implicit in its holder.
+		// Retain that exact nominal row authority in the persisted graph.
+		if strings.TrimSpace(view.TypeName) == "" {
+			view.TypeName = row.Key()
+		}
 		active[view] = true
 		defer delete(active, view)
 		compiler := outputColumnCompiler{output: xshape.New(row, lookup), lookup: lookup}
@@ -269,7 +275,19 @@ func CompileReaderGraphColumns(component *spec.Component, input, output *x.Type,
 		if view == nil || contract == nil {
 			return fmt.Errorf("reader graph exact holder required")
 		}
-		field, err := xshape.New(contract, lookup).ResolveField(param.Name)
+		shape := xshape.New(contract, lookup)
+		fields, err := shape.Fields()
+		if err != nil {
+			return err
+		}
+		holder, err := readergraph.ParameterField(fields, param)
+		if err != nil {
+			return err
+		}
+		if holder == nil {
+			return fmt.Errorf("reader graph parameter %s has no contract field", param.Name)
+		}
+		field, err := shape.ResolveField(holder.Name)
 		if err != nil {
 			return err
 		}

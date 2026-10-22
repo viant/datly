@@ -17,7 +17,7 @@ import (
 func aliasReservation(t *testing.T, db *sql.DB) int64 {
 	t.Helper()
 	var n int64
-	if err := db.QueryRow("SELECT value FROM sqlx_sequence_reservations WHERE table_name='records'").Scan(&n); err != nil {
+	if err := db.QueryRow("SELECT seq FROM sqlite_sequence WHERE name='records'").Scan(&n); err != nil {
 		t.Fatal(err)
 	}
 	return n
@@ -244,21 +244,21 @@ func TestAliasedAllocationCancellationBeforeAndAfterReservation(t *testing.T) {
 }
 func TestAliasedAllocationReservationFailureNoPublication(t *testing.T) {
 	db := aliasDefaultDB(t)
-	for _, q := range []string{"CREATE TABLE sqlx_sequence_reservations(table_name TEXT PRIMARY KEY,value INTEGER NOT NULL CHECK(value>=0))", "CREATE TRIGGER fail_reservation BEFORE INSERT ON sqlx_sequence_reservations BEGIN SELECT RAISE(ABORT,'real reservation fault'); END"} {
-		if _, err := db.Exec(q); err != nil {
-			t.Fatal(err)
-		}
+	// Native AUTOINCREMENT reserves in sqlite_sequence, without an auxiliary table.
+	// An exhausted engine counter must fail before publishing any public IDs.
+	if _, err := db.Exec("INSERT INTO sqlite_sequence(name,seq) VALUES('records',9223372036854775807)"); err != nil {
+		t.Fatal(err)
 	}
 	type row struct {
 		ID *int64 `sqlx:"ID,primaryKey=true,autoincrement=true"`
 	}
 	r, next := &row{}, &row{}
 	err := New(db).Allocate(context.Background(), "records", []*row{r, r, next}, "ID")
-	if err == nil || !strings.Contains(err.Error(), "real reservation fault") || r.ID != nil || next.ID != nil || aliasDefaultCount(t, db) != 0 {
+	if err == nil || !strings.Contains(err.Error(), "sequence range overflows int64") || r.ID != nil || next.ID != nil || aliasDefaultCount(t, db) != 0 {
 		t.Fatal("genuine reservation failure", r, next, err)
 	}
 	var n int
-	if err = db.QueryRow("SELECT COUNT(*) FROM sqlx_sequence_reservations").Scan(&n); err != nil || n != 0 {
+	if err = db.QueryRow("SELECT seq FROM sqlite_sequence WHERE name='records'").Scan(&n); err != nil || n != 9223372036854775807 {
 		t.Fatal("failed native reservation rows", n, err)
 	}
 }
@@ -288,7 +288,7 @@ func TestAliasedAllocationStrategiesAndCallerTransactions(t *testing.T) {
 				}
 				if managed {
 					var reserved int
-					if err := tx.QueryRowContext(ctx, "SELECT value FROM sqlx_sequence_reservations WHERE table_name='records'").Scan(&reserved); err != nil || reserved != 2 {
+					if err := tx.QueryRowContext(ctx, "SELECT seq FROM sqlite_sequence WHERE name='records'").Scan(&reserved); err != nil || reserved != 2 {
 						t.Fatal("caller owned reserved2", reserved, err)
 					}
 					if err := tx.Rollback(); err != nil {
@@ -365,7 +365,7 @@ func TestAliasedAllocationNarrowUnusedTailSQLXRejection(t *testing.T) {
 					t.Fatal("not authoritative full-reservation SQLX boundary", expected, err)
 				}
 				var reserved, engine int
-				if e := q.QueryRowContext(ctx, "SELECT value FROM sqlx_sequence_reservations WHERE table_name='records'").Scan(&reserved); e != nil || reserved != want {
+				if e := q.QueryRowContext(ctx, "SELECT seq FROM sqlite_sequence WHERE name='records'").Scan(&reserved); e != nil || reserved != want {
 					t.Fatal("truthful consumed native range", reserved, e)
 				}
 				if e := q.QueryRowContext(ctx, "SELECT seq FROM sqlite_sequence WHERE name='records'").Scan(&engine); e != nil || engine != want {

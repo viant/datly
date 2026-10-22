@@ -122,8 +122,24 @@ func (c composeClient) check(t *testing.T, revision int) {
 			t.Fatalf("configured deadline lost: %v", remaining)
 		}
 	}
+	c.requiredArguments(t)
 	c.limits(t)
  c.cube(t, revision)
+}
+
+// Discovery compatibility does not relax the compose runtime contract.
+func (c composeClient) requiredArguments(t *testing.T) {
+ t.Helper()
+ for _, name := range []string{"cubes", "sql"} {
+  t.Run("missing "+name, func(t *testing.T) {
+   args := c.arguments("web")
+   delete(args, name)
+   data, failed, err := c.call(args)
+   if !failed || !strings.Contains(strings.ToLower(fmt.Sprint(err)+string(data)), "required") {
+    t.Fatalf("missing %s accepted or rejected for an unrelated reason: body=%s failed=%v err=%v", name, data, failed, err)
+   }
+  })
+ }
 }
 
 func (c composeClient) limits(t *testing.T) {
@@ -202,8 +218,9 @@ func (c composeClient) schemas(t *testing.T) {
 		if err = json.Unmarshal(data, &actual); err != nil {
 			t.Fatal(err)
 		}
-		sort.Strings(actual.Required)
-		if actual.Type != "object" || len(actual.Properties) != 2 || !reflect.DeepEqual(actual.Required, []string{"cubes", "sql"}) {
+		// Legacy MCP discovery keeps named body arguments optional in the schema.
+		// Invocation requiredness is enforced separately, including after reload.
+		if actual.Type != "object" || len(actual.Properties) != 2 || len(actual.Required) != 0 {
 			t.Fatalf("business input schema: %s", data)
 		}
 		if actual.Properties["sql"].Type != "string" {

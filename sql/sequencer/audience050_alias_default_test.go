@@ -93,7 +93,7 @@ func TestAudience050AliasDefaultNativeOrdinaryControls(t *testing.T) {
 				t.Fatal("allocation wrote product rows before queue")
 			}
 			var reserved, engine int64
-			if err := q.QueryRowContext(ctx, "SELECT value FROM sqlx_sequence_reservations WHERE table_name='records'").Scan(&reserved); err != nil {
+			if err := q.QueryRowContext(ctx, "SELECT seq FROM sqlite_sequence WHERE name='records'").Scan(&reserved); err != nil {
 				t.Fatal(err)
 			}
 			if err := q.QueryRowContext(ctx, "SELECT seq FROM sqlite_sequence WHERE name='records'").Scan(&engine); err != nil {
@@ -141,10 +141,10 @@ func TestAudience050AliasDefaultNativeOrdinaryControls(t *testing.T) {
 					t.Fatal("caller-owned engine sequence survived", n, err)
 				}
 			} else {
-				if tables != 1 {
-					t.Fatal("standalone infrastructure lost")
+				if tables != 0 {
+					t.Fatal("native AUTOINCREMENT unexpectedly created an auxiliary ledger")
 				}
-				if err := db.QueryRowContext(ctx, "SELECT value FROM sqlx_sequence_reservations WHERE table_name='records'").Scan(&reserved); err != nil || reserved != 2 {
+				if err := db.QueryRowContext(ctx, "SELECT seq FROM sqlite_sequence WHERE name='records'").Scan(&reserved); err != nil || reserved != 2 {
 					t.Fatal("standalone reserved range rollback", reserved, err)
 				}
 			}
@@ -183,7 +183,7 @@ func TestAudience050AliasDefaultNativeLegacyContract(t *testing.T) {
 		t.Fatalf("wrong alias-public identity %d", public.ID)
 	}
 	var reserved int64
-	if err := db.QueryRow("SELECT value FROM sqlx_sequence_reservations WHERE table_name='records'").Scan(&reserved); err != nil || reserved != 2 {
+	if err := db.QueryRow("SELECT seq FROM sqlite_sequence WHERE name='records'").Scan(&reserved); err != nil || reserved != 2 {
 		t.Fatalf("original occurrence reservation=%d err=%v", reserved, err)
 	}
 	if aliasDefaultCount(t, db) != 0 {
@@ -203,7 +203,7 @@ func TestAudience050AliasDefaultNativeLegacyMixedContract(t *testing.T) {
 		t.Fatalf("expected first-owner assignment prefix1,2 (not slot-index1,3), got%d,%d", first.ID, later.ID)
 	}
 	var reserved int64
-	if err := db.QueryRow("SELECT value FROM sqlx_sequence_reservations WHERE table_name='records'").Scan(&reserved); err != nil || reserved != 3 {
+	if err := db.QueryRow("SELECT seq FROM sqlite_sequence WHERE name='records'").Scan(&reserved); err != nil || reserved != 3 {
 		t.Fatal("whole occurrence reservation must stay3", reserved, err)
 	}
 	if aliasDefaultCount(t, db) != 0 {
