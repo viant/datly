@@ -8,6 +8,7 @@ import (
 	"testing/fstest"
 
 	bindresource "github.com/viant/bindly/resource"
+	dexec "github.com/viant/datly/exec"
 	mcpresource "github.com/viant/datly/mcp/resource"
 	"github.com/viant/mcp-protocol/schema"
 	"github.com/xeipuuv/gojsonschema"
@@ -18,7 +19,7 @@ func TestSkillToolBridgePublishesListAndGetCompatibilityTools(t *testing.T) {
 	if err := store.Register("skills", fstest.MapFS{"review/SKILL.md": {Data: []byte("---\nname: review\ndescription: Review records.\nallowed-tools: records.read\n---\nReview.")}}); err != nil {
 		t.Fatal(err)
 	}
-	service, err := New(Config{Invoker: &serviceInvoker{}, Resources: store, Folders: []mcpresource.Folder{{Namespace: "skills", Root: ".", URIPrefix: "skill://studio/", Skills: []string{"review"}}}})
+	service, err := New(Config{Invoker: &serviceInvoker{}, AuthorizeCatalogTool: func(context.Context, dexec.ComponentTarget, string) error { return fmt.Errorf("deny authored tools") }, Resources: store, Folders: []mcpresource.Folder{{Namespace: "skills", Root: ".", URIPrefix: "skill://studio/", Skills: []string{"review"}}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -40,6 +41,9 @@ func TestSkillToolBridgePublishesListAndGetCompatibilityTools(t *testing.T) {
 		t.Fatalf("get result=%+v error=%v", result, protocolErr)
 	}
 	assertSkillToolSchema(t, get.Metadata.OutputSchema, result.StructuredContent)
+	if err := service.AuthorizeCatalogTool(context.Background(), SkillResourceReadTool, "discover"); err != nil {
+		t.Fatalf("skill reader must be discoverable: %v", err)
+	}
 	read, ok := service.Registry().ToolRegistry.Get(SkillResourceReadTool)
 	if !ok || strings.Contains(SkillResourceReadTool, "/") || strings.Contains(SkillListTool, "/") || strings.Contains(SkillGetTool, "/") {
 		t.Fatal("skill compatibility tools must use portable tool names")

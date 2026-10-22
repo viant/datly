@@ -21,7 +21,7 @@ func (s *Service) AuthorizeCatalogTool(ctx context.Context, name, action string)
 	if s.authorizeCatalogTool == nil {
 		return nil
 	}
-	if name == SkillListTool || name == SkillGetTool {
+	if name == SkillListTool || name == SkillGetTool || name == SkillResourceReadTool {
 		return nil
 	}
 	plan, ok := s.catalog.Tool(name)
