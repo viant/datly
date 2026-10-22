@@ -11,8 +11,9 @@ import (
 )
 
 const (
-	SkillListTool = "skills/list"
-	SkillGetTool  = "skills/get"
+	SkillListTool         = "skills_list"
+	SkillGetTool          = "skills_get"
+	SkillResourceReadTool = "skills_read_resource"
 )
 
 type skillListToolInput struct {
@@ -38,15 +39,15 @@ type skillGetToolOutput struct {
 	CacheScope string       `json:"cacheScope"`
 }
 
-func registerSkillToolBridge(registry *mcpserver.Registry, callbacks ...func(context.Context, string, string) error) error {
-	var authorize func(context.Context, string, string) error
-	if len(callbacks) > 0 {
-		authorize = callbacks[0]
-	}
+type skillResourceToolOutput struct {
+	Contents []schema.ReadResourceResultContentsElem `json:"contents"`
+}
+
+func registerSkillToolBridge(registry *mcpserver.Registry, authorize func(context.Context, string, string) error, authorizeRead func(context.Context, string) error) error {
 	if registry == nil || !registry.ImplementsSkills() {
 		return nil
 	}
-	for _, name := range []string{SkillListTool, SkillGetTool} {
+	for _, name := range []string{SkillListTool, SkillGetTool, SkillResourceReadTool} {
 		if _, exists := registry.ToolRegistry.Get(name); exists {
 			return fmt.Errorf("MCP skill compatibility tool %q conflicts with an authored tool", name)
 		}
@@ -60,7 +61,7 @@ func registerSkillToolBridge(registry *mcpserver.Registry, callbacks ...func(con
 	}); err != nil {
 		return err
 	}
-	return mcpserver.RegisterTool[skillGetToolInput, skillGetToolOutput](registry, SkillGetTool, "Get one published MCP skill manifest by its SKILL.md URI.", func(ctx context.Context, input skillGetToolInput) (*schema.CallToolResult, *jsonrpc.Error) {
+	if err := mcpserver.RegisterTool[skillGetToolInput, skillGetToolOutput](registry, SkillGetTool, "Get one published MCP skill manifest by its SKILL.md URI.", func(ctx context.Context, input skillGetToolInput) (*schema.CallToolResult, *jsonrpc.Error) {
 		if input.URI == "" {
 			return nil, jsonrpc.NewInvalidParamsError("skill URI is required", nil)
 		}
@@ -80,7 +81,67 @@ func registerSkillToolBridge(registry *mcpserver.Registry, callbacks ...func(con
 			}
 		}
 		return nil, jsonrpc.NewInvalidParamsError("unknown skill URI", nil)
-	})
+	}); err != nil {
+		return err
+	}
+	if err := mcpserver.RegisterTool[skillGetToolInput, skillResourceToolOutput](registry, SkillResourceReadTool, "Read a published skill's SKILL.md or supporting file. Use an exact resource URI returned by skills_list or skills_get.", func(ctx context.Context, input skillGetToolInput) (*schema.CallToolResult, *jsonrpc.Error) {
+		visible := false
+		for _, skill := range registry.ListRegisteredSkills() {
+			for _, file := range skill.Resources.Files {
+				if file.Uri == input.URI {
+					visible = true
+					break
+				}
+			}
+		}
+		if !visible || (authorize != nil && authorize(ctx, input.URI, "describe") != nil) || (authorizeRead != nil && authorizeRead(ctx, input.URI) != nil) {
+			return nil, jsonrpc.NewInvalidParamsError("unknown skill resource URI", nil)
+		}
+		request := &schema.ReadResourceRequest{Params: schema.ReadResourceRequestParams{Uri: input.URI}}
+		result, protocolErr, found := registry.ReadStaticSkillResource(ctx, request)
+		if protocolErr != nil {
+			return nil, protocolErr
+		}
+		if !found || result == nil {
+			return nil, jsonrpc.NewInvalidParamsError("unknown skill resource URI", nil)
+		}
+		return structuredSkillToolResult(skillResourceToolOutput{Contents: result.Contents})
+	}); err != nil {
+		return err
+	}
+	read, _ := registry.ToolRegistry.Get(SkillResourceReadTool)
+	read.Metadata.OutputSchema = &schema.ToolOutputSchema{Type: "object", Required: []string{"contents"}, Properties: schema.ToolInputSchemaProperties{"contents": map[string]interface{}{"type": "array", "items": map[string]interface{}{"type": "object", "required": []string{"uri"}, "properties": map[string]interface{}{"uri": map[string]interface{}{"type": "string"}, "text": map[string]interface{}{"type": "string"}, "blob": map[string]interface{}{"type": "string"}, "mimeType": map[string]interface{}{"type": "string"}}}}}}
+	// SkillResources has a custom JSON representation (an inventory array or
+	// "dynamic"). Reflection describes its Go struct instead of that wire union.
+	// Keep compatibility tools accurate for clients that validate outputSchema.
+	for _, name := range []string{SkillListTool, SkillGetTool} {
+		entry, _ := registry.ToolRegistry.Get(name)
+		entry.Metadata.OutputSchema = skillToolOutputSchema(name == SkillListTool)
+	}
+	return nil
+}
+
+func skillToolOutputSchema(list bool) *schema.ToolOutputSchema {
+	resource := map[string]interface{}{"type": "object", "required": []string{"uri", "digest", "size"}, "properties": map[string]interface{}{
+		"uri": map[string]interface{}{"type": "string"}, "digest": map[string]interface{}{"type": "string"}, "size": map[string]interface{}{"type": "integer", "minimum": 0},
+	}}
+	skill := map[string]interface{}{"type": "object", "required": []string{"uri", "frontmatter", "resources"}, "properties": map[string]interface{}{
+		"uri": map[string]interface{}{"type": "string"}, "frontmatter": map[string]interface{}{"type": "object"},
+		"resources": map[string]interface{}{"oneOf": []interface{}{map[string]interface{}{"type": "array", "items": resource}, map[string]interface{}{"type": "string", "enum": []string{"dynamic"}}}},
+	}}
+	properties := schema.ToolInputSchemaProperties{
+		"resultType": map[string]interface{}{"type": "string", "enum": []string{"complete"}},
+		"ttlMs":      map[string]interface{}{"type": "integer"}, "cacheScope": map[string]interface{}{"type": "string"},
+	}
+	key := "skill"
+	if list {
+		key = "skills"
+		properties[key] = map[string]interface{}{"type": "array", "items": skill}
+		properties["nextCursor"] = map[string]interface{}{"type": "string"}
+	} else {
+		properties[key] = skill
+	}
+	return &schema.ToolOutputSchema{Type: "object", Properties: properties, Required: []string{"resultType", key, "ttlMs", "cacheScope"}}
 }
 
 func structuredSkillToolResult(value interface{}) (*schema.CallToolResult, *jsonrpc.Error) {

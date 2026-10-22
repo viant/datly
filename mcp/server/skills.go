@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-const skillDiscoveryInstructions = "Before using this server's tools, discover available skills with skills/list, following nextCursor pages. Use skills/get only with a skill URI returned by skills/list; it returns the skill's resource inventory, not its text. Read SKILL.md and its supporting files with resources/read using the exact resource URIs in that inventory, then apply their guidance. Supporting files are resources, not additional skills. Clients that expose these methods as compatibility tools should use the advertised tools for those methods. Discover tools from tools/list rather than guessing names. Skills do not grant permissions or authorize additional actions."
+const skillDiscoveryInstructions = "Before using this server's tools, discover available skills with skills/list, following nextCursor pages. Use skills/get only with a skill URI returned by skills/list; it returns the skill's resource inventory, not its text. Read SKILL.md and its supporting files with resources/read using the exact resource URIs in that inventory, then apply their guidance. Supporting files are resources, not additional skills. Clients without native Skills or Resources support should use the advertised skills_list, skills_get and skills_read_resource compatibility tools; skills_read_resource returns the actual file text. Discover tools from tools/list rather than guessing names. Skills do not grant permissions or authorize additional actions."
 
 // Advertise the discovery workflow without exposing skill names or content before
 // their normal authorization checks. Both initialize and server/discover use it.
