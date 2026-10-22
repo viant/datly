@@ -27,7 +27,7 @@ func (e *Execution) ToolResult() *schema.CallToolResult {
 				return e.transportResult(transport, payload, true)
 			}
 			isError := true
-			return &schema.CallToolResult{Content: []schema.CallToolResultContentElem{schema.TextContent{Type: "text", Text: string(payload)}}, IsError: &isError, StructuredContent: objectPayload(payload)}
+			return textToolResult(payload, &isError)
 		}
 		// Preserve ordinary authentication failures at the tool presentation boundary.
 		// Explicit public bodies above retain priority; private causes and declared
@@ -50,7 +50,7 @@ func (e *Execution) ToolResult() *schema.CallToolResult {
 			}
 			if applicable {
 				isError := true
-				return &schema.CallToolResult{Content: []schema.CallToolResultContentElem{schema.TextContent{Type: "text", Text: string(payload)}}, IsError: &isError, StructuredContent: objectPayload(payload)}
+				return textToolResult(payload, &isError)
 			}
 		}
 		return errorResult(status, invokeErr)
@@ -77,6 +77,16 @@ func (e *Execution) ToolResult() *schema.CallToolResult {
 		Content: []schema.CallToolResultContentElem{schema.TextContent{Type: "text", Text: string(payload)}},
 	}
 	if object != nil {
+		result.StructuredContent = object
+	}
+	return result
+}
+
+// structuredContent is optional but, when present, must be an object. A typed
+// nil map stored in its interface would serialize as null and break MCP clients.
+func textToolResult(payload []byte, isError *bool) *schema.CallToolResult {
+	result := &schema.CallToolResult{Content: []schema.CallToolResultContentElem{schema.TextContent{Type: "text", Text: string(payload)}}, IsError: isError}
+	if object := objectPayload(payload); object != nil {
 		result.StructuredContent = object
 	}
 	return result

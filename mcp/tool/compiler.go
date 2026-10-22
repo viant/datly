@@ -310,6 +310,15 @@ func (c *Compiler) compileExternal(inputField registry.InputField, field reflect
 		argument.example = strings.TrimSpace(param.Example)
 	}
 	argument.schemaRequired = legacyNamedSchemaRequired(argument.sourceKind, binding.URI != "", inputField.DestinationType(), sourceTag)
+	// Named, non-nullable body members with an explicit required binding must
+	// advertise the same omission contract that invocation enforces. Preserve
+	// legacy pointer/slice and query discovery semantics.
+	if argument.sourceKind == "body" && argument.sourceName != "" && required {
+		kind := inputField.DestinationType().Kind()
+		if kind != reflect.Ptr && kind != reflect.Slice && kind != reflect.Map && kind != reflect.Interface {
+			argument.schemaRequired = true
+		}
+	}
 	if memberRequired, associated := wholeBodyMemberSchemaRequired(argument); associated {
 		argument.schemaRequired = memberRequired
 	}

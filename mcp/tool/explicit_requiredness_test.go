@@ -55,3 +55,32 @@ func TestCompilerSeparatesLegacyDiscoveryFromRuntimeRequiredness(t *testing.T) {
 		}
 	}
 }
+
+func TestNamedRequiredBodyScalarsAdvertiseInvocationContract(t *testing.T) {
+	type input struct {
+		Slug    string `json:"slug"`
+		Version int    `json:"version"`
+		Note    string `json:"note,omitempty"`
+	}
+	required := true
+	contract := testRouteContract(t, reflect.TypeFor[input](), []bindly.BindingSpec{
+		{Path: "Slug", Name: "Slug", Location: bindstate.Location{Kind: "body", In: "slug"}, Required: &required},
+		{Path: "Version", Name: "Version", Location: bindstate.Location{Kind: "body", In: "version"}, Required: &required},
+		{Path: "Note", Name: "Note", Location: bindstate.Location{Kind: "body", In: "note"}},
+	})
+	plan, err := NewCompiler().Compile(Input{Contract: contract, Exposure: &spec.MCPExposure{Kind: spec.MCPExposureTool, Name: "create"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(plan.Metadata().InputSchema.Required, []string{"slug", "version"}) {
+		t.Fatalf("required=%v", plan.Metadata().InputSchema.Required)
+	}
+	if _, err = plan.Scope(map[string]interface{}{"version": 1}); err == nil {
+		t.Fatal("missing required slug accepted")
+	}
+	scope, err := plan.Scope(map[string]interface{}{"slug": "demo", "version": 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	scope.Close()
+}
