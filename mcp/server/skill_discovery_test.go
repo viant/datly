@@ -60,6 +60,11 @@ func assertSkillInstructions(t *testing.T, instructions *string, want bool) {
 	if strings.Contains(*instructions, "skill://guide") {
 		t.Fatal("connection guidance exposed skill inventory")
 	}
+	for _, guidance := range []string{"resource inventory, not its text", "resources/read", "Supporting files are resources, not additional skills"} {
+		if !strings.Contains(*instructions, guidance) {
+			t.Fatalf("missing resource reading guidance %q: %s", guidance, *instructions)
+		}
+	}
 }
 func TestSkillDiscoveryInstructionsPreserveHostGuidance(t *testing.T) {
 	text := "Host guidance."
