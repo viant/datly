@@ -69,6 +69,22 @@ func (m rootCacheMatcher) apply(ctx context.Context, connection dsql.Connection)
 	if err != nil || settings == nil {
 		return err
 	}
+	selector := m.selectors.forView(view).Clone()
+	projection := viewProjection(view, selector)
+	stored, requested := root.cacheProjection(settings.FieldNames), root.cacheProjection(projection)
+	// The executed query has already validated its ordering and projection.
+	// An explicit warmup missing a requested field cannot answer that query.
+	// Reject reuse before applying request ordering to the narrower identity;
+	// otherwise a valid selected dimension becomes an invalid warmup sort key.
+	// This membership check only rules out reuse. Grouped SQL compatibility
+	// below still proves that every warmed dimension is retained.
+	if view.IsGroupable() && len(settings.FieldNames) > 0 {
+		if _, compatible, _, err := (cache.Projection{Stored: stored}).Indexes(requested); err != nil {
+			return err
+		} else if !compatible {
+			return nil
+		}
+	}
 	prepared := &dexec.ReaderInput{Input: m.input.Interface(), Binder: m.binder, Parameters: m.session.Parameters}
 	if len(values) > 0 {
 		if m.binder == nil {
@@ -91,8 +107,6 @@ func (m rootCacheMatcher) apply(ctx context.Context, connection dsql.Connection)
 	if input.Kind() != reflect.Pointer || input.IsNil() || input.Elem().Type() != m.session.InputType {
 		return fmt.Errorf("cache identity input must be *%s", m.session.InputType)
 	}
-	selector := m.selectors.forView(view).Clone()
-	projection := viewProjection(view, selector)
 	// Warmup's authored projection determines cache identity. Invocation fields
 	// only describe the requested native replay; they never rename that entry.
 	if selector == nil {
@@ -121,7 +135,6 @@ func (m rootCacheMatcher) apply(ctx context.Context, connection dsql.Connection)
 	if err != nil {
 		return err
 	}
-	stored, requested := root.cacheProjection(settings.FieldNames), root.cacheProjection(projection)
 	if view.IsGroupable() {
 		stored, err = (dsql.CacheProjection{SQL: identity.SQL, View: view}).Fields()
 		if err != nil {
