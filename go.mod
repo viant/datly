@@ -22,7 +22,7 @@ require (
 	github.com/viant/structql v0.5.5-0.20261012183420-6a47e96ff5b5
 	github.com/viant/tagly v0.4.1-0.20261007173811-969600917520
 	github.com/viant/velty v0.4.1-0.20260915052314-fca47c0595f8
-	github.com/viant/x v0.5.1-0.20261019170608-3c4033ed8ccd
+	github.com/viant/x v0.5.1-0.20261023202900-f9ec3e0a7de4
 	github.com/viant/xdatly v1.0.1-0.20261017023827-3a09d6ff7964
 	github.com/viant/xreflect v0.7.5-0.20260314170600-13f09f37d46e
 	github.com/viant/xunsafe v0.11.0
