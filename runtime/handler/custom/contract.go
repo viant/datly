@@ -29,6 +29,18 @@ type outcomeContractHandler[I any, O any] struct {
 	finalizer rhandler.OutcomeFinalizer
 }
 
+// NewPhaseObserver forwards the optional typed contract capability. The engine
+// creates it before input binding and retains ownership of panic isolation.
+// Do not reuse an observer on the shared adapter across invocations.
+func (h *contractHandler[I, O]) NewPhaseObserver() xhandler.PhaseObserver {
+	if h != nil {
+		if factory, ok := h.contract.(rhandler.PhaseObserverFactory); ok {
+			return factory.NewPhaseObserver()
+		}
+	}
+	return nil
+}
+
 func (h *outcomeContractHandler[I, O]) FinalizeOutcome(ctx context.Context, invocation rhandler.Invocation, result any, outcome xhandler.Outcome) error {
 	return h.finalizer.FinalizeOutcome(ctx, invocation, result, outcome)
 }
@@ -138,5 +150,7 @@ func (h *contractHandler[I, O]) Execute(ctx context.Context, invocation rhandler
 	output := new(O)
 	session := newSession(invocation.Binder, invocation.Response)
 	ctx = xhandler.WithSession(ctx, session)
-	return output, h.contract.Exec(ctx, session, input, output)
+	return output, rhandler.PhaseScopeFromContext(ctx).Run(ctx, xhandler.PhaseExecution, func() error {
+		return h.contract.Exec(ctx, session, input, output)
+	})
 }
