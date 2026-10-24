@@ -20,7 +20,18 @@ import (
 // changes persisted SQL/metadata with a stable Go ABI, as application.Manager's
 // trusted stage callback requires; it does not compile arbitrary Go at runtime.
 func TestGeneratedCustomPredicatePublicReloadSQLite(t *testing.T) {
+	testGeneratedPredicatePublicReloadSQLite(t, false)
+}
+
+func testGeneratedPredicatePublicReloadSQLite(t *testing.T, variadic bool) {
 	t.Parallel()
+	handlerType := reflect.TypeFor[linkedpredicate.Threshold]()
+	handlerName, dqlExtras := "Threshold", ""
+	if variadic {
+		handlerType = reflect.TypeFor[linkedpredicate.ConfiguredThreshold]()
+		handlerName = "ConfiguredThreshold"
+		dqlExtras = ",'offset',0,'enabled',true"
+	}
 	ctx := context.Background()
 	root := t.TempDir()
 	module := "github.com/viant/datly/testfixture/predicatereload"
@@ -40,30 +51,35 @@ func TestGeneratedCustomPredicatePublicReloadSQLite(t *testing.T) {
 			t.Fatal(err)
 		}
 		catalog := typecatalog.NewCatalog()
-		if err := catalog.Register(typecatalog.TypeOriginPackage, x.NewType(reflect.TypeFor[linkedpredicate.Threshold]())); err != nil {
+		if err := catalog.Register(typecatalog.TypeOriginPackage, x.NewType(handlerType)); err != nil {
 			t.Fatal(err)
 		}
-		predicateType := "security.Threshold"
+		predicateType := "security." + handlerName
 		if revision == 2 {
-			predicateType = predicatePath + ".Threshold"
+			predicateType = predicatePath + "." + handlerName
 		}
 		// No #package or persisted DQL: reload must recover the emitted
 		// Go package's destination from its component holder metadata.
 		source := &Source{Scope: module + "/records", Name: "Records", Connector: "main", Types: catalog, Text: fmt.Sprintf(`#import('security', '%s')
 #setting($_ = $route('/records','GET'))
 #setting($_ = $mcp('records.query'))
-#define($_ = $Minimum<int>(query/min).WithTag('json:"minimum"').Required().WithStatusCode(422).WithErrorMessage('minimum required').WithPredicate(0,'handler','%s'))
+#define($_ = $Minimum<int>(query/min).WithTag('json:"minimum"').Required().WithStatusCode(422).WithErrorMessage('minimum required').WithPredicate(0,'handler','%s'%s))
 SELECT id, CAST(records.id AS int) FROM records
 WHERE id <= %d
 ${predicate.Builder().CombineAnd($predicate.FilterGroup(0, "AND")).Build("AND")}
-ORDER BY id`, predicatePath, predicateType, revision+2)}
+ORDER BY id`, predicatePath, predicateType, dqlExtras, revision+2)}
 		compiler := NewCompiler()
 		compiled, err := compiler.Compile(ctx, source)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if got := compiled.Component.Parameters[0].Predicates[0].Args[0]; got != predicatePath+".Threshold" {
+		if got := compiled.Component.Parameters[0].Predicates[0].Args[0]; got != predicatePath+"."+handlerName {
 			t.Fatalf("compiled predicate authority = %q", got)
+		}
+		if variadic {
+			if got := compiled.Component.Parameters[0].Predicates[0].HandlerArgs; !reflect.DeepEqual(got, []any{"offset", 0, "enabled", true}) {
+				t.Fatalf("typed arguments lost: %#v", got)
+			}
 		}
 		input, dir, err := generationInput(stage, "records", compiled)
 		if err != nil {

@@ -246,7 +246,10 @@ func (p *declarationOptionParser) parse() (declarationOptions, error) {
 			if err := p.expect(cursor, args, 1, -1); err != nil {
 				return declarationOptions{}, err
 			}
-			predicate := p.predicate(args, key == "applywhenabsentpredicate")
+			predicate, err := p.predicate(args, key == "applywhenabsentpredicate")
+			if err != nil {
+				return declarationOptions{}, p.fail(cursor, "%v", err)
+			}
 			if predicate == nil || strings.TrimSpace(predicate.Name) == "" {
 				return declarationOptions{}, p.fail(cursor, "%s requires a predicate name", name)
 			}
@@ -492,9 +495,9 @@ func (p *declarationOptionParser) fail(cursor *optionCursor, format string, args
 	return &sourceError{offset: p.base + start, end: p.base + end, err: fmt.Errorf(format, args...)}
 }
 
-func (p *declarationOptionParser) predicate(args []string, applyWhenAbsent bool) *spec.Predicate {
+func (p *declarationOptionParser) predicate(args []string, applyWhenAbsent bool) (*spec.Predicate, error) {
 	if len(args) == 0 {
-		return nil
+		return nil, nil
 	}
 	group := 0
 	nameIndex := 0
@@ -505,11 +508,19 @@ func (p *declarationOptionParser) predicate(args []string, applyWhenAbsent bool)
 		}
 	}
 	if len(args) <= nameIndex {
-		return nil
+		return nil, nil
 	}
 	result := &spec.Predicate{Group: group, Name: trimQuote(args[nameIndex]), ApplyWhenAbsent: applyWhenAbsent}
-	for _, arg := range args[nameIndex+1:] {
-		result.Args = append(result.Args, trimQuote(arg))
+	for i, arg := range args[nameIndex+1:] {
+		if i > 0 && strings.EqualFold(strings.TrimSpace(result.Name), "handler") {
+			value, err := spec.ParseHandlerArgument(arg)
+			if err != nil {
+				return nil, err
+			}
+			result.HandlerArgs = append(result.HandlerArgs, value)
+		} else {
+			result.Args = append(result.Args, trimQuote(arg))
+		}
 	}
-	return result
+	return result, nil
 }

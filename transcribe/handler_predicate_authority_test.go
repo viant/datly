@@ -68,6 +68,7 @@ func TestTranscriptionValidatesSourcePredicateContract(t *testing.T) {
 		receiver, criteriaPackage string
 	}{
 		{"valid source method", "Compute(context.Context, any) (*predicate.Criteria, error)", true, "*Available", "github.com/viant/xdatly/predicate"},
+		{"typed variadic", "Compute(context.Context, any, ...any) (*predicate.Criteria, error)", true, "*Available", "github.com/viant/xdatly/predicate"},
 		{"value receiver", "Compute(context.Context, interface{}) (*predicate.Criteria, error)", true, "Available", "github.com/viant/xdatly/predicate"},
 		{"wrong Criteria package", "Compute(context.Context, any) (*predicate.Criteria, error)", false, "*Available", "example.com/other"},
 		{"wrong input", "Compute(context.Context, string) (*predicate.Criteria, error)", false, "*Available", "github.com/viant/xdatly/predicate"},
@@ -123,4 +124,50 @@ func TestTranscriptionRejectsNameOnlyPredicateAuthority(t *testing.T) {
 	if err := compilePredicateContracts(component, catalog, nil); err == nil || !strings.Contains(err.Error(), "no source declaration authority") {
 		t.Fatalf("name-only authority error=%v", err)
 	}
+}
+
+func TestTranscriptionTypedVariadicPredicateAuthority(t *testing.T) {
+	const packagePath = "example.com/security"
+	for _, tc := range []struct {
+		name      string
+		typ       reflect.Type
+		wantError bool
+	}{
+		{"legacy rejects extras", reflect.TypeFor[availablePredicate](), true},
+		{"variadic preserves extras", reflect.TypeFor[availableVariadicPredicate](), false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			catalog := typecatalog.NewCatalog()
+			if err := catalog.Register(typecatalog.TypeOriginPackage, x.NewType(tc.typ, x.WithPkgPath(packagePath), x.WithName("Available"))); err != nil {
+				t.Fatal(err)
+			}
+			source := &Source{Scope: "example.com/app", Name: "Records", Connector: "main", Types: catalog, Text: `#import('security','example.com/security')
+#setting($_ = $route('/records','GET'))
+#define($_ = $Minimum<int>(query/min).WithPredicate(0,'handler','security.Available','alias','r','enabled',true,'limit',7))
+SELECT id FROM records r ${predicate.Builder().CombineAnd($predicate.FilterGroup(0, "AND")).Build("WHERE")}`}
+			compiled, err := NewCompiler().Compile(context.Background(), source)
+			if tc.wantError {
+				if err == nil || !strings.Contains(err.Error(), "VariadicHandler") {
+					t.Fatalf("got %v", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			got := compiled.Component.Parameters[0].Predicates[0]
+			if got.Args[0] != packagePath+".Available" || !reflect.DeepEqual(got.HandlerArgs, []any{"alias", "r", "enabled", true, "limit", 7}) {
+				t.Fatalf("%#v", got)
+			}
+			if err := (readerpredicate.DefinitionCompiler{Catalog: catalog, RequireAvailable: true}).Compile(compiled.Component); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
+type availableVariadicPredicate struct{}
+
+func (*availableVariadicPredicate) Compute(context.Context, any, ...any) (*xpredicate.Criteria, error) {
+	return nil, nil
 }

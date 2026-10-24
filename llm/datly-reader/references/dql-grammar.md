@@ -1185,3 +1185,16 @@ guarantee that standard `encoding/json` changes only nil slices. Custom JSON
 marshalers retain their existing precedence and opaque custom values are not
 rewritten. The policy does not change standalone Go/storage JSON serialization
 or classify the component as JSON-only.
+
+### Custom handler literal arguments
+
+After the handler type identity, `WithPredicate`/`Predicate` and
+`ApplyWhenAbsentPredicate` accept quoted strings, booleans, integer literals and
+`null` for `predicate.VariadicHandler`. Example:
+`.WithPredicate(0,'handler','security.Scope','alias','r','enabled',true,'limit',10)`.
+Use alternating name/value pairs with SDK `predicate.Pairs` when desired; the
+handler validates and seeds its own explicit configuration attributes. No colon
+named-argument syntax, expression evaluation, compound values or automatic field
+injection is implied. Existing `predicate.Handler` accepts no extra arguments.
+Built-in predicate arguments and existing `Args []string` metadata stay unchanged;
+typed custom extras use additive `HandlerArgs []any`.

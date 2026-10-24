@@ -1,6 +1,7 @@
 package tag
 
 import (
+	"encoding/json"
 	"fmt"
 	"reflect"
 	"strconv"
@@ -35,6 +36,18 @@ func PredicateValue(predicate *spec.Predicate) (string, error) {
 	for _, argument := range predicate.Args {
 		values = append(values, encodeScalarValue(argument))
 	}
+	if len(predicate.HandlerArgs) > 0 {
+		for _, arg := range predicate.HandlerArgs {
+			if err := spec.ValidateHandlerArgument(arg); err != nil {
+				return "", err
+			}
+		}
+		data, err := json.Marshal(predicate.HandlerArgs)
+		if err != nil {
+			return "", err
+		}
+		values = append(values, "handlerArgs="+encodeScalarValue(string(data)))
+	}
 	return strings.Join(values, ","), nil
 }
 
@@ -56,6 +69,20 @@ func ParsePredicates(structTag reflect.StructTag) ([]*spec.Predicate, error) {
 			rawValue := strings.TrimSpace(value)
 			decodedKey, keyErr := decodeScalarValue(rawKey)
 			switch strings.ToLower(decodedKey) {
+			case "handlerargs":
+				if !strings.EqualFold(predicate.Name, "handler") {
+					break
+				}
+				value, err := decodeScalarValue(rawValue)
+				if err != nil {
+					return err
+				}
+				var decoded spec.Predicate
+				if err = json.Unmarshal([]byte(`{"handlerArgs":`+value+`}`), &decoded); err != nil {
+					return err
+				}
+				predicate.HandlerArgs = decoded.HandlerArgs
+				return nil
 			case "ensure":
 				return fmt.Errorf("unsupported predicate option %q; use applyWhenAbsent", decodedKey)
 			case "name":

@@ -37,6 +37,8 @@ type Predicate struct {
 	Name            string   `json:"name,omitempty"`
 	Args            []string `json:"args,omitempty"`
 	ApplyWhenAbsent bool     `json:"applyWhenAbsent,omitempty"`
+	// HandlerArgs contains trusted scalar configuration for variadic handlers.
+	HandlerArgs []any `json:"handlerArgs,omitempty"`
 }
 
 type Codec struct {

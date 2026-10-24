@@ -15,7 +15,7 @@ type Context struct {
 	input    reflect.Value
 	append   func(...any)
 	binder   xhandler.Binder
-	handlers map[int]xpredicate.Handler
+	handlers map[int]any
 }
 
 func newContext(program *Program, ctx context.Context, input any, appendArgs func(...any)) *Context {
@@ -59,7 +59,7 @@ func (c *Context) expandGroup(group int, operator string) (string, error) {
 		if predicate.handlerType != nil {
 			handler := c.handlers[index]
 			if handler == nil {
-				handler = reflect.New(predicate.handlerType).Interface().(xpredicate.Handler)
+				handler = reflect.New(predicate.handlerType).Interface()
 				if c.binder == nil {
 					return "", fmt.Errorf("custom predicate requires an invocation binder")
 				}
@@ -67,11 +67,17 @@ func (c *Context) expandGroup(group int, operator string) (string, error) {
 					return "", fmt.Errorf("bind predicate %v: %w", predicate.handlerType, err)
 				}
 				if c.handlers == nil {
-					c.handlers = map[int]xpredicate.Handler{}
+					c.handlers = map[int]any{}
 				}
 				c.handlers[index] = handler
 			}
-			criteria, err := handler.Compute(c.ctx, value)
+			var criteria *xpredicate.Criteria
+			var err error
+			if variadic, ok := handler.(xpredicate.VariadicHandler); ok {
+				criteria, err = variadic.Compute(c.ctx, value, append([]any(nil), predicate.handlerArgs...)...)
+			} else {
+				criteria, err = handler.(xpredicate.Handler).Compute(c.ctx, value)
+			}
 			if err != nil {
 				return "", err
 			}

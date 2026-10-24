@@ -409,9 +409,10 @@ and SDK types using the host's normal package/type configuration. The imports
 declare package authority; `security.OrderScope` resolves to
 `example.com/app/orders/security.OrderScope`. Explicit fully qualified identities
 are also supported, and generated metadata retains the canonical identity. There is no
-`RegisterPredicate("OrderScope", ...)` step. Only one handler type argument is
-accepted; configure dependencies through bound fields instead of extra positional
-DQL arguments. Transcription validates the exact SDK handler interface against the linked Go
+`RegisterPredicate("OrderScope", ...)` step. Existing `predicate.Handler` accepts
+only the type argument. The optional `predicate.VariadicHandler` accepts additional
+typed authored arguments as described below. Dependencies still use scoped bound
+fields. Transcription validates the SDK handler interface against the linked Go
 implementation or its real package source method set. This allows first
 transcription when a predicate uses an input type that generation will create.
 An import or type name without valid method authority is insufficient.
@@ -640,3 +641,72 @@ search value. `TestBuilderGroupComposition` covers empty rendering and mixed
 operator/parenthesis behavior. No custom production parser or binder is needed.
 
 `TestReaderCustomAndBuiltinPredicateGroupsDQLSQLite` verifies both WHERE and AND with declared verified JWT input, imported handler aliases, scoped injection, mixed built-in/custom groups, optional dependency skipping, nil/empty criteria, zero bounds, quoted values, wrong signatures, expiry and business/binding errors. Existing `TestCustomPredicateBindsComponentResultSQLite` supplies component-result injection evidence; `TestCustomPredicateScopedSQLite` includes cancellation.
+
+
+## Typed custom-handler arguments
+
+Existing `Handler.Compute(context.Context, any)` and `HandlerFunc` remain supported
+unchanged. To accept configuration, implement the optional SDK contract:
+
+```go
+type VariadicHandler interface {
+    Compute(context.Context, any, ...any) (*Criteria, error)
+}
+```
+
+The corresponding function adapter is `predicate.VariadicHandlerFunc`. Both
+contracts receive the bound filter value separately from authored configuration.
+Extra arguments on an old Handler fail compilation instead of being ignored.
+A variadic handler receives zero arguments when configuration is omitted.
+
+```dql
+#define($_ = $Minimum<int>(query/min).WithPredicate(0,'handler','security.Scope','alias','r','enabled',true,'limit',10))
+```
+
+Arguments after the type are quoted strings, booleans, native `int` integers or
+`null` (Go nil). They retain their types across source editing, generated tags,
+serialized metadata and reload. Built-in predicate arguments remain strings.
+`spec.Predicate.Args` remains `[]string`; the additive `HandlerArgs []any` holds
+typed custom arguments. Go-authored legacy `Args` extras are passed as strings
+to a variadic handler. Maps, arrays, floating-point literals, expressions and
+`name:'value'` syntax are not supported by this persisted literal contract. The
+SDK interface itself accepts arbitrary Go values when called directly.
+
+Use `predicate.Pairs(args...)` for optional alternating name/value arguments.
+It rejects odd argument counts, non-string/empty names and duplicates. The
+handler explicitly allowlists option names, validates their types and assigns
+its own configuration fields. For example, an existing `Alias` attribute can
+be seeded without changing its default or binding fields:
+
+```go
+func (p *Scope) Compute(ctx context.Context, value any, args ...any) (*predicate.Criteria, error) {
+    options, err := predicate.Pairs(args...)
+    if err != nil { return nil, err }
+    for name, option := range options {
+        switch name {
+        case "alias":
+            alias, ok := option.(string)
+            if !ok || !sqlIdentifier.MatchString(alias) {
+                return nil, fmt.Errorf("alias requires a SQL identifier")
+            }
+            p.Alias = alias
+        default:
+            return nil, fmt.Errorf("unknown predicate option %q", name)
+        }
+    }
+    // Continue the existing policy, including the existing default for empty Alias.
+    return p.criteria(ctx, value)
+}
+```
+
+In this fragment `sqlIdentifier` is an application-owned validator such as
+`regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)`. Match the SQL dialect's
+identifier policy; values still belong in Criteria.Placeholders. Do not rewrite
+SQL text to substitute an alias. Do not expose identity, dependencies or source
+fields as options and do not pass HTTP request values as configuration.
+
+Datly allocates and binds a handler within each invocation. It never reflects
+configuration pairs into arbitrary fields. The compiled argument plan contains
+immutable scalars, and every Compute call receives its own argument slice.
+Binding errors, cancellation handled by the existing lifecycle, and handler
+errors retain their normal propagation; denied authorization must return an error.

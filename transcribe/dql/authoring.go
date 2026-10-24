@@ -89,7 +89,10 @@ func DeclarationOccurrences(source string) ([]DeclarationOccurrence, error) {
 			if key != "withpredicate" && key != "predicate" && key != "applywhenabsentpredicate" {
 				continue
 			}
-			predicate := (&declarationOptionParser{}).predicate(args, key == "applywhenabsentpredicate")
+			predicate, err := (&declarationOptionParser{}).predicate(args, key == "applywhenabsentpredicate")
+			if err != nil {
+				return nil, err
+			}
 			if predicate == nil || strings.TrimSpace(predicate.Name) == "" {
 				return nil, fmt.Errorf("invalid predicate option for %s", holder)
 			}
@@ -149,6 +152,13 @@ func RenderPredicateOption(predicate *spec.Predicate) (string, error) {
 	args := []string{strconv.Itoa(predicate.Group), strconv.Quote(strings.TrimSpace(predicate.Name))}
 	for _, arg := range predicate.Args {
 		args = append(args, strconv.Quote(arg))
+	}
+	for _, arg := range predicate.HandlerArgs {
+		rendered, err := spec.RenderHandlerArgument(arg)
+		if err != nil {
+			return "", err
+		}
+		args = append(args, rendered)
 	}
 	return "." + name + "(" + strings.Join(args, ", ") + ")", nil
 }

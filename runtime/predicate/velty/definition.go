@@ -50,13 +50,18 @@ func (c DefinitionCompiler) Compile(component *spec.Component) error {
 			}
 			entry := registry[strings.ToLower(strings.TrimSpace(definition.Name))]
 			if !entry.handler {
+				if len(definition.HandlerArgs) > 0 {
+					return fmt.Errorf("predicate %s does not accept handlerArgs", definition.Name)
+				}
 				continue
 			}
 			if len(definition.Args) == 0 || strings.TrimSpace(definition.Args[0]) == "" {
 				return fmt.Errorf("compile predicate %s for %s: handler predicate requires an absolute type name", definition.Name, param.Name)
 			}
-			if len(definition.Args) != 1 {
-				return fmt.Errorf("compile predicate %s for %s: handler predicate accepts one type argument", definition.Name, param.Name)
+			for _, arg := range definition.HandlerArgs {
+				if err := spec.ValidateHandlerArgument(arg); err != nil {
+					return err
+				}
 			}
 			name, err := types.CanonicalDeclaration(definition.Args[0], packagePath)
 			if err != nil {
@@ -90,8 +95,15 @@ func (c DefinitionCompiler) Compile(component *spec.Component) error {
 				if contractErr != nil {
 					return fmt.Errorf("compile predicate %s for %s: inspect handler predicate %q: %w", definition.Name, param.Name, name, contractErr)
 				}
-				if !implements {
-					return fmt.Errorf("compile predicate %s for %s: handler predicate type %q does not implement predicate.Handler", definition.Name, param.Name, name)
+				variadic, contractErr := shape.New(descriptor, nil).Implements(reflect.TypeFor[xpredicate.VariadicHandler](), true)
+				if contractErr != nil {
+					return contractErr
+				}
+				if !implements && !variadic {
+					return fmt.Errorf("compile predicate %s for %s: handler predicate type %q does not implement predicate.Handler or predicate.VariadicHandler", definition.Name, param.Name, name)
+				}
+				if (len(definition.Args) > 1 || len(definition.HandlerArgs) > 0) && !variadic {
+					return fmt.Errorf("handler predicate %q requires predicate.VariadicHandler to accept arguments", name)
 				}
 			}
 			definition.Args[0] = name

@@ -266,7 +266,7 @@ func TestPublicReload(t *testing.T) {
 				t.Fatal(err)
 			}
 			types := typecatalog.NewCatalog()
-			for _, typ := range []reflect.Type{reflect.TypeOf(linkedpredicate.Threshold{}), reflect.TypeOf(RecordsInput{}), reflect.TypeOf(RecordsOutput{})} {
+			for _, typ := range []reflect.Type{reflect.TypeOf(linkedpredicate.Threshold{}), reflect.TypeOf(linkedpredicate.ConfiguredThreshold{}), reflect.TypeOf(RecordsInput{}), reflect.TypeOf(RecordsOutput{})} {
 				if err := types.Register(typecatalog.TypeOriginPackage, x.NewType(typ)); err != nil {
 					t.Fatal(err)
 				}

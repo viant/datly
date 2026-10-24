@@ -1,6 +1,7 @@
 package spec
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -20,8 +21,22 @@ func (p *Predicate) UnmarshalJSON(data []byte) error {
 	}
 	type predicateAlias Predicate
 	var decoded predicateAlias
-	if err := json.Unmarshal(data, &decoded); err != nil {
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.UseNumber()
+	if err := decoder.Decode(&decoded); err != nil {
 		return err
+	}
+	for i, arg := range decoded.HandlerArgs {
+		if number, ok := arg.(json.Number); ok {
+			value, err := ParseHandlerArgument(string(number))
+			if err != nil {
+				return err
+			}
+			decoded.HandlerArgs[i] = value
+		}
+		if err := ValidateHandlerArgument(decoded.HandlerArgs[i]); err != nil {
+			return err
+		}
 	}
 	*p = Predicate(decoded)
 	return nil

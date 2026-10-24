@@ -188,6 +188,7 @@ func (p *Parameter) Clone() *Parameter {
 		if predicate != nil {
 			item := *predicate
 			item.Args = append([]string(nil), predicate.Args...)
+			item.HandlerArgs = append([]any(nil), predicate.HandlerArgs...)
 			result.Predicates[i] = &item
 		}
 	}

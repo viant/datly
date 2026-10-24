@@ -171,6 +171,11 @@ declaration_type = ? Go type expression resolved by Go parsing and viant/x/shape
             declared import/package authority; named types, pointers, slices,
             arrays, maps, structs, interfaces, functions, channels and generic
             instantiations remain subject to component/type suitability ? ;
+
+(* For the built-in handler adapter only, arguments after its linked type are
+   immutable typed literals, delivered to predicate.VariadicHandler. *)
+handler_argument = string | integer | "true" | "false" | "null" ;
+
 arguments = "(", [argument, {",", argument}], ")" ;
 argument = string | integer | boolean | declaration_type | declarative_value ;
 declarative_value = ? balanced option-specific value text; its meaning belongs

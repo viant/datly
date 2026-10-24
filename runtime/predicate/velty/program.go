@@ -57,6 +57,7 @@ type compiledPredicate struct {
 	applyWhenAbsent bool
 	evaluator       *templateEvaluator
 	handlerType     reflect.Type
+	handlerArgs     []any
 }
 
 // compiledMarker is immutable input-presence metadata. Invocation reads only
@@ -107,7 +108,13 @@ func Compile(input CompileInput) (*Program, error) {
 			var err error
 			if entry.handler {
 				compiled.handlerType, err = resolveHandlerType(input.Lookup, definition.Args)
+				if err == nil {
+					compiled.handlerArgs, err = compileHandlerArgs(compiled.handlerType, definition)
+				}
 			} else {
+				if len(definition.HandlerArgs) > 0 {
+					return nil, fmt.Errorf("predicate %s does not accept handlerArgs", definition.Name)
+				}
 				compiled.evaluator, err = newTemplateEvaluator(entry.template, field.Type, definition.Args)
 			}
 			if err != nil {
@@ -163,9 +170,7 @@ func resolveHandlerType(lookup LookupType, args []string) (reflect.Type, error) 
 	if len(args) == 0 || strings.TrimSpace(args[0]) == "" {
 		return nil, fmt.Errorf("handler predicate requires an absolute type name")
 	}
-	if len(args) != 1 {
-		return nil, fmt.Errorf("handler predicate accepts one type argument; bind configuration through predicate fields")
-	}
+
 	if lookup == nil {
 		return nil, fmt.Errorf("handler predicate %q requires type lookup", args[0])
 	}
@@ -177,8 +182,11 @@ func resolveHandlerType(lookup LookupType, args []string) (reflect.Type, error) 
 		return nil, fmt.Errorf("handler predicate type %q was not found", args[0])
 	}
 	rType = derefType(rType)
-	if !reflect.PointerTo(rType).Implements(reflect.TypeOf((*xpredicate.Handler)(nil)).Elem()) {
+	if !reflect.PointerTo(rType).Implements(reflect.TypeFor[xpredicate.Handler]()) && !reflect.PointerTo(rType).Implements(reflect.TypeFor[xpredicate.VariadicHandler]()) {
 		return nil, fmt.Errorf("%v does not implement predicate.Handler", rType)
+	}
+	if len(args) > 1 && !reflect.PointerTo(rType).Implements(reflect.TypeFor[xpredicate.VariadicHandler]()) {
+		return nil, fmt.Errorf("%v requires predicate.VariadicHandler to accept arguments", rType)
 	}
 	return rType, nil
 }
@@ -200,4 +208,23 @@ func (p *Program) Criteria(ctx context.Context, binder xhandler.Binder, group in
 		return nil, nil
 	}
 	return result, nil
+}
+
+// Arguments are validated and detached once during compilation. Only immutable
+// scalar literals are supported, so handlers cannot mutate shared configuration.
+func compileHandlerArgs(typ reflect.Type, definition *spec.Predicate) ([]any, error) {
+	args := make([]any, 0, len(definition.Args)-1+len(definition.HandlerArgs))
+	for _, arg := range definition.Args[1:] {
+		args = append(args, arg)
+	}
+	args = append(args, definition.HandlerArgs...)
+	if len(args) > 0 && !reflect.PointerTo(typ).Implements(reflect.TypeFor[xpredicate.VariadicHandler]()) {
+		return nil, fmt.Errorf("%v requires predicate.VariadicHandler to accept arguments", typ)
+	}
+	for _, arg := range args {
+		if err := spec.ValidateHandlerArgument(arg); err != nil {
+			return nil, err
+		}
+	}
+	return args, nil
 }

@@ -15,10 +15,14 @@ import (
 // contracts may precede generated inputs; executable materialization still
 // requires the real compiled handlers through the strict runtime compiler.
 func compilePredicateContracts(component *spec.Component, catalog *typecatalog.Catalog, context *typecatalog.ResolutionContext) error {
+	if component == nil {
+		return nil
+	}
 	references, err := readerpredicate.References(component, context)
 	if err != nil {
 		return err
 	}
+	variadicHandlers := make(map[string]bool, len(references))
 	if len(references) != 0 {
 		if catalog == nil {
 			return fmt.Errorf("compile predicate: type authority is required")
@@ -42,10 +46,31 @@ func compilePredicateContracts(component *spec.Component, catalog *typecatalog.C
 			if err != nil {
 				return fmt.Errorf("compile predicate: inspect handler predicate %q: %w", name, err)
 			}
-			if !implements {
+			variadic, err := shape.New(descriptor, resolver.Descriptor).Implements(reflect.TypeFor[xpredicate.VariadicHandler](), true)
+			if err != nil {
+				return err
+			}
+			variadicHandlers[name] = variadic
+			if !implements && !variadic {
 				return fmt.Errorf("compile predicate: handler predicate type %q does not implement predicate.Handler", name)
 			}
 		}
 	}
-	return (readerpredicate.DefinitionCompiler{Context: context}).Compile(component)
+	if err := (readerpredicate.DefinitionCompiler{Context: context}).Compile(component); err != nil {
+		return err
+	}
+	for _, parameter := range component.Parameters {
+		if parameter == nil {
+			continue
+		}
+		for _, definition := range parameter.Predicates {
+			if definition == nil || len(definition.Args) == 0 || (len(definition.Args) == 1 && len(definition.HandlerArgs) == 0) {
+				continue
+			}
+			if variadic, found := variadicHandlers[definition.Args[0]]; found && !variadic {
+				return fmt.Errorf("handler predicate %q requires predicate.VariadicHandler to accept arguments", definition.Args[0])
+			}
+		}
+	}
+	return nil
 }
