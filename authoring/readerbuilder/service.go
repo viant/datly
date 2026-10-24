@@ -343,6 +343,9 @@ func (s *Service) editPredicate(source string, kind OperationType, mutation *Pre
 	if kind != OperationRemoveFieldPredicate && !slicesContainsFold(s.config.PredicateNames, mutation.Name) {
 		return "", fmt.Errorf("predicate %q is not available to the reader builder service", mutation.Name)
 	}
+	if kind != OperationRemoveFieldPredicate && mutation.HandlerArgs != nil && len(*mutation.HandlerArgs) > 0 && !strings.EqualFold(strings.TrimSpace(mutation.Name), "handler") {
+		return "", fmt.Errorf("handlerArgs requires the handler predicate")
+	}
 	declarations, err := dql.DeclarationOccurrences(source)
 	if err != nil {
 		return "", err
@@ -364,7 +367,12 @@ func (s *Service) editPredicate(source string, kind OperationType, mutation *Pre
 		span := declaration.Predicates[mutation.Occurrence].Span
 		replacement := ""
 		if kind == OperationUpdateFieldPredicate {
-			replacement, err = dql.RenderPredicateOption(mutation.predicate())
+			predicate := mutation.predicate()
+			previous := declaration.Predicates[mutation.Occurrence].Predicate
+			if mutation.HandlerArgs == nil && strings.EqualFold(strings.TrimSpace(predicate.Name), "handler") && strings.EqualFold(strings.TrimSpace(previous.Name), "handler") {
+				predicate.HandlerArgs = append([]any(nil), previous.HandlerArgs...)
+			}
+			replacement, err = dql.RenderPredicateOption(predicate)
 			if err != nil {
 				return "", err
 			}
@@ -384,7 +392,11 @@ func (s *Service) editPredicate(source string, kind OperationType, mutation *Pre
 }
 
 func (m *PredicateMutation) predicate() *spec.Predicate {
-	return &spec.Predicate{Group: m.Group, Name: m.Name, Args: append([]string(nil), m.Args...), ApplyWhenAbsent: m.ApplyWhenAbsent}
+	result := &spec.Predicate{Group: m.Group, Name: m.Name, Args: append([]string(nil), m.Args...), ApplyWhenAbsent: m.ApplyWhenAbsent}
+	if m.HandlerArgs != nil {
+		result.HandlerArgs = append([]any(nil), (*m.HandlerArgs)...)
+	}
+	return result
 }
 
 func updatePredicateGroup(source string, mutation *PredicateGroupMutation) (string, error) {

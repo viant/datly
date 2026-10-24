@@ -140,6 +140,9 @@ type CodecMutation struct {
 }
 
 type PredicateMutation struct {
+	// HandlerArgs is optional on update: omission preserves existing handler
+	// configuration; an explicit empty array clears it.
+	HandlerArgs     *[]any   `json:"handlerArgs,omitempty"`
 	Field           string   `json:"field"`
 	Occurrence      int      `json:"occurrence,omitempty"`
 	View            string   `json:"view"`
