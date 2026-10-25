@@ -1,0 +1,161 @@
+package CUBE_PACKAGE
+
+import (
+	"context"
+	"database/sql"
+	"encoding/json"
+	"net/http/httptest"
+	"reflect"
+	"strings"
+	"testing"
+
+	_ "github.com/mattn/go-sqlite3"
+	"github.com/stretchr/testify/require"
+	"github.com/viant/bindly/resource"
+	"github.com/viant/datly/bootstrap"
+	httpgateway "github.com/viant/datly/gateway/http"
+	"github.com/viant/datly/mcp"
+	"github.com/viant/datly/report"
+	druntime "github.com/viant/datly/runtime"
+	"github.com/viant/datly/spec"
+	dsql "github.com/viant/datly/sql"
+	"github.com/viant/datly/tag"
+	"github.com/viant/datly/typecatalog"
+	"github.com/viant/mcp-protocol/schema"
+	_ "github.com/viant/sqlx/metadata/product/sqlite"
+)
+
+func componentFor(t *testing.T, holder, input, output reflect.Type) *spec.Component {
+	t.Helper()
+	field := holder.Field(0)
+	metadata, _, err := tag.ParseComponent(field.Tag)
+	require.NoError(t, err)
+	source := &bootstrap.RouteSource{PackagePath: holder.PkgPath(), HolderType: holder.Name(), FieldName: field.Name, Tag: metadata, InputType: input.Name(), OutputType: output.Name()}
+	component, err := source.Resolve(input, output)
+	require.NoError(t, err)
+	return component
+}
+
+func TestTranscribedCubeWireAndExecution(t *testing.T) {
+	ctx := context.Background()
+	names := []string{"VStart", "V100", "ViewConversions", "AccountID", "IsPG", "URL"}
+	wires := []string{"vStart", "v100", "viewConversions", "accountId", "isPg", "url"}
+	sqlNames := []string{"v_start", "v100", "view_conversions", "account_id", "is_pg", "url"}
+	values := []int64{2, 100, 3, 7, 1, 9}
+	const body = `{"dimensions":{"v100":true,"accountId":true,"isPg":true,"url":true},"measures":{"vStart":true,"viewConversions":true},"filters":{"vStart":2,"v100":100,"viewConversions":3,"accountId":7,"isPg":1,"url":9}}`
+	var bound MetricsCubeInput
+	require.NoError(t, json.Unmarshal([]byte(body), &bound))
+	for i, name := range names {
+		section := "Dimensions"
+		if i == 0 || i == 2 {
+			section = "Measures"
+		}
+		owner, _ := reflect.TypeFor[MetricsCubeInput]().FieldByName(section)
+		field, ok := owner.Type.FieldByName(name)
+		require.True(t, ok, name)
+		require.Equal(t, wires[i]+",omitempty", field.Tag.Get("json"))
+		require.True(t, reflect.ValueOf(bound).FieldByName(section).FieldByName(name).Bool())
+		filter := reflect.ValueOf(bound).FieldByName("Filters").FieldByName(name)
+		require.False(t, filter.IsNil(), name)
+		require.Equal(t, values[i], filter.Elem().Int())
+		var row reflect.StructField
+		for index := 0; index < reflect.TypeFor[MetricsRow]().NumField(); index++ {
+			candidate := reflect.TypeFor[MetricsRow]().Field(index)
+			if strings.Split(candidate.Tag.Get("sqlx"), ",")[0] == name {
+				row = candidate
+				break
+			}
+		}
+		require.NotEmpty(t, row.Name, name)
+		require.Equal(t, "reader_"+sqlNames[i], row.Tag.Get("json"))
+		require.Contains(t, row.Tag.Get("sqlx"), name)
+	}
+	for _, section := range []string{"Dimensions", "Measures"} {
+		field, _ := reflect.TypeFor[MetricsCubeInput]().FieldByName(section)
+		_, found := field.Type.FieldByName("Hidden")
+		require.False(t, found)
+	}
+	reader := componentFor(t, reflect.TypeFor[Component](), reflect.TypeFor[MetricsInput](), reflect.TypeFor[MetricsOutput]())
+	cube := componentFor(t, reflect.TypeFor[MetricsCubeComponent](), reflect.TypeFor[MetricsCubeInput](), reflect.TypeFor[MetricsCubeOutput]())
+	db, err := sql.Open("sqlite3", ":memory:")
+	require.NoError(t, err)
+	db.SetMaxOpenConns(1)
+	defer db.Close()
+	_, err = db.ExecContext(ctx, "CREATE TABLE events(v_start INTEGER,v100 INTEGER,view_conversions INTEGER,account_id INTEGER,is_pg INTEGER,url INTEGER,hidden INTEGER)")
+	require.NoError(t, err)
+	_, err = db.ExecContext(ctx, "INSERT INTO events VALUES(2,100,3,7,1,9,11)")
+	require.NoError(t, err)
+	cubeHandler, err := NewMetricsCube()
+	require.NoError(t, err)
+	types := typecatalog.NewCatalog()
+	resources := resource.New()
+	require.NoError(t, resources.Register(DatlyResourceNamespace, &DatlyResources))
+	project, err := report.NewProjectCompiler(report.ProjectConfig{Types: types}).CompileArtifacts([]bootstrap.ArtifactInput{
+		{Component: reader, InputType: reflect.TypeFor[MetricsInput](), OutputType: reflect.TypeFor[MetricsOutput](), Types: types, Resources: resources},
+		{Component: cube, InputType: reflect.TypeFor[MetricsCubeInput](), OutputType: reflect.TypeFor[MetricsCubeOutput](), Handler: cubeHandler, HandlerOwnedOutput: true, Types: types},
+	})
+	require.NoError(t, err)
+	registered, err := project.RuntimeComponents(ctx, report.RuntimeConfigureFunc(func(_ context.Context, artifact *report.ComponentArtifact) (report.RuntimeCapabilities, error) {
+		if artifact.ReaderCompilation() == nil {
+			return report.RuntimeCapabilities{}, nil
+		}
+		reader, err := artifact.ReaderCompilation().NewExecution(bootstrap.ReaderRuntimeConfig{SQL: &dsql.SQLComponent{DB: db}})
+		return report.RuntimeCapabilities{Reader: reader}, err
+	}))
+	require.NoError(t, err)
+	runtime, err := druntime.NewRuntime(registered)
+	require.NoError(t, err)
+	defer runtime.Shutdown(ctx)
+	request := httptest.NewRequest("POST", "/metrics/cube", strings.NewReader(body))
+	request.Header.Set("Content-Type", "application/json")
+	response := httptest.NewRecorder()
+	httpgateway.NewHandler(runtime, nil, "").ServeHTTP(response, request)
+	require.Equal(t, 200, response.Code, response.Body.String())
+	const expected = `[{"reader_v_start":2,"reader_v100":100,"reader_view_conversions":3,"reader_account_id":7,"reader_is_pg":1,"reader_url":9}]`
+	assertRows := func(wire string) {
+		var envelope map[string]json.RawMessage
+		require.NoError(t, json.Unmarshal([]byte(wire), &envelope))
+		rows := envelope["Data"]
+		if rows == nil {
+			rows = envelope["data"]
+		}
+		require.JSONEq(t, expected, string(rows))
+	}
+	assertRows(response.Body.String())
+	service, err := mcp.New(mcp.Config{Components: registered, Invoker: runtime})
+	require.NoError(t, err)
+	tool, ok := service.Catalog().Tool("MetricsCube")
+	require.True(t, ok)
+	require.NotContains(t, tool.Metadata().InputSchema.Properties["measures"]["properties"], "vsTart")
+	require.NotContains(t, tool.Metadata().InputSchema.Properties["filters"]["properties"], "vsTart")
+	for i, wire := range wires {
+		section := "dimensions"
+		if i == 0 || i == 2 {
+			section = "measures"
+		}
+		require.Contains(t, tool.Metadata().InputSchema.Properties[section]["properties"], wire)
+		require.Contains(t, tool.Metadata().InputSchema.Properties["filters"]["properties"], wire)
+	}
+	var arguments map[string]any
+	require.NoError(t, json.Unmarshal([]byte(body), &arguments))
+	executable, ok := service.Registry().ToolRegistry.Get("MetricsCube")
+	require.True(t, ok)
+	result, protocolErr := executable.Handler(ctx, &schema.CallToolRequest{Method: schema.MethodToolsCall, Params: schema.CallToolRequestParams{Name: "MetricsCube", Arguments: arguments}})
+	require.Nil(t, protocolErr)
+	require.NotNil(t, result)
+	require.False(t, result.IsError != nil && *result.IsError)
+	assertRows(result.Content[0].(schema.TextContent).Text)
+	arguments["dimensions"] = map[string]any{}
+	arguments["measures"] = map[string]any{"vStart": true}
+	result, protocolErr = executable.Handler(ctx, &schema.CallToolRequest{Method: schema.MethodToolsCall, Params: schema.CallToolRequestParams{Name: "MetricsCube", Arguments: arguments}})
+	require.Nil(t, protocolErr)
+	require.NotNil(t, result)
+	require.False(t, result.IsError != nil && *result.IsError)
+	var selected map[string]json.RawMessage
+	require.NoError(t, json.Unmarshal([]byte(result.Content[0].(schema.TextContent).Text), &selected))
+	rows := selected["Data"]
+	if rows == nil {
+		rows = selected["data"]
+	}
+	require.JSONEq(t, `[{"reader_v_start":2}]`, string(rows))
+}

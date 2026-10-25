@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"github.com/viant/datly/spec"
 	"github.com/viant/datly/typecatalog"
@@ -137,6 +138,12 @@ func joinIndex(left, right []int) []int {
 func lowerCamel(value string) string {
 	if value == "" {
 		return ""
+	}
+	letters := []rune(value)
+	// A single-letter prefix is a word, not part of the next capitalized word.
+	// Keep Tagly's existing acronym normalization for the remaining words.
+	if len(letters) >= 3 && unicode.IsUpper(letters[0]) && unicode.IsUpper(letters[1]) && unicode.IsLower(letters[2]) {
+		return string(unicode.ToLower(letters[0])) + text.CaseFormatUpperCamel.Format(string(letters[1:]), text.CaseFormatUpperCamel)
 	}
 	return text.CaseFormatUpperCamel.Format(value, text.CaseFormatLowerCamel)
 }

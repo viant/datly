@@ -13,7 +13,7 @@ import (
 
 func TestCubeLowerCamelPreservesOriginalAcronymRule(t *testing.T) {
 	type useCase struct{ source, want string }
-	for _, tc := range []useCase{{"", ""}, {"IsPG", "isPg"}, {"AccountID", "accountId"}, {"URL", "url"}, {"EventDate", "eventDate"}, {"Video25", "video25"}} {
+	for _, tc := range []useCase{{"", ""}, {"VStart", "vStart"}, {"V100", "v100"}, {"ViewConversions", "viewConversions"}, {"VStartID", "vStartId"}, {"IsPG", "isPg"}, {"AccountID", "accountId"}, {"URL", "url"}, {"EventDate", "eventDate"}, {"Video25", "video25"}, {"AccountIDs", "accountIdS"}} {
 		if got := lowerCamel(tc.source); got != tc.want {
 			t.Errorf("%s: got %q, want %q", tc.source, got, tc.want)
 		}
