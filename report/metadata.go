@@ -149,9 +149,12 @@ func compileMetadata(component *spec.Component, contract *registry.RouteInputCon
 			}
 		}
 		result.filters = append(result.filters, filterField{
-			field:    field{name: name, fieldName: fieldName, description: param.Description},
+			field:    field{name: name, fieldName: fieldName, wireName: lowerCamel(name), description: param.Description},
 			contract: inputField, tag: string(nativeField.Tag),
 		})
+	}
+	if err := result.validateWireNames(); err != nil {
+		return nil, err
 	}
 	result.compileRelationHolders(component.RootView)
 	return result, nil

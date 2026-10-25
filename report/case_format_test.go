@@ -13,10 +13,28 @@ import (
 
 func TestCubeLowerCamelPreservesOriginalAcronymRule(t *testing.T) {
 	type useCase struct{ source, want string }
-	for _, tc := range []useCase{{"", ""}, {"VStart", "vStart"}, {"V100", "v100"}, {"ViewConversions", "viewConversions"}, {"VStartID", "vStartId"}, {"IsPG", "isPg"}, {"AccountID", "accountId"}, {"URL", "url"}, {"EventDate", "eventDate"}, {"Video25", "video25"}, {"AccountIDs", "accountIdS"}} {
-		if got := lowerCamel(tc.source); got != tc.want {
-			t.Errorf("%s: got %q, want %q", tc.source, got, tc.want)
-		}
+	for _, tc := range []useCase{
+		{"", ""}, {"VStart", "vStart"}, {"V100", "v100"}, {"V25Threshold", "v25Threshold"},
+		{"V100Window", "v100Window"}, {"ControlVExposed", "controlVExposed"},
+		{"ViewConversions", "viewConversions"}, {"VStartID", "vStartId"},
+		{"IsPG", "isPg"}, {"AccountID", "accountId"}, {"URL", "url"},
+		{"EventDate", "eventDate"}, {"Video25", "video25"}, {"AccountIDs", "accountIds"},
+		{"URLs", "urls"}, {"URLValue", "urlValue"}, {"AccountIDsThreshold", "accountIdsThreshold"},
+		{"DAs", "das"}, {"das", "das"}, {"dAs", "dAs"},
+		{"V50Threshold", "v50Threshold"}, {"V75Threshold", "v75Threshold"},
+		{"V100Threshold", "v100Threshold"}, {"V100WindowThreshold", "v100WindowThreshold"},
+		{"Last14Days", "last14Days"}, {"P99Latency", "p99Latency"},
+		{"v25Threshold", "v25Threshold"}, {"v100Window", "v100Window"},
+		{"controlVExposed", "controlVExposed"}, {"accountId", "accountId"}, {"accountIds", "accountIds"},
+	} {
+		t.Run(tc.source, func(t *testing.T) {
+			if got := lowerCamel(tc.source); got != tc.want {
+				t.Fatalf("got %q, want %q", got, tc.want)
+			}
+			if got := lowerCamel(lowerCamel(tc.source)); got != tc.want {
+				t.Fatalf("conversion is not idempotent: got %q, want %q", got, tc.want)
+			}
+		})
 	}
 }
 

@@ -111,6 +111,7 @@ func (d Definition) Compile(input, output reflect.Type) (*Plan, error) {
 	result := &Plan{target: d.Target, view: d.View, inputType: input, outputType: output, holderByName: map[string][]string{}}
 	names := map[string]bool{}
 	fields := map[string]bool{}
+	wireNames := inputWireNames{}
 	selections := func(source []SelectionDefinition, target *[]selection) error {
 		for _, item := range source {
 			if item.Name == "" || names[item.Name] || fields[item.Field] {
@@ -118,6 +119,9 @@ func (d Definition) Compile(input, output reflect.Type) (*Plan, error) {
 			}
 			field, index, err := definitionField(input, item.Field)
 			if err != nil {
+				return err
+			}
+			if err := wireNames.addField(item.Field, field); err != nil {
 				return err
 			}
 			if dereference(field.Type).Kind() != reflect.Bool {
@@ -141,6 +145,9 @@ func (d Definition) Compile(input, output reflect.Type) (*Plan, error) {
 		}
 		field, index, err := definitionField(input, item.Field)
 		if err != nil {
+			return nil, err
+		}
+		if err := wireNames.addField(item.Field, field); err != nil {
 			return nil, err
 		}
 		sourceType := field.Type

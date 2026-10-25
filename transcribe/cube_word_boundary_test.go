@@ -19,18 +19,19 @@ func TestTranscribedCubeWordBoundaries(t *testing.T) {
 	testharness.WriteGeneratedGoMod(t, root)
 	no := false
 	var columns []*spec.Column
-	names := []string{"VStart", "V100", "ViewConversions", "AccountID", "IsPG", "URL"}
-	sqlNames := []string{"v_start", "v100", "view_conversions", "account_id", "is_pg", "url"}
-	wires := []string{"vStart", "v100", "viewConversions", "accountId", "isPg", "url"}
+	names := []string{"VStart", "V100", "ViewConversions", "AccountID", "IsPG", "URL", "V25Threshold", "V100Window", "ControlVExposed"}
+	sqlNames := []string{"v_start", "v100", "view_conversions", "account_id", "is_pg", "url", "v25_threshold", "v100_window", "control_v_exposed"}
+	wires := []string{"vStart", "v100", "viewConversions", "accountId", "isPg", "url", "v25Threshold", "v100Window", "controlVExposed", "accountIds"}
 	var dql strings.Builder
 	dql.WriteString("#setting($_ = $route('/metrics','GET'))\n#setting($_ = $report())\n")
 	for i, name := range names {
 		dql.WriteString("#define($_ = $" + name + "<int>(query/" + sqlNames[i] + ").Optional())\n")
-		groupable := i != 0 && i != 2
+		groupable := i != 0 && i != 2 && i != 7
 		columns = append(columns, &spec.Column{Name: name, Type: spec.TypeRef{Name: "int"}, Groupable: &groupable, Tag: `json:"reader_` + sqlNames[i] + `"`})
 	}
+	dql.WriteString("#define($_ = $AccountIDs<[]int>(query/account_ids).Optional())\n")
 	columns = append(columns, &spec.Column{Name: "Hidden", Type: spec.TypeRef{Name: "int"}, Groupable: &no, Tag: `json:"-"`})
-	dql.WriteString("SELECT e.v_start AS VStart,e.v100 AS V100,e.view_conversions AS ViewConversions,e.account_id AS AccountID,e.is_pg AS IsPG,e.url AS URL,e.hidden AS Hidden,type(e,'MetricsRow'),groupable(e) FROM events e")
+	dql.WriteString("SELECT e.v_start AS VStart,e.v100 AS V100,e.view_conversions AS ViewConversions,e.account_id AS AccountID,e.is_pg AS IsPG,e.url AS URL,e.v25_threshold AS V25Threshold,e.v100_window AS V100Window,e.control_v_exposed AS ControlVExposed,e.hidden AS Hidden,type(e,'MetricsRow'),groupable(e) FROM events e")
 	source := &Source{Scope: "example.com/generated/metrics", Name: "Metrics", Text: dql.String(), PreparedColumns: func(context.Context, column.PreparedColumnRequest) (*column.PreparedColumnResult, error) {
 		return &column.PreparedColumnResult{Columns: columns}, nil
 	}}
@@ -59,6 +60,9 @@ func TestTranscribedCubeWordBoundaries(t *testing.T) {
 			require.Contains(t, string(content), `json:"`+wire+`,omitempty"`)
 		}
 		require.NotContains(t, string(content), `json:"vsTart`)
+		for _, invalid := range []string{"v25tHreshold", "v100wIndow", "controlVeXposed", "accountIdS"} {
+			require.NotContains(t, string(content), `json:"`+invalid)
+		}
 		runtimeTest, err := os.ReadFile("testdata/cube_word_boundary/runtime_test.go.txt")
 		require.NoError(t, err)
 		if generation == 1 {

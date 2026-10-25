@@ -38,16 +38,18 @@ func componentFor(t *testing.T, holder, input, output reflect.Type) *spec.Compon
 
 func TestTranscribedCubeWireAndExecution(t *testing.T) {
 	ctx := context.Background()
-	names := []string{"VStart", "V100", "ViewConversions", "AccountID", "IsPG", "URL"}
-	wires := []string{"vStart", "v100", "viewConversions", "accountId", "isPg", "url"}
-	sqlNames := []string{"v_start", "v100", "view_conversions", "account_id", "is_pg", "url"}
-	values := []int64{2, 100, 3, 7, 1, 9}
-	const body = `{"dimensions":{"v100":true,"accountId":true,"isPg":true,"url":true},"measures":{"vStart":true,"viewConversions":true},"filters":{"vStart":2,"v100":100,"viewConversions":3,"accountId":7,"isPg":1,"url":9}}`
+	names := []string{"VStart", "V100", "ViewConversions", "AccountID", "IsPG", "URL", "V25Threshold", "V100Window", "ControlVExposed"}
+	wires := []string{"vStart", "v100", "viewConversions", "accountId", "isPg", "url", "v25Threshold", "v100Window", "controlVExposed"}
+	sqlNames := []string{"v_start", "v100", "view_conversions", "account_id", "is_pg", "url", "v25_threshold", "v100_window", "control_v_exposed"}
+	values := []int64{2, 100, 3, 7, 1, 9, 11, 12, 13}
+	const body = `{"dimensions":{"v100":true,"accountId":true,"isPg":true,"url":true,"v25Threshold":true,"controlVExposed":true},"measures":{"vStart":true,"viewConversions":true,"v100Window":true},"filters":{"vStart":2,"v100":100,"viewConversions":3,"accountId":7,"isPg":1,"url":9,"v25Threshold":11,"v100Window":12,"controlVExposed":13,"accountIds":[7,8]}}`
 	var bound MetricsCubeInput
 	require.NoError(t, json.Unmarshal([]byte(body), &bound))
+	require.NotNil(t, bound.Filters.AccountIDs)
+	require.Equal(t, []int{7, 8}, *bound.Filters.AccountIDs)
 	for i, name := range names {
 		section := "Dimensions"
-		if i == 0 || i == 2 {
+		if i == 0 || i == 2 || i == 7 {
 			section = "Measures"
 		}
 		owner, _ := reflect.TypeFor[MetricsCubeInput]().FieldByName(section)
@@ -81,9 +83,9 @@ func TestTranscribedCubeWireAndExecution(t *testing.T) {
 	require.NoError(t, err)
 	db.SetMaxOpenConns(1)
 	defer db.Close()
-	_, err = db.ExecContext(ctx, "CREATE TABLE events(v_start INTEGER,v100 INTEGER,view_conversions INTEGER,account_id INTEGER,is_pg INTEGER,url INTEGER,hidden INTEGER)")
+	_, err = db.ExecContext(ctx, "CREATE TABLE events(v_start INTEGER,v100 INTEGER,view_conversions INTEGER,account_id INTEGER,is_pg INTEGER,url INTEGER,v25_threshold INTEGER,v100_window INTEGER,control_v_exposed INTEGER,hidden INTEGER)")
 	require.NoError(t, err)
-	_, err = db.ExecContext(ctx, "INSERT INTO events VALUES(2,100,3,7,1,9,11)")
+	_, err = db.ExecContext(ctx, "INSERT INTO events VALUES(2,100,3,7,1,9,11,12,13,14)")
 	require.NoError(t, err)
 	cubeHandler, err := NewMetricsCube()
 	require.NoError(t, err)
@@ -111,7 +113,7 @@ func TestTranscribedCubeWireAndExecution(t *testing.T) {
 	response := httptest.NewRecorder()
 	httpgateway.NewHandler(runtime, nil, "").ServeHTTP(response, request)
 	require.Equal(t, 200, response.Code, response.Body.String())
-	const expected = `[{"reader_v_start":2,"reader_v100":100,"reader_view_conversions":3,"reader_account_id":7,"reader_is_pg":1,"reader_url":9}]`
+	const expected = `[{"reader_v_start":2,"reader_v100":100,"reader_view_conversions":3,"reader_account_id":7,"reader_is_pg":1,"reader_url":9,"reader_v25_threshold":11,"reader_v100_window":12,"reader_control_v_exposed":13}]`
 	assertRows := func(wire string) {
 		var envelope map[string]json.RawMessage
 		require.NoError(t, json.Unmarshal([]byte(wire), &envelope))
@@ -128,9 +130,15 @@ func TestTranscribedCubeWireAndExecution(t *testing.T) {
 	require.True(t, ok)
 	require.NotContains(t, tool.Metadata().InputSchema.Properties["measures"]["properties"], "vsTart")
 	require.NotContains(t, tool.Metadata().InputSchema.Properties["filters"]["properties"], "vsTart")
+	require.Contains(t, tool.Metadata().InputSchema.Properties["filters"]["properties"], "accountIds")
+	for _, invalid := range []string{"v25tHreshold", "v100wIndow", "controlVeXposed", "accountIdS"} {
+		for _, section := range []string{"dimensions", "measures", "filters"} {
+			require.NotContains(t, tool.Metadata().InputSchema.Properties[section]["properties"], invalid)
+		}
+	}
 	for i, wire := range wires {
 		section := "dimensions"
-		if i == 0 || i == 2 {
+		if i == 0 || i == 2 || i == 7 {
 			section = "measures"
 		}
 		require.Contains(t, tool.Metadata().InputSchema.Properties[section]["properties"], wire)

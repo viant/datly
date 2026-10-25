@@ -5,11 +5,9 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
-	"unicode"
 
 	"github.com/viant/datly/spec"
 	"github.com/viant/datly/typecatalog"
-	"github.com/viant/tagly/format/text"
 	xshape "github.com/viant/x/shape"
 )
 
@@ -23,7 +21,7 @@ func (c *inputCompiler) filterType() (reflect.Type, error) {
 		if typeOf == nil {
 			return nil, fmt.Errorf("report filter %s has no source type", item.name)
 		}
-		tag := string(fieldTag(lowerCamel(item.name), item.description))
+		tag := string(fieldTag(selectionWireName(item.field), item.description))
 		if param, ok := item.contract.Binding().Extension.(*spec.Parameter); ok && param.MCP != nil && !*param.MCP {
 			tag += ` mcp:"-"`
 		}
@@ -133,19 +131,6 @@ func dereference(typeOf reflect.Type) reflect.Type {
 
 func joinIndex(left, right []int) []int {
 	return append(append([]int(nil), left...), right...)
-}
-
-func lowerCamel(value string) string {
-	if value == "" {
-		return ""
-	}
-	letters := []rune(value)
-	// A single-letter prefix is a word, not part of the next capitalized word.
-	// Keep Tagly's existing acronym normalization for the remaining words.
-	if len(letters) >= 3 && unicode.IsUpper(letters[0]) && unicode.IsUpper(letters[1]) && unicode.IsLower(letters[2]) {
-		return string(unicode.ToLower(letters[0])) + text.CaseFormatUpperCamel.Format(string(letters[1:]), text.CaseFormatUpperCamel)
-	}
-	return text.CaseFormatUpperCamel.Format(value, text.CaseFormatLowerCamel)
 }
 
 func (c *inputCompiler) resolutionContext() *typecatalog.ResolutionContext {
