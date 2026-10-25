@@ -64,6 +64,9 @@ func NewExecution(config Config, options ...Option) (*Execution, error) {
 	if err := validatePlanWarmups(execution.config.Plan); err != nil {
 		return nil, err
 	}
+	if err := validateExecutionOptions(execution.config.Plan, config.SQL); err != nil {
+		return nil, err
+	}
 	return execution, nil
 }
 

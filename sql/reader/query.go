@@ -98,8 +98,8 @@ func (r *projectionReader) ReadProjection(ctx context.Context, request dexec.Pro
 	session.recorder.Pending(observation.scope, 1)
 	defer session.recorder.Pending(observation.scope, -1)
 	defer observation.finish(&err)
-	scan := rowRead{retry: r.retry.policy(), newRow: func() any { return reflect.New(request.RowType).Interface() }, options: []sqlxread.Option{sqlxread.WithRetry(r.retry.policy())}}
-	err = scan.query(ctx, rowQuery{db: r.db, tx: r.tx, query: &cache.ParmetrizedQuery{SQL: request.SQL, Args: request.Args}, read: observation, visit: func(row any) error { rows = reflect.Append(rows, reflect.ValueOf(row)); return nil }})
+	scan := rowRead{view: r.view, retry: r.retry.policy(), newRow: func() any { return reflect.New(request.RowType).Interface() }, options: []sqlxread.Option{sqlxread.WithRetry(r.retry.policy())}}
+	err = scan.query(ctx, rowQuery{db: r.db, tx: r.tx, dialect: r.dialect, query: &cache.ParmetrizedQuery{SQL: request.SQL, Args: request.Args}, read: observation, visit: func(row any) error { rows = reflect.Append(rows, reflect.ValueOf(row)); return nil }})
 	if err != nil {
 		return nil, err
 	}

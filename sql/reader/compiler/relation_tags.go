@@ -18,6 +18,9 @@ func applyFieldViewTag(view *data.View, options *dtag.View) {
 	view.Connector = options.Connector
 	view.Spec.BatchSize = options.Batch
 	view.Spec.BatchConcurrency = options.BatchConcurrency
+	if options.ExecutionOptions != nil {
+		view.Spec.ExecutionOptions = options.ExecutionOptions.Clone()
+	}
 	view.Spec.PublishParent = options.PublishParent
 	view.Spec.RelationalConcurrency = options.RelationalConcurrency
 	if options.AllowNulls != nil {

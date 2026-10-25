@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/viant/datly/spec"
+	"github.com/viant/datly/sql/executionhint"
 	"github.com/viant/datly/transcribe/dql"
 	"github.com/viant/datly/typecatalog"
 	"github.com/viant/sqlparser"
@@ -170,6 +171,11 @@ func (r *Reader) Compile(input ReadInput) (*spec.View, error) {
 	}
 	if err := applyViewDirectives(root, directives); err != nil {
 		return nil, err
+	}
+	if root.ExecutionOptions != nil {
+		if _, err := executionhint.Render(templates.AnalysisSQL, "mysql", root.ExecutionOptions); err != nil {
+			return nil, &Error{Code: CodeViewDirective, Cause: err}
+		}
 	}
 	if input.FactoryComposition == nil && !sourceDecomposed && (locksRewritten || projectionRewritten || columnsRewritten || len(directives) > 0 || directAuxiliary || root.Source.SQL == "" && (table == "" || referencesCTE(parsed.From.X, parsed.WithSelects))) {
 		root.Source.SQL = wrapReadProgram(input.Template, strings.TrimSpace((sqlparser.Stringifier{PreserveWindow: true}).String(parsed)))
