@@ -7,6 +7,7 @@ import (
 	"github.com/viant/datly/internal/drainowner"
 	"github.com/viant/datly/internal/readfailure"
 	"github.com/viant/datly/internal/txread"
+	"github.com/viant/datly/observability"
 	"github.com/viant/datly/sql/reader/collector"
 
 	sqlxread "github.com/viant/sqlx/io/read"
@@ -125,23 +126,26 @@ func (r rowRead) query(ctx context.Context, q rowQuery) (err error) {
 				_ = stmt.Close()
 			}
 		}()
-		err = reader.QueryAll(ctx, func(value any) error {
-			delivered++
-			if capture != nil {
-				if err := capture.snapshot(); err != nil {
-					return err
+		err = func() error {
+			defer observability.StartToolTiming(ctx, observability.ToolTimingQueryAllInclusive)()
+			return reader.QueryAll(ctx, func(value any) error {
+				delivered++
+				if capture != nil {
+					if err := capture.snapshot(); err != nil {
+						return err
+					}
 				}
-			}
-			if q.tx == nil {
-				return visit(value)
-			}
-			// Close the transactional cursor before codecs/hooks can invoke another
-			// reader. Ordinary collector rows are already buffered in its destination.
-			if !collectorRows || r.decoder != nil {
-				buffered = append(buffered, value)
-			}
-			return nil
-		}, q.query.Args...)
+				if q.tx == nil {
+					return visit(value)
+				}
+				// Close the transactional cursor before codecs/hooks can invoke another
+				// reader. Ordinary collector rows are already buffered in its destination.
+				if !collectorRows || r.decoder != nil {
+					buffered = append(buffered, value)
+				}
+				return nil
+			}, q.query.Args...)
+		}()
 		err = readfailure.Capture(err, q.read.metric.View)
 		sampleQuery()
 		// These typed cache-only outcomes occur before any database fallback.

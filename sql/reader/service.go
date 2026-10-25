@@ -373,7 +373,9 @@ func viewConnection(ctx context.Context, session *Session, plan *ViewPlan) (dsql
 	if plan == nil || plan.View == nil {
 		return dsql.Connection{}, fmt.Errorf("reader view plan is required")
 	}
+	finishResolve := observability.StartToolTiming(ctx, observability.ToolTimingConnectorResolve)
 	connection, err := session.SQL.Resolve(ctx, plan.Connector)
+	finishResolve()
 	if err != nil {
 		return dsql.Connection{}, fmt.Errorf("resolve view %s connector %s: %w", viewName(plan.View), plan.Connector, err)
 	}

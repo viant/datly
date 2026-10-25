@@ -9,6 +9,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/viant/datly/observability"
 	"github.com/viant/jsonrpc"
 	"github.com/viant/jsonrpc/transport"
 	protocolclient "github.com/viant/mcp-protocol/client"
@@ -84,7 +85,37 @@ func (h *Handler) CallTool(ctx context.Context, request *jsonrpc.TypedRequest[*s
 		}
 		h.DefaultHandler.Registry = h.service.Registry()
 	}
-	return h.DefaultHandler.CallTool(h.withContext(ctx), request)
+	result, callErr := h.DefaultHandler.CallTool(h.withContext(ctx), request)
+	return attachToolTiming(ctx, result), callErr
+}
+
+func attachToolTiming(ctx context.Context, result *schema.CallToolResult) *schema.CallToolResult {
+	if result == nil {
+		return nil
+	}
+	phases := observability.ToolTimingSnapshot(ctx)
+	if len(phases) == 0 {
+		return result
+	}
+	meta := schema.ResultMetaObject{}
+	if result.Meta != nil {
+		meta = *result.Meta
+	}
+	existing, ok := meta.AdditionalProperties.(map[string]interface{})
+	if meta.AdditionalProperties != nil && !ok {
+		// Preserve an existing result with malformed extension metadata. Timing
+		// is diagnostic and must never alter tool execution or its error.
+		return result
+	}
+	extras := make(map[string]interface{}, len(existing)+1)
+	for key, value := range existing {
+		extras[key] = value
+	}
+	extras[observability.ToolTimingMetaKey] = phases
+	meta.AdditionalProperties = extras
+	copy := *result
+	copy.Meta = &meta
+	return &copy
 }
 
 func (h *Handler) ListTools(ctx context.Context, request *jsonrpc.TypedRequest[*schema.ListToolsRequest]) (*schema.ListToolsResult, *jsonrpc.Error) {
