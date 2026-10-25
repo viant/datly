@@ -602,7 +602,10 @@ func evaluateSource(ctx context.Context, source *spec.ViewSource, dialect *info.
 		if !value.IsValid() {
 			return nil, fmt.Errorf("SQL template requires a compile-time input contract")
 		}
-		viewInput := sqltemplate.ViewInput{Dialect: dialect, ExcludeParent: true}
+		// Discovery needs representative paging values, not the runtime's
+		// zero-value (unbounded) selector. Summary expressions may divide by
+		// $View.Limit even when the metadata query returns no rows.
+		viewInput := sqltemplate.ViewInput{Dialect: dialect, ExcludeParent: true, Limit: 1, Page: 1}
 		if parent != nil {
 			viewInput.NonWindowSQL = parent.SQL
 			viewInput.NonWindowArgs = append([]any(nil), parent.Args...)
