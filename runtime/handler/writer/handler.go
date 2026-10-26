@@ -2347,6 +2347,12 @@ func (p *Program) buildEntityFrame(ctx context.Context, binder xhandler.Binder, 
 			for _, link := range relation.Links {
 				parentValue := parent.Entity.Elem().FieldByIndex(link.Parent.Index)
 				previousValue := previous.Elem().FieldByIndex(link.Child.Index)
+				// A nonmutating lookup may supply the parent's FK in Init. Its
+				// missing link is checked again when frames are rebuilt after Init;
+				// writable children must retain the immediate ownership guard.
+				if record.Auxiliary && !linkValueResolved(parentValue) {
+					continue
+				}
 				if !linkedEqual(parentValue, previousValue) {
 					// Keep the real Previous and the first failure across Init and
 					// frame rebuilding. Diagnostics never admit a foreign child.

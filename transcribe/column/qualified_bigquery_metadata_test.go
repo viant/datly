@@ -85,7 +85,7 @@ func (*qualifiedBQMetadataStatement) Exec([]driver.Value) (driver.Result, error)
 }
 func (s *qualifiedBQMetadataStatement) Query(args []driver.Value) (driver.Rows, error) {
 	c := s.owner
-	if !strings.Contains(s.query, "FROM "+c.catalog+"."+c.schema+".INFORMATION_SCHEMA.COLUMNS") {
+	if !strings.Contains(s.query, "FROM `"+c.catalog+"."+c.schema+".INFORMATION_SCHEMA.COLUMNS`") {
 		return nil, fmt.Errorf("wrong namespace or unexpected metadata read: %s", s.query)
 	}
 	if len(args) != 1 || args[0] != c.table {
