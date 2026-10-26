@@ -64,6 +64,7 @@ func TestHostInvocationLoggerBindsReaderOutputChildAndWriterLifecycle(t *testing
 		t.Fatal("host capability leaked into body")
 	}
 	expected := []fixture.Entry{{Level: "info", Message: "parent.begin", Attributes: []any{"id", 1}}, {Level: "debug", Message: "reader.input", Attributes: []any{"id", 1}}, {Level: "info", Message: "parent.end", Attributes: []any{"rows", 1}}, {Level: "warn", Message: "reader.output", Attributes: []any{"rows", 1}}}
+	expected = append(expected, fixture.Entry{Level: "debug", Message: "HTTP route dispatched through handler engine"})
 	if actual := log.Snapshot(); !reflect.DeepEqual(actual, expected) {
 		t.Fatalf("configured logger/order %#v", actual)
 	}
@@ -72,7 +73,7 @@ func TestHostInvocationLoggerBindsReaderOutputChildAndWriterLifecycle(t *testing
 		t.Fatalf("writer %d %s", created.Code, created.Body.String())
 	}
 	entries := log.Snapshot()
-	if len(entries) != 6 || entries[4].Message != "writer.init" || entries[5].Message != "writer.finalize" || entries[4].Level != "info" || entries[5].Level != "info" {
+	if len(entries) != 8 || entries[5].Message != "writer.init" || entries[6].Message != "writer.finalize" || entries[5].Level != "info" || entries[6].Level != "info" || entries[7].Message != "HTTP route dispatched through handler engine" || entries[7].Level != "debug" {
 		t.Fatalf("lifecycle host logger %#v", entries)
 	}
 	var name string

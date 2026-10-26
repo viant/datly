@@ -66,7 +66,7 @@ func (s *source) compile(ctx context.Context, types *typecatalog.Catalog) (*appl
 		return s.compileLinked(ctx, types)
 	}
 	if s.config.GoBootstrap == nil || len(s.config.GoBootstrap.Packages) == 0 {
-		return &application.Build{Resources: s.resources, Types: types, HTTP: s.http, Version: s.config.Version}, nil
+		return &application.Build{Resources: s.resources, Types: types, HTTP: s.http, Logger: s.invocationLogger, Version: s.config.Version}, nil
 	}
 	started := time.Now()
 	workspace := s.Workspace
@@ -107,7 +107,7 @@ func (s *source) compile(ctx context.Context, types *typecatalog.Catalog) (*appl
 func (s *source) buildIndexed(snapshot *bootstrapindex.Snapshot, materializer bootstrapindex.Materializer, resources *resource.Store, types *typecatalog.Catalog, started time.Time) (*application.Build, error) {
 	entries := snapshot.Entries()
 	var err error
-	built := &application.Build{Index: snapshot, Materializer: materializer, Resources: resources, Types: types, HTTP: s.http, Version: s.config.Version}
+	built := &application.Build{Index: snapshot, Materializer: materializer, Resources: resources, Types: types, HTTP: s.http, Logger: s.invocationLogger, Version: s.config.Version}
 	if len(s.providers) > 0 {
 		built.RuntimeOptions = append(built.RuntimeOptions, druntime.WithApplicationProviders(s.providers...))
 	}
@@ -204,7 +204,7 @@ func (s *source) compileLinked(ctx context.Context, types *typecatalog.Catalog) 
 		return nil, err
 	}
 	if len(s.config.GoBootstrap.Packages) == 0 {
-		return &application.Build{Resources: s.resources, Types: types, HTTP: s.http, Version: s.config.Version}, nil
+		return &application.Build{Resources: s.resources, Types: types, HTTP: s.http, Logger: s.invocationLogger, Version: s.config.Version}, nil
 	}
 	started := time.Now()
 	discovered, err := bootstrap.ReflectSelectedPackages(s.config.GoBootstrap.Packages, s.config.GoBootstrap.Exclude)
@@ -328,7 +328,7 @@ func hasViewWarmupBinding(view *spec.View, visited map[*spec.View]bool) bool {
 
 func (s *source) compileEager(ctx context.Context, types *typecatalog.Catalog) (*application.Build, error) {
 	if s.config.GoBootstrap == nil || len(s.config.GoBootstrap.Packages) == 0 {
-		return &application.Build{Resources: s.resources, Types: types, HTTP: s.http, Version: s.config.Version}, nil
+		return &application.Build{Resources: s.resources, Types: types, HTTP: s.http, Logger: s.invocationLogger, Version: s.config.Version}, nil
 	}
 	discovered, err := bootstrap.ReflectPackages(s.config.GoBootstrap.Packages)
 	if err != nil {
@@ -348,7 +348,7 @@ func (s *source) compileEager(ctx context.Context, types *typecatalog.Catalog) (
 			}
 		}
 	}
-	built := &application.Build{Resources: resources, Types: discovered.Types, HTTP: s.http, Version: s.config.Version}
+	built := &application.Build{Resources: resources, Types: discovered.Types, HTTP: s.http, Logger: s.invocationLogger, Version: s.config.Version}
 	if len(s.providers) > 0 {
 		built.RuntimeOptions = append(built.RuntimeOptions, druntime.WithApplicationProviders(s.providers...))
 	}
