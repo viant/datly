@@ -1259,6 +1259,12 @@ The host supplies the actual `handler.MessageBus` capability. A binding tag does
 not connect to a broker or allow a client to replace the service implementation.
 The same mechanism can supply configured input, logger and other scoped services.
 
+Standalone applications supply the trusted bus with
+`standalone.Options{InvocationMessageBus: bus}` when constructing the server.
+The host owns the bus lifecycle. Leaving the option nil preserves missing-service
+behavior; it does not create a broker connection. Ordinary application/component
+providers cannot override the protected `mbus` capability.
+
 The root typed hook can implement the outcome finalizer:
 
 ```go

@@ -32,6 +32,7 @@ import (
 	xcodec "github.com/viant/xdatly/codec"
 	xdiffer "github.com/viant/xdatly/differ"
 	xlogger "github.com/viant/xdatly/logger"
+	xmbus "github.com/viant/xdatly/mbus"
 )
 
 type source struct {
@@ -40,6 +41,7 @@ type source struct {
 	toolMetadata            func(context.Context, exec.ComponentTarget) (map[string]interface{}, error)
 	invocationDiffer        xdiffer.Differ
 	invocationLogger        xlogger.Logger
+	invocationMessageBus    xmbus.Service
 	Workspace               *xmodule.Workspace
 	resources               *resource.Store
 	caches                  aerospike.Pool

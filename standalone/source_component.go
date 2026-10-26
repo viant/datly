@@ -162,6 +162,7 @@ func (c *sourceComponent) Configure(ctx context.Context, artifact *report.Compon
 	result.Invocation.Connector = c.source.connections.SQL
 	result.Invocation.Logger = c.source.invocationLogger
 	result.Invocation.Differ = c.source.invocationDiffer
+	result.Invocation.MessageBus = c.source.invocationMessageBus
 	var err error
 	component := artifact.Component()
 	independentSourceLess := artifact.HasLinkedHandler() && component.Settings != nil && component.Settings.IndependentChildTransactions && component.Settings.DefaultConnector == ""

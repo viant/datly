@@ -31,6 +31,7 @@ import (
 	xdiffer "github.com/viant/xdatly/differ"
 	xexec "github.com/viant/xdatly/exec"
 	xlogger "github.com/viant/xdatly/logger"
+	xmbus "github.com/viant/xdatly/mbus"
 )
 
 type Options struct {
@@ -52,6 +53,9 @@ type Options struct {
 	// InvocationLogger is the trusted host logger statically bound to component
 	// contracts and lifecycle hooks. It is separate from bootstrap diagnostics.
 	InvocationLogger xlogger.Logger
+	// InvocationMessageBus is a trusted host capability. Components cannot
+	// replace it through ordinary application providers.
+	InvocationMessageBus xmbus.Service
 	// Codecs supplies named application codec factories; built-in names are reserved.
 	Codecs map[string]xcodec.Factory
 	// Providers supplies immutable application-owned capabilities to every
@@ -151,7 +155,7 @@ func New(ctx context.Context, options Options) (_ *Server, err error) {
 		}
 		options.LinkedArtifact = &artifact
 	}
-	s := &Server{httpMiddleware: options.HTTPMiddleware, source: &source{Workspace: options.Workspace, config: options.Config, resources: options.Resources, holders: append([]any(nil), options.Holders...), invocationLogger: options.InvocationLogger, invocationDiffer: options.InvocationDiffer, providers: providers, requireLinked: options.RequireLinked || options.Holders != nil,
+	s := &Server{httpMiddleware: options.HTTPMiddleware, source: &source{Workspace: options.Workspace, config: options.Config, resources: options.Resources, holders: append([]any(nil), options.Holders...), invocationLogger: options.InvocationLogger, invocationDiffer: options.InvocationDiffer, invocationMessageBus: options.InvocationMessageBus, providers: providers, requireLinked: options.RequireLinked || options.Holders != nil,
 		linkedArtifact: options.LinkedArtifact, requireComponentBinding: options.RequireComponentBinding, toolMetadata: options.ToolMetadata}, done: make(chan struct{}), ready: make(chan struct{}), mcpResourceAuthorizer: options.MCPResourceAuthorizer, mcpBackendForFrontend: options.MCPBackendForFrontend}
 	s.source.codecFactories, err = normalizeCodecs(options.Codecs)
 	if err != nil {
