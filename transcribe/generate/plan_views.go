@@ -267,6 +267,12 @@ func (r *planResolver) resolveViews() (map[string]int, error) {
 			if previous.Destination != planner.dests[view] || !reflect.DeepEqual(previous.Fields, fields) {
 				return nil, fmt.Errorf("generated views %q and %q map to type %q with different shapes or destinations", planner.owners[name].Name, view.Name, name)
 			}
+			if PreparedLeafPair(planner.ordinaryBodyRoot, planner.owners[name], view) {
+				if len(previous.RoleIdentities) != 0 {
+					return nil, fmt.Errorf("generated type %q has more than two prepared roles", name)
+				}
+				previous.RoleIdentities = append(previous.RoleIdentities, identity)
+			}
 			if identity := generatedRoots[view]; identity != "" {
 				indexes[identity] = index
 			}
@@ -615,7 +621,7 @@ func (p *viewPlanner) assign(view *spec.View, typeName, destination string) erro
 		}
 		// Explicit names can share one generated leaf contract. Keep inferred
 		// name collisions, mutation presence and relation-specific metadata strict.
-		if !p.reuseLeafTypes || owner.TypeName == "" || view.TypeName == "" ||
+		if (!p.reuseLeafTypes && !PreparedLeafPair(p.ordinaryBodyRoot, owner, view)) || owner.TypeName == "" || view.TypeName == "" ||
 			len(owner.Relations) != 0 || len(view.Relations) != 0 || owner.SelfReference != nil || view.SelfReference != nil {
 			return fmt.Errorf("generated views %q and %q map to type %q", owner.Name, view.Name, typeName)
 		}

@@ -97,6 +97,11 @@ sequenceDiagram
     Note over Writer,Lifecycle: A failed phase stops later write phases. Failure finalization still applies
 ```
 
+For association replacement, keep captured request holders intact and populate a
+separate hidden physical relation during input initialization. See
+[prepared association writes](mutations.md#prepare-association-writes-without-replacing-the-request-graph)
+for the DQL pattern and its capture boundary.
+
 Any failing phase stops later write phases. The invocation owner resolves failure
 and transaction completion before outcome-aware finalization. A failed early
 capture can reach `Definition.FinalizeFailure` without a prepared Program.

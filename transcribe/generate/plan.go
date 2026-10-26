@@ -165,6 +165,8 @@ type HelperType struct {
 // ViewPlan is one generated canonical view type. Relations reference another
 // ViewPlan by its local type name rather than creating a parallel graph.
 type ViewPlan struct {
+	// RoleIdentities share this exact generated leaf and its presence contract.
+	RoleIdentities  []string
 	Package         string
 	Identity        string
 	Name            string

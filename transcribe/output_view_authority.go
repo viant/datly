@@ -146,18 +146,22 @@ func generatedOutputRow(result *Result, authority *generatedRowAuthority, view *
 		}
 	}
 	owners := authority.owners[base]
-	if len(owners) != 1 {
+	if len(owners) != 1 && !(len(owners) == 2 && gen.PreparedLeafPair(authority.root, owners[0], owners[1])) {
 		return false, nil
-	}
-	ownerIdentity, err := owners[0].Identity()
-	if err != nil {
-		return false, err
 	}
 	viewIdentity, err := view.Identity()
 	if err != nil {
 		return false, err
 	}
-	if ownerIdentity != viewIdentity {
+	owned := false
+	for _, owner := range owners {
+		ownerIdentity, err := owner.Identity()
+		if err != nil {
+			return false, err
+		}
+		owned = owned || ownerIdentity == viewIdentity
+	}
+	if !owned {
 		return false, nil
 	}
 	resolved, err := result.TypeResolver.ResolveWithProvenance(expression)

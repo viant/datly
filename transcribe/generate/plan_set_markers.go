@@ -2,6 +2,7 @@ package generate
 
 import (
 	"fmt"
+	"reflect"
 	"sort"
 	"strings"
 
@@ -112,6 +113,9 @@ func (r *planResolver) applySetMarkerViews() error {
 		if view.Identity != "" {
 			planned[view.Identity] = view
 		}
+		for _, identity := range view.RoleIdentities {
+			planned[identity] = view
+		}
 		if view.Ownership == ViewLinked {
 			if err := markLinked(canonical[view.Identity]); err != nil {
 				return err
@@ -132,6 +136,7 @@ func (r *planResolver) applySetMarkerViews() error {
 		}
 	}
 	sort.Strings(identities)
+	marked := map[*ViewPlan]bool{}
 	for _, identity := range identities {
 		view := canonical[identity]
 		if view == nil {
@@ -153,9 +158,22 @@ func (r *planResolver) applySetMarkerViews() error {
 		if viewPlan.Ownership == ViewLinked {
 			continue
 		}
+		if marked[viewPlan] {
+			candidate := *viewPlan
+			candidate.Fields = append([]Field(nil), viewPlan.Fields[:len(viewPlan.Fields)-1]...)
+			candidate.SetMarkerFields = nil
+			if err := addViewSetMarkerWithBorrowedEdges(&candidate, view, borrowedEdges); err != nil {
+				return err
+			}
+			if !reflect.DeepEqual(candidate.SetMarkerFields, viewPlan.SetMarkerFields) {
+				return fmt.Errorf("shared generated leaf %q has incompatible presence contracts", viewPlan.Name)
+			}
+			continue
+		}
 		if err := addViewSetMarkerWithBorrowedEdges(viewPlan, view, borrowedEdges); err != nil {
 			return err
 		}
+		marked[viewPlan] = true
 	}
 	return nil
 }

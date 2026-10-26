@@ -939,6 +939,57 @@ changes are not partially applied when synchronization fails. Hooks running afte
 this phase should use the generated marker-aware setters for business changes;
 do not expect a later hidden SyncPresence pass to repair arbitrary direct writes.
 
+### Prepare association writes without replacing the request graph
+
+When an API accepts a desired membership list, initialization may need to derive
+insertions and removals from the existing memberships. Keep the public request
+relation auxiliary and prepare physical actions in a separate hidden relation.
+Do not replace already captured parents or reorder captured physical children.
+
+The two relations can explicitly share one SQL-generated leaf type when their
+fields, types, SQLX mappings, tags, destination and presence contract are identical.
+They must be siblings under an auxiliary parent: one auxiliary request role and
+one physical `insert-delete` role. Datly emits one row and `Has` type while keeping
+each relation's SQL, links and write policy separate. Use the physical declaration
+first when it also supplies the row type for an independent Current read.
+
+For example, a team-membership writer can declare:
+
+```sql
+SELECT team.*, type(team,'Team'),
+       prepared.*, type(prepared,'Membership','PreparedMemberships'),
+       tag(prepared,'json:"-" internal:"true" mcp:"-"'),
+       internal_transient(prepared.remove), cast(prepared.remove AS bool),
+       delete_marker(prepared.remove), writer_action_policy(prepared,'insert-delete'),
+       requested.*, type(requested,'Membership','Memberships'),
+       internal_transient(requested.remove), cast(requested.remove AS bool),
+       tag(requested.remove,'writer:"delete"')
+FROM (SELECT id FROM (teams)) team
+LEFT JOIN (SELECT *, false AS remove FROM memberships) prepared
+  ON team.id=prepared.team_id
+LEFT JOIN (SELECT *, false AS remove FROM (memberships)) requested
+  ON team.id=requested.team_id
+```
+
+Declare the body, output and authorized Current read as usual. The physical
+relation still requires genuine Current rows and complete schema keys. The
+auxiliary projection retains the shared Go field's `writer:"delete"` tag, but
+does not declare a `delete_marker` operation of its own.
+
+In `Input.Init`, authorize and validate the request, then populate the initially
+empty `PreparedMemberships` relation with admitted insertions and explicit removal
+rows. Keep the original `Team` pointer and `Memberships` slice intact. Accepted
+insertions may share request-row pointers so generated IDs remain visible in the
+response; removal rows should be separate copies of Current rows. Return the
+public request graph, not the prepared actions.
+
+The writer captures newly introduced physical rows when they are first framed.
+After that point, identity, deletion decisions, holder positions and parent
+ownership remain guarded through shared transaction completion. This pattern
+does not permit later graph replacement or disable validation, rollback or
+post-queue guards. Hidden prepared relations are excluded from public JSON and
+MCP contracts.
+
 ### Shared body rows in independent Current reads
 
 A native writer with an auxiliary root may explicitly reuse its generated body

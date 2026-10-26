@@ -322,6 +322,10 @@ func (g *Generation) withGeneratedPresenceForGraph(semantic *handlerplan.Plan, g
 			fieldsByIdentity[view.Identity] = append([]string(nil), view.SetMarkerFields...)
 			viewCopy := view
 			viewsByIdentity[view.Identity] = &viewCopy
+			for _, identity := range view.RoleIdentities {
+				fieldsByIdentity[identity] = append([]string(nil), view.SetMarkerFields...)
+				viewsByIdentity[identity] = &viewCopy
+			}
 		}
 	}
 	var apply func(*handlerplan.RecordPlan) error
