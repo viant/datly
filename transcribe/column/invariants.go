@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/viant/datly/internal/sqlanalysis"
 	"github.com/viant/datly/spec"
 	dsql "github.com/viant/datly/sql"
 	"github.com/viant/datly/tag"
@@ -110,30 +111,51 @@ func (r *Refiner) ValidateSourceProjections(component *spec.Component, resources
 				SQL = "SELECT * FROM " + source.Table
 			}
 			if SQL != "" {
-				analysis, err := projectionAnalysisSQL(SQL, inputs)
+				variants, err := sqlanalysis.ConditionalSQL(SQL)
 				if err != nil {
 					return fmt.Errorf("static projection for view %s: %w", view.Namespace, err)
 				}
-				SQL = analysis
-				source.SQL = analysis
-				columns, err := (dsql.SelectorProjection{SQL: SQL}).Columns(nil)
-				if err != nil {
-					return fmt.Errorf("invariant projection for view %s requires column discovery: %w", view.Namespace, err)
+				var contract []string
+				checked := false
+				for _, variant := range variants {
+					if strings.TrimSpace(variant) == "" {
+						continue
+					}
+
+					analysis, err := projectionAnalysisSQL(variant, inputs)
+					if err != nil {
+						return fmt.Errorf("static projection for view %s: %w", view.Namespace, err)
+					}
+					SQL := analysis
+					source := source.Clone()
+					source.SQL = analysis
+					columns, err := (dsql.SelectorProjection{SQL: SQL}).Columns(nil)
+					if err != nil {
+						return fmt.Errorf("invariant projection for view %s requires column discovery: %w", view.Namespace, err)
+					}
+					names := make([]string, 0, len(columns))
+					for _, column := range columns {
+						names = append(names, column.OutputName())
+					}
+					if source.Table == "" {
+						source.Table = directSourceTable(SQL)
+					}
+					resultView := sqlResultView(view)
+					identities, err := resolveResultSources(resultView.Columns, source)
+					if err != nil {
+						return err
+					}
+					if err := validateResultAnnotations(resultView, names, identities); err != nil {
+						return err
+					}
+					if checked && !reflect.DeepEqual(contract, names) {
+						return fmt.Errorf("conditional projection for view %s changes output columns; requires bound discovery", view.Namespace)
+					}
+					contract = names
+					checked = true
 				}
-				names := make([]string, 0, len(columns))
-				for _, column := range columns {
-					names = append(names, column.OutputName())
-				}
-				if source.Table == "" {
-					source.Table = directSourceTable(SQL)
-				}
-				resultView := sqlResultView(view)
-				identities, err := resolveResultSources(resultView.Columns, source)
-				if err != nil {
-					return err
-				}
-				if err := validateResultAnnotations(resultView, names, identities); err != nil {
-					return err
+				if !checked {
+					return fmt.Errorf("conditional projection for view %s has no SELECT alternative", view.Namespace)
 				}
 			}
 		}
