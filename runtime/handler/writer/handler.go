@@ -3001,9 +3001,13 @@ func compileRecordMode(component *spec.Component, inputType reflect.Type, name, 
 	record := &Record{Name: name, Path: path, EntityType: entityType, CurrentField: -1, Table: tagOption(viewTag, "table"), Auxiliary: strings.EqualFold(tagOption(viewTag, "auxiliary"), "true"), Invariants: map[string][]Field{}}
 	record.RootNullPolicy = tagOption(viewTag, "rootNullPolicy")
 	record.NestedNullPolicy = tagOption(viewTag, "nestedNullPolicy")
+	// Generated Go relations can carry their policy without a child View spec.
+	record.WriterActionPolicy = tagOption(viewTag, "writerActionPolicy")
 	if view != nil {
 		record.Auxiliary = record.Auxiliary || view.Auxiliary
-		record.WriterActionPolicy = view.WriterActionPolicy
+		if view.WriterActionPolicy != "" {
+			record.WriterActionPolicy = view.WriterActionPolicy
+		}
 		record.QueueContract = view.QueueContract
 		record.WriterIdentityPolicy = view.WriterIdentityPolicy
 		if view.RootNullPolicy != "" {
