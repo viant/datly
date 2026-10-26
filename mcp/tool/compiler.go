@@ -151,7 +151,7 @@ func (c *Compiler) Compile(input Input) (*Plan, error) {
 		annotation := owner.Parameter(argument.path, documentation.Annotation{Description: argument.description, Example: argument.example})
 		argument.description, argument.example = annotation.Description, annotation.Example
 		arguments[index] = argument
-		if argument.wireType != nil || argument.wireSchema != nil || len(argument.wireSchemas) > 0 {
+		if argument.wireType != nil || argument.wireSchema != nil || hasWireRepresentation(argument.wireSchemas) {
 			named, err := fieldname.HasNames(argument.sourceType, memberNameVisibility())
 			if err != nil {
 				return nil, err

@@ -6,6 +6,7 @@ import (
 	"github.com/viant/mcp-protocol/schema/fieldname"
 	"github.com/viant/mcp-protocol/schema/jsonschema"
 	"reflect"
+	"sort"
 	"strings"
 )
 
@@ -74,6 +75,9 @@ func applyWireSchema(root map[string]interface{}, path string, schema *spec.Wire
 		parts = parts[1:]
 	}
 	if len(parts) == 0 {
+		if schema.Type == "" {
+			return
+		}
 		for key := range root {
 			delete(root, key)
 		}
@@ -100,10 +104,85 @@ func applyWireSchemaParts(node map[string]interface{}, parts []string, schema *s
 		return false
 	}
 	if len(parts) == 1 {
-		mergeWireSchema(child, schema)
+		if schema.Type != "" {
+			mergeWireSchema(child, schema)
+		}
+		if schema.Required {
+			addRequiredProperty(node, propertyName)
+			if !schema.Nullable {
+				removeSchemaNull(child)
+			}
+		}
+		if schema.MinItems > 0 {
+			child["minItems"] = schema.MinItems
+		}
 		return true
 	}
 	return applyWireSchemaParts(child, parts[1:], schema)
+}
+
+func addRequiredProperty(parent map[string]interface{}, name string) {
+	set := map[string]bool{name: true}
+	switch existing := parent["required"].(type) {
+	case []string:
+		for _, item := range existing {
+			set[item] = true
+		}
+	case []interface{}:
+		for _, item := range existing {
+			if value, ok := item.(string); ok {
+				set[value] = true
+			}
+		}
+	}
+	values := make([]string, 0, len(set))
+	for value := range set {
+		values = append(values, value)
+	}
+	sort.Strings(values)
+	parent["required"] = values
+}
+
+func removeSchemaNull(node map[string]interface{}) {
+	var kinds []string
+	switch value := node["type"].(type) {
+	case []string:
+		kinds = value
+	case []interface{}:
+		for _, item := range value {
+			if kind, ok := item.(string); ok {
+				kinds = append(kinds, kind)
+			}
+		}
+	}
+	if len(kinds) > 0 {
+		allowed := make([]string, 0, len(kinds))
+		for _, kind := range kinds {
+			if kind != "null" {
+				allowed = append(allowed, kind)
+			}
+		}
+		if len(allowed) == 1 {
+			node["type"] = allowed[0]
+		} else {
+			node["type"] = allowed
+		}
+	}
+	for _, key := range []string{"anyOf", "oneOf"} {
+		alternatives, ok := node[key].([]interface{})
+		if !ok {
+			continue
+		}
+		allowed := make([]interface{}, 0, len(alternatives))
+		for _, alternative := range alternatives {
+			child, ok := alternative.(map[string]interface{})
+			if ok && child["type"] == "null" {
+				continue
+			}
+			allowed = append(allowed, alternative)
+		}
+		node[key] = allowed
+	}
 }
 
 func mergeWireSchema(target map[string]interface{}, schema *spec.WireSchema) {

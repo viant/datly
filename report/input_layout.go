@@ -52,7 +52,15 @@ func (c *inputCompiler) compileLayout(typeOf reflect.Type, descriptor *x.Type) (
 	} {
 		param := bodyParam(name, typeOf)
 		if name == c.metadata.inputLayout.Filters {
-			param.WireSchemas = filterWireSchemas(name, c.metadata.filters)
+			field, _ := typeOf.FieldByName(name)
+			param.WireSchemas = filterWireSchemas(name, c.metadata.filters, true, field.Type)
+			for _, item := range c.metadata.filters {
+				if requiredPublicFilter(item) {
+					required := true
+					param.Required = &required
+					break
+				}
+			}
 		}
 		result.params = append(result.params, param)
 	}

@@ -53,6 +53,10 @@ type WireSchema struct {
 	Type     string `json:"type,omitempty"`
 	Format   string `json:"format,omitempty"`
 	Nullable bool   `json:"nullable,omitempty"`
+	// Required advertises presence of this nested member. An empty Type retains
+	// the reflected shape (including array items) while adding this constraint.
+	Required bool `json:"required,omitempty"`
+	MinItems int  `json:"minItems,omitempty"`
 }
 
 func (s *WireSchema) Clone() *WireSchema {

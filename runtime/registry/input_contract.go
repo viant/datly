@@ -424,6 +424,11 @@ func bindingWireSchema(binding bindly.BindingSpec) (*spec.WireSchema, map[string
 		nested = cloneWireSchemas(param.WireSchemas)
 	}
 	for key, schema := range nested {
+		// Presence-only metadata augments a reflected nested shape without
+		// replacing its type. Root wire representations still require a type.
+		if schema != nil && schema.Type == "" && schema.Required && schema.Format == "" {
+			continue
+		}
 		if err := validateWireSchema(schema); err != nil {
 			return nil, nil, fmt.Errorf("nested wire schema %s: %w", key, err)
 		}
