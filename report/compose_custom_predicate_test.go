@@ -56,6 +56,9 @@ func TestCubeComposeCustomPredicateInputAndFrameContext(t *testing.T) {
 				t.Fatal(err)
 			}
 			for _, p := range component.Parameters {
+				if p.Name == "AccountIDs" {
+					p.Required = boolPointer(true)
+				}
 				if p.Name == "Channel" {
 					p.Predicates = []*spec.Predicate{{Name: "handler", Args: []string{"example.com/acme/reporting.ComposeChannelPredicate"}}}
 				}

@@ -152,20 +152,38 @@ func TestHandlerLeavesRequiredFilterFailureToSourceBinding(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	input := reflect.New(derived.InputType)
-	input.Elem().FieldByName("Dimensions").FieldByName(typecatalog.ExportedFieldName("AccountID")).SetBool(true)
-	_, err = runtime.InvokeComponent(context.Background(), exec.ComponentRequest{
-		Target: exec.ComponentTarget{
-			Component: derived.Component.Key,
-			Route:     spec.RouteRef{Method: derived.Component.Routes[0].Method, Path: derived.Component.Routes[0].Path},
-		},
-		Input: input.Interface(),
-	})
-	// Bindly reports the absent source parameter directly; retain both its
-	// public 400 diagnostic and the source binding identity.
-	var bindingError *bindly.BindingError
-	if err == nil || xresponse.ErrorStatusCode(err, 500) != 400 || !errors.As(err, &bindingError) || bindingError.Path != "AccountIDs" || bindingError.Name != "AccountIDs" || bindingError.Kind != "query" || bindingError.In != "accountID" || err.Error() != "parameter AccountIDs is required" {
-		t.Fatalf("InvokeComponent() error = %v, want required source filter failure", err)
+	for _, tc := range []struct {
+		name    string
+		set     bool
+		ids     []int
+		missing bool
+	}{
+		{"omitted", false, nil, true}, {"null", true, nil, true},
+		{"empty", true, []int{}, true}, {"provided", true, []int{1}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			input := reflect.New(derived.InputType)
+			input.Elem().FieldByName("Dimensions").FieldByName(typecatalog.ExportedFieldName("AccountID")).SetBool(true)
+			if tc.set {
+				input.Elem().FieldByName("Filters").FieldByName("AccountIDs").Set(reflect.ValueOf(&tc.ids))
+			}
+			_, err := runtime.InvokeComponent(context.Background(), exec.ComponentRequest{
+				Target: exec.ComponentTarget{Component: derived.Component.Key,
+					Route: spec.RouteRef{Method: derived.Component.Routes[0].Method, Path: derived.Component.Routes[0].Path}}, Input: input.Interface(),
+			})
+			if !tc.missing {
+				if err != nil {
+					t.Fatalf("present filter rejected: %v", err)
+				}
+				return
+			}
+			// The source binding remains the execution authority. Required
+			// presence rejects omission, null, and empty source collections.
+			var bindingError *bindly.BindingError
+			if err == nil || xresponse.ErrorStatusCode(err, 500) != 400 || !errors.As(err, &bindingError) || bindingError.Path != "AccountIDs" || bindingError.Name != "AccountIDs" || bindingError.Kind != "query" || bindingError.In != "accountID" {
+				t.Fatalf("InvokeComponent() error = %v, want required source filter failure", err)
+			}
+		})
 	}
 }
 

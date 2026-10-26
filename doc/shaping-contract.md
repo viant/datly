@@ -189,3 +189,23 @@ be provisional during discovery but cannot pass final generation unchecked.
 Validate the generated shape **and the actual compiled vendor SQL**, then execute
 it through the native reader/writer with realistic fixtures. A manually invented
 aliased SQL query is not evidence of how the outer DQL configuration is lowered.
+
+### Conditional SQL during static projection validation
+
+Reader sources may use `#if`, `#elseif` and `#else` for structural alternatives,
+including an optional `UNION ALL` branch. No-database projection validation
+checks each possible SQL alternative without invoking conditions, input methods,
+or serializers. It preserves the authored source and embedded resources. Each
+nonempty alternative must satisfy its projection annotations and expose the same
+ordered output columns. Changing output shapes requires bound discovery instead
+of guessing a representative branch.
+
+Analysis uses the SQL lexer for protected strings/comments and the Velty parser
+for conditional syntax. It is bounded to 32 levels, 64 conditions and 64 branch
+alternatives; larger programs require bound discovery. This does not limit normal
+runtime template evaluation. Ordinary optional comparisons should still use
+built-in predicates when they express the query directly.
+
+See `transcribe/column/testdata/conditional_union.sql` and
+`TestConditionalUnionSQLite` for bound SQLite discovery and execution with and
+without the archive branch, including duplicate-row and parameter preservation.

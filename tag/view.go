@@ -43,6 +43,7 @@ type View struct {
 	RelationalConcurrency    int
 	AllowNulls               *bool
 	Groupable                *bool
+	ExecutionOptions         *spec.ExecutionOptions
 	Auxiliary                bool
 	Partitioning             *spec.Partitioning
 	Selector                 *spec.Selector
@@ -70,6 +71,12 @@ func ParseView(value string) (*View, error) {
 		}
 		value = decoded
 		switch key {
+		case "mysqlconditionfanoutfilter":
+			if result.ExecutionOptions != nil || value != "false" {
+				return fmt.Errorf("mysqlConditionFanoutFilter requires one false literal")
+			}
+			flag := false
+			result.ExecutionOptions = &spec.ExecutionOptions{MySQL: &spec.MySQLExecutionOptions{ConditionFanoutFilter: &flag}}
 		case "name":
 			result.Name = value
 		case "type":

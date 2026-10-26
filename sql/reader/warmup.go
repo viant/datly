@@ -69,25 +69,72 @@ func (e *Execution) Warmup(ctx context.Context, invocation dexec.ReaderWarmupInv
 }
 
 func (e *Execution) warmupWithSettings(ctx context.Context, session *Session, warmup warmupExecution, plan *ViewPlan, settings *spec.CacheWarmupSettings) (int, error) {
-	if settings.Limit != nil && *settings.Limit < 0 || settings.MaxCases != nil && *settings.MaxCases < 0 {
-		return 0, fmt.Errorf("warmup limits must be non-negative")
+	work, err := warmupWorkItems(plan, settings)
+	if err != nil {
+		return 0, err
 	}
-	selected := []*ViewPlan{plan}
-	if settings.IndexMeta {
-		for _, relation := range plan.Relations {
-			if relation.Relation.IsOutput() {
-				selected = append(selected, relation.Target)
+	// Validate the exact expanded policies before the first population. A
+	// summary can select a different connector than its parent's warmup.
+	for _, item := range work {
+		if err := validateWarmupLimits(item.settings); err != nil {
+			return 0, err
+		}
+		if item.plan.View.Spec.ExecutionOptions != nil {
+			connection, err := session.SQL.Resolve(ctx, item.connector())
+			if err != nil {
+				return 0, err
+			}
+			if connection.Dialect != nil {
+				if err := rejectHintedWarmup(item.plan.View, connection.Dialect.Name); err != nil {
+					return 0, err
+				}
 			}
 		}
-	}
-	for _, candidate := range selected {
-		if session.ReadCaches[candidate.View] == nil {
-			return 0, fmt.Errorf("view %q has no native read cache", candidate.View.Spec.Name)
+		if session.ReadCaches[item.plan.View] == nil {
+			return 0, fmt.Errorf("view %q has no native read cache", item.plan.View.Spec.Name)
 		}
 	}
-	total, err := warmup.run(ctx, plan, nil, settings)
-	if err != nil || !settings.IndexMeta {
-		return total, err
+	total := 0
+	for _, item := range work {
+		count, err := warmup.run(ctx, item.plan, item.derived, item.settings)
+		total += count
+		if err != nil {
+			return total, err
+		}
+	}
+	return total, nil
+}
+
+type warmupWork struct {
+	plan     *ViewPlan
+	derived  *RelationPlan
+	settings *spec.CacheWarmupSettings
+}
+
+func (w warmupWork) connector() string {
+	if w.settings.Connector != "" {
+		return w.settings.Connector
+	}
+	return w.plan.Connector
+}
+
+func validateWarmupLimits(settings *spec.CacheWarmupSettings) error {
+	if settings == nil {
+		return fmt.Errorf("warmup settings are required")
+	}
+	if settings.Limit != nil && *settings.Limit < 0 || settings.MaxCases != nil && *settings.MaxCases < 0 {
+		return fmt.Errorf("warmup limits must be non-negative")
+	}
+	return nil
+}
+
+func warmupWorkItems(plan *ViewPlan, settings *spec.CacheWarmupSettings) ([]warmupWork, error) {
+	if err := validateWarmupLimits(settings); err != nil {
+		return nil, err
+	}
+	work := []warmupWork{{plan: plan, settings: settings}}
+	if !settings.IndexMeta {
+		return work, nil
 	}
 	for _, relation := range plan.Relations {
 		if !relation.Relation.IsOutput() {
@@ -95,7 +142,7 @@ func (e *Execution) warmupWithSettings(ctx context.Context, session *Session, wa
 		}
 		policies, err := relation.Target.View.Cache.EffectiveWarmups()
 		if err != nil {
-			return total, err
+			return nil, err
 		}
 		if len(policies) == 0 {
 			policy := settings.Clone()
@@ -105,14 +152,10 @@ func (e *Execution) warmupWithSettings(ctx context.Context, session *Session, wa
 			policies = []*spec.CacheWarmupSettings{policy}
 		}
 		for _, policy := range policies {
-			count, err := warmup.run(ctx, relation.Target, relation, policy)
-			total += count
-			if err != nil {
-				return total, err
-			}
+			work = append(work, warmupWork{plan: relation.Target, derived: relation, settings: policy})
 		}
 	}
-	return total, nil
+	return work, nil
 }
 
 type warmupExecution struct {
@@ -135,6 +178,11 @@ func (w *warmupExecution) run(ctx context.Context, plan *ViewPlan, derived *Rela
 	}
 	if connection.Tx != nil {
 		return 0, fmt.Errorf("transactional reader does not support cache warmup")
+	}
+	if connection.Dialect != nil {
+		if err := rejectHintedWarmup(view, connection.Dialect.Name); err != nil {
+			return 0, err
+		}
 	}
 	selector := w.selectors.forView(view).Clone()
 	if len(settings.FieldNames) > 0 {

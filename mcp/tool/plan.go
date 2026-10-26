@@ -116,7 +116,7 @@ func (p *Plan) scope(ctx context.Context, arguments map[string]interface{}) (*re
 	// request/body providers and Bindly decoder. Wire representations stay owned
 	// by their declared authority; unannotated arguments retain their exact path.
 	for _, argument := range p.args {
-		if argument.sourceKind != "body" || argument.wireType != nil || argument.wireSchema != nil || len(argument.wireSchemas) > 0 {
+		if argument.sourceKind != "body" || argument.wireType != nil || argument.wireSchema != nil || hasWireRepresentation(argument.wireSchemas) {
 			continue
 		}
 		value, present := normalized[argument.publicName]
@@ -239,4 +239,14 @@ func cloneSchemaValue(value interface{}) interface{} {
 	default:
 		return actual
 	}
+}
+
+// Requiredness metadata does not replace the reflected wire representation.
+func hasWireRepresentation(schemas map[string]*spec.WireSchema) bool {
+	for _, schema := range schemas {
+		if schema != nil && schema.Type != "" {
+			return true
+		}
+	}
+	return false
 }

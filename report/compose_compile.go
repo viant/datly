@@ -96,7 +96,9 @@ func (d *reportDeriver) deriveCompose(source Source, route *spec.Route, identity
 		return nil, nil, err
 	}
 	cubesParam := bodyParam("Cubes", inputType)
-	cubesParam.WireSchemas = filterWireSchemas("Cubes.Filters", metadata.filters)
+	// Composition frames may inherit required filters from an earlier frame.
+	// The source binding validates the effective filters after inheritance.
+	cubesParam.WireSchemas = filterWireSchemas("Cubes.Filters", metadata.filters, false, filterType)
 	params := []*spec.Parameter{cubesParam, bodyParam("SQL", inputType)}
 	required := true
 	for _, param := range params {

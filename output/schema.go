@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/francoispqt/gojay"
+	"github.com/viant/mcp-protocol/schema/jsonschema"
 	xshape "github.com/viant/x/shape"
 )
 
@@ -86,7 +87,10 @@ func (b *jsonSchemaBuilder) value(t reflect.Type, ref, path string) (map[string]
 			if _, exists := properties[field.name]; exists {
 				return nil, fmt.Errorf("%w: JSON name collision %q on %s", ErrSchemaUnavailable, field.name, t)
 			}
-			item, err := b.value(field.field.Type, ref+"/properties/"+schemaPointerToken(field.name), field.path)
+			item, declared, err := jsonschema.ScalarWireSchema(field.field)
+			if !declared {
+				item, err = b.value(field.field.Type, ref+"/properties/"+schemaPointerToken(field.name), field.path)
+			}
 			if err != nil {
 				return nil, err
 			}
@@ -181,6 +185,13 @@ func nullableJSONSchema(source map[string]any) map[string]any {
 	}
 	if kind, ok := source["type"].(string); ok {
 		source["type"] = []string{kind, "null"}
+	} else if kinds, ok := source["type"].([]string); ok {
+		for _, kind := range kinds {
+			if kind == "null" {
+				return source
+			}
+		}
+		source["type"] = append(append([]string(nil), kinds...), "null")
 	} else if source["$ref"] != nil {
 		return map[string]any{"anyOf": []any{source, map[string]any{"type": "null"}}}
 	}

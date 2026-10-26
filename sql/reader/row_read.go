@@ -8,10 +8,12 @@ import (
 	"github.com/viant/datly/internal/readfailure"
 	"github.com/viant/datly/internal/txread"
 	"github.com/viant/datly/observability"
+	"github.com/viant/datly/sql/executionhint"
 	"github.com/viant/datly/sql/reader/collector"
 
 	sqlxread "github.com/viant/sqlx/io/read"
 	"github.com/viant/sqlx/io/read/cache"
+	"github.com/viant/sqlx/metadata/info"
 )
 
 // rowQuery groups the existing SQLX query inputs and native timing ownership.
@@ -24,9 +26,38 @@ type rowQuery struct {
 	visit      func(any) error
 	read       *viewRead
 	id, parent string
+	dialect    *info.Dialect
 }
 
 func (r rowRead) query(ctx context.Context, q rowQuery) (err error) {
+	if r.view != nil && r.view.Spec.ExecutionOptions != nil {
+		if err := r.view.Spec.ExecutionOptions.Validate(); err != nil {
+			return err
+		}
+		dialect := q.dialect
+		if dialect == nil {
+			session := q.read.session
+			connector := r.view.Connector
+			if plan := session.Artifact.ViewPlanFor(r.view); plan != nil {
+				connector = plan.Connector
+			}
+			connection, err := session.SQL.Resolve(ctx, connector)
+			if err != nil {
+				return err
+			}
+			dialect = connection.Dialect
+		}
+		if dialect != nil && r.view.Spec.ExecutionOptions.Active(dialect.Name) {
+			text, err := executionhint.Render(q.query.SQL, dialect.Name, r.view.Spec.ExecutionOptions)
+			if err != nil {
+				return err
+			}
+			query := *q.query
+			query.SQL = text
+			q.query = &query
+			r.readCache = onlyExactQueries(r.readCache)
+		}
+	}
 	execution := q.read.execution(q.query, q.id, q.parent)
 	rows := 0
 	delivered := 0

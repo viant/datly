@@ -127,8 +127,33 @@ func componentWithRootView(source *spec.Component, view *spec.View) *spec.Compon
 		result.Settings = &settings
 	}
 	result.Parameters = make([]*spec.Parameter, 0, len(source.Parameters))
+	// A prerequisite has its own view graph. Parent/default-root selectors
+	// must not page it or require the parent's transport-only bindings.
+	aliases := map[string]bool{}
+	visited := map[*spec.View]bool{}
+	var visit func(*spec.View)
+	visit = func(current *spec.View) {
+		if current == nil || visited[current] {
+			return
+		}
+		visited[current] = true
+		for _, name := range []string{current.Name, current.Key.Name} {
+			if name = strings.ToLower(strings.TrimSpace(name)); name != "" {
+				aliases[name] = true
+			}
+		}
+		for _, relation := range current.Relations {
+			if relation != nil {
+				visit(relation.View)
+			}
+		}
+	}
+	visit(view)
 	for _, param := range source.Parameters {
 		if param == nil || strings.EqualFold(strings.TrimSpace(param.Source.Kind), "output") {
+			continue
+		}
+		if param.QuerySelector != nil && !aliases[strings.ToLower(strings.TrimSpace(param.QuerySelector.View))] {
 			continue
 		}
 		result.Parameters = append(result.Parameters, param)

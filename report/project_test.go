@@ -172,10 +172,10 @@ func TestProjectCompilerPropagatesFormattedDateWireSchemaToCubeFilters(t *testin
 		switch item.Plan.inputType.Field(0).Name {
 		case "Dimensions":
 			schemas = parameterByName(item.Component.Parameters, "Filters").WireSchemas
-			assertWireDateSchema(t, schemas["Filters.From"], true)
+			assertWireDateSchema(t, schemas["Filters.from"], true)
 		case "Cubes":
 			schemas = parameterByName(item.Component.Parameters, "Cubes").WireSchemas
-			assertWireDateSchema(t, schemas["Cubes.Filters.From"], true)
+			assertWireDateSchema(t, schemas["Cubes.Filters.from"], true)
 		default:
 			t.Fatalf("unexpected derived input: %v", item.Plan.inputType)
 		}

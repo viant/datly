@@ -61,16 +61,39 @@ func bodyParam(name string, inputType reflect.Type) *spec.Parameter {
 	return &spec.Parameter{Name: name, Source: spec.BindSource{Kind: "body", Name: jsonName(field)}}
 }
 
-func filterWireSchemas(prefix string, filters []filterField) map[string]*spec.WireSchema {
+func filterWireSchemas(prefix string, filters []filterField, requireSourceFilters bool, filterType reflect.Type) map[string]*spec.WireSchema {
 	var result map[string]*spec.WireSchema
 	for _, item := range filters {
 		schema := item.contract.WireSchema()
-		if schema == nil {
+		required := requireSourceFilters && requiredPublicFilter(item)
+		if schema == nil && !required {
 			continue
 		}
-		schema = schema.Clone()
-		schema.Nullable = true
-		key := item.fieldName
+		if schema == nil {
+			schema = &spec.WireSchema{}
+		} else {
+			schema = schema.Clone()
+		}
+		schema.Required, schema.Nullable = required, !required
+		if required && schema.Type == "" {
+			typeOf := item.contract.SourceType()
+			if typeOf == nil {
+				typeOf = item.contract.DestinationType()
+			}
+			typeOf = dereference(typeOf)
+			if typeOf != nil && (typeOf.Kind() == reflect.Slice || typeOf.Kind() == reflect.Array) {
+				schema.MinItems = 1
+				if param, ok := item.contract.Binding().Extension.(*spec.Parameter); ok && param.MinAllowedRecords != nil && *param.MinAllowedRecords > 1 {
+					schema.MinItems = *param.MinAllowedRecords
+				}
+			}
+		}
+		// Use the declared JSON member identity, including acronyms and linked
+		// input aliases. Guessing lower-first Go names loses IDs -> ids.
+		key := selectionWireName(item.field)
+		if field, ok := typecatalog.FieldByName(dereference(filterType), item.fieldName); ok {
+			key = jsonName(field)
+		}
 		if prefix != "" {
 			key = prefix + "." + key
 		}
@@ -80,6 +103,17 @@ func filterWireSchemas(prefix string, filters []filterField) map[string]*spec.Wi
 		result[key] = schema
 	}
 	return result
+}
+
+func requiredPublicFilter(item filterField) bool {
+	binding := item.contract.Binding()
+	if binding.Required == nil || !*binding.Required || binding.DefaultValue != nil || binding.When != "" {
+		return false
+	}
+	if param, ok := binding.Extension.(*spec.Parameter); ok && param != nil && (param.MCP != nil && !*param.MCP || param.Activation != nil) {
+		return false
+	}
+	return reflect.StructTag(item.tag).Get("mcp") != "-"
 }
 
 func jsonName(field reflect.StructField) string {
