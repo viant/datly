@@ -5,12 +5,14 @@ import (
 	"encoding/json"
 	"fmt"
 
+	skillformat "github.com/viant/datly/mcp/resource"
 	"github.com/viant/jsonrpc"
 	"github.com/viant/mcp-protocol/schema"
 	mcpserver "github.com/viant/mcp-protocol/server"
 )
 
 const (
+	SkillDiscoverTool     = "skills_discover"
 	SkillListTool         = "skills_list"
 	SkillGetTool          = "skills_get"
 	SkillResourceReadTool = "skills_read_resource"
@@ -47,11 +49,25 @@ func registerSkillToolBridge(registry *mcpserver.Registry, authorize func(contex
 	if registry == nil || !registry.ImplementsSkills() {
 		return nil
 	}
-	for _, name := range []string{SkillListTool, SkillGetTool, SkillResourceReadTool} {
+	for _, name := range []string{SkillDiscoverTool, SkillListTool, SkillGetTool, SkillResourceReadTool} {
 		if _, exists := registry.ToolRegistry.Get(name); exists {
 			return fmt.Errorf("MCP skill compatibility tool %q conflicts with an authored tool", name)
 		}
 	}
+	if err := mcpserver.RegisterTool[skillformat.DiscoveryOptions, skillformat.DiscoveryResult](registry, SkillDiscoverTool, "Discover published skills with compact summaries and group counts. Default kind=skills lists summaries. Set kind=resources with exact skillURI, URI prefix and/or query to find targeted URI/digest/size descriptors without reading contents. Group selects an exact group; limit is 1-100 (default 32). Follow nextCursor using the same filters. Read selected entrypoints and matching resource URIs with skills_read_resource; use skills_get only when the complete inventory is needed.", func(ctx context.Context, input skillformat.DiscoveryOptions) (*schema.CallToolResult, *jsonrpc.Error) {
+		if err := ctx.Err(); err != nil {
+			return nil, jsonrpc.NewInternalError("skill catalog unavailable", nil)
+		}
+		result, err := skillformat.Discover(visibleSkills(ctx, registry, authorize), input)
+		if err != nil {
+			return nil, jsonrpc.NewInvalidParamsError(err.Error(), nil)
+		}
+		return structuredSkillToolResult(result)
+	}); err != nil {
+		return err
+	}
+	discovery, _ := registry.ToolRegistry.Get(SkillDiscoverTool)
+	discovery.Metadata.InputSchema = skillformat.SkillDiscoveryInputSchema()
 	if err := mcpserver.RegisterTool[skillListToolInput, skillListToolOutput](registry, SkillListTool, "List published MCP skills for clients without the Skills extension.", func(ctx context.Context, input skillListToolInput) (*schema.CallToolResult, *jsonrpc.Error) {
 		result, err := listVisibleSkills(ctx, registry, authorize, input.Cursor)
 		if err != nil {
