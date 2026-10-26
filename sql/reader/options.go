@@ -27,6 +27,7 @@ type readerOptions struct {
 	rowType             reflect.Type
 	collectProjection   bool
 	optionalCodecInputs map[string]bool
+	view                *data.View
 }
 
 func newReaderOptions(session *Session, view *data.View, tx *sql.Tx) readerOptions {
@@ -34,6 +35,7 @@ func newReaderOptions(session *Session, view *data.View, tx *sql.Tx) readerOptio
 		return readerOptions{}
 	}
 	result := readerOptions{parameters: session.Parameters}
+	result.view = view
 	if session.Component != nil {
 		result.optionalCodecInputs = map[string]bool{}
 		for _, param := range spec.EffectiveParameters(session.Component.Parameters) {
@@ -64,6 +66,7 @@ func newReaderOptions(session *Session, view *data.View, tx *sql.Tx) readerOptio
 }
 
 type rowRead struct {
+	view      *data.View
 	retry     sqlxread.RetryPolicy
 	readCache cache.Cache
 	cacheOnly bool
@@ -76,6 +79,7 @@ type rowRead struct {
 
 func (o readerOptions) rows(newRow func() any, resolve sqlxio.Resolve, matchers ...*cache.ParmetrizedQuery) rowRead {
 	result := rowRead{retry: o.retry, readCache: o.readCache, cacheOnly: o.cacheOnly, newRow: newRow, options: o.withResolver(resolve, matchers...)}
+	result.view = o.view
 	if o.readCache != nil {
 		result.stats = &cache.Stats{}
 		result.options = append(result.options, sqlxread.WithCacheStats(result.stats))

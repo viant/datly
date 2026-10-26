@@ -210,6 +210,9 @@ func (r *relationRead) applyWarmupMatcher(ctx context.Context, query, matcher *c
 		return nil
 	}
 	view := r.plan.View
+	if r.connection.Dialect != nil && view.Spec.ExecutionOptions.Active(r.connection.Dialect.Name) {
+		return nil
+	}
 	if r.connection.Tx != nil || r.session.ReadCaches[view] == nil || view.Cache == nil {
 		return nil
 	}

@@ -21,6 +21,9 @@ func resolveViewResources(root *data.View, resources fs.FS) error {
 		if view == nil {
 			return nil
 		}
+		if err := view.Spec.ExecutionOptions.Validate(); err != nil {
+			return fmt.Errorf("view %q: %w", view.Spec.Name, err)
+		}
 		if previous, found := visited[view]; found {
 			if explicit := declared[view]; explicit != "" {
 				namespace = explicit

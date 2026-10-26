@@ -561,6 +561,7 @@ the entire projection.
 | Control | Exact arity and syntax |
 | --- | --- |
 | connector/cache | use_connector(alias,name), use_cache(alias,name), cache_warmup(alias,name); 2 each; quoted names or supported identifiers |
+| MySQL execution planning | mysql_condition_fanout_filter(alias,false); exactly 2 arguments; boolean literal, currently false only |
 | ordering/limit | order_by(alias,'expression'), set_limit(alias,integer) |
 | null/grouping | allow_nulls(alias), groupable(alias), grouping_enabled(alias) |
 | order allowlist | allowed_order_by_columns(alias,'column,alias:column,...') |
@@ -579,6 +580,23 @@ the entire projection.
 | selector defaults | selector_default_order(view,'expression'), selector_default_limit(view,integer), selector_no_limit(view,bool) |
 | selector scope | selector_namespace(view,'name'), selector_filterable(view,'field,path,...') |
 | selector criteria methods | selector_sql_methods(view,'[{"name":"lower","args":["string"]}]') |
+
+For example, `mysql_condition_fanout_filter(adAudience, false)` stores a typed,
+view-owned option. On MySQL, the native reader adds
+`/*+ SET_VAR(optimizer_switch='condition_fanout_filter=off') */` immediately
+after the final outer SELECT, after query shaping. Other products leave the
+option inactive. Omission retains the database default; explicit true is not
+currently supported. Unknown targets, duplicate controls and conflicting
+existing optimizer-switch assignments are errors.
+
+Active hinted views support exact-query lazy caching, keyed by the final hinted
+SQL and its original bound arguments. They never consult indexed warmup entries.
+Warmup configuration and warmup execution are rejected for those views; unhinted
+sibling views retain their normal warmup behavior. `$View.NonWindowSQL` remains
+unhinted, and count/child views use only their own execution options. Generated
+view tags retain the option as `mysqlConditionFanoutFilter=false`; generated SQL
+and schema-discovery SQL do not receive a hint. Verify actual optimizer plans
+and warnings on the deployed MySQL version before adopting the option.
 
 Numeric control arguments are unquoted, nonnegative integer literals. set_limit(alias,0) removes the view limit; it does not erase an explicitly authored SQL LIMIT. Controls are consumed as metadata rather than sent to the DB. Every listed
 control has exactly 2 arguments except the five flags (`allow_nulls`, `groupable`,

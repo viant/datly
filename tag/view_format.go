@@ -13,6 +13,9 @@ import (
 
 // Value formats view metadata using the same grammar accepted by ParseView.
 func (v View) Value() (string, error) {
+	if err := v.ExecutionOptions.Validate(); err != nil {
+		return "", err
+	}
 	if v.BatchConcurrency < 0 {
 		return "", fmt.Errorf("view option batchConcurrency must be a non-negative integer")
 	}
@@ -86,6 +89,9 @@ func (v View) Value() (string, error) {
 	}
 	if v.Offset != nil {
 		values = append(values, "offset="+strconv.Itoa(*v.Offset))
+	}
+	if options := v.ExecutionOptions; options != nil && options.MySQL != nil && options.MySQL.ConditionFanoutFilter != nil {
+		values = append(values, "mysqlConditionFanoutFilter=false")
 	}
 	if v.Batch > 0 {
 		values = append(values, "batch="+strconv.Itoa(v.Batch))

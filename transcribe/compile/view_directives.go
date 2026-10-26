@@ -64,6 +64,7 @@ func parseViewDirective(item *query.Item) (viewDirective, bool, error) {
 	}
 	name := normalizeViewDirectiveName(sqlparser.Stringify(call.X))
 	switch name {
+	case spec.ViewControlMySQLConditionFanoutFilter:
 	case spec.ViewControlNestedNullPolicy, spec.ViewControlRootNullPolicy, spec.ViewControlInsertValidationPresence, spec.ViewControlWriterIdentity, spec.ViewControlWriterActionPolicy, spec.ViewControlFiniteReconciliation, spec.ViewControlQueueContract, spec.ViewControlOnDeleteNotFound, spec.ViewControlMutationPredicate, spec.ViewControlOrderBy, spec.ViewControlSetLimit, spec.ViewControlUseConnector,
 		spec.ViewControlUseCache, spec.ViewControlCacheWarmup,
 		spec.ViewControlAllowNulls, spec.ViewControlGroupable, spec.ViewControlGrouping,
@@ -128,6 +129,9 @@ func parseViewDirective(item *query.Item) (viewDirective, bool, error) {
 			return viewDirective{}, true, &Error{Code: CodeViewDirective, Cause: fmt.Errorf("selector_default_limit value %q must be a non-negative integer", directive.value)}
 		}
 	}
+	if name == spec.ViewControlMySQLConditionFanoutFilter && directive.value != "false" {
+		return viewDirective{}, true, &Error{Code: CodeViewDirective, Cause: fmt.Errorf("mysql_condition_fanout_filter currently supports only false")}
+	}
 	if name == spec.ViewControlSelectorSQLMethods {
 		if _, err := tag.ParseSQLMethods(directive.value); err != nil {
 			return viewDirective{}, true, &Error{Code: CodeViewDirective, Cause: err}
@@ -170,6 +174,7 @@ func containsViewDirective(source node.Node) bool {
 	return containsSQLCall(source, func(name string) bool {
 		switch name {
 		case spec.ViewControlNestedNullPolicy, spec.ViewControlRootNullPolicy, spec.ViewControlInsertValidationPresence, spec.ViewControlWriterIdentity, spec.ViewControlWriterActionPolicy, spec.ViewControlFiniteReconciliation, spec.ViewControlQueueContract, spec.ViewControlOnDeleteNotFound, spec.ViewControlMutationPredicate, spec.ViewControlOrderBy, spec.ViewControlSetLimit, spec.ViewControlUseConnector,
+			spec.ViewControlMySQLConditionFanoutFilter,
 			spec.ViewControlUseCache, spec.ViewControlCacheWarmup,
 			spec.ViewControlAllowNulls, spec.ViewControlGroupable, spec.ViewControlGrouping,
 			spec.ViewControlAllowedOrder, spec.ViewControlCardinality, spec.ViewControlSelfRef,
@@ -294,7 +299,7 @@ func viewDirectiveValue(name string, argument int, source node.Node) (string, bo
 		if numeric && actual.Kind != "int" {
 			return "", false
 		}
-		boolean := name == spec.ViewControlInsertValidationPresence || selectorBooleanDirective(name)
+		boolean := name == spec.ViewControlMySQLConditionFanoutFilter || name == spec.ViewControlInsertValidationPresence || selectorBooleanDirective(name)
 		if boolean && actual.Kind != "bool" {
 			return "", false
 		}
@@ -345,6 +350,9 @@ func applyViewDirectives(root *spec.View, directives []viewDirective) error {
 			target.Source = &spec.ViewSource{}
 		}
 		switch directive.name {
+		case spec.ViewControlMySQLConditionFanoutFilter:
+			value := false
+			target.ExecutionOptions = &spec.ExecutionOptions{MySQL: &spec.MySQLExecutionOptions{ConditionFanoutFilter: &value}}
 		case spec.ViewControlNestedNullPolicy:
 			if target == root || target.Cardinality == spec.CardinalityOne || !((directive.value == "initial-validation" && !target.Auxiliary) || (directive.value == "skip-auxiliary" && (target.Auxiliary || auxiliarySourcePending(target)))) {
 				return &Error{Code: CodeViewDirective, Cause: fmt.Errorf("nested_null_policy requires a writable collection relation and initial-validation")}

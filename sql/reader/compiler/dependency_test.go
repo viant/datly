@@ -101,3 +101,49 @@ func TestCompileViewDependenciesRejectsUnknownView(t *testing.T) {
 		t.Fatalf("expected unknown view error, got %v", err)
 	}
 }
+
+// A selector transported outside the business input belongs to the public
+// reader, not to an independent prerequisite view. Its own selector remains
+// independently bound, and authorization inputs must remain available.
+func TestCompileViewDependenciesSeparatesParentAndScopeSelectors(t *testing.T) {
+	type row struct{ ID int }
+	type input struct {
+		Rows        []*row
+		ScopeOffset int
+		AccountID   int
+	}
+	scope := &spec.View{Name: "Rows", Source: &spec.ViewSource{SQL: "SELECT id FROM rows WHERE account_id = $AccountID"}}
+	parent := &spec.Parameter{Name: "Offset", Source: spec.BindSource{Kind: "query", Name: "offset"}, QuerySelector: &spec.QuerySelectorBinding{View: "Eligible", Property: spec.SelectorPropertyOffset}}
+	component := &spec.Component{Name: "Eligible", RootView: &spec.View{Name: "Eligible"}, Views: []*spec.View{scope}, Parameters: []*spec.Parameter{
+		{Name: "Rows", Source: spec.BindSource{Kind: "view", Name: "Rows"}},
+		{Name: "AccountID", Source: spec.BindSource{Kind: "query", Name: "accountId"}},
+		{Name: "ScopeOffset", Source: spec.BindSource{Kind: "query", Name: "scopeOffset"}, QuerySelector: &spec.QuerySelectorBinding{View: "Rows", Property: spec.SelectorPropertyOffset}},
+	}}
+	bindings, err := testBindings(component, reflect.TypeOf(input{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	component.Parameters = append(component.Parameters, parent)
+	actual, err := CompileViewDependencies(Input{Component: component, InputType: reflect.TypeOf(input{}), Bindings: bindings})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(actual) != 1 {
+		t.Fatalf("dependencies: %d", len(actual))
+	}
+	selectors := actual[0].Plan.SelectorBindings
+	if len(selectors) != 1 || selectors[0].View.Spec.Name != "Rows" || selectors[0].Property != spec.SelectorPropertyOffset || !reflect.DeepEqual(selectors[0].FieldIndex, []int{1}) {
+		t.Fatalf("independent offset binding lost: %#v", selectors)
+	}
+	for _, p := range actual[0].Component.Parameters {
+		if p == parent {
+			t.Fatal("parent offset leaked into scope")
+		}
+	}
+	if len(actual[0].Component.Parameters) != 3 {
+		t.Fatal("scope selectors or authorization inputs lost")
+	}
+	if len(component.Parameters) != 4 || component.Parameters[3] != parent {
+		t.Fatal("parent metadata mutated")
+	}
+}

@@ -924,6 +924,7 @@ func (r *packageComponentResolver) view(field xshape.Field, name string, metadat
 		view.Selector = metadata.View.Selector.Clone()
 		view.BatchSize = metadata.View.Batch
 		view.BatchConcurrency = metadata.View.BatchConcurrency
+		view.ExecutionOptions = metadata.View.ExecutionOptions.Clone()
 		view.Auxiliary = metadata.View.Auxiliary
 		view.PublishParent = metadata.View.PublishParent
 		view.RelationalConcurrency = metadata.View.RelationalConcurrency

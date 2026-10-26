@@ -30,6 +30,9 @@ type rootCacheMatcher struct {
 func (m rootCacheMatcher) apply(ctx context.Context, connection dsql.Connection) error {
 	root := m.session.Artifact.Root
 	view := root.View
+	if connection.Dialect != nil && view.Spec.ExecutionOptions.Active(connection.Dialect.Name) {
+		return nil
+	}
 	if connection.Tx != nil || m.session.ReadCaches[view] == nil || view.Cache == nil {
 		return nil
 	}
