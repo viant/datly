@@ -66,11 +66,16 @@ func TestPredicateContextsReuseDeclarationsAndEmbeddedOwnership(t *testing.T) {
 	second, err := r.predicateFieldContext(root, []int{0, 1})
 	require.NoError(t, err)
 	require.Same(t, first, second, "siblings share only their declaring context")
-	for _, args := range [][]string{nil, {"security.Filter", "extra"}} {
+	for _, args := range [][]string{nil, {" "}} {
 		param := &spec.Parameter{Name: "Invalid", Predicates: []*spec.Predicate{{Name: "handler", Args: args}}}
 		err := r.resolveFieldPredicates(contract, xshape.Field{Name: "Invalid", Index: []int{0, 1}}, param)
 		require.Error(t, err, "a cached context must not bypass predicate validation")
 	}
+	// Type-name resolution preserves handler arguments for the later signature
+	// check; only a VariadicHandler may consume them at runtime.
+	variadic := &spec.Parameter{Name: "Configured", Predicates: []*spec.Predicate{{Name: "handler", Args: []string{"security.Filter", "extra"}}}}
+	require.NoError(t, r.resolveFieldPredicates(contract, xshape.Field{Name: "Configured", Index: []int{0, 1}}, variadic))
+	require.Equal(t, []string{"example.com/left/security.Filter", "extra"}, variadic.Predicates[0].Args)
 	// Private cache mutation cannot change the public resolver's snapshots.
 	r.predicateDeclarations[left.Key()].SynteticType.Imports["security"].Path = "changed"
 	fresh, err := types.Descriptor(left.Key())
