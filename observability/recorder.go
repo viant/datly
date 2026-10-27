@@ -9,6 +9,7 @@ import (
 
 	"github.com/viant/gmetric"
 	"github.com/viant/gmetric/counter"
+	"github.com/viant/gmetric/counter/base"
 	"github.com/viant/gmetric/provider"
 	"github.com/viant/gmetric/stat"
 	xlogger "github.com/viant/xdatly/logger"
@@ -52,6 +53,9 @@ func (r *Recorder) operation(name string) *gmetric.Operation {
 	var capture counter.Provider = viewMetricProvider{source: descriptor.Provider == Source11}
 	if descriptor.Provider == Basic2 {
 		capture = provider.NewBasic()
+	}
+	if descriptor.Provider == Request7 {
+		capture = base.NewProvider("Request", "Success", "Error", "status:2xx", "status:4xx", "status:5xx")
 	}
 	o := r.service.MultiOperationCounter(descriptor.Location, name, descriptor.Description, time.Millisecond, time.Minute, 2, capture)
 	r.operations[name] = o

@@ -169,3 +169,44 @@ encoding and transfer. Earlier rejected requests do not acquire a timing header.
 This policy is independent of logging and diagnostic metrics. Names must be valid
 HTTP field names; choose a dedicated name, not a transport, cookie, CORS or
 `Datly-Metrics-*` header. Application response headers retain existing precedence.
+
+### Request operation counters
+
+Use `Observation.Policy.Requests` to map route templates to request operations on
+the same gmetric service used for view metrics:
+
+```json
+{
+  "Observation": {
+    "Policy": {
+      "Requests": [{
+        "Route": {"Method": "PATCH", "Path": "/v1/books/{id}"},
+        "Operation": {
+          "Name": "PATCH:catalog.books.v1.books.T.request",
+          "Location": "catalog/books",
+          "Description": "books request",
+          "Provider": "request7"
+        }
+      }]
+    }
+  }
+}
+```
+
+The template identifies the route; concrete IDs and query values never become
+operation names. Unmapped routes retain their existing behavior. Request counters
+work with audit logging enabled or disabled and reuse an existing outer HTTP
+observer when the application owns one.
+
+Each matched request completes once after response handling and finalization.
+The provider retains legacy gmetric timing in milliseconds, two one-minute
+windows, and the `Request`, `Success`, `Error`, `status:2xx`, `status:4xx`, and
+`status:5xx` counters, plus gmetric's implicit `error` key. An encoded HTTP 400
+counts as `Error` and `status:4xx` even when the handler returns no Go error.
+A transport failure after a committed HTTP 200 counts as `Error` and
+`status:2xx`; it does not manufacture a server-error status. A normal redirect
+counts as `Success` without adding a status bucket.
+
+With `Meta.MetricURI` configured, cumulative counters use the existing endpoint,
+for example `/v1/api/meta/metric/operation/PATCH:catalog.books.v1.books.T.request/cumulative/Error`.
+View metrics and diagnostic response headers remain separately configured.
