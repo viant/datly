@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/viant/sqlx"
 	"github.com/viant/sqlx/metadata/info"
 )
 
@@ -76,8 +77,13 @@ func (c *Context) Expression(expression string, value any) (string, error) {
 	if text, ok := value.(string); ok && text == "" {
 		return "", nil
 	}
-	if _, err := c.AppendBinding(value); err != nil {
-		return "", err
+	if c == nil || c.bindings == nil {
+		return "", fmt.Errorf("SQL fragment bindings are required")
+	}
+	if sqlx.ParseParameters(expression).HasPositional() {
+		if _, err := c.AppendBinding(value); err != nil {
+			return "", err
+		}
 	}
 	return expression, nil
 }

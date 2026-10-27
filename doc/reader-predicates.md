@@ -135,6 +135,26 @@ of the group's Boolean operator. `ApplyWhenAbsentPredicate(...)` is a separate
 opt-in for predicates whose contract explicitly handles absence; it is not a
 substitute for required authorization inputs.
 
+For a list that must restrict rows even when absent, attach one always-applied
+`in` predicate:
+
+```dql
+#define($_ = $IDs<[]int>(query/ids).Required().ApplyWhenAbsentPredicate(0,'in','r','id'))
+```
+
+Present IDs produce the matching `IN` condition. Required input validation
+rejects omitted mandatory IDs before SQL. When absence is permitted, the
+predicate itself evaluates an empty or absent list as `1 = 0` without bindings.
+`ApplyWhenAbsentPredicate` also evaluates present
+values; it adds an independent predicate rather than an absence-only fallback.
+Keep requiredness for mandatory inputs, and let the predicate own its list
+behavior.
+
+For `expr`, a positional `?` consumes the input value. Constant SQL expressions
+such as `1 = 0` consume no value. Named placeholders retain their normal native
+resolver bindings. Question marks inside SQL strings and comments are literal
+text, not input slots.
+
 ## Three levels of Boolean composition
 
 | API | What it joins |
