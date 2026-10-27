@@ -2,6 +2,7 @@ package transcribe
 
 import (
 	"context"
+	"github.com/viant/datly/typecatalog"
 	"os"
 	"strings"
 	"testing"
@@ -26,6 +27,26 @@ func TestGeneratedHelperSelectedSourceOwnership(t *testing.T) {
 		t.Fatal(err)
 	}
 	compiled := project.Components[0]
+	linkedCatalog := typecatalog.NewCatalog()
+	for _, name := range []string{"KeysRow", "ForeignProjection", "AuthoredProjection"} {
+		descriptor, lookupErr := compiled.TypeResolver.Descriptor(pkg + "." + name)
+		if lookupErr != nil {
+			t.Fatal(lookupErr)
+		}
+		if registerErr := linkedCatalog.Register(typecatalog.TypeOriginPackage, descriptor); registerErr != nil {
+			t.Fatal(registerErr)
+		}
+	}
+	linkedResolver, resolveErr := typecatalog.NewResolver(linkedCatalog, typecatalog.TranscribeAuthority, compiled.TypeContext)
+	if resolveErr != nil {
+		t.Fatal(resolveErr)
+	}
+	compiled.TypeResolver = linkedResolver
+
+	resolution, err := compiled.TypeResolver.ResolveWithProvenance(pkg + ".KeysRow")
+	if err != nil || resolution == nil || resolution.Origin != typecatalog.TypeOriginPackage {
+		t.Fatalf("linked generated helper authority: %+v %v", resolution, err)
+	}
 	for _, tc := range []struct {
 		name, row, explicit, output, tag, header string
 		inferred                                 bool

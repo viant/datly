@@ -118,7 +118,7 @@ func TestReaderInvariantNamedDerivedViews(t *testing.T) {
 		}
 	}
 	vendor := got.Relations[0].View
-	if len(vendor.Columns) != 0 || !strings.Contains(vendor.Source.SQL, "(VENDOR)") {
+	if len(vendor.Columns) != 0 || !vendor.Auxiliary || vendor.Source.Table != "VENDOR" || strings.Contains(vendor.Source.SQL, "(VENDOR)") || !strings.Contains(vendor.Source.SQL, "VENDOR v") {
 		t.Fatalf("vendor source/metadata changed: %+v / %+v", vendor.Source, vendor.Columns)
 	}
 	for _, view := range []*spec.View{got, vendor} {

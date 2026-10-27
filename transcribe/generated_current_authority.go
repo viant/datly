@@ -72,8 +72,11 @@ func generatedCurrentAuthority(ctx context.Context, source *Source, component, a
 		if err != nil || !strings.HasPrefix(name, pkg+".") || borrowed[name] {
 			continue
 		}
+		// A linked authoring binary may give a generated declaration package
+		// provenance. The selected same-owner source and exact AST proof below
+		// remain authoritative; provenance alone neither admits nor rejects it.
 		resolution, err := resolver.ResolveWithProvenance(name)
-		if err != nil || resolution == nil || resolution.Origin != typecatalog.TypeOriginGenerated {
+		if err != nil || resolution == nil || (resolution.Origin != typecatalog.TypeOriginGenerated && resolution.Origin != typecatalog.TypeOriginPackage) {
 			continue
 		}
 		if err := declarations.load(); err != nil {
@@ -169,8 +172,11 @@ func generatedHelperAuthority(ctx context.Context, source *Source, component, au
 		if borrowed {
 			continue
 		}
+		// A linked authoring binary may give a generated declaration package
+		// provenance. The selected same-owner source and exact AST proof below
+		// remain authoritative; provenance alone neither admits nor rejects it.
 		resolution, err := resolver.ResolveWithProvenance(name)
-		if err != nil || resolution == nil || resolution.Origin != typecatalog.TypeOriginGenerated {
+		if err != nil || resolution == nil || (resolution.Origin != typecatalog.TypeOriginGenerated && resolution.Origin != typecatalog.TypeOriginPackage) {
 			continue
 		}
 		if err := declarations.load(); err != nil {

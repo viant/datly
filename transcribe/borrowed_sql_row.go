@@ -420,88 +420,9 @@ func (c *Compiler) admitBorrowedSQLRows(ctx context.Context, result *Result) err
 			return err
 		}
 		proof := &gen.BorrowedRowAuthority{Declaration: declaration, BorrowerSource: source.Path, BorrowerScope: source.Scope, BorrowerName: source.Name, BorrowerGraph: borrowerGraph, OwnerSource: ownerPath, OwnerScope: ownerSource.Scope, OwnerName: ownerSource.Name, OwnerGraph: ownerGraph, OwnerDirectory: location.Dir, Expected: expected, Files: append([]gen.BorrowedAuthorityFile(nil), files...)}
-		var holderFiles []xmodule.File
-		ownerEntries, err := os.ReadDir(location.Dir)
+		ownerMutation, err := prepareBorrowedNativeOwner(entry, &ownerSource, freshOwner, owner, location.Dir, declaration.Package)
 		if err != nil {
 			return err
-		}
-		for _, entry := range ownerEntries {
-			if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".go") {
-				holderFiles = append(holderFiles, xmodule.File{Path: filepath.Join(location.Dir, entry.Name()), Dir: location.Dir, ImportPath: declaration.Package})
-			}
-		}
-		routes, err := (bootstrap.PackageDiscovery{}).DiscoverFiles(holderFiles)
-		if err != nil {
-			return err
-		}
-		matches := 0
-		ownerMutation := ""
-		matchedRoutes := map[int]bool{}
-		for _, holder := range routes {
-			if holder.Tag.Name != ownerSource.Name {
-				continue
-			}
-			index := -1
-			for i, route := range freshOwner.Component.Routes {
-				if route != nil && route.Path == holder.Tag.Path && strings.EqualFold(route.Method, holder.Tag.Method) {
-					if index >= 0 {
-						return fmt.Errorf("borrow_sql_row owner route identity is ambiguous")
-					}
-					index = i
-				}
-			}
-			if index < 0 || matchedRoutes[index] || holder.PackagePath != declaration.Package || holder.Tag.Connector != borrowedConnector(freshOwner.Component, owner) {
-				return fmt.Errorf("borrow_sql_row actual owner holder differs from exact fresh source identity")
-			}
-			route := freshOwner.Component.Routes[index]
-			if route.RequestBodyMode != holder.Tag.RequestBodyMode || route.Internal != holder.Tag.Internal || route.APIKeyHeader != holder.Tag.APIKeyHeader || route.APIKeyValue != holder.Tag.APIKeyValue || (len(route.MCP) != len(holder.Tag.MCP) || len(route.MCP) > 0 && !reflect.DeepEqual(route.MCP, holder.Tag.MCP)) {
-				return fmt.Errorf("borrow_sql_row actual owner route metadata differs from fresh source")
-			}
-			mutation := holder.Tag.Settings.Mutation
-			if mutation != "post" && mutation != "put" && mutation != "patch" {
-				return fmt.Errorf("borrow_sql_row owner has no native physical write operation")
-			}
-			if ownerMutation != "" && ownerMutation != mutation {
-				return fmt.Errorf("borrow_sql_row owner mutation metadata is ambiguous")
-			}
-			ownerMutation = mutation
-			matchedRoutes[index] = true
-			matches++
-		}
-		if matches != len(freshOwner.Component.Routes) {
-			return fmt.Errorf("borrow_sql_row complete owner component holder is missing/ambiguous: %d holders for %d canonical routes", matches, len(freshOwner.Component.Routes))
-		}
-		if entry.helperInput == nil {
-			helperInput := entry.input
-			helperInput.Component = entry.input.Component.Clone()
-			if err := helperInput.ValidateLifecycleTarget(true); err != nil {
-				return err
-			}
-			initialHelpers := entry.plan
-			derivedHelpers, err := (&handlercompiler.Compiler{}).BuildInput(handlercompiler.Request{Component: helperInput.Component, ViewBindings: helperInput.ViewBindings, Operation: WriteOperation(ownerMutation)}, initialHelpers.RootViewType)
-			if err != nil {
-				return err
-			}
-			helperCopy := *freshOwner
-			helperCopy.Component, helperCopy.ViewBindings = derivedHelpers.Component, derivedHelpers.ViewBindings
-
-			helperDeclarations, err := newDeclarationCompiler(helperCopy.Component, nil).compile()
-			if err != nil {
-				return err
-			}
-			helperCopy.Declarations = helperDeclarations.generation
-			helperInput = rebindBorrowedInput(entry.input, &helperCopy)
-			helperOptions := Options{Contracts: ContractsAuto, Handler: HandlerOptions{Target: HandlerGo, Operation: WriteOperation(ownerMutation), Input: derivedHelpers.Input, Output: derivedHelpers.Output, Currents: derivedHelpers.Currents, Go: GoHandlerOptions{Execution: GoExecutionMutation}}}
-			helperGeneration := handlergen.New((&helperCopy).handlerContext(), &helperInput, helperOptions)
-			helperGeneration.Directory = location.Dir
-			if err := helperGeneration.Prepare(); err != nil {
-				return fmt.Errorf("borrow_sql_row native owner helper derivation: %w", err)
-			}
-			entry.selection, err = gen.SelectBorrowedNativeOwner(helperInput, location.Dir)
-			if err != nil {
-				return err
-			}
-			entry.helperInput = &helperInput
 		}
 		proof.Helpers, err = entry.selection.Helpers(declaration.Type, owner.Auxiliary)
 		if err != nil {
@@ -1176,4 +1097,94 @@ func (p *borrowedPreparation) refresh(ctx context.Context, files []gen.BorrowedA
 		}
 	}
 	return refreshed, nil
+}
+
+// prepareBorrowedNativeOwner derives the existing operation-specific writer
+// artifacts without publishing or transferring their ownership to a borrower.
+func prepareBorrowedNativeOwner(entry *borrowedOwnerPreparation, ownerSource *Source, freshOwner *Result, owner *spec.View, directory, packagePath string) (string, error) {
+	var holderFiles []xmodule.File
+	ownerEntries, err := os.ReadDir(directory)
+	if err != nil {
+		return "", err
+	}
+	for _, entry := range ownerEntries {
+		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".go") {
+			holderFiles = append(holderFiles, xmodule.File{Path: filepath.Join(directory, entry.Name()), Dir: directory, ImportPath: packagePath})
+		}
+	}
+	routes, err := (bootstrap.PackageDiscovery{}).DiscoverFiles(holderFiles)
+	if err != nil {
+		return "", err
+	}
+	matches := 0
+	ownerMutation := ""
+	matchedRoutes := map[int]bool{}
+	for _, holder := range routes {
+		if holder.Tag.Name != ownerSource.Name {
+			continue
+		}
+		index := -1
+		for i, route := range freshOwner.Component.Routes {
+			if route != nil && route.Path == holder.Tag.Path && strings.EqualFold(route.Method, holder.Tag.Method) {
+				if index >= 0 {
+					return "", fmt.Errorf("borrow_sql_row owner route identity is ambiguous")
+				}
+				index = i
+			}
+		}
+		if index < 0 || matchedRoutes[index] || holder.PackagePath != packagePath || holder.Tag.Connector != borrowedConnector(freshOwner.Component, owner) {
+			return "", fmt.Errorf("borrow_sql_row actual owner holder differs from exact fresh source identity")
+		}
+		route := freshOwner.Component.Routes[index]
+		if route.RequestBodyMode != holder.Tag.RequestBodyMode || route.Internal != holder.Tag.Internal || route.APIKeyHeader != holder.Tag.APIKeyHeader || route.APIKeyValue != holder.Tag.APIKeyValue || (len(route.MCP) != len(holder.Tag.MCP) || len(route.MCP) > 0 && !reflect.DeepEqual(route.MCP, holder.Tag.MCP)) {
+			return "", fmt.Errorf("borrow_sql_row actual owner route metadata differs from fresh source")
+		}
+		mutation := holder.Tag.Settings.Mutation
+		if mutation != "post" && mutation != "put" && mutation != "patch" {
+			return "", fmt.Errorf("borrow_sql_row owner has no native physical write operation")
+		}
+		if ownerMutation != "" && ownerMutation != mutation {
+			return "", fmt.Errorf("borrow_sql_row owner mutation metadata is ambiguous")
+		}
+		ownerMutation = mutation
+		matchedRoutes[index] = true
+		matches++
+	}
+	if matches != len(freshOwner.Component.Routes) {
+		return "", fmt.Errorf("borrow_sql_row complete owner component holder is missing/ambiguous: %d holders for %d canonical routes", matches, len(freshOwner.Component.Routes))
+	}
+	if entry.helperInput == nil {
+		helperInput := entry.input
+		helperInput.Component = entry.input.Component.Clone()
+		if err := helperInput.ValidateLifecycleTarget(true); err != nil {
+			return "", err
+		}
+		initialHelpers := entry.plan
+		derivedHelpers, err := (&handlercompiler.Compiler{}).BuildInput(handlercompiler.Request{Component: helperInput.Component, ViewBindings: helperInput.ViewBindings, Operation: WriteOperation(ownerMutation)}, initialHelpers.RootViewType)
+		if err != nil {
+			return "", err
+		}
+		helperCopy := *freshOwner
+		helperCopy.Component, helperCopy.ViewBindings = derivedHelpers.Component, derivedHelpers.ViewBindings
+
+		helperDeclarations, err := newDeclarationCompiler(helperCopy.Component, nil).compile()
+		if err != nil {
+			return "", err
+		}
+		helperCopy.Declarations = helperDeclarations.generation
+		helperInput = rebindBorrowedInput(entry.input, &helperCopy)
+		helperOptions := Options{Contracts: ContractsAuto, Handler: HandlerOptions{Target: HandlerGo, Operation: WriteOperation(ownerMutation), Input: derivedHelpers.Input, Output: derivedHelpers.Output, Currents: derivedHelpers.Currents, Go: GoHandlerOptions{Execution: GoExecutionMutation}}}
+		helperGeneration := handlergen.New((&helperCopy).handlerContext(), &helperInput, helperOptions)
+		helperGeneration.Directory = directory
+		if err := helperGeneration.Prepare(); err != nil {
+			return "", fmt.Errorf("borrow_sql_row native owner helper derivation: %w", err)
+		}
+		entry.selection, err = gen.SelectBorrowedNativeOwner(helperInput, directory)
+		if err != nil {
+			return "", err
+		}
+		entry.helperInput = &helperInput
+	}
+
+	return ownerMutation, nil
 }

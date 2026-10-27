@@ -582,3 +582,27 @@ Prefer vertical slices that can remove a legacy path completely:
 
 Keep both implementations only behind a temporary, explicit parity boundary.
 Do not allow new features to land on the legacy side during migration.
+
+## Referencing native writer contracts from a factory
+
+A generated factory input graph can reuse the complete SQL-derived record graph
+of a native writer through `borrow_sql_row`, including its typed relations and
+presence markers. For example, a shopping workflow can reference an order writer:
+
+```sql
+#setting($_ = $borrow_sql_row('Body/Orders','example.com/shop/orders','Order','dql/orders/Patch.dql','Patch','Orders'))
+```
+
+The six arguments identify the factory's body path, canonical Go package and
+record type, owner DQL resource, owner source name, and owner body path. Generate
+the owner first. The factory references those existing types; it does not acquire
+ownership of the writer's generated files or execute its lifecycle hooks and DML.
+Invoke the writer explicitly through the component invoker to retain its business
+rules and the caller's transaction/buffer semantics. Factories with generated SQL
+input contracts continue to use `transcribe post`; their declared HTTP method is
+independent of that authoring operation.
+
+Parenthesized physical tables remain the read-only DQL form, including inside
+derived queries. Transcription retains their auxiliary metadata and lowers those
+table markers to executable SQL. Derived query parentheses, predicates, aliases,
+and ordinary expression parentheses remain part of the query.
