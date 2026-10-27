@@ -83,6 +83,10 @@ DSNs and Scy secret content are not rewritten as relative file locations.
 | `Metrics` | Absent disables diagnostic response headers. `{}` enables SQL-redacted metrics; `AllowSQL: true` enables SQL/arguments for debug requests. |
 | `Observation` | Current native capture summaries and optional bounded OTLP/HTTP export. Export failure is telemetry loss, not business failure. |
 
+MCP JSON body discovery and binding follow the component's existing `caseFormat`.
+See [MCP input field names](mcp-input-names.md) for explicit-name precedence and
+custom decoder behavior.
+
 Ordinary route lookup, API-key checks, CORS, and MCP identity lookup use the
 bootstrap index without loading executable components. A first HTTP or direct
 MCP call loads only its owner. MCP tool listing loads MCP-exposed owners so it

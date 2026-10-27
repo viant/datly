@@ -2,6 +2,7 @@ package tool
 
 import (
 	"github.com/viant/mcp-protocol/schema/fieldname"
+	"github.com/viant/tagly/format/text"
 	"reflect"
 	"strings"
 )
@@ -67,4 +68,13 @@ func mcpFieldMetadata(field reflect.StructField) (mcpField, error) {
 		return mcpField{}, err
 	}
 	return mcpField{name: name.Public, aliases: name.Aliases, hidden: name.Hidden}, nil
+}
+
+// Explicit JSON and MCP names remain authoritative; caseFormat supplies only
+// the otherwise implicit component wire spelling.
+func caseFormattedFallback(field reflect.StructField, fallback, format string) string {
+	if name, _, _ := strings.Cut(field.Tag.Get("json"), ","); name != "" || strings.TrimSpace(format) == "" {
+		return fallback
+	}
+	return text.DetectCaseFormat(fallback).Format(fallback, text.NewCaseFormat(format))
 }

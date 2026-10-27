@@ -33,6 +33,7 @@ type Argument struct {
 	wireType         reflect.Type
 	// Anonymous JSON fields retain their whole-body owner for XLS decoding.
 	parentBodyType   reflect.Type
+	customJSONBody   bool
 	parentBodySource string
 	anonymousGoName  string
 	bodyNullPolicy   string
@@ -61,11 +62,12 @@ func (a Argument) Example() string     { return a.example }
 
 // Plan is one immutable exact-route MCP tool plan.
 type Plan struct {
-	metadata schema.Tool
-	target   exec.ComponentTarget
-	input    *registry.RouteInputContract
-	args     []Argument
-	binding  *mcpinput.Plan
+	metadata   schema.Tool
+	target     exec.ComponentTarget
+	input      *registry.RouteInputContract
+	args       []Argument
+	binding    *mcpinput.Plan
+	caseFormat string
 }
 
 func (p *Plan) Metadata() schema.Tool {
@@ -116,21 +118,25 @@ func (p *Plan) scope(ctx context.Context, arguments map[string]interface{}) (*re
 	// request/body providers and Bindly decoder. Wire representations stay owned
 	// by their declared authority; unannotated arguments retain their exact path.
 	for _, argument := range p.args {
-		if argument.sourceKind != "body" || argument.wireType != nil || argument.wireSchema != nil || hasWireRepresentation(argument.wireSchemas) {
+		if argument.sourceKind != "body" || argument.wireType != nil || argument.wireSchema != nil || (hasWireRepresentation(argument.wireSchemas) && p.caseFormat == "") {
 			continue
 		}
 		value, present := normalized[argument.publicName]
 		if !present {
 			continue
 		}
-		names, e := fieldname.HasNames(argument.sourceType, memberNameVisibility())
+		format := p.caseFormat
+		if argument.customJSONBody {
+			format = ""
+		}
+		names, e := fieldname.HasNames(argument.sourceType, memberNameVisibility(format))
 		if e != nil {
 			return nil, e
 		}
 		if !names {
 			continue
 		}
-		value, e = fieldname.Normalize(argument.sourceType, value, memberNameVisibility())
+		value, e = fieldname.Normalize(argument.sourceType, value, memberNameVisibility(format))
 		if e != nil {
 			return nil, fmt.Errorf("normalize MCP argument %q: %w", argument.publicName, e)
 		}
