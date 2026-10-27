@@ -42,6 +42,17 @@ func (c *discoveryInputCompiler) compile() (*column.TemplateInput, error) {
 		instance = c.source.Const
 	}
 	staged := *c
+	if c.source != nil && c.source.borrowedContractDependencies != nil {
+		// This resolver belongs only to the provisional request input. The
+		// caller's SQL discovery resolver must retain fresh DQL authority.
+		contract := &Result{Source: c.source, TypeContext: link.TypeContext(c.source.Scope, "", c.component.TypeContext)}
+		if err := c.source.borrowedContractDependencies.apply(contract); err != nil {
+			return nil, err
+		}
+		if contract.TypeResolver != nil {
+			staged.resolver = contract.TypeResolver
+		}
+	}
 	if instance != nil {
 		staged.component = instance.Apply(c.component)
 	}

@@ -13,7 +13,8 @@ import (
 	smodel "github.com/viant/x/syntetic/model"
 )
 
-// Output DTOs are needed to plan the complete owner contract, but must never
+// Authored output DTOs and explicit param types are needed to plan the complete
+// owner contract, but must never
 // participate in fresh SQL discovery. Keep this authority separate until the
 // fresh component has compiled; use the same captured declarations on refresh.
 type borrowedOutputDependencies struct {
@@ -91,26 +92,32 @@ func borrowedAuthoredOutputs(source *Source, prepared *dql.PreparedSource, direc
 		return result.catalog.Register(typecatalog.TypeOriginPackage, descriptor)
 	}
 	for _, param := range prepared.Directives.Params {
-		if param == nil || (!param.EmitOutput && !strings.EqualFold(param.Source.Kind, "output")) {
+		if param == nil || (!param.EmitOutput && !strings.EqualFold(param.Source.Kind, "output") && !strings.EqualFold(param.Source.Kind, "param")) {
 			continue
 		}
 		// Output(view) is a SQL row projection, not authored DTO authority.
 		if param.IsDerivedOutput() || strings.EqualFold(param.Source.Name, "view") || strings.EqualFold(param.Source.Kind, "body") || strings.EqualFold(param.Source.Kind, "view") {
 			continue
 		}
-		expression := param.OutputTypeExpr
-		if expression == "" {
-			expression = param.TypeExpr
+		expressions := []string{param.OutputTypeExpr}
+		if strings.EqualFold(param.Source.Kind, "param") {
+			// Preserve both explicit wire and codec-output contracts. Neither
+			// declaration is admitted into the fresh SQL discovery catalog.
+			expressions = append(expressions, param.TypeExpr)
+		} else if param.OutputTypeExpr == "" {
+			expressions = []string{param.TypeExpr}
 		}
-		if expression == "" || expression == "?" {
-			continue
-		}
-		canonical, err := resolver.CanonicalDeclaration(expression, owner)
-		if err != nil {
-			return nil, err
-		}
-		if _, err = (xshape.Resolver{Rewriter: func(key string) (string, error) { return key, visit(key) }}).Rewrite(canonical); err != nil {
-			return nil, err
+		for _, expression := range expressions {
+			if expression == "" || expression == "?" {
+				continue
+			}
+			canonical, err := resolver.CanonicalDeclaration(expression, owner)
+			if err != nil {
+				return nil, err
+			}
+			if _, err = (xshape.Resolver{Rewriter: func(key string) (string, error) { return key, visit(key) }}).Rewrite(canonical); err != nil {
+				return nil, err
+			}
 		}
 	}
 	return result, nil
@@ -142,6 +149,11 @@ func (d *borrowedOutputDependencies) apply(result *Result) error {
 	if err != nil {
 		return err
 	}
+	// Keep the original restricted discovery source/catalog immutable. Later
+	// helper planning and project clones consume the detached contract catalog.
+	source := *result.Source
+	source.Types = catalog
+	result.Source = &source
 	result.TypeResolver, err = typecatalog.NewResolver(catalog, typecatalog.TranscribeAuthority, result.TypeContext)
 	return err
 }

@@ -145,6 +145,7 @@ func freshBorrowedSource(ctx context.Context, source *Source, text string, files
 func compileBorrowedSource(ctx context.Context, source *Source, text string, files []gen.BorrowedAuthorityFile, foreign *typecatalog.Catalog, outputs *borrowedOutputDependencies, dependencies ...*typecatalog.Catalog) (*Result, error) {
 	copy := *source
 	copy.Text = text
+	copy.borrowedContractDependencies = outputs
 	copy.PackageComponent = nil
 	copy.LinkedInputType = nil
 	copy.LinkedOutputType = nil
@@ -792,7 +793,7 @@ func prepareBorrowedOwners(ctx context.Context, source *Source, component *spec.
 			}
 			owner, err := freshBorrowedSource(ctx, &ownerSource, string(ownerBytes), files)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("borrow_sql_row owner %s compilation: %w", declaration.OwnerURI, err)
 			}
 			if len(authoredBorrowedSQLRows(owner.Component)) != 0 {
 				return nil, fmt.Errorf("borrow_sql_row borrowed owners/cyclic dependencies are unsupported")
@@ -806,7 +807,7 @@ func prepareBorrowedOwners(ctx context.Context, source *Source, component *spec.
 			}
 			plan, err := gen.BorrowedOwnerPlan(input)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("borrow_sql_row owner %s plan: %w", declaration.OwnerURI, err)
 			}
 			owner.borrowedPreparation.input = &input
 			owner.borrowedPreparation.plan = plan
@@ -1080,7 +1081,7 @@ func (p *borrowedPreparation) refresh(ctx context.Context, files []gen.BorrowedA
 			result.borrowedPreparation.input = &input
 			plan, err := gen.BorrowedOwnerPlan(input)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("borrow_sql_row owner %s plan: %w", declaration.OwnerURI, err)
 			}
 			result.borrowedPreparation.plan = plan
 			entry = &borrowedOwnerPreparation{source: captured.source, result: result, input: input, plan: plan}
