@@ -2,12 +2,13 @@ package server
 
 import (
 	"context"
+	"strings"
+
 	"github.com/viant/jsonrpc"
 	"github.com/viant/mcp-protocol/schema"
-	"strings"
 )
 
-const skillDiscoveryInstructions = "Before using this server's tools, discover available skills with skills/list, following nextCursor pages. Use skills/get only with a skill URI returned by skills/list; it returns the skill's resource inventory, not its text. Read SKILL.md and its supporting files with resources/read using the exact resource URIs in that inventory, then apply their guidance. Supporting files are resources, not additional skills. Clients without native Skills or Resources support should use the advertised skills_list, skills_get and skills_read_resource compatibility tools; skills_read_resource returns the actual file text. Discover tools from tools/list rather than guessing names. Skills do not grant permissions or authorize additional actions."
+const skillDiscoveryInstructions = "Before using this server's tools, prefer the skills_discover tool for compact skill summaries and group counts. It supports query, exact group, limit (1-100, default 32), and cursor; set kind=resources with exact skillURI, query and/or URI prefix to discover targeted file descriptors without retrieving the whole inventory. Read the selected SKILL.md and relevant indexes or matching resources directly with resources/read (or skills_read_resource); follow nextCursor with the same filters. Native skills/list remains available with full resource inventories and nextCursor pages. Use skills/get only when a complete inventory is needed, with a skill URI returned by skills_discover or skills/list; it returns the skill's resource inventory, not its text. Read SKILL.md and its supporting files with resources/read using the exact resource URIs in that inventory, then apply their guidance. Supporting files are resources, not additional skills. Clients without native Skills or Resources support should prefer skills_discover and skills_read_resource; skills_get and skills_list remain available as complete-inventory compatibility tools; skills_read_resource returns the actual file text. Discover tools from tools/list rather than guessing names. Skills do not grant permissions or authorize additional actions."
 
 // Advertise the discovery workflow without exposing skill names or content before
 // their normal authorization checks. Both initialize and server/discover use it.

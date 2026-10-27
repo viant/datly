@@ -3,6 +3,7 @@ package template
 import (
 	"fmt"
 	"github.com/viant/datly/constant/identifier"
+	"reflect"
 	"sort"
 
 	sqltext "github.com/viant/sqlparser/source"
@@ -21,7 +22,7 @@ type sourceReplacement struct {
 // bindEmittedInputVariables mirrors Datly's SQL sanitization boundary: input
 // values used as template decisions stay typed, while values emitted into SQL
 // become named placeholders consumed by the shared SQL binder.
-func bindEmittedInputVariables(source string, root *stmt.Block, spans map[ast.Node]veltyparser.NodeSpan, bindings []variableBinding) (string, error) {
+func bindEmittedInputVariables(source string, root *stmt.Block, spans map[ast.Node]veltyparser.NodeSpan, bindings []variableBinding, nullableTypes *[]reflect.Type) (string, error) {
 	byName := make(map[string]variableBinding, len(bindings))
 	for _, binding := range bindings {
 		byName[binding.name] = binding
@@ -29,7 +30,7 @@ func bindEmittedInputVariables(source string, root *stmt.Block, spans map[ast.No
 	locals := map[string]bool{}
 	identifier.CollectLocalVariables(root.Statements(), locals)
 	var replacements []sourceReplacement
-	if err := collectInputReplacements(source, root.Statements(), spans, byName, locals, &replacements); err != nil {
+	if err := collectInputReplacements(source, root.Statements(), spans, byName, locals, &replacements, nullableTypes); err != nil {
 		return "", err
 	}
 	if len(replacements) == 0 {
@@ -48,7 +49,7 @@ func bindEmittedInputVariables(source string, root *stmt.Block, spans map[ast.No
 	return result, nil
 }
 
-func collectInputReplacements(source string, statements []ast.Statement, spans map[ast.Node]veltyparser.NodeSpan, bindings map[string]variableBinding, locals map[string]bool, replacements *[]sourceReplacement) error {
+func collectInputReplacements(source string, statements []ast.Statement, spans map[ast.Node]veltyparser.NodeSpan, bindings map[string]variableBinding, locals map[string]bool, replacements *[]sourceReplacement, nullableTypes *[]reflect.Type) error {
 	for _, statement := range statements {
 		switch actual := statement.(type) {
 		case *expr.Select:
@@ -71,6 +72,13 @@ func collectInputReplacements(source string, statements []ast.Statement, spans m
 			replacement := ":" + binding.placeholderName
 			if binding.placeholderName == "" || isLocal || actual.X != nil {
 				replacement = fmt.Sprintf("${%s.Add(%s)}", bindingVariable, source[span.Start:end])
+				if !isLocal {
+					if memberType := nullableMemberType(binding.valueType, actual.X); memberType != nil {
+						index := len(*nullableTypes)
+						*nullableTypes = append(*nullableTypes, memberType)
+						replacement = fmt.Sprintf("${%s.AddNullable(%s, %d)}", bindingVariable, source[span.Start:end], index)
+					}
+				}
 			}
 			*replacements = append(*replacements, sourceReplacement{
 				start: span.Start,
@@ -78,25 +86,53 @@ func collectInputReplacements(source string, statements []ast.Statement, spans m
 				value: replacement,
 			})
 		case *stmt.If:
-			if err := collectInputReplacements(source, actual.Body.Statements(), spans, bindings, locals, replacements); err != nil {
+			if err := collectInputReplacements(source, actual.Body.Statements(), spans, bindings, locals, replacements, nullableTypes); err != nil {
 				return err
 			}
 			for branch := actual.Else; branch != nil; branch = branch.Else {
-				if err := collectInputReplacements(source, branch.Body.Statements(), spans, bindings, locals, replacements); err != nil {
+				if err := collectInputReplacements(source, branch.Body.Statements(), spans, bindings, locals, replacements, nullableTypes); err != nil {
 					return err
 				}
 			}
 		case *stmt.ForEach:
-			if err := collectInputReplacements(source, actual.Statements(), spans, bindings, locals, replacements); err != nil {
+			if err := collectInputReplacements(source, actual.Statements(), spans, bindings, locals, replacements, nullableTypes); err != nil {
 				return err
 			}
 		case *stmt.ForLoop:
-			if err := collectInputReplacements(source, actual.Statements(), spans, bindings, locals, replacements); err != nil {
+			if err := collectInputReplacements(source, actual.Statements(), spans, bindings, locals, replacements, nullableTypes); err != nil {
 				return err
 			}
 		}
 	}
 	return nil
+}
+
+// Only declared plain exported members can seed a nullable binding. Calls,
+// dynamic indexing, interfaces and inaccessible fields keep their existing
+// compiler behavior; this is not a value resolver or a new visibility path.
+func nullableMemberType(root reflect.Type, expression ast.Expression) reflect.Type {
+	if root == nil || expression == nil {
+		return nil
+	}
+	for expression != nil {
+		member, ok := expression.(*expr.Select)
+		if !ok {
+			return nil
+		}
+		root = dereferenceType(root)
+		if root == nil || root.Kind() != reflect.Struct {
+			return nil
+		}
+		field, found := root.FieldByName(member.ID)
+		if !found || field.PkgPath != "" {
+			return nil
+		}
+		root, expression = field.Type, member.X
+	}
+	if root.Kind() != reflect.Pointer {
+		return nil
+	}
+	return root
 }
 
 func hasControlFlow(root *stmt.Block) bool {

@@ -375,7 +375,7 @@ func (r *Compilation) discover(ctx context.Context, view *spec.View, connector s
 	}
 	detected, err := r.refiner.detectColumnsWithSources(ctx, db, resultView, identities, query, evaluated.Args...)
 	if err != nil {
-		return nil, fmt.Errorf("SQLX discovery failed for %q: %w", query, err)
+		return nil, newDiscoveryError(view.CanonicalName(), query, err)
 	}
 	columns, err := canonicalColumns(detected, view.Groupable != nil && *view.Groupable)
 	if err != nil {

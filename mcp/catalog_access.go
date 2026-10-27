@@ -21,7 +21,7 @@ func (s *Service) AuthorizeCatalogTool(ctx context.Context, name, action string)
 	if s.authorizeCatalogTool == nil {
 		return nil
 	}
-	if name == SkillListTool || name == SkillGetTool || name == SkillResourceReadTool {
+	if name == SkillDiscoverTool || name == SkillListTool || name == SkillGetTool || name == SkillResourceReadTool {
 		return nil
 	}
 	plan, ok := s.catalog.Tool(name)
@@ -62,23 +62,7 @@ func listVisibleSkills(ctx context.Context, registry *protocol.Registry, authori
 	if err := ctx.Err(); err != nil {
 		return nil, jsonrpc.NewInternalError("skill catalog unavailable", nil)
 	}
-	entries := []schema.Skill{}
-	for _, entry := range registry.ListRegisteredSkills() {
-		if authorize != nil && (authorize(ctx, entry.Uri, "discover") != nil || authorize(ctx, entry.Uri, "describe") != nil) {
-			continue
-		}
-		// A manifest discloses its entire supporting-file inventory.
-		permitted := true
-		for _, file := range entry.Resources.Files {
-			if authorize != nil && authorize(ctx, file.Uri, "describe") != nil {
-				permitted = false
-				break
-			}
-		}
-		if permitted {
-			entries = append(entries, entry)
-		}
-	}
+	entries := visibleSkills(ctx, registry, authorize)
 	raw, _ := json.Marshal(entries)
 	revision := fmt.Sprintf("%x", sha256.Sum256(raw))
 	start := 0
@@ -100,4 +84,26 @@ func listVisibleSkills(ctx context.Context, registry *protocol.Registry, authori
 		result.NextCursor = &next
 	}
 	return result, nil
+}
+
+// visibleSkills preserves the complete-manifest authorization boundary for both discovery contracts.
+func visibleSkills(ctx context.Context, registry *protocol.Registry, authorize func(context.Context, string, string) error) []schema.Skill {
+	entries := []schema.Skill{}
+	for _, entry := range registry.ListRegisteredSkills() {
+		if authorize != nil && (authorize(ctx, entry.Uri, "discover") != nil || authorize(ctx, entry.Uri, "describe") != nil) {
+			continue
+		}
+		// A manifest discloses its entire supporting-file inventory.
+		permitted := true
+		for _, file := range entry.Resources.Files {
+			if authorize != nil && authorize(ctx, file.Uri, "describe") != nil {
+				permitted = false
+				break
+			}
+		}
+		if permitted {
+			entries = append(entries, entry)
+		}
+	}
+	return entries
 }

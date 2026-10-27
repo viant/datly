@@ -101,3 +101,52 @@ func TestSkillToolSchemaMatchesResourcesWireUnion(t *testing.T) {
 		t.Fatalf("Go struct representation must not satisfy wire schema: %v, %v", checked, err)
 	}
 }
+
+func TestSkillDiscoveryCompactAndAuthorized(t *testing.T) {
+	store := bindresource.New()
+	if err := store.Register("skills", fstest.MapFS{
+		"read/SKILL.md":               {Data: []byte("---\nname: read\ndescription: Read records.\n---\nRead guidance.")},
+		"read/references/contract.md": {Data: []byte("Full contract.")},
+		"hidden/SKILL.md":             {Data: []byte("---\nname: hidden\ndescription: Hidden records.\n---\nHidden guidance.")},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	service, err := New(Config{Invoker: &serviceInvoker{}, Resources: store, Folders: []mcpresource.Folder{{Namespace: "skills", Root: ".", URIPrefix: "skill://catalog/", Skills: []string{"read", "hidden"}}}, AuthorizeCatalogResource: func(_ context.Context, uri, action string) error {
+		if strings.Contains(uri, "/hidden/") {
+			return fmt.Errorf("denied")
+		}
+		return nil
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	discover, ok := service.Registry().ToolRegistry.Get(SkillDiscoverTool)
+	if !ok {
+		t.Fatal("compact discovery tool missing")
+	}
+	result, protocolErr := discover.Handler(context.Background(), &schema.CallToolRequest{Params: schema.CallToolRequestParams{Name: SkillDiscoverTool, Arguments: map[string]interface{}{"query": "records", "limit": 1}}})
+	if protocolErr != nil || result == nil {
+		t.Fatalf("discovery failed: %v", protocolErr)
+	}
+	assertSkillToolSchema(t, discover.Metadata.OutputSchema, result.StructuredContent)
+	text := fmt.Sprint(result.StructuredContent)
+	if strings.Contains(text, "contract.md") || strings.Contains(text, "hidden") || !strings.Contains(text, "resourceCount") {
+		t.Fatalf("unexpected compact response: %s", text)
+	}
+	if err := service.AuthorizeCatalogTool(context.Background(), SkillDiscoverTool, "discover"); err != nil {
+		t.Fatalf("compact discovery denied: %v", err)
+	}
+	targeted, protocolErr := discover.Handler(context.Background(), &schema.CallToolRequest{Params: schema.CallToolRequestParams{Name: SkillDiscoverTool, Arguments: map[string]interface{}{"kind": "resources", "skillURI": "skill://catalog/read/SKILL.md", "query": "contract"}}})
+	if protocolErr != nil || targeted == nil {
+		t.Fatalf("targeted resources failed: %v", protocolErr)
+	}
+	assertSkillToolSchema(t, discover.Metadata.OutputSchema, targeted.StructuredContent)
+	if !strings.Contains(fmt.Sprint(targeted.StructuredContent), "contract.md") || strings.Contains(fmt.Sprint(targeted.StructuredContent), "Full contract.") {
+		t.Fatal("targeted descriptor discovery lost isolation")
+	}
+	get, _ := service.Registry().ToolRegistry.Get(SkillGetTool)
+	full, protocolErr := get.Handler(context.Background(), &schema.CallToolRequest{Params: schema.CallToolRequestParams{Name: SkillGetTool, Arguments: map[string]interface{}{"uri": "skill://catalog/read/SKILL.md"}}})
+	if protocolErr != nil || !strings.Contains(fmt.Sprint(full.StructuredContent), "contract.md") {
+		t.Fatal("on-demand inventory lost reference contract")
+	}
+}

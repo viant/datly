@@ -1,9 +1,29 @@
 package fragment
 
-import "reflect"
+import (
+	"fmt"
+	"reflect"
+)
 
 type Bindings struct {
-	args []any
+	args          []any
+	nullableTypes []reflect.Type
+}
+
+// NewBindings retains immutable declared pointer types for emitted nullable
+// members. An absent member remains SQL NULL without losing its native type.
+func NewBindings(nullableTypes ...reflect.Type) *Bindings {
+	return &Bindings{nullableTypes: append([]reflect.Type(nil), nullableTypes...)}
+}
+
+func (b *Bindings) AddNullable(value any, typeIndex int) (string, error) {
+	if typeIndex < 0 || typeIndex >= len(b.nullableTypes) || b.nullableTypes[typeIndex] == nil || b.nullableTypes[typeIndex].Kind() != reflect.Pointer {
+		return "", fmt.Errorf("declared nullable SQL binding type is unavailable")
+	}
+	if value == nil {
+		value = reflect.Zero(b.nullableTypes[typeIndex]).Interface()
+	}
+	return b.Add(value)
 }
 
 func (b *Bindings) Add(value any) (string, error) {

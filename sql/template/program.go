@@ -76,6 +76,7 @@ type compiled struct {
 	newState         func() *est.State
 	inputType        reflect.Type
 	variables        []variableBinding
+	nullableTypes    []reflect.Type
 	predicate        dexec.PredicateEvaluator
 }
 
@@ -179,7 +180,8 @@ func (c Compiler) Compile() (Evaluator, error) {
 	if err != nil {
 		return nil, err
 	}
-	source, err = bindEmittedInputVariables(source, root, spans, bindings)
+	var nullableTypes []reflect.Type
+	source, err = bindEmittedInputVariables(source, root, spans, bindings, &nullableTypes)
 	if err != nil {
 		return nil, err
 	}
@@ -192,11 +194,12 @@ func (c Compiler) Compile() (Evaluator, error) {
 		predicateProgram = c.Predicate
 	}
 	return &compiled{constants: constants, allowEmptyInput: allowEmptyInput, unsafeRegistered: unsafeUsed || fullInput,
-		exec:      exec,
-		newState:  newState,
-		inputType: inputType,
-		variables: bindings,
-		predicate: predicateProgram,
+		exec:          exec,
+		newState:      newState,
+		inputType:     inputType,
+		variables:     bindings,
+		nullableTypes: nullableTypes,
+		predicate:     predicateProgram,
 	}, nil
 }
 
@@ -273,7 +276,7 @@ func (c *compiled) Evaluate(ctx context.Context, invocation Invocation) (Result,
 			return Result{}, fmt.Errorf("set $%s SQL template input: %w", unsafeVariable, err)
 		}
 	}
-	bindings := &fragment.Bindings{}
+	bindings := fragment.NewBindings(c.nullableTypes...)
 	if err := state.SetValue(bindingVariable, bindings); err != nil {
 		return Result{}, fmt.Errorf("set $%s SQL template binding collector: %w", bindingVariable, err)
 	}

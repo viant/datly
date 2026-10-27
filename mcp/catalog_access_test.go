@@ -67,7 +67,7 @@ func TestCatalogAccessProtectsNativeAndCompatibilitySkillPaths(t *testing.T) {
 		if (e == nil) != allowed {
 			t.Fatalf("allowed=%v static read=%+v err=%v", allowed, read, e)
 		}
-		for _, name := range []string{SkillListTool, SkillGetTool} {
+		for _, name := range []string{SkillDiscoverTool, SkillListTool, SkillGetTool} {
 			tool, _ := service.Registry().ToolRegistry.Get(name)
 			args := map[string]interface{}{}
 			if name == SkillGetTool {

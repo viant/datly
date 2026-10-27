@@ -458,6 +458,14 @@ from predicate activation. Absent inputs normally contribute no predicate;
 `ApplyWhenAbsentPredicate` permits evaluation when absent. Presence markers,
 when available, distinguish an explicitly supplied zero/false from omission.
 
+An always-applied list restriction uses one predicate:
+`.Required().ApplyWhenAbsentPredicate(0,'in','r','id')`. Present values produce
+`IN` bindings. Required input validation rejects omitted mandatory inputs before
+SQL; when absence is permitted, the predicate itself evaluates an empty or
+absent list as `1 = 0` with no bindings.
+`ApplyWhenAbsentPredicate` applies to present values too and adds an independent
+predicate; it is not an absence-only alternative to a preceding `WithPredicate`.
+
 See [Reader predicates](reader-predicates.md) for the predicate catalog and
 reader examples. SQL fragment composition, group references in expressions and
 WHERE/AND placement belong to the [final DQL + Velty section](#dql--velty-separate-language-layer).

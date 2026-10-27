@@ -6,12 +6,15 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/viant/bindly/locator"
 	"github.com/viant/datly/bootstrap/cacheconfig"
 	"github.com/viant/datly/data"
 	"github.com/viant/datly/exec"
+	"github.com/viant/datly/runtime/registry"
 	"github.com/viant/datly/spec"
 	dsql "github.com/viant/datly/sql"
 	sqlreader "github.com/viant/datly/sql/reader"
+	viewprovider "github.com/viant/datly/sql/reader/provider"
 	"github.com/viant/sqlx/io/read/cache"
 	"github.com/viant/sqlx/io/read/cache/aerospike"
 )
@@ -24,6 +27,8 @@ type CompiledReader struct {
 	inputType     reflect.Type
 	outputType    reflect.Type
 	plan          *sqlreader.Plan
+	input         *registry.InputContract
+	dependencies  []*sqlreader.ViewDependency
 }
 
 // ReaderRuntimeConfig supplies concrete execution dependencies without
@@ -47,7 +52,41 @@ func (a *Artifact) ReaderCompilation() *CompiledReader {
 	}
 	return &CompiledReader{
 		instanceConst: a.instanceConst, component: a.Component, inputType: a.inputType, outputType: a.outputType, plan: a.Reader,
+		input: a.Input, dependencies: append([]*sqlreader.ViewDependency(nil), a.ViewDependencies...),
 	}
+}
+
+// NewProviders attaches only this artifact's declared independent input views.
+// Each provider creates its input locator from the active invocation's state;
+// compiled plans and connection/cache capabilities may be shared safely.
+func (c *CompiledReader) NewProviders(config ReaderRuntimeConfig) ([]locator.Provider, error) {
+	if c == nil {
+		return nil, fmt.Errorf("compiled reader is required")
+	}
+	if len(c.dependencies) == 0 {
+		return nil, nil
+	}
+	readCaches := make(map[string]map[*data.View]cache.Cache, len(c.dependencies))
+	for _, dependency := range c.dependencies {
+		if dependency == nil {
+			return nil, fmt.Errorf("independent reader dependency is required")
+		}
+		child := &CompiledReader{instanceConst: c.instanceConst, component: dependency.Component, inputType: dependency.InputType, outputType: dependency.TargetType, plan: dependency.Plan}
+		childConfig := config
+		// Explicit view aliases in ReadCaches belong to the source reader.
+		// Dependencies retain their own authored cache settings and shared pool.
+		childConfig.ReadCaches = nil
+		resolved, err := child.resolveCaches(childConfig)
+		if err != nil {
+			return nil, fmt.Errorf("independent reader %s caches: %w", dependency.Name, err)
+		}
+		readCaches[dependency.Name] = resolved
+	}
+	provider, err := viewprovider.New(viewprovider.Config{Dependencies: c.dependencies, Input: c.input, SQL: config.SQL, ReadCaches: readCaches})
+	if err != nil {
+		return nil, err
+	}
+	return []locator.Provider{provider}, nil
 }
 
 // NewExecution attaches concrete runtime dependencies and returns only the
