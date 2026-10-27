@@ -602,6 +602,10 @@ rules and the caller's transaction/buffer semantics. Factories with generated SQ
 input contracts continue to use `transcribe post`; their declared HTTP method is
 independent of that authoring operation.
 
+The declared `#package` supplies an existing component's named SQL resources
+during regeneration, including generated Current and key-projection queries.
+Source-local embedded SQL continues to resolve relative to its DQL resource.
+
 Parenthesized physical tables remain the read-only DQL form, including inside
 derived queries. Transcription retains their auxiliary metadata and lowers those
 table markers to executable SQL. Derived query parentheses, predicates, aliases,
