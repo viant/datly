@@ -14,8 +14,28 @@ Each observation supplies an opaque invocation-scoped `OccurrenceRef`, detached 
 
 A plan must name every root in the same order and every declared holder. `Selected` contains captured request occurrences or bound Current occurrences. Omission discards a request occurrence without reclaiming its allocation. `AdoptCurrent` rematches a captured request to a specific same-parent Current row in the declared adoption role; a literal identity cannot grant authority. `Deletes` names bound Current occurrences and produces internal native deletes, outside the public collections. Declared scalar assignments use exact Go value types and optional source setter presence. Parent-link assignments must equal their native parent tuple. Identity fields cannot be scalar assignments.
 
+For an unchanged stored row that must remain in the response, select its Current
+occurrence with `RetainUnchanged: true`. The writer keeps the row in the effective
+holder and final validation but queues no DML or queue notification for it. All
+mapped fields must have loaded Current evidence and still equal it after the
+plan's assignments and invariant propagation. A request occurrence, including an
+equal-valued row or one using `AdoptCurrent`, cannot claim this disposition.
+Changed stored rows should use an ordinary selection so their updates execute.
+Omitting `RetainUnchanged` preserves the normal write behavior.
+
 The writer validates the entire finite data plan before publishing working holders, constructs effective frames without recapturing Original or reallocating, rebuilds native reference producers, and runs final native validation. Internal deletion evidence uses the existing native UPDATE validation contract because the validator does not accept a DELETE candidate; the physical frame/action remains DELETE. Selected Current and adopted rows keep authoritative immutable Previous. Distinct request occurrences with the same physical ID remain distinct actions. Cross-role or unexplained cross-parent pointer associations fail.
 
 For each root, native traversal admits the eligible root write and its AfterQueue, then each declared role's deletes followed by writes, preserving list order. Native DML and completion keep ownership. This does not establish cross-connector physical execution order. Root suppression retains linked direct-child writes only when the native persisted parent-producer guard passes. AfterQueueInput remains the terminal batch boundary.
+
+A role may set `"deleteBatchSize": 1000` to group its native deletes into bounded
+statements. For example, `{"holder":"Items","fields":["OrderId"],"deleteBatchSize":1000}`
+keeps each statement scoped to the current parent and the selected child IDs.
+This option currently requires a single child identity key. Batches never cross
+parent or role boundaries and stay before that role's writes. Every deleted
+occurrence still receives its normal queue observation and AfterQueue hook;
+the first occurrence of each chunk queues the shared statement. A later failure
+rolls back through the same transaction owner. Zero or an omitted setting keeps
+individual deletes. Declare the option in DQL and transcribe the component; do
+not modify generated metadata.
 
 Scoped sequences, assigned/missing-identity policy, insert-delete policy, source-row queue contracts, explicit delete markers, concurrency tokens, mutation predicates, auxiliary roots, recursive/derived writable graphs and grandchildren are initially rejected. Writers with no opt-in retain their existing paths. Retained queued-state guards include effective holders, occurrence/frame/action associations, Original, Current/Previous and superseded allocation evidence. A consumed reconciliation attempt cannot be reused; owner-scope recovery and composing-parent replay are vetoed from allocation admission onward.

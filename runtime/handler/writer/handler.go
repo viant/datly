@@ -1581,7 +1581,7 @@ func (p *Program) prepare(ctx context.Context, binder xhandler.Binder) (err erro
 	return nil
 }
 
-func (p *Program) queuePhysical(ctx context.Context, binder xhandler.Binder, dml xhandler.DML, action *Action, frame *Frame, queued *bool) error {
+func (p *Program) queuePhysical(ctx context.Context, binder xhandler.Binder, dml xhandler.DML, action *Action, frame *Frame, queued *bool, deleteBatch ...func() error) error {
 	if err := p.validateActionPolicyFacts(); err != nil {
 		return err
 	}
@@ -1654,7 +1654,11 @@ func (p *Program) queuePhysical(ctx context.Context, binder xhandler.Binder, dml
 			if frame.Record.QueueContract != "" {
 				err = p.admitSourceRow(dml, action, frame)
 			} else {
-				err = dml.Delete(table, value)
+				if len(deleteBatch) > 0 && deleteBatch[0] != nil {
+					err = deleteBatch[0]()
+				} else {
+					err = dml.Delete(table, value)
+				}
 			}
 		}
 	default:

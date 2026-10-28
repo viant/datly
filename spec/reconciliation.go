@@ -18,9 +18,11 @@ type Reconciliation struct {
 	Roles        []ReconciliationRole        `json:"roles"`
 }
 type ReconciliationRole struct {
-	Holder        string   `json:"holder"`
-	Fields        []string `json:"fields,omitempty"`
-	AdoptIdentity bool     `json:"adoptIdentity,omitempty"`
+	// DeleteBatchSize groups same-parent role deletes; zero preserves scalar deletes.
+	DeleteBatchSize int      `json:"deleteBatchSize,omitempty"`
+	Holder          string   `json:"holder"`
+	Fields          []string `json:"fields,omitempty"`
+	AdoptIdentity   bool     `json:"adoptIdentity,omitempty"`
 }
 
 func ParseReconciliation(text string) (*Reconciliation, error) {
@@ -48,6 +50,9 @@ func ParseReconciliation(text string) (*Reconciliation, error) {
 	}
 	seen := map[string]bool{}
 	for _, role := range result.Roles {
+		if role.DeleteBatchSize < 0 {
+			return nil, fmt.Errorf("finite_reconciliation deleteBatchSize must not be negative")
+		}
 		if role.Holder == "" || seen[role.Holder] {
 			return nil, fmt.Errorf("finite_reconciliation has an empty or duplicate holder")
 		}
@@ -120,6 +125,9 @@ func ValidateReconciliationView(root *View, operation string) error {
 	seen := map[string]bool{}
 	adoptions := 0
 	for i, role := range config.Roles {
+		if role.DeleteBatchSize < 0 {
+			return fmt.Errorf("finite_reconciliation deleteBatchSize must not be negative")
+		}
 		rel := root.Relations[i]
 		if rel == nil || rel.View == nil || role.Holder == "" || seen[role.Holder] || role.Holder != rel.Holder || rel.Cardinality == CardinalityOne || rel.View.Cardinality == CardinalityOne || rel.View.Auxiliary || rel.View.SelfReference != nil || len(rel.View.Relations) != 0 {
 			return fmt.Errorf("finite_reconciliation requires every direct writable leaf holder in declared graph order")

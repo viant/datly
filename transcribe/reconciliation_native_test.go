@@ -36,7 +36,7 @@ func TestFiniteReconciliationStockGenerationSQLite(t *testing.T) {
 
 #define($_ = $Data<[]*Batch>(output/body))
 
-SELECT b.*,e.*,type(b,'Batch'),type(e,'Entry'),lifecycle_type(b,'Hooks'),finite_reconciliation(b,'{"mode":"same-parent-root-first","rootFields":["Total"],"roles":[{"holder":"Entries","fields":["Title","BatchId"],"adoptIdentity":true}]}')
+SELECT b.*,e.*,type(b,'Batch'),type(e,'Entry'),lifecycle_type(b,'Hooks'),finite_reconciliation(b,'{"mode":"same-parent-root-first","rootFields":["Total"],"roles":[{"holder":"Entries","fields":["Title","BatchId"],"adoptIdentity":true,"deleteBatchSize":1000}]}')
 FROM (SELECT batches.* FROM batches) b
 JOIN (SELECT entries.* FROM entries) e ON e.batch_id=b.id
 `
