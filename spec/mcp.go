@@ -1,6 +1,11 @@
 package spec
 
-import "strings"
+import (
+	"fmt"
+	"strings"
+
+	"github.com/viant/tagly/format/text"
+)
 
 type MCPExposureKind string
 
@@ -17,6 +22,36 @@ type MCPExposure struct {
 	Description     string          `json:"description,omitempty"`
 	DescriptionPath string          `json:"descriptionPath,omitempty"`
 	MIMEType        string          `json:"mimeType,omitempty"`
+	// CaseFormat customizes implicit MCP input member names only. Empty preserves
+	// legacy Go/JSON spelling, independently of the component's HTTP case format.
+	CaseFormat string `json:"caseFormat,omitempty"`
+}
+
+func (e *MCPExposure) ValidateCaseFormat() error {
+	if e != nil && strings.TrimSpace(e.CaseFormat) != "" && !text.NewCaseFormat(e.CaseFormat).IsDefined() {
+		return fmt.Errorf("invalid MCP case format %q", e.CaseFormat)
+	}
+	return nil
+}
+
+// DerivedMCPCaseFormat follows the source tool used for derived naming. An
+// unnamed exposure still owns its input format when no named tool exists.
+func DerivedMCPCaseFormat(route *Route) string {
+	var fallback string
+	if route != nil {
+		for _, exposure := range route.MCP {
+			if exposure == nil || exposure.Kind != MCPExposureTool {
+				continue
+			}
+			if strings.TrimSpace(exposure.Name) != "" {
+				return exposure.CaseFormat
+			}
+			if fallback == "" {
+				fallback = exposure.CaseFormat
+			}
+		}
+	}
+	return fallback
 }
 
 func (e *MCPExposure) Clone() *MCPExposure {

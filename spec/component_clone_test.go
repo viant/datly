@@ -40,12 +40,16 @@ func TestComponentCloneIsolatesIndependentViews(t *testing.T) {
 func TestComponentCloneIsolatesRouteMCPExposures(t *testing.T) {
 	source := &Component{Routes: []*Route{{
 		Method: "GET", Path: "/orders",
-		MCP: []*MCPExposure{{Kind: MCPExposureTool, Name: "orders.list", Description: "List orders"}},
+		MCP: []*MCPExposure{{Kind: MCPExposureTool, Name: "orders.list", Description: "List orders", CaseFormat: "lu"}},
 	}}}
 	cloned := source.Clone()
+	if cloned.Routes[0].MCP[0].CaseFormat != "lu" {
+		t.Fatal("clone lost MCP case format")
+	}
+	cloned.Routes[0].MCP[0].CaseFormat = "lc"
 	cloned.Routes[0].MCP[0].Name = "changed"
 	cloned.Routes[0].MCP = append(cloned.Routes[0].MCP, &MCPExposure{Kind: MCPExposureResource, Name: "orders"})
-	if len(source.Routes[0].MCP) != 1 || source.Routes[0].MCP[0].Name != "orders.list" {
+	if len(source.Routes[0].MCP) != 1 || source.Routes[0].MCP[0].Name != "orders.list" || source.Routes[0].MCP[0].CaseFormat != "lu" {
 		t.Fatalf("clone mutated source route exposure: source=%+v clone=%+v", source.Routes[0], cloned.Routes[0])
 	}
 }

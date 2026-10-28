@@ -52,7 +52,7 @@ func TestExpandReportEntriesUsesAuthoredMCPNameForDerivedReports(t *testing.T) {
 			Path:   "/spo/performance",
 			MCP: []*spec.MCPExposure{{
 				Kind: spec.MCPExposureTool,
-				Name: "SupplyOptimizationPerformance",
+				Name: "SupplyOptimizationPerformance", CaseFormat: "lu",
 			}},
 		}},
 		Settings: &spec.Settings{Report: &spec.ReportSettings{
@@ -69,6 +69,11 @@ func TestExpandReportEntriesUsesAuthoredMCPNameForDerivedReports(t *testing.T) {
 		t.Fatalf("expanded entries = %d, want source, cube, compose", len(expanded))
 	}
 
+	for _, derived := range expanded[1:] {
+		if derived.Component.Routes[0].MCP[0].CaseFormat != "lu" {
+			t.Fatal("indexed derived tool lost MCP input format")
+		}
+	}
 	cube := expanded[1].Component
 	if cube.Key.Name != "SpoPerformanceCube" {
 		t.Fatalf("cube key = %q, want internal key from component name", cube.Key.Name)

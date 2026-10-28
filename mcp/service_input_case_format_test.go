@@ -31,12 +31,12 @@ type inputCaseRequest struct {
 }
 type inputCaseResult struct{ response.Status }
 
-func TestMCPInputSchemaUsesComponentCaseFormat(t *testing.T) {
+func TestMCPInputSchemaUsesOptInExposureCaseFormat(t *testing.T) {
 	type useCase struct{ description, format, id, name, flag, children, metric string }
 	for _, tc := range []useCase{{"existing Go naming without format", "", "Id", "Name", "AutoAdvertising", "Children", "MetricID"}, {"lower camel component contract", "lc", "id", "name", "autoAdvertising", "children", "metricId"}, {"snake component contract", "lu", "id", "name", "auto_advertising", "children", "metric_id"}, {"dash component contract", "ld", "id", "name", "auto-advertising", "children", "metric-id"}} {
 		t.Run(tc.description, func(t *testing.T) {
 			ctx := context.Background()
-			component := &spec.Component{Key: spec.Key{Kind: spec.KindComponent, Name: "InputCase"}, Settings: &spec.Settings{CaseFormat: tc.format}, Routes: []*spec.Route{{Method: "POST", Path: "/input-case", MCP: []*spec.MCPExposure{{Kind: spec.MCPExposureTool, Name: "InputCase"}}}}}
+			component := &spec.Component{Key: spec.Key{Kind: spec.KindComponent, Name: "InputCase"}, Settings: &spec.Settings{CaseFormat: "lc"}, Routes: []*spec.Route{{Method: "POST", Path: "/input-case", MCP: []*spec.MCPExposure{{Kind: spec.MCPExposureTool, Name: "InputCase", CaseFormat: tc.format}}}}}
 			artifact, err := bootstrap.BuildArtifact(bootstrap.ArtifactInput{Component: component, InputType: reflect.TypeFor[inputCaseRequest](), OutputType: reflect.TypeFor[inputCaseResult]()})
 			require.NoError(t, err)
 			var bound *inputCaseBody

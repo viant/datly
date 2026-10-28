@@ -176,7 +176,10 @@ func (c *serviceCompiler) compileRoute(result *compiledPlans, toolCompiler *tool
 			if err != nil {
 				return err
 			}
-			plan, compileErr := toolCompiler.Compile(tool.Input{CaseFormat: componentCaseFormat(registered.Component), Fields: fields, Example: registered.Documentation.Operation(route.Path, documentation.Annotation{Example: registered.Component.Example}).Example, TransportReady: registered.Output != nil && registered.Output.TransportReady(), Documentation: registered.Documentation, Component: registered.Component.Key, Exposure: exposure, Contract: contract, OutputType: registered.OutputType, Output: registered.Output})
+			if err := exposure.ValidateCaseFormat(); err != nil {
+				return err
+			}
+			plan, compileErr := toolCompiler.Compile(tool.Input{CaseFormat: exposure.CaseFormat, Fields: fields, Example: registered.Documentation.Operation(route.Path, documentation.Annotation{Example: registered.Component.Example}).Example, TransportReady: registered.Output != nil && registered.Output.TransportReady(), Documentation: registered.Documentation, Component: registered.Component.Key, Exposure: exposure, Contract: contract, OutputType: registered.OutputType, Output: registered.Output})
 			if compileErr != nil {
 				return compileErr
 			}
@@ -319,11 +322,4 @@ func validateExposedRoute(component *spec.Component, route *spec.Route) error {
 		return fmt.Errorf("MCP route %s is guarded by an HTTP API key", (spec.RouteRef{Method: route.Method, Path: route.Path}).String())
 	}
 	return nil
-}
-
-func componentCaseFormat(component *spec.Component) string {
-	if component != nil && component.Settings != nil {
-		return component.Settings.CaseFormat
-	}
-	return ""
 }

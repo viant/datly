@@ -25,7 +25,7 @@ type Input struct {
 	Example        string
 	TransportReady bool
 	Documentation  *documentation.Snapshot
-	// CaseFormat is the component JSON body naming policy; empty retains existing names.
+	// CaseFormat is the MCP input fallback naming policy; empty retains legacy names.
 	CaseFormat string
 	Component  spec.Key
 	Exposure   *spec.MCPExposure
