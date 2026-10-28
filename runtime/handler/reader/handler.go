@@ -3,6 +3,7 @@ package reader
 import (
 	"context"
 	"fmt"
+	xh "github.com/viant/xdatly/handler"
 
 	dexec "github.com/viant/datly/exec"
 	rhandler "github.com/viant/datly/runtime/handler"
@@ -13,6 +14,7 @@ import (
 // Handler is the built-in reader flavor over the shared handler engine.
 type Handler struct {
 	options *dexec.ReaderOptions
+	rows    *xh.RowConsumer
 	reader  dexec.Reader
 	input   *registry.RouteInputContract
 }
@@ -32,6 +34,13 @@ func (h *Handler) Execute(ctx context.Context, invocation rhandler.Invocation) (
 		ctx = h.options.Context(ctx)
 	}
 	resolver := sqlx.ParameterResolver(h.input.Resolver(invocation.Input))
+	if h.rows != nil {
+		reader, ok := h.reader.(dexec.RowReader)
+		if !ok {
+			return nil, fmt.Errorf("registered reader does not support row consumption")
+		}
+		return reader.ReadRows(ctx, invocation.Input, invocation.Binder, resolver, h.rows)
+	}
 	return h.reader.Read(ctx, invocation.Input, invocation.Binder, resolver)
 }
 
@@ -40,5 +49,12 @@ func (h *Handler) Execute(ctx context.Context, invocation rhandler.Invocation) (
 func (h *Handler) WithReadOptions(options dexec.ReaderOptions) *Handler {
 	clone := *h
 	clone.options = &options
+	return &clone
+}
+
+// WithRows installs a consumer only on this result-read invocation.
+func (h *Handler) WithRows(rows *xh.RowConsumer) *Handler {
+	clone := *h
+	clone.rows = rows
 	return &clone
 }
