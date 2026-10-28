@@ -408,7 +408,15 @@ func predicateMethod(fn *ast.FuncDecl, imports map[string]string) bool {
 		return false
 	}
 	inputs := methodParameters(fn)
-	return len(inputs) == 2 && namedFromPackage(inputs[0], imports, "context", "Context") && anyType(inputs[1]) &&
+	if len(inputs) == 3 {
+		variadic, ok := inputs[2].(*ast.Ellipsis)
+		if !ok || !anyType(variadic.Elt) {
+			return false
+		}
+	} else if len(inputs) != 2 {
+		return false
+	}
+	return namedFromPackage(inputs[0], imports, "context", "Context") && anyType(inputs[1]) &&
 		namedFromPackage(fn.Type.Results.List[0].Type, imports, "github.com/viant/xdatly/predicate", "Criteria") && named(fn.Type.Results.List[1].Type, "error")
 }
 

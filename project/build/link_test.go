@@ -2,6 +2,9 @@ package build
 
 import (
 	"context"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -10,6 +13,24 @@ import (
 
 	"github.com/viant/datly/internal/testharness"
 )
+
+func TestPredicateMethodVariadicSignature(t *testing.T) {
+	for _, tc := range []struct {
+		args string
+		want bool
+	}{{"context.Context, any", true}, {"context.Context, any, ...any", true}, {"context.Context, any, []any", false}, {"context.Context, any, ...string", false}, {"context.Context", false}} {
+		t.Run(tc.args, func(t *testing.T) {
+			file, err := parser.ParseFile(token.NewFileSet(), "predicate.go", "package p; func (*P) Compute("+tc.args+") (*pred.Criteria,error) {return nil,nil}", 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got := predicateMethod(file.Decls[0].(*ast.FuncDecl), map[string]string{"context": "context", "pred": "github.com/viant/xdatly/predicate"})
+			if got != tc.want {
+				t.Fatalf("recognized=%v want=%v", got, tc.want)
+			}
+		})
+	}
+}
 
 func TestSyncLinksAddsOnlyMissingBlankImports(t *testing.T) {
 	root := t.TempDir()
