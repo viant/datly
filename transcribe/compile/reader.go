@@ -165,6 +165,10 @@ func (r *Reader) Compile(input ReadInput) (*spec.View, error) {
 			return nil, fmt.Errorf("factory logical root cannot own scalar or wildcard projections")
 		}
 	}
+	auxiliaryRewritten, err := lowerAuxiliarySources(parsed)
+	if err != nil {
+		return nil, err
+	}
 	sourceDecomposed, err := decomposeReadSources(parsed, root, input.Template, input.FactoryComposition)
 	if err != nil {
 		return nil, err
@@ -177,7 +181,7 @@ func (r *Reader) Compile(input ReadInput) (*spec.View, error) {
 			return nil, &Error{Code: CodeViewDirective, Cause: err}
 		}
 	}
-	if input.FactoryComposition == nil && !sourceDecomposed && (locksRewritten || projectionRewritten || columnsRewritten || len(directives) > 0 || directAuxiliary || root.Source.SQL == "" && (table == "" || referencesCTE(parsed.From.X, parsed.WithSelects))) {
+	if input.FactoryComposition == nil && !sourceDecomposed && (locksRewritten || projectionRewritten || columnsRewritten || auxiliaryRewritten || len(directives) > 0 || directAuxiliary || root.Source.SQL == "" && (table == "" || referencesCTE(parsed.From.X, parsed.WithSelects))) {
 		root.Source.SQL = wrapReadProgram(input.Template, strings.TrimSpace((sqlparser.Stringifier{PreserveWindow: true}).String(parsed)))
 		// Lowered SQL may already contain materialized resources. Keep its typed
 		// resource references aligned with the executable source, as decomposition does.
@@ -264,6 +268,14 @@ func (r *Reader) compileRelation(join *query.Join, index int, withs query.WithSe
 		}
 		links = append(links, link)
 	}
+	childTable, childAuxiliary, err := readSourceTable(join.With, withs, 0)
+	if err != nil {
+		return nil, relationError(CodeRelationUnsupported, err, join.Span)
+	}
+	join.With, _, err = lowerAuxiliarySource(join.With)
+	if err != nil {
+		return nil, relationError(CodeRelationUnsupported, err, join.Span)
+	}
 	childSource, err := canonicalReadSource(join.With, childNamespace, withs, recursive, frame)
 	if err != nil {
 		var compileError *Error
@@ -276,7 +288,7 @@ func (r *Reader) compileRelation(join *query.Join, index int, withs query.WithSe
 		Name: childNamespace, Namespace: childNamespace,
 		Source: childSource,
 	}
-	child.Source.Table, child.Auxiliary, err = readSourceTable(join.With, withs, 0)
+	child.Source.Table, child.Auxiliary = childTable, childAuxiliary
 	child.Source.TableInferred = true
 	if err != nil {
 		return nil, relationError(CodeRelationUnsupported, err, join.Span)

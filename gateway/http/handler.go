@@ -68,7 +68,7 @@ func (h *Handler) ServeHTTP(writer stdhttp.ResponseWriter, req *stdhttp.Request)
 		writer.WriteHeader(stdhttp.StatusInternalServerError)
 		return
 	}
-	if owner := h.runtime.Observability(); owner != nil && owner.Recorder != nil && internallog.Enabled(owner.Recorder) && !internallog.HTTPObserved(req.Context()) {
+	if owner := h.runtime.Observability(); owner != nil && owner.Recorder != nil && (internallog.Enabled(owner.Recorder) || owner.Recorder.HasRequestMetrics()) && !internallog.HTTPObserved(req.Context()) {
 		serveHTTPObserved(writer, req, h.version, h.serveHTTP, func(ctx context.Context, e *xexec.Context) { internallog.LogHTTP(owner.Recorder, ctx, e) })
 		return
 	}
@@ -76,6 +76,14 @@ func (h *Handler) ServeHTTP(writer stdhttp.ResponseWriter, req *stdhttp.Request)
 }
 
 func (h *Handler) serveHTTP(writer stdhttp.ResponseWriter, req *stdhttp.Request) {
+	if owner := h.runtime.Observability(); owner != nil && owner.Recorder != nil {
+		if route, ok := h.runtime.RouteByMethodPath(req.Method, h.routingPath(req)); ok {
+			internallog.RegisterHTTPCompletion(req.Context(), func() func(time.Time, int, bool) {
+				return owner.Recorder.BeginRequest(spec.RouteRef{Method: route.Method, Path: route.Path}, time.Now())
+			})
+		}
+	}
+
 	if !h.allowsRemote(req) {
 		writer.WriteHeader(stdhttp.StatusForbidden)
 		return

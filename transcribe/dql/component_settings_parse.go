@@ -287,8 +287,8 @@ func parseComponentSettings(blocks []directiveBlock) (ret *componentSettings, er
 				return nil, fmt.Errorf("invalid meta directive: empty path")
 			}
 		case strings.EqualFold(name, "mcp_route"):
-			if len(args) < 2 || len(args) > 4 || tail != "" {
-				return nil, fmt.Errorf("mcp_route requires METHOD:/path, name, optional description and description path")
+			if len(args) < 2 || len(args) > 5 || tail != "" {
+				return nil, fmt.Errorf("mcp_route requires METHOD:/path, name, optional description, description path and case format")
 			}
 			ref, err := spec.ParseRouteRef(trimQuote(args[0]))
 			if err != nil {

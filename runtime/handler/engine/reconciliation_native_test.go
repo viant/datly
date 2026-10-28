@@ -53,18 +53,19 @@ type reconciliationOutput struct {
 }
 type reconciliationProbeKey struct{}
 type reconciliationProbe struct {
-	filtered    bool
-	mode        string
-	base        context.Context
-	cancel      context.CancelFunc
-	allocations map[string][]int
-	originals   map[string][]bool
-	trace       []string
-	physical    []string
-	refs        []writer.OccurrenceRef
-	calls       int
-	premerge    map[*reconciliationRoot]int
-	outcomes    []h.Outcome
+	deleteBatchSize int
+	filtered        bool
+	mode            string
+	base            context.Context
+	cancel          context.CancelFunc
+	allocations     map[string][]int
+	originals       map[string][]bool
+	trace           []string
+	physical        []string
+	refs            []writer.OccurrenceRef
+	calls           int
+	premerge        map[*reconciliationRoot]int
+	outcomes        []h.Outcome
 }
 type reconciliationHooks struct{}
 
@@ -124,7 +125,15 @@ func (*reconciliationHooks) ReconcileInput(ctx context.Context, input *reconcili
 			}
 			if role.Holder == "Labels" && input.Method != "PUT" {
 				for _, row := range role.Current {
-					rp.Selected = append(rp.Selected, writer.ReconciliationSelection{Occurrence: row.Ref})
+					selection := writer.ReconciliationSelection{Occurrence: row.Ref}
+					if strings.HasPrefix(p.mode, "retain") {
+						selection.RetainUnchanged = true
+						if p.mode == "retain changed" {
+							value := "changed stored row"
+							selection.Assignments = []writer.ReconciliationAssignment{{Field: "Name", Value: &value, MarkPresent: true}}
+						}
+					}
+					rp.Selected = append(rp.Selected, selection)
 					seen[*row.Row.(*reconciliationLeaf).Name] = true
 				}
 			}
@@ -133,6 +142,9 @@ func (*reconciliationHooks) ReconcileInput(ctx context.Context, input *reconcili
 				p.allocations[role.Holder] = append(p.allocations[role.Holder], *leaf.ID)
 				p.originals[role.Holder] = append(p.originals[role.Holder], row.Original.Has("ID"))
 				selection := writer.ReconciliationSelection{Occurrence: row.Ref}
+				if p.mode == "retain payload" {
+					selection.RetainUnchanged = true
+				}
 				if p.mode == "stale" && len(p.refs) > 0 {
 					selection.Occurrence = p.refs[0]
 				}
@@ -294,7 +306,7 @@ func runReconciliation(t *testing.T, db *sqlite.Harness, input *reconciliationIn
 	config := &spec.Reconciliation{Mode: "same-parent-root-first", RootFields: []string{"Count"}}
 	root := &spec.View{Name: "Rows", EntityHooks: linked.Name(), Source: &spec.ViewSource{Table: "reconcile_root"}, Reconciliation: config}
 	for _, role := range []string{"Labels", "Grants", "Links", "Tokens", "Blocks"} {
-		config.Roles = append(config.Roles, spec.ReconciliationRole{Holder: role, Fields: []string{"Name", "ParentID"}, AdoptIdentity: role == "Grants"})
+		config.Roles = append(config.Roles, spec.ReconciliationRole{DeleteBatchSize: p.deleteBatchSize, Holder: role, Fields: []string{"Name", "ParentID"}, AdoptIdentity: role == "Grants"})
 		root.Relations = append(root.Relations, &spec.Relation{Name: role, Holder: role, View: &spec.View{Name: role, Source: &spec.ViewSource{Table: "reconcile_" + strings.ToLower(role)}}})
 	}
 	component := &spec.Component{Key: spec.Key{Kind: spec.KindComponent, Scope: reconciliationLinked.PkgPath(), Name: "Reconcile"}, Settings: &spec.Settings{Mutation: "patch"}, Routes: []*spec.Route{{Method: "PATCH", Path: "/reconcile"}}, RootView: root}
@@ -428,50 +440,54 @@ func TestFiniteReconciliationFailureControlsSQLite(t *testing.T) {
 	}
 }
 func TestFiniteReconciliationFixedTraversalAndDeletesSQLite(t *testing.T) {
-	db := newReconciliationDB(t)
-	for _, role := range []string{"labels", "grants", "links", "tokens", "blocks"} {
-		if e := db.ExecStatements(t.Context(), fmt.Sprintf(`INSERT INTO reconcile_%s(id,parent_id,name) VALUES(90,1,'discard')`, role)); e != nil {
-			t.Fatal(e)
-		}
-	}
-	if e := db.ExecStatements(t.Context(), `DELETE FROM reconcile_trace`); e != nil {
-		t.Fatal(e)
-	}
-	row := reconcileRow()
-	row.Labels = []*reconciliationLeaf{reconcileLeaf("new label")}
-	row.Grants = []*reconciliationLeaf{reconcileLeaf("a")}
-	row.Links = []*reconciliationLeaf{reconcileLeaf("new link")}
-	row.Tokens = []*reconciliationLeaf{reconcileLeaf("new token")}
-	row.Blocks = []*reconciliationLeaf{reconcileLeaf("new block")}
-	p := &reconciliationProbe{}
-	result, e := runReconciliation(t, db, &reconciliationInput{Rows: []*reconciliationRoot{row}, Method: "PUT"}, p)
-	if e != nil {
-		t.Fatal(e)
-	}
-	want := []string{"Rows:update", "root:1", "Rows/Labels:delete", "Rows/Labels:delete", "Rows/Labels:insert", "Rows/Grants:delete", "Rows/Grants:update", "Rows/Links:delete", "Rows/Links:insert", "Rows/Tokens:delete", "Rows/Tokens:insert", "Rows/Blocks:delete", "Rows/Blocks:insert", "batch"}
-	if !reflect.DeepEqual(p.trace, want) {
-		t.Fatalf("queue order=%v want=%v", p.trace, want)
-	}
-	final := result.(*reconciliationOutput).Data[0]
-	if len(final.Labels) != 1 || len(final.Grants) != 1 || len(final.Links) != 1 || len(final.Tokens) != 1 || len(final.Blocks) != 1 {
-		t.Fatal("internal tombstones leaked into output")
-	}
-	rows, e := db.DB.Query(`SELECT value FROM reconcile_trace ORDER BY seq`)
-	if e != nil {
-		t.Fatal(e)
-	}
-	defer rows.Close()
-	var physical []string
-	for rows.Next() {
-		var value string
-		if e = rows.Scan(&value); e != nil {
-			t.Fatal(e)
-		}
-		physical = append(physical, value)
-	}
-	expected := []string{"labels:DELETE:10", "labels:DELETE:90", "labels:INSERT:91", "grants:DELETE:90", "grants:UPDATE:40", "links:DELETE:90", "links:INSERT:91", "tokens:DELETE:90", "tokens:INSERT:91", "blocks:DELETE:90", "blocks:INSERT:91"}
-	if !reflect.DeepEqual(physical, expected) {
-		t.Fatalf("physical SQLite order=%v want=%v", physical, expected)
+	for _, batchSize := range []int{0, 1000} {
+		t.Run(fmt.Sprint(batchSize), func(t *testing.T) {
+			db := newReconciliationDB(t)
+			for _, role := range []string{"labels", "grants", "links", "tokens", "blocks"} {
+				if e := db.ExecStatements(t.Context(), fmt.Sprintf(`INSERT INTO reconcile_%s(id,parent_id,name) VALUES(90,1,'discard')`, role)); e != nil {
+					t.Fatal(e)
+				}
+			}
+			if e := db.ExecStatements(t.Context(), `DELETE FROM reconcile_trace`); e != nil {
+				t.Fatal(e)
+			}
+			row := reconcileRow()
+			row.Labels = []*reconciliationLeaf{reconcileLeaf("new label")}
+			row.Grants = []*reconciliationLeaf{reconcileLeaf("a")}
+			row.Links = []*reconciliationLeaf{reconcileLeaf("new link")}
+			row.Tokens = []*reconciliationLeaf{reconcileLeaf("new token")}
+			row.Blocks = []*reconciliationLeaf{reconcileLeaf("new block")}
+			p := &reconciliationProbe{deleteBatchSize: batchSize}
+			result, e := runReconciliation(t, db, &reconciliationInput{Rows: []*reconciliationRoot{row}, Method: "PUT"}, p)
+			if e != nil {
+				t.Fatal(e)
+			}
+			want := []string{"Rows:update", "root:1", "Rows/Labels:delete", "Rows/Labels:delete", "Rows/Labels:insert", "Rows/Grants:delete", "Rows/Grants:update", "Rows/Links:delete", "Rows/Links:insert", "Rows/Tokens:delete", "Rows/Tokens:insert", "Rows/Blocks:delete", "Rows/Blocks:insert", "batch"}
+			if !reflect.DeepEqual(p.trace, want) {
+				t.Fatalf("queue order=%v want=%v", p.trace, want)
+			}
+			final := result.(*reconciliationOutput).Data[0]
+			if len(final.Labels) != 1 || len(final.Grants) != 1 || len(final.Links) != 1 || len(final.Tokens) != 1 || len(final.Blocks) != 1 {
+				t.Fatal("internal tombstones leaked into output")
+			}
+			rows, e := db.DB.Query(`SELECT value FROM reconcile_trace ORDER BY seq`)
+			if e != nil {
+				t.Fatal(e)
+			}
+			defer rows.Close()
+			var physical []string
+			for rows.Next() {
+				var value string
+				if e = rows.Scan(&value); e != nil {
+					t.Fatal(e)
+				}
+				physical = append(physical, value)
+			}
+			expected := []string{"labels:DELETE:10", "labels:DELETE:90", "labels:INSERT:91", "grants:DELETE:90", "grants:UPDATE:40", "links:DELETE:90", "links:INSERT:91", "tokens:DELETE:90", "tokens:INSERT:91", "blocks:DELETE:90", "blocks:INSERT:91"}
+			if !reflect.DeepEqual(physical, expected) {
+				t.Fatalf("physical SQLite order=%v want=%v", physical, expected)
+			}
+		})
 	}
 }
 
@@ -755,5 +771,136 @@ func TestFiniteReconciliationAfterValidateInputIntegrationSQLite(t *testing.T) {
 	}
 	if !reflect.DeepEqual(q.allocations["Grants"], []int{43}) {
 		t.Fatalf("unexpected next allocation %v", q.allocations)
+	}
+}
+
+func TestFiniteReconciliationRetainedCurrentSQLite(t *testing.T) {
+	type useCase struct {
+		description, mode string
+		wantLabelsWrites  int
+		wantError         bool
+	}
+	for _, tc := range []useCase{
+		{description: "default still updates stored rows", wantLabelsWrites: 1},
+		{description: "retained Current remains in response without DML", mode: "retain"},
+		{description: "changed Current cannot claim retention", mode: "retain changed", wantError: true},
+		{description: "equal payload cannot claim stored provenance", mode: "retain payload", wantError: true},
+	} {
+		t.Run(tc.description, func(t *testing.T) {
+			db := newReconciliationDB(t)
+			row := reconcileRow()
+			row.Grants = []*reconciliationLeaf{reconcileLeaf("a")}
+			p := &reconciliationProbe{mode: tc.mode}
+			result, err := runReconciliation(t, db, &reconciliationInput{Rows: []*reconciliationRoot{row}}, p)
+			if tc.wantError {
+				if err == nil {
+					t.Fatal("accepted invalid retained selection")
+				}
+				var count int
+				if err = db.DB.QueryRow(`SELECT COUNT(*) FROM reconcile_trace`).Scan(&count); err != nil || count != 0 {
+					t.Fatalf("writes on rejection: %d, %v", count, err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			output := result.(*reconciliationOutput).Data[0]
+			if !reflect.DeepEqual(reconcileIDs(output.Labels), []int{10}) || *output.Labels[0].Name != "a" {
+				t.Fatalf("lost retained output: %+v", output.Labels)
+			}
+			var labels, grants int
+			if err = db.DB.QueryRow(`SELECT COUNT(*) FROM reconcile_trace WHERE value='labels:UPDATE:10'`).Scan(&labels); err != nil {
+				t.Fatal(err)
+			}
+			if err = db.DB.QueryRow(`SELECT COUNT(*) FROM reconcile_trace WHERE value='grants:UPDATE:40'`).Scan(&grants); err != nil {
+				t.Fatal(err)
+			}
+			if labels != tc.wantLabelsWrites || grants != 1 {
+				t.Fatalf("updates labels=%d grants=%d", labels, grants)
+			}
+			if tc.mode == "retain" {
+				for _, event := range p.trace {
+					if event == "Rows/Labels:update" {
+						t.Fatal("retained row emitted queue attempt")
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestFiniteReconciliationDeleteBatchRollbackSQLite(t *testing.T) {
+	type useCase struct {
+		description string
+		fail        bool
+	}
+	for _, tc := range []useCase{{"1001 scoped deletes and replacement", false}, {"later write rolls back both chunks", true}} {
+		t.Run(tc.description, func(t *testing.T) {
+			db := newReconciliationDB(t)
+			if err := db.ExecStatements(t.Context(), `INSERT INTO reconcile_root(id,name) VALUES(2,'other')`, `INSERT INTO reconcile_labels(id,parent_id,name) VALUES(2000,2,'foreign')`); err != nil {
+				t.Fatal(err)
+			}
+			tx, err := db.DB.Begin()
+			if err != nil {
+				t.Fatal(err)
+			}
+			for id := 11; id <= 1010; id++ {
+				if _, err = tx.Exec(`INSERT INTO reconcile_labels(id,parent_id,name) VALUES(?,1,?)`, id, fmt.Sprint(id)); err != nil {
+					tx.Rollback()
+					t.Fatal(err)
+				}
+			}
+			if err = tx.Commit(); err != nil {
+				t.Fatal(err)
+			}
+			if tc.fail {
+				if err = db.ExecStatements(t.Context(), `CREATE TRIGGER reject_replacement BEFORE INSERT ON reconcile_labels WHEN NEW.name='replacement' BEGIN SELECT RAISE(ABORT,'replacement failure'); END`); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err = db.ExecStatements(t.Context(), `DELETE FROM reconcile_trace`); err != nil {
+				t.Fatal(err)
+			}
+			row := reconcileRow()
+			row.Labels = []*reconciliationLeaf{reconcileLeaf("replacement")}
+			probe := &reconciliationProbe{deleteBatchSize: 1000}
+			output, err := runReconciliation(t, db, &reconciliationInput{Rows: []*reconciliationRoot{row}, Method: "PUT"}, probe)
+			if tc.fail {
+				if err == nil || !strings.Contains(err.Error(), "replacement failure") {
+					t.Fatalf("error=%v", err)
+				}
+			} else if err != nil {
+				t.Fatal(err)
+			}
+			var own, foreign int
+			if err = db.DB.QueryRow(`SELECT COUNT(*) FROM reconcile_labels WHERE parent_id=1`).Scan(&own); err != nil {
+				t.Fatal(err)
+			}
+			if err = db.DB.QueryRow(`SELECT COUNT(*) FROM reconcile_labels WHERE parent_id=2`).Scan(&foreign); err != nil {
+				t.Fatal(err)
+			}
+			expected := 1
+			if tc.fail {
+				expected = 1001
+			}
+			if own != expected || foreign != 1 {
+				t.Fatalf("own=%d expected=%d foreign=%d", own, expected, foreign)
+			}
+			if !tc.fail {
+				if rows := output.(*reconciliationOutput).Data[0].Labels; len(rows) != 1 || *rows[0].Name != "replacement" {
+					t.Fatalf("output=%+v", rows)
+				}
+				deletes := 0
+				for _, event := range probe.trace {
+					if event == "Rows/Labels:delete" {
+						deletes++
+					}
+				}
+				if deletes != 1001 {
+					t.Fatalf("logical delete observations=%d", deletes)
+				}
+			}
+		})
 	}
 }

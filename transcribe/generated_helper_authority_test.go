@@ -2,6 +2,7 @@ package transcribe
 
 import (
 	"context"
+	"github.com/viant/datly/typecatalog"
 	"os"
 	"strings"
 	"testing"
@@ -26,6 +27,26 @@ func TestGeneratedHelperSelectedSourceOwnership(t *testing.T) {
 		t.Fatal(err)
 	}
 	compiled := project.Components[0]
+	linkedCatalog := typecatalog.NewCatalog()
+	for _, name := range []string{"KeysRow", "ForeignProjection", "AuthoredProjection"} {
+		descriptor, lookupErr := compiled.TypeResolver.Descriptor(pkg + "." + name)
+		if lookupErr != nil {
+			t.Fatal(lookupErr)
+		}
+		if registerErr := linkedCatalog.Register(typecatalog.TypeOriginPackage, descriptor); registerErr != nil {
+			t.Fatal(registerErr)
+		}
+	}
+	linkedResolver, resolveErr := typecatalog.NewResolver(linkedCatalog, typecatalog.TranscribeAuthority, compiled.TypeContext)
+	if resolveErr != nil {
+		t.Fatal(resolveErr)
+	}
+	compiled.TypeResolver = linkedResolver
+
+	resolution, err := compiled.TypeResolver.ResolveWithProvenance(pkg + ".KeysRow")
+	if err != nil || resolution == nil || resolution.Origin != typecatalog.TypeOriginPackage {
+		t.Fatalf("linked generated helper authority: %+v %v", resolution, err)
+	}
 	for _, tc := range []struct {
 		name, row, explicit, output, tag, header string
 		inferred                                 bool
@@ -74,6 +95,16 @@ func TestGeneratedHelperSelectedSourceOwnership(t *testing.T) {
 }
 
 func TestInferredCurrentKeyHelperSurvivesPackageReload(t *testing.T) {
+	type useCase struct {
+		description    string
+		explicitImport bool
+	}
+	for _, tc := range []useCase{{"explicit package import", true}, {"declared package without self import", false}} {
+		t.Run(tc.description, func(t *testing.T) { testInferredCurrentKeyHelperReload(t, tc.explicitImport) })
+	}
+}
+
+func testInferredCurrentKeyHelperReload(t *testing.T, explicitImport bool) {
 	source, root := stockExpandedCurrentFixture(t, "absent-physical-current")
 	source.Text = strings.Replace(source.Text, "#define($_ = $CurrentProbe<?>(view/CurrentProbe).Cardinality('Many') /* SELECT * FROM roots WHERE id=1 */)\n", "", 1)
 	ctx := context.Background()
@@ -94,7 +125,11 @@ func TestInferredCurrentKeyHelperSurvivesPackageReload(t *testing.T) {
 	if len(helpers) == 0 {
 		t.Fatal("fixture did not generate inferred Current key helper")
 	}
-	writeSourceFile(t, root, "source/probe.dql", "#import('generated','github.com/viant/datly/stockcurrentfixture/generated')\n"+source.Text)
+	text := source.Text
+	if explicitImport {
+		text = "#import('generated','github.com/viant/datly/stockcurrentfixture/generated')\n" + text
+	}
+	writeSourceFile(t, root, "source/probe.dql", text)
 	for generation := 2; generation <= 3; generation++ {
 		project, err := (&Discovery{BaseDir: root, Include: []string{"github.com/viant/datly/stockcurrentfixture/source"}, SourceFile: "probe.dql", Connector: "main", ColumnRefiner: source.ColumnRefiner}).Compile(ctx)
 		if err != nil {

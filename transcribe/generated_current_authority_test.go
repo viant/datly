@@ -31,10 +31,31 @@ func TestGeneratedCurrentSelectedSourceOwnershipControls(t *testing.T) {
 		t.Fatal(err)
 	}
 	compiled := project.Components[0]
+	// Linked authoring can select package provenance for a type whose current
+	// source is generated. Retain the source descriptor and exercise that origin.
+	linkedCatalog := typecatalog.NewCatalog()
+	for _, entry := range []struct {
+		name   string
+		origin typecatalog.TypeOrigin
+	}{{"SelfReadRow", typecatalog.TypeOriginPackage}, {"OtherReadRow", typecatalog.TypeOriginGenerated}, {"AuthoredReadRow", typecatalog.TypeOriginPackage}} {
+		descriptor, lookupErr := compiled.TypeResolver.Descriptor(pkg + "." + entry.name)
+		if lookupErr != nil {
+			t.Fatal(lookupErr)
+		}
+		if registerErr := linkedCatalog.Register(entry.origin, descriptor); registerErr != nil {
+			t.Fatal(registerErr)
+		}
+	}
+	linkedResolver, resolveErr := typecatalog.NewResolver(linkedCatalog, typecatalog.TranscribeAuthority, compiled.TypeContext)
+	if resolveErr != nil {
+		t.Fatal(resolveErr)
+	}
+	compiled.TypeResolver = linkedResolver
+
 	for _, tc := range []struct {
 		name   string
 		origin typecatalog.TypeOrigin
-	}{{"SelfReadRow", typecatalog.TypeOriginGenerated}, {"OtherReadRow", typecatalog.TypeOriginGenerated}, {"AuthoredReadRow", typecatalog.TypeOriginPackage}} {
+	}{{"SelfReadRow", typecatalog.TypeOriginPackage}, {"OtherReadRow", typecatalog.TypeOriginGenerated}, {"AuthoredReadRow", typecatalog.TypeOriginPackage}} {
 		resolution, err := compiled.TypeResolver.ResolveWithProvenance(pkg + "." + tc.name)
 		if err != nil || resolution == nil || resolution.Origin != tc.origin {
 			t.Fatalf("mixed package %s: %+v %v", tc.name, resolution, err)

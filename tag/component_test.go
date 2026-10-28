@@ -27,7 +27,7 @@ func TestComponentRoundTripPreservesRouteMCPExposures(t *testing.T) {
 	original := Component{
 		Name: "Orders", Path: "/orders", Method: "GET",
 		MCP: []*spec.MCPExposure{
-			{Kind: spec.MCPExposureTool, Name: "orders.search", Description: "Search orders"},
+			{Kind: spec.MCPExposureTool, Name: "orders.search", Description: "Search orders", CaseFormat: "lu"},
 			{Kind: spec.MCPExposureResource, Name: "orders", MIMEType: "application/json"},
 		},
 	}

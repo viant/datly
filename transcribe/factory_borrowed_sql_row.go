@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/viant/datly/spec"
+	dsql "github.com/viant/datly/sql"
 	"github.com/viant/datly/transcribe/column"
 	authoring "github.com/viant/datly/transcribe/compile"
 	gen "github.com/viant/datly/transcribe/generate"
@@ -248,11 +249,34 @@ func (c *Compiler) prepareFactoryOwnerReferences(ctx context.Context, source *So
 		if err != nil {
 			return fmt.Errorf("factory owner %s: %w", declaration.OwnerURI, err)
 		}
-		if owner.ExternalHandler == nil || owner.ExternalHandler.InputShape == nil || owner.Component.RootView != nil || owner.Component.TypeContext.PackagePath != declaration.Package {
-			return fmt.Errorf("factory owner is not an exact native source-factory body")
+		if owner.Component == nil || owner.Component.TypeContext == nil || owner.Component.TypeContext.PackagePath != declaration.Package {
+			return fmt.Errorf("factory owner canonical package differs")
 		}
 		ownerBody := owner.Component.Clone()
-		ownerBody.RootView = owner.ExternalHandler.InputShape
+		nativeOwner := owner.ExternalHandler == nil && ownerBody.RootView != nil
+		if nativeOwner {
+			// Use the same declared holder pairing as ordinary native borrowing.
+			pairingWorkspace, pairErr := (xmodule.LocalWorkspace{BaseDir: location.Dir}).Resolve(ctx)
+			if pairErr != nil {
+				return pairErr
+			}
+			pairing := &discoveryCompilation{workspace: pairingWorkspace, catalog: ownerSource.Types, discovery: &Discovery{BaseDir: location.Dir, GoBuild: source.GoBuild}}
+			if _, pairErr = pairing.declaredPackageSource(ctx, &ownerSource); pairErr != nil {
+				return pairErr
+			}
+			owner, err = ownerCompiler.Compile(ctx, &ownerSource)
+			if err != nil {
+				return err
+			}
+			ownerBody = owner.Component.Clone()
+			if err = ref.discover(ctx, ownerBody); err != nil {
+				return err
+			}
+		} else if owner.ExternalHandler != nil && owner.ExternalHandler.InputShape != nil && ownerBody.RootView == nil {
+			ownerBody.RootView = owner.ExternalHandler.InputShape
+		} else {
+			return fmt.Errorf("factory owner is not a native writer or source-factory body")
+		}
 		target, _, err := bodygraph.ResolveOccurrence(ownerBody, declaration.OwnerBodyPath)
 		if err != nil {
 			return err
@@ -266,16 +290,33 @@ func (c *Compiler) prepareFactoryOwnerReferences(ctx context.Context, source *So
 		}
 		// Reuse complete native owner authority. The ownership-sensitive leaf API is
 		// deliberately not called, and relations are never removed to satisfy it.
-		ownerInput, ownerDirectory, err := generationInput(location.Module.Dir, "", owner)
-		if err != nil {
-			return fmt.Errorf("factory owner generation identity: %w", err)
-		}
-		if filepath.Clean(filepath.Join(location.Module.Dir, ownerDirectory)) != filepath.Clean(location.Dir) {
-			return fmt.Errorf("factory owner generated destination differs from nominal package")
-		}
-		artifacts, err := gen.BorrowedNativeOwnerArtifacts(ownerInput, location.Dir)
-		if err != nil {
-			return fmt.Errorf("factory owner original native artifacts: %w", err)
+		var artifacts []gen.BorrowedAuthorityFile
+		if nativeOwner {
+			ownerInput, inputErr := borrowedGenerationInput(ctx, owner, declaration.Package)
+			if inputErr != nil {
+				return inputErr
+			}
+			plan, planErr := gen.BorrowedOwnerPlan(ownerInput)
+			if planErr != nil {
+				return planErr
+			}
+			entry := &borrowedOwnerPreparation{source: ownerSource, result: owner, input: ownerInput, plan: plan}
+			if _, err = prepareBorrowedNativeOwner(entry, &ownerSource, owner, target, location.Dir, declaration.Package); err != nil {
+				return err
+			}
+			artifacts = entry.selection.Artifacts
+		} else {
+			ownerInput, ownerDirectory, inputErr := generationInput(location.Module.Dir, "", owner)
+			if inputErr != nil {
+				return fmt.Errorf("factory owner generation identity: %w", inputErr)
+			}
+			if filepath.Clean(filepath.Join(location.Module.Dir, ownerDirectory)) != filepath.Clean(location.Dir) {
+				return fmt.Errorf("factory owner generated destination differs from nominal package")
+			}
+			artifacts, err = gen.BorrowedNativeOwnerArtifacts(ownerInput, location.Dir)
+			if err != nil {
+				return fmt.Errorf("factory owner original native artifacts: %w", err)
+			}
 		}
 		ref.files = append(ref.files, artifacts...)
 		ref.result = owner
@@ -391,10 +432,22 @@ func (r *factoryOwnerReference) install(inputs []gen.Input) error {
 		if view == nil {
 			return fmt.Errorf("factory owner contains nil view")
 		}
+		// Materialize the detached projection with its owner's captured resources.
+		// Relative embed paths belong to the owner, not the composing factory.
+		if err := dsql.ResolveSource(view.Name, view.Source, r.source.Const.Resources(r.source.Resources)); err != nil {
+			return err
+		}
 		view.Key.Scope = r.slot.Key.Scope + "/owner/" + r.declaration.BodyPath
 		// Reference-only ownership uses the actual nominal source; destinations stay
 		// exclusively on the unchanged native owner result.
 		view.Dest = ""
+		// Only this detached input projection loses execution controls. The
+		// canonical owner's graph/artifacts and lifecycle remain unchanged.
+		view.EntityHooks = ""
+		view.QueueContract = ""
+		view.WriterActionPolicy = ""
+		view.Reconciliation = nil
+		view.MutationPredicateGroup = nil
 		if view.TypeName != "" {
 			canonical, err := authority.CanonicalType(r.declaration.Package, view.TypeName)
 			if err != nil {

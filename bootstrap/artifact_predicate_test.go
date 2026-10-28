@@ -65,7 +65,7 @@ func TestArtifactPredicateTypeAuthority(t *testing.T) {
 				{name: "no global short name fallback", class: "handler", args: []string{"UnscopedOnly"}, diagnostic: `handler predicate type "example.com/app/orders/read.UnscopedOnly" was not found`},
 				{name: "missing argument", class: "handler", diagnostic: "requires an absolute type name"},
 				{name: "empty argument", class: "handler", args: []string{" "}, diagnostic: "requires an absolute type name"},
-				{name: "extra argument", class: "handler", args: []string{"security.OrderScope", "config"}, diagnostic: "accepts one type argument"},
+				{name: "extra argument", class: "handler", args: []string{"security.OrderScope", "config"}, diagnostic: "requires predicate.VariadicHandler to accept arguments"},
 				{name: "predicate class stays a string", class: "security.OrderScope", diagnostic: `predicate "security.OrderScope" is not registered`},
 				{name: "builtin arguments stay strings", class: "contains", args: []string{"security", "OrderScope"}},
 				{name: "builtin expression stays a string", class: "expr", args: []string{"security.OrderScope = 7"}},
@@ -90,7 +90,7 @@ func TestArtifactPredicateTypeAuthority(t *testing.T) {
 					require.Equal(t, before, component.Clone(), "bootstrap must not mutate authored metadata")
 					if tc.diagnostic != "" {
 						require.ErrorContains(t, err, tc.diagnostic)
-						if tc.class == "handler" {
+						if tc.class == "handler" && tc.name != "extra argument" {
 							require.ErrorContains(t, err, "compile predicate handler for Value")
 						}
 						require.Nil(t, artifact)

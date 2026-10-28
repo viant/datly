@@ -12,6 +12,7 @@ import (
 	gen "github.com/viant/datly/transcribe/generate"
 	handlercompiler "github.com/viant/datly/transcribe/handler/compiler"
 	"github.com/viant/datly/transcribe/internal/handlergen"
+	"github.com/viant/datly/transcribe/internal/link"
 	"github.com/viant/datly/typecatalog"
 )
 
@@ -200,6 +201,22 @@ func (g Generator) generate(ctx context.Context, root, dir string, compiled *Res
 	}
 	copy := *compiled
 	copy.Component = derived.Component
+	// Derived Current SQL/key projections may change after the package's
+	// earlier contract comparison (for example after schema discovery adds a
+	// column). Recheck input metadata before retaining the old generated tags.
+	if copy.Contracts.Input != nil {
+		comparison := &link.Contracts{PackageComponent: input.Component, CompiledComponent: derived.Component}
+		if compiled.TypeResolver != nil {
+			comparison.Lookup = compiled.TypeResolver.Descriptor
+		}
+		equal, compareErr := comparison.EqualParamsChecked(false)
+		if compareErr != nil {
+			return nil, compareErr
+		}
+		if !equal {
+			copy.Contracts.Input = nil
+		}
+	}
 	copy.ViewBindings = derived.ViewBindings
 	declarations, err := newDeclarationCompiler(copy.Component, nil).compile()
 	if err != nil {

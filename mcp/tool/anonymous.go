@@ -9,10 +9,11 @@ import (
 	"github.com/viant/datly/internal/inputvisibility"
 	"github.com/viant/datly/runtime/registry"
 	"github.com/viant/mcp-protocol/schema"
+	"github.com/viant/mcp-protocol/schema/fieldname"
 	xshape "github.com/viant/x/shape"
 )
 
-func (c *Compiler) compileAnonymousBody(inputField registry.InputField) ([]Argument, error) {
+func (c *Compiler) compileAnonymousBody(inputField registry.InputField, caseFormat string) ([]Argument, error) {
 	binding := inputField.Binding()
 	if !strings.EqualFold(strings.TrimSpace(binding.Location.Kind), "body") {
 		return nil, fmt.Errorf("anonymous field %q must use body binding, got %q", inputField.Path(), binding.Location.Kind)
@@ -30,6 +31,10 @@ func (c *Compiler) compileAnonymousBody(inputField registry.InputField) ([]Argum
 	}
 	if inputField.WireType() != nil || customText {
 		return nil, fmt.Errorf("anonymous body field %q custom JSON source requires a direct named body argument", inputField.Path())
+	}
+	customJSONBody := fieldname.CustomJSON(sourceType)
+	if customJSONBody {
+		caseFormat = ""
 	}
 	destinationType := types.Indirect(inputField.DestinationType())
 	if sourceType == nil || sourceType.Kind() != reflect.Struct {
@@ -60,6 +65,12 @@ func (c *Compiler) compileAnonymousBody(inputField registry.InputField) ([]Argum
 		if hidden {
 			continue
 		}
+		requiredName := publicName
+		formatted, err := memberNameVisibility(caseFormat).Resolve(field, projected.Name)
+		if err != nil {
+			return nil, err
+		}
+		publicName = formatted.Public
 
 		goName := ""
 		// Legacy anonymous bodies accept the exact Go spelling before JSON names.
@@ -72,8 +83,8 @@ func (c *Compiler) compileAnonymousBody(inputField registry.InputField) ([]Argum
 			documentation: inputField.Documentation(), publicName: publicName, aliases: aliases, path: inputField.Path() + "." + field.Name,
 			sourceKind: "body", sourceName: projected.Name,
 			sourceType: field.Type, destinationType: field.Type,
-			parentBodyType: inputField.SourceType(), parentBodySource: binding.Location.In,
-			schemaRequired: required[publicName], anonymousGoName: goName,
+			parentBodyType: inputField.SourceType(), parentBodySource: binding.Location.In, customJSONBody: customJSONBody,
+			schemaRequired: required[requiredName], anonymousGoName: goName,
 		})
 	}
 	if len(result) == 0 {

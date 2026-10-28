@@ -35,6 +35,7 @@ type ComponentRequest struct {
 	IndependentChildTransactions bool
 	Target                       ComponentTarget
 	Input                        any
+	Rows                         *xhandler.RowConsumer `json:"-"`
 	// ExtraInput explicitly seeds trusted data on an ordinary native reader.
 	// It is never deserialized or populated by HTTP/MCP request binding.
 	ExtraInput *InputSeed `json:"-"`

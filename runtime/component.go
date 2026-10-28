@@ -128,7 +128,7 @@ func (i *scopedComponentInvoker) InvokeComponent(ctx context.Context, request de
 	}
 	ctx = handlerengine.PrepareComponent(ctx, relation, "")
 	value, err := i.runtime.invokeComponent(ctx, request, i.scope)
-	if err != nil && request.Input == nil && request.Replay == nil && !request.PrepareQuery && !request.DryRun && request.Warmup == nil && len(request.WarmupOmitInput) == 0 && request.ReaderOptions == nil && request.ReportOrdering == nil {
+	if err != nil && request.Input == nil && request.Replay == nil && !request.PrepareQuery && !request.DryRun && request.Warmup == nil && len(request.WarmupOmitInput) == 0 && request.ReaderOptions == nil && request.Rows == nil && request.ReportOrdering == nil {
 		// Scoped proxy calls preserve the checked child's source identity. The
 		// declarative component provider retains its own binding ownership.
 		registered, lookupErr := i.runtime.registeredComponent(ctx, request.Target.Component)
@@ -151,7 +151,7 @@ func (i *scopedComponentInvoker) Invoke(ctx context.Context, request xhandler.Co
 			Component: spec.Key{Kind: spec.KindComponent, Scope: request.Target.Scope, Name: request.Target.Name},
 			Route:     spec.RouteRef{Method: request.Target.Method, Path: request.Target.Path},
 		},
-		Input: request.Input, ExtraInput: seed,
+		Input: request.Input, ExtraInput: seed, Rows: request.Rows,
 		Providers: request.Providers, Completion: request.Completion,
 	})
 }
@@ -263,7 +263,7 @@ func (r *Runtime) invokeComponent(ctx context.Context, request dexec.ComponentRe
 		return nil, fmt.Errorf("registered component not found: %s", identity)
 	}
 	if handlerengine.ReadOnlyDependency(ctx) {
-		if !readOnlyGroupReader(registered, route) || request.IndependentChildTransactions || len(request.Providers) != 0 || request.Completion != nil || request.BindingOutput != nil || request.ExtraInput != nil || request.Replay != nil || request.Warmup != nil || request.PrepareQuery || request.DryRun || len(request.WarmupOmitInput) != 0 {
+		if !readOnlyGroupReader(registered, route) || request.Rows != nil || request.IndependentChildTransactions || len(request.Providers) != 0 || request.Completion != nil || request.BindingOutput != nil || request.ExtraInput != nil || request.Replay != nil || request.Warmup != nil || request.PrepareQuery || request.DryRun || len(request.WarmupOmitInput) != 0 {
 			return nil, handlerengine.RejectReadOnlyDependency(ctx, "child requires a native reader without provider overrides, independent transactions, or post-commit callbacks")
 		}
 		ctx, err = handlerengine.AdmitReadOnlyDependency(ctx, route.String(), true)
@@ -410,6 +410,9 @@ func (r *Runtime) invokeComponent(ctx context.Context, request dexec.ComponentRe
 	if request.Replay != nil && request.Input != nil {
 		return nil, fmt.Errorf("replay cannot bypass canonical binding with component Input")
 	}
+	if request.Rows != nil && (registered.Handler != nil || registered.Reader == nil || request.Warmup != nil || request.PrepareQuery || request.DryRun || request.Replay != nil || request.BindingOutput != nil || request.IndependentChildTransactions || len(request.WarmupOmitInput) != 0 || request.ReportOrdering != nil) {
+		return nil, fmt.Errorf("row consumption requires an ordinary canonical reader invocation")
+	}
 	if request.ReaderOptions != nil && (registered.Handler != nil || registered.Reader == nil || request.Warmup != nil || request.DryRun || request.PrepareQuery || request.Replay != nil && request.Replay.Only) {
 		return nil, fmt.Errorf("result read options require a canonical reader invocation")
 	}
@@ -454,6 +457,9 @@ func (r *Runtime) invokeComponent(ctx context.Context, request dexec.ComponentRe
 		readerHandler := rreader.NewHandler(registered.Reader, inputRoute)
 		if request.ReaderOptions != nil {
 			readerHandler = readerHandler.WithReadOptions(*request.ReaderOptions)
+		}
+		if request.Rows != nil {
+			readerHandler = readerHandler.WithRows(request.Rows)
 		}
 		handler = readerHandler
 		dataSource = nil

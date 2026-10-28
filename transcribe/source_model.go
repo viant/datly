@@ -20,6 +20,10 @@ import (
 // Source is the transcribe-owned authored source/config model used to assemble
 // canonical components and generated package artifacts for package bootstrap.
 type Source struct {
+	// Captured authored parameter DTOs are available only to provisional input
+	// materialization, never to fresh SQL body/view discovery.
+	borrowedContractDependencies *borrowedOutputDependencies
+
 	// Compile-local selected declaration proof; maps are immutable after compilation.
 	ownedGeneratedHelpers      map[string]string
 	selfGeneratedInputViews    map[string]bool

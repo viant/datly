@@ -22,8 +22,11 @@ func (p *Program) queueObserver() xhandler.QueueAttemptObserver {
 
 func (p *Program) queue(ctx context.Context, binder xhandler.Binder) error {
 	observer := p.queueObserver()
+	deleteBatches, err := p.reconciliationDeleteBatches(ctx, binder)
+	if err != nil {
+		return err
+	}
 	var dml xhandler.DML
-	var err error
 	// Keep the default capability-resolution boundary unchanged.
 	if observer == nil {
 		dml, err = lookup[xhandler.DML](ctx, binder, xhandler.DMLKey)
@@ -45,7 +48,7 @@ func (p *Program) queue(ctx context.Context, binder xhandler.Binder) error {
 			if frame == nil {
 				return fmt.Errorf("writer action has no authoritative frame")
 			}
-			if err = p.queuePhysical(ctx, binder, dml, action, frame, nil); err != nil {
+			if err = p.queuePhysical(ctx, binder, dml, action, frame, nil, deleteBatches[action]); err != nil {
 				return err
 			}
 		}
@@ -78,7 +81,7 @@ func (p *Program) queue(ctx context.Context, binder xhandler.Binder) error {
 					return err
 				}
 			}
-			return p.queuePhysical(ctx, binder, dml, action, frame, queued)
+			return p.queuePhysical(ctx, binder, dml, action, frame, queued, deleteBatches[action])
 		})
 		if err != nil {
 			return err

@@ -13,9 +13,21 @@ import (
 
 type httpObservationKey struct{}
 type httpObservation struct {
-	status int
-	err    error
-	errors int
+	status     int
+	err        error
+	errors     int
+	completion func(time.Time, int, bool)
+}
+
+// RegisterHTTPCompletion attaches one matched route to the existing HTTP owner.
+// The factory runs once, so duplicate registration cannot begin another counter.
+func RegisterHTTPCompletion(ctx context.Context, begin func() func(time.Time, int, bool)) bool {
+	state, _ := ctx.Value(httpObservationKey{}).(*httpObservation)
+	if state == nil || state.completion != nil {
+		return false
+	}
+	state.completion = begin()
+	return state.completion != nil
 }
 
 func RecordHTTPError(ctx context.Context, err error) {
@@ -97,7 +109,11 @@ func ServeHTTPObserved(writer stdhttp.ResponseWriter, req *stdhttp.Request, vers
 			if completionErr == nil && state.status >= 400 {
 				completionErr = errors.New(stdhttp.StatusText(state.status))
 			}
-			execCtx.Complete(time.Now(), completionErr)
+			end := time.Now()
+			execCtx.Complete(end, completionErr)
+			if state.completion != nil {
+				func() { defer func() { _ = recover() }(); state.completion(end, state.status, completionErr != nil) }()
+			}
 			// Logging failures never replace an application panic or affect the response.
 			complete(ctx, execCtx)
 		}()

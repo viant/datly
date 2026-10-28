@@ -58,7 +58,7 @@ func TestNamedViewAuxiliarySourceAuthority(t *testing.T) {
 			if actual.Auxiliary || actual.Source.Table != "ORDERS" || child.Auxiliary != tc.auxiliary || child.Source.Table != tc.table {
 				t.Fatalf("root=%+v child=%+v", actual, child)
 			}
-			if !strings.Contains(child.Source.SQL, tc.source) || !strings.Contains(actual.Source.SQL, "WHERE o.ID>0") {
+			if strings.Contains(child.Source.SQL, "(ORDER_KINDS)") || strings.Contains(child.Source.SQL, "(OTHER)") || !strings.Contains(child.Source.SQL, "ORDER_KINDS k") || !strings.Contains(child.Source.SQL, "k.ID") || !strings.Contains(child.Source.SQL, "kind") || !strings.Contains(actual.Source.SQL, "WHERE o.ID>0") {
 				t.Fatalf("query restriction/alias lost: %s / %s", actual.Source.SQL, child.Source.SQL)
 			}
 			if input.Source.SQL != SQL || input.Auxiliary {

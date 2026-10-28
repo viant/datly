@@ -11,9 +11,10 @@ import (
 )
 
 type schemaProjector struct {
-	docs     *docs.Snapshot
-	schemas  map[string]*spec.WireSchema
-	wireType reflect.Type
+	docs       *docs.Snapshot
+	schemas    map[string]*spec.WireSchema
+	wireType   reflect.Type
+	caseFormat string
 }
 
 func schemaForType(t reflect.Type, _ map[reflect.Type]bool) (map[string]interface{}, error) {
@@ -31,8 +32,11 @@ func (p *schemaProjector) argument(t reflect.Type, path, property string, schema
 		}
 		authority = map[reflect.Type]reflect.Type{source: p.wireType}
 	}
-	visibility := memberNameVisibility()
-	result, err := (jsonschema.Reflector{WireTypes: authority, ExcludeInternal: visibility.ExcludeInternal, ExcludeField: visibility.ExcludeField, Annotate: func(path string, field reflect.StructField) (string, any) {
+	visibility := memberNameVisibility(p.caseFormat)
+	if p.wireType != nil {
+		visibility.FallbackName = nil
+	}
+	result, err := (jsonschema.Reflector{FallbackName: visibility.FallbackName, WireTypes: authority, ExcludeInternal: visibility.ExcludeInternal, ExcludeField: visibility.ExcludeField, Annotate: func(path string, field reflect.StructField) (string, any) {
 		annotation := p.docs.StructField(path, field)
 		var example any
 		if annotation.Example != "" {
@@ -44,7 +48,7 @@ func (p *schemaProjector) argument(t reflect.Type, path, property string, schema
 		return nil, err
 	}
 	for schemaPath, schema := range p.schemas {
-		applyWireSchema(result, schemaPath, schema)
+		applyWireSchema(result, canonicalSchemaPath(t, schemaPath, visibility), schema)
 	}
 	return result, nil
 }
@@ -230,8 +234,48 @@ func schemaObjectNode(node map[string]interface{}) map[string]interface{} {
 }
 
 // One policy is shared by native schema projection and MCP JSON-key normalization.
-func memberNameVisibility() fieldname.Visibility {
-	return fieldname.Visibility{ExcludeInternal: true, ExcludeField: excludedMCPMember}
+func memberNameVisibility(formats ...string) fieldname.Visibility {
+	result := fieldname.Visibility{ExcludeInternal: true, ExcludeField: excludedMCPMember}
+	if len(formats) != 0 && strings.TrimSpace(formats[0]) != "" {
+		result.FallbackName = func(field reflect.StructField, fallback string) string {
+			return caseFormattedFallback(field, fallback, formats[0])
+		}
+	}
+	return result
+}
+
+// Wire schema paths identify original members, independent of public spelling.
+func canonicalSchemaPath(t reflect.Type, path string, visibility fieldname.Visibility) string {
+	parts := strings.Split(path, ".")
+	for i := 1; i < len(parts); i++ {
+		for t != nil && (t.Kind() == reflect.Pointer || t.Kind() == reflect.Slice || t.Kind() == reflect.Array) {
+			if fieldname.CustomJSON(t) {
+				visibility.FallbackName = nil
+			}
+			t = t.Elem()
+		}
+		if t == nil || t.Kind() != reflect.Struct {
+			break
+		}
+		if fieldname.CustomJSON(t) {
+			visibility.FallbackName = nil
+		}
+		entries, err := fieldname.Fields(t, visibility)
+		if err != nil {
+			break
+		}
+		found := false
+		for _, entry := range entries {
+			if parts[i] == entry.Field.Name || parts[i] == entry.JSONName || parts[i] == entry.Name.Public {
+				parts[i], t, found = entry.Name.Public, entry.Field.Type, true
+				break
+			}
+		}
+		if !found {
+			break
+		}
+	}
+	return strings.Join(parts, ".")
 }
 func excludedMCPMember(field reflect.StructField) bool {
 	return strings.TrimSpace(field.Tag.Get("mcp")) == "-"

@@ -25,9 +25,11 @@ type Input struct {
 	Example        string
 	TransportReady bool
 	Documentation  *documentation.Snapshot
-	Component      spec.Key
-	Exposure       *spec.MCPExposure
-	Contract       *registry.RouteInputContract
+	// CaseFormat is the MCP input fallback naming policy; empty retains legacy names.
+	CaseFormat string
+	Component  spec.Key
+	Exposure   *spec.MCPExposure
+	Contract   *registry.RouteInputContract
 	// OutputType is the execution result shape. MCP output schemas are only
 	// emitted for object-shaped structuredContent, as required by the protocol.
 	OutputType reflect.Type
@@ -102,7 +104,7 @@ func (c *Compiler) Compile(input Input) (*Plan, error) {
 			if binding.BodyNullPolicy != "" {
 				return nil, fmt.Errorf("compile MCP tool %q: BodyNullPolicy does not support anonymous body projection", name)
 			}
-			flattened, err := c.compileAnonymousBody(inputField)
+			flattened, err := c.compileAnonymousBody(inputField, input.CaseFormat)
 			if err != nil {
 				return nil, fmt.Errorf("compile MCP tool %q: %w", name, err)
 			}
@@ -171,7 +173,11 @@ func (c *Compiler) Compile(input Input) (*Plan, error) {
 		if argument.required && argument.bodyNullPolicy == "" {
 			sourceType = (xshape.Runtime{}).Indirect(sourceType)
 		}
-		property, err := (&schemaProjector{docs: owner, schemas: argument.wireSchemas, wireType: argument.wireType}).argument(sourceType, argument.path, argument.publicName, argument.wireSchema)
+		format := input.CaseFormat
+		if argument.customJSONBody {
+			format = ""
+		}
+		property, err := (&schemaProjector{docs: owner, schemas: argument.wireSchemas, wireType: argument.wireType, caseFormat: format}).argument(sourceType, argument.path, argument.publicName, argument.wireSchema)
 		if err != nil {
 			return nil, fmt.Errorf("compile MCP tool %q argument %q: %w", name, argument.publicName, err)
 		}
@@ -234,7 +240,7 @@ func (c *Compiler) Compile(input Input) (*Plan, error) {
 	return &Plan{
 		metadata: schema.Tool{Meta: metadata, Name: name, Description: &description, InputSchema: inputSchema, OutputSchema: outputSchema},
 		target:   exec.ComponentTarget{Component: input.Component, Route: input.Contract.Route()},
-		input:    input.Contract, args: arguments, binding: binding,
+		input:    input.Contract, args: arguments, binding: binding, caseFormat: input.CaseFormat,
 	}, nil
 }
 

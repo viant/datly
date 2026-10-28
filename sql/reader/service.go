@@ -188,6 +188,9 @@ func (s *Service) readBound(ctx context.Context, session *Session, input reflect
 	if !session.Artifact.DirectOutput && outputType.Kind() == reflect.Ptr {
 		outputType = outputType.Elem()
 	}
+	if session.consumer != nil {
+		return s.consumeRoot(ctx, session, rootConnection, query, outputType, session.Artifact.DirectOutput)
+	}
 	actual, rootCollector, rootField, rootDest, err := s.readRoot(ctx, session, rootConnection, query, rootBuilderOptions, session.Artifact.OutputViewField, outputType, session.Artifact.DirectOutput)
 	if err != nil {
 		return nil, err

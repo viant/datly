@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -148,6 +149,11 @@ func (d *Discovery) Compile(ctx context.Context) (*ProjectGeneration, error) {
 		return nil, err
 	}
 	packagePaths = append(packagePaths, dqlImports...)
+	declaredResources, err := declaredResourcePackages(ctx, workspace, files)
+	if err != nil {
+		return nil, err
+	}
+	packagePaths = append(packagePaths, declaredResources...)
 	assets, err := (packageresources.Loader{Workspace: workspace, Packages: packagePaths, Holders: d.Holders}).Load(ctx)
 	if err != nil {
 		return nil, err
@@ -484,4 +490,51 @@ func linkedRouteTypes(routes []*bootstrap.RouteSource) map[string]reflect.Type {
 
 func packageSourceIdentity(packagePath, componentName string) string {
 	return strings.TrimSpace(packagePath) + "\x00" + strings.TrimSpace(componentName)
+}
+
+// A declared Go package can supply an existing component's named resources even
+// when the DQL needs no self-imported types. Future generated destinations have
+// no resources yet and remain valid first-generation targets.
+func declaredResourcePackages(ctx context.Context, workspace *xmodule.Workspace, files []xmodule.File) ([]string, error) {
+	var packages []string
+	seen := map[string]bool{}
+	for _, file := range files {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		data, err := os.ReadFile(file.Path)
+		if err != nil {
+			return nil, err
+		}
+		prepared := dql.PrepareSource(string(data))
+		if prepared.TypeContext == nil {
+			continue
+		}
+		pkg := prepared.TypeContext.PackagePath
+		if pkg == "" || seen[pkg] {
+			continue
+		}
+		seen[pkg] = true
+		location, err := workspace.Package(pkg)
+		if errors.Is(err, fs.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		if location == nil {
+			continue
+		}
+		info, err := os.Stat(location.Dir)
+		if errors.Is(err, fs.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		if info.IsDir() {
+			packages = append(packages, pkg)
+		}
+	}
+	return packages, nil
 }

@@ -16,7 +16,8 @@ const (
 	Native14 ProviderSchema = "native14"
 	Source11 ProviderSchema = "source11"
 	// Basic2 retains the original gmetric error/pending capture contract.
-	Basic2 ProviderSchema = "basic2"
+	Basic2   ProviderSchema = "basic2"
+	Request7 ProviderSchema = "request7"
 )
 
 type OperationDescriptor struct {
@@ -35,13 +36,21 @@ type ViewObservation struct {
 }
 
 // Policy is application configuration. Recorder construction freezes a deep copy.
-type Policy struct{ Views []ViewObservation }
+type RequestObservation struct {
+	Route     spec.RouteRef
+	Operation OperationDescriptor
+}
+
+type Policy struct {
+	Views    []ViewObservation
+	Requests []RequestObservation
+}
 
 func (p *Policy) Copy() *Policy {
 	if p == nil {
 		return nil
 	}
-	result := &Policy{Views: append([]ViewObservation(nil), p.Views...)}
+	result := &Policy{Views: append([]ViewObservation(nil), p.Views...), Requests: append([]RequestObservation(nil), p.Requests...)}
 	for i := range result.Views {
 		if op := result.Views[i].Operation; op != nil {
 			copied := *op
@@ -54,10 +63,11 @@ func (p *Policy) Copy() *Policy {
 type compiledPolicy struct {
 	views      map[string]map[string]ViewObservation
 	operations map[string]OperationDescriptor
+	requests   map[string]OperationDescriptor
 }
 
 func (p *Policy) compile() (*compiledPolicy, error) {
-	r := &compiledPolicy{views: map[string]map[string]ViewObservation{}, operations: map[string]OperationDescriptor{}}
+	r := &compiledPolicy{views: map[string]map[string]ViewObservation{}, operations: map[string]OperationDescriptor{}, requests: map[string]OperationDescriptor{}}
 	if p == nil {
 		return r, nil
 	}
@@ -88,6 +98,22 @@ func (p *Policy) compile() (*compiledPolicy, error) {
 			declaration.Operation = &op
 		}
 		r.views[key][declaration.ViewIdentity] = declaration
+	}
+	for _, declaration := range p.Requests {
+		route, op := declaration.Route.String(), declaration.Operation
+		if op.Provider == "" {
+			op.Provider = Request7
+		}
+		if route == "" || strings.TrimSpace(op.Name) == "" || strings.TrimSpace(op.Location) == "" || strings.TrimSpace(op.Description) == "" || op.Provider != Request7 {
+			return nil, fmt.Errorf("invalid request observation for %s", route)
+		}
+		if _, exists := r.requests[route]; exists {
+			return nil, fmt.Errorf("duplicate request observation for %s", route)
+		}
+		if previous, exists := r.operations[op.Name]; exists && previous != op {
+			return nil, fmt.Errorf("conflicting observation operation %q", op.Name)
+		}
+		r.operations[op.Name], r.requests[route] = op, op
 	}
 	return r, nil
 }

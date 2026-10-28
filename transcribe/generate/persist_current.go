@@ -174,7 +174,7 @@ func (p *scaffoldPersistence) prepareCurrentAt(target, readRoot string) error {
 			return err
 		}
 		owner := generatedOwner(content)
-		if keep[entry.Name()] && p.linkedSource(content) && !p.ownedReadIndexDestination(entry.Name(), content) {
+		if keep[entry.Name()] && p.linkedSource(content) && !p.ownedReadIndexDestination(entry.Name(), content) && !p.ownedUnchangedInputMethods(entry.Name(), content) {
 			return fmt.Errorf("generated destination %q contains a linked Go type; link the remaining row types or choose a separate generated destination", entry.Name())
 		}
 		if keep[entry.Name()] && owner == "" && !sourceMembers[entry.Name()] && !(legacyComponent && p.matchesCurrentDeclarations(entry.Name(), content)) {

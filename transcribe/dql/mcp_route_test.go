@@ -42,7 +42,7 @@ SELECT 1`)
 func TestMCPRouteNewFormDiagnosticsAndGlobalCompatibility(t *testing.T) {
 	for _, tc := range []struct{ name, source, want string }{
 		{"missing name", `#setting($_ = $mcp_route('GET:/a'))`, "mcp_route requires"},
-		{"extra args", `#setting($_ = $mcp_route('GET:/a','a','','','extra'))`, "mcp_route requires"},
+		{"extra args", `#setting($_ = $mcp_route('GET:/a','a','','','lc','extra'))`, "mcp_route requires"},
 		{"modifier", `#setting($_ = $mcp_route('GET:/a','a').Extra())`, "mcp_route requires"},
 		{"bad ref", `#setting($_ = $mcp_route('/a','a'))`, "must use METHOD:/path"},
 		{"empty name", `#setting($_ = $mcp_route('GET:/a',''))`, "empty name"},
@@ -63,8 +63,9 @@ func TestMCPRouteNewFormDiagnosticsAndGlobalCompatibility(t *testing.T) {
 			require.ErrorContains(t, PrepareSource("#setting($_ = $route('/a','GET'))\n"+tc.source+"\nSELECT 1").Err(), tc.want)
 		})
 	}
-	component, err := parseComponentSource("example.com/app", "A", "#setting($_ = $route('/a','GET'))\n#setting($_ = $mcp('one','original','docs/original.md','previously ignored'))\nSELECT 1")
+	component, err := parseComponentSource("example.com/app", "A", "#setting($_ = $route('/a','GET'))\n#setting($_ = $mcp('one','original','docs/original.md','lu'))\nSELECT 1")
 	require.NoError(t, err)
 	require.Equal(t, "one", component.Routes[0].MCP[0].Name)
 	require.Equal(t, "docs/original.md", component.Routes[0].MCP[0].DescriptionPath)
+	require.Equal(t, "lu", component.Routes[0].MCP[0].CaseFormat)
 }

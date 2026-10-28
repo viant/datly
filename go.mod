@@ -14,7 +14,7 @@ require (
 	github.com/viant/gmetric v0.3.2
 	github.com/viant/govalidator v0.3.4-0.20260913213120-027a9dd54d73
 	github.com/viant/mcp v0.24.1-0.20261018180156-2794488fbdb7
-	github.com/viant/mcp-protocol v0.19.1-0.20261026153111-c9c39f826b2d
+	github.com/viant/mcp-protocol v0.19.2-0.20261027213652-0e0a33352bbe
 	github.com/viant/parsly v0.3.3
 	github.com/viant/sqlparser v0.13.1-0.20261021204353-1c20a82bbb29
 	github.com/viant/sqlx v0.26.2-0.20261027002628-ae54e725fe65
@@ -23,7 +23,7 @@ require (
 	github.com/viant/tagly v0.4.1-0.20261007173811-969600917520
 	github.com/viant/velty v0.4.1-0.20260915052314-fca47c0595f8
 	github.com/viant/x v0.5.1-0.20261023202900-f9ec3e0a7de4
-	github.com/viant/xdatly v1.0.1-0.20261024171213-64c863c68aa7
+	github.com/viant/xdatly v1.0.1-0.20261028025820-0f5248a07009
 	github.com/viant/xreflect v0.7.5-0.20260314170600-13f09f37d46e
 	github.com/viant/xunsafe v0.11.0
 	github.com/xeipuuv/gojsonschema v1.2.0

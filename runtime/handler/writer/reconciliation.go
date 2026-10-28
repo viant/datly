@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/viant/datly/runtime/handler/engine"
 	"github.com/viant/datly/spec"
@@ -33,9 +34,11 @@ type ReconciliationAssignment struct {
 	MarkPresent bool
 }
 type ReconciliationSelection struct {
-	Occurrence   OccurrenceRef
-	AdoptCurrent OccurrenceRef
-	Assignments  []ReconciliationAssignment
+	// RetainUnchanged keeps a stored Current occurrence in the result without queuing DML.
+	RetainUnchanged bool
+	Occurrence      OccurrenceRef
+	AdoptCurrent    OccurrenceRef
+	Assignments     []ReconciliationAssignment
 }
 type ReconciliationRolePlan struct {
 	Holder   string
@@ -234,6 +237,9 @@ func validateReconciliation(metadata *Metadata, inputType, outputType reflect.Ty
 	adopts := 0
 	for i, decl := range declaration.Roles {
 		rel := root.Relations[i]
+		if decl.DeleteBatchSize < 0 || decl.DeleteBatchSize > 0 && len(rel.Child.Keys) != 1 {
+			return fmt.Errorf("finite_reconciliation delete batching requires a positive size and single child key")
+		}
 		holder := root.EntityType.FieldByIndex(rel.Field)
 		if holder.Name != decl.Holder || holder.Type.Kind() != reflect.Slice || rel.Child.Auxiliary || len(rel.Child.Relations) != 0 || len(rel.Links) == 0 || len(rel.Child.Keys) == 0 || rel.Child.CurrentField < 0 {
 			return fmt.Errorf("finite_reconciliation requires declared linked direct writable leaf collections with bound Current")
@@ -668,6 +674,15 @@ func (p *Program) applyReconciliationPlan(ctx context.Context, plan Reconciliati
 						return e
 					}
 				}
+				if selection.RetainUnchanged {
+					if !ticket.current || selection.AdoptCurrent.ticket != nil {
+						return fmt.Errorf("finite_reconciliation retained unchanged selection requires Current provenance")
+					}
+					if e = p.validateRetainedCurrent(frame); e != nil {
+						return e
+					}
+					frame.ExcludedWrite = true
+				}
 				final = reflect.Append(final, frame.Entity)
 				writes = append(writes, frame)
 			}
@@ -712,6 +727,11 @@ func (p *Program) applyReconciliationPlan(ctx context.Context, plan Reconciliati
 	p.actions = &MutationActions{}
 	p.queueItems = nil
 	for _, frame := range effective {
+		// Retained rows remain in frames for validation and output membership,
+		// but own no physical write or queue lifecycle notification.
+		if frame.ExcludedWrite {
+			continue
+		}
 		action := &Action{Kind: frame.Action, Entity: frame.Entity, frame: frame}
 		if frame.Action != h.WriteUpdate || hasMutableFields(frame) {
 			p.actions.Rows = append(p.actions.Rows, action)
@@ -722,6 +742,50 @@ func (p *Program) applyReconciliationPlan(ctx context.Context, plan Reconciliati
 	}
 	return nil
 }
+
+// validateRetainedCurrent checks the mapped row after declared assignments and
+// invariant propagation, against native loaded Current evidence. Presence-marker
+// changes alone do not constitute a value change or authorize a physical write.
+func (p *Program) validateRetainedCurrent(frame *Frame) error {
+	if frame.Action != h.WriteUpdate || !frame.Previous.IsValid() || frame.Previous.IsNil() {
+		return fmt.Errorf("finite_reconciliation retained unchanged selection requires loaded Current")
+	}
+	loaded := p.previousFields[frame.Record]
+	for _, field := range frame.Record.Fields {
+		if field.Column == "" || field.Column == "-" {
+			continue
+		}
+		if !loaded.Has(field.Name) {
+			return fmt.Errorf("finite_reconciliation cannot retain unloaded field %s", field.Name)
+		}
+		value := frame.Entity.Elem().FieldByIndex(field.Index).Interface()
+		previous := frame.Previous.Elem().FieldByIndex(field.Index).Interface()
+		if !retainedCurrentValuesEqual(reflect.ValueOf(value), reflect.ValueOf(previous)) {
+			return fmt.Errorf("finite_reconciliation retained unchanged field %s changed", field.Name)
+		}
+	}
+	return nil
+}
+
+func retainedCurrentValuesEqual(left, right reflect.Value) bool {
+	if !left.IsValid() || !right.IsValid() {
+		return left.IsValid() == right.IsValid()
+	}
+	if left.Type() != right.Type() {
+		return false
+	}
+	if left.Kind() == reflect.Pointer {
+		if left.IsNil() || right.IsNil() {
+			return left.IsNil() == right.IsNil()
+		}
+		return retainedCurrentValuesEqual(left.Elem(), right.Elem())
+	}
+	if left.Type() == reflect.TypeFor[time.Time]() {
+		return left.Interface().(time.Time).Equal(right.Interface().(time.Time))
+	}
+	return reflect.DeepEqual(left.Interface(), right.Interface())
+}
+
 func (p *Program) effectiveReconciliationFrame(ticket *reconciliationTicket, root *Frame, slot int, deletion bool) (*Frame, error) {
 	var value reflect.Value
 	var original h.OriginalPresence

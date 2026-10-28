@@ -1131,6 +1131,8 @@ github.com/viant/mcp-protocol v0.19.1-0.20261019190045-bf1f848b71f9 h1:iKhOaPoDE
 github.com/viant/mcp-protocol v0.19.1-0.20261019190045-bf1f848b71f9/go.mod h1:8h2yGk/LjWpyLqQEZYOGuNZQPohCr1vtM8IvtcNcEIQ=
 github.com/viant/mcp-protocol v0.19.1-0.20261026153111-c9c39f826b2d h1:Lry/WQSWGgwAibHePNpvyLjQrRQCg9w9KTDeSvwUejU=
 github.com/viant/mcp-protocol v0.19.1-0.20261026153111-c9c39f826b2d/go.mod h1:8h2yGk/LjWpyLqQEZYOGuNZQPohCr1vtM8IvtcNcEIQ=
+github.com/viant/mcp-protocol v0.19.2-0.20261027213652-0e0a33352bbe h1:P3REGVJOcnHg9WxemSofOyQCkpA1ESBQa9enO9RVtq0=
+github.com/viant/mcp-protocol v0.19.2-0.20261027213652-0e0a33352bbe/go.mod h1:8h2yGk/LjWpyLqQEZYOGuNZQPohCr1vtM8IvtcNcEIQ=
 github.com/viant/parsly v0.3.3 h1:7ytgfLOG4Ils+wviGacWxRD0gAUvVEH/iGsSE+UI8YM=
 github.com/viant/parsly v0.3.3/go.mod h1:85fneXJbErKMGhSQto3A5ElTQCwl3t74U9cSV0waBHw=
 github.com/viant/scy v0.35.1-0.20260914041206-699e6c909726 h1:vXZewpcbOqVvj1yNxwT5mLZzVZXcJViKzv22a0v2uK0=
@@ -1243,6 +1245,8 @@ github.com/viant/xdatly v1.0.1-0.20261017023827-3a09d6ff7964 h1:dYmZuEzx3c5ej5MZ
 github.com/viant/xdatly v1.0.1-0.20261017023827-3a09d6ff7964/go.mod h1:t085YqeJeRWQzuzio1Th4Jkfcb6E35n/XSw3ltCAkrI=
 github.com/viant/xdatly v1.0.1-0.20261024171213-64c863c68aa7 h1:K7fdo2mXNLKiBMr21GorzmGeaA51RLxsfJxia95s37s=
 github.com/viant/xdatly v1.0.1-0.20261024171213-64c863c68aa7/go.mod h1:t085YqeJeRWQzuzio1Th4Jkfcb6E35n/XSw3ltCAkrI=
+github.com/viant/xdatly v1.0.1-0.20261028025820-0f5248a07009 h1:Nsr9FAaz5i6q7ButluHHb/FLao6XiMhT/lIpV1MP/Oc=
+github.com/viant/xdatly v1.0.1-0.20261028025820-0f5248a07009/go.mod h1:t085YqeJeRWQzuzio1Th4Jkfcb6E35n/XSw3ltCAkrI=
 github.com/viant/xlsy v0.3.1 h1:KwA7PxOTVg+ns4CCPOdfNy5aEA9OUlIByUbuNC9ju0s=
 github.com/viant/xlsy v0.3.1/go.mod h1:RajfF9HkL/PfIxRCvZSubpNlpdMUNDKYZp8C1o3vF4Q=
 github.com/viant/xmlify v0.1.2-0.20260914155716-e525a8788fd0 h1:KOvP8KJgM8+SmrsnPOOnZ6EPhAvivMj7dS/QCfBk++U=
