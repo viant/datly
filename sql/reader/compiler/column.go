@@ -153,6 +153,9 @@ func reconcileReaderGraphColumns(typed, canonical []*data.Column) ([]*data.Colum
 		copy.Tag = match.Tag
 		if match.Nullable {
 			copy.Nullable = true
+			// A pointer destination can represent SQL NULL. Canonical scalar
+			// fallbacks must not turn an absent reference into a real zero ID.
+			copy.NullFallback = match.NullFallback
 		}
 		result = append(result, &copy)
 	}

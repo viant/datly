@@ -109,3 +109,34 @@ func TestColumnPointerNullProjectionSQLite(t *testing.T) {
 		})
 	}
 }
+
+func TestReaderGraphColumnsPreserveNullableReferences(t *testing.T) {
+	type row struct {
+		ParentID *int `sqlx:"PARENT_ID,refTable=parents,refColumn=ID"`
+		Scalar   int  `sqlx:"SCALAR"`
+	}
+	typed, err := columnsFromType(reflect.TypeFor[row]())
+	if err != nil {
+		t.Fatal(err)
+	}
+	canonical := []*data.Column{{Name: "PARENT_ID", Column: "PARENT_ID", Nullable: true, NullFallback: "0"}, {Name: "SCALAR", Column: "SCALAR", Nullable: true, NullFallback: "0"}}
+	got, err := reconcileReaderGraphColumns(typed, canonical)
+	if err != nil {
+		t.Fatal(err)
+	}
+	type useCase struct {
+		description string
+		index       int
+		expected    string
+	}
+	for _, tc := range []useCase{{"nullable reference remains SQL NULL", 0, ""}, {"value field retains scalar fallback", 1, "0"}} {
+		t.Run(tc.description, func(t *testing.T) {
+			if got[tc.index].NullFallback != tc.expected {
+				t.Fatalf("fallback = %q; expected %q", got[tc.index].NullFallback, tc.expected)
+			}
+		})
+	}
+	if canonical[0].NullFallback != "0" {
+		t.Fatal("canonical metadata mutated")
+	}
+}
