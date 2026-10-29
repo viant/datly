@@ -169,3 +169,33 @@ func TestScalarValuesPreserveAuthoredJSONTags(t *testing.T) {
 	_, err = p.BindValues(context.Background(), json.RawMessage(`{"exact":9007199254740993}`))
 	r.Error(err)
 }
+
+func TestScalarValuesChoiceValidationRequiresOptIn(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		typ      reflect.Type
+		rejected bool
+	}{
+		{"metadata only", reflect.TypeFor[struct {
+			Metric int `json:"metric" choice:"1" choice:"2"`
+		}](), false},
+		{"validation opted in", reflect.TypeFor[struct {
+			Metric int `json:"metric" choice:"1" choice:"2" validate:"choice(1,2)"`
+		}](), true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			catalog, err := NewCatalog(Field{Name: "amount", Role: Measure, Type: reflect.TypeFor[int64]()})
+			require.NoError(t, err)
+			values, err := NewValuesContract(tc.typ)
+			require.NoError(t, err)
+			plan, err := CompileWithValues(`SELECT $Values.metric AS metric,t1.amount FROM $CubeSQL1 AS t1`, catalog, 1, 10, nil, values)
+			require.NoError(t, err)
+			_, err = plan.BindValues(context.Background(), json.RawMessage(`{"metric":3}`))
+			if tc.rejected {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
