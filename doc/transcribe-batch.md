@@ -32,6 +32,8 @@ datly transcribe get -dir . ./dql/readers/catalog.dql ./dql/readers/orders.dql
 
 Selections run in argument order; files within each directory or package pattern
 run in sorted path order. Overlapping selections process each file once.
+Source selection finishes before generation starts. Newly generated files are
+available as dependencies for later rules, but are not added as extra batch rules.
 Use `-batch` when passing just one file. Existing `-source` filters by basename;
 `-source-name` still requires exactly one selected source. Put all flags before
 the source arguments.

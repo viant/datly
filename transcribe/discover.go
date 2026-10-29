@@ -107,27 +107,31 @@ func (d *Discovery) Compile(ctx context.Context) (*ProjectGeneration, error) {
 			return nil, err
 		}
 	}
+	inventory, err := discoverFiles(ctx, workspace, d.Include, d.Exclude)
+	if err != nil {
+		return nil, err
+	}
 	if _, err = d.loadTypeIncludes(ctx, catalog, workspace); err != nil {
 		return nil, err
 	}
-	packageSources, packagePaths, err := d.packageSources(ctx, catalog, workspace)
+	packageSources, packagePaths, err := d.packageSources(ctx, catalog, workspace, inventory)
 	if err != nil {
 		return nil, err
 	}
 	var files []xmodule.File
-	err = workspace.Walk(ctx, d.Include, d.Exclude, func(file xmodule.File) error {
-		packagePaths = append(packagePaths, file.ImportPath)
-		if !sourceFileExtensions[strings.ToLower(filepath.Ext(file.Path))] {
-			return nil
-		}
-		if d.SourceFile != "" && filepath.Base(file.Path) != d.SourceFile {
-			return nil
-		}
-		files = append(files, file)
-		return nil
-	})
+	selectedFiles, err := inventory.selectFiles(ctx, d.Include, d.Exclude)
 	if err != nil {
 		return nil, err
+	}
+	for _, file := range selectedFiles {
+		packagePaths = append(packagePaths, file.ImportPath)
+		if !sourceFileExtensions[strings.ToLower(filepath.Ext(file.Path))] {
+			continue
+		}
+		if d.SourceFile != "" && filepath.Base(file.Path) != d.SourceFile {
+			continue
+		}
+		files = append(files, file)
 	}
 	if d.SourceName != "" && len(files) != 1 {
 		return nil, fmt.Errorf("source-name requires exactly one selected source file; found %d (use source selection)", len(files))
@@ -159,7 +163,7 @@ func (d *Discovery) Compile(ctx context.Context) (*ProjectGeneration, error) {
 		return nil, err
 	}
 	project.Resources = assets.Store
-	compilation := &discoveryCompilation{discovery: d, catalog: catalog, packages: packageSources, resources: assets.Store, defaults: map[string]*resource.Store{}, workspace: workspace, dependencySnapshot: dependencySource.dependencySnapshot}
+	compilation := &discoveryCompilation{files: inventory, discovery: d, catalog: catalog, packages: packageSources, resources: assets.Store, defaults: map[string]*resource.Store{}, workspace: workspace, dependencySnapshot: dependencySource.dependencySnapshot}
 	compiledPackages := map[string]bool{}
 	for _, file := range files {
 		if assets.IsAsset(file.Path) {
@@ -210,6 +214,7 @@ func (d *Discovery) Generate(ctx context.Context, rootDir string) (*GeneratedPro
 }
 
 type discoveryCompilation struct {
+	files              discoveryFiles
 	dependencySnapshot *dependency.Snapshot
 	pairingPackages    map[string]map[string]*bootstrap.PackageComponentSource
 	workspace          *xmodule.Workspace
@@ -295,8 +300,12 @@ func (d *Discovery) loadTypeIncludes(ctx context.Context, catalog *typecatalog.C
 	return (&dependency.Loader{Workspace: workspace, Catalog: catalog, Registry: d.Registry}).LoadImports(ctx, imports)
 }
 
-func (d *Discovery) packageSources(ctx context.Context, catalog *typecatalog.Catalog, workspace *xmodule.Workspace) (map[string]*bootstrap.PackageComponentSource, []string, error) {
-	routes, err := (bootstrap.PackageDiscovery{Workspace: workspace, Include: d.Include, Exclude: d.Exclude, Holders: d.Holders, RequireLinked: d.RequireLinked}).Discover(ctx)
+func (d *Discovery) packageSources(ctx context.Context, catalog *typecatalog.Catalog, workspace *xmodule.Workspace, inventory discoveryFiles) (map[string]*bootstrap.PackageComponentSource, []string, error) {
+	files, err := inventory.selectFiles(ctx, d.Include, d.Exclude)
+	if err != nil {
+		return nil, nil, err
+	}
+	routes, err := (bootstrap.PackageDiscovery{Holders: d.Holders, RequireLinked: d.RequireLinked}).DiscoverFiles(files)
 	if err != nil {
 		return nil, nil, err
 	}

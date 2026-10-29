@@ -62,8 +62,9 @@ func (d *Discovery) TranscribeBatch(ctx context.Context, request BatchRequest) (
 			rules = append(rules, BatchRule{Source: include})
 		}
 	}
-	var sources []batchSource
-	seen := map[string]string{}
+	type selection struct{ source, pattern, file, operation string }
+	var selections []selection
+	var patterns []string
 	for _, rule := range rules {
 		operation := rule.Operation
 		if operation == "" {
@@ -78,25 +79,39 @@ func (d *Discovery) TranscribeBatch(ctx context.Context, request BatchRequest) (
 		if err != nil {
 			return nil, err
 		}
+		selections = append(selections, selection{source: rule.Source, pattern: pattern, file: selected, operation: operation})
+		patterns = append(patterns, pattern)
+	}
+	if len(patterns) == 0 {
+		return nil, fmt.Errorf("batch selection contains no component sources")
+	}
+	inventory, err := discoverFiles(ctx, workspace, patterns, d.Exclude)
+	if err != nil {
+		return nil, err
+	}
+	var sources []batchSource
+	seen := map[string]string{}
+	for _, selection := range selections {
+		pattern, selected, operation := selection.pattern, selection.file, selection.operation
 		var files []xmodule.File
-		err = workspace.Walk(ctx, []string{pattern}, d.Exclude, func(file xmodule.File) error {
+		candidates, err := inventory.selectFiles(ctx, []string{pattern}, d.Exclude)
+		if err != nil {
+			return nil, fmt.Errorf("select batch source %q: %w", selection.source, err)
+		}
+		for _, file := range candidates {
 			if !sourceFileExtensions[strings.ToLower(filepath.Ext(file.Path))] {
-				return nil
+				continue
 			}
 			if selected != "" && filepath.Clean(file.Path) != selected {
-				return nil
+				continue
 			}
 			if d.SourceFile != "" && filepath.Base(file.Path) != d.SourceFile {
-				return nil
+				continue
 			}
 			files = append(files, file)
-			return nil
-		})
-		if err != nil {
-			return nil, fmt.Errorf("select batch source %q: %w", rule.Source, err)
 		}
 		if selected != "" && len(files) == 0 {
-			return nil, fmt.Errorf("batch source %q is excluded or unavailable", rule.Source)
+			return nil, fmt.Errorf("batch source %q is excluded or unavailable", selection.source)
 		}
 		sort.Slice(files, func(i, j int) bool { return files[i].Path < files[j].Path })
 		for _, file := range files {

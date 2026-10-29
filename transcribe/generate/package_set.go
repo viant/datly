@@ -2,7 +2,6 @@ package generate
 
 import (
 	"fmt"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
@@ -261,68 +260,66 @@ func (s *packageSet) validateImports() error {
 	// SourceParser owns Go imports. Include existing project packages so a shape
 	// cannot introduce a cycle through an authored intermediary.
 	walk := func(readRoot, nominalRoot string, physical bool) error {
-		return filepath.WalkDir(readRoot, func(file string, entry fs.DirEntry, walkErr error) error {
-			if walkErr != nil {
-				return walkErr
-			}
+		var visit func(string) error
+		visit = func(directory string) error {
 			if physical {
 				for _, forest := range s.forests {
-					if filepath.Clean(file) == forest.target {
-						return filepath.SkipDir
+					if filepath.Clean(directory) == forest.target {
+						return nil
 					}
 				}
 			}
-			if !entry.IsDir() {
-				return nil
-			}
-			if file != readRoot && (strings.HasPrefix(entry.Name(), ".") || entry.Name() == "vendor") {
-				return filepath.SkipDir
-			}
-			if file != readRoot {
-				if _, err := os.Stat(filepath.Join(file, "go.mod")); err == nil {
-					return filepath.SkipDir
+			if directory != readRoot {
+				name := filepath.Base(directory)
+				if strings.HasPrefix(name, ".") || name == "vendor" {
+					return nil
+				}
+				if _, err := os.Stat(filepath.Join(directory, "go.mod")); err == nil {
+					return nil
 				}
 			}
-			relative, err := filepath.Rel(readRoot, file)
+			relative, err := filepath.Rel(readRoot, directory)
 			if err != nil {
 				return err
 			}
 			nominal := filepath.Join(nominalRoot, relative)
-			if _, ok := proposed[filepath.Clean(nominal)]; ok {
-				return nil
-			}
-			files, err := os.ReadDir(file)
+			// WalkDir also reads every directory to recurse. Reading here once lets
+			// import validation and recursion consume the same ordered entries.
+			entries, err := os.ReadDir(directory)
 			if err != nil {
 				return err
 			}
-			hasGoSource := false
-			for _, item := range files {
-				if !item.IsDir() && strings.HasSuffix(item.Name(), ".go") && !strings.HasSuffix(item.Name(), "_test.go") {
-					hasGoSource = true
-					break
+			if _, overridden := proposed[filepath.Clean(nominal)]; !overridden {
+				importPath := ""
+				for _, entry := range entries {
+					if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") || strings.HasSuffix(entry.Name(), "_test.go") {
+						continue
+					}
+					if importPath == "" {
+						importPath, err = xmodule.ImportPathLocal(module.Dir, module.Path, nominal)
+						if err != nil {
+							return err
+						}
+					}
+					content, err := os.ReadFile(filepath.Join(directory, entry.Name()))
+					if err != nil {
+						return err
+					}
+					if err = s.imports(graph, importPath, string(content)); err != nil {
+						return err
+					}
 				}
 			}
-			if !hasGoSource {
-				return nil
-			}
-			importPath, err := xmodule.ImportPathLocal(module.Dir, module.Path, nominal)
-			if err != nil {
-				return err
-			}
-			for _, item := range files {
-				if item.IsDir() || !strings.HasSuffix(item.Name(), ".go") || strings.HasSuffix(item.Name(), "_test.go") {
-					continue
-				}
-				content, err := os.ReadFile(filepath.Join(file, item.Name()))
-				if err != nil {
-					return err
-				}
-				if err = s.imports(graph, importPath, string(content)); err != nil {
-					return err
+			for _, entry := range entries {
+				if entry.IsDir() {
+					if err := visit(filepath.Join(directory, entry.Name())); err != nil {
+						return err
+					}
 				}
 			}
 			return nil
-		})
+		}
+		return visit(readRoot)
 	}
 	err = walk(root, root, true)
 	if err == nil {

@@ -83,7 +83,17 @@ func (c *discoveryCompilation) declaredPackageCandidates(ctx context.Context, pk
 	selected := *c.discovery
 	selected.Include = []string{pkg}
 	selected.SourceFile = ""
-	candidates, _, err := selected.packageSources(ctx, c.catalog, c.workspace)
+	files, err := c.files.selectFiles(ctx, selected.Include, selected.Exclude)
+	if err != nil {
+		return nil, err
+	}
+	if len(files) == 0 {
+		files, err = discoverFiles(ctx, c.workspace, selected.Include, selected.Exclude)
+		if err != nil {
+			return nil, err
+		}
+	}
+	candidates, _, err := selected.packageSources(ctx, c.catalog, c.workspace, files)
 	if err != nil {
 		return nil, err
 	}
