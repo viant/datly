@@ -200,6 +200,8 @@ func (r *renderer) renderNode(n node.Node) (string, error) {
 		}
 		max, err := r.renderNode(actual.Max)
 		return min + " AND " + max, err
+	case *expr.Switch:
+		return r.renderCase(actual)
 	case *expr.Call:
 		name := strings.ToUpper(sourceName(actual.X))
 		args := make([]string, 0, len(actual.Args))

@@ -291,7 +291,7 @@ func (p *Plan) validate(maxLimit int) error {
 	return nil
 }
 
-// RuntimeType returns the projected scalar type, or nil for a computed expression.
+// RuntimeType returns the native scanner type for the projected scalar.
 func (c Column) RuntimeType() reflect.Type { return c.rType }
 
 type fieldRef struct {
@@ -373,7 +373,11 @@ func (p *Plan) outputColumn(item *query.Item) (string, Role, reflect.Type, error
 	if item.Alias == "" || !safeIdentifier.MatchString(item.Alias) {
 		return "", "", nil, fmt.Errorf("computed cube compose projections require a safe explicit alias")
 	}
-	return item.Alias, Computed, nil, nil
+	typ, err := p.scalarType(item.Expr, nil)
+	if err == nil && typ == nil {
+		err = fmt.Errorf("computed cube compose projection requires a concrete scalar type")
+	}
+	return item.Alias, Computed, typ, err
 }
 
 func (p *Plan) validateNode(n node.Node, aliases map[string]Column) ([]fieldRef, error) {
@@ -456,7 +460,9 @@ func (p *Plan) validateNode(n node.Node, aliases map[string]Column) ([]fieldRef,
 			refs = append(refs, items...)
 		}
 		return refs, nil
-	case *expr.Switch, *expr.Raw:
+	case *expr.Switch:
+		return p.validateCase(actual, aliases)
+	case *expr.Raw:
 		return nil, fmt.Errorf("opaque SQL expression %T is not allowed", n)
 	default:
 		return nil, fmt.Errorf("unsupported cube compose expression %T", n)
