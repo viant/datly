@@ -5,7 +5,6 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"github.com/viant/datly/internal/testharness"
 	"io"
@@ -64,7 +63,7 @@ func TestInvokerUsesExactProviderModeAndMCPContext(t *testing.T) {
 	if protocolErr != nil {
 		t.Fatal(protocolErr)
 	}
-	if captured.request.Target != target || captured.request.Input != nil || testharness.StructuredObject(t, result.StructuredContent)["id"] != json.Number("7") {
+	if captured.request.Target != target || captured.request.Input != nil || testharness.StructuredObject(t, result.StructuredContent)["id"] != float64(7) {
 		t.Fatalf("request=%+v result=%+v", captured.request, result)
 	}
 	text := result.Content[0].(schema.TextContent)

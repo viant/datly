@@ -2,7 +2,6 @@ package mcp
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"reflect"
 	"strings"
@@ -116,7 +115,7 @@ func TestToolArgumentsCannotOverrideComponentBoundScope(t *testing.T) {
 			t.Fatal(err)
 		}
 		structured := testharness.StructuredObject(t, result.StructuredContent)
-		if structured["tenant"] != json.Number("1") || structured["requested"] != "x" {
+		if structured["tenant"] != float64(1) || structured["requested"] != "x" {
 			t.Fatalf("structured=%+v", structured)
 		}
 	})
@@ -126,7 +125,7 @@ func TestToolArgumentsCannotOverrideComponentBoundScope(t *testing.T) {
 			t.Fatal(err)
 		}
 		structured := testharness.StructuredObject(t, result.StructuredContent)
-		if structured["tenant"] != json.Number("2") {
+		if structured["tenant"] != float64(2) {
 			t.Fatalf("structured=%+v", structured)
 		}
 	})
@@ -140,7 +139,7 @@ func TestToolArgumentsCannotOverrideComponentBoundScope(t *testing.T) {
 			return
 		}
 		structured := testharness.StructuredObject(t, result.StructuredContent)
-		if structured["tenant"] != json.Number("1") || strings.Contains(textContent(result), "999") {
+		if structured["tenant"] != float64(1) || strings.Contains(textContent(result), "999") {
 			t.Fatalf("forged arguments widened scope: %+v", structured)
 		}
 	})
