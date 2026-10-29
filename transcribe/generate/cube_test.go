@@ -243,18 +243,43 @@ func TestLinkedCubeRegistrationMCPAndDependency(t *testing.T) {
 `
 
 func TestCubeRouteNamesPreventPackageCollisions(t *testing.T) {
-	component := cubeFixture()
-	component.Routes = []*spec.Route{{Method: "GET", Path: "/spend/one", Name: "One"}, {Method: "GET", Path: "/spend/two", Name: "Two"}}
-	plan, err := New(Input{Component: component, TargetPackage: "example.com/generated/reporting"}).Plan()
-	if err != nil {
-		t.Fatal(err)
+	type useCase struct {
+		description string
+		names       [2]string
 	}
-	if len(plan.Cubes) != 2 || plan.Cubes[0].Name == plan.Cubes[1].Name || plan.Cubes[0].InputName == plan.Cubes[1].InputName {
-		t.Fatalf("colliding routes: %+v", plan.Cubes)
-	}
-	component.Routes[1].Name = "One"
-	if _, err := New(Input{Component: component, TargetPackage: "example.com/generated/reporting"}).Plan(); err == nil {
-		t.Fatal("ambiguous cube identity accepted")
+	for _, tc := range []useCase{
+		{description: "distinct names", names: [2]string{"One", "Two"}},
+		{description: "shared alias name", names: [2]string{"One", "One"}},
+		{description: "normalized names", names: [2]string{"event-total", "event_total"}},
+	} {
+		t.Run(tc.description, func(t *testing.T) {
+			component := cubeFixture()
+			component.Routes = []*spec.Route{{Method: "GET", Path: "/spend/one", Name: tc.names[0]}, {Method: "GET", Path: "/spend/two", Name: tc.names[1]}}
+			identities := func() map[string][2]string {
+				t.Helper()
+				plan, err := New(Input{Component: component, TargetPackage: "example.com/generated/reporting"}).Plan()
+				if err != nil {
+					t.Fatal(err)
+				}
+				if len(plan.Cubes) != 2 || plan.Cubes[0].Name == plan.Cubes[1].Name || plan.Cubes[0].InputName == plan.Cubes[1].InputName {
+					t.Fatalf("colliding routes: %+v", plan.Cubes)
+				}
+				result := map[string][2]string{}
+				for _, cube := range plan.Cubes {
+					result[cube.Component.Routes[0].Path] = [2]string{cube.Name, cube.InputName}
+				}
+				return result
+			}
+			first := identities()
+			component.Routes[0], component.Routes[1] = component.Routes[1], component.Routes[0]
+			if reversed := identities(); !reflect.DeepEqual(first, reversed) {
+				t.Fatalf("route order changes generated identity: %v vs %v", first, reversed)
+			}
+			component.Routes[1].Path = component.Routes[0].Path
+			if _, err := New(Input{Component: component, TargetPackage: "example.com/generated/reporting"}).Plan(); err == nil {
+				t.Fatal("duplicate cube route accepted")
+			}
+		})
 	}
 }
 
