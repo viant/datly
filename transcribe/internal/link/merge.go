@@ -147,6 +147,13 @@ func overlayParam(base, authored *spec.Parameter) *spec.Parameter {
 	authoredCopy := authored.Clone()
 	result.Name = authored.Name
 	result.Source = authored.Source
+	if authored.WireSchema != nil && len(authored.WireSchema.Enum) > 0 {
+		result.WireSchema = authoredCopy.WireSchema
+	} else if result.WireSchema != nil && len(result.WireSchema.Enum) > 0 {
+		// An authored declaration owns removal as well as addition of its enum.
+		result.WireSchema = result.WireSchema.Clone()
+		result.WireSchema.Enum = nil
+	}
 	result.Declaration = authored.Declaration
 	result.Raw = authored.Raw
 	// A matched DQL declaration owns the complete scheduling policy, including

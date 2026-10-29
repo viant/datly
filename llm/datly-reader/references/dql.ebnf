@@ -105,7 +105,7 @@ key_equality = column_ref, "=", column_ref ;
    ordinary (SELECT ...) alone does not make a view auxiliary. *)
 outer_sql_tail = ? SQLparser-owned outer clauses, subject to graph compilation ? ;
 outer_projection = star_projection | column_ref, [sql_alias]
-                 | view_control | rich_cast | column_tag | internal_column | column_nullability | invariant | mutation_marker
+                 | view_control | rich_cast | column_tag | column_choice | internal_column | column_nullability | invariant | mutation_marker
                  | outer_sql_expression ;
 star_projection = [view_name, "."], "*", ["EXCEPT", exclusion_names] ;
 exclusion_names = sql_column, {",", sql_column} ;
@@ -123,6 +123,12 @@ column_type_name = identifier, [".", identifier] ;
 column_tag = "tag", "(", column_ref, ",", string, ")" ;
 internal_column = ("internal" | "internal_transient"), "(", column_ref, ")" ;
 column_nullability = ("required" | "optional"), "(", column_ref, ")" ;
+column_choice = "choice", "(", column_ref, ",", choice_scalar, { ",", choice_scalar }, ")" ;
+choice_scalar = string | choice_number | "true" | "false" ;
+choice_number = ? finite JSON numeric literal, exact integer digits preserved ? ;
+(* choice is standalone outer projection metadata, lowers to ordered repeated
+   Go choice tags, and never filters rows. Values must fit the selected scalar
+   field's Go/wire type. null, duplicates, aliases and nested SQL are rejected. *)
 invariant = "invariant", "(", column_ref, ",", string, ")" ;
 mutation_marker = ("delete_marker" | "concurrency_token"), "(", column_ref, ")" ;
 (* One of each per mutable view, generated PATCH/PUT Go policy only.

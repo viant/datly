@@ -89,11 +89,15 @@ func fieldTag(param *spec.Parameter, tagName string, metadata []structTagValue) 
 		parts = append(parts, "async=true")
 	}
 	base := "parameter:" + strconv.Quote(strings.Join(parts, ","))
+
 	extraTags := contractFieldTags(param.Tag)
 	if extraTags != "" {
 		base += " " + extraTags
 	}
 	for _, item := range metadata {
+		if item.name == "wireSchema" {
+			base = withoutStructTags(base, "wireSchema")
+		}
 		base = appendStructTag(base, item.name, item.value)
 	}
 	if param.QueryListCSV {
@@ -125,7 +129,7 @@ func contractFieldTags(raw string) string {
 
 func isCanonicalParameterTag(name string) bool {
 	switch name {
-	case "parameter", "bind", "codec", "predicate", "querySelector", "desc", "example", "compositeAlias":
+	case "choice", "parameter", "bind", "codec", "predicate", "querySelector", "desc", "example", "compositeAlias":
 		return true
 	default:
 		return false

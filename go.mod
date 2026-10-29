@@ -14,13 +14,13 @@ require (
 	github.com/viant/gmetric v0.3.2
 	github.com/viant/govalidator v0.3.4-0.20260913213120-027a9dd54d73
 	github.com/viant/mcp v0.24.1-0.20261018180156-2794488fbdb7
-	github.com/viant/mcp-protocol v0.19.2-0.20261027213652-0e0a33352bbe
+	github.com/viant/mcp-protocol v0.19.2-0.20261029142405-c3e06c97f8a1
 	github.com/viant/parsly v0.3.3
 	github.com/viant/sqlparser v0.13.1-0.20261021204353-1c20a82bbb29
 	github.com/viant/sqlx v0.26.2-0.20261027002628-ae54e725fe65
 	github.com/viant/structology v0.10.2-0.20261028223423-51b95943c499
 	github.com/viant/structql v0.5.5-0.20261012183420-6a47e96ff5b5
-	github.com/viant/tagly v0.4.1-0.20261007173811-969600917520
+	github.com/viant/tagly v0.4.2-0.20261028223500-81e046a19ef9
 	github.com/viant/velty v0.4.1-0.20260915052314-fca47c0595f8
 	github.com/viant/x v0.5.1-0.20261023202900-f9ec3e0a7de4
 	github.com/viant/xdatly v1.0.1-0.20261028025820-0f5248a07009
@@ -36,6 +36,7 @@ require (
 	go.opentelemetry.io/proto/otlp v1.10.0
 	golang.org/x/mod v0.36.0
 	golang.org/x/net v0.55.0
+	google.golang.org/api v0.283.0
 	google.golang.org/protobuf v1.36.11
 	gopkg.in/yaml.v3 v3.0.1
 )
@@ -107,7 +108,6 @@ require (
 	golang.org/x/sync v0.21.0 // indirect
 	golang.org/x/text v0.38.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
-	google.golang.org/api v0.283.0 // indirect
 	google.golang.org/appengine/v2 v2.0.2 // indirect
 	google.golang.org/genproto v0.0.0-20260526163538-3dc84a4a5aaa // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260526163538-3dc84a4a5aaa // indirect

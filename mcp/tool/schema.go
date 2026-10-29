@@ -58,6 +58,13 @@ func wireSchemaMap(schema *spec.WireSchema) map[string]interface{} {
 		return nil
 	}
 	result := map[string]interface{}{}
+	if len(schema.Enum) > 0 {
+		values := append([]any(nil), schema.Enum...)
+		if schema.Nullable {
+			values = append(values, nil)
+		}
+		result["enum"] = values
+	}
 	if schema.Nullable {
 		result["type"] = []string{schema.Type, "null"}
 	} else {

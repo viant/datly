@@ -1,6 +1,7 @@
 package bootstrap
 
 import (
+	"encoding/json"
 	"fmt"
 	routecompiler "github.com/viant/datly/bootstrap/routes"
 	"github.com/viant/xdatly/response"
@@ -419,11 +420,23 @@ func (r *packageComponentResolver) resolveField(contract *packageContract, field
 				return nil, fmt.Errorf("resolve package %s %s: conflicting wireType declarations", contract.role.label(), field.Name)
 			}
 		}
+		if param.WireSchema == nil {
+			if raw := field.Tag.Get("wireSchema"); raw != "" {
+				schema := &spec.WireSchema{}
+				if err := json.Unmarshal([]byte(raw), schema); err != nil {
+					return nil, fmt.Errorf("input %s wire schema: %w", field.Name, err)
+				}
+				param.WireSchema = schema
+			}
+		}
 		if param.WireTypeExpr == "" {
 			param.WireTypeExpr = metadata.WireType
 		}
 	}
 	if err = r.resolveParamType(contract.role, field, param); err != nil {
+		return nil, err
+	}
+	if err = r.resolveChoiceMetadata(field, param); err != nil {
 		return nil, err
 	}
 	return &resolvedContractField{field: field, metadata: metadata, param: param}, nil

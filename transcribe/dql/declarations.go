@@ -111,6 +111,14 @@ func parseDeclarations(blocks []directiveBlock) (result []*spec.Parameter, spans
 				required = &value
 			}
 		}
+		var enumSchema *spec.WireSchema
+		if len(options.enum) > 0 {
+			wireType := map[string]string{"int": "integer", "int64": "integer", "float64": "number", "string": "string", "bool": "boolean"}[strings.TrimPrefix(inputType, "*")]
+			if wireType == "" {
+				return nil, nil, nil, fmt.Errorf("WithEnum requires an explicit supported scalar type")
+			}
+			enumSchema = &spec.WireSchema{Type: wireType, Enum: options.enum}
+		}
 		activation, resourceRef := declarationURI(options.uri)
 		param := &spec.Parameter{
 			Name:        holder,
@@ -119,6 +127,7 @@ func parseDeclarations(blocks []directiveBlock) (result []*spec.Parameter, spans
 				Kind: kind,
 				Name: location,
 			},
+			WireSchema:      enumSchema,
 			ResolutionGroup: options.resolutionGroup,
 			BodyNullPolicy:  options.bodyNullPolicy,
 			QueryListCSV:    options.queryListCSV, TypeExpr: inputType,

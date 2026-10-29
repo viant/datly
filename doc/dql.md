@@ -6,6 +6,63 @@
 
 DQL declares a typed SQL view graph, request bindings, view controls, Go types and business hook metadata. This is the high-level authoring grammar. SQL dialect expressions and Go types are delegated to their parsers; the EBNF does not implement every SQL dialect. Application behavior belongs in Go hooks.
 
+## Ordered scalar choices
+
+Repeated Go-field `choice` tags are the canonical closed scalar metadata:
+
+```go
+Mode int `choice:"3" choice:"1" choice:"2"`
+Label string `choice:"z" choice:"a" choice:"m"`
+NumericLabel string `choice:"3" choice:"1" choice:"2"`
+Exact *int64 `choice:"9007199254740993" choice:"9007199254740994"`
+Enabled *bool `choice:"false" choice:"true"`
+```
+
+The declared scalar/pointer wire type controls numeric, boolean or string parsing;
+named Go types retain their underlying wire kind. Order, exact string whitespace
+and escapes, and int64 digits above 2^53 survive generated/linked Go and schema
+roundtrips. Values are never sorted or deduplicated. Duplicates, unrepresentable
+numbers and conflicting authorities (including different order) are rejected.
+
+DQL `.WithEnum(3,1,2)` on a typed integer parameter is authoring sugar that lowers
+to the same ordered tags. The equivalent output projection annotation is
+`choice(r.status,3,1,2)` or `choice(r.label,'z','a','m')`. Output choices describe
+schema/picker metadata only; they do not filter data or add output authorization.
+The annotation must target a selected qualified column, with no SQL alias, and
+must remain outside executable database SQL.
+
+One shared type-directed normalization owns schema enum metadata. Choice tags,
+`WithEnum` and the column annotation do not add runtime validation. Existing
+defaults, optional omission/null and native
+presence markers retain their existing meaning. Nullable transport schemas can
+include null without turning it into a declared choice. Numeric-looking string
+choices stay strings. A `WireSchema.Enum` compatibility adapter must match the
+Go-field choice values, types and order; it cannot silently override the tags.
+
+Runtime validation remains an application opt-in through an existing validation
+service or hook. This metadata release does not install a validator or require a
+companion govalidator change. Ordinary reader binding, defaults and presence
+markers keep their existing behavior.
+
+
+Choice schema metadata supports scalar fields and pointers. Choice-bearing
+arrays/slices, maps, structs and interfaces fail metadata compilation; prior
+legacy string-enum-on-array behavior was not a valid typed contract. Ordinary
+array binding remains unchanged. Choice-bearing fields require valid full struct
+tags, including sibling metadata; fields without choice tags are unaffected.
+Generated unresolved named scalar types report a precise authority gap rather
+than silently omitting choice metadata checks. Linked known Go scalar aliases
+retain their underlying kind.
+
+Bootstrap imports authored wireSchema tags on input parameters even when no enum
+is declared. Generation preserves those full non-enum scalar format/nullability
+overrides; this is broader than choice metadata. Existing Datly single-scalar
+wire-schema checks still apply, rather than promising arbitrary JSON-schema or
+scalar-union support through that parameter adapter.
+
+These shared changes are local development work until reviewed, published and
+pinned. Do not assume availability in an older Datly/protocol dependency.
+
 Use this reference to author declarations and view controls, then validate and generate pure Go with the matching Datly build. Syntax, installed capabilities and execution are separate checks; see [release status](status.md) for current boundaries.
 
 ## A shared view structure for readers and writers

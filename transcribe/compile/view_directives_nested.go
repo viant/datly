@@ -86,7 +86,7 @@ func validateDatabaseSQL(parsed *query.Select) error {
 			marker = name
 			return true
 		}
-		return name == tag.InvariantName || name == "tag"
+		return name == "choice" || name == tag.InvariantName || name == "tag"
 	}) {
 		if marker != "" {
 			return &Error{Code: CodeViewDirective, Cause: fmt.Errorf("%s belongs on the outer view projection, not inside database SQL", marker)}

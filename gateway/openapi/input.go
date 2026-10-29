@@ -73,6 +73,23 @@ func (b *inputBuilder) build(fields []registry.InputField, operation *openapi3.O
 		if err != nil {
 			return fmt.Errorf("input %s: %w", field.Path(), err)
 		}
+		if wire := field.WireSchema(); wire != nil && len(wire.Enum) > 0 {
+			schema, _ = b.schemas.enumSchema(schema, nil, wire.Enum, 0)
+		}
+		for path, wire := range field.WireSchemas() {
+			if wire == nil || len(wire.Enum) == 0 {
+				continue
+			}
+			parts := strings.Split(path, ".")
+			if len(parts) > 0 {
+				parts = parts[1:]
+			}
+			var applied bool
+			schema, applied = b.schemas.enumSchema(schema, parts, wire.Enum, 0)
+			if !applied {
+				return fmt.Errorf("enum schema path %s is not represented", path)
+			}
+		}
 		if strictValue && schema.Nullable {
 			copy := *schema
 			copy.Nullable = false

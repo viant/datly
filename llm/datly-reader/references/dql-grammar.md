@@ -639,6 +639,8 @@ CAST(r.bounds AS model.Bounds)
 tag(r.bounds, 'sqlx:"-"')
 internal(r.BOUND_UNIT) -- shorthand for tag(r.BOUND_UNIT, 'internal:"true"')
 tag(r.name, 'validate:"required"')
+choice(r.status, 3, 1, 2)
+choice(r.label, 'z', 'a', 'm')
 ~~~~
 
 The column shorthand controls one field's application-facing visibility and
@@ -1206,3 +1208,87 @@ named-argument syntax, expression evaluation, compound values or automatic field
 injection is implied. Existing `predicate.Handler` accepts no extra arguments.
 Built-in predicate arguments and existing `Args []string` metadata stay unchanged;
 typed custom extras use additive `HandlerArgs []any`.
+
+### Ordered scalar choices from Go shape metadata
+
+Repeated established `choice` tags are the canonical Go-field metadata:
+
+```go
+Mode int `choice:"3" choice:"1" choice:"2"`
+Label string `choice:"z" choice:"a" choice:"m"`
+NumericLabel string `choice:"3" choice:"1" choice:"2"`
+Exact *int64 `choice:"9007199254740993" choice:"9007199254740994"`
+Enabled *bool `choice:"false" choice:"true"`
+```
+
+Choice declaration order is significant and is preserved in generated Go and
+schema enum arrays: numeric `[3,1,2]`, string `["z","a","m"]`, and numeric-looking
+string `["3","1","2"]`. The declared scalar/pointer wire type controls parsing,
+including named Go scalar types. String whitespace, escaped quotes/backslashes
+and empty strings remain exact. Integer domains never roundtrip through float64;
+int64 values above 2^53 retain their exact digits. Duplicate choices and nonfinite
+or unrepresentable numeric values fail contract compilation.
+
+`.WithEnum(value, ...)` is metadata-only DQL authoring sugar for the same ordered tags on an explicitly typed
+`int`, `int64`, `float64`, `string`, or `bool` parameter (optionally pointer-valued).
+Arguments are JSON scalar literals, including double-quoted strings; null and
+compound values are rejected. For example:
+
+```sql
+#define($_ = $Mode<int>(query/mode).Optional().Value(3).WithEnum(3, 1, 2))
+#define($_ = $Label<string>(query/label).Optional().WithEnum("z", "a", "m"))
+```
+
+The generated Go shape carries repeated `choice` tags, not a parallel enum tag.
+One shared type-directed normalization owns Go tags and schema discovery.
+It does not install a runtime validator. `WireSchema.Enum` remains a component persistence/discovery
+compatibility adapter; when both representations are present their types, values
+and order must agree or compilation fails. No authority silently overrides another.
+Choice metadata alone leaves canonical input binding unchanged, including values
+outside the advertised choices. Validation is explicitly opt in through an
+application invocation of an existing validation service/hook. When supported
+by the separately selected validator version, an explicit
+`validate:"choice(3,1,2)"` (or `oneof`) remains supported and must not conflict
+with the field's metadata. `WithEnum`, repeated `choice` and output
+annotations never add a `validate` tag or automatically call that validator.
+Optional absent/null values retain existing presence/default behavior; nullable
+MCP schemas include null as transport absence. Integer values remain exact;
+`float64` domains use the declared floating-point source semantics and reject
+nonfinite values and choices that collapse to the same runtime value.
+Existing defaults and scalar source transformers retain their behavior. An enum
+requires an explicit scalar wire type; an untyped interface or collection cannot
+supply scalar domain authority.
+
+`choice(view.column, scalar, ...)` is the equivalent standalone outer SELECT
+annotation. It lowers to the same ordered Go-field tags and schema metadata.
+Its target must be a selected qualified column. Use `choice(r.status,3,1,2)` for an
+integer column and `choice(r.label,'z','a','m')` for a string column; typed literals
+must fit the resulting field contract. A conflicting tag/annotation is rejected.
+Output column choices describe schema/picker options only: they do not filter
+SQL rows, reject returned output values, or introduce a row-permission check.
+Do not place this annotation in database SQL or give it a SQL alias.
+
+This implementation is local development work until its shared protocol/Datly
+dependencies are published and pinned. These examples do not establish released
+availability. The current ordinary reader binding path enforces typed conversion
+and required input presence but does not automatically run govalidator on every
+input field. Adding a validate tag alone must not be claimed as reader runtime
+rejection. Use the application's existing explicit validation lifecycle/service;
+if that connection is absent, report it as an integration gap. Do not add a
+second enum validator to the binder. Optional govalidator choice validation is a separate release scope; it is not required by metadata discovery.
+
+Compatibility boundary: choice schema metadata is scalar-only. A choice-bearing
+slice/array, map, struct or interface is rejected by schema/metadata compilation;
+this replaces the legacy reflector's ill-typed string enum attached to an entire
+array. It does not change ordinary array binding or silently validate each item.
+For list validation use the existing validator's supported explicit contract.
+Linked scalar aliases/pointers use their real Go wire kind. A generated output
+whose named scalar type cannot yet be resolved fails with that precise type-
+authority gap instead of skipping its metadata check. A choice-bearing field
+also requires valid sibling struct tags; malformed sibling metadata fails strict
+full-tag parsing. Fields with no choice metadata keep their existing behavior.
+
+Bootstrap's parameter adapter also imports authored wireSchema tags with no enum;
+generation preserves those full non-enum scalar format/nullability declarations.
+This is broader than choice metadata. Existing single-scalar wire-schema checks
+still apply; this adapter is not arbitrary JSON-schema or scalar-union support.

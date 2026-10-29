@@ -2,6 +2,9 @@ package compile
 
 import (
 	"fmt"
+	"github.com/viant/tagly/choice"
+	"reflect"
+	"strconv"
 	"strings"
 
 	"github.com/viant/datly/spec"
@@ -33,10 +36,10 @@ func lowerColumnDeclarations(parsed *query.Select, root *spec.View, types *typec
 			continue
 		}
 		name := strings.ToLower(strings.TrimSpace(sqlparser.Stringify(call.X)))
-		if (name == tag.InvariantName || name == "delete_marker" || name == "concurrency_token" || (name == "required" || name == "optional") || name == "sequence_scope" || (name == "internal" || name == "internal_transient")) && item.Alias != "" {
+		if (name == "choice" || name == tag.InvariantName || name == "delete_marker" || name == "concurrency_token" || (name == "required" || name == "optional") || name == "sequence_scope" || (name == "internal" || name == "internal_transient")) && item.Alias != "" {
 			return false, fmt.Errorf("%s must be a standalone SELECT annotation without an alias", name)
 		}
-		if item.Alias != "" || (name != "cast" && name != "tag" && name != tag.InvariantName && name != "delete_marker" && name != "concurrency_token" && name != "required" && name != "optional" && name != "sequence_scope" && name != "internal" && name != "internal_transient") {
+		if item.Alias != "" || (name != "choice" && name != "cast" && name != "tag" && name != tag.InvariantName && name != "delete_marker" && name != "concurrency_token" && name != "required" && name != "optional" && name != "sequence_scope" && name != "internal" && name != "internal_transient") {
 			filtered = append(filtered, item)
 			continue
 		}
@@ -48,6 +51,39 @@ func lowerColumnDeclarations(parsed *query.Select, root *spec.View, types *typec
 			}
 			target, typeName = cast.Operand, cast.Type
 
+		} else if name == "choice" {
+			if len(call.Args) < 2 {
+				return false, fmt.Errorf("choice requires a qualified column and one or more scalar literals")
+			}
+			target = sqlparser.Stringify(call.Args[0])
+			values := []string{}
+			for _, arg := range call.Args[1:] {
+				literal, ok := arg.(*expr.Literal)
+				if !ok || literal.Kind == "null" {
+					return false, fmt.Errorf("choice requires nonnull scalar literals")
+				}
+				switch literal.Kind {
+				case "string":
+					value := literal.Value
+					if len(value) >= 2 && (value[0] == '\'' || value[0] == '"') {
+						if value[0] == '"' {
+							decoded, e := strconv.Unquote(value)
+							if e != nil {
+								return false, e
+							}
+							value = decoded
+						} else {
+							value = strings.ReplaceAll(value[1:len(value)-1], "''", "'")
+						}
+					}
+					values = append(values, "choice:"+strconv.Quote(value))
+				case "int", "numeric", "bool":
+					values = append(values, "choice:"+strconv.Quote(literal.Value))
+				default:
+					return false, fmt.Errorf("choice requires scalar literals")
+				}
+			}
+			rawTag = strings.Join(values, " ")
 		} else if name == "sequence_scope" {
 			if len(call.Args) < 2 {
 				return false, fmt.Errorf("sequence_scope requires a numeric column and scope columns")
@@ -218,7 +254,7 @@ func lowerColumnDeclarations(parsed *query.Select, root *spec.View, types *typec
 	}
 	misplaced := ""
 	if containsSQLCall(parsed, func(name string) bool {
-		if name == tag.InvariantName || name == "delete_marker" || name == "concurrency_token" || (name == "required" || name == "optional") || name == "sequence_scope" || (name == "internal" || name == "internal_transient") {
+		if name == "choice" || name == tag.InvariantName || name == "delete_marker" || name == "concurrency_token" || (name == "required" || name == "optional") || name == "sequence_scope" || (name == "internal" || name == "internal_transient") {
 			misplaced = name
 			return true
 		}
@@ -244,7 +280,28 @@ func mergeDeclarationTags(existing, raw, target string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("existing tag %s: %w", target, err)
 	}
+	choiceAdditions, err := choice.Tags(reflect.StructTag(raw))
+	if err != nil {
+		return "", err
+	}
+	if len(choiceAdditions) > 0 {
+		previous, err := choice.Tags(reflect.StructTag(existing))
+		if err != nil {
+			return "", err
+		}
+		if len(previous) > 0 && !reflect.DeepEqual(previous, choiceAdditions) {
+			return "", fmt.Errorf("tag %s has conflicting ordered choice values", target)
+		}
+		if len(previous) == 0 {
+			for _, value := range choiceAdditions {
+				merged = append(merged, &tags.Tag{Name: "choice", Values: tags.Values(value)})
+			}
+		}
+	}
 	for _, addition := range additions {
+		if addition.Name == "choice" {
+			continue
+		}
 		if addition.Name == "" {
 			return "", fmt.Errorf("tag %s has an empty key", target)
 		}

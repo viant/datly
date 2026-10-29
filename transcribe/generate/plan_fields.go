@@ -1,8 +1,11 @@
 package generate
 
 import (
+	"encoding/json"
 	"fmt"
+	"github.com/viant/tagly/choice"
 	"github.com/viant/tagly/format/text"
+	xshape "github.com/viant/x/shape"
 	"reflect"
 	"strings"
 
@@ -299,6 +302,66 @@ func canonicalFieldMetadata(param *spec.Parameter) ([]structTagValue, error) {
 		return nil, nil
 	}
 	var result []structTagValue
+	// Non-enum wire declarations remain full authored metadata. Choice lowering
+	// must not strip an unrelated scalar format/nullability override.
+	if param.WireSchema != nil && len(param.WireSchema.Enum) == 0 {
+		encoded, err := json.Marshal(param.WireSchema)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, structTagValue{name: "wireSchema", value: string(encoded)})
+	}
+	var constraint *choice.Constraint
+	var sourceType reflect.Type
+	if strings.Contains(param.Tag, "choice:") || param.WireSchema != nil && len(param.WireSchema.Enum) > 0 {
+		expression := param.WireTypeExpr
+		if expression == "" {
+			expression = param.TypeExpr
+		}
+		var err error
+		sourceType, err = (xshape.Runtime{}).Type(expression)
+		if err != nil && param.WireSchema != nil {
+			switch param.WireSchema.Type {
+			case "integer":
+				sourceType = reflect.TypeFor[int64]()
+			case "number":
+				sourceType = reflect.TypeFor[float64]()
+			case "string":
+				sourceType = reflect.TypeFor[string]()
+			case "boolean":
+				sourceType = reflect.TypeFor[bool]()
+			default:
+				return nil, err
+			}
+		}
+		if sourceType == nil {
+			return nil, fmt.Errorf("parameter %s choice requires scalar source type", param.Name)
+		}
+		constraint, err = choice.Parse(reflect.StructTag(dtag.CanonicalFieldTag(param.Tag)), sourceType)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if param.WireSchema != nil && len(param.WireSchema.Enum) > 0 {
+		compatibility, err := choice.Normalize(sourceType, param.WireSchema.Enum)
+		if err != nil {
+			return nil, err
+		}
+		if constraint != nil && !choice.Equal(constraint, compatibility) {
+			return nil, fmt.Errorf("parameter %s conflicting choice metadata", param.Name)
+		}
+		constraint = compatibility
+	}
+	if constraint != nil {
+		for _, value := range constraint.WireValues() {
+			text := fmt.Sprint(value)
+			if reflect.ValueOf(value).Kind() == reflect.String {
+				text = reflect.ValueOf(value).String()
+			}
+			result = append(result, structTagValue{name: "choice", value: text})
+		}
+	}
+
 	if param.MCP != nil {
 		result = append(result, structTagValue{name: "mcpEnabled", value: fmt.Sprint(*param.MCP)})
 	}

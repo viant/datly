@@ -1,6 +1,7 @@
 package dql
 
 import (
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -10,6 +11,7 @@ import (
 )
 
 type declarationOptions struct {
+	enum                                                   []any
 	resolutionGroup                                        *spec.ResolutionGroupSpec
 	bodyNullPolicy                                         string
 	queryListCSV                                           bool
@@ -346,6 +348,27 @@ func (p *declarationOptionParser) parse() (declarationOptions, error) {
 				return declarationOptions{}, err
 			}
 			p.result.example = trimQuote(args[0])
+		case "withenum":
+			if err := p.single(cursor, key, args, 1, -1); err != nil {
+				return declarationOptions{}, err
+			}
+			for _, arg := range args {
+				if !json.Valid([]byte(strings.TrimSpace(arg))) {
+					return declarationOptions{}, p.fail(cursor, "WithEnum requires complete JSON scalar literals")
+				}
+				decoder := json.NewDecoder(strings.NewReader(strings.TrimSpace(arg)))
+				decoder.UseNumber()
+				var value any
+				if err := decoder.Decode(&value); err != nil {
+					return declarationOptions{}, p.fail(cursor, "WithEnum requires JSON scalar literals")
+				}
+				switch value.(type) {
+				case string, bool, json.Number:
+				default:
+					return declarationOptions{}, p.fail(cursor, "WithEnum requires non-null scalar literals")
+				}
+				p.result.enum = append(p.result.enum, value)
+			}
 		case "value":
 			if err := p.single(cursor, key, args, 1, 1); err != nil {
 				return declarationOptions{}, err

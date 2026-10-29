@@ -1,6 +1,10 @@
 package spec
 
-import "strings"
+import (
+	"bytes"
+	"encoding/json"
+	"strings"
+)
 
 type DeclarationKind string
 
@@ -50,6 +54,7 @@ type Codec struct {
 // WireSchema is discovery-only metadata for a public wire contract. Runtime
 // binding continues to use the compiled source and destination types.
 type WireSchema struct {
+	Enum     []any  `json:"enum,omitempty"`
 	Type     string `json:"type,omitempty"`
 	Format   string `json:"format,omitempty"`
 	Nullable bool   `json:"nullable,omitempty"`
@@ -64,7 +69,21 @@ func (s *WireSchema) Clone() *WireSchema {
 		return nil
 	}
 	result := *s
+	result.Enum = append([]any(nil), s.Enum...)
 	return &result
+}
+
+// UnmarshalJSON retains integer enum identity across component persistence.
+func (s *WireSchema) UnmarshalJSON(data []byte) error {
+	type plain WireSchema
+	var value plain
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.UseNumber()
+	if err := decoder.Decode(&value); err != nil {
+		return err
+	}
+	*s = WireSchema(value)
+	return nil
 }
 
 type ResolutionGroupSpec struct {

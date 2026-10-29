@@ -13,6 +13,7 @@ import (
 	"github.com/viant/datly/spec"
 	"github.com/viant/datly/tag"
 	"github.com/viant/datly/typecatalog"
+	"github.com/viant/tagly/choice"
 	"github.com/viant/tagly/tags"
 	xshape "github.com/viant/x/shape"
 )
@@ -827,6 +828,15 @@ func resolveScalarViewFieldsWithOmission(plan *Plan, view *spec.View, includeVel
 			source = strings.TrimSpace(column.Name)
 		}
 		fieldTag := scalarColumnFieldTag(column, source, includeVelty)
+		if strings.Contains(fieldTag, "choice:") {
+			typ, e := (xshape.Runtime{}).Type(typeName)
+			if e != nil {
+				return nil, fmt.Errorf("view %s field %s choice metadata requires resolved scalar Go type %q: %w", view.Name, name, typeName, e)
+			}
+			if _, e = choice.Parse(reflect.StructTag(fieldTag), typ); e != nil {
+				return nil, fmt.Errorf("view %s field %s choice: %w", view.Name, name, e)
+			}
+		}
 		// SQL nullability supplies the original writer omission default; Go
 		// requiredness and CAST shape do not change the physical fact.
 		if column.Nullable && (factoryBody || strings.TrimSpace(plan.Settings.Mutation) != "") && !hasStructTag(fieldTag, "json") && !strings.EqualFold(reflect.StructTag(fieldTag).Get("internal"), "true") {
