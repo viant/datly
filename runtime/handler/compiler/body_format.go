@@ -14,6 +14,7 @@ import (
 	bindinput "github.com/viant/bindly/input"
 	"github.com/viant/bindly/locator"
 	bodyprovider "github.com/viant/bindly/provider/body"
+	"github.com/viant/datly/spec"
 	"github.com/viant/tagly/format"
 )
 
@@ -27,6 +28,24 @@ func applyBodyFormat(field reflect.StructField, binding *bindly.BindingSpec) err
 	plan, err := compileBodyFormat(field.Type, map[reflect.Type]*bodyFormatPlan{})
 	if err != nil {
 		return fmt.Errorf("body field %s format: %w", field.Name, err)
+	}
+	if param, ok := binding.Extension.(*spec.Parameter); ok && param != nil {
+		if param.WireSchema != nil && param.WireSchema.Format == "date-time" {
+			plan = bodyTimeSchema(plan, field.Type, nil)
+		}
+		keys := make([]string, 0, len(param.WireSchemas))
+		for key := range param.WireSchemas {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		for _, key := range keys {
+			schema := param.WireSchemas[key]
+			if schema == nil || schema.Format != "date-time" {
+				continue
+			}
+			path := strings.TrimPrefix(key, field.Name+".")
+			plan = bodyTimeSchema(plan, field.Type, strings.Split(path, "."))
+		}
 	}
 	if plan == nil || !plan.hasLayout(map[*bodyFormatPlan]bool{}) {
 		return nil
@@ -350,4 +369,53 @@ func rewriteBodyJSONValues(raw json.RawMessage, convert func(string, int, json.R
 	}
 	result = append(result, raw[previous:]...)
 	return result, nil
+}
+
+// bodyTimeSchema applies declared wire authority only to a matching public time
+// leaf. Copy the path because a compiled reusable struct plan can be shared by
+// sibling fields with different schemas. Explicit authored layouts win.
+func bodyTimeSchema(plan *bodyFormatPlan, target reflect.Type, path []string) *bodyFormatPlan {
+	for target.Kind() == reflect.Pointer {
+		target = target.Elem()
+	}
+	if len(path) == 0 {
+		if target != reflect.TypeFor[time.Time]() || (plan != nil && plan.layout != "") {
+			return plan
+		}
+		return &bodyFormatPlan{layout: time.RFC3339}
+	}
+	if target.Kind() != reflect.Struct || target == reflect.TypeFor[time.Time]() {
+		return plan
+	}
+	owner := reflect.TypeFor[json.Unmarshaler]()
+	if target.Implements(owner) || reflect.PointerTo(target).Implements(owner) {
+		return plan
+	}
+	for _, candidate := range authorizedBodyJSONFields(target) {
+		if candidate.field.Tag.Get("internal") == "true" {
+			continue
+		}
+		// WireSchemas paths name public JSON members. Untagged fields already
+		// use their Go name; a tagged field cannot claim another member's path.
+		if candidate.name != path[0] {
+			continue
+		}
+		if plan == nil {
+			return plan
+		}
+		for i, field := range plan.fields {
+			if field.name != candidate.name {
+				continue
+			}
+			child := bodyTimeSchema(field.plan, candidate.field.Type, path[1:])
+			if child == field.plan {
+				return plan
+			}
+			clone := *plan
+			clone.fields = append([]bodyFormatField(nil), plan.fields...)
+			clone.fields[i].plan = child
+			return &clone
+		}
+	}
+	return plan
 }

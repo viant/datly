@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/viant/datly/spec"
 	"github.com/viant/datly/typecatalog"
@@ -14,15 +15,18 @@ import (
 func (c *inputCompiler) filterType() (reflect.Type, error) {
 	fields := make([]xshape.RuntimeField, 0, len(c.metadata.filters))
 	for _, item := range c.metadata.filters {
-		typeOf := item.contract.SourceType()
-		if typeOf == nil {
-			typeOf = item.contract.DestinationType()
-		}
+		typeOf := filterSourceType(item)
 		if typeOf == nil {
 			return nil, fmt.Errorf("report filter %s has no source type", item.name)
 		}
 		tag := string(fieldTag(selectionWireName(item.field), item.description))
-		if param, ok := item.contract.Binding().Extension.(*spec.Parameter); ok && param.MCP != nil && !*param.MCP {
+		// Query/form time inputs use strict RFC3339 conversion. Preserve that
+		// contract when wrapping them in the cube body: the default body time
+		// decoder intentionally retains legacy permissive date behavior.
+		if strictTimeFilter(item, typeOf) {
+			tag += ` format:"timeLayout=` + time.RFC3339 + `"`
+		}
+		if param, ok := item.contract.Binding().Extension.(*spec.Parameter); ok && param != nil && param.MCP != nil && !*param.MCP {
 			tag += ` mcp:"-"`
 		}
 		if reflect.StructTag(item.tag).Get("mcp") == "-" && !strings.Contains(tag, `mcp:"-"`) {
@@ -65,14 +69,24 @@ func filterWireSchemas(prefix string, filters []filterField, requireSourceFilter
 	var result map[string]*spec.WireSchema
 	for _, item := range filters {
 		schema := item.contract.WireSchema()
+		if schema != nil {
+			schema = schema.Clone()
+		}
+		if strictTimeFilter(item, filterSourceType(item)) && (schema == nil || schema.Format == "") {
+			if schema == nil {
+				schema = &spec.WireSchema{}
+			}
+			if schema.Type == "" || schema.Type == "string" {
+				schema.Type = "string"
+				schema.Format = "date-time"
+			}
+		}
 		required := requireSourceFilters && requiredPublicFilter(item)
 		if schema == nil && !required {
 			continue
 		}
 		if schema == nil {
 			schema = &spec.WireSchema{}
-		} else {
-			schema = schema.Clone()
 		}
 		schema.Required, schema.Nullable = required, !required
 		if required && schema.Type == "" {
@@ -83,7 +97,7 @@ func filterWireSchemas(prefix string, filters []filterField, requireSourceFilter
 			typeOf = dereference(typeOf)
 			if typeOf != nil && (typeOf.Kind() == reflect.Slice || typeOf.Kind() == reflect.Array) {
 				schema.MinItems = 1
-				if param, ok := item.contract.Binding().Extension.(*spec.Parameter); ok && param.MinAllowedRecords != nil && *param.MinAllowedRecords > 1 {
+				if param, ok := item.contract.Binding().Extension.(*spec.Parameter); ok && param != nil && param.MinAllowedRecords != nil && *param.MinAllowedRecords > 1 {
 					schema.MinItems = *param.MinAllowedRecords
 				}
 			}
@@ -189,4 +203,24 @@ func selectionWireName(item field) string {
 		return lowerCamel(item.fieldName)
 	}
 	return lowerCamel(typecatalog.ExportedFieldName(item.publicName))
+}
+
+func strictTimeFilter(item filterField, typeOf reflect.Type) bool {
+	binding := item.contract.Binding()
+	if binding.Transformer != nil {
+		return false
+	}
+	if param, ok := binding.Extension.(*spec.Parameter); ok && param != nil && param.Codec != nil {
+		return false
+	}
+	kind := binding.Location.Kind
+	return typeOf != nil && (kind == "query" || kind == "form" || kind == "path" || kind == "header" || kind == "cookie") && dereference(typeOf) == reflect.TypeFor[time.Time]()
+}
+
+func filterSourceType(item filterField) reflect.Type {
+	result := item.contract.SourceType()
+	if result == nil {
+		result = item.contract.DestinationType()
+	}
+	return result
 }
