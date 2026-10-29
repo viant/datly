@@ -131,6 +131,8 @@ import (
  requestprovider "github.com/viant/bindly/provider/request"
  "github.com/viant/bindly/resource"
  "github.com/viant/datly/bootstrap"
+ dexec "github.com/viant/datly/exec"
+ "github.com/viant/datly/spec"
  druntime "github.com/viant/datly/runtime"
  "github.com/viant/datly/runtime/registry"
  writer "github.com/viant/datly/runtime/handler/writer"
@@ -141,7 +143,6 @@ import (
  _ "github.com/viant/sqlx/metadata/product/sqlite"
 )
 func(i *Input)Init(context.Context)error{
- for _,s:=range i.Scopes {for _,g:=range s.Groups {for _,item:=range g.Items {if item.Id==3 {item.SetShouldDelete(true)}}}}
  for _,s:=range i.CurScopes {if s.Groups!=nil||s.Has!=nil{panic(fmt.Sprintf("Current gained body relations/presence Groups=%v Has=%v",s.Groups,s.Has))}}
  for _,g:=range i.CurGroups {if g.Items!=nil||g.Has!=nil{panic("Current child gained body relations/presence")}}
  for _,i:=range i.CurItems {if i.ShouldDelete||i.Has!=nil{panic("Current gained deletion intent/presence")}}
@@ -172,7 +173,16 @@ func TestAuxiliarySharedNativeActions(t *testing.T){
  native,err:=writer.New(artifact.Component,reflect.TypeFor[Input](),reflect.TypeFor[Output](),"patch");if err!=nil{t.Fatal(err)}
  rt,err:=druntime.NewRuntime([]*registry.RegisteredComponent{{Component:artifact.Component,Input:artifact.Input,Output:artifact.Output,OutputType:reflect.TypeFor[Output](),Handler:native,Providers:[]locator.Provider{views},DataSource:dml.Source{DB:db}}},druntime.WithResources(resources));if err!=nil{t.Fatal(err)};defer rt.Shutdown(ctx)
  request:=httptest.NewRequest("PATCH","/scope-items",strings.NewReader(tc.body));request.Header.Set("Content-Type","application/json");scope,err:=requestprovider.New(request);if err!=nil{t.Fatal(err)};defer scope.Close()
- if _,err=rt.ExecuteRoute(ctx,"PATCH","/scope-items",scope);err!=nil{t.Fatal(err)}
+ // Insert/delete policy freezes removal intent at capture. A typed composing
+ // caller prepares internal deletion intent before invoking this writer.
+ if tc.name=="delete" {
+  item:=&Item{};item.SetId(3);item.SetShouldDelete(true)
+  group:=&Group{};group.SetId(2);group.Items=[]*Item{item}
+  parent:=&Scope{};parent.SetId(1);parent.Groups=[]*Group{group}
+  input:=&Input{};input.SetScopes([]*Scope{parent})
+  _,err=rt.InvokeComponent(ctx,dexec.ComponentRequest{Target:dexec.ComponentTarget{Component:component.Key,Route:spec.RouteRef{Method:"PATCH",Path:"/scope-items"}},Input:input})
+ } else { _,err=rt.ExecuteRoute(ctx,"PATCH","/scope-items",scope) }
+ if err!=nil{t.Fatal(err)}
  var count int;if err=db.QueryRow("SELECT COUNT(*) FROM items").Scan(&count);err!=nil||count!=tc.count{t.Fatalf("items=%d: %v",count,err)}
  for _,table:=range []string{"scopes","groups"}{if err=db.QueryRow("SELECT COUNT(*) FROM "+table).Scan(&count);err!=nil||count!=1{t.Fatalf("auxiliary %s changed",table)}}
  })}

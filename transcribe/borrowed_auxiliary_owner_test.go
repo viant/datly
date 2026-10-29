@@ -381,6 +381,7 @@ func TestBorrowedPreparationRetainsOwnerAcrossAdmission(t *testing.T) {
 	observed := db.FaultDB(t, func(_ context.Context, call sqlfault.Call) error {
 		if call.Phase == "query" {
 			queries = append(queries, call.SQL)
+
 		}
 		return nil
 	})
@@ -405,17 +406,20 @@ func TestBorrowedPreparationRetainsOwnerAcrossAdmission(t *testing.T) {
 	queries = nil
 	require.NoError(t, (&Compiler{}).admitBorrowedSQLRows(t.Context(), compilation.result))
 	require.Same(t, captured, compilation.result.borrowedPreparation.owners[borrowedOwnerKey(child.BaseDir(), compilation.result.AuthoredBorrowedSQLRows[0])])
-	countOwnerDiscovery := func(calls []string) int {
+	countSharedDiscovery := func(calls []string) int {
 		count := 0
 		for _, query := range calls {
-			if strings.Contains(query, "FROM (records)") && strings.Contains(query, "NULL AS note") {
+			if strings.Contains(query, "SELECT records.*") && strings.Contains(query, "NULL AS note") {
 				count++
 			}
 		}
 		return count
 	}
-	require.Equal(t, 1, countOwnerDiscovery(metadataQueries), "initial owner must compile exactly once")
-	require.Equal(t, 1, countOwnerDiscovery(queries), "admission must reuse initial owner; only the mandatory fresh publication verification rediscovers it")
+	require.Equal(t, 1, countSharedDiscovery(metadataQueries), "initial owner must compile exactly once")
+	// Owner and borrower now use the same physical projection during discovery.
+	// Admission discovers the borrower, then publication verification refreshes
+	// both owner and borrower. The captured owner above must still be reused.
+	require.Equal(t, 3, countSharedDiscovery(queries), "one borrower admission plus fresh owner and borrower publication verification")
 }
 
 func TestBorrowedPreparationRevalidatesWhileTargetIsStaged(t *testing.T) {
