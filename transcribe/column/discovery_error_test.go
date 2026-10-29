@@ -107,3 +107,21 @@ func assertSafeDiscoveryJSON(t *testing.T, value any) {
 		}
 	}
 }
+
+type structuredJobFailure struct{ reason string }
+
+func (e structuredJobFailure) Error() string          { return "CANARY_SQL DSN=CANARY_PASSWORD" }
+func (e structuredJobFailure) BigQueryReason() string { return e.reason }
+
+func TestStructuredCompletedJobReasonProjection(t *testing.T) {
+	for _, tc := range []struct{ native, want string }{{"accessDenied", "access_denied"}, {"notFound", "source_not_found"}, {"invalidQuery", "query_invalid"}, {"CANARY_TOKEN", ""}} {
+		d, ok := QueryFailureDiagnostic(fmt.Errorf("private query wrapper: %w", structuredJobFailure{tc.native}))
+		if d.Reason != tc.want || ok != (tc.want != "") {
+			t.Fatalf("projection %+v ok=%v", d, ok)
+		}
+		raw, err := json.Marshal(d)
+		if err != nil || strings.Contains(string(raw), "CANARY") {
+			t.Fatalf("native secrets leaked: %s %v", raw, err)
+		}
+	}
+}
