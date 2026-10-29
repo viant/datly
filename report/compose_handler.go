@@ -56,7 +56,7 @@ func (h *composeHandler) Execute(ctx context.Context, invocation rhandler.Invoca
 		value := int(field.Elem().Int())
 		resultLimit = &value
 	}
-	plan, err := cubecompose.CompileWithResultLimit(input.FieldByName("SQL").String(), h.catalog, cubes.Len(), h.config.MaxLimit, resultLimit)
+	plan, err := h.compileComposition(input.FieldByName("SQL").String(), cubes.Len(), resultLimit)
 	if err != nil {
 		return nil, err
 	}
