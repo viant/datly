@@ -285,3 +285,22 @@ own parser acceptance; the configured fixture proves a single-key left join.
 The `exec` request options in this guide are Datly runtime-adapter controls.
 Application DI ordinarily uses `github.com/viant/xdatly/handler.ComponentInvoker`;
 these controls are not fields of its public request contract.
+
+### Transport page overrides
+
+The generated compose input accepts optional `page: {"limit": 20, "offset": 20}`.
+This overrides only the compiled transport window, preserving the authored SQL,
+source filters, expressions, grouping, ordering and optional semantic `resultLimit`.
+Omission (or null) preserves existing SQL LIMIT/OFFSET behavior. An explicit empty
+or zero page is rejected: limit must be positive, offset nonnegative, and their
+sum no larger than the native compose MaxLimit. Positive offsets require explicit
+ordering. The planner validates these bounds without integer overflow; execution
+uses the native combined query offset and one bounded lookahead row.
+
+`Plan.WithPage(Page)` returns a detached plan, leaving its compiled input unchanged.
+`PreparedComposition.Page()` returns copied effective compiled LIMIT/OFFSET metadata;
+`ResultLimit()` returns a copied optional semantic bound. `Budget().MaxRows` remains
+the producer ceiling. Hosts should validate the effective authored window against
+their report cap, rather than rejecting a small authored LIMIT merely because the
+producer ceiling is higher. A producer ceiling of 1000, report cap of 100 and an
+authored LIMIT of 10 are compatible.

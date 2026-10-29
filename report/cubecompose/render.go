@@ -85,6 +85,9 @@ func (p *Plan) render(frames []Frame) (string, []interface{}, error) {
 		args = append(args, r.takeArgs()...)
 	}
 	parts = append(parts, "LIMIT "+strconv.Itoa(p.Limit))
+	if p.offset > 0 {
+		parts = append(parts, "OFFSET "+strconv.Itoa(p.offset))
+	}
 	return strings.Join(parts, "\n"), args, nil
 }
 

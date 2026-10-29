@@ -5,7 +5,42 @@ import (
 	"strconv"
 )
 
-// Offset is the offset in the combined result; ordinary join plans start at zero.
+// Page is an explicit transport window over a compiled composition. Omit the
+// optional input Page to retain the authored SQL window. An explicit zero or
+// empty Page is invalid; Limit must be positive and Offset must be nonnegative.
+type Page struct {
+	Limit  int `json:"limit"`
+	Offset int `json:"offset"`
+}
+
+// WithPage returns a detached plan with a transport window. It preserves the
+// compiled selection and semantic result limit. The native response budget
+// includes skipped rows; bounded lookahead is the only extra physical row.
+func (p *Plan) WithPage(page Page) (*Plan, error) {
+	if p == nil || p.selectQuery == nil || p.maxLimit <= 0 {
+		return nil, fmt.Errorf("compiled cube compose plan required")
+	}
+	if page.Limit <= 0 || page.Offset < 0 || page.Offset > p.maxLimit || page.Limit > p.maxLimit-page.Offset || page.Limit == int(^uint(0)>>1) {
+		return nil, fmt.Errorf("cube compose page requires positive LIMIT and nonnegative OFFSET with LIMIT plus OFFSET at most %d and room for lookahead", p.maxLimit)
+	}
+	order := p.selectQuery.OrderBy
+	if len(p.unionBranches) > 0 {
+		order = p.unionOrder
+	}
+	if page.Offset > 0 && len(order) == 0 {
+		return nil, fmt.Errorf("cube compose page OFFSET requires explicit ordering")
+	}
+	result := *p
+	result.Limit, result.offset = page.Limit, page.Offset
+	result.Columns = append([]Column(nil), p.Columns...)
+	result.Fields = make([][]string, len(p.Fields))
+	for i, fields := range p.Fields {
+		result.Fields[i] = append([]string(nil), fields...)
+	}
+	return &result, nil
+}
+
+// Offset is the offset in the combined result.
 func (p *Plan) Offset() int { return p.offset }
 
 // RenderPage adds one bounded lookahead row to the requested result limit.

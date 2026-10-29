@@ -60,6 +60,12 @@ func (h *composeHandler) Execute(ctx context.Context, invocation rhandler.Invoca
 	if err != nil {
 		return nil, err
 	}
+	if field := input.FieldByName("Page"); field.IsValid() && !field.IsNil() {
+		plan, err = plan.WithPage(*field.Interface().(*cubecompose.Page))
+		if err != nil {
+			return nil, err
+		}
+	}
 	frames, err := h.frames(cubes)
 	if err != nil {
 		return nil, err

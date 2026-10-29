@@ -44,6 +44,7 @@ type Column struct {
 }
 
 type Plan struct {
+	maxLimit      int
 	unionBranches []*query.Select
 	unionOrder    query.List
 	offset        int
@@ -135,7 +136,7 @@ func compileResult(SQL string, catalog *Catalog, frameCount, maxLimit int, resul
 	if err != nil {
 		return nil, fmt.Errorf("invalid cube compose SQL: %w", err)
 	}
-	plan := &Plan{selectQuery: parsed, catalog: catalog, FrameCount: frameCount}
+	plan := &Plan{selectQuery: parsed, catalog: catalog, FrameCount: frameCount, maxLimit: maxLimit}
 	if resultLimit != nil {
 		if *resultLimit < 1 || *resultLimit > maxLimit {
 			return nil, fmt.Errorf("semantic resultLimit must be between 1 and %d", maxLimit)
