@@ -230,6 +230,125 @@ func TestTranscribeBatchRefreshAfterGeneration(t *testing.T) {
 	require.Greater(t, result.DependencyReuses, 0)
 }
 
+// This causal sequence checks that regenerating one owner refreshes its alias
+// without making the other owner's changed database schema visible prematurely.
+func TestTranscribeBatchRefreshesRowOwnersThroughAliases(t *testing.T) {
+	root := t.TempDir()
+	(testharness.GeneratedModule{Path: "example.com/batch"}).Write(t, root)
+	write := func(name, source string) {
+		t.Helper()
+		target := filepath.Join(root, name)
+		require.NoError(t, os.MkdirAll(filepath.Dir(target), 0755))
+		require.NoError(t, os.WriteFile(target, []byte(source), 0600))
+	}
+	db := testharness.NewSQLiteHarness(t)
+	type ownerFixture struct{ name, table, row, alias, column, field string }
+	owners := []ownerFixture{
+		{"books", "BOOKS", "BookView", "Book", "EDITION TEXT", "Edition"},
+		{"shelves", "SHELVES", "ShelfView", "Shelf", "CAPACITY INTEGER", "Capacity"},
+	}
+	var seedRules []BatchRule
+	for _, owner := range owners {
+		require.NoError(t, db.ExecStatements(t.Context(), "CREATE TABLE "+owner.table+"(ID INTEGER PRIMARY KEY)"))
+		source := fmt.Sprintf(`#package('example.com/batch/api/%s')
+#setting($_ = $input_type('%sInput'))
+#setting($_ = $output_type('%sOutput'))
+#setting($_ = $route('/%s','GET'))
+#define($_ = $Data<[]*%s>(output/view))
+SELECT r.*, type(r,'%s') FROM %s r`, owner.name, owner.alias, owner.alias, owner.name, owner.row, owner.row, owner.table)
+		file := "source/" + owner.name + ".dql"
+		write(file, source)
+		seedRules = append(seedRules, BatchRule{Source: file})
+	}
+	discovery := &Discovery{BaseDir: root, Connector: "main", ColumnRefiner: column.New(column.Connections{"main": db.DB})}
+	request := BatchRequest{Generator: Generator{Operation: "get"}, Destination: root, Rules: seedRules}
+	_, err := discovery.TranscribeBatch(t.Context(), request)
+	require.NoError(t, err)
+	aliases := map[string]string{}
+	for _, owner := range owners {
+		name := "model/" + owner.name + ".go"
+		aliases[name] = fmt.Sprintf("package model\nimport %s \"example.com/batch/api/%s\"\ntype %s %s.%s\n", owner.name, owner.name, owner.alias, owner.name, owner.row)
+		write(name, aliases[name])
+		require.NoError(t, db.ExecStatements(t.Context(), "ALTER TABLE "+owner.table+" ADD COLUMN "+owner.column))
+	}
+	for _, name := range []string{"warm", "middle", "final"} {
+		write("source/"+name+".dql", fmt.Sprintf(`#package('example.com/batch/api/%s')
+#import('model','example.com/batch/model')
+#setting($_ = $input_type('Input'))
+#setting($_ = $output_type('Output'))
+#setting($_ = $route('/%s','GET'))
+#define($_ = $Book<*model.Book>(param/Book).Optional())
+#define($_ = $Shelf<*model.Shelf>(param/Shelf).Optional())
+#define($_ = $Data<[]*Row>(output/view))
+SELECT r.*, type(r,'Row'), CAST(r.ID AS int) FROM (SELECT 1 AS ID) r`, name, name))
+	}
+	request.Rules = []BatchRule{{Source: "source/warm.dql"}, seedRules[0], {Source: "source/middle.dql"}, seedRules[1], {Source: "source/final.dql"}}
+	result, err := discovery.TranscribeBatch(t.Context(), request)
+	require.NoError(t, err)
+	require.Len(t, result.Packages, 5)
+	type useCase struct {
+		description string
+		index       int
+		fields      []bool
+	}
+	for _, test := range []useCase{
+		{"warm consumer sees both old owners", 0, []bool{false, false}},
+		{"middle consumer sees only first regenerated owner", 2, []bool{true, false}},
+		{"final consumer sees both regenerated owners", 4, []bool{true, true}},
+	} {
+		t.Run(test.description, func(t *testing.T) {
+			catalog := result.Packages[test.index].Types
+			for i, owner := range owners {
+				key := "example.com/batch/api/" + owner.name + "."
+				alias, found, err := catalog.Resolve(typecatalog.PackageAuthority, "example.com/batch/model."+owner.alias)
+				require.NoError(t, err)
+				require.True(t, found)
+				require.NotNil(t, alias.SynteticType)
+				target, ok := alias.SynteticType.TypeSpec.Type.(*ast.SelectorExpr)
+				require.True(t, ok, "authored named type must still refer to its generated row")
+				require.Equal(t, owner.row, target.Sel.Name)
+				qualifier, ok := target.X.(*ast.Ident)
+				require.True(t, ok)
+				require.Equal(t, owner.name, qualifier.Name)
+				row, found, err := catalog.Resolve(typecatalog.PackageAuthority, key+target.Sel.Name)
+				require.NoError(t, err)
+				require.True(t, found)
+				require.NotNil(t, row.SynteticType)
+				shape, ok := row.SynteticType.TypeSpec.Type.(*ast.StructType)
+				require.True(t, ok)
+				hasField := false
+				for _, field := range shape.Fields.List {
+					for _, name := range field.Names {
+						if name.Name == owner.field {
+							hasField = true
+						}
+					}
+				}
+				require.Equal(t, test.fields[i], hasField, "%s.%s", owner.row, owner.field)
+			}
+		})
+	}
+	require.Greater(t, result.DependencyReuses, 0, "the test must exercise a populated batch cache")
+	for name, source := range aliases {
+		actual, err := os.ReadFile(filepath.Join(root, name))
+		require.NoError(t, err)
+		require.Equal(t, source, string(actual), "authored aliases must survive regeneration")
+	}
+	input, err := os.ReadFile(filepath.Join(root, "api/final/input.go"))
+	require.NoError(t, err)
+	require.Contains(t, string(input), "*model.Book")
+	require.Contains(t, string(input), "*model.Shelf")
+	write("api/final/alias_fields_test.go", `package final
+import (
+ "example.com/batch/model"
+)
+var _ = (&model.Book{}).Edition
+var _ = (&model.Shelf{}).Capacity
+`)
+	output, err := testharness.SourceGoCommand(t, root, "test", "./api/...").CombinedOutput()
+	require.NoError(t, err, string(output))
+}
+
 func TestTranscribeBatchPreflight(t *testing.T) {
 	for _, test := range []struct {
 		name                  string
