@@ -44,13 +44,17 @@ type Column struct {
 }
 
 type Plan struct {
-	selectQuery *query.Select
-	catalog     *Catalog
-	nullable    []bool
-	Columns     []Column
-	Fields      [][]string
-	FrameCount  int
-	Limit       int
+	unionBranches []*query.Select
+	unionOrder    query.List
+	offset        int
+	resultLimit   int
+	selectQuery   *query.Select
+	catalog       *Catalog
+	nullable      []bool
+	Columns       []Column
+	Fields        [][]string
+	FrameCount    int
+	Limit         int
 }
 
 // Frame is one trusted, parameterized cube projection supplied to Render.
@@ -100,6 +104,17 @@ func (c *Catalog) Lookup(name string) (Field, bool) {
 }
 
 func Compile(SQL string, catalog *Catalog, frameCount, maxLimit int) (*Plan, error) {
+	return compileResult(SQL, catalog, frameCount, maxLimit, nil)
+}
+
+// CompileWithResultLimit declares a semantic ordered prefix independently of
+// transport LIMIT/OFFSET. Nil retains Compile's existing contract. Only one
+// explicitly ordered, flat cube selection is admitted in this initial subset.
+func CompileWithResultLimit(SQL string, catalog *Catalog, frameCount, maxLimit int, resultLimit *int) (*Plan, error) {
+	return compileResult(SQL, catalog, frameCount, maxLimit, resultLimit)
+}
+
+func compileResult(SQL string, catalog *Catalog, frameCount, maxLimit int, resultLimit *int) (*Plan, error) {
 	if catalog == nil || len(catalog.fields) == 0 {
 		return nil, fmt.Errorf("cube compose field catalog was empty")
 	}
@@ -121,6 +136,12 @@ func Compile(SQL string, catalog *Catalog, frameCount, maxLimit int) (*Plan, err
 		return nil, fmt.Errorf("invalid cube compose SQL: %w", err)
 	}
 	plan := &Plan{selectQuery: parsed, catalog: catalog, FrameCount: frameCount}
+	if resultLimit != nil {
+		if *resultLimit < 1 || *resultLimit > maxLimit {
+			return nil, fmt.Errorf("semantic resultLimit must be between 1 and %d", maxLimit)
+		}
+		plan.resultLimit = *resultLimit
+	}
 	if err := plan.validate(maxLimit); err != nil {
 		return nil, err
 	}
@@ -135,11 +156,21 @@ func (p *Plan) validate(maxLimit int) error {
 	if len(q.WithSelects) != 0 || q.WithRecursive {
 		return fmt.Errorf("cube compose v1 does not allow WITH clauses")
 	}
+	if p.resultLimit > 0 && (p.FrameCount != 1 || q.Union != nil || len(q.Joins) > 0 || len(q.GroupBy) > 0 || len(q.OrderBy) == 0) {
+		return fmt.Errorf("semantic resultLimit requires one explicitly ordered flat cube selection")
+	}
 	if q.Union != nil {
-		return fmt.Errorf("cube compose v1 does not allow UNION clauses")
+		return p.validateUnion(maxLimit)
 	}
 	if q.Offset != nil {
-		return fmt.Errorf("cube compose v1 does not allow OFFSET clauses")
+		if p.resultLimit == 0 {
+			return fmt.Errorf("cube compose v1 does not allow OFFSET clauses")
+		}
+		offset, err := strconv.Atoi(strings.TrimSpace(q.Offset.Value))
+		if err != nil || offset < 0 || offset > maxLimit {
+			return fmt.Errorf("semantic result page OFFSET must be between 0 and %d", maxLimit)
+		}
+		p.offset = offset
 	}
 	// sqlparser records LIMIT/OFFSET's keyword in Window as well as populating
 	// Limit/Offset. LIMIT is the only supported windowing clause here.

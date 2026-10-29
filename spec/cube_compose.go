@@ -2,11 +2,13 @@ package spec
 
 // CubeComposeSettings enables a bounded, request-local composition of cube queries.
 type CubeComposeSettings struct {
-	Enabled   bool  `json:"enabled,omitempty"`
-	MCPTool   *bool `json:"mcpTool,omitempty"`
-	MaxCubes  int   `json:"maxCubes,omitempty"`
-	MaxLimit  int   `json:"maxLimit,omitempty"`
-	TimeoutMs int   `json:"timeoutMs,omitempty"`
+	Enabled  bool  `json:"enabled,omitempty"`
+	MCPTool  *bool `json:"mcpTool,omitempty"`
+	MaxCubes int   `json:"maxCubes,omitempty"`
+	// MaxLimit bounds response rows (and UNION LIMIT+OFFSET). Native execution
+	// may read one additional combined-result row solely to determine hasMore.
+	MaxLimit  int `json:"maxLimit,omitempty"`
+	TimeoutMs int `json:"timeoutMs,omitempty"`
 }
 
 func (s *CubeComposeSettings) Clone() *CubeComposeSettings {
