@@ -61,6 +61,44 @@ func TestPrepareCompositionUsesRegisteredNativeHandlerAndExactSourceRoute(t *tes
 		if prepared.SourceTarget() != source || len(prepared.Columns()) != 2 || prepared.Columns()[1].RuntimeType() != reflect.TypeFor[float64]() || prepared.Budget().MaxRows != 20 {
 			t.Fatalf("native preparation contract differs: %+v", prepared)
 		}
+		// Effective authored bounds are independent of the producer ceiling.
+		large := *component.Handler.(*composeHandler)
+		config := *large.config
+		config.MaxLimit = 1000
+		large.config = &config
+		effective, err := PrepareComposition(&large, definition)
+		if err != nil {
+			t.Fatal(err)
+		}
+		inputType := large.inputType
+		if inputType.Field(2).Name != "ResultLimit" || inputType.Field(2).Type != reflect.TypeFor[*int]() || inputType.Field(3).Name != "Page" {
+			t.Fatal("existing generated input field identity changed")
+		}
+		offsetDefinition := definition
+		offsetDefinition.SQL += " OFFSET 3"
+		offsetPrepared, err := PrepareComposition(&large, offsetDefinition)
+		if err != nil || offsetPrepared.Page().Offset != 3 {
+			t.Fatalf("authored offset metadata lost: %v %+v", err, offsetPrepared)
+		}
+		page := effective.Page()
+		if page.Limit != 10 || page.Offset != 0 || page.Limit > 100 || effective.Budget().MaxRows != 1000 {
+			t.Fatalf("effective authored page differs from producer budget: %+v %+v", page, effective.Budget())
+		}
+		page.Limit = 2000
+		semantic := effective.ResultLimit()
+		if semantic == nil || *semantic != 5 {
+			t.Fatalf("semantic metadata lost: %+v", semantic)
+		}
+		*semantic = 1000
+		end = 7
+		if effective.Page().Limit != 10 || *effective.ResultLimit() != 5 {
+			t.Fatal("metadata aliases authored input or returned page/prefix")
+		}
+		end = 5
+		plain, err := PrepareComposition(&large, CompositionDefinition{SQL: definition.SQL, FrameCount: 1})
+		if err != nil || plain.ResultLimit() != nil {
+			t.Fatalf("omitted semantic metadata changed: %v %+v", err, plain)
+		}
 		filters := prepared.Filters()
 		if len(filters) != 1 || filters[0].Name != "accountIds" || filters[0].Parameter != "AccountIDs" || filters[0].Type != reflect.TypeFor[[]int]() {
 			t.Fatalf("source filter contract differs: %+v", filters)

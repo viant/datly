@@ -37,10 +37,12 @@ type CompositionBudget struct {
 // PreparedComposition contains detached metadata only. The executable native
 // plan, catalog, binder and input holders are never exposed.
 type PreparedComposition struct {
-	source  exec.ComponentTarget
-	columns []cubecompose.Column
-	filters []CompositionFilter
-	budget  CompositionBudget
+	source      exec.ComponentTarget
+	columns     []cubecompose.Column
+	filters     []CompositionFilter
+	page        cubecompose.Page
+	resultLimit *int
+	budget      CompositionBudget
 }
 
 func (p *PreparedComposition) SourceTarget() exec.ComponentTarget { return p.source }
@@ -51,6 +53,18 @@ func (p *PreparedComposition) Filters() []CompositionFilter {
 	return append([]CompositionFilter(nil), p.filters...)
 }
 func (p *PreparedComposition) Budget() CompositionBudget { return p.budget }
+
+// Page returns the effective compiled SQL window before transport overrides.
+func (p *PreparedComposition) Page() cubecompose.Page { return p.page }
+
+// ResultLimit returns a copy of the optional semantic ordered-prefix bound.
+func (p *PreparedComposition) ResultLimit() *int {
+	if p.resultLimit == nil {
+		return nil
+	}
+	value := *p.resultLimit
+	return &value
+}
 
 // CompositionSource recognizes only Datly's native derived compose handler.
 // Unknown wrappers are rejected rather than unwrapped or trusted by shape.
@@ -85,8 +99,13 @@ func PrepareComposition(handler rhandler.Handler, definition CompositionDefiniti
 		return nil, err
 	}
 	result := &PreparedComposition{
+		page:   cubecompose.Page{Limit: plan.Limit, Offset: plan.Offset()},
 		source: h.source.target, columns: append([]cubecompose.Column(nil), plan.Columns...),
 		budget: CompositionBudget{MaxFrames: h.config.MaxCubes, MaxRows: h.config.MaxLimit, TimeoutMs: h.config.TimeoutMs},
+	}
+	if definition.ResultLimit != nil {
+		value := *definition.ResultLimit
+		result.resultLimit = &value
 	}
 	for _, filter := range h.metadata.filters {
 		parameter, ok := filter.contract.Binding().Extension.(*spec.Parameter)
