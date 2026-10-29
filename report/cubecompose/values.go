@@ -109,6 +109,17 @@ func (p *Plan) placeholder(raw string) (string, error) {
 	return name, nil
 }
 
+// ValueNames returns the referenced authored scalar JSON names in stable order.
+// The returned slice is detached from the compiled plan.
+func (p *Plan) ValueNames() []string {
+	result := make([]string, 0, len(p.references))
+	for name := range p.references {
+		result = append(result, name)
+	}
+	sort.Strings(result)
+	return result
+}
+
 // BindValues returns a request-local plan. It never mutates the compiled plan.
 // Referenced values must be present and non-null; declared unused values may be
 // omitted. Explicit zero/false/empty string remain valid unless authored

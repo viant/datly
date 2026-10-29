@@ -25,6 +25,10 @@ func TestScalarValuesOrderAndAdmission(t *testing.T) {
 	sql := `SELECT $Values.label AS label,t1.amount FROM $CubeSQL1 AS t1 WHERE t1.amount >= $Values.threshold ORDER BY $Values.threshold`
 	p, err := CompileWithValues(sql, catalog, 1, 10, nil, values)
 	r.NoError(err)
+	names := p.ValueNames()
+	r.Equal([]string{"label", "threshold"}, names)
+	names[0] = "changed"
+	r.Equal([]string{"label", "threshold"}, p.ValueNames())
 	bound, err := p.BindValues(context.Background(), json.RawMessage(`{"label":"alpha","threshold":9007199254740993}`))
 	r.NoError(err)
 	rendered, args, err := bound.Render([]Frame{{SQL: "SELECT ? AS amount", Args: []interface{}{int64(7)}}})

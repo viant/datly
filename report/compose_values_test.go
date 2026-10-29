@@ -63,6 +63,18 @@ func testComposeScalarValuesNativeTransports(t *testing.T, inline bool) {
 	if err != nil || prepared.ValuesType() == nil || prepared.ValuesType().Kind() != reflect.Struct || prepared.ValuesType().Field(0).Type != reflect.TypeFor[int64]() {
 		t.Fatalf("prepared scalar contract lost: %v %+v", err, prepared)
 	}
+	names := prepared.ValueNames()
+	if !reflect.DeepEqual(names, []string{"threshold"}) {
+		t.Fatalf("unexpected referenced values: %v", names)
+	}
+	names[0] = "mutated"
+	if !reflect.DeepEqual(prepared.ValueNames(), []string{"threshold"}) {
+		t.Fatal("prepared value names share mutable storage")
+	}
+	casePrepared, caseErr := PrepareComposition(registered.Handler, CompositionDefinition{SQL: "SELECT CASE WHEN $Values.metric = 1 THEN t1.TotalSpend ELSE 0 - t1.TotalSpend END AS amount FROM $CubeSQL1 AS t1 WHERE t1.TotalSpend > $Values.threshold ORDER BY amount DESC LIMIT 5", FrameCount: 1})
+	if caseErr != nil || !reflect.DeepEqual(casePrepared.ValueNames(), []string{"metric", "threshold"}) {
+		t.Fatalf("CASE references: %v %v", casePrepared, caseErr)
+	}
 	if _, err = PrepareComposition(registered.Handler, CompositionDefinition{SQL: "SELECT t1.TotalSpend FROM $CubeSQL1 AS t1 WHERE t1.TotalSpend > $Values.unknown", FrameCount: 1}); err == nil {
 		t.Fatal("undeclared prepared value admitted")
 	}

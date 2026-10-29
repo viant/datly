@@ -43,8 +43,12 @@ type PreparedComposition struct {
 	page        cubecompose.Page
 	resultLimit *int
 	valuesType  reflect.Type
+	valueNames  []string
 	budget      CompositionBudget
 }
+
+// ValueNames returns detached, sorted JSON names referenced by the authored SQL.
+func (p *PreparedComposition) ValueNames() []string { return append([]string(nil), p.valueNames...) }
 
 func (p *PreparedComposition) ValuesType() reflect.Type { return p.valuesType }
 
@@ -103,6 +107,7 @@ func PrepareComposition(handler rhandler.Handler, definition CompositionDefiniti
 	}
 	result := &PreparedComposition{
 		valuesType: h.values.Type(),
+		valueNames: plan.ValueNames(),
 		page:       cubecompose.Page{Limit: plan.Limit, Offset: plan.Offset()},
 		source:     h.source.target, columns: append([]cubecompose.Column(nil), plan.Columns...),
 		budget: CompositionBudget{MaxFrames: h.config.MaxCubes, MaxRows: h.config.MaxLimit, TimeoutMs: h.config.TimeoutMs},
