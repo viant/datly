@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/viant/datly/spec"
+	"github.com/viant/datly/typecatalog"
 	sqlio "github.com/viant/sqlx/io"
 	"github.com/viant/tagly/tags"
 	"github.com/viant/x"
@@ -142,8 +143,36 @@ func compositeAliasColumns(param *spec.Parameter) map[string]string {
 	return result
 }
 
-func (r *planResolver) concretizeHelperFields() error {
+// helperShapeLookup uses current generated syntax for structural inference while
+// retaining the linked descriptor's executable identity everywhere else.
+func (r *planResolver) helperShapeLookup() func(string) (*x.Type, error) {
 	lookup := r.lookup()
+	if lookup == nil || r.input.TypeResolver == nil {
+		return lookup
+	}
+	return func(expression string) (*x.Type, error) {
+		descriptor, err := lookup(expression)
+		if err != nil || descriptor == nil {
+			return descriptor, err
+		}
+		if descriptor.Type == nil || descriptor.SynteticType == nil || descriptor.SynteticType.TypeSpec == nil || descriptor.SynteticType.TypeSpec.Type == nil {
+			return descriptor, nil
+		}
+		resolution, err := r.input.TypeResolver.ResolveWithProvenance(expression)
+		if err != nil {
+			return nil, err
+		}
+		if resolution == nil || resolution.Origin != typecatalog.TypeOriginGenerated {
+			return descriptor, nil
+		}
+		structural := *descriptor
+		structural.Type = nil
+		return &structural, nil
+	}
+}
+
+func (r *planResolver) concretizeHelperFields() error {
+	lookup := r.helperShapeLookup()
 	if r.plan == nil || r.input.Component == nil || lookup == nil || len(r.plan.HelperTypes) == 0 {
 		return nil
 	}
