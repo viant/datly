@@ -28,7 +28,7 @@ func (p *Plan) render(frames []Frame) (string, []interface{}, error) {
 	if len(p.unionBranches) > 0 {
 		return p.renderUnion(frames)
 	}
-	r := &renderer{catalog: p.catalog, aliases: map[string]Column{}}
+	r := &renderer{values: p.values, catalog: p.catalog, aliases: map[string]Column{}}
 	for _, column := range p.Columns {
 		r.aliases[normalize(column.Name)] = column
 	}
@@ -161,6 +161,14 @@ func (r *renderer) renderNode(n node.Node) (string, error) {
 			return column.Name, nil
 		}
 		return "", fmt.Errorf("unknown output alias %q", actual.Name)
+	case *expr.Placeholder:
+		name := strings.TrimPrefix(actual.Name, "$Values.")
+		value, ok := r.values[name]
+		if !ok {
+			return "", fmt.Errorf("cube compose value %q is unbound", name)
+		}
+		r.args = append(r.args, value)
+		return "?", nil
 	case *expr.Literal:
 		if strings.EqualFold(actual.Kind, "null") {
 			return "NULL", nil

@@ -57,6 +57,13 @@ func (p *Plan) validateUnion(maxLimit int) error {
 					return fmt.Errorf("cube compose UNION ALL field requires a concrete type")
 				}
 				fields[ref.field.Name] = true
+			case *expr.Placeholder:
+				name, err := p.placeholder(value.Name)
+				if err != nil {
+					return err
+				}
+				p.references[name] = true
+				typ = baseType(p.valuesContract.fields[name].Type)
 			case *expr.Literal:
 				literal, err := literalValue(value)
 				if err != nil {
@@ -181,7 +188,7 @@ func unionType(a, b reflect.Type) (reflect.Type, error) {
 }
 
 func (p *Plan) renderUnion(frames []Frame) (string, []interface{}, error) {
-	r := &renderer{catalog: p.catalog, aliases: map[string]Column{}}
+	r := &renderer{values: p.values, catalog: p.catalog, aliases: map[string]Column{}}
 	for _, column := range p.Columns {
 		r.aliases[normalize(column.Name)] = column
 	}

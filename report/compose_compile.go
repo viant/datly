@@ -1,6 +1,7 @@
 package report
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/viant/datly/report/cubecompose"
 	"github.com/viant/datly/spec"
@@ -36,12 +37,29 @@ func (d *reportDeriver) deriveCompose(source Source, route *spec.Route, identity
 	if err != nil {
 		return nil, nil, err
 	}
-	inputType, err := (xshape.Runtime{}).Struct([]xshape.RuntimeField{
+	inputFields := []xshape.RuntimeField{
 		inputField("Cubes", reflect.SliceOf(frameType), fmt.Sprintf("Ordered cube frames, minimum 1, maximum %d", config.MaxCubes)),
 		{Name: "SQL", Type: reflect.TypeFor[string](), Tag: fieldTag("sql", "Validated wrapper SELECT; cubes[N-1] maps exactly to $CubeSQLN AS tN. Start FROM $CubeSQL1 AS t1 and join subsequent frames in order.")},
 		inputField("ResultLimit", reflect.TypeFor[*int](), "Optional semantic ordered-prefix size, independent of transport LIMIT/OFFSET; requires one explicitly ordered flat cube selection"),
 		inputField("Page", reflect.TypeFor[*cubecompose.Page](), "Optional transport window; explicit limit must be positive, offset nonnegative, and their sum within the native budget; omission preserves SQL LIMIT/OFFSET"),
-	})
+	}
+	var values *cubecompose.ValuesContract
+	if config.ValuesType != "" {
+		resolver, resolveErr := typecatalog.NewResolver(d.compiler.config.Types, d.compiler.config.Authority, (&inputCompiler{component: source.Component}).resolutionContext())
+		if resolveErr != nil {
+			return nil, nil, resolveErr
+		}
+		typ, resolveErr := (xshape.Runtime{Lookup: resolver.Type}).Type(config.ValuesType)
+		if resolveErr != nil {
+			return nil, nil, resolveErr
+		}
+		values, resolveErr = cubecompose.NewValuesContract(typ)
+		if resolveErr != nil {
+			return nil, nil, resolveErr
+		}
+		inputFields = append(inputFields, inputField("Values", reflect.TypeFor[json.RawMessage](), "Typed scalar wrapper values; supplied values must be non-null"))
+	}
+	inputType, err := (xshape.Runtime{}).Struct(inputFields)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -107,6 +125,11 @@ func (d *reportDeriver) deriveCompose(source Source, route *spec.Route, identity
 		param.Required = &required
 	}
 	params = append(params, bodyParam("ResultLimit", inputType), bodyParam("Page", inputType))
+	if values != nil {
+		parameter := bodyParam("Values", inputType)
+		parameter.WireTypeExpr = values.WireType().String()
+		params = append(params, parameter)
+	}
 	component := &spec.Component{
 		Key: identity.key, Name: identity.key.Name, Description: strings.TrimSpace(source.Component.Description + " cube composition"),
 		Settings: &spec.Settings{InputType: descriptor.Key()}, TypeContext: source.Component.TypeContext.Clone(), Parameters: params,
@@ -121,7 +144,7 @@ func (d *reportDeriver) deriveCompose(source Source, route *spec.Route, identity
 	if !ok {
 		return nil, nil, fmt.Errorf("compose source route contract is missing")
 	}
-	handler := &composeHandler{inputType: inputType, source: sourcePlan, config: config, catalog: catalog, metadata: metadata, contract: contract}
+	handler := &composeHandler{inputType: inputType, source: sourcePlan, config: config, catalog: catalog, metadata: metadata, contract: contract, values: values}
 	d.commit(identity)
 	return &Derived{Component: component, InputType: inputType, OutputType: plan.outputType, Plan: plan, Handler: handler, Type: descriptor}, descriptor, nil
 }

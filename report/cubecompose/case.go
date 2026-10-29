@@ -196,6 +196,12 @@ func (p *Plan) scalarType(n node.Node, aliases map[string]Column) (reflect.Type,
 		return p.scalarType(v.X, aliases)
 	case *expr.Switch:
 		return p.caseType(v, aliases)
+	case *expr.Placeholder:
+		name, err := p.placeholder(v.Name)
+		if err != nil {
+			return nil, err
+		}
+		return baseType(p.valuesContract.fields[name].Type), nil
 	case *expr.Literal:
 		value, e := literalValue(v)
 		return reflect.TypeOf(value), e

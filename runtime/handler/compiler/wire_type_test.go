@@ -101,3 +101,39 @@ func TestWireTypeEffectiveRouteFiltering(t *testing.T) {
 		}
 	}
 }
+
+func TestWireTypeAuthoredRuntimeStruct(t *testing.T) {
+	type input struct {
+		Values json.RawMessage `parameter:",kind=body,in=values"`
+	}
+	for _, expression := range []string{
+		"struct { Threshold int64 `json:\"threshold\"`; Metric int `json:\"metric\" choice:\"1\" choice:\"2\"` }",
+		"GeneratedControls",
+	} {
+		component := &spec.Component{Routes: []*spec.Route{{Method: "POST", Path: "/values"}}, Parameters: []*spec.Parameter{{Name: "Values", Source: spec.BindSource{Kind: "body", Name: "values"}, WireTypeExpr: expression}}}
+		lookup := func(name string) (reflect.Type, error) {
+			if name == "GeneratedControls" {
+				return reflect.TypeFor[struct {
+					Threshold int64 `json:"threshold"`
+					Metric    int   `json:"metric" choice:"1" choice:"2"`
+				}](), nil
+			}
+			return nil, nil
+		}
+		compiled, err := New(Input{Component: component, InputType: reflect.TypeFor[input](), TypeLookup: lookup}).Compile()
+		if err != nil {
+			t.Fatal(err)
+		}
+		route, _ := compiled.Input.ForRoute(spec.RouteRef{Method: "POST", Path: "/values"})
+		field := route.Fields()[0]
+		if field.SourceType() != reflect.TypeFor[json.RawMessage]() || field.WireType() == nil || field.WireType().Kind() != reflect.Struct || field.WireType().Field(0).Type != reflect.TypeFor[int64]() {
+			t.Fatalf("authored shape replaced binding or lost types: %+v", field)
+		}
+		for _, bad := range []string{"[]int", "map[string]int", "*struct { Threshold int }", "struct { Threshold unknown }", "struct { broken"} {
+			component.Parameters[0].WireTypeExpr = bad
+			if _, err = New(Input{Component: component, InputType: reflect.TypeFor[input]()}).Compile(); err == nil {
+				t.Fatalf("admitted invalid shape %s", bad)
+			}
+		}
+	}
+}

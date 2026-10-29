@@ -130,6 +130,9 @@ func (c Component) StructTag() (string, error) {
 		return "", nil
 	}
 	result := ComponentName + ":" + strconv.Quote(value)
+	if c.ReportCompose != nil && c.ReportCompose.ValuesType != "" {
+		result += " reportComposeValuesType:" + strconv.Quote(c.ReportCompose.ValuesType)
+	}
 	if c.RouteName != "" {
 		result += " " + RouteNameTag + ":" + strconv.Quote(c.RouteName)
 	}
@@ -186,6 +189,12 @@ func ParseComponent(structTag reflect.StructTag) (Component, bool, error) {
 		return Component{}, false, nil
 	}
 	parsed, parseErr := ParseComponentValue(value)
+	if value, exists := structTag.Lookup("reportComposeValuesType"); exists {
+		if parsed.ReportCompose == nil {
+			parsed.ReportCompose = &spec.CubeComposeSettings{}
+		}
+		parsed.ReportCompose.ValuesType = value
+	}
 	parsed.RouteName = structTag.Get(RouteNameTag)
 	parsed.APIKeyHeader = structTag.Get(APIKeyHeaderTag)
 	parsed.APIKeyValue = structTag.Get(APIKeyValueTag)
@@ -274,10 +283,14 @@ func ParseComponentValue(value string) (Component, error) {
 			parsed, err := parseBool("reportMCPTool", value)
 			result.ReportMCPTool = &parsed
 			return err
-		case "reportcompose", "reportcomposemcptool", "reportcomposemaxcubes", "reportcomposemaxlimit", "reportcomposetimeoutms":
+		case "reportcompose", "reportcomposemcptool", "reportcomposemaxcubes", "reportcomposemaxlimit", "reportcomposetimeoutms", "reportcomposevaluestype":
 			key = strings.ToLower(key)
 			if result.ReportCompose == nil {
 				result.ReportCompose = &spec.CubeComposeSettings{}
+			}
+			if key == "reportcomposevaluestype" {
+				result.ReportCompose.ValuesType = value
+				break
 			}
 			if key == "reportcompose" || key == "reportcomposemcptool" {
 				parsed, err := parseBool(key, value)

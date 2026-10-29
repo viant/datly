@@ -42,8 +42,11 @@ type PreparedComposition struct {
 	filters     []CompositionFilter
 	page        cubecompose.Page
 	resultLimit *int
+	valuesType  reflect.Type
 	budget      CompositionBudget
 }
+
+func (p *PreparedComposition) ValuesType() reflect.Type { return p.valuesType }
 
 func (p *PreparedComposition) SourceTarget() exec.ComponentTarget { return p.source }
 func (p *PreparedComposition) Columns() []cubecompose.Column {
@@ -99,8 +102,9 @@ func PrepareComposition(handler rhandler.Handler, definition CompositionDefiniti
 		return nil, err
 	}
 	result := &PreparedComposition{
-		page:   cubecompose.Page{Limit: plan.Limit, Offset: plan.Offset()},
-		source: h.source.target, columns: append([]cubecompose.Column(nil), plan.Columns...),
+		valuesType: h.values.Type(),
+		page:       cubecompose.Page{Limit: plan.Limit, Offset: plan.Offset()},
+		source:     h.source.target, columns: append([]cubecompose.Column(nil), plan.Columns...),
 		budget: CompositionBudget{MaxFrames: h.config.MaxCubes, MaxRows: h.config.MaxLimit, TimeoutMs: h.config.TimeoutMs},
 	}
 	if definition.ResultLimit != nil {
@@ -124,5 +128,5 @@ func (h *composeHandler) compileComposition(SQL string, frames int, resultLimit 
 	if frames < 1 || frames > h.config.MaxCubes {
 		return nil, fmt.Errorf("cube compose requires between 1 and %d cubes", h.config.MaxCubes)
 	}
-	return cubecompose.CompileWithResultLimit(SQL, h.catalog, frames, h.config.MaxLimit, resultLimit)
+	return cubecompose.CompileWithValues(SQL, h.catalog, frames, h.config.MaxLimit, resultLimit, h.values)
 }

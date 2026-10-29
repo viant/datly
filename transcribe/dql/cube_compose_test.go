@@ -39,3 +39,14 @@ func TestCubeComposeDirectiveCarriesMCPAndBudgets(t *testing.T) {
 		}
 	}
 }
+
+func TestCubeComposeAuthoredValuesShape(t *testing.T) {
+	shape := "struct { Threshold int64 `json:\"threshold\"`; Metric int `json:\"metric\" choice:\"1\" choice:\"2\" validate:\"choice(1,2)\"` }"
+	prepared := PrepareSource("#setting($_ = $cubeCompose(true,true,4,50,12000,'" + shape + "'))\nSELECT id FROM events")
+	if err := prepared.Err(); err != nil {
+		t.Fatal(err)
+	}
+	if prepared.Directives.Settings.Report.Compose.ValuesType != shape {
+		t.Fatal("authored scalar shape not preserved")
+	}
+}

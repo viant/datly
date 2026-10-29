@@ -44,18 +44,21 @@ type Column struct {
 }
 
 type Plan struct {
-	maxLimit      int
-	unionBranches []*query.Select
-	unionOrder    query.List
-	offset        int
-	resultLimit   int
-	selectQuery   *query.Select
-	catalog       *Catalog
-	nullable      []bool
-	Columns       []Column
-	Fields        [][]string
-	FrameCount    int
-	Limit         int
+	valuesContract *ValuesContract
+	references     map[string]bool
+	values         map[string]interface{}
+	maxLimit       int
+	unionBranches  []*query.Select
+	unionOrder     query.List
+	offset         int
+	resultLimit    int
+	selectQuery    *query.Select
+	catalog        *Catalog
+	nullable       []bool
+	Columns        []Column
+	Fields         [][]string
+	FrameCount     int
+	Limit          int
 }
 
 // Frame is one trusted, parameterized cube projection supplied to Render.
@@ -68,6 +71,7 @@ type renderer struct {
 	catalog *Catalog
 	aliases map[string]Column
 	args    []interface{}
+	values  map[string]interface{}
 }
 
 var safeIdentifier = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
@@ -105,17 +109,17 @@ func (c *Catalog) Lookup(name string) (Field, bool) {
 }
 
 func Compile(SQL string, catalog *Catalog, frameCount, maxLimit int) (*Plan, error) {
-	return compileResult(SQL, catalog, frameCount, maxLimit, nil)
+	return compileResult(SQL, catalog, frameCount, maxLimit, nil, nil)
 }
 
 // CompileWithResultLimit declares a semantic ordered prefix independently of
 // transport LIMIT/OFFSET. Nil retains Compile's existing contract. Only one
 // explicitly ordered, flat cube selection is admitted in this initial subset.
 func CompileWithResultLimit(SQL string, catalog *Catalog, frameCount, maxLimit int, resultLimit *int) (*Plan, error) {
-	return compileResult(SQL, catalog, frameCount, maxLimit, resultLimit)
+	return compileResult(SQL, catalog, frameCount, maxLimit, resultLimit, nil)
 }
 
-func compileResult(SQL string, catalog *Catalog, frameCount, maxLimit int, resultLimit *int) (*Plan, error) {
+func compileResult(SQL string, catalog *Catalog, frameCount, maxLimit int, resultLimit *int, values *ValuesContract) (*Plan, error) {
 	if catalog == nil || len(catalog.fields) == 0 {
 		return nil, fmt.Errorf("cube compose field catalog was empty")
 	}
@@ -136,7 +140,7 @@ func compileResult(SQL string, catalog *Catalog, frameCount, maxLimit int, resul
 	if err != nil {
 		return nil, fmt.Errorf("invalid cube compose SQL: %w", err)
 	}
-	plan := &Plan{selectQuery: parsed, catalog: catalog, FrameCount: frameCount, maxLimit: maxLimit}
+	plan := &Plan{valuesContract: values, references: map[string]bool{}, selectQuery: parsed, catalog: catalog, FrameCount: frameCount, maxLimit: maxLimit}
 	if resultLimit != nil {
 		if *resultLimit < 1 || *resultLimit > maxLimit {
 			return nil, fmt.Errorf("semantic resultLimit must be between 1 and %d", maxLimit)
@@ -414,7 +418,12 @@ func (p *Plan) validateNode(n node.Node, aliases map[string]Column) ([]fieldRef,
 	case *expr.Literal:
 		return nil, validateLiteral(actual)
 	case *expr.Placeholder:
-		return nil, fmt.Errorf("caller placeholders are not allowed")
+		name, err := p.placeholder(actual.Name)
+		if err != nil {
+			return nil, err
+		}
+		p.references[name] = true
+		return nil, nil
 	case *expr.Star:
 		return nil, fmt.Errorf("wildcard projection is not allowed")
 	case *expr.Binary:

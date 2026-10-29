@@ -304,3 +304,80 @@ the producer ceiling. Hosts should validate the effective authored window agains
 their report cap, rather than rejecting a small authored LIMIT merely because the
 producer ceiling is higher. A producer ceiling of 1000, report cap of 100 and an
 authored LIMIT of 10 are compatible.
+
+## Bound scalar composition controls
+
+A source may opt into typed wrapper values with
+`CubeComposeSettings{Enabled: true, ValuesType: "controls.WrapperValues"}` or the
+component holder tag `reportComposeValuesType:"controls.WrapperValues"`. Resolve named types
+from the same package/import catalog as the source component. `ValuesType` may
+also contain an authored inline Go struct shape, materialized through the existing
+Go shape compiler; adding controls this way requires no application binary change.
+For example, persist the setting in component metadata:
+
+```json
+{"report":{"compose":{"enabled":true,"valuesType":"struct { Threshold int64 `json:\"threshold\"`; Metric int `json:\"metric\" choice:\"1\" choice:\"2\" validate:\"choice(1,2)\"` }"}}}
+```
+
+DQL may pass the same shape or named type as the optional sixth
+`cubeCompose(true,true,8,100,30000,'TYPE_EXPRESSION')` argument. The type
+must be a flat struct of exported scalar fields (or pointers to scalars), with
+safe, distinct JSON field names. Collections, nested structs and anonymous fields
+are rejected. Existing sources without `ValuesType` keep their existing input
+contract and reject SQL placeholders.
+
+```go
+type WrapperValues struct {
+    Threshold int64  `json:"threshold"`
+    Metric    int    `json:"metric" choice:"1" choice:"2" validate:"choice(1,2)"`
+    Label     string `json:"label" choice:"alpha" choice:"beta" validate:"choice(alpha,beta)"`
+}
+```
+
+Reference those exact JSON names as `$Values.threshold`, `$Values.metric`, and
+`$Values.label` in authored wrapper scalar expressions. For example:
+
+```sql
+SELECT t1.key, t1.amount
+FROM $CubeSQL1 AS t1
+WHERE t1.amount >= $Values.threshold
+ORDER BY t1.amount DESC
+LIMIT 20
+```
+
+Invoke the generated native compose component normally, including a `values`
+object alongside `cubes`, `sql`, optional `page`, and optional `resultLimit`:
+
+```json
+{"cubes":[{"filters":{}}],"sql":"SELECT t1.amount FROM $CubeSQL1 AS t1 WHERE t1.amount >= $Values.threshold","values":{"threshold":1000}}
+```
+
+`PrepareComposition` validates references against the same native authored type;
+its `ValuesType()` metadata exposes that shape. Preparation grants no execution
+authority. Execute through the registered compose target and ComponentInvoker,
+which still prepares each source with its original filters and authorization.
+Wrapper filters apply after source aggregation; changing a threshold never
+changes the fact-row predicates. Page and semantic result-limit rules are
+unchanged.
+
+Every referenced value must be present and non-null. Declared unused fields may
+be omitted. Supplied nulls, unknown keys (including differently cased aliases),
+wrong scalar types and integer overflows are rejected. Explicit zero, false and
+empty string remain values. Integers decode directly into their declared width,
+without a floating-point intermediate. `choice` tags retain their existing schema
+metadata role; use explicit `validate:"choice(...)"` for membership checks.
+Only supplied fields are validated using the existing validator. The generated
+HTTP/MCP schema retains the authored scalar and choice metadata while making
+all controls optional until a particular SQL statement references them. Supplied
+controls are non-null even when their Go declarations use pointers. Internally the generated input
+holds `Values` as `json.RawMessage` so strict native decoding can preserve exact
+keys and integer values; trusted Go callers populate that field with JSON too.
+
+All wrapper values render as SQL arguments in lexical clause order, including
+projection expressions before source arguments and WHERE/HAVING/ORDER BY
+expressions after them. UNION ALL admits typed scalar values in its already
+supported projection positions. Values cannot identify a table, field, SQL
+function, operator, sort direction, LIMIT/OFFSET or cube frame, and are never
+interpolated into SQL. Choose among authored metric expressions with an approved
+compiled expression or a separately supported authored CASE expression; never
+accept SQL expressions from a client value.

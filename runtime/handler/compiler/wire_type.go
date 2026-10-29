@@ -32,19 +32,28 @@ func (c *Compiler) compileWireTypes(bindings []bindly.BindingSpec) (map[string]r
 				continue
 			}
 			seen[expression] = true
-			named, err := (xshape.Resolver{}).Named(expression)
-			if err != nil || named != expression {
-				return nil, fmt.Errorf("input %s field %s wireType %q requires a linked non-pointer named representation", c.input.InputType, binding.Path, expression)
-			}
-			if c.input.TypeLookup == nil {
-				return nil, fmt.Errorf("input %s field %s wireType %q requires component type lookup", c.input.InputType, binding.Path, expression)
-			}
-			resolved, err := c.input.TypeLookup(expression)
-			if err != nil {
-				return nil, fmt.Errorf("input %s field %s wireType %q: %w", c.input.InputType, binding.Path, expression, err)
-			}
-			if resolved == nil || resolved.Kind() == reflect.Pointer || strings.HasPrefix(expression, "*") || resolved.Name() == "" || resolved.PkgPath() == "" {
-				return nil, fmt.Errorf("input %s field %s wireType %q requires a linked non-pointer named representation", c.input.InputType, binding.Path, expression)
+			// Canonical Go shape expressions also support source-authored runtime
+			// structs. They carry the same trusted wire authority as linked names
+			// without requiring a compiled application type for every shape.
+			named, nameErr := (xshape.Resolver{}).Named(expression)
+			var resolved reflect.Type
+			var err error
+			if nameErr != nil || named != expression {
+				resolved, err = (xshape.Runtime{Lookup: c.input.TypeLookup}).Type(expression)
+				if err != nil || resolved == nil || resolved.Kind() != reflect.Struct {
+					return nil, fmt.Errorf("input %s field %s wireType %q requires a linked non-pointer named representation or authored struct shape", c.input.InputType, binding.Path, expression)
+				}
+			} else {
+				if c.input.TypeLookup == nil {
+					return nil, fmt.Errorf("input %s field %s wireType %q requires component type lookup", c.input.InputType, binding.Path, expression)
+				}
+				resolved, err = c.input.TypeLookup(expression)
+				if err != nil {
+					return nil, fmt.Errorf("input %s field %s wireType %q: %w", c.input.InputType, binding.Path, expression, err)
+				}
+				if resolved == nil || resolved.Kind() == reflect.Pointer || (resolved.Kind() != reflect.Struct && (resolved.Name() == "" || resolved.PkgPath() == "")) {
+					return nil, fmt.Errorf("input %s field %s wireType %q requires a linked non-pointer named representation", c.input.InputType, binding.Path, expression)
+				}
 			}
 			if wire != nil && wire != resolved {
 				return nil, fmt.Errorf("input %s field %s has conflicting wireType declarations", c.input.InputType, binding.Path)

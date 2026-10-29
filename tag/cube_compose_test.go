@@ -21,3 +21,28 @@ func TestCubeComposeTagRoundTrip(t *testing.T) {
 		t.Fatalf("compose=%+v", parsed.ReportCompose)
 	}
 }
+
+func TestComposeValuesTypeTagRoundTrip(t *testing.T) {
+	original := Component{Name: "Metrics", ReportCompose: &spec.CubeComposeSettings{Enabled: true, ValuesType: "controls.Scalars"}}
+	raw, err := original.StructTag()
+	if err != nil {
+		t.Fatal(err)
+	}
+	parsed, ok, err := ParseComponent(reflect.StructTag(raw))
+	if err != nil || !ok || parsed.ReportCompose == nil || parsed.ReportCompose.ValuesType != "controls.Scalars" {
+		t.Fatalf("scalar type lost: %+v %v", parsed, err)
+	}
+}
+
+func TestComposeInlineValuesTypeTagRoundTrip(t *testing.T) {
+	shape := "struct { Metric int `json:\"metric,omitempty\" choice:\"1\" choice:\"2\" validate:\"choice(1,2)\"` }"
+	original := Component{Name: "Metrics", ReportCompose: &spec.CubeComposeSettings{Enabled: true, ValuesType: shape}}
+	raw, err := original.StructTag()
+	if err != nil {
+		t.Fatal(err)
+	}
+	parsed, ok, err := ParseComponent(reflect.StructTag(raw))
+	if err != nil || !ok || parsed.ReportCompose == nil || parsed.ReportCompose.ValuesType != shape {
+		t.Fatalf("inline shape lost: %s %+v %v", raw, parsed, err)
+	}
+}

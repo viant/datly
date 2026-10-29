@@ -194,8 +194,8 @@ func parseComponentSettings(blocks []directiveBlock) (ret *componentSettings, er
 			}
 			ret.Report = report
 		case strings.EqualFold(name, "cubeCompose"):
-			if len(args) < 1 || len(args) > 5 || tail != "" {
-				return nil, fmt.Errorf("cubeCompose requires enabled and optional MCP, max cubes, max limit and timeout values")
+			if len(args) < 1 || len(args) > 6 || tail != "" {
+				return nil, fmt.Errorf("cubeCompose requires enabled and optional MCP, max cubes, max limit, timeout and authored values type")
 			}
 			enabled, parseErr := strconv.ParseBool(strings.TrimSpace(trimQuote(args[0])))
 			if parseErr != nil {
@@ -214,12 +214,22 @@ func parseComponentSettings(blocks []directiveBlock) (ret *componentSettings, er
 			}
 			values := []*int{&compose.MaxCubes, &compose.MaxLimit, &compose.TimeoutMs}
 			labels := []string{"max cubes", "max limit", "timeout milliseconds"}
-			for index := 2; index < len(args); index++ {
+			for index := 2; index < len(args) && index < 5; index++ {
 				value, ok := parseIntArg(args[index])
 				if !ok || value <= 0 {
 					return nil, fmt.Errorf("cubeCompose %s requires a positive integer", labels[index-2])
 				}
 				*values[index-2] = value
+			}
+			if len(args) == 6 {
+				raw := strings.TrimSpace(args[5])
+				if len(raw) < 2 || (raw[0] != '\'' && raw[0] != '"') || raw[len(raw)-1] != raw[0] {
+					return nil, fmt.Errorf("cubeCompose values type requires a quoted Go type expression")
+				}
+				compose.ValuesType = trimQuote(raw)
+				if strings.TrimSpace(compose.ValuesType) == "" {
+					return nil, fmt.Errorf("cubeCompose values type cannot be empty")
+				}
 			}
 			ret.Report.Compose = compose
 		case strings.EqualFold(name, "cache"):

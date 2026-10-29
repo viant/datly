@@ -2,7 +2,9 @@ package report
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	bindinput "github.com/viant/bindly/input"
 	"github.com/viant/bindly/locator"
 	"github.com/viant/datly/exec"
 	"github.com/viant/datly/report/cubecompose"
@@ -32,6 +34,7 @@ type ComposeResponse struct {
 }
 
 type composeHandler struct {
+	values    *cubecompose.ValuesContract
 	inputType reflect.Type
 	source    *Plan
 	config    *spec.CubeComposeSettings
@@ -58,7 +61,16 @@ func (h *composeHandler) Execute(ctx context.Context, invocation rhandler.Invoca
 	}
 	plan, err := h.compileComposition(input.FieldByName("SQL").String(), cubes.Len(), resultLimit)
 	if err != nil {
+		if h.values != nil {
+			return nil, &bindinput.Error{Cause: err}
+		}
 		return nil, err
+	}
+	if h.values != nil {
+		plan, err = plan.BindValues(ctx, input.FieldByName("Values").Interface().(json.RawMessage))
+		if err != nil {
+			return nil, &bindinput.Error{Cause: err}
+		}
 	}
 	if field := input.FieldByName("Page"); field.IsValid() && !field.IsNil() {
 		plan, err = plan.WithPage(*field.Interface().(*cubecompose.Page))

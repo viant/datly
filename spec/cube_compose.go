@@ -2,9 +2,11 @@ package spec
 
 // CubeComposeSettings enables a bounded, request-local composition of cube queries.
 type CubeComposeSettings struct {
-	Enabled  bool  `json:"enabled,omitempty"`
-	MCPTool  *bool `json:"mcpTool,omitempty"`
-	MaxCubes int   `json:"maxCubes,omitempty"`
+	// ValuesType is a catalog type name or authored Go struct expression for bound wrapper scalars.
+	ValuesType string `json:"valuesType,omitempty"`
+	Enabled    bool   `json:"enabled,omitempty"`
+	MCPTool    *bool  `json:"mcpTool,omitempty"`
+	MaxCubes   int    `json:"maxCubes,omitempty"`
 	// MaxLimit bounds response rows (and UNION LIMIT+OFFSET). Native execution
 	// may read one additional combined-result row solely to determine hasMore.
 	MaxLimit  int `json:"maxLimit,omitempty"`
