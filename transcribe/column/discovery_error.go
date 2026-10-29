@@ -58,6 +58,13 @@ func validDiscoveryIdentifier(value string) bool {
 	return true
 }
 
+// QueryFailureDiagnostic projects only recognized structured native errors.
+// It never interprets or copies an error message, SQL or connector information.
+func QueryFailureDiagnostic(err error) (DiscoveryDiagnostic, bool) {
+	code, reason := discoveryDriverReason(err)
+	return DiscoveryDiagnostic{Operation: "query", DriverCode: code, Reason: reason}, code != "" || reason != ""
+}
+
 func discoveryDriverReason(err error) (string, string) {
 	var my *mysql.MySQLError
 	if errors.As(err, &my) {
@@ -72,6 +79,10 @@ func discoveryDriverReason(err error) (string, string) {
 			return "mysql:1146", "source_not_found"
 		}
 	}
+	var job interface{ BigQueryReason() string }
+	if errors.As(err, &job) {
+		return "", bigQueryReason(job.BigQueryReason())
+	}
 	var api *googleapi.Error
 	if errors.As(err, &api) {
 		code := ""
@@ -80,22 +91,29 @@ func discoveryDriverReason(err error) (string, string) {
 			code = fmt.Sprintf("googleapi:%d", api.Code)
 		}
 		for _, item := range api.Errors {
-			switch item.Reason {
-			case "invalidQuery":
-				return code, "query_invalid"
-			case "notFound":
-				return code, "source_not_found"
-			case "accessDenied":
-				return code, "access_denied"
-			case "backendError", "internalError":
-				return code, "source_unavailable"
-			case "rateLimitExceeded", "jobRateLimitExceeded":
-				return code, "rate_limited"
-			case "quotaExceeded":
-				return code, "quota_exceeded"
+			if reason := bigQueryReason(item.Reason); reason != "" {
+				return code, reason
 			}
 		}
 		return code, ""
 	}
 	return "", ""
+}
+
+func bigQueryReason(reason string) string {
+	switch reason {
+	case "invalidQuery":
+		return "query_invalid"
+	case "notFound":
+		return "source_not_found"
+	case "accessDenied":
+		return "access_denied"
+	case "backendError", "internalError":
+		return "source_unavailable"
+	case "rateLimitExceeded", "jobRateLimitExceeded":
+		return "rate_limited"
+	case "quotaExceeded":
+		return "quota_exceeded"
+	}
+	return ""
 }
