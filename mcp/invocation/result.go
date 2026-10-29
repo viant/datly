@@ -1,6 +1,7 @@
 package invocation
 
 import (
+	"bytes"
 	"compress/gzip"
 	"compress/zlib"
 	"encoding/json"
@@ -143,7 +144,14 @@ func objectPayload(payload []byte) map[string]interface{} {
 		return nil
 	}
 	var result map[string]interface{}
-	if json.Unmarshal(payload, &result) != nil {
+	decoder := json.NewDecoder(bytes.NewReader(payload))
+	decoder.UseNumber()
+	if decoder.Decode(&result) != nil {
+		return nil
+	}
+	// Decode must consume one complete JSON value, as json.Unmarshal did.
+	var trailing interface{}
+	if decoder.Decode(&trailing) != io.EOF {
 		return nil
 	}
 	return result
