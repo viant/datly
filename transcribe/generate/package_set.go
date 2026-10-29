@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/viant/datly/typecatalog"
 	xmodule "github.com/viant/x/module"
@@ -257,6 +258,11 @@ func (s *packageSet) validateImports() error {
 		proposed[filepath.Clean(s.dirs[i])] = sources
 		graph[p.Package] = map[string]bool{}
 	}
+	// Bound concurrent filesystem work without retaining a stale directory or
+	// source snapshot between preflight and projected validation. One caller plus
+	// seven workers limits open files and avoids unbounded subtree goroutines.
+	slots := make(chan struct{}, 7)
+	var graphMu sync.Mutex
 	// SourceParser owns Go imports. Include existing project packages so a shape
 	// cannot introduce a cycle through an authored intermediary.
 	walk := func(readRoot, nominalRoot string, physical bool) error {
@@ -274,9 +280,6 @@ func (s *packageSet) validateImports() error {
 				if strings.HasPrefix(name, ".") || name == "vendor" {
 					return nil
 				}
-				if _, err := os.Stat(filepath.Join(directory, "go.mod")); err == nil {
-					return nil
-				}
 			}
 			relative, err := filepath.Rel(readRoot, directory)
 			if err != nil {
@@ -287,10 +290,34 @@ func (s *packageSet) validateImports() error {
 			// import validation and recursion consume the same ordered entries.
 			entries, err := os.ReadDir(directory)
 			if err != nil {
+				// Preserve nested-module exclusion when the directory permits
+				// lookup of go.mod but cannot itself be listed.
+				if directory != readRoot {
+					if _, statErr := os.Stat(filepath.Join(directory, "go.mod")); statErr == nil {
+						return nil
+					}
+				}
 				return err
+			}
+			if directory != readRoot {
+				for _, entry := range entries {
+					if entry.Name() != "go.mod" {
+						continue
+					}
+					// Most directories have no module boundary. Use the listing
+					// instead of a failing Stat for every one of them; follow
+					// symlinks only to retain the existing dangling-link rule.
+					if entry.Type()&os.ModeSymlink == 0 {
+						return nil
+					}
+					if _, statErr := os.Stat(filepath.Join(directory, "go.mod")); statErr == nil {
+						return nil
+					}
+				}
 			}
 			if _, overridden := proposed[filepath.Clean(nominal)]; !overridden {
 				importPath := ""
+				localGraph := map[string]map[string]bool{}
 				for _, entry := range entries {
 					if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") || strings.HasSuffix(entry.Name(), "_test.go") {
 						continue
@@ -305,16 +332,45 @@ func (s *packageSet) validateImports() error {
 					if err != nil {
 						return err
 					}
-					if err = s.imports(graph, importPath, string(content)); err != nil {
+					if err = s.imports(localGraph, importPath, string(content)); err != nil {
 						return err
 					}
 				}
-			}
-			for _, entry := range entries {
-				if entry.IsDir() {
-					if err := visit(filepath.Join(directory, entry.Name())); err != nil {
-						return err
+				graphMu.Lock()
+				for pkg, imports := range localGraph {
+					if graph[pkg] == nil {
+						graph[pkg] = map[string]bool{}
 					}
+					for imported := range imports {
+						graph[pkg][imported] = true
+					}
+				}
+				graphMu.Unlock()
+			}
+			// Keep errors in directory order regardless of worker completion.
+			// Join every worker before returning, including on failure.
+			errors := make([]error, len(entries))
+			var pending sync.WaitGroup
+			for i, entry := range entries {
+				if entry.IsDir() {
+					child := filepath.Join(directory, entry.Name())
+					select {
+					case slots <- struct{}{}:
+						pending.Add(1)
+						go func(i int, child string) {
+							defer pending.Done()
+							defer func() { <-slots }()
+							errors[i] = visit(child)
+						}(i, child)
+					default:
+						errors[i] = visit(child)
+					}
+				}
+			}
+			pending.Wait()
+			for _, err := range errors {
+				if err != nil {
+					return err
 				}
 			}
 			return nil
