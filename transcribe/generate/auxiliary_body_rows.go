@@ -34,13 +34,23 @@ func (r *planResolver) auxiliaryBodyRoot() *spec.View {
 	if err != nil || canonical != planned {
 		return nil
 	}
+	parameters := preferDefinedParams(c.Parameters)
+	// A response DTO does not own request presence. Output/body is only a
+	// fallback for decoded-body contracts that have no explicit request body.
+	hasRequestBody := false
+	for _, param := range parameters {
+		if param != nil && strings.EqualFold(strings.TrimSpace(param.Source.Kind), "body") {
+			hasRequestBody = true
+			break
+		}
+	}
 	matched := false
-	for _, param := range preferDefinedParams(c.Parameters) {
+	for _, param := range parameters {
 		if param == nil {
 			continue
 		}
 		kind := strings.ToLower(strings.TrimSpace(param.Source.Kind))
-		if kind != "body" && !(kind == "output" && param.Source.Name == "body") {
+		if kind != "body" && !(kind == "output" && param.Source.Name == "body" && !hasRequestBody) {
 			continue
 		}
 		// The decoded field owns the body row; a codec's raw provider type
