@@ -159,7 +159,7 @@ matched case-insensitively; use the spelling below. Quote textual values.
 | `mcp` | 1+ | name (nonempty), optional description, optional description path; arguments after third ignored |
 | `mcp_folder`, `mcp_skill_folder` | exactly 3 | namespace, root, URI prefix; no tail; skill variant selects `Skills: ["."]` |
 | `report`, `cube` | 0+ | first eight: linked input type, dimensions, measures, filters, orderBy, limit, offset, MCP-tool boolean; later arguments ignored |
-| `cubeCompose` | exactly 1 | boolean; no tail |
+| `cubeCompose` | 1..5 | enabled boolean; optional MCP-tool boolean, positive max-cubes integer, positive max-limit integer, positive timeout-ms integer, in order |
 | `cache` | 1+ | enabled boolean or name, optional TTL; later positional arguments ignored; fluent options below |
 | `cache_warmup` | 1+ | index column, then name=value options; repeated same-index calls merge cases with conflict checks; a different index appends an ordered plural warmup |
 | `cache_warmup_cases` | 2+ | shared case set: name, then name=value parameters; referenced by warmup `CaseRefs` |
@@ -911,7 +911,7 @@ SDK documentation service. Shared schema references remain resources.
 | Parameter errors | status 100–599; counts nonnegative; the binder checks the bound collection count; `transcribe/dql/declarations_options.go`, registration/binding validation |
 | View counts | nonnegative integer literals for limit/batching/concurrency; no fixed global maximum in directive parser; `transcribe/compile/view_directives.go` |
 | No-limit | `set_limit(view,0)` removes view limit; authored inner SQL LIMIT remains SQL |
-| Cube composition | `cubeCompose(bool)` enables it; typed `CubeComposeSettings` defaults to max 8 cubes, max limit 100, timeout 30000 ms; these numbers are **not** additional DQL arguments |
+| Cube composition | `cubeCompose(enabled[, mcpTool[, maxCubes[, maxLimit[, timeoutMs]]]])` enables it and can set native budgets. Both flags are booleans; supplied budgets are positive integers. Omitted budgets default to 8 cubes, limit 100, timeout 30000 ms. Example: `cubeCompose(true,true,2,50,12000)` |
 | Warmup | `Limit`, `MaxCases`, `FieldNames` and per-case exclusions exist on typed settings, not standalone DQL options; unknown warmup option names become parameter dimensions |
 | Cache | positive TTL and agreement between duration/milliseconds checked by configuration; no automatic backend selection or fallback |
 | SQL parameters / expressions | database dialect placeholder budgets and reader/report validation apply; no universal DQL parameter-count maximum |

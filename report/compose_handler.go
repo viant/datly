@@ -21,8 +21,14 @@ import (
 )
 
 type ComposeResponse struct {
-	Columns []cubecompose.Column `json:"columns"`
-	Data    any                  `json:"data"`
+	ResultLimit *int                 `json:"resultLimit,omitempty"`
+	Columns     []cubecompose.Column `json:"columns"`
+	Data        any                  `json:"data"`
+	HasMore     bool                 `json:"hasMore"`
+	Complete    bool                 `json:"complete"`
+	Truncated   bool                 `json:"truncated"`
+	Limit       int                  `json:"limit"`
+	Offset      int                  `json:"offset"`
 }
 
 type composeHandler struct {
@@ -45,7 +51,12 @@ func (h *composeHandler) Execute(ctx context.Context, invocation rhandler.Invoca
 	if cubes.Len() < 1 || cubes.Len() > h.config.MaxCubes {
 		return nil, fmt.Errorf("cube compose requires between 1 and %d cubes", h.config.MaxCubes)
 	}
-	plan, err := cubecompose.Compile(input.FieldByName("SQL").String(), h.catalog, cubes.Len(), h.config.MaxLimit)
+	var resultLimit *int
+	if field := input.FieldByName("ResultLimit"); field.IsValid() && !field.IsNil() {
+		value := int(field.Elem().Int())
+		resultLimit = &value
+	}
+	plan, err := cubecompose.CompileWithResultLimit(input.FieldByName("SQL").String(), h.catalog, cubes.Len(), h.config.MaxLimit, resultLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -90,7 +101,7 @@ func (h *composeHandler) Execute(ctx context.Context, invocation rhandler.Invoca
 			projection = query.Projection
 		}
 	}
-	SQL, args, err := plan.Render(prepared)
+	SQL, args, err := plan.RenderPage(prepared)
 	if err != nil {
 		return nil, err
 	}
@@ -102,7 +113,15 @@ func (h *composeHandler) Execute(ctx context.Context, invocation rhandler.Invoca
 	if err != nil {
 		return nil, err
 	}
-	return &ComposeResponse{Columns: plan.Columns, Data: rows}, nil
+	values := reflect.ValueOf(rows)
+	if !values.IsValid() || values.Kind() != reflect.Slice {
+		return nil, fmt.Errorf("cube compose projection returned a non-slice result")
+	}
+	hasMore := values.Len() > plan.Limit
+	if hasMore {
+		values = values.Slice(0, plan.Limit)
+	}
+	return &ComposeResponse{ResultLimit: resultLimit, Columns: plan.Columns, Data: values.Interface(), HasMore: hasMore, Complete: plan.Offset() == 0 && !hasMore, Truncated: plan.Offset() != 0 || hasMore, Limit: plan.Limit, Offset: plan.Offset()}, nil
 }
 
 func (h *composeHandler) rowType(plan *cubecompose.Plan) (reflect.Type, error) {

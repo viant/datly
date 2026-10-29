@@ -462,7 +462,7 @@ func validateWireSchema(schema *spec.WireSchema) error {
 		return fmt.Errorf("unsupported wire schema type %q", schema.Type)
 	}
 	switch schema.Format {
-	case "", "date":
+	case "", "date", "date-time":
 	default:
 		return fmt.Errorf("unsupported wire schema format %q", schema.Format)
 	}

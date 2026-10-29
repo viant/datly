@@ -10,6 +10,13 @@ import (
 )
 
 func (p *Plan) Render(frames []Frame) (string, []interface{}, error) {
+	if p.resultLimit > 0 {
+		return p.renderResultPage(frames, false)
+	}
+	return p.render(frames)
+}
+
+func (p *Plan) render(frames []Frame) (string, []interface{}, error) {
 	if len(frames) != p.FrameCount {
 		return "", nil, fmt.Errorf("cube compose plan requires %d prepared cubes, got %d", p.FrameCount, len(frames))
 	}
@@ -17,6 +24,9 @@ func (p *Plan) Render(frames []Frame) (string, []interface{}, error) {
 		if strings.TrimSpace(frame.SQL) == "" {
 			return "", nil, fmt.Errorf("cube compose cube %d SQL was empty", i+1)
 		}
+	}
+	if len(p.unionBranches) > 0 {
+		return p.renderUnion(frames)
 	}
 	r := &renderer{catalog: p.catalog, aliases: map[string]Column{}}
 	for _, column := range p.Columns {

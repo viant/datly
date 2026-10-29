@@ -28,3 +28,15 @@ and the SDK must not depend on the runtime.
 
 To publish the prepared local branch explicitly, use `git push -u origin v1`
 from its worktree. The current migration does not push or create tags itself.
+
+## Native report time input compatibility
+
+Unformatted source `time.Time` query/form filters exposed in a cube JSON body
+now require RFC 3339 values, matching their source conversion contract. A client
+that previously sent a date-only value to an unformatted cube filter must send
+a timestamp or use an explicitly authored date format. Malformed values return
+an input error rather than disappearing from the filter. Explicit layouts and
+codecs retain their contracts; linked typed `*time.Time` shapes are supported.
+A linked `*any` field is not a substitute for an unformatted time source and is
+rejected during report compilation. Existing explicitly formatted `*any`
+filter fixtures remain covered separately.

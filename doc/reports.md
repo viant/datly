@@ -141,6 +141,73 @@ Composition is list-based. Default limits are 8 cubes, result limit 100 and
 can change permitted budgets. The combined query must still fit the dialect's
 placeholder limit even when each frame fits independently.
 
+### Combine independently aggregated rows
+
+An opt-in compose endpoint also accepts bounded `UNION ALL` requests. Supply
+one frame per branch in order: branch N reads only `$CubeSQLN AS tN`. Each
+branch projects explicitly aliased source fields or scalar literals; the same
+column aliases and compatible concrete types must appear in every branch.
+A NULL literal paired with a concrete column produces a nullable output type.
+Columns containing only NULL, implicit aliases, arithmetic, aggregate calls,
+joins, branch WHERE/GROUP/HAVING, CTEs and subqueries are rejected. Ordinary
+join composition keeps its existing contract.
+
+For example, a root measure frame and category measure frame may be combined:
+
+```sql
+SELECT 'root' AS rowKey, NULL AS parentKey, 'All categories' AS category,
+       t1.Amount AS amount
+FROM $CubeSQL1 AS t1
+UNION ALL
+SELECT t2.CategoryKey AS rowKey, 'root' AS parentKey, t2.Category AS category,
+       t2.Amount AS amount
+FROM $CubeSQL2 AS t2
+ORDER BY rowKey
+LIMIT 50 OFFSET 0
+```
+
+The example requires declared string `Category` and `CategoryKey` dimensions
+and a numeric `Amount` measure. Author `CategoryKey` as a stable, unique key
+in a separate leaf namespace (for example `leaf:` followed by an injective
+encoding of the category identity). The key must be functionally determined
+by Category so it does not change the grouping grain. The hierarchy consumer
+must reject duplicate keys and a leaf key equal to the reserved `root` key.
+Composition itself does not validate hierarchy identity. Each
+frame's referenced fields determine its native grouping: the root is computed
+without Category, independently of the leaf rows. Ratios and distinct counts
+are never obtained by summing the leaf results.
+
+Only the final branch may carry ordering and pagination. ORDER BY accepts
+output aliases; a positive OFFSET requires ordering. LIMIT is positive and
+LIMIT plus OFFSET cannot exceed the authored compose MaxLimit. Omitted LIMIT
+uses that configured bound. The limit applies once to the combined result,
+not to either prepared frame. Native execution reads at most one additional combined-result row as a
+lookahead, including when LIMIT equals MaxLimit; the response still returns
+at most LIMIT rows. This documented one-row lookahead is the only allowance
+beyond the response budget. No frame receives a separate pagination limit.
+
+Responses retain `columns` and `data` and add `limit`, `offset`, `hasMore`,
+`complete`, and `truncated`. All are explicitly encoded, including false and
+zero values. `hasMore` is true only when the lookahead row exists; `complete`
+is true only at offset zero with no lookahead. `truncated` is the inverse of
+`complete`, including a final page that omitted earlier rows. Thus an exact-cap
+result is distinguishable from a truncated result, while an offset tail never
+claims to be the complete dataset. These additive fields also apply to the
+existing join composition endpoint, with its existing offset-zero contract.
+`Plan.Render` retains exact-limit semantics for existing SDK callers;
+`Plan.RenderPage` supplies the bounded lookahead used by native execution.
+
+Consumers that require complete hierarchy/export data must require
+`complete=true` (equivalently `hasMore=false` and `truncated=false`). The budget
+is still finite; a truncated response is not an export-completion signal.
+When `hasMore=true` at `LIMIT+OFFSET==MaxLimit`, a further page beyond that
+authored budget is rejected rather than reported as empty.
+
+Each branch is prepared through the same source component and its authorization
+predicates. Inheritance only fills omitted input filters from preceding frames;
+it does not grant authority to override trusted scope. Invalid source filter
+values and rejected source authorization fail the entire composition.
+
 ## Grouping and cache projection
 
 Selecting dimensions changes grouping semantics. A cache warmed at
@@ -158,6 +225,36 @@ acceptance, not production-scale qualification; the exact-name correction still
 awaits final code delivery and review. See [cache acceptance](cache-and-warmup.md).
 
 ## Verify the result you expose
+
+### Semantic ordered prefixes
+
+Cube composition accepts optional integer `resultLimit` for a source-defined
+ordered prefix, separately from SQL `LIMIT`/`OFFSET` transport paging. Omit it
+to preserve existing behavior. This initial contract requires one flat cube
+selection, an explicit `ORDER BY`, no UNION/join/outer GROUP BY, and a positive
+prefix size no larger than the configured composition limit.
+
+```json
+{"cubes":[{"filters":{"tenant":"sample"}}],"sql":"SELECT t1.Category AS category, t1.Amount AS amount FROM $CubeSQL1 AS t1 ORDER BY amount DESC, category ASC LIMIT 2 OFFSET 2","resultLimit":5}
+```
+
+Source predicates, grouping, native calculations and ordering run before the
+prefix. The example returns positions 3–4 of that five-row semantic result.
+Lookahead never crosses its end. A complete zero-offset read of all five rows
+returns `complete:true`, `hasMore:false`, `truncated:false`, and echoes
+`resultLimit:5`; this means complete **within the declared semantic result**, not
+the unrestricted source population. Later pages remain partial as usual. Reading
+all pages for export has exactly the same membership as the complete result.
+No tie-breaker is invented: declare additional ordering terms if stable tied-row
+identity is required across pages. This is positional selection, not dense rank.
+
+`CompileWithResultLimit` is the corresponding planner API; nil preserves
+`Compile`. Both exact `Render` and lookahead `RenderPage` honor the prefix.
+Do not use this feature before client-side percent-of-total, running totals or
+other table calculations whose original partition includes excluded rows.
+Those cases require their calculations to execute before membership selection.
+Source cache/authorization rules remain unchanged; the semantic limit never
+becomes a fact predicate or changes contributor scope.
 
 Test multiple dimensions, aggregate-only requests, nullable left joins, required
 filters, renamed columns, inherited frames and exceeded budgets. Confirm that

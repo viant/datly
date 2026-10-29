@@ -50,6 +50,9 @@ func (d *reportDeriver) derivedComponent(source *spec.Component, sourceRoute *sp
 	settings := &spec.Settings{InputType: input.descriptor.Key()}
 	if source.Settings != nil {
 		settings.OutputType = source.Settings.OutputType
+		// The facade returns the source Go shape. Preserve its naming/format
+		// encoder activation so field-level format tags keep their wire contract.
+		settings.CaseFormat = source.Settings.CaseFormat
 	}
 	var exposure []*spec.MCPExposure
 	if metadata.settings.MCPTool == nil || *metadata.settings.MCPTool {

@@ -59,6 +59,9 @@ selected. Request-specific presentation must not mutate shared registered shapes
 
 ## Formats and their bounded representations
 
+Datly v1 uses Structology’s `encoding/csv` codec for CSV, including standard
+double-quote escaping. The legacy SQLX CSV package is unchanged.
+
 The candidate's multiview v4 output uses native typed codecs and a per-request
 presentation plan. JSON/CSV/XML/tabular/XLSX project only selected output fields.
 This format proof is separate from acceptance of the active naming correction.

@@ -39,6 +39,7 @@ func (d *reportDeriver) deriveCompose(source Source, route *spec.Route, identity
 	inputType, err := (xshape.Runtime{}).Struct([]xshape.RuntimeField{
 		inputField("Cubes", reflect.SliceOf(frameType), fmt.Sprintf("Ordered cube frames, minimum 1, maximum %d", config.MaxCubes)),
 		{Name: "SQL", Type: reflect.TypeFor[string](), Tag: fieldTag("sql", "Validated wrapper SELECT; cubes[N-1] maps exactly to $CubeSQLN AS tN. Start FROM $CubeSQL1 AS t1 and join subsequent frames in order.")},
+		inputField("ResultLimit", reflect.TypeFor[*int](), "Optional semantic ordered-prefix size, independent of transport LIMIT/OFFSET; requires one explicitly ordered flat cube selection"),
 	})
 	if err != nil {
 		return nil, nil, err
@@ -104,6 +105,7 @@ func (d *reportDeriver) deriveCompose(source Source, route *spec.Route, identity
 	for _, param := range params {
 		param.Required = &required
 	}
+	params = append(params, bodyParam("ResultLimit", inputType))
 	component := &spec.Component{
 		Key: identity.key, Name: identity.key.Name, Description: strings.TrimSpace(source.Component.Description + " cube composition"),
 		Settings: &spec.Settings{InputType: descriptor.Key()}, TypeContext: source.Component.TypeContext.Clone(), Parameters: params,

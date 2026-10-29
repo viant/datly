@@ -10,7 +10,10 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"github.com/viant/bindly"
+	"github.com/viant/datly/bootstrap"
 	httpgateway "github.com/viant/datly/gateway/http"
+	"github.com/viant/datly/runtime/registry"
 	"github.com/viant/datly/spec"
 	"github.com/viant/datly/typecatalog"
 	"github.com/viant/mcp-protocol/schema"
@@ -42,24 +45,47 @@ type nullDateCubeInput struct {
 }
 
 func TestCubeNullDateBoundariesHTTPMCP(t *testing.T) {
-	t.Run("dynamic", func(t *testing.T) { testCubeNullDateBoundaries(t, false) })
-	t.Run("linked", func(t *testing.T) { testCubeNullDateBoundaries(t, true) })
+	t.Run("dynamic", func(t *testing.T) { testCubeNullDateBoundaries(t, false, false) })
+	t.Run("linked", func(t *testing.T) { testCubeNullDateBoundaries(t, true, false) })
 }
 
-func testCubeNullDateBoundaries(t *testing.T, linked bool) {
+type strictDateInput struct {
+	From *time.Time
+	To   *time.Time
+	Has  *nullDatePresence `setMarker:"true" json:"-"`
+}
+
+func TestCubeUnformattedTimeBoundariesHTTPMCP(t *testing.T) {
+	t.Run("dynamic", func(t *testing.T) { testCubeNullDateBoundaries(t, false, true) })
+	t.Run("linked_typed", func(t *testing.T) { testCubeNullDateBoundaries(t, true, true, true) })
+
+}
+
+func testCubeNullDateBoundaries(t *testing.T, linked, strict bool, typed ...bool) {
+	inputType := reflect.TypeFor[nullDateInput]()
+	if strict {
+		inputType = reflect.TypeFor[strictDateInput]()
+	}
 	h := (groupedReportHarnessConfig{
-		input: reflect.TypeFor[nullDateInput](),
+		input: inputType,
 		source: func(component *spec.Component, types *typecatalog.Catalog) {
 			if linked {
+				linkedType := reflect.TypeFor[nullDateCubeInput]()
+				if len(typed) > 0 && typed[0] {
+					linkedType = reflect.TypeFor[strictDateCubeInput]()
+				}
 				component.Settings.Report.LinkedInputType = "NullDateCubeInput"
 				require.NoError(t, types.Register(typecatalog.TypeOriginPackage, &x.Type{
-					PkgPath: component.Key.Scope, Name: "NullDateCubeInput", Type: reflect.TypeFor[nullDateCubeInput](),
+					PkgPath: component.Key.Scope, Name: "NullDateCubeInput", Type: linkedType,
 				}))
 			}
 			component.Parameters = []*spec.Parameter{
 				{Name: "From", Source: spec.BindSource{Kind: "form", Name: "from"}},
 				{Name: "To", Source: spec.BindSource{Kind: "form", Name: "to"}},
 				{Name: "Rows", Source: spec.BindSource{Kind: "output", Name: "view"}},
+			}
+			if strict {
+				component.Parameters[0].WireSchema = &spec.WireSchema{Type: "string", Nullable: true}
 			}
 			component.RootView.Relations = nil
 			component.RootView.Source.SQL = `SELECT s.tenant, s.account_id, s.region,
@@ -87,6 +113,11 @@ GROUP BY s.tenant, s.account_id, s.region`
 		{name: "invalid", filters: `{"from":"not-a-date"}`, invalid: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			if strict {
+				for _, date := range []string{"2026-10-07", "2026-10-08", "2026-10-09"} {
+					tc.filters = strings.ReplaceAll(tc.filters, date, date+"T00:00:00Z")
+				}
+			}
 			body := `{"measures":{"orderCount":true},"filters":` + tc.filters + `}`
 			check := func(t *testing.T, raw []byte) {
 				t.Helper()
@@ -154,4 +185,56 @@ func TestFilterSourceValueNullAndZero(t *testing.T) {
 			}
 		})
 	}
+}
+
+type strictDateCubeInput struct {
+	Dimensions groupedLinkedDimensions `json:"dimensions,omitempty"`
+	Measures   groupedLinkedMeasures   `json:"measures,omitempty"`
+	Filters    struct {
+		From *time.Time        `json:"from,omitempty" `
+		To   *time.Time        `json:"to,omitempty" `
+		Has  *nullDatePresence `setMarker:"true" json:"-"`
+	} `json:"filters,omitempty"`
+	OrderBy []string `json:"orderBy,omitempty"`
+	Limit   *int     `json:"limit,omitempty"`
+	Offset  *int     `json:"offset,omitempty"`
+}
+
+// Linked opaque fields are not a supported substitute for typed unformatted
+// time inputs. Reject at compile time, before either HTTP or MCP exposure.
+func TestCubeUnformattedTimeRejectsLinkedAnyAtCompilation(t *testing.T) {
+	types := typecatalog.NewCatalog()
+	component := groupedReportComponent(&spec.ReportSettings{Enabled: true, LinkedInputType: "OpaqueDateCubeInput"})
+	require.NoError(t, types.Register(typecatalog.TypeOriginPackage, &x.Type{PkgPath: component.Key.Scope, Name: "OpaqueDateCubeInput", Type: reflect.TypeFor[nullDateCubeInput]()}))
+	component.Parameters = []*spec.Parameter{{Name: "From", Source: spec.BindSource{Kind: "form", Name: "from"}}, {Name: "To", Source: spec.BindSource{Kind: "form", Name: "to"}}, {Name: "Rows", Source: spec.BindSource{Kind: "output", Name: "view"}}}
+	component.RootView.Relations = nil
+	component.RootView.Source.SQL = "SELECT s.tenant,s.account_id,s.region,SUM(s.amount) AS total_spend,COUNT(*) AS order_count FROM report_spend s GROUP BY s.tenant,s.account_id,s.region"
+	_, err := NewProjectCompiler(ProjectConfig{Types: types}).CompileArtifacts([]bootstrap.ArtifactInput{{Component: component, InputType: reflect.TypeFor[strictDateInput](), OutputType: reflect.TypeFor[groupedSpendOutput](), DirectViewField: "Rows"}})
+	require.ErrorContains(t, err, "cannot provide source type *time.Time")
+}
+
+func TestStrictTimeFilterTypedNilParameterExtension(t *testing.T) {
+	type input struct{ When *time.Time }
+	var parameter *spec.Parameter
+	binding := bindly.BindingSpec{Path: "When", Extension: parameter}
+	binding.Location.Kind = "query"
+	binding.Location.In = "when"
+	injector, err := bindly.NewInjector()
+	require.NoError(t, err)
+	plan, err := injector.CompilePlan(reflect.TypeFor[input](), binding)
+	require.NoError(t, err)
+	projection, err := plan.Projection()
+	require.NoError(t, err)
+	ref := spec.RouteRef{Method: "GET", Path: "/typed-nil-date"}
+	owner, err := registry.NewInputContract(reflect.TypeFor[input](), projection, registry.RouteInput{Route: ref, Plan: plan, Bindings: []bindly.BindingSpec{binding}})
+	require.NoError(t, err)
+	route, ok := owner.ForRoute(ref)
+	require.True(t, ok)
+	item := filterField{field: field{name: "when", fieldName: "When", wireName: "when"}, contract: route.Fields()[0]}
+	require.True(t, strictTimeFilter(item, filterSourceType(item)))
+	compiler := inputCompiler{metadata: &metadata{filters: []filterField{item}}}
+	_, err = compiler.filterType()
+	require.NoError(t, err)
+	schemas := filterWireSchemas("Filters", []filterField{item}, false, reflect.TypeFor[input]())
+	require.Equal(t, "date-time", schemas["Filters.when"].Format)
 }
