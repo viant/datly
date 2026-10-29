@@ -1,6 +1,7 @@
 package report
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"net/http"
 	"strings"
@@ -22,6 +23,18 @@ func (d *reportDeriver) derivedIdentity(component *spec.Component, route *spec.R
 			return reportIdentity{}, fmt.Errorf("report component %s has multiple GET routes; each route requires a name", component.Key.String())
 		}
 		suffix = typecatalog.ExportedFieldName(route.Name)
+		for _, peer := range component.Routes {
+			if peer == nil || peer == route || !strings.EqualFold(peer.Method, http.MethodGet) || typecatalog.ExportedFieldName(peer.Name) != suffix {
+				continue
+			}
+			// DQL aliases share the component's default route name. Keep their
+			// facade keys distinct without changing the shared reader contract.
+			// Use exact route identity so ordering and punctuation cannot alias.
+			identity := spec.RouteRef{Method: strings.ToUpper(route.Method), Path: route.Path}
+			digest := sha256.Sum256([]byte(identity.String()))
+			suffix += fmt.Sprintf("Route%x", digest[:8])
+			break
+		}
 	}
 	base := typecatalog.ExportedFieldName(component.Key.Name + suffix + "Cube")
 	if base == "" {
