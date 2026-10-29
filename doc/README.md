@@ -16,6 +16,7 @@ provide a runnable feature switch.
 | Shape Go fields, distinguish outer/inner aliases and retain SQLX mappings | [V1 shaping contract](shaping-contract.md) |
 | Configure instance constants and preserve authored SQL | [Constants and substitutions](constants-and-substitutions.md) |
 | Transcribe DQL, import types and preserve application hooks | [Authoring](authoring.md) |
+| Transcribe multiple DQL rules in order | [Batch transcription](transcribe-batch.md) |
 | Understand reader/writer hook order, sparse updates and invariants | [Hook flow diagrams](hooks.md) |
 | Build nested reads and paginated outputs | [Readers](readers.md) |
 | Edit complete reader DQL through the stateless API | [Reader builder](reader-builder.md) |

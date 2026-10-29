@@ -19,7 +19,6 @@ import (
 	"github.com/viant/datly/transcribe/internal/program"
 	"github.com/viant/datly/typecatalog"
 	"github.com/viant/x"
-	loaderast "github.com/viant/x/loader/ast"
 	xmodule "github.com/viant/x/module"
 	smodel "github.com/viant/x/syntetic/model"
 	"github.com/viant/xunsafe"
@@ -314,7 +313,7 @@ func LoadPackage(ctx context.Context, workspace *xmodule.Workspace, packagePath 
 	if err != nil {
 		return nil, err
 	}
-	pkg, err := loaderast.LoadPackageFS(ctx, workspace.SourceFS(location.Module), filepath.ToSlash(relative))
+	pkg, err := loadPackageFS(ctx, workspace.SourceFS(location.Module), filepath.ToSlash(relative), location.Dir)
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, nil
 	}
@@ -379,7 +378,7 @@ func loadSnapshotPackage(ctx context.Context, workspace *xmodule.Workspace, pack
 		}
 		files = append(files, gen.BorrowedAuthorityFile{Path: filepath.Join(location.Module.Dir, filepath.FromSlash(name)), Mode: info.Mode(), SHA256: fmt.Sprintf("%x", sha256.Sum256(data)), Bytes: data})
 	}
-	pkg, err := loaderast.LoadPackageFS(ctx, frozen, filepath.ToSlash(relative))
+	pkg, err := loadPackageFS(ctx, frozen, filepath.ToSlash(relative), location.Dir+"#snapshot")
 	if err != nil {
 		return nil, err
 	}

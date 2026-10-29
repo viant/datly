@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 
 	"github.com/viant/datly/bootstrap"
-	loaderast "github.com/viant/x/loader/ast"
 	xmodule "github.com/viant/x/module"
 	"github.com/viant/x/syntetic/model"
 )
@@ -52,7 +51,7 @@ func LoadAuthority(ctx context.Context, workspace *xmodule.Workspace, routes []*
 		if err != nil {
 			return nil, err
 		}
-		pkg, err := loaderast.LoadPackageFS(ctx, workspace.SourceFS(location.Module), filepath.ToSlash(relative))
+		pkg, err := loadPackageFS(ctx, workspace.SourceFS(location.Module), filepath.ToSlash(relative), location.Dir)
 		if err != nil {
 			return nil, err
 		}

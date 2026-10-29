@@ -22,7 +22,7 @@ func Transcribe(ctx context.Context, args []string, stdout, stderr io.Writer, ha
 	arguments := args[1:]
 	if name == "transcribe" {
 		if len(arguments) == 0 {
-			fmt.Fprintln(stderr, "usage: datly transcribe get|patch|post|put|handler [options] module/package")
+			fmt.Fprintln(stderr, "usage: datly transcribe get|patch|post|put|handler [options] module/package [source ...]")
 			return 2
 		}
 		if arguments[0] != "-h" && arguments[0] != "--help" {
@@ -37,12 +37,15 @@ func Transcribe(ctx context.Context, args []string, stdout, stderr io.Writer, ha
 	flags.SetOutput(stderr)
 	if name == "transcribe" {
 		flags.Usage = func() {
-			fmt.Fprintln(stderr, "usage: datly transcribe get|patch|post|put|handler [options] module/package")
+			fmt.Fprintln(stderr, "usage: datly transcribe get|patch|post|put|handler [options] module/package [source ...]")
 			flags.PrintDefaults()
 		}
 	}
 	constantURL := flags.String("const", "", "instance constants YAML/JSON file")
 	directory := flags.String("dir", ".", "project root; DQL/package metadata controls artifact destinations")
+	batch := flags.Bool("batch", false, "transcribe an ordered batch of source files, directories or package patterns")
+	var excludes stringFlags
+	flags.Var(&excludes, "exclude", "exclude a module-qualified package pattern (repeatable)")
 	sourceFile := flags.String("source", "", "component source filename within the selected package, for example lookup.dql")
 	sourceName := flags.String("source-name", "", "component name for exactly one selected source; preserves source path and artifact destinations")
 	operation := &operationValue
@@ -55,8 +58,8 @@ func Transcribe(ctx context.Context, args []string, stdout, stderr io.Writer, ha
 		}
 		return 2
 	}
-	if flags.NArg() != 1 || (*operation != "get" && *operation != "patch" && *operation != "post" && *operation != "put" && *operation != "handler") || (*language != "go" && *language != "velty") {
-		fmt.Fprintln(stderr, "transcribe requires get|patch|post|put|handler, optional -lang go|velty and one module-qualified source package")
+	if flags.NArg() < 1 || (*operation != "get" && *operation != "patch" && *operation != "post" && *operation != "put" && *operation != "handler") || (*language != "go" && *language != "velty") {
+		fmt.Fprintln(stderr, "transcribe requires get|patch|post|put|handler, optional -lang go|velty and at least one source selection")
 		return 2
 	}
 	if *operation == "handler" {
@@ -81,7 +84,7 @@ func Transcribe(ctx context.Context, args []string, stdout, stderr io.Writer, ha
 		return 1
 	}
 	schema.Const = instance
-	discovery := &transcribe.Discovery{Const: instance, BaseDir: resolvedDirectory, GoBuild: &gobuild.Context{Dir: resolvedDirectory}, Include: flags.Args(), SourceFile: *sourceFile, SourceName: *sourceName}
+	discovery := &transcribe.Discovery{Const: instance, BaseDir: resolvedDirectory, GoBuild: &gobuild.Context{Dir: resolvedDirectory}, Include: flags.Args(), Exclude: excludes, SourceFile: *sourceFile, SourceName: *sourceName}
 	discovery.HandlerBindings = handlers
 	if *operation == "handler" {
 		discovery.Connector = schema.connector
@@ -90,6 +93,19 @@ func Transcribe(ctx context.Context, args []string, stdout, stderr io.Writer, ha
 		discovery.Connector = schema.connector
 		discovery.ColumnRefiner = column.New(&schema)
 		defer schema.close()
+	}
+	if *batch || flags.NArg() > 1 {
+		result, err := discovery.TranscribeBatch(ctx, transcribe.BatchRequest{Generator: transcribe.Generator{Operation: *operation, Language: transcribe.HandlerTarget(*language)}, Destination: resolvedDirectory})
+		if result != nil {
+			for i, generated := range result.Packages {
+				fmt.Fprintf(stdout, "Generated %s %s %s: %d artifacts\n", *language, *operation, result.Sources[i], len(generated.Result.Files))
+			}
+		}
+		if err != nil {
+			fmt.Fprintln(stderr, err)
+			return 1
+		}
+		return 0
 	}
 	project, err := discovery.Compile(ctx)
 	if err != nil {
@@ -117,3 +133,9 @@ func Transcribe(ctx context.Context, args []string, stdout, stderr io.Writer, ha
 	fmt.Fprintf(stdout, "Generated %s %s: %d artifacts\n", *language, *operation, len(generated.Result.Files))
 	return 0
 }
+
+// stringFlags preserves repeated flag order.
+type stringFlags []string
+
+func (s *stringFlags) String() string         { return fmt.Sprint([]string(*s)) }
+func (s *stringFlags) Set(value string) error { *s = append(*s, value); return nil }
