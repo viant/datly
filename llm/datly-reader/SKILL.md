@@ -107,6 +107,29 @@ For a cleanup sweep, inspect every reader and writer rather than only the named 
 
 ## Authoring workflow
 
+### Verify native capability before implementing reader behavior
+
+Before adding application filtering, sorting, paging, projection, joins or
+aggregation, verify the selected v1 reader capability and an executable example.
+Check predicate names in the selected version's registry and tests; never infer
+them from a UI operator or older Datly API. The v1 text predicate is `contains`,
+not `contain`: `.WithPredicate(1, 'contains', 'r', 'name')`. See
+[reader predicates](references/reader-predicates.md) for declaration, groups and
+presence. For linked typed inputs, use the documented predicate tag contract.
+
+Database-backed name/text filtering belongs in the native reader predicate, before
+paging/counting and relation expansion. Do not retrieve rows and reimplement it
+with Go string/regexp filters, or duplicate a supported predicate with handwritten
+wildcard SQL. Preserve separate business authorization checks.
+
+Verify the full raw-input → datasource projection → typed binding → predicate →
+bound SQL path. Only one layer constructs wildcards. Exercise present/absent input,
+the required wildcard/collation semantics, filtered paging/counts and denied rows
+using native reader execution. A mocked transport or rendered control alone is
+insufficient. A missing capability requires version-specific evidence and a minimal
+native reproduction before a framework change; it does not authorize a silent Go
+filtering fallback.
+
 The standard workflow is **reader-like declarative DQL graph + explicit `transcribe`
 operation (`get`, `patch`, `post`, `put`) → generated pure Go**. Declare auxiliary
 tables in parentheses, entity hooks and invariant tags in DQL. Reader generation owns typed read contracts and resources; writer generation
