@@ -82,6 +82,46 @@ func (p *Plan) orderingFields(fields []string) []string {
 	return result
 }
 
+// SelectFields resolves native scalar selections and their complete-key relation
+// holders without executing the source component. Names use the same identities
+// as Definition.Dimensions and Definition.Measures; holders are never caller
+// selectable. An empty list returns an empty selection without error, as with
+// native selectedFields. The returned slice is detached from the immutable plan.
+func (p *Plan) SelectFields(names []string) ([]string, error) {
+	if p == nil || p.inputType == nil {
+		return nil, fmt.Errorf("report plan is required")
+	}
+	input := reflect.New(p.inputType).Elem()
+	selections := make(map[string]selection, len(p.dimensions)+len(p.measures))
+	for _, item := range append(append([]selection(nil), p.dimensions...), p.measures...) {
+		selections[item.name] = item
+	}
+	for _, name := range names {
+		item, ok := selections[name]
+		if !ok {
+			return nil, fmt.Errorf("unknown report selection %q", name)
+		}
+		value := input
+		for _, index := range item.index {
+			for value.Kind() == reflect.Pointer {
+				if value.IsNil() {
+					value.Set(reflect.New(value.Type().Elem()))
+				}
+				value = value.Elem()
+			}
+			value = value.Field(index)
+		}
+		for value.Kind() == reflect.Pointer {
+			if value.IsNil() {
+				value.Set(reflect.New(value.Type().Elem()))
+			}
+			value = value.Elem()
+		}
+		value.SetBool(true)
+	}
+	return p.selectedFields(input)
+}
+
 func (p *Plan) selectedFields(input reflect.Value) ([]string, error) {
 	seen := map[string]bool{}
 	result := make([]string, 0, len(p.dimensions)+len(p.measures))
