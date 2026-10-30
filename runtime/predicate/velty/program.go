@@ -94,7 +94,26 @@ func Compile(input CompileInput) (*Program, error) {
 			if definition == nil {
 				continue
 			}
-			entry, ok := registry[strings.ToLower(strings.TrimSpace(definition.Name))]
+			name := strings.ToLower(strings.TrimSpace(definition.Name))
+			if name == "nullable_in" || name == "nullable_literal_in" {
+				typ := derefType(field.Type)
+				if typ.Kind() != reflect.Slice || typ.Elem().Kind() != reflect.Pointer {
+					return nil, fmt.Errorf("predicate %s requires a nullable pointer-element slice", definition.Name)
+				}
+				args := 2
+				if name == "nullable_literal_in" {
+					args = 1
+				}
+				if len(definition.Args) != args {
+					return nil, fmt.Errorf("predicate %s requires %d authored arguments", definition.Name, args)
+				}
+				for _, arg := range definition.Args {
+					if strings.TrimSpace(arg) == "" {
+						return nil, fmt.Errorf("predicate %s requires nonempty authored arguments", definition.Name)
+					}
+				}
+			}
+			entry, ok := registry[name]
 			if !ok {
 				return nil, fmt.Errorf("predicate %q is not registered", definition.Name)
 			}

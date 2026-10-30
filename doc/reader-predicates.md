@@ -730,3 +730,30 @@ configuration pairs into arbitrary fields. The compiled argument plan contains
 immutable scalars, and every Compute call receives its own argument slice.
 Binding errors, cancellation handled by the existing lifecycle, and handler
 errors retain their normal propagation; denied authorization must return an error.
+
+## Nullable selections
+
+The opt-in `nullable_in` predicate uses the same authored alias and column
+arguments as `in`. Its native input must be a pointer-element slice, such as
+`[]*string` or `[]*int`, so a JSON NULL member retains its identity. For an
+expression authored in the source, `nullable_literal_in` takes one expression
+argument directly, including CASE or CONCAT expressions. Neither predicate
+accepts an expression from the caller.
+
+Absent, null, and empty selections omit this optional predicate. `[null]`
+selects only SQL NULL; `["Cedar",null]` selects rows matching the bound string
+or SQL NULL. The string `"null"` remains an ordinary bound string. Required
+scope predicates must remain AND-connected around the whole selection.
+The expression is parenthesized before applying IN or IS NULL. These predicates
+do not change the existing `in`, `not_in`, or `literal_in` contracts. An empty
+selection therefore differs from ordinary `in`'s explicit empty-set behavior.
+
+For example, declare an optional JSON-body selector in a reader:
+
+```sql
+#define($_ = $Segments<[]*string>(body/segments).Optional().WithPredicate(1,'nullable_in','r','segment'))
+```
+
+Include group 1 in the existing predicate Builder and retain the reader's
+required authorization groups. Native SQL templates can use
+`$criteria.NullableIn("r.segment", $Segments)` with the same selection semantics.

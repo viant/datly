@@ -49,6 +49,8 @@ func predicateRegistry() map[string]registryEntry {
 		predicateEqual:             {template: binaryTemplate(predicateEqual, "=")},
 		predicateNotEqual:          {template: binaryTemplate(predicateNotEqual, "!=")},
 		predicateIn:                {template: inTemplate(predicateIn, false, true, false)},
+		"nullable_in":              {template: nullableInTemplate(false)},
+		"nullable_literal_in":      {template: nullableInTemplate(true)},
 		predicateMultiIn:           {template: inTemplate(predicateMultiIn, false, true, true)},
 		predicateNotIn:             {template: inTemplate(predicateNotIn, false, false, false)},
 		predicateMultiNotIn:        {template: inTemplate(predicateMultiNotIn, false, false, true)},
@@ -211,6 +213,19 @@ func literalInTemplate() *xpredicate.Template {
 		Name:   predicateLiteralIn,
 		Source: ` $criteria.In($Literal, $FilterValue)`,
 		Args:   []*xpredicate.NamedArgument{{Name: "Literal", Position: 0}},
+	}
+}
+
+func nullableInTemplate(literal bool) *xpredicate.Template {
+	if literal {
+		return &xpredicate.Template{
+			Name: "nullable_literal_in", Source: ` $criteria.NullableIn($Literal, $FilterValue)`,
+			Args: []*xpredicate.NamedArgument{{Name: "Literal", Position: 0}},
+		}
+	}
+	return &xpredicate.Template{
+		Name: "nullable_in", Source: ` $criteria.NullableIn(${Alias}+"."+${ColumnName}, $FilterValue)`,
+		Args: []*xpredicate.NamedArgument{{Name: "Alias", Position: 0}, {Name: "ColumnName", Position: 1}},
 	}
 }
 
