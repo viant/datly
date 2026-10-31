@@ -237,6 +237,11 @@ func (w *warmupExecution) run(ctx context.Context, plan *ViewPlan, derived *Rela
 			}
 			query = limited
 		}
+		if w.session.queryGuard != nil {
+			if err = w.session.queryGuard(ctx, connection.DB, query.SQL, append([]any(nil), query.Args...)); err != nil {
+				return 0, err
+			}
+		}
 		execution := observation.execution(query, "", "")
 		defer func() { observation.completeSQL(execution, nil, -1, err); observation.emitSQL(execution, nil) }()
 		ctx = cache.WithCreationObserver(ctx, func(kind string, entries int) { w.session.recorder.Created(observation.scope, kind, entries) })

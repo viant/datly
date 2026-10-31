@@ -58,6 +58,11 @@ func (r rowRead) query(ctx context.Context, q rowQuery) (err error) {
 			r.readCache = onlyExactQueries(r.readCache)
 		}
 	}
+	if q.read != nil && q.read.session != nil && q.read.session.queryGuard != nil {
+		if err = q.read.session.queryGuard(ctx, q.db, q.query.SQL, append([]any(nil), q.query.Args...)); err != nil {
+			return err
+		}
+	}
 	execution := q.read.execution(q.query, q.id, q.parent)
 	rows := 0
 	delivered := 0

@@ -2,6 +2,7 @@ package reader
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"github.com/viant/datly/observability"
 	"reflect"
@@ -18,6 +19,7 @@ import (
 
 // Config contains immutable dependencies for a registered reader execution.
 type Config struct {
+	queryGuard      func(context.Context, *sql.DB, string, []any) error
 	metricScope     string
 	observations    map[*data.View]observability.Resolution
 	observationErr  error
@@ -164,6 +166,7 @@ func (e *Execution) session() *Session {
 		return nil
 	}
 	return &Session{
+		queryGuard:      e.config.queryGuard,
 		Component:       e.config.Component,
 		metricScope:     e.config.metricScope,
 		observations:    e.config.observations,

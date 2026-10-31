@@ -2,6 +2,7 @@ package reader
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	dexec "github.com/viant/datly/exec"
 	"github.com/viant/datly/observability"
@@ -31,6 +32,7 @@ type Output struct {
 // Session contains only SQL reader execution state. Input binding, transport,
 // handler capabilities, and registration remain runtime concerns.
 type Session struct {
+	queryGuard        func(context.Context, *sql.DB, string, []any) error
 	consumer          *xh.RowConsumer
 	metricScope       string
 	observations      map[*data.View]observability.Resolution
