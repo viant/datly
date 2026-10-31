@@ -48,18 +48,18 @@ func TestQueryGuardCoversNativeRootPartitionAndRelationSQL(t *testing.T) {
 			require.NoError(t, err)
 			var mu sync.Mutex
 			rootCalls, childCalls := 0, 0
-			guarded := execution.WithQueryGuard(func(ctx context.Context, db *sql.DB, query string, args []any) error {
+			guarded := execution.WithQueryGuard(func(ctx context.Context, db *sql.DB, query *xreader.ParameterizedQuery) error {
 				require.Same(t, h.DB, db)
 				require.NoError(t, ctx.Err())
 				mu.Lock()
 				defer mu.Unlock()
-				if strings.Contains(query, "FROM children") {
+				if strings.Contains(query.Query, "FROM children") {
 					childCalls++
-					require.NotEmpty(t, args)
+					require.NotEmpty(t, query.Args)
 				} else {
 					rootCalls++
 					if partitioned {
-						require.NotEmpty(t, args)
+						require.NotEmpty(t, query.Args)
 					}
 				}
 				return nil
@@ -74,7 +74,7 @@ func TestQueryGuardCoversNativeRootPartitionAndRelationSQL(t *testing.T) {
 				require.Equal(t, 1, rootCalls)
 			}
 			denied := errors.New("resource budget exceeded")
-			rejected := execution.WithQueryGuard(func(context.Context, *sql.DB, string, []any) error { return denied })
+			rejected := execution.WithQueryGuard(func(context.Context, *sql.DB, *xreader.ParameterizedQuery) error { return denied })
 			_, err = rejected.Read(ctx, &struct{}{}, nil, nil)
 			require.ErrorIs(t, err, denied)
 			// Attaching a guard never mutates the original registered execution.
@@ -101,7 +101,7 @@ func TestQueryGuardCarriesIntoPreparedProjection(t *testing.T) {
 	calls := 0
 	deny := false
 	rejection := errors.New("projection budget exceeded")
-	guarded := execution.WithQueryGuard(func(context.Context, *sql.DB, string, []any) error {
+	guarded := execution.WithQueryGuard(func(context.Context, *sql.DB, *xreader.ParameterizedQuery) error {
 		calls++
 		if deny {
 			return rejection

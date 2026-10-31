@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/google/uuid"
-	dexec "github.com/viant/datly/exec"
 	xasync "github.com/viant/xdatly/async"
+	xreader "github.com/viant/xdatly/reader"
 	"time"
 )
 
@@ -44,12 +44,9 @@ func (s *Service) prepare(ctx context.Context, request Submission) (*Record, *Ca
 	}
 	return record, captured, nil
 }
-func (s *Service) persist(ctx context.Context, record *Record, plan *dexec.ReadPlan, publish bool) (*Scheduled, error) {
+func (s *Service) persist(ctx context.Context, record *Record, plan *xreader.ParameterizedQuery, publish bool) (*Scheduled, error) {
 	if plan != nil {
-		query, err := json.Marshal([]struct {
-			Query string
-			Args  []any
-		}{{Query: plan.SQL, Args: plan.Args}})
+		query, err := json.Marshal([]*xreader.ParameterizedQuery{plan})
 		if err != nil {
 			return nil, err
 		}

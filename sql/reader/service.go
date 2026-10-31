@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/viant/xdatly/handler/runtimecache"
+	xreader "github.com/viant/xdatly/reader"
 	"reflect"
 	"strings"
 	"unsafe"
@@ -169,7 +170,7 @@ func (s *Service) readBound(ctx context.Context, session *Session, input reflect
 		if root.Partitioner != nil {
 			return nil, fmt.Errorf("reader dry-run does not support partitioned roots")
 		}
-		return &dexec.ReadPlan{SQL: query.SQL, Args: append([]any(nil), query.Args...)}, nil
+		return &xreader.ParameterizedQuery{Query: query.SQL, Args: append([]any(nil), query.Args...)}, nil
 	}
 	var snapshot *runtimecache.Snapshot
 	if cacheEnabled && rootConnection.Tx == nil {

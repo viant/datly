@@ -238,7 +238,7 @@ func (w *warmupExecution) run(ctx context.Context, plan *ViewPlan, derived *Rela
 			query = limited
 		}
 		if w.session.queryGuard != nil {
-			if err = w.session.queryGuard(ctx, connection.DB, query.SQL, append([]any(nil), query.Args...)); err != nil {
+			if err = w.session.queryGuard(ctx, connection.DB, &xreader.ParameterizedQuery{Query: query.SQL, Args: append([]any(nil), query.Args...)}); err != nil {
 				return 0, err
 			}
 		}

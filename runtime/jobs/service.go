@@ -7,6 +7,7 @@ import (
 	dexec "github.com/viant/datly/exec"
 	xasync "github.com/viant/xdatly/async"
 	xhandler "github.com/viant/xdatly/handler"
+	xreader "github.com/viant/xdatly/reader"
 	xresponse "github.com/viant/xdatly/response"
 	"time"
 )
@@ -50,7 +51,7 @@ type Submission struct {
 }
 type Scheduled struct {
 	Job  *xasync.Job
-	Plan *dexec.ReadPlan
+	Plan *xreader.ParameterizedQuery
 }
 
 // Dispatcher adapts jobs to the canonical runtime, never to a second SQL engine.

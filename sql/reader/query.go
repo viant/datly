@@ -14,6 +14,7 @@ import (
 	"github.com/viant/sqlx/io/read/cache"
 	"github.com/viant/sqlx/metadata/info"
 	xhandler "github.com/viant/xdatly/handler"
+	xreader "github.com/viant/xdatly/reader"
 	"reflect"
 )
 
@@ -66,7 +67,7 @@ func (e *Execution) PrepareQuery(ctx context.Context, input any, binder xhandler
 // projectionReader is request-local. SQLX owns typed row mapping; source caches,
 // relations, dictionaries and hooks do not apply to a new wrapper projection.
 type projectionReader struct {
-	queryGuard   func(context.Context, *sql.DB, string, []any) error
+	queryGuard   xreader.QueryGuard
 	retry        readRetry
 	metricScope  string
 	observations map[*data.View]observability.Resolution

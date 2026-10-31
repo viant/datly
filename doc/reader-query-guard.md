@@ -1,5 +1,20 @@
 # Native reader query admission
 
+Reader planning and admission share `github.com/viant/xdatly/reader.ParameterizedQuery`:
+
+```go
+type ParameterizedQuery struct {
+    Query string
+    Args  []any
+}
+```
+
+`reader.QueryGuard` receives `(context.Context, *sql.DB, *ParameterizedQuery)` and
+returns an error to deny execution. Query retains SQL placeholders and Args holds
+the ordered bound values. Datly's `exec.ReadPlan` name is a deprecated alias;
+new code uses the Xdatly type and its `Query` field directly. Async job persistence
+retains its existing `Query`/`Args` JSON representation.
+
 A trusted host may attach a concurrency-safe query guard with
 `Execution.WithQueryGuard`. Like `WithRecorder`, it returns a detached registered
 reader; the source execution and compiled graph remain unchanged.

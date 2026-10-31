@@ -3,12 +3,12 @@ package reader
 import (
 	"context"
 	"fmt"
-	dexec "github.com/viant/datly/exec"
 	"github.com/viant/sqlx"
 	xhandler "github.com/viant/xdatly/handler"
+	xreader "github.com/viant/xdatly/reader"
 )
 
-func (e *Execution) PlanRead(ctx context.Context, input any, binder xhandler.Binder, resolver sqlx.ParameterResolver) (*dexec.ReadPlan, error) {
+func (e *Execution) PlanRead(ctx context.Context, input any, binder xhandler.Binder, resolver sqlx.ParameterResolver) (*xreader.ParameterizedQuery, error) {
 	if e == nil || e.service == nil {
 		return nil, fmt.Errorf("reader execution is not initialized")
 	}
@@ -18,7 +18,7 @@ func (e *Execution) PlanRead(ctx context.Context, input any, binder xhandler.Bin
 	if err != nil {
 		return nil, err
 	}
-	plan, ok := value.(*dexec.ReadPlan)
+	plan, ok := value.(*xreader.ParameterizedQuery)
 	if !ok {
 		return nil, fmt.Errorf("reader returned invalid dry-run plan %T", value)
 	}

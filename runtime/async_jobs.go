@@ -12,6 +12,7 @@ import (
 	"github.com/viant/datly/spec"
 	xexec "github.com/viant/xdatly/exec"
 	xhandler "github.com/viant/xdatly/handler"
+	xreader "github.com/viant/xdatly/reader"
 	"net/http"
 	"net/url"
 )
@@ -187,7 +188,7 @@ func (d *jobDispatcher) Capture(ctx context.Context, record *jobs.Record, submis
 	if err != nil {
 		return nil, err
 	}
-	plan, ok := planned.(*dexec.ReadPlan)
+	plan, ok := planned.(*xreader.ParameterizedQuery)
 	if !ok {
 		return nil, fmt.Errorf("async reader returned invalid plan %T", planned)
 	}

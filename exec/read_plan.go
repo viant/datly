@@ -4,15 +4,13 @@ import (
 	"context"
 	"github.com/viant/sqlx"
 	xhandler "github.com/viant/xdatly/handler"
+	xreader "github.com/viant/xdatly/reader"
 )
 
-// ReadPlan contains the bound root query with its effective pagination.
-// It grants no execution capability and does not promise whole-invocation purity.
-type ReadPlan struct {
-	SQL  string
-	Args []any
-}
+// ReadPlan is retained as a source-level name for the shared query contract.
+// Deprecated: use reader.ParameterizedQuery from Xdatly.
+type ReadPlan = xreader.ParameterizedQuery
 
 type ReadPlanner interface {
-	PlanRead(context.Context, any, xhandler.Binder, sqlx.ParameterResolver) (*ReadPlan, error)
+	PlanRead(context.Context, any, xhandler.Binder, sqlx.ParameterResolver) (*xreader.ParameterizedQuery, error)
 }

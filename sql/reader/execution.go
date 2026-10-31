@@ -2,9 +2,9 @@ package reader
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"github.com/viant/datly/observability"
+	xreader "github.com/viant/xdatly/reader"
 	"reflect"
 	"strings"
 
@@ -19,7 +19,7 @@ import (
 
 // Config contains immutable dependencies for a registered reader execution.
 type Config struct {
-	queryGuard      func(context.Context, *sql.DB, string, []any) error
+	queryGuard      xreader.QueryGuard
 	metricScope     string
 	observations    map[*data.View]observability.Resolution
 	observationErr  error

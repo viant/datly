@@ -4,6 +4,7 @@ import (
 	"context"
 	dexec "github.com/viant/datly/exec"
 	xexec "github.com/viant/xdatly/exec"
+	xreader "github.com/viant/xdatly/reader"
 	"testing"
 	"time"
 )
@@ -26,7 +27,7 @@ func TestDryRunObservationDoesNotReportExecutedSQL(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := result.(*dexec.ReadPlan); !ok {
+	if _, ok := result.(*xreader.ParameterizedQuery); !ok {
 		t.Fatalf("result=%T", result)
 	}
 	if len(captured.Metrics) != 1 {

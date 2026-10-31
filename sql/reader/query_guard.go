@@ -1,8 +1,7 @@
 package reader
 
 import (
-	"context"
-	"database/sql"
+	xreader "github.com/viant/xdatly/reader"
 
 	dexec "github.com/viant/datly/exec"
 )
@@ -12,7 +11,7 @@ import (
 // derived outputs and warmup retain their native read/population boundaries. The guard
 // must be concurrency-safe; it must not modify SQL or arguments or execute the
 // business query. It receives the source connector for metadata-only admission.
-func (e *Execution) WithQueryGuard(guard func(context.Context, *sql.DB, string, []any) error) dexec.Reader {
+func (e *Execution) WithQueryGuard(guard xreader.QueryGuard) dexec.Reader {
 	if e == nil {
 		return e
 	}

@@ -10,6 +10,7 @@ import (
 	"github.com/viant/datly/observability"
 	"github.com/viant/datly/sql/executionhint"
 	"github.com/viant/datly/sql/reader/collector"
+	xreader "github.com/viant/xdatly/reader"
 
 	sqlxread "github.com/viant/sqlx/io/read"
 	"github.com/viant/sqlx/io/read/cache"
@@ -59,7 +60,7 @@ func (r rowRead) query(ctx context.Context, q rowQuery) (err error) {
 		}
 	}
 	if q.read != nil && q.read.session != nil && q.read.session.queryGuard != nil {
-		if err = q.read.session.queryGuard(ctx, q.db, q.query.SQL, append([]any(nil), q.query.Args...)); err != nil {
+		if err = q.read.session.queryGuard(ctx, q.db, &xreader.ParameterizedQuery{Query: q.query.SQL, Args: append([]any(nil), q.query.Args...)}); err != nil {
 			return err
 		}
 	}

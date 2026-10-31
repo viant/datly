@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	xreader "github.com/viant/xdatly/reader"
 	"reflect"
 	"testing"
 
@@ -38,7 +39,7 @@ func TestQueryGuardCoversNativeCachePopulation(t *testing.T) {
 	require.NoError(t, err)
 	denied := errors.New("warmup budget exceeded")
 	calls := 0
-	guarded := execution.WithQueryGuard(func(context.Context, *sql.DB, string, []any) error { calls++; return denied })
+	guarded := execution.WithQueryGuard(func(context.Context, *sql.DB, *xreader.ParameterizedQuery) error { calls++; return denied })
 	_, err = guarded.(dexec.ReaderWarmer).Warmup(ctx, dexec.ReaderWarmupInvocation{Input: &struct{}{}})
 	require.ErrorIs(t, err, denied)
 	require.Equal(t, 1, calls)
