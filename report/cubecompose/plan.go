@@ -30,6 +30,7 @@ type Field struct {
 	SQLName string
 	Type    reflect.Type
 	Role    Role
+	Tag     reflect.StructTag
 }
 
 type Catalog struct {
@@ -41,6 +42,7 @@ type Column struct {
 	Type  string `json:"type"`
 	Role  Role   `json:"role"`
 	rType reflect.Type
+	rTag  reflect.StructTag
 }
 
 type Plan struct {
@@ -243,6 +245,11 @@ func (p *Plan) validate(maxLimit int) error {
 			return fmt.Errorf("duplicate cube compose output name %q", name)
 		}
 		column := Column{Name: name, Type: typeName(rType), Role: role, rType: rType}
+		// Only a direct source projection has an unambiguous presentation tag.
+		// Do not infer formatting for calculated expressions.
+		if source, sourceErr := p.resolveSelector(item.Expr); sourceErr == nil {
+			column.rTag = source.field.Tag
+		}
 		aliases[key] = column
 		p.Columns = append(p.Columns, column)
 	}
@@ -297,6 +304,9 @@ func (p *Plan) validate(maxLimit int) error {
 
 // RuntimeType returns the native scanner type for the projected scalar.
 func (c Column) RuntimeType() reflect.Type { return c.rType }
+
+// RuntimeTag preserves source presentation metadata for direct projections.
+func (c Column) RuntimeTag() reflect.StructTag { return c.rTag }
 
 type fieldRef struct {
 	alias string

@@ -155,7 +155,11 @@ func (h *composeHandler) rowType(plan *cubecompose.Plan) (reflect.Type, error) {
 		if typeOf == nil {
 			typeOf = reflect.TypeFor[any]()
 		}
-		fields = append(fields, xshape.RuntimeField{Name: name, Type: typeOf, Tag: reflect.StructTag(fmt.Sprintf(`json:"%s" sqlx:"%s"`, column.Name, column.Name))})
+		tag := fmt.Sprintf(`json:"%s" sqlx:"%s"`, column.Name, column.Name)
+		if presentation := column.RuntimeTag().Get("format"); presentation != "" {
+			tag += fmt.Sprintf(` format:%q`, presentation)
+		}
+		fields = append(fields, xshape.RuntimeField{Name: name, Type: typeOf, Tag: reflect.StructTag(tag)})
 	}
 	return (xshape.Runtime{}).Struct(fields)
 }

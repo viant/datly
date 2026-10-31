@@ -105,9 +105,9 @@ func (d *reportDeriver) deriveCompose(source Source, route *spec.Route, identity
 			if !ok {
 				return nil, nil, fmt.Errorf("compose column %s requires a resolved row field", column.publicName)
 			}
-			fields = append(fields, cubecompose.Field{Name: column.sqlName, SQLName: column.sqlName, Type: rowField.Type, Role: section.role})
+			fields = append(fields, cubecompose.Field{Name: column.sqlName, SQLName: column.sqlName, Type: rowField.Type, Role: section.role, Tag: rowField.Tag})
 			if column.sqlName != column.name {
-				fields = append(fields, cubecompose.Field{Name: column.name, SQLName: column.sqlName, Type: rowField.Type, Role: section.role})
+				fields = append(fields, cubecompose.Field{Name: column.name, SQLName: column.sqlName, Type: rowField.Type, Role: section.role, Tag: rowField.Tag})
 			}
 		}
 	}
@@ -134,6 +134,10 @@ func (d *reportDeriver) deriveCompose(source Source, route *spec.Route, identity
 		Key: identity.key, Name: identity.key.Name, Description: strings.TrimSpace(source.Component.Description + " cube composition"),
 		Settings: &spec.Settings{InputType: descriptor.Key()}, TypeContext: source.Component.TypeContext.Clone(), Parameters: params,
 		Routes: []*spec.Route{{Method: identity.route.Method, Path: identity.route.Path, Internal: route.Internal, APIKeyHeader: route.APIKeyHeader, APIKeyValue: route.APIKeyValue}},
+	}
+	if source.Component.Settings != nil {
+		// Preserve activation of the source's native presentation encoder.
+		component.Settings.CaseFormat = source.Component.Settings.CaseFormat
 	}
 	if config.MCPTool == nil || *config.MCPTool {
 		component.Routes[0].MCP = []*spec.MCPExposure{{Kind: spec.MCPExposureTool, CaseFormat: spec.DerivedMCPCaseFormat(route), Name: spec.DerivedMCPToolName(route, identity.key.Name, "CubeCompose"), Description: component.Description}}
