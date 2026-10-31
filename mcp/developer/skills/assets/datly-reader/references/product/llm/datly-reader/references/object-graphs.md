@@ -1,8 +1,13 @@
-# Object and release graphs
+# Object graphs and data graphs for releases
 
 Use this reference when deciding whether related reads/writes belong in one graph,
 or when replacing application-side object assembly with native Datly behavior.
 A useful boundary is one authorized aggregate or use case, not one SQL statement.
+
+The **object graph** describes the typed aggregate/root, related entities and
+cardinalities. The **data graph** declares the DQL sources, connectors, predicates
+and native relation loading that supply those objects. These are corresponding
+views of one contract, not Go map joins or a fetch-and-filter pipeline.
 
 ## Reader boundary and relation loading
 
@@ -63,6 +68,26 @@ keys available internally and selector allowlists explicit. A summary, detail or
 export projection of the same authorized graph usually does not need another
 reader. Preserve genuinely different authorization, data contracts or independent
 operations as separate components; do not widen a graph solely to reduce file count.
+
+### Separate selector transport names from properties
+
+Native declaration fragment for a graph whose canonical view identities are
+`release` and `assets`:
+
+```sql
+#define($_ = $Fields<[]string>(query/fields).Optional().QuerySelector('release'))
+#define($_ = $Fields<[]string>(query/assetFields).Optional().QuerySelector('assets'))
+#define($_ = $OrderBy<[]string>(query/orderBy).Optional().QuerySelector('release'))
+#define($_ = $OrderBy<[]string>(query/assetOrderBy).Optional().QuerySelector('assets'))
+```
+
+Repeat the selector property (`Fields` or `OrderBy`) with distinct transport
+source names and one view argument. Stock transcription generates unique
+selector sidecar fields such as `Fields` and `AssetFields`, separate from the
+business Input. Do not rename the property, add a `WithTag` workaround or invent
+a two-argument `QuerySelector`. This pattern has transcription evidence; verify
+runtime child-view projection and ordering with the connected build before
+claiming their execution or qualification behavior.
 
 ## Writer and hook ownership
 

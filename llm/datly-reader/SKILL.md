@@ -1,6 +1,6 @@
 ---
 name: datly-reader
-description: Author Datly readers with declarative DQL graphs and transcribe get to pure Go, linked shapes, typed relations, selectors, DerivedViews, cubes, and MCP exposure.
+description: Author Datly object graphs and data graphs with DQL readers, native relations, predicates and Query Selectors; transcribe get to typed Go, DerivedViews, cubes and MCP exposure.
 ---
 
 # Datly Reader Components
@@ -25,17 +25,15 @@ boundary requires it; never force unrelated fact grains into a row-multiplying
 join. Read [data-graph authoring](references/data-graphs.md) before designing or
 splitting a reader.
 
-## Design the object graph first
+## Object graph and data graph correspond
 
-Model a bounded entity, aggregate or release use case as a root view with related
-views, complete relation keys and native batched loading, including relations
-across configured connectors. Use native predicates for scope, membership and
-revision selection before paging/counting; use Query Selectors for ordering,
-fields and relation inclusion/projection. Avoid a point reader per table or
-projection followed by Go filtering, joins or per-row component calls. Independent
-operations may remain separate; do not create a universal graph or hide authorization.
-Read [object and release graph design](references/object-graphs.md) before splitting
-an aggregate into components or implementing graph assembly in Go.
+The **object graph** is the typed aggregate: its root, related entities and
+cardinalities. The **data graph** declares the sources, connectors, predicates
+and native relation loading that populate it. Neither means joining Go maps or
+fetching broad rows to filter in Go. Use native predicates for scope, membership
+and revision selection, and Query Selectors for ordering, fields and related-view
+inclusion/projection. Read [object graph and data graph design](references/object-graphs.md)
+for bounded aggregate selection and writer/hook ownership.
 
 ## Audience and contract
 
