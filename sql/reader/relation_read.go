@@ -182,7 +182,16 @@ func (r *relationRead) readBatch(placeholders []interface{}, composite [][]inter
 	if err := (parameterBudget{dialect: r.connection.Dialect}).check(len(query.Args)); err != nil {
 		return err
 	}
-	matcher, err := rsql.NewBuilder().QueryMatcher(r.ctx, query, options...)
+	// Build already evaluated the source and validated ordering/projection.
+	// The matcher describes that exact query plus the original per-parent
+	// window; it must not reinterpret an unevaluated conditional SQL source.
+	matcherOptions := append([]rsql.BuilderOption(nil), options...)
+	matcherSelector := r.selector.forView(view).Clone()
+	if matcherSelector != nil {
+		matcherSelector.OrderBy = ""
+	}
+	matcherOptions = append(matcherOptions, rsql.WithBuilderSQL(query.SQL), rsql.WithBuilderTemplate(nil), rsql.WithBuilderSelector(matcherSelector))
+	matcher, err := rsql.NewBuilder().QueryMatcher(r.ctx, query, matcherOptions...)
 	if err != nil {
 		return fmt.Errorf("build relation cache matcher for %s: %w", view.Spec.Name, err)
 	}
