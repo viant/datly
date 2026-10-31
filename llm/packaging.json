@@ -29,6 +29,7 @@
     "llm/datly-custom-component/references/tags-and-interfaces.md",
     "llm/datly-reader/references/cache-and-operations.md",
     "llm/datly-reader/references/developer-mcp.md",
+    "llm/datly-reader/references/object-graphs.md",
     "llm/datly-reader/references/project-build.md",
     "llm/datly-reader/references/reader-examples.md",
     "llm/datly-reader/references/reader-predicates.md",

@@ -7,6 +7,18 @@ description: Author Datly readers with declarative DQL graphs and transcribe get
 
 Build a typed, data-driven read API. A reader maps a declared query/view graph to a public Go-shaped response; it is not a handwritten DAO.
 
+## Design the object graph first
+
+Model a bounded entity, aggregate or release use case as a root view with related
+views, complete relation keys and native batched loading, including relations
+across configured connectors. Use native predicates for scope, membership and
+revision selection before paging/counting; use Query Selectors for ordering,
+fields and relation inclusion/projection. Avoid a point reader per table or
+projection followed by Go filtering, joins or per-row component calls. Independent
+operations may remain separate; do not create a universal graph or hide authorization.
+Read [object and release graph design](references/object-graphs.md) before splitting
+an aggregate into components or implementing graph assembly in Go.
+
 ## Audience and contract
 
 This skill is for application developers, not Datly framework contributors. Explain DQL, Go shapes, tags, base types, interfaces, and behavior in application terms. Do not require knowledge of internal compilers, collectors, registries, or source directories.

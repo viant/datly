@@ -7,6 +7,17 @@ description: Create Datly components with custom Go handlers, typed inputs and o
 
 Build a component whose application-owned handler orchestrates behavior that is not simply a generated reader or writer. Preserve the same typed contract and scoped services.
 
+## Compose graphs for persistence
+
+For database-backed object or release workflows, invoke bounded generated readers
+and writers with their exact typed inputs. Keep persistence SQL in their DQL views
+or adjacent source assets; do not add application `sql.DB`/`sql.Tx` Query/Exec calls,
+transaction wrappers, broad reads with Go filtering, or a component call per row.
+Use native relations/predicates/selectors within each aggregate and reserve custom
+code for business orchestration and non-database behavior. Read
+[object and release graph design](references/product/llm/datly-reader/references/object-graphs.md)
+when choosing component boundaries and lifecycle composition.
+
 ## Audience and contract
 
 This skill is for application developers, not Datly framework contributors. Explain DQL, Go shapes, tags, base types, interfaces, and behavior in application terms. Do not require knowledge of internal compilers, collectors, registries, or source directories.

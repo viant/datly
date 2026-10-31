@@ -7,6 +7,18 @@ description: Author Datly readers with declarative DQL graphs and transcribe get
 
 Build a typed, data-driven read API. A reader maps a declared query/view graph to a public Go-shaped response; it is not a handwritten DAO.
 
+## Design the object graph first
+
+Model a bounded entity, aggregate or release use case as a root view with related
+views, complete relation keys and native batched loading, including relations
+across configured connectors. Use native predicates for scope, membership and
+revision selection before paging/counting; use Query Selectors for ordering,
+fields and relation inclusion/projection. Avoid a point reader per table or
+projection followed by Go filtering, joins or per-row component calls. Independent
+operations may remain separate; do not create a universal graph or hide authorization.
+Read [object and release graph design](references/object-graphs.md) before splitting
+an aggregate into components or implementing graph assembly in Go.
+
 ## Audience and contract
 
 This skill is for application developers, not Datly framework contributors. Explain DQL, Go shapes, tags, base types, interfaces, and behavior in application terms. Do not require knowledge of internal compilers, collectors, registries, or source directories.
@@ -106,6 +118,29 @@ Preserve each query's SQL, template expressions, aliases, predicates, ordering a
 For a cleanup sweep, inspect every reader and writer rather than only the named example. Record source/asset locations and any intentionally inline simple query. Verify stock transcription resolves the assets, preserves generated Go and runtime SQL semantics, and leaves no unresolved embed references; exercise the affected selectors and supported database dialects. Discovery must not bake its fixture dialect's quoting into portable persisted SQL.
 
 ## Authoring workflow
+
+### Verify native capability before implementing reader behavior
+
+Before adding application filtering, sorting, paging, projection, joins or
+aggregation, verify the selected v1 reader capability and an executable example.
+Check predicate names in the selected version's registry and tests; never infer
+them from a UI operator or older Datly API. The v1 text predicate is `contains`,
+not `contain`: `.WithPredicate(1, 'contains', 'r', 'name')`. See
+[reader predicates](references/reader-predicates.md) for declaration, groups and
+presence. For linked typed inputs, use the documented predicate tag contract.
+
+Database-backed name/text filtering belongs in the native reader predicate, before
+paging/counting and relation expansion. Do not retrieve rows and reimplement it
+with Go string/regexp filters, or duplicate a supported predicate with handwritten
+wildcard SQL. Preserve separate business authorization checks.
+
+Verify the full raw-input → datasource projection → typed binding → predicate →
+bound SQL path. Only one layer constructs wildcards. Exercise present/absent input,
+the required wildcard/collation semantics, filtered paging/counts and denied rows
+using native reader execution. A mocked transport or rendered control alone is
+insufficient. A missing capability requires version-specific evidence and a minimal
+native reproduction before a framework change; it does not authorize a silent Go
+filtering fallback.
 
 The standard workflow is **reader-like declarative DQL graph + explicit `transcribe`
 operation (`get`, `patch`, `post`, `put`) → generated pure Go**. Declare auxiliary

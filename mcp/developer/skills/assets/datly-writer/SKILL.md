@@ -7,6 +7,17 @@ description: Author Datly PATCH, POST, and PUT components with declarative DQL g
 
 Build a typed, data-driven mutation API. Declare the intended write graph and contract; put business customization in explicit hooks instead of editing regenerated orchestration.
 
+## Design the mutation graph first
+
+Declare the body, Current/auxiliary views, presence, complete FK relations and
+validation as a bounded generated writer graph. Native orchestration owns writes
+and managed transaction completion; hooks own business validation/normalization.
+Compose genuinely separate operations through typed component invocation while
+preserving authorization, constraints and the caller's transaction owner. Do not
+replace this with application `sql.DB`/`sql.Tx` Query/Exec calls or transaction
+wrappers. Read [object and release graph design](references/product/llm/datly-reader/references/object-graphs.md)
+when a mutation needs related reads, revision selection or multiple writers.
+
 ## Audience and contract
 
 This skill is for application developers, not Datly framework contributors. Explain DQL, Go shapes, tags, base types, interfaces, and behavior in application terms. Do not require knowledge of internal compilers, collectors, registries, or source directories.
