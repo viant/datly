@@ -25,6 +25,29 @@ selected build's native compiler rather than treating this guide as a parser.
 | Several projections over the same authorized facts | Existing selectors and groupable reader/cube composition, preserving aggregate semantics |
 | Unrelated fact grains or distinct authorization | Separate internal components where necessary; compose through an explicit supported contract |
 
+## Avoid statement-sized components
+
+A SQL statement is not automatically a component boundary. A root query, child
+query, dictionary query, prerequisite and total can serve one authorized result.
+Declare them as native views and relations in that result's graph. Wrapping each
+query in a public GET or a custom component, then looping over those components
+in Go, duplicates binding and assembly responsibilities and can create N+1
+queries. Calling direct SQL from a component wrapper does not make it a native
+reader. Keep executable SQL in named DQL sources or adjacent SQL assets.
+
+Separate components are appropriate for independently reusable contracts,
+different authorization policies, independent operations or unrelated fact grains.
+A prerequisite with its own established service/authorization boundary may remain
+a typed component dependency. Preserve that boundary instead of copying its SQL
+or broadening access. For ordinary database prerequisites within the same use
+case, start with declared input `view` / `data_view` reads. Keep dependency
+components private unless their public exposure is independently required.
+
+Do not consolidate solely to reduce file count. Keep independent writer and
+reader operations separate, and do not force several fact collections into one
+physical join. Use typed invocation for legitimate composition, with the caller's
+authorization and transaction ownership intact.
+
 ## A complete related-view pattern
 
 Illustrative schema: invoice IDs and customer IDs are unique only within a
@@ -93,6 +116,38 @@ their source-defined stages. A scalar MAX-date input can have a different scope
 from the visible rows; declare that intentionally without reading outside the
 authorized domain. A related label must not change the fact's admitted row set.
 
+## Performance follows the loading contract
+
+One component is not a promise of one SQL statement. Native related loading
+uses view queries and batches; prerequisites and DerivedViews can add queries.
+The benefit is declared loading and shared graph semantics, not an invented
+constant query count or guaranteed latency improvement.
+
+- A per-parent lookup can issue another query for each parent. Native `batch`
+  groups parent keys; composite keys and other arguments consume database bind
+  limits. Inspect actual query counts across multiple batches rather than
+  asserting that a relation always runs once.
+- `batchConcurrency`, `relationalConcurrency` and partition `concurrency` control
+  different work. More parallel work can increase connection and database load;
+  tune with the configured pool and real workload. See [reader loading](reader-contract.md#batching-concurrency-and-partitioning).
+- Fetch-and-filter transfers and decodes rows that native predicates could reject.
+  Filtering or sorting a page in Go also changes full-result paging/count
+  semantics. Push the intended scope into the query before paging and expansion.
+- Use allowed Query Selectors for projection and relation selection while retaining
+  internal keys. A different projection alone does not require duplicated source
+  SQL, caches or components. Verify selected-away fields and required hooks.
+- A full-match DerivedView must use the intended non-window scope. It may perform
+  additional database work; it is not a free count of the returned page.
+- Cache reuse depends on prepared view/query identity, bindings, projection and
+  grouping compatibility. Preserve authorization for cold and warm paths, and
+  declare invalidation after writes; related read caches are not automatically
+  invalidated. Follow [cache and operations](cache-and-operations.md).
+
+Compare query count, bound arguments, returned rows, database plans and latency
+with representative authorized fixtures and selector/cache cases. Report measured
+conditions and results; do not claim production gains from syntax validation or
+small fixtures. Cross-connector assembly does not guarantee a common snapshot.
+
 ## Verify the graph through native execution
 
 Use the existing component test and project workflow. Check the emitted typed
@@ -102,6 +157,15 @@ root pages, all requested relations and full-match totals. Verify field selectio
 and paging do not duplicate or lose root rows and that hidden fields stay hidden.
 For cross-connector reads, inspect actual native execution to establish which
 query uses which connector; do not infer this from an outer JOIN's spelling.
+
+Exercise stock validation/transcription and regeneration, then native execution
+with complete bindings. Test prerequisite failure, unauthorized scope, repeated
+IDs across tenants/revisions, duplicate to-one keys, multiple batches, selector
+variations, empty pages with totals and cold/warm cache behavior. Verify the
+supported target database as well as local SQLite fixtures: SQLite or mocked
+execution alone cannot prove MySQL source syntax, bind limits or query plans.
+For writer reuse, additionally prove that auxiliary tables receive no DML and
+that real writable entities still validate, persist and roll back correctly.
 
 When a graph cannot express the requested behavior, record the precise missing
 native capability before adding a custom handler. A per-row Go lookup or several

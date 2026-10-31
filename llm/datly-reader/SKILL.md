@@ -160,8 +160,13 @@ native reproduction before a framework change; it does not authorize a silent Go
 filtering fallback.
 
 The standard workflow is **reader-like declarative DQL graph + explicit `transcribe`
-operation (`get`, `patch`, `post`, `put`) → generated pure Go**. Declare auxiliary
-tables in parentheses, entity hooks and invariant tags in DQL. Reader generation owns typed read contracts and resources; writer generation
+operation (`get`, `patch`, `post`, `put`) → generated pure Go**. Standalone GET
+readers are already read-only; do not wrap physical tables in `(TABLE)` merely
+to prevent writes. In a writer graph, that syntax explicitly marks an auxiliary,
+nonmutating source; preserve its authoring metadata without leaking the marker
+into executable vendor SQL. Real `(SELECT ...)` subqueries remain SQL. Declare
+writer lifecycle hooks and invariant tags only where applicable. Reader generation
+owns typed read contracts and resources; writer generation
 owns Previous reads, presence, validation and write orchestration. Application
 Go hooks own business rules. Existing linked Go types keep their authority.
 

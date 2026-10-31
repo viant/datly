@@ -19,6 +19,13 @@ preserving authorization, constraints and the caller's transaction owner. Do not
 replace this with application `sql.DB`/`sql.Tx` Query/Exec calls or transaction
 wrappers. Read [release graph details](references/product/llm/datly-reader/references/object-graphs.md)
 when a mutation needs related reads, revision selection or multiple writers.
+Do not split Current/lookup reads into one component per statement or call a
+point reader per entity. Use the declared graph and typed read indexes first.
+Auxiliary `(TABLE)` sources are explicitly nonmutating writer roles, not a way
+to make a standalone GET read-only. Preserve this metadata while generating valid
+physical SQL; retain real `(SELECT ...)` subqueries. Read the
+[auxiliary source contract](references/writer-contract.md#4-dql-graph-and-generated-previous-reads)
+before editing source parentheses or reusing reader SQL in a writer.
 
 ## Audience and contract
 

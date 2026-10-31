@@ -96,7 +96,13 @@ A generated mutation graph declares its body, Current and auxiliary read-only
 views, complete identities/FK links, sparse presence, validation and lifecycle
 types. Current is database state, not a replacement for original request presence.
 Use native relations and typed read indexes for those reads; auxiliary views do
-not become writable just because hooks consume them. Generated writers own
+not become writable just because hooks consume them. In a writer, `(TABLE)`
+marks a nonmutating physical source; retain that intent in authoring/generated
+metadata while emitting valid physical SQL without the marker. A real
+`(SELECT ...)` remains a subquery, and its parentheses alone do not declare
+auxiliary ownership. Do not blanket-strip parentheses or remove the writer's
+read-only role to repair SQL. Standalone GET readers already read without writes
+and need no such marker merely to be read-only. Generated writers own
 classification, sequencing, validation, diff/reconciliation, queued writes and
 managed transaction ownership. Do not bypass a constraint or authorization check
 to make a consolidated graph work.
