@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"github.com/viant/datly/observability"
-	xreader "github.com/viant/xdatly/reader"
 	"reflect"
 	"strings"
 
@@ -19,7 +18,6 @@ import (
 
 // Config contains immutable dependencies for a registered reader execution.
 type Config struct {
-	queryGuard      xreader.QueryGuard
 	metricScope     string
 	observations    map[*data.View]observability.Resolution
 	observationErr  error
@@ -166,7 +164,6 @@ func (e *Execution) session() *Session {
 		return nil
 	}
 	return &Session{
-		queryGuard:      e.config.queryGuard,
 		Component:       e.config.Component,
 		metricScope:     e.config.metricScope,
 		observations:    e.config.observations,

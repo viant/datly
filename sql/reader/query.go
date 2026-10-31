@@ -14,7 +14,6 @@ import (
 	"github.com/viant/sqlx/io/read/cache"
 	"github.com/viant/sqlx/metadata/info"
 	xhandler "github.com/viant/xdatly/handler"
-	xreader "github.com/viant/xdatly/reader"
 	"reflect"
 )
 
@@ -61,13 +60,12 @@ func (e *Execution) PrepareQuery(ctx context.Context, input any, binder xhandler
 	if err != nil {
 		return nil, err
 	}
-	return &dexec.PreparedQuery{SQL: query.SQL, Args: append([]any(nil), query.Args...), Projection: &projectionReader{queryGuard: session.queryGuard, db: connection.DB, tx: connection.Tx, dialect: connection.Dialect, component: session.Component, view: root.View, recorder: session.recorder, metricScope: session.metricScope, observations: session.observations, retry: readRetry{source: session.SQL, connector: root.Connector}}}, nil
+	return &dexec.PreparedQuery{SQL: query.SQL, Args: append([]any(nil), query.Args...), Projection: &projectionReader{db: connection.DB, tx: connection.Tx, dialect: connection.Dialect, component: session.Component, view: root.View, recorder: session.recorder, metricScope: session.metricScope, observations: session.observations, retry: readRetry{source: session.SQL, connector: root.Connector}}}, nil
 }
 
 // projectionReader is request-local. SQLX owns typed row mapping; source caches,
 // relations, dictionaries and hooks do not apply to a new wrapper projection.
 type projectionReader struct {
-	queryGuard   xreader.QueryGuard
 	retry        readRetry
 	metricScope  string
 	observations map[*data.View]observability.Resolution
@@ -89,7 +87,7 @@ func (r *projectionReader) ReadProjection(ctx context.Context, request dexec.Pro
 		return nil, err
 	}
 	rows := reflect.MakeSlice(reflect.SliceOf(reflect.PointerTo(request.RowType)), 0, 0)
-	session := &Session{queryGuard: r.queryGuard, Component: r.component, recorder: r.recorder, metricScope: r.metricScope, observations: r.observations}
+	session := &Session{Component: r.component, recorder: r.recorder, metricScope: r.metricScope, observations: r.observations}
 	if session.Component == nil {
 		session.Component = &spec.Component{}
 	}

@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 	dexec "github.com/viant/datly/exec"
 	"github.com/viant/datly/internal/testharness/sqlite"
+	"github.com/viant/datly/observability"
 	"github.com/viant/datly/spec"
 	dsql "github.com/viant/datly/sql"
 	"github.com/viant/datly/sql/reader"
@@ -119,4 +120,54 @@ func TestQueryGuardCarriesIntoPreparedProjection(t *testing.T) {
 	_, err = prepared.Projection.ReadProjection(ctx, dexec.ProjectionRequest{SQL: "SELECT * FROM missing_records", RowType: reflect.TypeFor[row]()})
 	require.ErrorIs(t, err, rejection)
 	require.Equal(t, 2, calls)
+	// Recorder decoration keeps admission; clearing admission detaches its service.
+	observed := guarded.(interface {
+		WithRecorder(*observability.Recorder) dexec.Reader
+	}).WithRecorder(observability.NewRecorder(nil))
+	_, err = observed.Read(ctx, &struct{}{}, nil, nil)
+	require.ErrorIs(t, err, rejection)
+	cleared := observed.(interface {
+		WithQueryGuard(xreader.QueryGuard) dexec.Reader
+	}).WithQueryGuard(nil)
+	value, err = cleared.Read(ctx, &struct{}{}, nil, nil)
+	require.NoError(t, err)
+	require.Len(t, value, 2)
+	_, err = observed.Read(ctx, &struct{}{}, nil, nil)
+	require.ErrorIs(t, err, rejection)
+}
+
+type unguardedChildKey struct{}
+type guardedParentRow struct {
+	ID int `sqlx:"id"`
+}
+
+func (*guardedParentRow) OnFetch(ctx context.Context) error {
+	child := ctx.Value(unguardedChildKey{}).(dexec.Reader)
+	_, err := child.Read(ctx, &struct{}{}, nil, nil)
+	return err
+}
+func TestQueryGuardDoesNotOptNestedComponentsIn(t *testing.T) {
+	ctx := context.Background()
+	h := sqlite.New(t)
+	require.NoError(t, h.ExecStatements(ctx, "CREATE TABLE records(id INTEGER)", "INSERT INTO records VALUES(1)"))
+	compile := func(name string, typ reflect.Type) *reader.Execution {
+		component := &spec.Component{Key: spec.Key{Kind: spec.KindComponent, Name: name}, RootView: &spec.View{Name: "records", Source: &spec.ViewSource{SQL: "SELECT id FROM records"}}}
+		plan, err := compiler.Compile(compiler.Input{Component: component, InputType: reflect.TypeFor[struct{}](), OutputType: typ, DirectViewType: typ})
+		require.NoError(t, err)
+		execution, err := reader.NewExecution(reader.Config{Component: component, InputType: reflect.TypeFor[struct{}](), OutputType: typ, Plan: plan, SQL: &dsql.SQLComponent{DB: h.DB}})
+		require.NoError(t, err)
+		return execution
+	}
+	type childRow struct {
+		ID int `sqlx:"id"`
+	}
+	child := compile("Child", reflect.TypeFor[[]*childRow]())
+	parent := compile("Parent", reflect.TypeFor[[]*guardedParentRow]())
+	ctx = context.WithValue(ctx, unguardedChildKey{}, child)
+	calls := 0
+	guarded := parent.WithQueryGuard(func(context.Context, *sql.DB, *xreader.ParameterizedQuery) error { calls++; return nil })
+	value, err := guarded.Read(ctx, &struct{}{}, nil, nil)
+	require.NoError(t, err)
+	require.Len(t, value, 1)
+	require.Equal(t, 1, calls)
 }

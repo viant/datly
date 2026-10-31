@@ -59,8 +59,8 @@ func (r rowRead) query(ctx context.Context, q rowQuery) (err error) {
 			r.readCache = onlyExactQueries(r.readCache)
 		}
 	}
-	if q.read != nil && q.read.session != nil && q.read.session.queryGuard != nil {
-		if err = q.read.session.queryGuard(ctx, q.db, &xreader.ParameterizedQuery{Query: q.query.SQL, Args: append([]any(nil), q.query.Args...)}); err != nil {
+	if guard := queryGuardFor(ctx, q.read.session.Component); guard != nil {
+		if err = guard(ctx, q.db, &xreader.ParameterizedQuery{Query: q.query.SQL, Args: append([]any(nil), q.query.Args...)}); err != nil {
 			return err
 		}
 	}
