@@ -1,0 +1,2 @@
+SELECT r.tenant, r.document_id, r.revision, r.fingerprint, r.content FROM (SELECT * FROM (SELECT r.*, '' AS should_delete FROM test_drafts r
+) drafts) r WHERE $criteria.CompositeIn("r", $Unsafe.ProjectCurrentDraftsParentKeys($CurrentDocuments))

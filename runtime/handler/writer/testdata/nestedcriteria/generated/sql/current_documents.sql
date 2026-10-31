@@ -1,0 +1,2 @@
+SELECT r.tenant, r.id, r.ledger_id, r.title, r.revision FROM (SELECT * FROM (SELECT d.* FROM test_documents d
+) documents) r WHERE $criteria.CompositeIn("r", $Unsafe.ProjectCurrentDocumentsParentKeys($CurrentComponent))

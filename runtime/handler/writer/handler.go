@@ -3013,6 +3013,11 @@ func compileRecordMode(component *spec.Component, inputType reflect.Type, name, 
 	record.NestedNullPolicy = tagOption(viewTag, "nestedNullPolicy")
 	// Generated Go relations can carry their policy without a child View spec.
 	record.WriterActionPolicy = tagOption(viewTag, "writerActionPolicy")
+	mutationGroup, err := recordMutationPredicate(viewTag, view)
+	if err != nil {
+		return nil, fmt.Errorf("writer relation %s: %w", path, err)
+	}
+	record.MutationPredicateGroup = mutationGroup
 	if view != nil {
 		record.Auxiliary = record.Auxiliary || view.Auxiliary
 		if view.WriterActionPolicy != "" {
@@ -3028,7 +3033,6 @@ func compileRecordMode(component *spec.Component, inputType reflect.Type, name, 
 		}
 		record.InsertValidationPresence = view.InsertValidationPresence
 		record.OnDeleteNotFound = view.OnDeleteNotFound
-		record.MutationPredicateGroup = view.MutationPredicateGroup
 		if view.Source != nil && strings.TrimSpace(view.Source.Table) != "" {
 			record.Table = strings.TrimSpace(view.Source.Table)
 		}
