@@ -35,6 +35,11 @@ Use explicit scalar types, pointers where NULL is meaningful, named domain types
 
 ## Views and related data
 
+Start with the [data graph](data-graphs.md): the outer DQL query composes named
+views, while each inner query runs against its own connector. Do not split a
+related result into separate readers solely because it uses several tables or
+databases.
+
 A view names a typed result and its query/source. Common `view` options:
 
 | Concern | Options |

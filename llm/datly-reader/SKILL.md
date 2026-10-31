@@ -7,6 +7,24 @@ description: Author Datly readers with declarative DQL graphs and transcribe get
 
 Build a typed, data-driven read API. A reader maps a declared query/view graph to a public Go-shaped response; it is not a handwritten DAO.
 
+## Start with the data graph
+
+**The outer DQL SELECT/FROM/JOIN describes a graph of typed views, not one
+database SQL join.** Each named subquery owns its executable SQL and connector.
+Use this graph to compose related rows, cross-connector dictionaries and derived
+outputs before creating fragmented readers or joining their results in Go.
+
+For each requested result, sketch its grain, keys, cardinality, connector and
+authorization scope. Related views can belong to one reader even when their SQL
+or databases differ. Preserve complete relation keys; `AND 1=1` on an outer
+relation declares a to-one holder and must not be removed as redundant SQL.
+Use native input views for prerequisites and DerivedViews for companion totals.
+Different projections, sort orders or pages do not by themselves justify another
+reader. Separate components when their independent contract or authorization
+boundary requires it; never force unrelated fact grains into a row-multiplying
+join. Read [data-graph authoring](references/data-graphs.md) before designing or
+splitting a reader.
+
 ## Design the object graph first
 
 Model a bounded entity, aggregate or release use case as a root view with related
