@@ -1,22 +1,23 @@
 ---
 name: datly-writer
-description: Author Datly PATCH, POST and PUT object graphs and data graphs with DQL and operation-based transcription to Go, preserving sparse presence, validation, business hooks and managed transactions.
+description: Author Datly PATCH, POST and PUT object graphs (data graphs) with DQL and operation-based transcription to Go, preserving sparse presence, validation, business hooks and managed transactions.
 ---
 
 # Datly Writer Components
 
 Build a typed, data-driven mutation API. Declare the intended write graph and contract; put business customization in explicit hooks instead of editing regenerated orchestration.
 
-## Write the object graph through the data graph
+## Write the object graph (data graph)
 
-Model the typed root and relations as the object graph; declare its body,
-Current/auxiliary sources, connectors, presence, complete FK relations and
-validation as the data graph of a bounded generated writer. Native orchestration
-owns writes and managed transaction completion; hooks own business validation/normalization.
+Object graph and data graph mean the same logical graph here. Declare its typed
+root/relations, body, Current/auxiliary sources, connectors, sparse presence,
+complete FK links and validation in a bounded generated writer. Native
+orchestration owns writes and managed transaction completion; hooks own business
+validation/normalization.
 Compose genuinely separate operations through typed component invocation while
 preserving authorization, constraints and the caller's transaction owner. Do not
 replace this with application `sql.DB`/`sql.Tx` Query/Exec calls or transaction
-wrappers. Read [object graph and data graph design](references/product/llm/datly-reader/references/object-graphs.md)
+wrappers. Read [release graph details](references/product/llm/datly-reader/references/object-graphs.md)
 when a mutation needs related reads, revision selection or multiple writers.
 
 ## Audience and contract

@@ -1,9 +1,11 @@
 # Data graph authoring
 
-The typed **object graph** describes the aggregate root and its relations; the
-**data graph** declares the sources, connectors, predicates and loading that
-populate it. See [object and release graphs](object-graphs.md) for revision
-selection and writer ownership. Neither is a Go map join or fetch-and-filter loop.
+**Data graph** and **object graph** name the same logical graph here: its typed
+root/relations and the DQL sources, connectors, predicates and loading that
+supply them. They are not separate models or components; readers and writers
+operate on that same graph. Neither means Go map joins or fetch-and-filter.
+This guide covers general graph structure; see [release graph details](object-graphs.md)
+for release/revision selection, selector transport names and writer ownership.
 
 Datly's outer query is the **view graph**. SQL inside each named source is the
 **database query** for that view. Keeping these two levels distinct lets one

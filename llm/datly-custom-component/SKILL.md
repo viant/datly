@@ -1,22 +1,23 @@
 ---
 name: datly-custom-component
-description: Compose Datly object graphs and data graphs through typed reader/writer invocation in custom Go components, with scoped capabilities, validation and controlled HTTP/MCP responses.
+description: Compose Datly object graphs (data graphs) through typed reader/writer invocation in custom Go components, with scoped capabilities, validation and controlled HTTP/MCP responses.
 ---
 
 # Datly Custom Components
 
 Build a component whose application-owned handler orchestrates behavior that is not simply a generated reader or writer. Preserve the same typed contract and scoped services.
 
-## Compose object graphs and data graphs
+## Compose the object graph (data graph)
 
-For database-backed object or release workflows, the object graph is the typed
-root and relations; its data graph declares sources, connectors, predicates and
-loading. Invoke bounded generated readers and writers with exact typed inputs.
-Keep persistence SQL in their DQL views or adjacent source assets; do not add application `sql.DB`/`sql.Tx` Query/Exec calls,
+Object graph and data graph mean the same logical graph here, including its
+typed root/relations and declared sources, connectors, predicates and loading.
+Invoke bounded generated readers and writers with exact typed inputs. Keep
+persistence SQL in their DQL views or adjacent source assets; do not add
+application `sql.DB`/`sql.Tx` Query/Exec calls,
 transaction wrappers, broad reads with Go filtering, or a component call per row.
 Use native relations/predicates/selectors within each aggregate and reserve custom
 code for business orchestration and non-database behavior. Read
-[object graph and data graph design](references/product/llm/datly-reader/references/object-graphs.md)
+[release graph details](references/product/llm/datly-reader/references/object-graphs.md)
 when choosing component boundaries and lifecycle composition.
 
 ## Audience and contract

@@ -1,13 +1,14 @@
-# Object graphs and data graphs for releases
+# Release object graphs (data graphs)
 
-Use this reference when deciding whether related reads/writes belong in one graph,
-or when replacing application-side object assembly with native Datly behavior.
-A useful boundary is one authorized aggregate or use case, not one SQL statement.
+Use this reference for release/revision selection, selector transport names and
+writer/hook ownership. A useful boundary is one authorized aggregate or use case,
+not one SQL statement.
 
-The **object graph** describes the typed aggregate/root, related entities and
-cardinalities. The **data graph** declares the DQL sources, connectors, predicates
-and native relation loading that supply those objects. These are corresponding
-views of one contract, not Go map joins or a fetch-and-filter pipeline.
+**Object graph** and **data graph** are synonymous here: one logical graph of a
+typed root and relations, with DQL sources, connectors, predicates and native
+loading. The words may emphasize objects or data access; they do not require
+separate models, architectures or components. Readers and writers operate on
+this same graph. Neither term means Go map joins or a fetch-and-filter pipeline.
 
 ## Reader boundary and relation loading
 
