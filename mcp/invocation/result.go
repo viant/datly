@@ -24,10 +24,10 @@ func (e *Execution) ToolResult() *schema.CallToolResult {
 				return errorResult(http.StatusInternalServerError, err)
 			}
 			if transport, ok := body.(response.Response); ok {
-				return e.transportResult(transport, payload, true)
+				return withToolErrorStatus(e.transportResult(transport, payload, true), status)
 			}
 			isError := true
-			return textToolResult(payload, &isError)
+			return withToolErrorStatus(textToolResult(payload, &isError), status)
 		}
 		// Preserve ordinary authentication failures at the tool presentation boundary.
 		// Explicit public bodies above retain priority; private causes and declared
@@ -50,7 +50,7 @@ func (e *Execution) ToolResult() *schema.CallToolResult {
 			}
 			if applicable {
 				isError := true
-				return textToolResult(payload, &isError)
+				return withToolErrorStatus(textToolResult(payload, &isError), status)
 			}
 		}
 		return errorResult(status, invokeErr)
@@ -171,4 +171,10 @@ func (e *Execution) errorPayload(body any) ([]byte, error) {
 		return e.encodeErrorOutput(e.encodingContext, body)
 	}
 	return encodePayload(body)
+}
+
+// Typed transport status remains separate from the component's public body.
+func withToolErrorStatus(result *schema.CallToolResult, status int) *schema.CallToolResult {
+	schema.SetToolErrorHTTPStatus(result, status)
+	return result
 }
