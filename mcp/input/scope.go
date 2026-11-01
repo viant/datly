@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"mime"
 	"net/http"
 	"net/url"
@@ -46,7 +47,9 @@ func (p *Plan) Scope(source Source) (*requestprovider.Scope, error) {
 	return p.scope(source, nil, nil)
 }
 
-// ScopeRequest reuses compiled non-body projections with an encoded binary request.
+// ScopeRequest retains compiled projections alongside a target HTTP request.
+// Encoded request bodies own body binding; metadata-only requests retain the
+// ordinary JSON argument projection.
 func (p *Plan) ScopeRequest(source Source, request *http.Request, options ...requestprovider.Option) (*requestprovider.Scope, error) {
 	return p.scope(source, request, options)
 }
@@ -75,6 +78,7 @@ func (p *Plan) scope(source Source, request *http.Request, requestOptions []requ
 	var namedBody map[string]json.RawMessage
 	var wholeBody json.RawMessage
 	encodedForm := false
+	metadataOnly := request != nil && (request.Body == nil || request.Body == http.NoBody)
 	if request != nil {
 		media, _, _ := mime.ParseMediaType(request.Header.Get("Content-Type"))
 		encodedForm = media == "multipart/form-data"
@@ -85,7 +89,7 @@ func (p *Plan) scope(source Source, request *http.Request, requestOptions []requ
 		if argument.Source.Kind == requestprovider.QueryKind && queryValues == nil {
 			queryValues = make(url.Values)
 		}
-		if request != nil && (encodedForm && argument.Source.Kind == requestprovider.FormKind || argument.Source.Kind == requestprovider.BodyKind) {
+		if request != nil && (encodedForm && argument.Source.Kind == requestprovider.FormKind || !metadataOnly && argument.Source.Kind == requestprovider.BodyKind) {
 			continue
 		}
 		resolved, found, err := source.resolve(argument)
@@ -166,6 +170,17 @@ func (p *Plan) scope(source Source, request *http.Request, requestOptions []requ
 			return nil, err
 		}
 		options = append(options, requestprovider.WithBodySource(body))
+		if metadataOnly {
+			// Reuse the exact native JSON projection, including named body roots.
+			// Cloning preserves caller ownership when ScopeRequest is used directly.
+			request = request.Clone(request.Context())
+			request.Body = io.NopCloser(bytes.NewReader(raw))
+			request.ContentLength = int64(len(raw))
+			if request.Header == nil {
+				request.Header = make(http.Header)
+			}
+			request.Header.Set("Content-Type", "application/json")
+		}
 	}
 	if request != nil {
 		return requestprovider.New(request, append(options, requestOptions...)...)

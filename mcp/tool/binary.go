@@ -228,7 +228,7 @@ func (p *Plan) binaryRequest(ctx context.Context, args, synthetic map[string]int
 	if encoded == nil {
 		return nil, nil, nil
 	}
-	req, err := http.NewRequestWithContext(ctx, "POST", "http://localhost/", encoded)
+	req, err := p.targetRequest(ctx, encoded)
 	if err != nil {
 		return nil, nil, err
 	}
