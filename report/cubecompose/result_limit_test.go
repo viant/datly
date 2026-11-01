@@ -49,7 +49,7 @@ func TestSemanticPrefixPagingKeepsSourceOrderAndBound(t *testing.T) {
 func TestSemanticPrefixRejectsUnprovedShapeAndPreservesLegacy(t *testing.T) {
 	end := 5
 	base := "SELECT t1.category AS category,t1.total_spend AS amount FROM $CubeSQL1 AS t1 ORDER BY amount DESC LIMIT 2"
-	for _, sql := range []string{strings.Replace(base, " ORDER BY amount DESC", "", 1), strings.Replace(base, " ORDER BY", " GROUP BY t1.category ORDER BY", 1), base + " OFFSET -1", base + " OFFSET 11"} {
+	for _, sql := range []string{strings.Replace(base, " ORDER BY amount DESC", "", 1), base + " OFFSET -1", base + " OFFSET 11"} {
 		if _, err := CompileWithResultLimit(sql, unionCatalog(t), 1, 10, &end); err == nil {
 			t.Fatalf("unsupported prefix admitted: %s", sql)
 		}

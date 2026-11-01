@@ -230,9 +230,13 @@ awaits final code delivery and review. See [cache acceptance](cache-and-warmup.m
 
 Cube composition accepts optional integer `resultLimit` for a source-defined
 ordered prefix, separately from SQL `LIMIT`/`OFFSET` transport paging. Omit it
-to preserve existing behavior. This initial contract requires one flat cube
-selection, an explicit `ORDER BY`, no UNION/join/outer GROUP BY, and a positive
+to preserve existing behavior. This contract requires one cube
+selection, an explicit `ORDER BY`, no UNION/join, and a positive
 prefix size no larger than the configured composition limit.
+The selection may aggregate with `GROUP BY` and `HAVING`: both execute before
+ordering and prefix paging. A wider transport page cannot turn an authored top
+five into a top twenty-five. Omitting `resultLimit` retains ordinary transport
+limit behavior; the SQL `LIMIT` alone is not a permanent semantic prefix.
 
 ```json
 {"cubes":[{"filters":{"tenant":"sample"}}],"sql":"SELECT t1.Category AS category, t1.Amount AS amount FROM $CubeSQL1 AS t1 ORDER BY amount DESC, category ASC LIMIT 2 OFFSET 2","resultLimit":5}

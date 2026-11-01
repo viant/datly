@@ -116,7 +116,7 @@ func Compile(SQL string, catalog *Catalog, frameCount, maxLimit int) (*Plan, err
 
 // CompileWithResultLimit declares a semantic ordered prefix independently of
 // transport LIMIT/OFFSET. Nil retains Compile's existing contract. Only one
-// explicitly ordered, flat cube selection is admitted in this initial subset.
+// explicitly ordered single-cube selection is admitted, including aggregation.
 func CompileWithResultLimit(SQL string, catalog *Catalog, frameCount, maxLimit int, resultLimit *int) (*Plan, error) {
 	return compileResult(SQL, catalog, frameCount, maxLimit, resultLimit, nil)
 }
@@ -163,8 +163,8 @@ func (p *Plan) validate(maxLimit int) error {
 	if len(q.WithSelects) != 0 || q.WithRecursive {
 		return fmt.Errorf("cube compose v1 does not allow WITH clauses")
 	}
-	if p.resultLimit > 0 && (p.FrameCount != 1 || q.Union != nil || len(q.Joins) > 0 || len(q.GroupBy) > 0 || len(q.OrderBy) == 0) {
-		return fmt.Errorf("semantic resultLimit requires one explicitly ordered flat cube selection")
+	if p.resultLimit > 0 && (p.FrameCount != 1 || q.Union != nil || len(q.Joins) > 0 || len(q.OrderBy) == 0) {
+		return fmt.Errorf("semantic resultLimit requires one explicitly ordered single-cube selection")
 	}
 	if q.Union != nil {
 		return p.validateUnion(maxLimit)
