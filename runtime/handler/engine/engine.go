@@ -142,6 +142,14 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 	if request.Input == nil {
 		return nil, fmt.Errorf("route input contract is required")
 	}
+	if p := beforeCommitRead(ctx); p != nil {
+		if !request.CanonicalReader || request.IndependentChildTransactions || request.Completion != nil || request.DataSource != nil {
+			return nil, p.reject()
+		}
+		if err := p.admit(); err != nil {
+			return nil, err
+		}
+	}
 	if ReadOnlyDependency(ctx) && (!request.CanonicalReader || request.IndependentChildTransactions || request.Completion != nil || request.DataSource != nil) {
 		return nil, RejectReadOnlyDependency(ctx, "non-reader execution or independent completion")
 	}
@@ -287,7 +295,7 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 		}
 		activityActive = err == nil
 	}
-	runtimeProviders = readOnlyProviders(ctx, handlerprovider.Capabilities(request.Capabilities))
+	runtimeProviders = beforeCommitProviders(ctx, readOnlyProviders(ctx, handlerprovider.Capabilities(request.Capabilities)))
 	if request.Scope != nil {
 		protocolProviders = request.Scope.Providers()
 	}
@@ -310,6 +318,10 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 		}
 		ctx = withDataScope(ctx, data)
 		ctx = dexec.WithInvocationTransactionLookup(ctx, data.transactionForDatabase)
+	}
+	if p := beforeCommitRead(ctx); p != nil {
+		ctx = dexec.WithInvocationTransactionLookup(ctx, p.transaction)
+		runtimeProviders = beforeCommitProviders(ctx, runtimeProviders)
 	}
 	invocation := rhandler.Invocation{Input: input, Response: newResponseWriter(ctx)}
 	var mutationReplay *bindly.Replay
@@ -826,6 +838,12 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 			}, handlerErr)
 		}
 	}
+	if validator, ok := result.(xhandler.BeforeCommitValidator); ok && handlerErr == nil {
+		if data == nil {
+			data, ownsData = neutralDataScope(ctx), true
+		}
+		handlerErr = data.registerBeforeCommit(ctx, binder, validator)
+	}
 	if outcomeAware {
 		return finish(result, handlerErr)
 	}
@@ -1021,7 +1039,7 @@ func (r Request) hasCompositionFinalizer() bool {
 	if outputType == nil {
 		return false
 	}
-	for _, contract := range []reflect.Type{reflect.TypeFor[xhandler.InvokerFinalizer](), reflect.TypeFor[xhandler.InvokerErrorFinalizer](), reflect.TypeFor[xhandler.InjectorFinalizer]()} {
+	for _, contract := range []reflect.Type{reflect.TypeFor[xhandler.InvokerFinalizer](), reflect.TypeFor[xhandler.InvokerErrorFinalizer](), reflect.TypeFor[xhandler.InjectorFinalizer](), reflect.TypeFor[xhandler.BeforeCommitValidator]()} {
 		if outputType.Implements(contract) || (outputType.Kind() != reflect.Pointer && reflect.PointerTo(outputType).Implements(contract)) {
 			return true
 		}

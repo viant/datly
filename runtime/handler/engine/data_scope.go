@@ -23,6 +23,7 @@ import (
 type dataScopeContextKey struct{}
 
 type dataScope struct {
+	beforeCommit             []*beforeCommitFrame
 	readOnlyDependency       *readOnlyDependency
 	invocationContext        context.Context
 	nativeInvocation         *drainowner.Invocation
@@ -1022,6 +1023,12 @@ func (s *dataScope) complete(ctx context.Context, handlerErr error) (completionE
 	}
 	if handlerErr != nil {
 		units = root.transactionCompletionOrder(units)
+		for index := len(units) - 1; index >= 0; index-- {
+			handlerErr = units[index].completeUnit(ctx, handlerErr)
+		}
+		return handlerErr
+	}
+	if handlerErr = root.validateBeforeCommit(ctx, units); handlerErr != nil {
 		for index := len(units) - 1; index >= 0; index-- {
 			handlerErr = units[index].completeUnit(ctx, handlerErr)
 		}
