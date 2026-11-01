@@ -23,17 +23,19 @@ import (
 )
 
 type ComposeResponse struct {
-	ResultLimit *int                 `json:"resultLimit,omitempty"`
-	Columns     []cubecompose.Column `json:"columns"`
-	Data        any                  `json:"data"`
-	HasMore     bool                 `json:"hasMore"`
-	Complete    bool                 `json:"complete"`
-	Truncated   bool                 `json:"truncated"`
-	Limit       int                  `json:"limit"`
-	Offset      int                  `json:"offset"`
+	Relations   []CompositionRelation `json:"relations,omitempty"`
+	ResultLimit *int                  `json:"resultLimit,omitempty"`
+	Columns     []cubecompose.Column  `json:"columns"`
+	Data        any                   `json:"data"`
+	HasMore     bool                  `json:"hasMore"`
+	Complete    bool                  `json:"complete"`
+	Truncated   bool                  `json:"truncated"`
+	Limit       int                   `json:"limit"`
+	Offset      int                   `json:"offset"`
 }
 
 type composeHandler struct {
+	relations []composeRelation
 	values    *cubecompose.ValuesContract
 	inputType reflect.Type
 	source    *Plan
@@ -82,6 +84,14 @@ func (h *composeHandler) Execute(ctx context.Context, invocation rhandler.Invoca
 	if err != nil {
 		return nil, err
 	}
+	var relationNames []string
+	if field := input.FieldByName("Relations"); field.IsValid() {
+		relationNames = field.Interface().([]string)
+	}
+	relationRequests, relationMetadata, err := h.projectionRelations(plan, relationNames)
+	if err != nil {
+		return nil, err
+	}
 	value, _, err := invocation.Binder.Lookup(ctx, exec.ComponentInvokerKey)
 	if err != nil {
 		return nil, err
@@ -127,6 +137,18 @@ func (h *composeHandler) Execute(ctx context.Context, invocation rhandler.Invoca
 	if err != nil {
 		return nil, err
 	}
+	var graph exec.ProjectionGraph
+	if len(relationRequests) > 0 {
+		reader, ok := projection.(exec.ProjectionGraphReader)
+		if !ok {
+			return nil, fmt.Errorf("source does not support projection relations")
+		}
+		graph, err = reader.PrepareProjectionGraph(ctx, exec.ProjectionGraphRequest{RowType: rowType, Relations: relationRequests})
+		if err != nil {
+			return nil, err
+		}
+		rowType = graph.RowType()
+	}
 	rows, err := projection.ReadProjection(ctx, exec.ProjectionRequest{SQL: SQL, Args: args, RowType: rowType})
 	if err != nil {
 		return nil, err
@@ -139,7 +161,14 @@ func (h *composeHandler) Execute(ctx context.Context, invocation rhandler.Invoca
 	if hasMore {
 		values = values.Slice(0, plan.Limit)
 	}
-	return &ComposeResponse{ResultLimit: resultLimit, Columns: plan.Columns, Data: values.Interface(), HasMore: hasMore, Complete: plan.Offset() == 0 && !hasMore, Truncated: plan.Offset() != 0 || hasMore, Limit: plan.Limit, Offset: plan.Offset()}, nil
+	if graph != nil {
+		loaded, loadErr := graph.Load(ctx, values.Interface())
+		if loadErr != nil {
+			return nil, loadErr
+		}
+		values = reflect.ValueOf(loaded)
+	}
+	return &ComposeResponse{Relations: relationMetadata, ResultLimit: resultLimit, Columns: plan.Columns, Data: values.Interface(), HasMore: hasMore, Complete: plan.Offset() == 0 && !hasMore, Truncated: plan.Offset() != 0 || hasMore, Limit: plan.Limit, Offset: plan.Offset()}, nil
 }
 
 func (h *composeHandler) rowType(plan *cubecompose.Plan) (reflect.Type, error) {

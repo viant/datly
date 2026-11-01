@@ -194,8 +194,8 @@ func parseComponentSettings(blocks []directiveBlock) (ret *componentSettings, er
 			}
 			ret.Report = report
 		case strings.EqualFold(name, "cubeCompose"):
-			if len(args) < 1 || len(args) > 6 || tail != "" {
-				return nil, fmt.Errorf("cubeCompose requires enabled and optional MCP, max cubes, max limit, timeout and authored values type")
+			if len(args) < 1 || len(args) > 7 || tail != "" {
+				return nil, fmt.Errorf("cubeCompose requires enabled and optional MCP, max cubes, max limit, timeout, authored values type and projection relations")
 			}
 			enabled, parseErr := strconv.ParseBool(strings.TrimSpace(trimQuote(args[0])))
 			if parseErr != nil {
@@ -221,7 +221,7 @@ func parseComponentSettings(blocks []directiveBlock) (ret *componentSettings, er
 				}
 				*values[index-2] = value
 			}
-			if len(args) == 6 {
+			if len(args) >= 6 {
 				raw := strings.TrimSpace(args[5])
 				if len(raw) < 2 || (raw[0] != '\'' && raw[0] != '"') || raw[len(raw)-1] != raw[0] {
 					return nil, fmt.Errorf("cubeCompose values type requires a quoted Go type expression")
@@ -230,6 +230,13 @@ func parseComponentSettings(blocks []directiveBlock) (ret *componentSettings, er
 				if strings.TrimSpace(compose.ValuesType) == "" {
 					return nil, fmt.Errorf("cubeCompose values type cannot be empty")
 				}
+			}
+			if len(args) == 7 {
+				value, err := strconv.ParseBool(strings.TrimSpace(trimQuote(args[6])))
+				if err != nil {
+					return nil, fmt.Errorf("cubeCompose projection relations requires true or false")
+				}
+				compose.ProjectionRelations = value
 			}
 			ret.Report.Compose = compose
 		case strings.EqualFold(name, "cache"):

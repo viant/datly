@@ -381,3 +381,61 @@ function, operator, sort direction, LIMIT/OFFSET or cube frame, and are never
 interpolated into SQL. Choose among authored metric expressions with an approved
 compiled expression or a separately supported authored CASE expression; never
 accept SQL expressions from a client value.
+
+## Opt-in projection relations
+
+Composition is scalar-only by default. A source can additionally opt into native
+lookup graphs with `report.compose.projectionRelations: true` in its settings.
+When using the positional DQL directive with an authored values type, the optional
+seventh argument enables the same capability:
+
+```sql
+#setting($_ = $cubeCompose(true,false,1,100,30000,'struct { Mode string }',true))
+```
+
+An enabled compose request may include `"relations": ["customer"]`, using the
+source's public relation-holder name. It must explicitly project every native
+relation key as a direct dimension, for example `t1.customer_id AS customerId`.
+The existing declared to-one relation supplies the query, connector, predicate
+bindings and output type. Datly never adds a hidden grouping dimension to satisfy
+a missing key. Composite relations require every key. A direct key in an aggregate
+wrapper must also be an explicit grouping key.
+
+For requested relations, every `GROUP BY` item must be a qualified direct
+dimension such as `t1.customer_id`. Unqualified output aliases, ordinal positions
+and computed grouping expressions are rejected without rewriting the query:
+an alias can resolve to a different source column, even outside the exposed
+catalog. Legacy scalar composition retains its existing grouping behavior.
+
+The initial capability admits one source frame and public pointer holders for
+hook-free, nonpartitioned leaf relations. JOIN/UNION provenance, computed keys,
+ambiguous aliases, missing keys, to-many and nested relations are rejected.
+Children with `OnFetch` or `OnRelation` are rejected: composition must not bypass
+child validation/redaction or execute source-root lifecycle behavior on a new
+projection. Native row decoding and the child query's binding/predicates remain
+in force. Duplicate returned to-one keys fail instead of selecting a label.
+Source-envelope exclusions, custom marshallers and global date/omission policies
+are also rejected in this initial subset; field-local public output tags retain
+their normal behavior. A relation whose keys are all NULL or incomplete issues
+no lookup, and its root rows retain NULL holders.
+
+Composition performs its original SQL sorting, semantic `resultLimit`, transport
+paging and lookahead trimming before loading labels. Only retained rows supply
+lookup keys, using the ordinary native collector, relation batching, connector,
+parameter-budget and cancellation machinery. Missing labels retain their root
+rows. Labels are not available as new global filter or sort expressions.
+
+The scalar `columns` remain unchanged. When requested, `data` also contains the
+native nested holder, and an additive `relations` property describes its existing
+output keys:
+
+```json
+{"relations":[{"name":"customer","keys":["customerId"]}],
+ "data":[{"customerId":7,"amount":12,"customer":{"id":7,"name":"Example"}}]}
+```
+
+Trusted adapters can supply `CompositionDefinition.Relations` to
+`PrepareComposition` and inspect `PreparedComposition.Relations()` before invoking
+the registered compose target. This metadata does not grant execution authority.
+Omitting requested relations preserves the scalar response and issues no lookup
+queries, including when the source enables this capability.

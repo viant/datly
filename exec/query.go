@@ -29,3 +29,34 @@ type ProjectionRequest struct {
 type ProjectionReader interface {
 	ReadProjection(context.Context, ProjectionRequest) (any, error)
 }
+
+// ProjectionKey maps an existing direct source dimension to its projected alias.
+// It never requests an additional source field or grouping dimension.
+type ProjectionKey struct {
+	Source string
+	Output string
+}
+
+// ProjectionRelation selects one declared source relation for a projected graph.
+type ProjectionRelation struct {
+	Name   string
+	Output string
+	Keys   []ProjectionKey
+}
+
+type ProjectionGraphRequest struct {
+	RowType   reflect.Type
+	Relations []ProjectionRelation
+}
+
+// ProjectionGraphReader is optional; ordinary scalar projection is unchanged.
+type ProjectionGraphReader interface {
+	PrepareProjectionGraph(context.Context, ProjectionGraphRequest) (ProjectionGraph, error)
+}
+
+// ProjectionGraph owns a request-local native graph over an already paged slice.
+// Load must receive only the rows retained after composition lookahead trimming.
+type ProjectionGraph interface {
+	RowType() reflect.Type
+	Load(context.Context, any) (any, error)
+}

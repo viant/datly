@@ -43,6 +43,9 @@ func (d *reportDeriver) deriveCompose(source Source, route *spec.Route, identity
 		inputField("ResultLimit", reflect.TypeFor[*int](), "Optional semantic ordered-prefix size, independent of transport LIMIT/OFFSET; requires one explicitly ordered flat cube selection"),
 		inputField("Page", reflect.TypeFor[*cubecompose.Page](), "Optional transport window; explicit limit must be positive, offset nonnegative, and their sum within the native budget; omission preserves SQL LIMIT/OFFSET"),
 	}
+	if config.ProjectionRelations {
+		inputFields = append(inputFields, inputField("Relations", reflect.TypeFor[[]string](), "Optional declared to-one leaf holders; requires complete direct projected dimension keys from one source frame"))
+	}
 	var values *cubecompose.ValuesContract
 	if config.ValuesType != "" {
 		resolver, resolveErr := typecatalog.NewResolver(d.compiler.config.Types, d.compiler.config.Authority, (&inputCompiler{component: source.Component}).resolutionContext())
@@ -125,6 +128,9 @@ func (d *reportDeriver) deriveCompose(source Source, route *spec.Route, identity
 		param.Required = &required
 	}
 	params = append(params, bodyParam("ResultLimit", inputType), bodyParam("Page", inputType))
+	if config.ProjectionRelations {
+		params = append(params, bodyParam("Relations", inputType))
+	}
 	if values != nil {
 		parameter := bodyParam("Values", inputType)
 		parameter.WireTypeExpr = values.WireType().String()
@@ -149,6 +155,12 @@ func (d *reportDeriver) deriveCompose(source Source, route *spec.Route, identity
 		return nil, nil, fmt.Errorf("compose source route contract is missing")
 	}
 	handler := &composeHandler{inputType: inputType, source: sourcePlan, config: config, catalog: catalog, metadata: metadata, contract: contract, values: values}
+	if config.ProjectionRelations {
+		handler.relations, err = composeRelations(source.Component, rowType)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
 	d.commit(identity)
 	return &Derived{Component: component, InputType: inputType, OutputType: plan.outputType, Plan: plan, Handler: handler, Type: descriptor}, descriptor, nil
 }

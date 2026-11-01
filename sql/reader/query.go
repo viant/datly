@@ -22,6 +22,7 @@ func (e *Execution) PrepareQuery(ctx context.Context, input any, binder xhandler
 		return nil, fmt.Errorf("reader execution is required")
 	}
 	session := e.session()
+	session.Parameters = resolver
 	session.applyReadOptions(ctx)
 	if err := session.Init(); err != nil {
 		return nil, err
@@ -60,21 +61,28 @@ func (e *Execution) PrepareQuery(ctx context.Context, input any, binder xhandler
 	if err != nil {
 		return nil, err
 	}
-	return &dexec.PreparedQuery{SQL: query.SQL, Args: append([]any(nil), query.Args...), Projection: &projectionReader{db: connection.DB, tx: connection.Tx, dialect: connection.Dialect, component: session.Component, view: root.View, recorder: session.recorder, metricScope: session.metricScope, observations: session.observations, retry: readRetry{source: session.SQL, connector: root.Connector}}}, nil
+	return &dexec.PreparedQuery{SQL: query.SQL, Args: append([]any(nil), query.Args...), Projection: &projectionReader{selectors: selectors, bindingContext: ctx, service: e.service, session: session, input: value, binder: binder, db: connection.DB, tx: connection.Tx, dialect: connection.Dialect, component: session.Component, view: root.View, recorder: session.recorder, metricScope: session.metricScope, observations: session.observations, retry: readRetry{source: session.SQL, connector: root.Connector}}}, nil
 }
 
-// projectionReader is request-local. SQLX owns typed row mapping; source caches,
-// relations, dictionaries and hooks do not apply to a new wrapper projection.
+// projectionReader is request-local. Scalar projections retain their original
+// SQLX-only behavior. A separately prepared opt-in graph may load declared
+// relations after the composed result has been paged.
 type projectionReader struct {
-	retry        readRetry
-	metricScope  string
-	observations map[*data.View]observability.Resolution
-	component    *spec.Component
-	view         *data.View
-	recorder     *observability.Recorder
-	db           *sql.DB
-	tx           *sql.Tx
-	dialect      *info.Dialect
+	selectors      invocationSelectors
+	bindingContext context.Context
+	service        *Service
+	session        *Session
+	input          reflect.Value
+	binder         xhandler.Binder
+	retry          readRetry
+	metricScope    string
+	observations   map[*data.View]observability.Resolution
+	component      *spec.Component
+	view           *data.View
+	recorder       *observability.Recorder
+	db             *sql.DB
+	tx             *sql.Tx
+	dialect        *info.Dialect
 }
 
 func (r *projectionReader) ReadProjection(ctx context.Context, request dexec.ProjectionRequest) (_ any, err error) {

@@ -2,6 +2,8 @@ package spec
 
 // CubeComposeSettings enables a bounded, request-local composition of cube queries.
 type CubeComposeSettings struct {
+	// ProjectionRelations admits explicitly selected native to-one leaf graphs.
+	ProjectionRelations bool `json:"projectionRelations,omitempty"`
 	// ValuesType is a catalog type name or authored Go struct expression for bound wrapper scalars.
 	ValuesType string `json:"valuesType,omitempty"`
 	Enabled    bool   `json:"enabled,omitempty"`
