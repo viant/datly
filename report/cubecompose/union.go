@@ -42,6 +42,7 @@ func (p *Plan) validateUnion(maxLimit int) error {
 			}
 			names[normalize(item.Alias)] = true
 			var typ reflect.Type
+			var presentation reflect.StructTag
 			role := Computed
 			switch value := item.Expr.(type) {
 			case *expr.Selector:
@@ -53,6 +54,7 @@ func (p *Plan) validateUnion(maxLimit int) error {
 					return fmt.Errorf("cube compose UNION ALL branch references another frame")
 				}
 				typ, role = ref.field.Type, ref.field.Role
+				presentation = ref.field.Tag
 				if typ == nil {
 					return fmt.Errorf("cube compose UNION ALL field requires a concrete type")
 				}
@@ -74,7 +76,7 @@ func (p *Plan) validateUnion(maxLimit int) error {
 				return fmt.Errorf("cube compose UNION ALL permits only typed fields and scalar literals")
 			}
 			if index == 0 {
-				p.Columns = append(p.Columns, Column{Name: item.Alias, Type: typeName(typ), Role: role, rType: typ})
+				p.Columns = append(p.Columns, Column{Name: item.Alias, Type: typeName(typ), Role: role, rType: typ, rTag: presentation})
 				continue
 			}
 			prior := &p.Columns[column]
@@ -84,6 +86,13 @@ func (p *Plan) validateUnion(maxLimit int) error {
 			merged, err := unionType(prior.rType, typ)
 			if err != nil {
 				return fmt.Errorf("cube compose UNION ALL column %s: %w", item.Alias, err)
+			}
+			// NULL-only values are presentation-neutral. Otherwise every branch
+			// must agree; a raw timestamp must not inherit another field's date tag.
+			if prior.rType == nil {
+				prior.rTag = presentation
+			} else if typ != nil && prior.rTag.Get("format") != presentation.Get("format") {
+				prior.rTag = ""
 			}
 			prior.rType, prior.Type = merged, typeName(merged)
 			if prior.Role != role {

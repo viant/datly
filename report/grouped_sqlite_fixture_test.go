@@ -17,6 +17,7 @@ import (
 )
 
 type groupedReportHarness struct {
+	compose  *composeHandler
 	runtime  *druntime.Runtime
 	service  *mcp.Service
 	artifact *ComponentArtifact
@@ -36,6 +37,7 @@ type groupedReportHarnessConfig struct {
 	route   func(*spec.Route)
 	source  func(*spec.Component, *typecatalog.Catalog)
 	input   reflect.Type
+	output  reflect.Type
 }
 
 func (c groupedReportHarnessConfig) build(t *testing.T) *groupedReportHarness {
@@ -89,9 +91,13 @@ func (c groupedReportHarnessConfig) build(t *testing.T) *groupedReportHarness {
 			c.route(route)
 		}
 	}
+	outputType := c.output
+	if outputType == nil {
+		outputType = reflect.TypeOf(groupedSpendOutput{})
+	}
 	compilation, err := NewProjectCompiler(ProjectConfig{Types: types}).CompileArtifacts([]bootstrap.ArtifactInput{{
 		Component: component, InputType: inputType,
-		OutputType: reflect.TypeOf(groupedSpendOutput{}), DirectViewField: "Rows", CodecFactory: codec,
+		OutputType: outputType, DirectViewField: "Rows", CodecFactory: codec,
 	}})
 	if err != nil {
 		t.Fatalf("compile grouped report project: %v", err)
@@ -123,16 +129,19 @@ func (c groupedReportHarnessConfig) build(t *testing.T) *groupedReportHarness {
 		}
 	}
 	var reportArtifact *ComponentArtifact
+	var compose *composeHandler
 	for _, artifact := range compilation.Artifacts() {
-		if artifact.IsReport() {
+		if artifact.IsReport() && reportArtifact == nil {
 			reportArtifact = artifact
-			break
+		}
+		if handler, ok := artifact.predefinedHandler.(*composeHandler); ok {
+			compose = handler
 		}
 	}
 	if reportArtifact == nil {
 		t.Fatal("grouped report artifact was not derived")
 	}
-	return &groupedReportHarness{runtime: runtime, service: service, artifact: reportArtifact, codec: codec, sql: sourceSQL}
+	return &groupedReportHarness{compose: compose, runtime: runtime, service: service, artifact: reportArtifact, codec: codec, sql: sourceSQL}
 }
 
 func groupedReportComponent(settings *spec.ReportSettings) *spec.Component {

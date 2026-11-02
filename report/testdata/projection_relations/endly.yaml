@@ -1,0 +1,41 @@
+# Run with datlyPath set to the Datly v1 checkout. All databases and HTTP servers
+# are owned by Go test fixtures; this workflow starts no shared service.
+pipeline:
+  nativeGraphs:
+    action: exec:run
+    directory: $datlyPath
+    strictCompletion: true
+    checkError: true
+    timeoutMs: 120000
+    commands:
+      - go test -v ./sql/reader ./report ./report/cubecompose ./transcribe/dql -run '^(TestProjectionGraph.*|TestProjectionBindingContext.*|TestComposeProjectionRelations.*|TestPreparedCompositionRelationMetadataAndDefaultOff|TestProjectionKeys.*|TestCubeComposeProjectionRelationsOptIn)$' -count=1
+  requireExecutedAssertions:
+    action: validator:assert
+    actual:
+      paging: $nativeGraphs.Output
+      keys: $nativeGraphs.Output
+      bindings: $nativeGraphs.Output
+      nullable: $nativeGraphs.Output
+      compatibility: $nativeGraphs.Output
+      provenance: $nativeGraphs.Output
+      authoring: $nativeGraphs.Output
+      dynamicDQL: $nativeGraphs.Output
+      sourceAuthority: $nativeGraphs.Output
+      aggregateTraversal: $nativeGraphs.Output
+      rejectBeforeQueries: $nativeGraphs.Output
+      groupingCollision: $nativeGraphs.Output
+      groupingBeforeQueries: $nativeGraphs.Output
+    expect:
+      paging: '/--- PASS: TestComposeProjectionRelationsPagingKeysAndCompatibility/'
+      keys: '/--- PASS: TestComposeProjectionRelationsRejectUnsupportedKeys/'
+      bindings: '/--- PASS: TestProjectionGraphNativeBatchBindingCancellationAndHooks/'
+      nullable: '/--- PASS: TestProjectionGraphNullableCompositeKeysNeverReadWholeDictionary/'
+      compatibility: '/--- PASS: TestPreparedCompositionRelationMetadataAndDefaultOff/'
+      provenance: '/--- PASS: TestProjectionKeysPreserveOnlyDirectGroupedDimensions/'
+      authoring: '/--- PASS: TestCubeComposeProjectionRelationsOptIn/'
+      dynamicDQL: '/--- PASS: TestComposeProjectionRelationsDynamicDQLHTTP/'
+      sourceAuthority: '/--- PASS: TestProjectionBindingContextKeepsAbsenceAndCallerCancellation/'
+      aggregateTraversal: '/--- PASS: TestProjectionKeysRejectNestedAggregateProvenance/'
+      rejectBeforeQueries: '/--- PASS: TestComposeProjectionRelationsRejectHiddenAggregatesBeforeInvocation/'
+      groupingCollision: '/--- PASS: TestProjectionKeysQualifiedGroupingAvoidsExecutedAliasCollision/'
+      groupingBeforeQueries: '/--- PASS: TestComposeProjectionRelationsRejectGroupingAliasBeforeInvocation/'

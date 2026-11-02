@@ -39,7 +39,7 @@ func groupedProjectionNeedsRewrite(items query.List) bool {
 func groupedProjectionGroupBy(items query.List) query.List {
 	result := make(query.List, 0, len(items))
 	for i, item := range items {
-		if isAggregateSelectItem(item) {
+		if isAggregateSelectItem(item) || containsWindowSelectItem(item) {
 			continue
 		}
 		result = append(result, query.NewItem(expr.NewIntLiteral(strconv.Itoa(i+1))))
@@ -93,9 +93,47 @@ func isAggregateSelectItem(item *query.Item) bool {
 	return containsAggregateNode(item.Expr)
 }
 
+// Analytic expressions cannot be grouping keys, even when they contain no
+// grouped aggregate. Keep this separate from aggregate detection so a window
+// alone does not turn a row-level query into a grouped query.
+func containsWindowSelectItem(item *query.Item) bool {
+	if item == nil || item.Expr == nil {
+		return false
+	}
+	found := false
+	sqlparser.Traverse(item.Expr, func(n node.Node) bool {
+		if _, ok := n.(*expr.Window); ok {
+			found = true
+		}
+		return !found
+	})
+	return found
+}
+
 func containsAggregateNode(n node.Node) bool {
 	switch actual := n.(type) {
 	case nil:
+		return false
+	case *expr.Window:
+		// The function directly under OVER is analytic; its arguments can
+		// contain grouped aggregates, as in AVG(AVG(amount)) OVER().
+		if callable, ok := actual.X.(*expr.Call); ok {
+			for _, arg := range callable.Args {
+				if containsAggregateNode(arg) {
+					return true
+				}
+			}
+		}
+		for _, partition := range actual.PartitionBy {
+			if containsAggregateNode(partition) {
+				return true
+			}
+		}
+		for _, order := range actual.OrderBy {
+			if order != nil && containsAggregateNode(order.X) {
+				return true
+			}
+		}
 		return false
 	case *expr.Call:
 		if actual.X != nil {

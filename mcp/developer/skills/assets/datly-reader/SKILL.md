@@ -1,11 +1,40 @@
 ---
 name: datly-reader
-description: Author Datly readers with declarative DQL graphs and transcribe get to pure Go, linked shapes, typed relations, selectors, DerivedViews, cubes, and MCP exposure.
+description: Author Datly object graphs (data graphs) with DQL readers, native relations, predicates and Query Selectors; transcribe get to typed Go, DerivedViews, cubes and MCP exposure.
 ---
 
 # Datly Reader Components
 
 Build a typed, data-driven read API. A reader maps a declared query/view graph to a public Go-shaped response; it is not a handwritten DAO.
+
+## Start with the data graph
+
+**The outer DQL SELECT/FROM/JOIN describes a graph of typed views, not one
+database SQL join.** Each named subquery owns its executable SQL and connector.
+Use this graph to compose related rows, cross-connector dictionaries and derived
+outputs before creating fragmented readers or joining their results in Go.
+
+For each requested result, sketch its grain, keys, cardinality, connector and
+authorization scope. Related views can belong to one reader even when their SQL
+or databases differ. Preserve complete relation keys; `AND 1=1` on an outer
+relation declares a to-one holder and must not be removed as redundant SQL.
+Use native input views for prerequisites and DerivedViews for companion totals.
+Different projections, sort orders or pages do not by themselves justify another
+reader. Separate components when their independent contract or authorization
+boundary requires it; never force unrelated fact grains into a row-multiplying
+join. Read [data-graph authoring](references/data-graphs.md) before designing or
+splitting a reader.
+
+## One graph, either name
+
+**Object graph** and **data graph** name the same logical graph here: its typed
+root and relations, declared through DQL sources, connectors, predicates and
+native loading. Reader/writer components operate on that graph; do not build a
+second model or extra component to translate between the terms. Neither means
+Go map joins or fetch-and-filter. Use native predicates for scope, membership
+and revision selection, and Query Selectors for ordering and projections. For
+release/revision selection, selector transport names and mutation ownership,
+read [release graph details](references/object-graphs.md).
 
 ## Audience and contract
 
@@ -107,9 +136,37 @@ For a cleanup sweep, inspect every reader and writer rather than only the named 
 
 ## Authoring workflow
 
+### Verify native capability before implementing reader behavior
+
+Before adding application filtering, sorting, paging, projection, joins or
+aggregation, verify the selected v1 reader capability and an executable example.
+Check predicate names in the selected version's registry and tests; never infer
+them from a UI operator or older Datly API. The v1 text predicate is `contains`,
+not `contain`: `.WithPredicate(1, 'contains', 'r', 'name')`. See
+[reader predicates](references/reader-predicates.md) for declaration, groups and
+presence. For linked typed inputs, use the documented predicate tag contract.
+
+Database-backed name/text filtering belongs in the native reader predicate, before
+paging/counting and relation expansion. Do not retrieve rows and reimplement it
+with Go string/regexp filters, or duplicate a supported predicate with handwritten
+wildcard SQL. Preserve separate business authorization checks.
+
+Verify the full raw-input → datasource projection → typed binding → predicate →
+bound SQL path. Only one layer constructs wildcards. Exercise present/absent input,
+the required wildcard/collation semantics, filtered paging/counts and denied rows
+using native reader execution. A mocked transport or rendered control alone is
+insufficient. A missing capability requires version-specific evidence and a minimal
+native reproduction before a framework change; it does not authorize a silent Go
+filtering fallback.
+
 The standard workflow is **reader-like declarative DQL graph + explicit `transcribe`
-operation (`get`, `patch`, `post`, `put`) → generated pure Go**. Declare auxiliary
-tables in parentheses, entity hooks and invariant tags in DQL. Reader generation owns typed read contracts and resources; writer generation
+operation (`get`, `patch`, `post`, `put`) → generated pure Go**. Standalone GET
+readers are already read-only; do not wrap physical tables in `(TABLE)` merely
+to prevent writes. In a writer graph, that syntax explicitly marks an auxiliary,
+nonmutating source; preserve its authoring metadata without leaking the marker
+into executable vendor SQL. Real `(SELECT ...)` subqueries remain SQL. Declare
+writer lifecycle hooks and invariant tags only where applicable. Reader generation
+owns typed read contracts and resources; writer generation
 owns Previous reads, presence, validation and write orchestration. Application
 Go hooks own business rules. Existing linked Go types keep their authority.
 

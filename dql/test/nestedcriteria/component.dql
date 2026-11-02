@@ -1,0 +1,23 @@
+#package('runtime/handler/writer/testdata/nestedcriteria/generated')
+#setting($_ = $input_type('GuardInput'))
+#setting($_ = $output_type('GuardOutput'))
+#setting($_ = $case_format('lc'))
+#setting($_ = $route('/test/nested-criteria','PUT'))
+#setting($_ = $internal(true))
+#setting($_ = $connector('main'))
+#define($_ = $Tenant<string>(query/tenant).Required().WithPredicate(0,'equal','o','tenant'))
+#define($_ = $LedgerID<int>(query/ledgerId).Required().WithPredicate(0,'equal','o','id'))
+#define($_ = $ExpectedState<string>(query/expectedState).Required().WithPredicate(7,'equal','test_ledger','state'))
+#define($_ = $ExpectedHash<string>(query/expectedHash).Required().WithPredicate(7,'equal','test_ledger','payload_hash'))
+#define($_ = $ExpectedRevision<int>(query/expectedRevision).Required().WithPredicate(8,'equal','test_drafts','revision'))
+#define($_ = $ExpectedFingerprint<string>(query/expectedFingerprint).Required().WithPredicate(8,'equal','test_drafts','fingerprint'))
+#define($_ = $Data<[]*Ledger>(output/body))
+SELECT operations.*,documents.*,drafts.*,
+ type(operations,'Ledger'),type(documents,'Document'),type(drafts,'Draft'),
+ mutation_predicate(operations,7),mutation_predicate(drafts,8),
+ CAST(drafts.should_delete AS bool),delete_marker(drafts.should_delete),
+ concurrency_token(documents.revision),concurrency_token(drafts.revision),
+ lifecycle_type(documents,'DocumentHooks'),lifecycle_type(drafts,'DraftHooks')
+FROM (${embed:sql/ledger.sql}) operations
+LEFT JOIN (${embed:sql/documents.sql}) documents ON documents.tenant=operations.tenant AND documents.ledger_id=operations.id
+LEFT JOIN (${embed:sql/drafts.sql}) drafts ON drafts.tenant=documents.tenant AND drafts.document_id=documents.id AND 1=1

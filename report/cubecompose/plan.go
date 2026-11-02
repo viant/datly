@@ -30,6 +30,7 @@ type Field struct {
 	SQLName string
 	Type    reflect.Type
 	Role    Role
+	Tag     reflect.StructTag
 }
 
 type Catalog struct {
@@ -41,6 +42,7 @@ type Column struct {
 	Type  string `json:"type"`
 	Role  Role   `json:"role"`
 	rType reflect.Type
+	rTag  reflect.StructTag
 }
 
 type Plan struct {
@@ -114,7 +116,7 @@ func Compile(SQL string, catalog *Catalog, frameCount, maxLimit int) (*Plan, err
 
 // CompileWithResultLimit declares a semantic ordered prefix independently of
 // transport LIMIT/OFFSET. Nil retains Compile's existing contract. Only one
-// explicitly ordered, flat cube selection is admitted in this initial subset.
+// explicitly ordered single-cube selection is admitted, including aggregation.
 func CompileWithResultLimit(SQL string, catalog *Catalog, frameCount, maxLimit int, resultLimit *int) (*Plan, error) {
 	return compileResult(SQL, catalog, frameCount, maxLimit, resultLimit, nil)
 }
@@ -161,8 +163,8 @@ func (p *Plan) validate(maxLimit int) error {
 	if len(q.WithSelects) != 0 || q.WithRecursive {
 		return fmt.Errorf("cube compose v1 does not allow WITH clauses")
 	}
-	if p.resultLimit > 0 && (p.FrameCount != 1 || q.Union != nil || len(q.Joins) > 0 || len(q.GroupBy) > 0 || len(q.OrderBy) == 0) {
-		return fmt.Errorf("semantic resultLimit requires one explicitly ordered flat cube selection")
+	if p.resultLimit > 0 && (p.FrameCount != 1 || q.Union != nil || len(q.Joins) > 0 || len(q.OrderBy) == 0) {
+		return fmt.Errorf("semantic resultLimit requires one explicitly ordered single-cube selection")
 	}
 	if q.Union != nil {
 		return p.validateUnion(maxLimit)
@@ -243,6 +245,11 @@ func (p *Plan) validate(maxLimit int) error {
 			return fmt.Errorf("duplicate cube compose output name %q", name)
 		}
 		column := Column{Name: name, Type: typeName(rType), Role: role, rType: rType}
+		// Only a direct source projection has an unambiguous presentation tag.
+		// Do not infer formatting for calculated expressions.
+		if source, sourceErr := p.resolveSelector(item.Expr); sourceErr == nil {
+			column.rTag = source.field.Tag
+		}
 		aliases[key] = column
 		p.Columns = append(p.Columns, column)
 	}
@@ -297,6 +304,9 @@ func (p *Plan) validate(maxLimit int) error {
 
 // RuntimeType returns the native scanner type for the projected scalar.
 func (c Column) RuntimeType() reflect.Type { return c.rType }
+
+// RuntimeTag preserves source presentation metadata for direct projections.
+func (c Column) RuntimeTag() reflect.StructTag { return c.rTag }
 
 type fieldRef struct {
 	alias string
@@ -427,6 +437,11 @@ func (p *Plan) validateNode(n node.Node, aliases map[string]Column) ([]fieldRef,
 	case *expr.Star:
 		return nil, fmt.Errorf("wildcard projection is not allowed")
 	case *expr.Binary:
+		// ParseQualify retains a Binary container even when its entire
+		// expression is a single operand, such as a parenthesis or CASE.
+		if actual.Op == "" && actual.X != nil && actual.Y == nil {
+			return p.validateNode(actual.X, aliases)
+		}
 		if !allowedOperator(actual.Op) {
 			return nil, fmt.Errorf("unsupported cube compose operator %q", actual.Op)
 		}

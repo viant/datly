@@ -28,11 +28,15 @@ type serviceResourceInput struct {
 }
 
 type serviceInvoker struct {
-	request exec.ComponentRequest
+	request      exec.ComponentRequest
+	checkRequest func(context.Context, exec.ComponentRequest)
 }
 
-func (i *serviceInvoker) InvokeComponent(_ context.Context, request exec.ComponentRequest) (interface{}, error) {
+func (i *serviceInvoker) InvokeComponent(ctx context.Context, request exec.ComponentRequest) (interface{}, error) {
 	i.request = request
+	if i.checkRequest != nil {
+		i.checkRequest(ctx, request)
+	}
 	return map[string]interface{}{"query": "ok"}, nil
 }
 
@@ -44,7 +48,7 @@ func TestNewBuildsAtomicToolCatalogAndRegistry(t *testing.T) {
 	component := serviceComponent(t, "Search", &spec.MCPExposure{
 		Kind: spec.MCPExposureTool, Name: "search.run", Description: "Search", DescriptionPath: "docs/search.md",
 	})
-	invoker := &serviceInvoker{}
+	invoker := &serviceInvoker{checkRequest: checkToolRequest(t, "active")}
 	service, err := New(Config{Components: []*registry.RegisteredComponent{component}, Invoker: invoker, Resources: resources})
 	if err != nil {
 		t.Fatal(err)
@@ -60,7 +64,7 @@ func TestNewBuildsAtomicToolCatalogAndRegistry(t *testing.T) {
 		Method: schema.MethodToolsCall,
 		Params: schema.CallToolRequestParams{Name: "search.run", Arguments: map[string]interface{}{"query": "active"}},
 	})
-	if protocolErr != nil || testharness.StructuredObject(t, result.StructuredContent)["query"] != "ok" || invoker.request.Input != nil || len(invoker.request.Providers) != 1 {
+	if protocolErr != nil || testharness.StructuredObject(t, result.StructuredContent)["query"] != "ok" || invoker.request.Input != nil {
 		t.Fatalf("result=%+v error=%v request=%+v", result, protocolErr, invoker.request)
 	}
 }
@@ -454,5 +458,38 @@ func TestToolOnlyServiceRejectsMalformedRoutes(t *testing.T) {
 				t.Fatalf("malformed route published: %s", path)
 			}
 		})
+	}
+}
+
+// Verify the invocation sources while their request scope is live. The number
+// of providers is an implementation detail: tools also carry route metadata.
+func checkToolRequest(t *testing.T, query string) func(context.Context, exec.ComponentRequest) {
+	t.Helper()
+	return func(ctx context.Context, request exec.ComponentRequest) {
+		t.Helper()
+		for _, check := range []struct{ kind, name, expected string }{
+			{"query", "q", query}, {"http_request", "method", "POST"}, {"http_request", "uri", "/tools"},
+		} {
+			found := false
+			for _, provider := range request.Providers {
+				if provider.Kind() != check.kind {
+					continue
+				}
+				value, ok, err := provider.Locate(nil).Value(ctx, reflect.TypeOf(""), check.name)
+				if err != nil {
+					t.Fatalf("%s/%s: %v", check.kind, check.name, err)
+				}
+				if ok {
+					found = true
+					if value != check.expected {
+						t.Errorf("%s/%s = %v, want %q", check.kind, check.name, value, check.expected)
+					}
+					break
+				}
+			}
+			if !found {
+				t.Errorf("missing %s/%s provider value", check.kind, check.name)
+			}
+		}
 	}
 }

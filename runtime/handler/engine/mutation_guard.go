@@ -135,6 +135,9 @@ func RetainMutationAuthority(ctx context.Context) func(context.Context) context.
 	issued := recoveryReadPermit(ctx)
 	readOnly := readOnlyFrom(ctx)
 	return func(call context.Context) context.Context {
+		if permit := beforeCommitRead(call); permit != nil && rootScope(scope) == permit.owner && permit.admit() == nil {
+			return call
+		}
 		if readOnly != nil {
 			// Preserve caller values when supplied, but retain cancellation and the
 			// original member's scheduler when a hook uses a replacement context.
@@ -186,6 +189,12 @@ func RetainMutationAuthority(ctx context.Context) func(context.Context) context.
 // CheckComponentMutation admits canonical readers while rejecting writers and
 // unknown custom effects before child binding or data-unit creation.
 func CheckComponentMutation(ctx context.Context, canonicalReader bool) error {
+	if p := beforeCommitRead(ctx); p != nil {
+		if !canonicalReader {
+			return p.reject()
+		}
+		return p.admit()
+	}
 	if ReadOnlyDependency(ctx) && !canonicalReader {
 		return RejectReadOnlyDependency(ctx, "writer or custom handler invocation")
 	}
@@ -248,6 +257,9 @@ func retainProviderMutationAuthority(ctx context.Context, provider locator.Provi
 		// retain their previous ownership behavior outside WriteEligible.
 		scope, _ := ctx.Value(dataScopeContextKey{}).(*dataScope)
 		authority = func(call context.Context) context.Context {
+			if permit := beforeCommitRead(call); permit != nil && rootScope(scope) == permit.owner && permit.admit() == nil {
+				return call
+			}
 			if scope == nil {
 				return call
 			}

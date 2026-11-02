@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	xreader "github.com/viant/xdatly/reader"
 	"reflect"
 	"strings"
 	"sync"
@@ -146,7 +147,7 @@ func TestAsyncOriginalSchemaDryRunReplaySQLite(t *testing.T) {
 	if err != nil {
 		t.Fatalf("dry-run read application rows: %v", err)
 	}
-	if !strings.Contains(scheduled.Plan.SQL, "async_users") || len(scheduled.Plan.Args) < 2 {
+	if !strings.Contains(scheduled.Plan.Query, "async_users") || len(scheduled.Plan.Args) < 2 {
 		t.Fatalf("plan=%+v", scheduled.Plan)
 	}
 	if notifications != 0 || scheduled.Job.Status != xasync.StatusPending {
@@ -353,9 +354,9 @@ func TestReaderDryRunKeepsPaginationSQLite(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	plan := value.(*dexec.ReadPlan)
-	if !strings.Contains(strings.ToUpper(plan.SQL), "LIMIT 5") {
-		t.Fatalf("reader limit lost: %s", plan.SQL)
+	plan := value.(*xreader.ParameterizedQuery)
+	if !strings.Contains(strings.ToUpper(plan.Query), "LIMIT 5") {
+		t.Fatalf("reader limit lost: %s", plan.Query)
 	}
 	prepared, err := f.runtime.InvokeComponent(context.Background(), dexec.ComponentRequest{Target: f.target, Input: &asyncReaderInput{ID: 7, Tenant: 1}, PrepareQuery: true})
 	if err != nil {

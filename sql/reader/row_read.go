@@ -10,6 +10,7 @@ import (
 	"github.com/viant/datly/observability"
 	"github.com/viant/datly/sql/executionhint"
 	"github.com/viant/datly/sql/reader/collector"
+	xreader "github.com/viant/xdatly/reader"
 
 	sqlxread "github.com/viant/sqlx/io/read"
 	"github.com/viant/sqlx/io/read/cache"
@@ -56,6 +57,11 @@ func (r rowRead) query(ctx context.Context, q rowQuery) (err error) {
 			query.SQL = text
 			q.query = &query
 			r.readCache = onlyExactQueries(r.readCache)
+		}
+	}
+	if guard := queryGuardFor(ctx, q.read.session.Component); guard != nil {
+		if err = guard(ctx, q.db, &xreader.ParameterizedQuery{Query: q.query.SQL, Args: append([]any(nil), q.query.Args...)}); err != nil {
+			return err
 		}
 	}
 	execution := q.read.execution(q.query, q.id, q.parent)

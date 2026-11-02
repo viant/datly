@@ -2,7 +2,6 @@ package mcp
 
 import (
 	"context"
-	"encoding/json"
 	"github.com/viant/datly/internal/testharness"
 	"reflect"
 	"strconv"
@@ -87,7 +86,7 @@ func TestToolCodecRunsOnceAndOutputBindingUsesCanonicalInput(t *testing.T) {
 	}
 	for _, field := range []string{"handlerIDs", "boundIDs"} {
 		values, ok := testharness.StructuredObject(t, result.StructuredContent)[field].([]interface{})
-		if !ok || len(values) != 1 || values[0] != json.Number("7") {
+		if !ok || len(values) != 1 || values[0] != float64(7) {
 			t.Fatalf("%s = %#v; result=%+v", field, testharness.StructuredObject(t, result.StructuredContent)[field], result.StructuredContent)
 		}
 	}

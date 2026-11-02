@@ -50,3 +50,18 @@ func TestCubeComposeAuthoredValuesShape(t *testing.T) {
 		t.Fatal("authored scalar shape not preserved")
 	}
 }
+
+func TestCubeComposeProjectionRelationsOptIn(t *testing.T) {
+	for _, flag := range []string{"true", "false"} {
+		prepared := PrepareSource("#setting($_ = $cubeCompose(true,false,1,50,12000,'struct { Mode int }'," + flag + "))\nSELECT id FROM events")
+		if err := prepared.Err(); err != nil {
+			t.Fatal(err)
+		}
+		if prepared.Directives.Settings.Report.Compose.ProjectionRelations != (flag == "true") {
+			t.Fatal("projection relation flag lost")
+		}
+	}
+	if err := PrepareSource("#setting($_ = $cubeCompose(true,false,1,50,12000,'struct { Mode int }','invalid'))\nSELECT id FROM events").Err(); err == nil {
+		t.Fatal("accepted invalid relation flag")
+	}
+}

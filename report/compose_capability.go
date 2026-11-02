@@ -14,6 +14,7 @@ import (
 // CompositionDefinition is trusted application metadata to prepare against an
 // existing native compose handler. Preparation grants no execution authority.
 type CompositionDefinition struct {
+	Relations   []string
 	SQL         string
 	FrameCount  int
 	ResultLimit *int
@@ -37,6 +38,7 @@ type CompositionBudget struct {
 // PreparedComposition contains detached metadata only. The executable native
 // plan, catalog, binder and input holders are never exposed.
 type PreparedComposition struct {
+	relations   []CompositionRelation
 	source      exec.ComponentTarget
 	columns     []cubecompose.Column
 	filters     []CompositionFilter
@@ -45,6 +47,14 @@ type PreparedComposition struct {
 	valuesType  reflect.Type
 	valueNames  []string
 	budget      CompositionBudget
+}
+
+func (p *PreparedComposition) Relations() []CompositionRelation {
+	result := append([]CompositionRelation(nil), p.relations...)
+	for i := range result {
+		result[i].Keys = append([]string(nil), result[i].Keys...)
+	}
+	return result
 }
 
 // ValueNames returns detached, sorted JSON names referenced by the authored SQL.
@@ -111,6 +121,10 @@ func PrepareComposition(handler rhandler.Handler, definition CompositionDefiniti
 		page:       cubecompose.Page{Limit: plan.Limit, Offset: plan.Offset()},
 		source:     h.source.target, columns: append([]cubecompose.Column(nil), plan.Columns...),
 		budget: CompositionBudget{MaxFrames: h.config.MaxCubes, MaxRows: h.config.MaxLimit, TimeoutMs: h.config.TimeoutMs},
+	}
+	_, result.relations, err = h.projectionRelations(plan, definition.Relations)
+	if err != nil {
+		return nil, err
 	}
 	if definition.ResultLimit != nil {
 		value := *definition.ResultLimit

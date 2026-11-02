@@ -10,6 +10,10 @@ DQL and Go shapes are complementary. DQL expresses data intent and metadata. Go 
 
 ## Standard authoring workflow
 
+Choose the [native data graph](data-graphs.md) before choosing how many reader
+components to create. An outer relation is typed graph metadata; it is not an
+instruction to flatten every source into one database query.
+
 Author independent reader and writer DQL using the same structure: an outer
 graph of named views, each backed by its own database SQL subquery. Place Datly
 annotations only in the outer projection; inner table aliases stay local. Select `transcribe` operation `get`, `patch`, `post`

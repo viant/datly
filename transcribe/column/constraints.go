@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"reflect"
+	"sort"
 	"strings"
 
 	"github.com/viant/datly/spec"
@@ -33,9 +34,10 @@ type tableConstraint struct {
 }
 
 type tableReference struct {
-	schema string
-	table  string
-	column string
+	columns []string
+	schema  string
+	table   string
+	column  string
 }
 
 type projectionLineage struct {
@@ -112,6 +114,16 @@ func (m *discoveryMetadata) tableSession(ctx context.Context, db *sql.DB, produc
 }
 
 func applyForeignKeyConstraints(result map[string]tableConstraint, keys []sink.Key, discoverySchema, sourceTable string) {
+	type foreignKeyIdentity struct{ name, schema, table, parentSchema, parentTable string }
+	identity := func(k *sink.Key) foreignKeyIdentity {
+		return foreignKeyIdentity{k.Name, k.Schema, k.Table, k.ReferenceSchema, k.ReferenceTable}
+	}
+	groups := map[foreignKeyIdentity][]sink.Key{}
+	for _, key := range keys {
+		if strings.TrimSpace(key.Name) != "" {
+			groups[identity(&key)] = append(groups[identity(&key)], key)
+		}
+	}
 	for index := range keys {
 		key := &keys[index]
 		name := normalizedName(key.Column)
@@ -124,8 +136,33 @@ func applyForeignKeyConstraints(result map[string]tableConstraint, keys []sink.K
 			table:  strings.TrimSpace(key.ReferenceTable),
 			column: strings.TrimSpace(key.ReferenceColumn),
 		}
+		if group := groups[identity(key)]; len(group) > 1 && simpleReferenceMatch(key.OnMatch) {
+			sort.SliceStable(group, func(i, j int) bool { return group[i].Position < group[j].Position })
+			members := make([]string, 0, len(group))
+			seen := map[string]bool{}
+			for _, member := range group {
+				column := strings.TrimSpace(member.Column)
+				if column == "" || seen[normalizedName(column)] {
+					members = nil
+					break
+				}
+				seen[normalizedName(column)] = true
+				members = append(members, column)
+			}
+			if len(members) > 1 {
+				constraint.reference.columns = members
+			}
+		}
 		result[name] = constraint
 	}
+}
+
+func simpleReferenceMatch(value string) bool {
+	switch strings.ToUpper(strings.TrimSpace(value)) {
+	case "", "NONE", "SIMPLE":
+		return true
+	}
+	return false
 }
 
 func inferredReferenceSchema(key *sink.Key, discoverySchema, sourceTable string) string {
@@ -465,6 +502,14 @@ func applyReferenceConstraint(column *spec.Column, reference *tableReference, re
 	}
 	if authored.RefColumn == "" {
 		sqlxTag.Append("refColumn=" + reference.column)
+	}
+	// Keep the declared FK tuple together. Scalar validators must not require
+	// a parent when another member of this nullable SQL MATCH SIMPLE key is NULL.
+	if len(reference.columns) > 1 && parsed.Lookup("refKey") == nil &&
+		(authored.RefTable == "" || authored.RefTable == reference.table) &&
+		(authored.RefColumn == "" || authored.RefColumn == reference.column) &&
+		(authored.RefDb == "" || authored.RefDb == reference.schema) {
+		parsed.Set("refKey", strings.Join(reference.columns, ","))
 	}
 	// Preserve authored empty values such as json:"": they suppress inferred
 	// omission without fixing a public name. Stringify would discard them.

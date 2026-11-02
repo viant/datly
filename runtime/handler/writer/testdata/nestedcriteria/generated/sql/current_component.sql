@@ -1,0 +1,2 @@
+SELECT r.tenant, r.id, r.state, r.payload_hash FROM (SELECT * FROM  (SELECT o.* FROM test_ledger o ${predicate.Builder().CombineAnd($predicate.FilterGroup(0,"AND")).Build("WHERE")}
+)  operations) r WHERE $criteria.CompositeIn("r", $ComponentKeys)

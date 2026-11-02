@@ -3,6 +3,7 @@ package jobs
 import (
 	"context"
 	"errors"
+	xreader "github.com/viant/xdatly/reader"
 	"time"
 
 	dexec "github.com/viant/datly/exec"
@@ -22,7 +23,7 @@ type Controls struct {
 	Result   bool
 }
 type Capture struct {
-	Plan     *dexec.ReadPlan
+	Plan     *xreader.ParameterizedQuery
 	Input    any
 	Controls Controls
 }
@@ -31,7 +32,7 @@ type Capture struct {
 // Value is present only when this invocation actually executed the job.
 type Exchange struct {
 	Job    *xasync.Job
-	Plan   *dexec.ReadPlan
+	Plan   *xreader.ParameterizedQuery
 	Value  any
 	Reused bool
 }

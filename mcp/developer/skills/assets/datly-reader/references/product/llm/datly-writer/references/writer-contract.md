@@ -146,7 +146,30 @@ Declare writable tables and relation keys in the reader-like graph. Parenthesize
 physical tables, such as `JOIN (LOOKUP_TABLE) lookup ON lookup.ID=r.LOOKUP_ID`,
 are auxiliary: readable by business logic and excluded from sequencing, mutation
 hooks, relinking and DML. A parenthesized physical root is also auxiliary.
-A real `(SELECT ...)` subquery retains its declared query meaning.
+A real `(SELECT ...)` subquery retains its declared query meaning; its outer
+parentheses alone do not make its underlying physical table auxiliary. To mark
+that source nonmutating, author the physical source as `(TABLE)` inside it.
+A lookup joined inside a writable source does not make that source's root
+auxiliary. Declare and verify each role independently.
+
+The marker is authoring metadata, not physical database syntax. Preserve the
+nonmutating intent in DQL and generated view metadata (`auxiliary=true`), while
+stock generation renders the physical source in executable SQL without the
+marker. For example, authored `FROM (LOOKUP_TABLE) lookup` must execute as a valid
+physical table reference such as `FROM LOOKUP_TABLE lookup`. Do not forward an
+invalid marker wrapper into MySQL, remove auxiliary intent to make SQL parse,
+or blanket-strip parentheses: legitimate subqueries, expressions, CTEs and
+quoted strings must retain their meaning. Standalone GET readers are already
+read-only and need no auxiliary marker merely to avoid writes.
+
+Inspect regenerated metadata and actual bound SQL together. With synthetic
+fixtures, assert that auxiliary roots/children are readable but never sequenced,
+relinked or mutated, even when supplied in a body. Also assert that intended
+writable roots/children still undergo validation and persist correctly. Test
+real target-database execution, including MySQL when supported by the component;
+SQLite-only or parser tests cannot establish its SQL acceptance. Exercise
+rollback and caller-owned transactions. Report a connected-build gap instead of
+patching generated SQL, adding direct SQL calls or weakening writer ownership.
 
 Attach `lifecycle_type(records, 'hooks.RecordLifecycle')` to the named outer view,
 using a declared package import, for example

@@ -170,7 +170,11 @@ func (p *Plan) scope(ctx context.Context, arguments map[string]interface{}) (*re
 		}
 		return p.binding.ScopeRequest(mcpinput.Arguments(normalized), request, options...)
 	}
-	return p.binding.Scope(mcpinput.Arguments(normalized))
+	request, err = p.targetRequest(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	return p.binding.ScopeRequest(mcpinput.Arguments(normalized), request)
 }
 
 func cloneArgument(argument Argument) Argument {

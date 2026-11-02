@@ -1,0 +1,1 @@
+SELECT Tenant AS Tenant, Id AS Id FROM `/`

@@ -40,8 +40,11 @@ func (d *reportDeriver) deriveCompose(source Source, route *spec.Route, identity
 	inputFields := []xshape.RuntimeField{
 		inputField("Cubes", reflect.SliceOf(frameType), fmt.Sprintf("Ordered cube frames, minimum 1, maximum %d", config.MaxCubes)),
 		{Name: "SQL", Type: reflect.TypeFor[string](), Tag: fieldTag("sql", "Validated wrapper SELECT; cubes[N-1] maps exactly to $CubeSQLN AS tN. Start FROM $CubeSQL1 AS t1 and join subsequent frames in order.")},
-		inputField("ResultLimit", reflect.TypeFor[*int](), "Optional semantic ordered-prefix size, independent of transport LIMIT/OFFSET; requires one explicitly ordered flat cube selection"),
+		inputField("ResultLimit", reflect.TypeFor[*int](), "Optional semantic ordered-prefix size, independent of transport LIMIT/OFFSET; requires one explicitly ordered single-cube selection; GROUP BY and HAVING run before the prefix"),
 		inputField("Page", reflect.TypeFor[*cubecompose.Page](), "Optional transport window; explicit limit must be positive, offset nonnegative, and their sum within the native budget; omission preserves SQL LIMIT/OFFSET"),
+	}
+	if config.ProjectionRelations {
+		inputFields = append(inputFields, inputField("Relations", reflect.TypeFor[[]string](), "Optional declared to-one leaf holders; requires complete direct projected dimension keys from one source frame"))
 	}
 	var values *cubecompose.ValuesContract
 	if config.ValuesType != "" {
@@ -105,9 +108,9 @@ func (d *reportDeriver) deriveCompose(source Source, route *spec.Route, identity
 			if !ok {
 				return nil, nil, fmt.Errorf("compose column %s requires a resolved row field", column.publicName)
 			}
-			fields = append(fields, cubecompose.Field{Name: column.sqlName, SQLName: column.sqlName, Type: rowField.Type, Role: section.role})
+			fields = append(fields, cubecompose.Field{Name: column.sqlName, SQLName: column.sqlName, Type: rowField.Type, Role: section.role, Tag: rowField.Tag})
 			if column.sqlName != column.name {
-				fields = append(fields, cubecompose.Field{Name: column.name, SQLName: column.sqlName, Type: rowField.Type, Role: section.role})
+				fields = append(fields, cubecompose.Field{Name: column.name, SQLName: column.sqlName, Type: rowField.Type, Role: section.role, Tag: rowField.Tag})
 			}
 		}
 	}
@@ -125,6 +128,9 @@ func (d *reportDeriver) deriveCompose(source Source, route *spec.Route, identity
 		param.Required = &required
 	}
 	params = append(params, bodyParam("ResultLimit", inputType), bodyParam("Page", inputType))
+	if config.ProjectionRelations {
+		params = append(params, bodyParam("Relations", inputType))
+	}
 	if values != nil {
 		parameter := bodyParam("Values", inputType)
 		parameter.WireTypeExpr = values.WireType().String()
@@ -134,6 +140,10 @@ func (d *reportDeriver) deriveCompose(source Source, route *spec.Route, identity
 		Key: identity.key, Name: identity.key.Name, Description: strings.TrimSpace(source.Component.Description + " cube composition"),
 		Settings: &spec.Settings{InputType: descriptor.Key()}, TypeContext: source.Component.TypeContext.Clone(), Parameters: params,
 		Routes: []*spec.Route{{Method: identity.route.Method, Path: identity.route.Path, Internal: route.Internal, APIKeyHeader: route.APIKeyHeader, APIKeyValue: route.APIKeyValue}},
+	}
+	if source.Component.Settings != nil {
+		// Preserve activation of the source's native presentation encoder.
+		component.Settings.CaseFormat = source.Component.Settings.CaseFormat
 	}
 	if config.MCPTool == nil || *config.MCPTool {
 		component.Routes[0].MCP = []*spec.MCPExposure{{Kind: spec.MCPExposureTool, CaseFormat: spec.DerivedMCPCaseFormat(route), Name: spec.DerivedMCPToolName(route, identity.key.Name, "CubeCompose"), Description: component.Description}}
@@ -145,6 +155,12 @@ func (d *reportDeriver) deriveCompose(source Source, route *spec.Route, identity
 		return nil, nil, fmt.Errorf("compose source route contract is missing")
 	}
 	handler := &composeHandler{inputType: inputType, source: sourcePlan, config: config, catalog: catalog, metadata: metadata, contract: contract, values: values}
+	if config.ProjectionRelations {
+		handler.relations, err = composeRelations(source.Component, rowType)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
 	d.commit(identity)
 	return &Derived{Component: component, InputType: inputType, OutputType: plan.outputType, Plan: plan, Handler: handler, Type: descriptor}, descriptor, nil
 }
