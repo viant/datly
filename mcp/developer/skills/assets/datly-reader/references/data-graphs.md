@@ -100,6 +100,35 @@ must reflect its own data contract when root admission alone is insufficient.
 
 ## Preserve grain and aggregate meaning
 
+Declare measure aggregation in SQL: `groupable:"false"` supplies a role, not an
+implicit SUM. For preaggregated sources, an authored outer SUM can regroup an
+unchanged inner deduplication query. Preserve nonadditive raw grain separately
+from explicit cube projection; an all-fields selector still requests projection.
+
+For example, retain an authorized deduplication query as the inner source and
+declare its additive rollup explicitly:
+
+```sql
+SELECT d.category, SUM(d.amount) AS amount
+FROM (
+    SELECT category, amount, COUNT(*) AS copies
+    FROM authorized_facts
+    GROUP BY category, amount
+) d
+GROUP BY d.category, d.amount, d.copies
+```
+
+No scalar selector preserves the authored raw grain; an explicit
+category/amount projection regroups the deduplicated values. Do not apply this
+SUM pattern to distinct reach or other nonadditive snapshots.
+
+A trusted Go adapter that preserves raw scalar grain can select row relations
+independently with `ReaderOptions.Relations = exec.NewRelationSelection(target,
+"records", "Label")`. Names resolve against the exact compiled component route
+and canonical view. An explicit empty list skips row relations; omission retains
+ordinary loading. This invocation control does not alter authorization, select
+scalar fields, suppress output relations, or become an HTTP/MCP input.
+
 Aggregate a fact at its authorized grain before attaching a to-one dictionary.
 Do not join a many-valued label table into database fact SQL and then sum the
 duplicated rows. A to-one marker is a claim to verify, not a way to conceal

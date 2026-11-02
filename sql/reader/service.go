@@ -63,6 +63,9 @@ func (s *Service) Read(ctx context.Context, session *Session, input any, binder 
 	if err := session.Init(); err != nil {
 		return nil, err
 	}
+	if err := session.configureRelationSelection(ctx); err != nil {
+		return nil, err
+	}
 	session.initMetrics(s.recorder)
 	session.recorder.Pending(session.pendingScope, 1)
 	defer session.recorder.Pending(session.pendingScope, -1)
@@ -311,7 +314,7 @@ func (s *Service) relationWork(session *Session, input reflect.Value, binder xha
 	if collector == nil {
 		return nil
 	}
-	children := collector.Relations(selectorStatelet(selectors.forView(collector.View())))
+	children := session.relationCollectors(collector, selectorStatelet(selectors.forView(collector.View())))
 	work := make([]relationWork, 0, len(children))
 	for _, child := range children {
 		child := child

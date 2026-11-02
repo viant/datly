@@ -155,6 +155,45 @@ such as `1 = 0` consume no value. Named placeholders retain their normal native
 resolver bindings. Question marks inside SQL strings and comments are literal
 text, not input slots.
 
+### Expression filters with and without a bound value
+
+`expr` already takes an authored SQL expression; a separate expression property
+or predicate type is not needed. Keep SQL structure in the component definition
+and caller values in native bindings:
+
+```dql
+#define($_ = $Phase<string>(query/phase).Optional().WithPredicate(1,'expr','p.phase = ?'))
+```
+
+For `Phase = "prior"`, the fragment remains `p.phase = ?` and its argument is
+`"prior"`. A value containing quotes remains data, not executable SQL. A fixed
+column comparison such as `p.asset_id = p.owner_id` has no placeholder and adds
+no argument. If a fixed condition is unconditional, ordinary authored SQL is
+usually clearer than introducing a dummy input solely to activate a predicate.
+
+Placement matters for outer joins. In ordinary reader SQL, filtering an optional
+related row belongs in `ON` when unmatched roots must survive:
+
+```sql
+SELECT a.id, p.amount
+FROM assets a
+LEFT JOIN observations p ON p.asset_id = a.id
+  ${predicate.Builder().CombineAnd($predicate.FilterGroup(1,"AND")).Build("AND")}
+```
+
+With the `Phase` predicate above, an asset without a prior observation remains
+in the result with a NULL amount. Moving that filter to `WHERE` would remove it.
+For several external values, use the existing named parameter resolver or
+separate predicates; do not assume one `expr` input automatically supplies an
+arbitrary number of positional placeholders. A supplied boolean `false` is a
+real value, not an instruction to disable a predicate.
+
+This ordinary reader expression support is distinct from the restricted cube
+composition join grammar. A bound `$Values.phase` does not by itself make a
+non-key `ON` condition supported by that compiler. Check its versioned grammar
+before adding an extension; do not move a right-side filter into `WHERE` merely
+to satisfy a join restriction.
+
 ## Three levels of Boolean composition
 
 | API | What it joins |

@@ -633,3 +633,19 @@ When `assigned-update` selects an unmatched identity and queues no mutation,
 both passes. Omitted insert-only fields are not required for this no-op; supplied
 null/zero/invalid fields and business hooks remain checked. This exception does
 not change complete final validation for actual INSERTs or database constraints.
+
+### Nullable composite foreign keys
+
+Stock schema discovery retains each MATCH SIMPLE composite FK's complete physical column
+membership in generated `refKey` tags beside the normal SQLX reference mappings.
+Keep these inferred tags together; do not hand-edit generated reference metadata,
+seed an unrelated parent row, or disable reference validation to make an optional
+reference work.
+
+The SQLX validator uses this group only for SQL MATCH SIMPLE nullability. A tuple
+with a SQL NULL member does not require a parent; zero and empty strings remain
+values. Sparse checks use matched Previous for omitted members, and an unknown or
+deferred member cannot establish NULL. Required, unique and unrelated reference
+checks remain enabled. Nonnull scalar checks retain their existing behavior;
+the database still enforces complete tuple combinations and transaction rollback.
+This metadata is not an authorization or revision-evidence substitute.
