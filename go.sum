@@ -1123,6 +1123,8 @@ github.com/viant/mcp v0.24.1-0.20261018180156-2794488fbdb7 h1:nU8O/b/eLd68zM3avl
 github.com/viant/mcp v0.24.1-0.20261018180156-2794488fbdb7/go.mod h1:wAC/q7M6wkWHjSMXfWHC+eQ+rYxYQfYzG8WQyrJT110=
 github.com/viant/mcp v0.24.2-0.20261101162548-1758f511a3f6 h1:1AhgWk63qnw7j5SUOuTCXwaIZsOp67DOGuEWyHI7tQ4=
 github.com/viant/mcp v0.24.2-0.20261101162548-1758f511a3f6/go.mod h1:vWKkZyPlQdMFbIqU4/p8soq0jIzTKgXRw35+hmu9Qd4=
+github.com/viant/mcp v0.24.2-0.20261102163024-7166d81ea725 h1:NYuBHs45nqBB5hmz+88HcnI7g+dCw93ctO+mPCOjklc=
+github.com/viant/mcp v0.24.2-0.20261102163024-7166d81ea725/go.mod h1:vWKkZyPlQdMFbIqU4/p8soq0jIzTKgXRw35+hmu9Qd4=
 github.com/viant/mcp-protocol v0.19.1-0.20261008164814-4025ecf6ddd4 h1:ABnpbBcwPh8236dlseHFkpmpvU+S93AY1dWjAeiNttg=
 github.com/viant/mcp-protocol v0.19.1-0.20261008164814-4025ecf6ddd4/go.mod h1:8h2yGk/LjWpyLqQEZYOGuNZQPohCr1vtM8IvtcNcEIQ=
 github.com/viant/mcp-protocol v0.19.1-0.20261008202502-046707df5ed9 h1:R7YFSIdvdcSFCc3lH6JR+9Bc2vekRrOqBf64MuSFMGQ=
