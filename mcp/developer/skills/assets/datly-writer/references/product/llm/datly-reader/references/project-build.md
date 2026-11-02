@@ -87,3 +87,17 @@ Generated holders expose package resources through `EmbedFS() *embed.FS` and
 Failed reload retains the previous generation; missing files fail staging. Shutdown
 stops admission and drains accepted work and externally owned services. A deadline
 return does not justify closing services still in use.
+
+Nested SQL embeds resolve from the file containing the reference. For this tree:
+
+```text
+records.dql
+sql/records.sql
+sql/record_facts.sql
+```
+
+The DQL can use `${embed:sql/records.sql}`. Inside `sql/records.sql`, use
+`${embed:record_facts.sql}` for its sibling. Repeating the `sql/` prefix there
+would request `sql/sql/record_facts.sql`. Package both files and validate the
+complete native component before publication; validating the inner SQL alone
+does not prove that the component's resource references resolve.
