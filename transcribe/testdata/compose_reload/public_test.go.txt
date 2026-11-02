@@ -218,13 +218,20 @@ func (c composeClient) schemas(t *testing.T) {
 		if err = json.Unmarshal(data, &actual); err != nil {
 			t.Fatal(err)
 		}
-		// Legacy MCP discovery keeps named body arguments optional in the schema.
-		// Invocation requiredness is enforced separately, including after reload.
-		if actual.Type != "object" || len(actual.Properties) != 2 || len(actual.Required) != 0 {
+		// Compose exposes the current optional semantic prefix and transport page.
+		// SQL has no omission tag; optional controls must not become required.
+		if actual.Type != "object" || len(actual.Properties) != 4 || !reflect.DeepEqual(actual.Required, []string{"sql"}) {
 			t.Fatalf("business input schema: %s", data)
 		}
 		if actual.Properties["sql"].Type != "string" {
 			t.Fatalf("SQL schema: %s", data)
+		}
+		if !reflect.DeepEqual(actual.Properties["resultLimit"].Type, []any{"integer", "null"}) {
+			t.Fatalf("optional result limit schema: %s", data)
+		}
+		page := actual.Properties["page"]
+		if !reflect.DeepEqual(page.Type, []any{"object", "null"}) || len(page.Properties) != 2 || !reflect.DeepEqual(page.Required, []string{"limit", "offset"}) || page.Properties["limit"].Type != "integer" || page.Properties["offset"].Type != "integer" {
+			t.Fatalf("optional transport page schema: %s", data)
 		}
 		cubes := actual.Properties["cubes"]
 		if cubes.Type != "array" || cubes.Items == nil || cubes.Items.Type != "object" {
