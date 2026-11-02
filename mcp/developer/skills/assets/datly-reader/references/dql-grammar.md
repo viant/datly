@@ -159,7 +159,7 @@ matched case-insensitively; use the spelling below. Quote textual values.
 | `mcp` | 1+ | name (nonempty), optional description, optional description path; arguments after third ignored |
 | `mcp_folder`, `mcp_skill_folder` | exactly 3 | namespace, root, URI prefix; no tail; skill variant selects `Skills: ["."]` |
 | `report`, `cube` | 0+ | first eight: linked input type, dimensions, measures, filters, orderBy, limit, offset, MCP-tool boolean; later arguments ignored |
-| `cubeCompose` | 1..5 | enabled boolean; optional MCP-tool boolean, positive max-cubes integer, positive max-limit integer, positive timeout-ms integer, in order |
+| `cubeCompose` | 1..7 | enabled boolean; optional MCP-tool boolean, positive max-cubes integer, positive max-limit integer, positive timeout-ms integer, quoted Go scalar-values type, projection-relations boolean, in order |
 | `cache` | 1+ | enabled boolean or name, optional TTL; later positional arguments ignored; fluent options below |
 | `cache_warmup` | 1+ | index column, then name=value options; repeated same-index calls merge cases with conflict checks; a different index appends an ordered plural warmup |
 | `cache_warmup_cases` | 2+ | shared case set: name, then name=value parameters; referenced by warmup `CaseRefs` |
@@ -911,7 +911,7 @@ SDK documentation service. Shared schema references remain resources.
 | Parameter errors | status 100–599; counts nonnegative; the binder checks the bound collection count; `transcribe/dql/declarations_options.go`, registration/binding validation |
 | View counts | nonnegative integer literals for limit/batching/concurrency; no fixed global maximum in directive parser; `transcribe/compile/view_directives.go` |
 | No-limit | `set_limit(view,0)` removes view limit; authored inner SQL LIMIT remains SQL |
-| Cube composition | `cubeCompose(enabled[, mcpTool[, maxCubes[, maxLimit[, timeoutMs]]]])` enables it and can set native budgets. Both flags are booleans; supplied budgets are positive integers. Omitted budgets default to 8 cubes, limit 100, timeout 30000 ms. Example: `cubeCompose(true,true,2,50,12000)` |
+| Cube composition | `cubeCompose(enabled[, mcpTool[, maxCubes[, maxLimit[, timeoutMs[, valuesType[, projectionRelations]]]]]])` enables it and can set native budgets and typed scalar inputs. Boolean flags must be booleans; supplied budgets are positive integers. Omitted budgets default to 8 cubes, limit 100, timeout 30000 ms. `valuesType` is a nonempty quoted Go type expression, such as `'struct { Threshold int64 }'`; composition SQL can bind `$Values.Threshold` rather than interpolate SQL. The final boolean opts into native projection relations; complete relation keys and native cardinality rules still apply. Existing 1–5 argument forms remain supported. Examples: `cubeCompose(true,true,2,50,12000)` and `cubeCompose(true,false,2,50,12000,'struct { Threshold int64 }',true)`. See `transcribe/dql/cube_compose_test.go`, `report/cubecompose/values_test.go`, and `report/compose_relations_test.go` for executable contracts. |
 | Warmup | `Limit`, `MaxCases`, `FieldNames` and per-case exclusions exist on typed settings, not standalone DQL options; unknown warmup option names become parameter dimensions |
 | Cache | positive TTL and agreement between duration/milliseconds checked by configuration; no automatic backend selection or fallback |
 | SQL parameters / expressions | database dialect placeholder budgets and reader/report validation apply; no universal DQL parameter-count maximum |
