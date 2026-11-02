@@ -382,7 +382,13 @@ func linkExplicitOutputContract(result *Result, expression string, currentOutput
 				if err != nil {
 					return fmt.Errorf("output contract %q field %s: %w", expression, param.Name, err)
 				}
-				if declaredIdentity == linkedIdentity {
+				// Native shape comparison preserves wrappers and recognizes
+				// predeclared aliases such as any and interface{}.
+				equivalent, err := (xshape.Contract{}).Equivalent(declaredIdentity, linkedIdentity)
+				if err != nil {
+					return fmt.Errorf("output contract %q field %s: %w", expression, param.Name, err)
+				}
+				if equivalent {
 					continue
 				}
 				return fmt.Errorf("output contract %q field %s: declared %s differs from linked field %s", expression, param.Name, canonical, field.Identity)
