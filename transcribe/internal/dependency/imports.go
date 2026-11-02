@@ -155,6 +155,36 @@ func (d *Loader) LoadImports(ctx context.Context, imports map[string]bool) ([]st
 		packagePaths = append(packagePaths, path)
 	}
 	sort.Strings(packagePaths)
+	// Local descriptors can refer to linked dependency types through Go imports
+	// without importing those packages directly from DQL. Retain the same linked
+	// authority used for a direct import; source-backed packages stay below.
+	external := map[string]bool{}
+	for _, pkg := range packagesByPath {
+		for _, imported := range pkg.Imports {
+			if packagesByPath[imported.Path] == nil {
+				external[imported.Path] = true
+			}
+		}
+	}
+	var externalPaths []string
+	for path := range external {
+		externalPaths = append(externalPaths, path)
+	}
+	sort.Strings(externalPaths)
+	for _, path := range externalPaths {
+		location, err := d.Workspace.Package(path)
+		if errors.Is(err, fs.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		if location == nil {
+			if err := d.registerLinkedPackageTypes(path); err != nil {
+				return nil, err
+			}
+		}
+	}
 	for _, path := range packagePaths {
 		pkg := packagesByPath[path]
 		if err := d.linkSourcePackage(pkg, xunsafe.PackageTypes(path)); err != nil {

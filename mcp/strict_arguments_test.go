@@ -15,7 +15,7 @@ func TestServiceExtraArgumentPolicyAndSchema(t *testing.T) {
 	component := serviceComponent(t, "ExtraArgumentPolicy", &spec.MCPExposure{Kind: spec.MCPExposureTool, Name: "records.search"})
 	args := map[string]interface{}{"query": "scoped", "semanticSelection": map[string]interface{}{"entity": "records"}}
 	for _, strict := range []bool{false, true} {
-		invoker := &serviceInvoker{}
+		invoker := &serviceInvoker{checkRequest: checkToolRequest(t, "scoped")}
 		service, err := New(Config{StrictArguments: strict, Components: []*registry.RegisteredComponent{component}, Invoker: invoker})
 		if err != nil {
 			t.Fatal(err)
@@ -32,7 +32,7 @@ func TestServiceExtraArgumentPolicyAndSchema(t *testing.T) {
 			if invoker.request.Target.Component.Name != "" {
 				t.Fatal("rejected arguments reached execution")
 			}
-		} else if rpcErr != nil || result == nil || len(invoker.request.Providers) != 1 {
+		} else if rpcErr != nil || result == nil {
 			t.Fatalf("lenient result=%v error=%v", result, rpcErr)
 		}
 		raw, err := json.Marshal(entry.Metadata.InputSchema)

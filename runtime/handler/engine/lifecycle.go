@@ -247,3 +247,15 @@ func (s *lifecycleScope) BindResponse(ctx context.Context, request xhandler.Comp
 }
 
 var _ xhandler.ComponentResponseBinder = (*lifecycleScope)(nil)
+
+// OutputSelection inspects the successful reader result frozen before this
+// finalizer. It shares the callback's cancellation and closed-scope admission.
+func (s *lifecycleScope) OutputSelection(ctx context.Context) (filter xhandler.OutputFieldFilter, available bool, err error) {
+	err = s.run(ctx, func(context.Context) error {
+		filter, available = dexec.CurrentOutputSelection(s.ctx, s.output)
+		return nil
+	})
+	return
+}
+
+var _ xhandler.OutputSelectionProvider = (*lifecycleScope)(nil)

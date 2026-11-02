@@ -772,6 +772,9 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 	}
 
 	readerResult = request.CanonicalReader
+	if request.requiresOutputSelection() {
+		dexec.EnableLifecycleOutputSelection(ctx)
+	}
 	dexec.BeginOutputSelection(ctx)
 	result, handlerErr := request.Handler.Execute(ctx, invocation)
 	if scopedLease != nil {
@@ -788,7 +791,7 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 		}
 	}
 	if responseToken != nil {
-		completeSelection(nil, nil)
+		dexec.SealOutputSelection(ctx, result, handlerErr)
 	} else {
 		completeSelection(result, handlerErr)
 	}
@@ -1065,4 +1068,21 @@ func ResponseBindingOwner(ctx context.Context) any {
 		return owner.root
 	}
 	return owner
+}
+
+func (r Request) requiresOutputSelection() bool {
+	outputType := r.OutputType
+	if outputType == nil {
+		if typed, ok := r.Handler.(rhandler.TypedHandler); ok {
+			outputType = typed.OutputType()
+		}
+	}
+	if outputType == nil {
+		return false
+	}
+	if outputType.Kind() == reflect.Pointer {
+		outputType = outputType.Elem()
+	}
+	consumer, ok := reflect.New(outputType).Interface().(xhandler.OutputSelectionConsumer)
+	return ok && consumer.RequiresOutputSelection()
 }
