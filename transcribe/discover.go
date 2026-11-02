@@ -15,6 +15,7 @@ import (
 	"github.com/viant/datly/bootstrap"
 	packageresources "github.com/viant/datly/bootstrap/resources"
 	"github.com/viant/datly/constant"
+	"github.com/viant/datly/spec"
 	"github.com/viant/datly/transcribe/column"
 	"github.com/viant/datly/transcribe/dql"
 	gen "github.com/viant/datly/transcribe/generate"
@@ -252,6 +253,9 @@ func (c *discoveryCompilation) compileFile(ctx context.Context, file xmodule.Fil
 	if c.discovery.SourceName != "" {
 		source.Name = c.discovery.SourceName
 	}
+	// Pairing may select a holder in a different package. Keep the authored
+	// source's project identity stable before and after that holder is generated.
+	authoredKey := spec.Key{Kind: spec.KindComponent, Scope: source.Scope, Name: source.Name}
 	var result *Result
 	preparation, err := prepareSourceCompilation(ctx, source)
 	if err != nil {
@@ -280,6 +284,7 @@ func (c *discoveryCompilation) compileFile(ctx context.Context, file xmodule.Fil
 	if err != nil {
 		return nil, fmt.Errorf("compile component source %q: %w", file.Path, err)
 	}
+	result.Component.Key = authoredKey
 	if err := (&dependency.Loader{Workspace: c.workspace, Catalog: result.Source.Types, Registry: c.discovery.Registry}).LoadCodecs(ctx, result.Component, result.TypeContext, result.Source.LinkedInputType, result.Source.LinkedOutputType); err != nil {
 		return nil, err
 	}

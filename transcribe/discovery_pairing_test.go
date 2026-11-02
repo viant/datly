@@ -53,6 +53,9 @@ func TestDiscoveryDeclaredPackagePairsDistinctSource(t *testing.T) {
 		t.Fatalf("pairing exposed unrelated components: %d", len(project.Components))
 	}
 	result := project.Components[0]
+	if result.Component.Key.String() != "component:example.com/generated/source:query" {
+		t.Fatalf("pairing changed authored project identity: %s", result.Component.Key.String())
+	}
 	shared := result.Source.preparation
 	compilation, err := prepareCompilation(context.Background(), result.Source)
 	if err != nil || shared == nil || compilation.prepared != shared.prepared || compilation.result.Source.preparation != shared {
@@ -183,6 +186,9 @@ func TestDiscoverySourceNamePreservesPhysicalResourcesAndPairing(t *testing.T) {
 			t.Fatalf("selected source duplicated or renamed sibling: %d", len(project.Components))
 		}
 		result := project.Components[0]
+		if result.Component.Key.String() != "component:example.com/generated/source:Records" {
+			t.Fatalf("SourceName project identity changed: %s", result.Component.Key.String())
+		}
 		if result.Component.Name != "Records" || result.Source.Name != "Records" || result.Source.Path != filepath.Join(base, "source/query.dql") {
 			t.Fatalf("source identity changed: %+v", result.Source)
 		}

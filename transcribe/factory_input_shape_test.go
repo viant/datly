@@ -126,7 +126,12 @@ func testFactoryInputShapeNativeGeneration(t *testing.T, qualifier string) {
 		project, err := (&Discovery{BaseDir: root, Include: []string{handlerFixtureModule + "/dql"}, GoBuild: source.GoBuild, ColumnRefiner: source.ColumnRefiner}).Compile(context.Background())
 		require.NoError(t, err)
 		require.Len(t, project.Components, 1)
-		require.Equal(t, compiled.Component, project.Components[0].Component)
+		// Discovery keys belong to the authored file; explicit CompileSource
+		// uses the caller's source name. Their runtime contract stays identical.
+		require.Equal(t, "shape", project.Components[0].Component.Key.Name)
+		projectComponent := *project.Components[0].Component
+		projectComponent.Key = compiled.Component.Key
+		require.Equal(t, compiled.Component, &projectComponent)
 		require.Equal(t, compiled.ExternalHandler.InputShape, project.Components[0].ExternalHandler.InputShape)
 		shape := compiled.ExternalHandler.InputShape
 		require.NotNil(t, shape)
