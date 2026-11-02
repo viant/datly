@@ -200,7 +200,8 @@ func (c withURIAcceptance) schemas(t *testing.T) {
 		// Empty properties are omitted by the native wire schema serializer.
 		want := schema.ToolInputSchema{Type: "object"}
 		if tool.Name == "RecordsById" {
-			want.Required = []string{"id"}
+			// Legacy discovery advertises pointer fields as optional. Invocation
+			// still rejects a missing id, checked by the request tests above.
 			want.Properties = map[string]map[string]any{"id": {"type": "integer"}}
 		}
 		actual := tool.InputSchema

@@ -34,6 +34,13 @@ func (c exposurePublic) check(t *testing.T, selection exposureSelection, id int)
 		path, tool string
 		exposed    bool
 	}{{"/records", "records.public", selection.app}, {"/internal-records", "records.lookup", selection.private}} {
+		if endpoint.exposed && (c.native != nil || c.registry) {
+			result, err := c.call(&schema.CallToolRequestParams{Name: endpoint.tool})
+			var rpcErr *jsonrpc.Error
+			if !errors.As(err, &rpcErr) || rpcErr.Code != jsonrpc.InvalidParams || rpcErr.Message != `missing required MCP argument "tenant"` || result != nil {
+				t.Fatalf("%s missing tenant: result=%+v error=%v", endpoint.tool, result, err)
+			}
+		}
 		for _, tenant := range []int{7, 8} {
 			var body []byte
 			if c.native == nil && !c.registry {
@@ -111,7 +118,9 @@ func (c exposurePublic) catalog(t *testing.T, selection exposureSelection) {
 		if extension, ok := input.AdditionalProperties.(map[string]any); ok && len(extension) == 0 {
 			input.AdditionalProperties = nil
 		}
-		expected := schema.ToolInputSchema{Type: "object", Required: []string{"tenant"}, Properties: map[string]map[string]any{"tenant": {"type": "integer"}}}
+		// Legacy discovery leaves query fields optional; check() independently
+		// verifies that runtime invocation rejects the missing required tenant.
+		expected := schema.ToolInputSchema{Type: "object", Properties: map[string]map[string]any{"tenant": {"type": "integer"}}}
 		if !reflect.DeepEqual(input, expected) {
 			t.Fatalf("%s business schema=%+v", tool.Name, tool.InputSchema)
 		}
