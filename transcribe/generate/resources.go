@@ -223,82 +223,96 @@ func (r *planResolver) prepareResources() (*ResourcePlan, error) {
 			return nil, err
 		}
 	}
-	needsLinkedOutputSQL := false
-	for _, field := range r.plan.Output.Fields {
-		if raw := tags.NewTags(field.Tag).Lookup(tag.SQLName); raw != nil {
-			if source := tag.ParseSQL(string(raw.Values)); source != nil && strings.TrimSpace(source.Text) != "" {
-				needsLinkedOutputSQL = true
-				break
+	for index, contract := range []ContractPlan{r.plan.Input, r.plan.Output} {
+		roleName := []string{"input", "output"}[index]
+		needsLinkedSQL := false
+		for _, field := range contract.Fields {
+			if raw := tags.NewTags(field.Tag).Lookup(tag.SQLName); raw != nil {
+				if source := tag.ParseSQL(string(raw.Values)); source != nil && strings.TrimSpace(source.Text) != "" {
+					needsLinkedSQL = true
+					break
+				}
 			}
 		}
-	}
-	// SQL-free external factories carry validated Go contract identities,
-	// not reader row descriptors. Inspect linked fields only for planned SQL.
-	if r.input.SQLResources && r.plan.Output.Ownership == ContractLinked && needsLinkedOutputSQL {
-		descriptor, err := r.types.Descriptor(r.plan.Output.DescriptorKey)
-		if err != nil {
-			return nil, err
-		}
-		fields, err := xshape.New(descriptor, r.types.Descriptor).Fields()
-		if err != nil {
-			return nil, err
-		}
-		for _, planned := range r.plan.Output.Fields {
-			for _, field := range fields {
-				if field.Name != planned.Name {
-					continue
-				}
-				metadata, err := tag.ParseField(field.StructField())
-				if err != nil {
-					return nil, err
-				}
-				if metadata.Binding == nil || metadata.Binding.Location.Kind != "output" || metadata.Binding.Location.In != "view" {
-					continue
-				}
-				raw := tags.NewTags(planned.Tag).Lookup(tag.SQLName)
-				if raw == nil {
-					continue
-				}
-				source := tag.ParseSQL(string(raw.Values))
-				if source == nil || strings.TrimSpace(source.Text) == "" {
-					continue
-				}
-				if metadata.SQL == nil {
-					return nil, fmt.Errorf("linked output field %s requires authored SQL metadata", field.Name)
-				}
-				if metadata.SQL.URI == "" {
-					if metadata.SQL.Text != source.Text {
-						return nil, fmt.Errorf("linked output field %s has different uneditable SQL", field.Name)
+		// Linked envelopes retain their SQL URIs while DQL refreshes the assets.
+		// SQL-free factories need no descriptor inspection.
+		if r.input.SQLResources && contract.Ownership == ContractLinked && needsLinkedSQL {
+			descriptor, err := r.types.Descriptor(contract.DescriptorKey)
+			if err != nil {
+				return nil, err
+			}
+			fields, err := xshape.New(descriptor, r.types.Descriptor).Fields()
+			if err != nil {
+				return nil, err
+			}
+			for _, planned := range contract.Fields {
+				for _, field := range fields {
+					if field.Name != planned.Name {
+						continue
 					}
-					continue
-				}
-				namespace, path, qualified := strings.Cut(metadata.SQL.URI, ":")
-				if !qualified {
-					path = metadata.SQL.URI
-				} else if namespace != result.Namespace {
-					return nil, fmt.Errorf("linked output field %s SQL namespace %q differs from component resources %q", field.Name, namespace, result.Namespace)
-				}
-				role := rootSQLRole
-				if role == "" {
-					role = r.plan.ComponentName
-				}
-				wanted := r.plan.Generation.SQLFile(role, "")
-				if wanted != "" && path != wanted {
-					return nil, fmt.Errorf("linked output field %s SQL destination %q differs from uneditable URI %q", field.Name, wanted, metadata.SQL.URI)
-				}
-				// A compiled contract owns its URI. Defaults must retain that
-				// destination; only an explicit conflicting sql_dest is invalid.
-				if wanted == "" {
-					if r.plan.Generation == nil {
-						r.plan.Generation = &spec.GenerationSettings{}
-					}
-					if err := r.plan.Generation.SetSQLFile(role, path); err != nil {
+					metadata, err := tag.ParseField(field.StructField())
+					if err != nil {
 						return nil, err
 					}
+					if metadata.Binding == nil || roleName == "output" && (metadata.Binding.Location.Kind != "output" || metadata.Binding.Location.In != "view") {
+						continue
+					}
+					raw := tags.NewTags(planned.Tag).Lookup(tag.SQLName)
+					if raw == nil {
+						continue
+					}
+					source := tag.ParseSQL(string(raw.Values))
+					if source == nil || strings.TrimSpace(source.Text) == "" {
+						continue
+					}
+					if metadata.SQL == nil {
+						return nil, fmt.Errorf("linked %s field %s requires authored SQL metadata", roleName, field.Name)
+					}
+					if metadata.SQL.URI == "" {
+						if metadata.SQL.Text != source.Text {
+							return nil, fmt.Errorf("linked %s field %s has different uneditable SQL", roleName, field.Name)
+						}
+						continue
+					}
+					namespace, path, qualified := strings.Cut(metadata.SQL.URI, ":")
+					if !qualified {
+						path = metadata.SQL.URI
+					} else if namespace != result.Namespace {
+						return nil, fmt.Errorf("linked %s field %s SQL namespace %q differs from component resources %q", roleName, field.Name, namespace, result.Namespace)
+					}
+					role := planned.Name
+					if roleName == "output" || planned.Source == "body" && unwrapQualifiedTypeName(planned.Type) == unwrapQualifiedTypeName(r.plan.RootViewType) {
+						role = rootSQLRole
+						if role == "" {
+							role = r.plan.ComponentName
+						}
+					}
+					wanted := r.plan.Generation.SQLFile(role, "")
+					if wanted != "" && path != wanted {
+						return nil, fmt.Errorf("linked %s field %s SQL destination %q differs from uneditable URI %q", roleName, field.Name, wanted, metadata.SQL.URI)
+					}
+					if roleName == "input" {
+						if existing, ok := files[path]; ok && existing != source.Text {
+							return nil, fmt.Errorf("linked input field %s has conflicting SQL resource %s", field.Name, path)
+						}
+						files[path] = source.Text
+						continue
+					}
+					// A compiled contract owns its URI. Defaults must retain that
+					// destination; only an explicit conflicting sql_dest is invalid.
+					if wanted == "" {
+						if r.plan.Generation == nil {
+							r.plan.Generation = &spec.GenerationSettings{}
+						}
+						if err := r.plan.Generation.SetSQLFile(role, path); err != nil {
+							return nil, err
+						}
+					}
 				}
 			}
 		}
 	}
+
 	if r.input.SQLResources {
 		if err := externalize(r.plan.Output.Type, r.plan.Output.Fields); err != nil {
 			return nil, err

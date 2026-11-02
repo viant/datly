@@ -31,7 +31,12 @@ func linkDeclaredOutputView(result *Result, authored *spec.Component, generatedR
 		if expression == "" {
 			expression = strings.TrimSpace(param.TypeExpr)
 		}
-		if !strings.Contains(expression, ".") {
+		if expression == "" {
+			continue
+		}
+		// Bare names need an ownership override only when reloading a prior
+		// package. First generation resolves them in the destination package.
+		if !strings.Contains(expression, ".") && (result.Source == nil || result.Source.PackageComponent == nil) {
 			continue
 		}
 		view := result.Component.RootView
@@ -91,6 +96,13 @@ func linkDeclaredOutputView(result *Result, authored *spec.Component, generatedR
 				result.generatedOutputRows[view] = true
 				continue
 			}
+		}
+		// Local output names still identify SQL-owned generated rows. Record
+		// that ownership before the package output can retain its old row as
+		// linked authority during regeneration. Only qualified non-generated
+		// names explicitly request an existing Go contract.
+		if !strings.Contains(expression, ".") {
+			continue
 		}
 		resolved, err := result.TypeResolver.ResolveShape(expression)
 		if err != nil {
