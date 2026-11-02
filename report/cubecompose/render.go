@@ -180,6 +180,9 @@ func (r *renderer) renderNode(n node.Node) (string, error) {
 		r.args = append(r.args, value)
 		return "?", nil
 	case *expr.Binary:
+		if actual.Op == "" && actual.X != nil && actual.Y == nil {
+			return r.renderNode(actual.X)
+		}
 		left, err := r.renderNode(actual.X)
 		if err != nil {
 			return "", err

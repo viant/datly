@@ -437,6 +437,11 @@ func (p *Plan) validateNode(n node.Node, aliases map[string]Column) ([]fieldRef,
 	case *expr.Star:
 		return nil, fmt.Errorf("wildcard projection is not allowed")
 	case *expr.Binary:
+		// ParseQualify retains a Binary container even when its entire
+		// expression is a single operand, such as a parenthesis or CASE.
+		if actual.Op == "" && actual.X != nil && actual.Y == nil {
+			return p.validateNode(actual.X, aliases)
+		}
 		if !allowedOperator(actual.Op) {
 			return nil, fmt.Errorf("unsupported cube compose operator %q", actual.Op)
 		}
