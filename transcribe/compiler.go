@@ -182,6 +182,7 @@ func prepareCompilation(ctx context.Context, source *Source) (*componentCompilat
 			}
 		}
 	}
+	prepared.Directives.ApplyRouteNames(component.Routes)
 	return &componentCompilation{
 		result:   &Result{Source: source, Component: component, SourceMap: sourceMap},
 		authored: component, prepared: prepared,

@@ -24,6 +24,7 @@ type componentSettings struct {
 	Generation                   spec.GenerationSettings
 	MCP                          *spec.MCPExposure
 	routeMCP                     []routeMCPExposure
+	routeNames                   []routeNameSetting
 	MCPOnly                      bool
 	Internal                     bool
 	InputType                    string
@@ -45,4 +46,10 @@ type routeMCPExposure struct {
 	ref      spec.RouteRef
 	exposure *spec.MCPExposure
 	span     SourceSpan
+}
+
+type routeNameSetting struct {
+	ref  spec.RouteRef
+	name string
+	span SourceSpan
 }

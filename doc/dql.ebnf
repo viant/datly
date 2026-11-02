@@ -28,7 +28,7 @@ sequence_strategy_literal = "'transient'" | '"transient"'
    reservation). Other values, including maxid, fail transcription. *)
 setting_keyword = "#setting" | "#settings" ;
 assignment_prefix = "$_", "=" ;
-setting_name = "route" | "api_key" | "connector"
+setting_name = "route" | "route_name" | "api_key" | "connector"
  | "input_type" | "output_type" | "dest" | "input_dest" | "output_dest"
  | "file_prefix" | "handler_dest" | "lifecycle_dest" | "mutation_dest"
  | "resources_dest" | "links_dest" | "support_dest" | "router_dest"
