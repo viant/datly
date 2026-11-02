@@ -11,6 +11,7 @@ import (
 	"github.com/viant/bindly/locator"
 	bindstate "github.com/viant/bindly/state"
 	"github.com/viant/datly/data"
+	"github.com/viant/datly/exec"
 	"github.com/viant/datly/observability"
 	dsql "github.com/viant/datly/sql"
 	sqlreader "github.com/viant/datly/sql/reader"
@@ -142,6 +143,12 @@ func (l *viewLocator) ValueInScope(ctx context.Context, scope locator.Scope, tar
 	var output any
 	var projection *readProjection
 	var err error
+	// Input views have their own compiled graph, even when they share the
+	// component key. Output relation selection must not alter prerequisite reads.
+	ctx, err = exec.EnterRelationSelection(ctx, exec.ComponentTarget{}, nil)
+	if err != nil {
+		return nil, false, err
+	}
 	if requested, ok := scope.(locator.MetadataScope); ok && requested.MetadataRequested() {
 		var result *sqlreader.ReadResult
 		result, err = view.execution.ReadResult(ctx, l.input, scopeBinder{scope: scope}, resolver)
