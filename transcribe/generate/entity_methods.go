@@ -288,7 +288,9 @@ func (p *entityMethodOwnership) hasCandidate(file *ast.File) bool {
 }
 
 func (p *entityMethodOwnership) inspect(file *ast.File, path string) error {
-	if file == nil {
+	// Package scans include resource and driver files that own no accessor.
+	// Their side-effect imports do not participate in method signature validation.
+	if file == nil || !p.hasCandidate(file) {
 		return nil
 	}
 	imports, err := handlerImports(file, "")

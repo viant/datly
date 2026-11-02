@@ -36,3 +36,25 @@ func (e *Record) BackfillScheduleIfNeeded(prior *Record, fields renamed.FieldSet
 		})
 	}
 }
+
+func TestEntityOwnershipIgnoresUnrelatedEmbeddedResources(t *testing.T) {
+	type useCase struct{ description, source string }
+	for _, test := range []useCase{
+		{"embedded schema", "package records\nimport _ \"embed\"\n//go:embed schema.xsd\nvar schema string\n"},
+		{"driver registration", "package records\nimport _ \"example.com/driver\"\n"},
+	} {
+		t.Run(test.description, func(t *testing.T) {
+			file, err := parser.ParseFile(token.NewFileSet(), "resources.go", test.source, parser.ParseComments)
+			if err != nil {
+				t.Fatal(err)
+			}
+			policy := &entityMethodOwnership{expected: map[string]EntityMethod{"Record.BackfillScheduleIfNeeded": {Receiver: "Record", Name: "BackfillScheduleIfNeeded", Signature: "func(*Record, handler.FieldSet) error"}}, claimed: map[string]string{}, packageName: "records"}
+			if err = policy.inspect(file, "resources.go"); err != nil {
+				t.Fatal(err)
+			}
+			if len(policy.claimed) != 0 {
+				t.Fatal("unrelated source claimed an accessor")
+			}
+		})
+	}
+}
