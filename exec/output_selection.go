@@ -4,19 +4,24 @@ import (
 	"context"
 	"reflect"
 	"sync"
+
+	xhandler "github.com/viant/xdatly/handler"
 )
 
 // OutputFieldFilter is an invocation's user projection, independent of loaded
 // columns and per-row read evidence. Paths follow the native JSON encoder.
-type OutputFieldFilter interface{ ExcludePath([]string, string) bool }
+type OutputFieldFilter = xhandler.OutputFieldFilter
 
 type outputSelection struct {
-	mu     sync.RWMutex
-	filter OutputFieldFilter
-	typeOf reflect.Type
-	sealed bool
-	active bool
-	root   bool
+	mu        sync.RWMutex
+	filter    OutputFieldFilter
+	typeOf    reflect.Type
+	sealed    bool
+	active    bool
+	root      bool
+	lifecycle bool
+	published bool
+	valid     bool
 }
 type outputSelectionKey struct{}
 type outputSelectionFrameKey struct{}
@@ -55,6 +60,7 @@ func ScopeOutputSelection(ctx context.Context) (context.Context, func(any, error
 		frame.mu.Lock()
 		defer frame.mu.Unlock()
 		frame.sealed = true
+		frame.valid = frame.published && err == nil && reflect.TypeOf(result) == frame.typeOf
 		if parent != nil || target == nil || err != nil || reflect.TypeOf(result) != frame.typeOf {
 			return
 		}
@@ -73,8 +79,9 @@ func PublishOutputSelection(ctx context.Context, result any, filter OutputFieldF
 	}
 	frame.mu.Lock()
 	defer frame.mu.Unlock()
-	if frame.active && !frame.sealed && frame.root {
+	if frame.active && !frame.sealed && (frame.root || frame.lifecycle) {
 		frame.filter, frame.typeOf = filter, reflect.TypeOf(result)
+		frame.published = true
 	}
 }
 
@@ -99,7 +106,7 @@ func WantsOutputSelection(ctx context.Context) bool {
 	}
 	frame.mu.RLock()
 	defer frame.mu.RUnlock()
-	return frame.root && frame.active && !frame.sealed
+	return (frame.root || frame.lifecycle) && frame.active && !frame.sealed
 }
 
 // BeginOutputSelection excludes input preparation reads from output selection.
@@ -111,4 +118,45 @@ func BeginOutputSelection(ctx context.Context) {
 	frame.mu.Lock()
 	defer frame.mu.Unlock()
 	frame.active = true
+}
+
+// EnableLifecycleOutputSelection retains this invocation's successful reader
+// mask independently of transport publication. Input reads are still excluded.
+func EnableLifecycleOutputSelection(ctx context.Context) {
+	frame, _ := ctx.Value(outputSelectionFrameKey{}).(*outputSelection)
+	if frame == nil {
+		return
+	}
+	frame.mu.Lock()
+	defer frame.mu.Unlock()
+	frame.lifecycle = true
+}
+
+// CurrentOutputSelection returns only the sealed mask for this exact output
+// type. It never reads the transport target or an enclosing invocation's frame.
+func CurrentOutputSelection(ctx context.Context, output any) (OutputFieldFilter, bool) {
+	frame, _ := ctx.Value(outputSelectionFrameKey{}).(*outputSelection)
+	if frame == nil {
+		return nil, false
+	}
+	frame.mu.RLock()
+	defer frame.mu.RUnlock()
+	if !frame.sealed || !frame.valid || reflect.TypeOf(output) != frame.typeOf {
+		return nil, false
+	}
+	return frame.filter, true
+}
+
+// SealOutputSelection freezes this invocation's reader evidence without
+// publishing it to the transport. Response binding defers that publication
+// until the final response has been classified.
+func SealOutputSelection(ctx context.Context, result any, err error) {
+	frame, _ := ctx.Value(outputSelectionFrameKey{}).(*outputSelection)
+	if frame == nil {
+		return
+	}
+	frame.mu.Lock()
+	defer frame.mu.Unlock()
+	frame.sealed = true
+	frame.valid = frame.published && err == nil && reflect.TypeOf(result) == frame.typeOf
 }

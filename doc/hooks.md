@@ -206,3 +206,52 @@ AfterQueue and flushing into someone else's transaction do not prove commitment.
 
 See [mutations](mutations.md) for the complete validation/transaction contract and
 [custom handlers](custom-handlers.md) for injector-aware finalization and output behavior.
+
+## Inspect the reader's selected output in a finalizer
+
+When a derived value depends on whether a relation was requested, inspect the
+reader's effective output selection. An empty relation is not evidence that it
+was excluded: a selected relation may legitimately return zero rows.
+
+Opt in on the output contract and use the optional capability on the finalizer's
+invoker. For an output whose `Data` field has `json:"data"` and whose rows contain
+`Items`, a catalog component can distinguish selected items from omitted items:
+
+```go
+func (*Output) RequiresOutputSelection() bool { return true }
+
+func (o *Output) Finalize(ctx context.Context, invoker handler.ComponentInvoker) error {
+    selection, ok := invoker.(handler.OutputSelectionProvider)
+    if !ok {
+        return fmt.Errorf("output selection capability is unavailable")
+    }
+    filter, available, err := selection.OutputSelection(ctx)
+    if err != nil {
+        return err
+    }
+    if !available {
+        return fmt.Errorf("reader selection evidence is unavailable")
+    }
+    itemsSelected := filter == nil || !filter.ExcludePath([]string{"data"}, "Items")
+    if itemsSelected {
+        // Compute values that require the complete selected Items relation.
+    }
+    return nil
+}
+```
+
+Parent path segments use their encoded JSON names (`data` above); the final
+field argument is the Go field name (`Items`). Use the actual output tags rather
+than assuming the Go parent name matches its encoded name.
+
+A nil filter with `available=true` means unrestricted selection. Missing or
+unsuccessful reader evidence reports `available=false`; do not treat that as
+unrestricted selection. Datly captures the successful reader's resolved filter,
+including query fields and explicit selector overrides, then freezes it before
+finalization. Nested component reads cannot replace it. This works for typed
+calls as well as HTTP, and does not add fields to the public contract.
+
+Acquire the filter during the callback: capability calls after callback closure
+or with a canceled context fail. The acquired filter is immutable and safe to
+retain as read-only evidence. This capability describes the requested output
+projection, not which database columns were loaded or whether rows exist.
