@@ -210,6 +210,41 @@ values and rejected source authorization fail the entire composition.
 
 ## Grouping and cache projection
 
+Field roles do not invent aggregation. `groupable:"false"` marks a measure;
+its SQL must declare `SUM`, `MAX`, a distinct count, or the intended expression.
+Selecting fewer dimensions from `SELECT category, SUM(amount) AS amount ...
+GROUP BY category` regroups natively. A bare `amount` grouped with the source
+keys remains a scalar value; selecting it does not turn it into `SUM(amount)`.
+
+For preaggregated facts, preserve their authored deduplication and authorization
+inside the source, then declare additive rollups outside it:
+
+```sql
+SELECT d.category, SUM(d.amount) AS amount, SUM(d.source_count) AS source_count
+FROM (
+    SELECT category, amount, COUNT(*) AS source_count
+    FROM authorized_facts
+    GROUP BY category, amount
+) d
+GROUP BY d.category, d.amount, d.source_count
+```
+
+With no scalar selector, this retains the full authored grain, including rows
+that differ only in amount. An explicit category/amount projection rebuilds the
+outer grouping and sums the deduplicated values; it leaves the inner source
+intact. Even explicitly selecting every output field requests projection and
+can regroup. Keep nonadditive snapshots at their authoritative grain, and expose
+only measures with meaningful aggregation in flexible cube contracts. Source
+authorization predicates remain inside the fact query and its cache boundary.
+
+Trusted adapters preserving scalar grain can independently restrict relations
+with `ReaderOptions.Relations = exec.NewRelationSelection(target, "records",
+"Label")`. The exact component route and canonical view own this capability;
+native metadata resolves its holder names. An explicit empty list loads no row
+relations, while an absent capability retains ordinary selector behavior. It
+cannot expand an existing field selection, and nested component calls do not
+inherit it. This is a Go invocation control, not an HTTP/MCP input.
+
 Selecting dimensions changes grouping semantics. A cache warmed at
 `Tenant, AccountID, Region` cannot safely answer a request dropping `Region`
 merely by hiding that column: sums/counts may require reaggregation. For the

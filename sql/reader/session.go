@@ -31,6 +31,7 @@ type Output struct {
 // Session contains only SQL reader execution state. Input binding, transport,
 // handler capabilities, and registration remain runtime concerns.
 type Session struct {
+	relationSelection *relationSelection
 	consumer          *xh.RowConsumer
 	metricScope       string
 	observations      map[*data.View]observability.Resolution

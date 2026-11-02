@@ -393,6 +393,14 @@ func (r *Runtime) invokeComponent(ctx context.Context, request dexec.ComponentRe
 	if err != nil {
 		return nil, err
 	}
+	var relations *dexec.RelationSelection
+	if request.ReaderOptions != nil {
+		relations = request.ReaderOptions.Relations
+	}
+	ctx, err = dexec.EnterRelationSelection(ctx, target, relations)
+	if err != nil {
+		return nil, err
+	}
 	ctx, err = enterComponent(ctx, target)
 	if err != nil {
 		return nil, err
@@ -415,6 +423,15 @@ func (r *Runtime) invokeComponent(ctx context.Context, request dexec.ComponentRe
 	}
 	if request.ReaderOptions != nil && (registered.Handler != nil || registered.Reader == nil || request.Warmup != nil || request.DryRun || request.PrepareQuery || request.Replay != nil && request.Replay.Only) {
 		return nil, fmt.Errorf("result read options require a canonical reader invocation")
+	}
+	if relations != nil {
+		validator, ok := registered.Reader.(dexec.RelationSelectionValidator)
+		if !ok {
+			return nil, fmt.Errorf("registered reader does not support relation selection")
+		}
+		if err := validator.ValidateRelationSelection(ctx); err != nil {
+			return nil, err
+		}
 	}
 	handler := registered.Handler
 	dataSource := registered.DataSource

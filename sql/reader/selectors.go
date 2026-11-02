@@ -101,20 +101,13 @@ func resolveInvocationSelectors(ctx context.Context, session *Session, input ref
 		selector.Columns = append([]string(nil), selector.Columns...)
 		for _, names := range [][]string{selector.Fields, selector.Columns} {
 			for i, name := range names {
-				var resolved *data.SelectorField
-				for at := range view.SelectorFields {
-					field := &view.SelectorFields[at]
-					if !(dsql.ProjectionNames{field.PublicName, field.GoName, field.Column}).Matches(name) {
-						continue
+				resolved, ambiguous := resolveSelectorField(view, name)
+				if ambiguous {
+					failure := invalidSelectorField(name, "ambiguous public field").(*xresponse.Error)
+					if owned := session.selectorError(view, failure.Cause, session.selectorOwned); owned != nil {
+						return nil, owned
 					}
-					if resolved != nil && resolved.GoName != field.GoName {
-						failure := invalidSelectorField(name, "ambiguous public field").(*xresponse.Error)
-						if owned := session.selectorError(view, failure.Cause, session.selectorOwned); owned != nil {
-							return nil, owned
-						}
-						return nil, failure
-					}
-					resolved = field
+					return nil, failure
 				}
 
 				if resolved != nil && resolved.OutputOnly && view.IsGroupable() {
@@ -289,4 +282,21 @@ func invalidSelectorFieldCause(name, reason string, cause error) error {
 		cause = fmt.Errorf("%s", message)
 	}
 	return &xresponse.Error{Code: 400, Payload: xresponse.Status{Status: "error", Message: message}, Cause: cause}
+}
+
+// resolveSelectorField is shared by scalar selectors and trusted relation-only
+// selection so public/Go/SQL identities retain one ambiguity policy.
+func resolveSelectorField(view *data.View, name string) (*data.SelectorField, bool) {
+	var resolved *data.SelectorField
+	for at := range view.SelectorFields {
+		field := &view.SelectorFields[at]
+		if !(dsql.ProjectionNames{field.PublicName, field.GoName, field.Column}).Matches(name) {
+			continue
+		}
+		if resolved != nil && resolved.GoName != field.GoName {
+			return nil, true
+		}
+		resolved = field
+	}
+	return resolved, false
 }

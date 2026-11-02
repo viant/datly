@@ -13,6 +13,9 @@ import (
 const RootView = "$root"
 
 type ReaderOptions struct {
+	// Relations restricts one exact invocation's authored relation graph without
+	// changing scalar projection. It is never inherited by another component.
+	Relations *RelationSelection `json:"-"`
 	// ForUpdate requests row locks on explicitly capable views under the caller transaction.
 	// These trusted controls are not bound from transport input.
 	ForUpdate    []string
