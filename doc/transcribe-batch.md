@@ -58,6 +58,18 @@ Borrowed authority still uses its sealed source snapshots. Packages containing
 Go embed directives use ordinary loading to retain resource freshness. Nothing
 is cached across invocations.
 
+Dependency traversal follows imports referenced by Go type declarations and
+method signatures, including aliases, embedded types, generic constraints and
+array-length constants. Imports used only inside function or method bodies do
+not expand this type-discovery graph. Explicit DQL imports remain roots. Dot
+imports and inherited constant expressions retain conservative dependency scope
+when the source model cannot resolve a narrower reference.
+
+Compiled runtime discovery can encounter distinct function-local types with the
+same package and name. Those ambiguous names are not automatically registered;
+the loader does not choose an arbitrary identity. Explicit catalog registrations
+and source-backed type linking retain their identity-conflict checks.
+
 The Go result reports completed `Sources` and `Packages`, plus
 `DependencyParses` and `DependencyReuses`. These count dependency package AST
 loads only; they do not count every source scan, generated-package parse, or Go
