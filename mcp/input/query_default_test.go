@@ -71,6 +71,10 @@ func TestQueryEmptyProjectionKeepsOtherValues(t *testing.T) {
 		{"body null", "body", nil, reflect.TypeFor[*string](), true, nil, "null"},
 		{"body empty", "body", "", reflect.TypeFor[string](), true, nil, `""`},
 		{"header empty", "header", "", reflect.TypeFor[string](), true, []string{""}, ""},
+		{"form integer null", "form", nil, reflect.TypeFor[int](), false, nil, ""},
+		{"form pointer boolean null", "form", nil, reflect.TypeFor[*bool](), false, nil, ""},
+		{"form zero", "form", 0, reflect.TypeFor[int](), true, []string{"0"}, ""},
+		{"form false", "form", false, reflect.TypeFor[bool](), true, []string{"false"}, ""},
 		{"form empty", "form", "", reflect.TypeFor[string](), true, []string{""}, ""},
 		{"path empty", "path", "", reflect.TypeFor[string](), true, []string{""}, ""},
 	} {

@@ -193,13 +193,16 @@ func (a Arguments) resolve(argument Argument) (resolvedValue, bool, error) {
 	if !found {
 		return resolvedValue{}, false, nil
 	}
+	// URL-encoded query/form inputs have no JSON null representation. Treat
+	// null as absent so native defaults and required checks own the decision.
+	// Preserve body null and explicit false/zero values.
+	if raw == nil && (argument.Source.Kind == requestprovider.QueryKind || argument.Source.Kind == requestprovider.FormKind) {
+		return resolvedValue{}, false, nil
+	}
 	// Legacy MCP omits null and empty-string query arguments before native
 	// binding, so defaults and required checks see absence. Do not apply this
 	// to bodies or converted values: false, zero and explicit body null matter.
 	if argument.Source.Kind == requestprovider.QueryKind {
-		if raw == nil {
-			return resolvedValue{}, false, nil
-		}
 		if text, ok := raw.(string); ok && text == "" {
 			return resolvedValue{}, false, nil
 		}
