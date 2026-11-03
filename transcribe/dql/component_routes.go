@@ -27,7 +27,47 @@ func (p *DirectivePlan) ComponentRoutes(name, handler string) []*spec.Route {
 			result = append(result, route)
 		}
 	}
+	p.ApplyRouteNames(result)
 	return result
+}
+
+// ApplyRouteNames preserves explicit names after global reader-name defaults.
+func (p *DirectivePlan) ApplyRouteNames(routes []*spec.Route) {
+	for _, route := range routes {
+		if route != nil {
+			if name := p.routeNames[spec.RouteRef{Method: route.Method, Path: route.Path}]; name != "" {
+				route.Name = name
+			}
+		}
+	}
+}
+
+func normalizeRouteNames(settings *componentSettings, routes *routeDirective) (map[spec.RouteRef]string, error) {
+	if len(settings.routeNames) == 0 {
+		return nil, nil
+	}
+	declared := map[spec.RouteRef]bool{}
+	if routes != nil {
+		for _, route := range routes.routes {
+			for _, method := range route.Methods {
+				declared[spec.RouteRef{Method: method, Path: route.URI}] = true
+			}
+		}
+	}
+	result := map[spec.RouteRef]string{}
+	for _, item := range settings.routeNames {
+		var err error
+		if !declared[item.ref] {
+			err = fmt.Errorf("route_name target %s is not a declared route", item.ref.String())
+		} else if prior := result[item.ref]; prior != "" && prior != item.name {
+			err = fmt.Errorf("conflicting route_name for %s", item.ref.String())
+		}
+		if err != nil {
+			return nil, &sourceError{offset: item.span.Start, end: item.span.End, err: err}
+		}
+		result[item.ref] = item.name
+	}
+	return result, nil
 }
 
 func normalizeRouteMCP(settings *componentSettings, routes *routeDirective) (map[spec.RouteRef]*spec.MCPExposure, error) {

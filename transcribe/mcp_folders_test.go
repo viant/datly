@@ -107,7 +107,7 @@ SELECT id,name FROM records`
 			for _, tool := range tools.Tools {
 				byName[tool.Name] = tool
 			}
-			if len(tools.Tools) != 3 || len(byName) != 3 || byName["records.read"].Name == "" || byName["skills/get"].Name == "" || byName["skills/list"].Name == "" {
+			if len(tools.Tools) != 5 || len(byName) != 5 || byName["records.read"].Name == "" || byName["skills_get"].Name == "" || byName["skills_list"].Name == "" || byName["skills_discover"].Name == "" || byName["skills_read_resource"].Name == "" {
 				t.Fatalf("business and standard skills tools: %+v", tools.Tools)
 			}
 			business := byName["records.read"]

@@ -113,7 +113,11 @@ func resolveInvocationSelectors(ctx context.Context, session *Session, input ref
 				if resolved != nil && resolved.OutputOnly && view.IsGroupable() {
 					return nil, invalidSelectorField(name, "output-only selection is not supported for grouped views")
 				}
-				if resolved != nil && resolved.Holder {
+				if resolved != nil && (resolved.Holder || (dsql.ProjectionNames{resolved.PublicName, resolved.GoName}).Matches(name)) {
+					// Keep the encoder-approved field identity after resolving a
+					// public alias. Reusing that alias as raw SQL vocabulary can
+					// collide with a hidden column (e.g. name -> DisplayName
+					// alongside an internal NAME column).
 					names[i] = resolved.GoName
 				}
 			}

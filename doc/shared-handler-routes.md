@@ -28,9 +28,18 @@ parameters are inferred and validated for every path. Duplicate method/path pair
 are rejected. The generated holder contains a typed contract field for each route;
 package discovery and reload retain all routes and the same Go contract types.
 
-The routes share a component-derived observability name. Preserve a required
-distinct route name separately when migrating an existing contract; shared paths
-alone do not establish logging or MCP name parity. A single MCP declaration is
+Routes default to the component-derived observability name. Preserve distinct
+logging names with an exact path and method selector:
+
+```sql
+#setting($_ = $route_name('/records/archive','PATCH','ArchiveRecords'))
+#setting($_ = $route_name('/records/restore','PATCH','RestoreRecords'))
+```
+
+This changes route observability names only; the shared component and Go contracts
+retain one owner. Unnamed routes keep their existing defaults. The selected route
+must be declared, and conflicting names for the same route are rejected.
+A single MCP declaration is
 ambiguous across multiple routes and is rejected. Static content does not support
 multiple path declarations. `WithURI` remains input activation metadata and is not
 needed merely to give one handler multiple paths.

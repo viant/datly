@@ -129,3 +129,33 @@ func TestPublicHolderResolutionDoesNotMutateInputsAndRejectsAmbiguity(t *testing
 		t.Fatalf("ambiguous alias accepted: %v", err)
 	}
 }
+
+func TestPublicSelectorAliasDoesNotCollideWithHiddenSQLColumn(t *testing.T) {
+	type input struct{ Fields []string }
+	type useCase struct{ description, input string }
+	for _, tc := range []useCase{{"public alias", "name"}, {"Go field", "DisplayName"}, {"SQL field", "DISPLAY_NAME"}} {
+		t.Run(tc.description, func(t *testing.T) {
+			root := &data.View{Spec: spec.View{Name: "items", Selector: &spec.Selector{AllowFields: true}}, SelectorFieldsBound: true, SelectorFields: []data.SelectorField{{GoName: "DisplayName", PublicName: "name", Column: "DISPLAY_NAME"}}}
+			component := &spec.Component{Name: "Items"}
+			plan, err := NewPlan(PlanConfig{RootView: root, ViewIndex: NewViewIndex(component, root), SelectorBindings: []SelectorBindingPlan{{View: root, Property: spec.SelectorPropertyFields, FieldIndex: []int{0}}}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			bound := &input{Fields: []string{tc.input}}
+			selections, err := resolveInvocationSelectors(t.Context(), &Session{Component: component, Artifact: plan}, reflect.ValueOf(bound), selectorBinder{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			columns, err := (dsql.SelectorProjection{SQL: "SELECT NAME, COALESCE(BUNDLE_NAME, NAME) AS DISPLAY_NAME FROM items", View: root}).Columns(selections.forView(root).Fields)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(columns) != 1 || columns[0].OutputName() != "DISPLAY_NAME" {
+				t.Fatalf("unexpected projection: %v", columns)
+			}
+			if bound.Fields[0] != tc.input {
+				t.Fatal("mutated caller input")
+			}
+		})
+	}
+}

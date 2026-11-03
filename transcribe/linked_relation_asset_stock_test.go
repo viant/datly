@@ -175,6 +175,11 @@ func TestStockDiscoveryPlansAndEmitsNestedLinkedRelationAssets(t *testing.T) {
 	firstFiles := generatedFileSnapshot(t, root)
 	secondProject := generateStockLinkedAssetFixture(t, root)
 	secondFiles := generatedFileSnapshot(t, root)
+	for _, project := range []*transcribe.GeneratedProject{firstProject, secondProject} {
+		if len(project.Manifest.Components) != 1 || project.Manifest.Components[0].Key.String() != "component:example.com/linkedassets/dql:rows" {
+			t.Fatalf("authored source identity changed: %+v", project.Manifest.Components)
+		}
+	}
 	if len(firstProject.Components) != 1 || len(secondProject.Components) != 1 {
 		t.Fatalf("stock generation component counts: %d then %d", len(firstProject.Components), len(secondProject.Components))
 	}

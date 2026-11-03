@@ -303,6 +303,19 @@ func parseComponentSettings(blocks []directiveBlock) (ret *componentSettings, er
 			if ret.Generation.DescriptionResource == "" {
 				return nil, fmt.Errorf("invalid meta directive: empty path")
 			}
+		case strings.EqualFold(name, "route_name"):
+			if len(args) != 3 || tail != "" {
+				return nil, fmt.Errorf("route_name requires path, method and name")
+			}
+			ref, err := spec.ParseRouteRef(strings.TrimSpace(trimQuote(args[1])) + ":" + trimQuote(args[0]))
+			if err != nil {
+				return nil, err
+			}
+			value := strings.TrimSpace(trimQuote(args[2]))
+			if value == "" {
+				return nil, fmt.Errorf("route_name requires a nonempty name")
+			}
+			ret.routeNames = append(ret.routeNames, routeNameSetting{ref: ref, name: value, span: SourceSpan{Start: block.start, End: block.end}})
 		case strings.EqualFold(name, "mcp_route"):
 			if len(args) < 2 || len(args) > 5 || tail != "" {
 				return nil, fmt.Errorf("mcp_route requires METHOD:/path, name, optional description, description path and case format")
@@ -619,7 +632,7 @@ func parseComponentSettings(blocks []directiveBlock) (ret *componentSettings, er
 	}
 	if ret.HandlerFactory == "" && ret.HandlerAdapter == "" && ret.ProtectedFlushTables == nil && ret.ResponseCompression == nil && !ret.IndependentChildTransactions && ret.ComponentCallPolicy == "" && ret.Static == nil && len(ret.MCPFolders) == 0 && ret.Documentation.IsZero() && ret.Generation.IsZero() && ret.DefaultConnector == "" && ret.SequenceStrategy == "" && ret.Report == nil && ret.Cache == nil &&
 		ret.InputType == "" && ret.OutputType == "" &&
-		ret.MCP == nil && len(ret.routeMCP) == 0 && ret.JSONMarshalType == "" &&
+		ret.MCP == nil && len(ret.routeMCP) == 0 && len(ret.routeNames) == 0 && ret.JSONMarshalType == "" &&
 		ret.JSONUnmarshalType == "" && ret.XMLUnmarshalType == "" &&
 		ret.Format == "" && ret.DateFormat == "" && ret.CaseFormat == "" && ret.Output == nil &&
 		len(ret.Const) == 0 && ret.IgnoreEmptyQueryParameters == nil && !ret.MCPOnly && !ret.Internal {

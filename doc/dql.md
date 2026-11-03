@@ -198,7 +198,8 @@ matched case-insensitively; use the spelling below. Quote textual values.
 
 | Setting | Accepted count | Consumed arguments / checks |
 | --- | --- | --- |
-| `route` | 1+ | absolute quoted URI, then quoted HTTP methods; default GET; one route only |
+| `route` | 1+ | absolute quoted URI, then quoted HTTP methods; default GET; repeat to declare multiple routes |
+| `route_name` | 3 | declared URI, HTTP method, and nonempty observability name; preserves the route and MCP contract |
 | `api_key` | 2+ | header, value; further arguments ignored |
 | `connector` | 1+ | last argument is default connector |
 | `sequence_strategy` | exactly 1 | quoted `transient` or `reservation`; singleton, no modifiers; omitted selects native dialect default |

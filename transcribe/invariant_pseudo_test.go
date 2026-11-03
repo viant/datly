@@ -40,7 +40,8 @@ func TestInvariantPseudoNamedViewsSQLiteAndGo(t *testing.T) {
 		t.Fatal(err)
 	}
 	vendor := graph.Relations[0].View
-	if !vendor.Auxiliary || !strings.Contains(vendor.Source.SQL, "(VENDOR)") {
+	// Parentheses mark read-only authority in DQL; executable SQL lowers the marker.
+	if !vendor.Auxiliary || strings.Contains(vendor.Source.SQL, "(VENDOR)") || !strings.Contains(vendor.Source.SQL, "FROM VENDOR v") {
 		t.Fatalf("auxiliary source changed: %s", vendor.Source.SQL)
 	}
 	for _, v := range []*spec.View{graph, vendor} {

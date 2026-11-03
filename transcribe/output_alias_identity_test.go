@@ -62,3 +62,36 @@ func TestExplicitOutputContractAliasIdentity(t *testing.T) {
 		})
 	}
 }
+
+func TestExplicitOutputContractPredeclaredAny(t *testing.T) {
+	type useCase struct {
+		description, declaration string
+		linked                   reflect.Type
+		valid                    bool
+	}
+	for _, tc := range []useCase{
+		{"scalar alias", "any", reflect.TypeFor[any](), true},
+		{"explicit interface", "interface{}", reflect.TypeFor[any](), true},
+		{"slice alias", "[]any", reflect.TypeFor[[]any](), true},
+		{"map alias", "map[string]any", reflect.TypeFor[map[string]any](), true},
+		{"different wrapper", "[]any", reflect.TypeFor[any](), false},
+		{"different concrete type", "string", reflect.TypeFor[any](), false},
+	} {
+		t.Run(tc.description, func(t *testing.T) {
+			const pkg = "example.com/outputaliases"
+			output := reflect.StructOf([]reflect.StructField{{Name: "Errors", Type: tc.linked, Tag: `parameter:"Errors,kind=output,in=errors"`}})
+			catalog := typecatalog.NewCatalog()
+			require.NoError(t, catalog.LinkRuntimeAll(typecatalog.TypeOriginPackage, x.NewType(output, x.WithPkgPath(pkg), x.WithName("Output"))))
+			resolver, err := typecatalog.NewResolver(catalog, typecatalog.PackageAuthority, nil)
+			require.NoError(t, err)
+			param := &spec.Parameter{Name: "Errors", TypeExpr: tc.declaration, Source: spec.BindSource{Kind: "output", Name: "errors"}}
+			result := &Result{Component: &spec.Component{Parameters: []*spec.Parameter{param}}, TypeResolver: resolver}
+			err = linkExplicitOutputContract(result, pkg+".Output", nil)
+			if tc.valid {
+				require.NoError(t, err)
+			} else {
+				require.ErrorContains(t, err, "differs from linked field")
+			}
+		})
+	}
+}

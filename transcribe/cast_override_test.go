@@ -167,7 +167,8 @@ func TestCASTReplacesCustomizedGeneratedField(t *testing.T) {
 			t.Fatalf("regenerated field %+v", field)
 		}
 	}
-	if strings.Join(names, ",") != "A,Z,B" {
+	// Regeneration follows the authored projection order, not the prior Go layout.
+	if strings.Join(names, ",") != "A,B,Z" {
 		t.Fatalf("field order %v", names)
 	}
 	run()
