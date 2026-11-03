@@ -113,7 +113,8 @@ func TestExplicitFormStringWireRuntime(t *testing.T) {
 					require.NoError(t, injector.Bind(t.Context(), &original, bindly.WithPlan(baselineRoute.Plan())))
 					require.Equal(t, original, got)
 					want := test.want
-					if test.name == "omitted" && withDefault {
+					// MCP null form arguments use the same absence/default semantics as omitted values.
+					if (test.name == "omitted" || test.name == "null") && withDefault {
 						want = "ui"
 					}
 					require.Equal(t, want, got.Action)
