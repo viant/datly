@@ -1,5 +1,10 @@
 # Project instructions
 
+## Datly 1.0 branch policy
+
+- Make all Datly changes in this existing checkout on `v1`. Verify the branch before editing.
+- Do not create additional Datly development branches or worktrees. Preserve other contributors' uncommitted work.
+
 ## Capability reuse and explicit user approval
 
 - Before adding any feature or mechanism, inspect the owning framework's existing APIs, configuration, documentation, implementation, tests, and callers at the exact version used by the application. Prove the relevant native behavior with an executable example before proposing an alternative.
