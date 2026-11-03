@@ -4,6 +4,7 @@ package input
 
 import (
 	"fmt"
+	"log/slog"
 	"net/textproto"
 	"reflect"
 	"sort"
@@ -163,6 +164,7 @@ func (p *Plan) NormalizeArguments(arguments map[string]interface{}) (map[string]
 			if p.strictArguments {
 				return nil, fmt.Errorf("unknown MCP argument %q", name)
 			}
+			slog.Warn("ignoring undeclared MCP argument in lenient mode", "argument", name)
 			continue
 		}
 		if _, exists := result[canonical]; exists {
