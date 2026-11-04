@@ -143,6 +143,7 @@ func TestBuilder_SelectorPolicy(t *testing.T) {
 			policy:   &spec.Selector{AllowOffset: true},
 			selector: &xstate.Selector{Offset: 1},
 			wantErr:  "offset requires a positive limit",
+			wantCode: 400,
 		},
 		{
 			name:     "page denied",
