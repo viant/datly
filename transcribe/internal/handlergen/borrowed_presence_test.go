@@ -128,3 +128,15 @@ func TestBorrowedAncestorPresenceKeepsSelfAndDerivedBranchesExcluded(t *testing.
 		})
 	}
 }
+
+func TestLifecycleIdentityUsesBorrowedRowOwner(t *testing.T) {
+	generation, semantic, generated := handlerBorrowedPresenceFixture()
+	leaf := semantic.Root.Relations[0].Child.Relations[0].Child
+	leaf.InputPath = hp.FieldPath{"Rows", "Children", "Leaves"}
+	leaf.Cardinality = spec.CardinalityMany
+	compiled := &entityHookCompilation{generation: generation, generated: generated, types: map[string]string{"Rows.Children.Leaves": "[]*Row"}}
+	identity, err := compiled.identity(leaf)
+	if err != nil || identity != "example.com/app.Row" {
+		t.Fatalf("borrowed lifecycle entity = %q, error = %v", identity, err)
+	}
+}
