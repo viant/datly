@@ -328,6 +328,13 @@ func (c *entityHookCompilation) identity(record *plan.RecordPlan) (string, error
 	if err != nil {
 		return "", err
 	}
+	if ref := c.generation.input.Views[record.Identity]; ref != nil && ref.Borrowed != nil {
+		owner := ref.Borrowed.Expected
+		if ref.DescriptorKey != owner.Package+"."+owner.Name || (base != owner.Name && base != ref.DescriptorKey) {
+			return "", fmt.Errorf("borrowed lifecycle row %s does not match its owner %s", base, ref.DescriptorKey)
+		}
+		return ref.DescriptorKey, nil
+	}
 	if view := c.generated.ViewByType(base); view != nil && view.Ownership == gen.ViewGenerated {
 		packagePath := view.Package
 		if packagePath == "" {

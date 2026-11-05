@@ -160,7 +160,7 @@ func (d *Loader) LoadImports(ctx context.Context, imports map[string]bool) ([]st
 	// authority used for a direct import; source-backed packages stay below.
 	external := map[string]bool{}
 	for _, pkg := range packagesByPath {
-		for _, imported := range pkg.Imports {
+		for _, imported := range declarationImports(pkg) {
 			if packagesByPath[imported.Path] == nil {
 				external[imported.Path] = true
 			}
@@ -253,9 +253,25 @@ func (d *Loader) linkSourcePackage(pkg *smodel.Package, linked []reflect.Type) e
 }
 
 func (d *Loader) registerLinkedPackageTypes(path string) error {
-	var descriptors []*x.Type
+	// Runtime typelinks also contain function-local declarations. Distinct
+	// scoped types can share a package/name pair, so that pair is not a usable
+	// imported identity. Do not choose an arbitrary candidate or let an unused
+	// local declaration prevent discovery of the package's other types.
+	byName := map[string]reflect.Type{}
+	ambiguous := map[string]bool{}
 	for _, typeOf := range xunsafe.PackageTypes(path) {
-		if typeOf != nil && typeOf.Name() != "" {
+		if typeOf == nil || typeOf.Name() == "" {
+			continue
+		}
+		name := typeOf.Name()
+		if prior := byName[name]; prior != nil && prior != typeOf {
+			ambiguous[name] = true
+		}
+		byName[name] = typeOf
+	}
+	var descriptors []*x.Type
+	for name, typeOf := range byName {
+		if !ambiguous[name] {
 			descriptors = append(descriptors, x.NewType(typeOf))
 		}
 	}
@@ -303,7 +319,7 @@ func loadAvailablePackageClosure(ctx context.Context, workspace *xmodule.Workspa
 		}
 		result[path] = pkg
 		imports := make([]string, 0, len(pkg.Imports))
-		for _, imported := range pkg.Imports {
+		for _, imported := range declarationImports(pkg) {
 			imports = append(imports, imported.Path)
 		}
 		sort.Strings(imports)

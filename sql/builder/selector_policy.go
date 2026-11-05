@@ -208,7 +208,7 @@ func (r selectorResolver) controls(base *spec.ViewControls, input *xstate.Select
 		result.Limit = nil
 		result.Offset = nil
 	} else if result.Offset != nil && *result.Offset > 0 && (result.Limit == nil || *result.Limit <= 0) {
-		return nil, fmt.Errorf("selector offset requires a positive limit")
+		return nil, &xresponse.Error{Code: 400, Payload: xresponse.Status{Status: "error", Message: "selector offset requires a positive limit"}, Cause: fmt.Errorf("selector offset requires a positive limit")}
 	}
 	if result.IsZero() {
 		return nil, nil

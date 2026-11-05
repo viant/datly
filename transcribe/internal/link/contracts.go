@@ -79,6 +79,11 @@ func (l *Contracts) EqualParams(output bool) bool {
 
 // EqualParamsChecked compares detached contracts under the selected authority.
 func (l *Contracts) EqualParamsChecked(output bool) (bool, error) {
+	// The mutation body field carries the root lifecycle in its view tag.
+	// Its parameter declaration can stay identical while the hook changes.
+	if !output && mutationInputHook(l.PackageComponent) != mutationInputHook(l.CompiledComponent) {
+		return false, nil
+	}
 	if output && !l.equalViews() {
 		return false, nil
 	}
@@ -99,6 +104,18 @@ func (l *Contracts) EqualParamsChecked(output bool) (bool, error) {
 		return false, err
 	}
 	return bytes.Equal(packageContract, compiledContract), nil
+}
+
+func mutationInputHook(component *spec.Component) string {
+	if component == nil || component.RootView == nil || component.RootView.EntityHooks == "" {
+		return ""
+	}
+	for _, parameter := range spec.EffectiveParameters(component.Parameters) {
+		if parameter.IsMutationInput() {
+			return component.RootView.EntityHooks
+		}
+	}
+	return ""
 }
 
 func (l *Contracts) equalViews() bool {
