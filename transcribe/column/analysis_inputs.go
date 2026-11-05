@@ -43,6 +43,24 @@ func (a *analysisInputs) validate(selector *veltyexpr.Select) (string, error) {
 		if current.X == nil {
 			break
 		}
+		// Predicate loops use a representative element only for type analysis.
+		// No collection value or element is read.
+		if index, ok := current.X.(*veltyexpr.SliceIndex); ok {
+			literal, ok := index.X.(*veltyexpr.Literal)
+			if !ok || literal.Value != "0" {
+				return "", fmt.Errorf("unsupported input index")
+			}
+			names = append(names, "[0]")
+			if index.Y == nil {
+				break
+			}
+			next, ok := index.Y.(*veltyexpr.Select)
+			if !ok {
+				return "", fmt.Errorf("unsupported input index member")
+			}
+			current = next
+			continue
+		}
 		next, ok := current.X.(*veltyexpr.Select)
 		if !ok {
 			return "", fmt.Errorf("unsupported input value expression %s: only member access can be analyzed", strings.Join(names, "."))
@@ -71,6 +89,36 @@ func (a *analysisInputs) validate(selector *veltyexpr.Select) (string, error) {
 
 func (a *analysisInputs) validateMembers(expression string, linked reflect.Type, names []string) error {
 	for index, name := range names {
+		if name == "[0]" {
+			if linked != nil {
+				for linked.Kind() == reflect.Pointer {
+					linked = linked.Elem()
+				}
+				if linked.Kind() != reflect.Array && linked.Kind() != reflect.Slice {
+					return fmt.Errorf("foreach requires a collection, not %s", linked)
+				}
+				linked = linked.Elem()
+				continue
+			}
+			expression = strings.TrimSpace(strings.TrimPrefix(expression, "*"))
+			if strings.HasPrefix(expression, "[]") {
+				expression = expression[2:]
+				continue
+			}
+			if expression == "" || expression == "any" || expression == "interface{}" {
+				return nil
+			}
+			if a.types != nil {
+				descriptor, err := a.types.Descriptor(expression)
+				if err != nil {
+					return err
+				}
+				if descriptor != nil && descriptor.Type != nil {
+					return a.validateMembers("", descriptor.Type, names[index:])
+				}
+			}
+			return fmt.Errorf("foreach requires a collection, not %s", expression)
+		}
 		var descriptor *x.Type
 		var err error
 		if linked != nil {

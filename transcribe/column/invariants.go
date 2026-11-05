@@ -111,7 +111,7 @@ func (r *Refiner) ValidateSourceProjections(component *spec.Component, resources
 				SQL = "SELECT * FROM " + source.Table
 			}
 			if SQL != "" {
-				variants, err := sqlanalysis.ConditionalSQL(SQL)
+				variants, err := sqlanalysis.ConditionalSQL(SQL, inputs.validate)
 				if err != nil {
 					return fmt.Errorf("static projection for view %s: %w", view.Namespace, err)
 				}
