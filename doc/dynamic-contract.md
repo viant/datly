@@ -1,93 +1,62 @@
 # Dynamic contracts
 
-Dynamic contracts make the public shape of a Datly API depend on **who is calling**
-and **which operation is being performed**. You can reuse one application model
-while adapting what clients discover, send and receive.
+**Expose the right fields and values to each caller—from one Go model.**
 
-An API contract describes its exposed properties, their names and requiredness,
-enum choices, JSON representations, descriptions and examples. A dynamic contract
-selects those details for the current request. For example, a response can omit
-commission for one role, a request can accept a pricing name while the handler uses
-a numeric code, and PATCH can publish a sparse schema while preserving key fields.
+Dynamic contracts let an API adapt to a caller's permissions and the operation
+being performed. You write a field policy once. Datly uses it for both the
+MCP/OpenAPI schema and the configured JSON encoder/decoder.
 
-Datly applies the selected contract to **MCP/OpenAPI discovery and the configured
-JSON encoding/decoding path**. The result is an executable representation rule:
-a field hidden from that contract is omitted from JSON output and ignored by its
-effective JSON input decoder, not merely removed from a documentation page.
+A field hidden by the policy is absent from that caller's schema and response.
+A pricing value described as a string is handled as a string on the wire—even
+when your Go model stores its numeric code.
 
-## What it achieves
+## What you can do
 
-Ordinary Go struct tags describe one fixed representation. When different callers
-or operations need different representations, separate DTOs and separate schema or
-serialization rules can become difficult to keep consistent. Dynamic contracts
-keep those variations in a policy associated with the linked model.
+- **Keep commission private.** Finance users see `"commission": 0.15`. Other
+  callers do not see that field in the response or in their API schema.
+- **Accept names instead of codes.** A client sends `"pricingModel": "usage"`.
+  Your handler receives integer `10`.
+- **Choose response formatting separately.** The handler returns integer `10`.
+  You can return `"pricingModel": "usage"` or `"pricingModel": 10` to the client.
+- **Offer choices by role.** Editors see `fixed` and `subscription`; finance
+  users also see `usage`. Stored codes stay the same for every role.
+- **Make PATCH sparse.** Keep `id` required, but allow a request such as
+  `{"id":"r-1","commission":0.12}` without resending the title or pricing model.
 
-| Use case | Desired contract |
-|---|---|
-| A caller cannot access commission | Remove the commission property from that caller's effective schema and JSON representation |
-| Requests use readable pricing names | Accept a literal such as `"usage"`, then give the handler its stored code, such as `10` |
-| Responses should show readable pricing names | Emit `"usage"` for stored code `10` and advertise a string response property |
-| Roles have different pricing choices | Advertise the appropriate choice domain without renumbering persisted codes |
-| POST and PATCH share a model | Retain creation requirements for POST; make non-key fields optional in the selected PATCH contract |
+## Why it matters
 
-The application keeps its **original Go fields, types and business values**. Policies
-change the exposed field metadata and wire representation. Unchanged contracts and
-subtrees retain their linked identity, and equivalent named variants can be reused.
+Keep your existing Go models and business handlers. Avoid creating another DTO,
+schema builder and JSON adapter for every role or operation. The API that clients
+discover and the JSON that the configured codecs read/write follow the same rules.
 
-Use this feature for representation and field exposure. Endpoint authorization,
-record access, allowed transitions and business validation remain with their native
-owners. In particular, advertising a smaller enum is not a permission check, and
-changing PATCH schema requiredness does not itself change the writer's mutation policy.
+This controls field exposure and representation. Your existing authorization and
+validation still decide which records a caller may access and which changes are
+allowed. The PATCH policy changes the schema; the writer still owns update behavior.
 
 ## How it works
 
-A linked input, output, domain/view type or nested composite can implement:
+A model supplies a `Contract` hook:
 
 ```go
 Contract(context.Context, bindly.Binder) (*contract.Policy, error)
 ```
 
-The public packages are `github.com/viant/bindly` and
-`github.com/viant/xdatly/contract`. The same method signature works in both supported
-Datly versions.
+1. **Read the context.** Bind verified claims, your auth-context component, the
+   target operation, or other state needed to make the decision.
+2. **Return field rules.** Hide a field, change its JSON name, select enum choices,
+   or adjust requiredness. Return `nil, nil` when nothing needs to change.
+3. **Use one selected contract.** Datly applies those rules to schema generation
+   and JSON handling. Nested types can supply their own rules; parents have final
+   authority.
 
-1. **Bind the decision state.** The hook uses the supplied binder to obtain verified
-   claims, an auth-context component, headers, the target operation, or other native
-   binding sources. Hooks receive fresh metadata receivers; they do not assume the
-   business input has already been populated.
-2. **Return a policy.** Compute decisions once, then return a stable `Policy.Name`
-   and a `Field` callback. Return `nil, nil` if the linked contract needs no edits.
-3. **Adjust field metadata.** The host traverses the linked graph, including nested
-   containers and embeddings. Nested contracts run first; enclosing policies run last.
-   Callbacks can change field names and tags, not field types or storage layout.
-4. **Reuse equivalent variants.** Named policies can reuse immutable effective
-   metadata. Authorization still runs for each invocation. `NoCache: true` or an
-   empty name disables Contract variant reuse.
-5. **Use the selected contract.** Schema consumers describe the selected fields and
-   wire types; metadata-aware codecs read/write the linked values accordingly.
-   Codec plans are cached separately for each effective representation.
+Datly changes field metadata, not your model's storage layout. Handlers keep using
+the same Go fields and types. Unchanged parts retain their original linked types.
+Named policies can reuse the selected metadata and codec plans, while authorization
+is still resolved for each invocation.
 
-```mermaid
-flowchart LR
-    A[Caller and target operation] --> B[Bind policy state]
-    B --> C[Contract policy]
-    D[Linked Go model] --> E[Effective field metadata]
-    C --> E
-    E --> F[MCP / OpenAPI schemas]
-    E --> G[Configured JSON codecs]
-    G --> H[Original linked application values]
-```
-
-The implementation uses `viant/x/shape` metadata over the original types. Unchanged
-subtrees keep their linked identity. This also supports method-bearing embeddings
-without requiring an anonymous replacement struct for every adjustment. Where a
-supported consumer needs a reflected type, it can be materialized from the selected
-variant; application storage remains canonical.
-
-Schema discovery does not run the target business handler. It does execute the
-policy hook and any dependencies that the hook explicitly binds, such as an auth
-component. Custom JSON/Text methods continue to own their complete representation;
-see the codec boundaries below before trying to rewrite inside those owners.
+The hook uses `github.com/viant/bindly` and `github.com/viant/xdatly/contract`.
+Schema discovery runs the hook and any explicitly bound dependencies, such as an
+auth component; it does not run the target business handler.
 
 ## Choose a focused example
 
