@@ -11,6 +11,7 @@ import (
 	"github.com/viant/datly/gateway/router/marshal/json"
 	"github.com/viant/datly/gateway/router/marshal/tabjson"
 	"github.com/viant/datly/shared"
+	"github.com/viant/datly/utils/types"
 	"github.com/viant/sqlx/io/load/reader/csv"
 	"github.com/viant/tagly/format"
 	"github.com/viant/xlsy"
@@ -261,13 +262,19 @@ func (c *Content) InitMarshaller(config *config.IOConfig, exclude []string, inpu
 	c.Marshaller.JSON.RuntimeUnmarshaller = runtimeUnmarshaller
 	c.Marshaller.XLS.XlsMarshaller = xlsy.NewMarshaller(c.XLS.Options()...)
 
-	if err := c.initCSVIfNeeded(inputType, outputType); err != nil {
+	// Auxiliary format plans require record fields. Normalize only their input
+	// descriptor; do not change Contract.BodyType or the actual JSON destination.
+	formatInputType := inputType
+	if formatInputType != nil && types.EnsureStruct(formatInputType) == nil {
+		formatInputType = reflect.TypeFor[struct{}]()
+	}
+	if err := c.initCSVIfNeeded(formatInputType, outputType); err != nil {
 		return err
 	}
-	if err := c.initTabJSONIfNeeded(exclude, inputType, outputType, lookupType); err != nil {
+	if err := c.initTabJSONIfNeeded(exclude, formatInputType, outputType, lookupType); err != nil {
 		return err
 	}
-	if err := c.initXMLIfNeeded(exclude, inputType, outputType); err != nil {
+	if err := c.initXMLIfNeeded(exclude, formatInputType, outputType); err != nil {
 		return err
 	}
 	return nil
