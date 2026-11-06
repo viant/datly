@@ -26,7 +26,7 @@ type or a closure; Go method-set compatibility is stricter than call compatibili
 Bindly's shared interface and Xdatly v1's matching interface migration are published.
 The current dynamic-contract additions are developed against the local workspace;
 version pins are finalized after their dependency commits are pushed. Do not commit
-filesystem replacements. See [dynamic contract status](dynamic-contract-v1.md).
+filesystem replacements. See [dynamic contract status](dynamic-contract.md).
 
 ### Dynamic contracts and requiredness
 

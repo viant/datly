@@ -18,12 +18,12 @@ require (
 	github.com/viant/parsly v0.3.3
 	github.com/viant/sqlparser v0.13.1-0.20261021204353-1c20a82bbb29
 	github.com/viant/sqlx v0.26.2-0.20261031214940-7cb396a51254
-	github.com/viant/structology v0.10.2-0.20261106071121-906c12343bcc
+	github.com/viant/structology v0.10.2-0.20261106143941-ed3b2d84154c
 	github.com/viant/structql v0.5.5-0.20261012183420-6a47e96ff5b5
 	github.com/viant/tagly v0.4.2-0.20261106060238-fe360d6f7ac4
 	github.com/viant/velty v0.4.1-0.20260915052314-fca47c0595f8
 	github.com/viant/x v0.6.1-0.20261106041415-0487ec66884b
-	github.com/viant/xdatly v1.0.1-0.20261106051919-85c143c30bf6
+	github.com/viant/xdatly v1.1.1-0.20261106145237-aabfd57a6db3
 	github.com/viant/xreflect v0.7.5-0.20260314170600-13f09f37d46e
 	github.com/viant/xunsafe v0.11.0
 	github.com/xeipuuv/gojsonschema v1.2.0

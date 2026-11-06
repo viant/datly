@@ -6,9 +6,11 @@
     "datly/doc/api-documentation.md",
     "datly/doc/auth-context.md",
     "datly/doc/cache-and-warmup.md",
+    "datly/doc/contract-field-examples.md",
+    "datly/doc/contract-operation.md",
     "datly/doc/delete-not-found.md",
     "datly/doc/dynamic-contract-boundaries.md",
-    "datly/doc/dynamic-contract-v1.md",
+    "datly/doc/dynamic-contract.md",
     "datly/doc/enum-json.md",
     "datly/doc/legacy-to-v1-migration.md",
     "datly/doc/mutation-predicates.md",
@@ -89,11 +91,6 @@
       "StartAt": "## Describe the writable graph",
       "EndBefore": "## CLI generation and generated code",
       "Reason": "Maintained writer graph, generated body/Current contract, child lifecycle and read-only auxiliary source authoring; excludes repository navigation and unrelated sections."
-    },
-    "datly/doc/dynamic-contract-v1.md": {
-      "StartAt": "# Caller-dependent contracts in v1",
-      "EndBefore": "## Validation record",
-      "Reason": "Application-facing hook, composition, codec, caching and trusted operation contract; excludes local verification history, benchmarks and revision pins."
     }
   }
 }

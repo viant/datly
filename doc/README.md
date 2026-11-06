@@ -18,6 +18,9 @@ provide a runnable feature switch.
 | Transcribe DQL, import types and preserve application hooks | [Authoring](authoring.md) |
 | Transcribe multiple DQL rules in order | [Batch transcription](transcribe-batch.md) |
 | Understand reader/writer hook order, sparse updates and invariants | [Hook flow diagrams](hooks.md) |
+| Adjust caller-specific MCP/OpenAPI/JSON contracts | [Dynamic contracts](dynamic-contract.md) |
+| Share POST/PATCH requiredness rules, retaining primary keys | [POST/PATCH contract example](contract-operation.md) |
+| See Field methods and resulting schemas | [Field/schema examples](contract-field-examples.md) |
 | Build nested reads and paginated outputs | [Readers](readers.md) |
 | Edit complete reader DQL through the stateless API | [Reader builder](reader-builder.md) |
 | Combine optional reader filters and scoped AND/OR groups | [Reader predicates](reader-predicates.md) |

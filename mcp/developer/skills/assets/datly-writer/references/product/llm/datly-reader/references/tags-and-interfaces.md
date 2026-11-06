@@ -311,7 +311,7 @@ mean equal edits within the component/route/direction/generation namespace. Cach
 metadata, never authorization results or closures. Nil/no-change policies retain
 linked types and existing codec behavior.
 
-See [the maintained contract guide](../../../datly/doc/dynamic-contract-v1.md) for
+See [the maintained contract guide](../../../datly/doc/dynamic-contract.md) for
 binding, helpers, opt-in codec metadata and trusted `kind=contract` method/path.
 See [the boundaries](../../../datly/doc/dynamic-contract-boundaries.md) before applying
 changes inside a custom JSON/Text owner. V0 support is not implied by v1 availability.
