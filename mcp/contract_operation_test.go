@@ -39,9 +39,9 @@ func (*operationBody) Contract(ctx context.Context, binder bindly.Binder) (*xcon
 	return &xcontract.Policy{Name: "operation", Field: func(_ string, parent reflect.Type, f *xcontract.Field) (*xcontract.Field, error) {
 		if parent == reflect.TypeFor[operationBody]() && f.Name == "Name" {
 			if state.Method == "POST" {
-				return f.Clone().Required(), nil
+				return f.Required(), nil
 			}
-			return f.Clone().Optional(), nil
+			return f.Optional(), nil
 		}
 		return nil, nil
 	}}, nil

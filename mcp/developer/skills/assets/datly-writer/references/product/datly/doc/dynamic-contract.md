@@ -90,15 +90,15 @@ func (*CatalogItem) Contract(ctx context.Context, binder bindly.Binder) (*contra
 		switch field.Name {
 		case "Commission":
 			if !showCommission {
-				return field.Clone().Hide(), nil
+				return field.Hide(), nil
 			}
 		case "Title":
 			if creating {
-				return field.Clone().Required(), nil
+				return field.Required(), nil
 			}
-			return field.Clone().Optional(), nil
+			return field.Optional(), nil
 		case "PricingModel":
-			return field.Clone().SetEnum(choices...).
+			return field.SetEnum(choices...).
 				SetTag("enumAccept", "literal").
 				SetTag("enumStyle", outputStyle).
 				SetDescription(pricingDescription), nil
@@ -232,15 +232,22 @@ The callback receives `*contract.Field`, which exposes two editable members:
 offset, index or embedding flag. Read a tag with `field.Tag.Get("json")` or
 `field.Tag.Lookup("required")`; prefer the helpers below for edits.
 
-Mutating helpers update their receiver and return `*Field` for chaining. Call them
-on `field.Clone()` to preserve the callback input.
-They preserve unrelated tags. Helper errors are recorded on the field; Datly checks
+Helpers return `*Field` for copy-on-write chaining. A private `cloned` flag gates
+copying: the first actual edit obtains a writable copy when needed; later helpers
+reuse it. An explicitly writable clone needs no additional copy, and a
+no-op helper retains its existing pointer. Datly supplies a read-only snapshot
+to each callback, so comparing its original tags with the returned tags is safe. Unrelated tags are preserved.
+
+Always use the returned value: `field = field.Optional()` or return the chain.
+Use `Clone()` before assigning `Name`/`Tag` directly, or to start an independent
+branch from an edited field. Writable results belong to one edit chain; the flag
+is not a general alias tracker or a concurrency primitive. Helper errors are recorded on the field; Datly checks
 them before publishing a variant. Returning `nil, nil` discards that callback's edit
 and continues traversal. Returning a non-nil error aborts contract resolution.
 
 | Method | Behavior |
 |---|---|
-| `Clone() *Field` | Copies name, tags, recorded error and traversal flag; useful when keeping the supplied field unchanged locally. |
+| `Clone() *Field` | Always creates an independent writable copy of the name, tags, error and traversal flag, even when the source is already a clone. Use it for direct assignments or independent edit branches. |
 | `Hide() *Field` | Sets `json:"-"`, `internal:"true"`, and `mcp:"-"`. Storage remains present; effective JSON input ignores it and output omits it. |
 | `IsPK() bool` | Recognizes explicit SQLX `primaryKey` / `autoincrement` options without inferring from a field name. It does not modify metadata. |
 | `Required() *Field` | Sets `required:"true"`, removes `optional`, and updates the `required` option in existing `parameter` / `bind` tags. |
@@ -258,7 +265,7 @@ and continues traversal. Returning a non-nil error aborts contract resolution.
 For example, inside a callback that has matched the business type and field name:
 
 ```go
-return field.Clone().
+return field.
     SetDescription("Caller-visible pricing model").
     SetExample("subscription").
     RemoveTag("deprecated"), nil

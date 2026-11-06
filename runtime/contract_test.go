@@ -45,7 +45,7 @@ func (*contractBusinessOutput) Contract(ctx context.Context, binder bindly.Binde
 	}
 	return &xcontract.Policy{Name: "restricted", Field: func(_ string, _ reflect.Type, f *xcontract.Field) (*xcontract.Field, error) {
 		if f.Name == "Secret" {
-			return f.Clone().Hide(), nil
+			return f.Hide(), nil
 		}
 		return nil, nil
 	}}, nil

@@ -59,7 +59,7 @@ func (*enumContractView) Contract(ctx context.Context, binder bindly.Binder) (*x
 					accept, style = "ordinal", "ordinal"
 				}
 			}
-			return f.Clone().SetEnum("10:active").SetTag("enumAccept", accept).SetTag("enumStyle", style), nil
+			return f.SetEnum("10:active").SetTag("enumAccept", accept).SetTag("enumStyle", style), nil
 		}
 		return nil, nil
 	}}, nil

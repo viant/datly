@@ -46,7 +46,7 @@ func (*Record) Contract(ctx context.Context, binder bindly.Binder) (*contract.Po
             if field.IsPK() {
                 return nil, nil // preserve the key's authored requiredness
             }
-            adjusted := field.Clone().Optional()
+            adjusted := field.Optional()
             if err := adjusted.Err(); err != nil {
                 return nil, err
             }

@@ -62,14 +62,14 @@ func docPolicy(ctx context.Context, b bindly.Binder) (*xcontract.Policy, error) 
 		case "docPolicyInput":
 			switch f.Name {
 			case "Secret":
-				return f.Clone().Hide(), nil
+				return f.Hide(), nil
 			case "Reason":
-				return f.Clone().Required(), nil
+				return f.Required(), nil
 			}
 		case "docPolicyOutput":
 			switch f.Name {
 			case "Secret":
-				return f.Clone().Hide(), nil
+				return f.Hide(), nil
 			}
 		}
 		return nil, nil

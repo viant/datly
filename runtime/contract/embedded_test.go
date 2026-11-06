@@ -20,7 +20,7 @@ type embeddedRoot struct {
 func (*embeddedRoot) Contract(context.Context, bindly.Binder) (*xcontract.Policy, error) {
 	return &xcontract.Policy{Name: "hide-secret", Field: func(_ string, _ reflect.Type, f *xcontract.Field) (*xcontract.Field, error) {
 		if f.Name == "Secret" {
-			return f.Clone().Hide(), nil
+			return f.Hide(), nil
 		}
 		return nil, nil
 	}}, nil

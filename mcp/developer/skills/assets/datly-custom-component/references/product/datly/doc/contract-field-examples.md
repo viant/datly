@@ -31,7 +31,7 @@ adjusted field from the callback; the host validates it before publishing/cachin
 
 ## Visibility and requiredness
 
-`field.Clone().Hide()` on `Commission` sets JSON/internal/MCP exclusion tags. Both
+`field.Hide()` on `Commission` sets JSON/internal/MCP exclusion tags. Both
 its property and its required-list entry disappear; the Go `Commission` member
 still exists. Input cannot populate it through the effective JSON decoder.
 
@@ -44,7 +44,7 @@ properties:
   pricingModel: {type: string, enum: [fixed, usage, subscription]}
 ```
 
-`field.Clone().Required()` on `PricingModel` adds its existing property name to the
+`field.Required()` on `PricingModel` adds its existing property name to the
 required list. `Optional()` on `Title` removes that requirement. Neither changes
 property types or makes a non-pointer value nullable.
 
@@ -72,7 +72,7 @@ On `PricingModel`, this chain narrows the advertised choices while keeping their
 stored codes stable:
 
 ```go
-return field.Clone().SetEnum("0:fixed", "20:subscription"), nil
+return field.SetEnum("0:fixed", "20:subscription"), nil
 ```
 
 ```yaml
@@ -102,7 +102,7 @@ business membership validation.
 ## Description and example
 
 ```go
-return field.Clone().
+return field.
     SetDescription("Fraction of the amount retained as commission").
     SetExample("0.15"), nil
 ```
@@ -152,7 +152,7 @@ while leaving its type and requiredness intact. To remove enum conversion and th
 domain together, remove all three related tags:
 
 ```go
-return field.Clone().RemoveTag("choice").
+return field.RemoveTag("choice").
     RemoveTag("enumAccept").RemoveTag("enumStyle"), nil
 ```
 
@@ -170,7 +170,7 @@ has a schema meaning; each consumer interprets its supported annotations.
 
 | Method | Schema effect |
 |---|---|
-| `Clone()` | None by itself. It copies the editable metadata/error/traversal state; return a modified clone to apply an edit. |
+| `Clone()` | None by itself. It makes an independent writable copy of metadata/error/traversal state. Helpers already clone when needed; use Clone for direct assignments or independent branches. |
 | `SkipChildren()` | None by itself. Returning it skips descendants for this policy. Other policies, including nested owners, still apply. |
 | `IsPK()` | None. Tests SQLX key semantics; use it to preserve keys when making PATCH fields optional. `Tag.Lookup("sqlx")` only tests tag presence. |
 | `ChildrenSkipped()` | None. Reports the traversal flag. |
@@ -178,7 +178,7 @@ has a schema meaning; each consumer interprets its supported annotations.
 | `Validate(originalType)` | None. Datly checks the name, tags and choices against the original type; invalid metadata fails resolution. |
 
 For a linked `Details` field with no other policies, returning
-`field.Clone().SkipChildren()` leaves its original schema unchanged:
+`field.SkipChildren()` leaves its original schema unchanged:
 
 ```yaml
 details:

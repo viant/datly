@@ -27,7 +27,7 @@ func (*cacheControlRecord) Contract(ctx context.Context, binder bindly.Binder) (
 		return nil, err
 	}
 	return &xcontract.Policy{Name: state.Name, NoCache: state.NoCache, Field: func(_ string, _ reflect.Type, f *xcontract.Field) (*xcontract.Field, error) {
-		return f.Clone().SetDescription(state.Description), nil
+		return f.SetDescription(state.Description), nil
 	}}, nil
 }
 func TestPolicyNoCacheBypassesNamedVariant(t *testing.T) {
