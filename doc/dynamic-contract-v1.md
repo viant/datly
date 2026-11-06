@@ -98,3 +98,29 @@ binding, schema serialization and codec execution.
 | Bindly | `v0.5.1-0.20261106041415-daa8f9128968` |
 | MCP protocol | `v0.19.2-0.20261106041415-5280ed5df48d` |
 | Xdatly v1 | `v1.0.1-0.20261106041415-485a3c7ca5fa` |
+
+## Declared operation in contract state
+
+Contract hooks can bind trusted target metadata using the existing Binder:
+
+```go
+var state struct {
+    Method string `parameter:",kind=contract,in=method,required=true"`
+    Path   string `parameter:",kind=contract,in=path,required=true"`
+}
+if err := binder.Bind(ctx, &state); err != nil {
+    return nil, err
+}
+```
+
+These values come from the declared component target during HTTP/MCP discovery
+and invocation. They are not the outer schema-fetch GET or MCP transport POST.
+The `contract` provider kind is runtime-owned; protocol/component providers cannot
+replace it. Existing `http_request` metadata retains its transport meaning.
+
+DQL already supports distinct names for selected method/path targets through
+`mcp_route`. Declaring both POST and PATCH can expose CreateCampaign and PatchCampaign
+without inferring tool names or treating client arguments as operation authority.
+A route method does not override a generated writer's mutation policy. Applications
+must keep schema requiredness consistent with the selected execution policy; a
+POST writer exposed over PATCH remains insert-only unless its writer policy changes.

@@ -79,7 +79,7 @@ func (r *Runtime) resolveContract(ctx context.Context, target dexec.ComponentTar
 			return nil, err
 		}
 	}
-	providers, err := engine.ContractScope(r.injector, entry.Providers, scope, constants, r.componentProvider(scope, entry.Component, entry))
+	providers, err := engine.ContractScope(r.injector, entry.Providers, scope, constants, r.componentProvider(scope, entry.Component, entry), target)
 	if err != nil {
 		return nil, err
 	}
