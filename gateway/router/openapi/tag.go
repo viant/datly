@@ -4,7 +4,7 @@ import (
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/datly/view/tags"
-	"github.com/viant/govalidator"
+	"github.com/viant/mcp-protocol/schema/fieldname"
 	"github.com/viant/sqlx/io"
 	"github.com/viant/tagly/format"
 	"github.com/viant/xreflect"
@@ -13,12 +13,14 @@ import (
 
 type (
 	Tag struct {
+		RawTag      reflect.StructTag
 		Format      string
 		Inlined     bool
 		Ignore      bool
 		Description string
 		CaseFormat  string
 
+		Required     bool
 		IsNullable   bool
 		Min          *float64
 		Max          *float64
@@ -48,11 +50,6 @@ func ParseTag(field reflect.StructField, tag reflect.StructTag, isInput bool, ro
 		return &Tag{}, err
 	}
 
-	validationTag := govalidator.ParseTag(string(tag))
-	if err != nil {
-		return &Tag{}, err
-	}
-
 	typeName := tag.Get(xreflect.TagTypeName)
 	if (field.Type.Kind() == reflect.Slice || field.Type.Kind() == reflect.Array) && typeName == "" {
 		typeName = field.Type.Name()
@@ -68,10 +65,12 @@ func ParseTag(field reflect.StructField, tag reflect.StructTag, isInput bool, ro
 	}
 
 	ret := &Tag{
+		RawTag:     tag,
 		Format:     aTag.DateFormat,
 		Inlined:    aTag.Inline,
 		Ignore:     aTag.Ignore,
-		IsNullable: !validationTag.Required && field.Type.Kind() == reflect.Ptr,
+		IsNullable: field.Type.Kind() == reflect.Ptr,
+		Required:   fieldname.Required(reflect.StructField{Tag: tag}),
 		TypeName:   typeName,
 
 		CaseFormat:  aTag.CaseFormat,
@@ -89,6 +88,9 @@ func ParseTag(field reflect.StructField, tag reflect.StructTag, isInput bool, ro
 
 	if tags, _ := tags.Parse(tag, nil, tags.ParameterTag); tags != nil {
 		ret.Parameter = tags.Parameter
+		if ret.Parameter != nil && ret.Parameter.Required != nil {
+			ret.Required = *ret.Parameter.Required
+		}
 		if parameter := ret.Parameter; parameter != nil && parameter.Kind != "" {
 			switch state.Kind(parameter.Kind) {
 			case state.KindForm, state.KindRequestBody:

@@ -66,7 +66,7 @@ func TestMCPRelationSelectorsDiscoverAndRouteWithoutChangingRoot(t *testing.T) {
 	for _, name := range []string{"Limit", "Offset", "Fields", "MatchLimit", "MatchOffset", "MatchFields", "MatchOrderBy", "MatchPage", "MatchDetailsLimit"} {
 		field, ok := typ.FieldByName(name)
 		require.True(t, ok, name)
-		require.Equal(t, "true", field.Tag.Get("optional"), name)
+		require.Empty(t, field.Tag.Get("required"), name)
 	}
 	_, duplicate := typ.FieldByName("InternalChildLimit")
 	require.False(t, duplicate)

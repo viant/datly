@@ -11,9 +11,9 @@ import (
 	"github.com/viant/afs/option"
 	acontent "github.com/viant/afs/option/content"
 	"github.com/viant/afs/url"
-	"github.com/viant/datly/internal/requesttrace"
 	"github.com/viant/datly/gateway/router/openapi"
 	"github.com/viant/datly/gateway/router/status"
+	"github.com/viant/datly/internal/requesttrace"
 	"github.com/viant/datly/repository"
 	"github.com/viant/datly/repository/content"
 	"github.com/viant/datly/repository/contract"
@@ -215,7 +215,7 @@ func (r *Handler) safelyHandleComponent(ctx context.Context, request *http.Reque
 			err = response.NewError(http.StatusInternalServerError, fmt.Sprintf("failed to handle request %v, %s", r, stackInfo))
 		}
 	}()
-	return r.handleComponent(ctx, request, aComponent)
+	return r.handleComponent(ctx, request, aComponent, &r.Path.Path)
 }
 
 func extractPanicInfo(lines []string) interface{} {
@@ -409,12 +409,16 @@ func (r *Handler) compressIfNeeded(marshalled []byte, options *response.Options)
 	return response.NewBuffered(options.Options()...), nil
 }
 
-func (r *Handler) handleComponent(ctx context.Context, request *http.Request, aComponent *repository.Component) (response.Response, error) {
+func (r *Handler) handleComponent(ctx context.Context, request *http.Request, aComponent *repository.Component, targets ...*contract.Path) (response.Response, error) {
+	target := &aComponent.Path
+	if len(targets) > 0 && targets[0] != nil {
+		target = targets[0]
+	}
 	//TODO merge with Path settings
 
 	anOperator := operator.New()
 	unmarshal := aComponent.UnmarshalFunc(request)
-	locatorOptions := append(aComponent.LocatorOptions(request, hstate.NewForm(), unmarshal))
+	locatorOptions := aComponent.LocatorOptions(request, hstate.NewForm(), func(data []byte, dest interface{}) error { return unmarshal(data, dest) })
 	locatorOptions = append(locatorOptions, locator.WithLogger(r.logger))
 	aSession := session.New(aComponent.View,
 		session.WithAuth(r.auth),
@@ -432,10 +436,25 @@ func (r *Handler) handleComponent(ctx context.Context, request *http.Request, aC
 	if ctx, err = r.dispatcher.EnsureContext(ctx, aSession, aComponent); err != nil {
 		return nil, err
 	}
+	effective, err := aComponent.ResolveContract(ctx, aSession.ContractBinder(target.Method, target.URI), target.Method, target.URI)
+	if err != nil {
+		return nil, err
+	}
+	unmarshal = aComponent.UnmarshalFor(repository.WithUnmarshalRequest(request), repository.WithUnmarshalRepresentation(effective.Body))
+	if err = aComponent.ValidateContractCodec(effective, request); err != nil {
+		return nil, err
+	}
+	aSession.ApplyContract(effective, unmarshal)
 	if err := aSession.Populate(ctx); err != nil {
 		return nil, err
 	}
 	output, operationErr := r.dispatcher.Operate(ctx, aSession, aComponent)
+	if effective.Output != nil && effective.Output.Changed() {
+		switch output.(type) {
+		case response.Response, []byte:
+			return nil, fmt.Errorf("raw handler response cannot apply dynamic contract metadata")
+		}
+	}
 	if operationErr != nil && output == nil {
 		return nil, operationErr
 	}
@@ -486,14 +505,14 @@ func (r *Handler) handleComponent(ctx context.Context, request *http.Request, aC
 		}
 		// Use component-level marshaller with request-scoped options
 		filters := aComponent.Exclusion(aSession.State())
-		mf := aComponent.MarshalFunc(repository.WithRequest(request), repository.WithFormat(format), repository.WithFilters(filters))
+		mf := aComponent.MarshalFunc(repository.WithRequest(request), repository.WithFormat(format), repository.WithFilters(filters), repository.WithRepresentation(effective.Output))
 		data, err := mf(output)
 		if err != nil {
 			return nil, response.NewError(500, fmt.Sprintf("failed to marshal response: %v", err), response.WithError(err))
 		}
 		return r.compressIfNeeded(data, options)
 	}
-	return r.marshalComponentOutput(output, aComponent, options)
+	return r.marshalComponentOutput(output, aComponent, options, repository.WithRepresentation(effective.Output))
 }
 
 func isCacheDisabled(request *http.Request) bool {
@@ -526,7 +545,7 @@ func createRequest(ctx context.Context, redirect *session.Redirect) (*http.Reque
 	return request, nil
 }
 
-func (r *Handler) marshalComponentOutput(output interface{}, aComponent *repository.Component, options *response.Options) (response.Response, error) {
+func (r *Handler) marshalComponentOutput(output interface{}, aComponent *repository.Component, options *response.Options, marshalOptions ...repository.MarshalOption) (response.Response, error) {
 	switch actual := output.(type) {
 	case response.Response:
 		return actual, nil
@@ -534,7 +553,7 @@ func (r *Handler) marshalComponentOutput(output interface{}, aComponent *reposit
 		return response.NewBuffered(response.WithBytes(actual)), nil
 	default:
 		// Default to JSON marshalling using component-level marshaller
-		mf := aComponent.MarshalFunc()
+		mf := aComponent.MarshalFunc(marshalOptions...)
 		data, err := mf(output)
 		if err != nil {
 			return nil, response.NewError(http.StatusInternalServerError, err.Error(), response.WithError(err))

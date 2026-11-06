@@ -28,7 +28,8 @@ func (r *Router) NewOpenAPIRoute(URL string, components *repository.Service, pro
 }
 
 func (r *Router) handleOpenAPI(ctx context.Context, components *repository.Service, res http.ResponseWriter, request *http.Request, provider []*repository.Provider) {
-	statusCode, content := r.generateOpenAPI(ctx, components, provider)
+	res.Header().Set("Cache-Control", "private, no-store")
+	statusCode, content := r.generateOpenAPI(r.contractDocumentationContext(ctx, request), components, provider)
 	setContentType(res, statusCode, "text/yaml")
 	write(res, statusCode, content)
 }
@@ -67,8 +68,9 @@ func (r *Router) NewOpenAPIAggregateRoute(URL string, components *repository.Ser
 }
 
 func (r *Router) handleOpenAPIAggregate(ctx context.Context, components *repository.Service, res http.ResponseWriter, request *http.Request, providers []*repository.Provider) {
+	res.Header().Set("Cache-Control", "private, no-store")
 	asYAML := wantsYAML(request)
-	statusCode, content, contentType := r.generateOpenAPIWithFormat(ctx, components, providers, asYAML)
+	statusCode, content, contentType := r.generateOpenAPIWithFormat(r.contractDocumentationContext(ctx, request), components, providers, asYAML)
 	setContentType(res, statusCode, contentType)
 	write(res, statusCode, content)
 }

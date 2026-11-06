@@ -119,6 +119,8 @@ func (c *Contract) BodyType() reflect.Type {
 		return nil
 	}
 	rType := c.Input.Body.Schema.Type()
+	// Preserve the legacy raw-map boundary. The request schema still owns
+	// the real map type used by the body locator and its query/form propagation.
 	if rType != nil && rType.Kind() == reflect.Map {
 		return reflect.TypeOf(struct {
 		}{})

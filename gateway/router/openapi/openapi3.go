@@ -228,6 +228,15 @@ func (g *generator) appendBuiltInParam(ctx context.Context, params *[]*openapi.P
 
 func (g *generator) convertParam(ctx context.Context, component *ComponentSchema, param *state.Parameter, description string) ([]*openapi.Parameter, bool, error) {
 
+	if component.effective != nil {
+		var hidden bool
+		param, hidden = repository.EffectiveParameter(param, component.effective.Input)
+		if hidden {
+			return nil, false, nil
+		}
+	}
+	copy := *param
+	param = &copy
 	docs := component.component.Docs()
 	parameters := docs.Parameters
 	if len(parameters) > 0 && param.Description == "" {
@@ -272,7 +281,7 @@ func (g *generator) convertParam(ctx context.Context, component *ComponentSchema
 	}
 
 	cachedParam, ok := g._parametersIndex[shared.FirstNotEmpty(param.In.Name, param.Name)]
-	if ok {
+	if ok && (component.effective == nil || component.effective.Input == nil) {
 		if cachedParam != nil {
 			original := *cachedParam
 			g.commonParameters[param.Name] = &original
@@ -294,6 +303,7 @@ func (g *generator) convertParam(ctx context.Context, component *ComponentSchema
 		}
 	}
 	schema, err := component.GenerateSchema(ctx, component.SchemaWithTag(param.Name, param.Schema.Type(), "Parameter "+param.Name+" schema", component.component.IOConfig(), Tag{
+		RawTag:     reflect.StructTag(param.Tag),
 		Format:     param.DateFormat,
 		IsNullable: !param.IsRequired(),
 		Table:      table,
@@ -323,7 +333,9 @@ func (g *generator) convertParam(ctx context.Context, component *ComponentSchema
 		Schema:   schema,
 	}
 
-	g._parametersIndex[param.Name] = convertedParam
+	if component.effective == nil || component.effective.Input == nil {
+		g._parametersIndex[param.Name] = convertedParam
+	}
 	return []*openapi.Parameter{convertedParam}, true, nil
 }
 

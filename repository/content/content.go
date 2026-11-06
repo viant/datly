@@ -2,6 +2,7 @@ package content
 
 import (
 	"fmt"
+	xcontract "github.com/viant/xdatly/contract"
 	"reflect"
 	"strings"
 
@@ -10,6 +11,7 @@ import (
 	"github.com/viant/datly/gateway/router/marshal/json"
 	"github.com/viant/datly/gateway/router/marshal/tabjson"
 	"github.com/viant/datly/shared"
+	"github.com/viant/datly/utils/types"
 	"github.com/viant/sqlx/io/load/reader/csv"
 	"github.com/viant/tagly/format"
 	"github.com/viant/xlsy"
@@ -54,10 +56,12 @@ type (
 	}
 
 	Codec struct {
-		rType     reflect.Type
-		TypeName  string
-		unmarshal shared.Unmarshal
-		marshal   shared.Marshal
+		contractEncoder xcontract.JSONEncoder
+		contractDecoder xcontract.JSONDecoder
+		rType           reflect.Type
+		TypeName        string
+		unmarshal       shared.Unmarshal
+		marshal         shared.Marshal
 	}
 
 	JSON struct {
@@ -156,6 +160,8 @@ func (u *Codec) init(lookupType xreflect.LookupType, requireMarshal, requireUnma
 	}
 	u.rType = rType
 	value := reflect.New(rType).Interface()
+	u.contractEncoder, _ = value.(xcontract.JSONEncoder)
+	u.contractDecoder, _ = value.(xcontract.JSONDecoder)
 	unmarshal, ok := value.(Unmarshaller)
 	if ok {
 		u.unmarshal = unmarshal.Unmarshal
@@ -256,13 +262,19 @@ func (c *Content) InitMarshaller(config *config.IOConfig, exclude []string, inpu
 	c.Marshaller.JSON.RuntimeUnmarshaller = runtimeUnmarshaller
 	c.Marshaller.XLS.XlsMarshaller = xlsy.NewMarshaller(c.XLS.Options()...)
 
-	if err := c.initCSVIfNeeded(inputType, outputType); err != nil {
+	// Auxiliary format plans require record fields. Normalize only their input
+	// descriptor; do not change Contract.BodyType or the actual JSON destination.
+	formatInputType := inputType
+	if formatInputType != nil && types.EnsureStruct(formatInputType) == nil {
+		formatInputType = reflect.TypeFor[struct{}]()
+	}
+	if err := c.initCSVIfNeeded(formatInputType, outputType); err != nil {
 		return err
 	}
-	if err := c.initTabJSONIfNeeded(exclude, inputType, outputType, lookupType); err != nil {
+	if err := c.initTabJSONIfNeeded(exclude, formatInputType, outputType, lookupType); err != nil {
 		return err
 	}
-	if err := c.initXMLIfNeeded(exclude, inputType, outputType); err != nil {
+	if err := c.initXMLIfNeeded(exclude, formatInputType, outputType); err != nil {
 		return err
 	}
 	return nil
@@ -539,4 +551,21 @@ func (c *Content) tabJSONInterceptors(field string, data interface{}) json.Marsh
 		return c.TabularJSON.OutputMarshaller.Marshal(data)
 	}
 	return interceptors
+}
+
+// ContractEncoder/ContractDecoder retain configured codec ownership. A custom
+// codec must explicitly opt in to metadata; it is never silently substituted.
+func (j *JSON) ContractEncoder() xcontract.JSONEncoder {
+	if j.CanMarshal() {
+		return j.marshalCodec.contractEncoder
+	}
+	encoder, _ := j.RuntimeMarshallerEngine().(xcontract.JSONEncoder)
+	return encoder
+}
+func (j *JSON) ContractDecoder() xcontract.JSONDecoder {
+	if j.CanUnmarshal() {
+		return j.unmarshalCodec.contractDecoder
+	}
+	decoder, _ := j.RuntimeUnmarshallerEngine().(xcontract.JSONDecoder)
+	return decoder
 }

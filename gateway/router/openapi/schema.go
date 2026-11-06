@@ -10,6 +10,7 @@ import (
 	"github.com/viant/datly/view/state"
 	"github.com/viant/datly/view/tags"
 	"github.com/viant/tagly/format/text"
+	"github.com/viant/x/shape"
 	"github.com/viant/xdatly/docs"
 	"github.com/viant/xreflect"
 	"reflect"
@@ -23,6 +24,7 @@ const (
 
 type (
 	ComponentSchema struct {
+		effective  *repository.EffectiveContract
 		component  *repository.Component
 		components *repository.Service
 		schemas    *SchemaContainer
@@ -31,17 +33,19 @@ type (
 	}
 
 	Schema struct {
-		docs        *state.Docs
-		pkg         string
-		path        string
-		fieldName   string
-		name        string
-		description string
-		example     string
-		rType       reflect.Type
-		tag         Tag
-		ioConfig    *config.IOConfig
-		isInput     bool
+		representation *shape.Representation
+		rawTag         reflect.StructTag
+		docs           *state.Docs
+		pkg            string
+		path           string
+		fieldName      string
+		name           string
+		description    string
+		example        string
+		rType          reflect.Type
+		tag            Tag
+		ioConfig       *config.IOConfig
+		isInput        bool
 	}
 
 	SchemaContainer struct {
@@ -68,6 +72,12 @@ func (s *Schema) SliceItem(rType reflect.Type) *Schema {
 		result.tag.TypeName = result.tag.TypeName + "Item"
 	}
 	result.rType = elem
+	if result.representation != nil {
+		for result.representation.Original().Kind() == reflect.Pointer {
+			result.representation = result.representation.Elem()
+		}
+		result.representation = result.representation.Elem()
+	}
 	return &result
 }
 
@@ -76,6 +86,13 @@ func (s *Schema) Field(field reflect.StructField, tag *Tag) (*Schema, error) {
 	result := *s
 	result.path = result.path + "." + field.Name
 	result.rType = field.Type
+	result.rawTag = field.Tag
+	if result.representation != nil {
+		for result.representation.Original().Kind() == reflect.Pointer {
+			result.representation = result.representation.Elem()
+		}
+		result.representation = result.representation.FieldShapeByIndex(field.Index)
+	}
 	if tag != nil {
 		result.tag = *tag
 	}
@@ -219,23 +236,49 @@ func (c *ComponentSchema) TypedSchema(ctx context.Context, stateType state.Type,
 		return nil, err
 	}
 
+	var metadata *shape.Representation
+	var rawTag reflect.StructTag
+	if isInput {
+		if parameter := c.component.Input.Type.Parameters.LookupByLocation(state.KindRequestBody, ""); parameter != nil {
+			if c.effective != nil {
+				parameter, _ = repository.EffectiveParameter(parameter, c.effective.Input)
+			}
+			rawTag = reflect.StructTag(parameter.Tag)
+		}
+	}
+	if c.effective != nil {
+		if isInput {
+			metadata = c.effective.Body
+		} else {
+			metadata = c.effective.Output
+		}
+	}
 	return &Schema{
-		tag:         Tag{TypeName: defaultTypeName},
-		pkg:         stateType.Package,
-		path:        path,
-		name:        typeName,
-		fieldName:   typeName,
-		description: description,
-		rType:       rType,
-		ioConfig:    ioConfig,
-		isInput:     isInput,
-		docs:        c.component.Docs(),
+		representation: metadata,
+		rawTag:         rawTag,
+		tag:            Tag{TypeName: defaultTypeName},
+		pkg:            stateType.Package,
+		path:           path,
+		name:           typeName,
+		fieldName:      typeName,
+		description:    description,
+		rType:          rType,
+		ioConfig:       ioConfig,
+		isInput:        isInput,
+		docs:           c.component.Docs(),
 	}, nil
 }
 
 func (c *ComponentSchema) isRequired(input contract.Input) bool {
 	isRequired := false
 	for _, parameter := range input.Body.Parameters {
+		if c.effective != nil {
+			var hidden bool
+			parameter, hidden = repository.EffectiveParameter(parameter, c.effective.Input)
+			if hidden {
+				continue
+			}
+		}
 		if parameter.IsRequired() {
 			isRequired = true
 			break
@@ -304,6 +347,8 @@ func (c *ComponentSchema) SchemaWithTag(fieldName string, rType reflect.Type, de
 		fieldName = ioConfig.FormatName(typeName)
 	}
 	return &Schema{
+		rawTag:      tag.RawTag,
+		isInput:     tag.IsInput,
 		path:        typeName,
 		fieldName:   fieldName,
 		name:        typeName,
@@ -343,5 +388,5 @@ func (c *ComponentSchema) GenerateSchema(ctx context.Context, schema *Schema) (*
 		return nil, err
 	}
 
-	return result, nil
+	return fieldEnum(result, schema)
 }

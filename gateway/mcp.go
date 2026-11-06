@@ -14,7 +14,6 @@ import (
 	"net/textproto"
 	"net/url"
 	"reflect"
-	"strconv"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -35,6 +34,7 @@ import (
 	"github.com/viant/mcp-protocol/schema"
 	serverproto "github.com/viant/mcp-protocol/server"
 	"github.com/viant/toolbox"
+	xcontract "github.com/viant/xdatly/contract"
 	"github.com/viant/xdatly/handler/logger"
 )
 
@@ -49,26 +49,70 @@ func (r *Router) buildToolsIntegration(item *dpath.Item, aPath *dpath.Path, aRou
 	meta := aPath.Meta.Build(component.View.Name, component.View.Table, &aPath.Path)
 	baseToolName := strings.ReplaceAll(meta.Name, " ", "")
 	toolName, alternateRoute := mcpToolName(item, aPath, baseToolName)
+	explicitRoute := len(aPath.MCPRoutes) > 0
+	if explicitRoute {
+		selected, err := declaredMCPRoute(item, aPath)
+		if err != nil {
+			return err
+		}
+		if selected == nil {
+			return nil
+		}
+		meta = selected
+		toolName = selected.Name
+	}
 	if !mcpRouteEnabled(component, aPath, alternateRoute) {
 		return nil
 	}
-	toolInputType := r.buildToolInputTypeForPath(component, aPath)
 	mcpTool := schema.Tool{
 		Name:        toolName,
 		Description: &meta.Description,
 		InputSchema: schema.ToolInputSchema{},
 	}
 	if _, ok := r.mcpRegistry.ToolRegistry.Get(mcpTool.Name); ok {
+		if explicitRoute {
+			return fmt.Errorf("duplicate MCP route tool name %q", mcpTool.Name)
+		}
 		return nil //already registered
 	}
-	err = mcpTool.InputSchema.Load(reflect.New(toolInputType).Interface())
+	dynamic, err := component.HasDynamicContract(aPath.Method, aPath.URI)
 	if err != nil {
 		return err
 	}
-	handler := r.mcpToolCallHandler(component, aRoute)
+	if dynamic {
+		// Registration metadata is not caller-authorized discovery. Keep only a
+		// conservative shell; MetadataFor supplies fields after policy resolution.
+		mcpTool.InputSchema.Type = "object"
+	} else {
+		document, err := r.mcpInputSchema(component, aPath, &repository.EffectiveContract{})
+		if err != nil {
+			return err
+		}
+		encoded, err := json.Marshal(document)
+		if err != nil {
+			return err
+		}
+		if err = json.Unmarshal(encoded, &mcpTool.InputSchema); err != nil {
+			return err
+		}
+	}
+
 	tool := &serverproto.ToolEntry{
 		Metadata: mcpTool,
-		Handler:  handler,
+		MetadataFor: func(ctx context.Context) (schema.Tool, error) {
+			current, err := r.mcpComponent(ctx, provider, aPath)
+			if err != nil {
+				return schema.Tool{}, err
+			}
+			return r.mcpMetadata(ctx, current, aPath, mcpTool)
+		},
+		Handler: func(ctx context.Context, request *schema.CallToolRequest) (*schema.CallToolResult, *jsonrpc.Error) {
+			current, err := r.mcpComponent(ctx, provider, aPath)
+			if err != nil {
+				return nil, jsonrpc.NewInvalidRequest(err.Error(), nil)
+			}
+			return r.mcpToolCallHandler(current, aRoute)(ctx, request)
+		},
 	}
 	r.mcpRegistry.RegisterTool(tool)
 	return nil
@@ -214,7 +258,15 @@ func (r *Router) mcpToolCallHandler(component *repository.Component, aRoute *Rou
 	return func(ctx context.Context, req *schema.CallToolRequest) (*schema.CallToolResult, *jsonrpc.Error) {
 		ctx = vcontext.WithValue(ctx, logger.ContextKey, r.logger)
 		params := req.Params
-		arguments, err := initializeToolArguments(ctx, component, params.Arguments)
+		effective, err := r.mcpInvocationContract(ctx, component, aRoute, params.Arguments)
+		if err != nil {
+			return nil, jsonrpc.NewInvalidParamsError(err.Error(), nil)
+		}
+		ctx = repository.WithResolvedContract(ctx, component, aRoute.Path.Method, aRoute.Path.URI, effective)
+		arguments, nativeContract, err := r.contractToolArguments(ctx, component, aRoute, params.Arguments)
+		if err == nil && !nativeContract {
+			arguments, err = initializeToolArguments(ctx, component, params.Arguments)
+		}
 		if err != nil {
 			return nil, jsonrpc.NewInvalidParamsError(err.Error(), nil)
 		}
@@ -251,13 +303,29 @@ func (r *Router) mcpToolCallHandler(component *repository.Component, aRoute *Rou
 				continue
 			}
 			value := toolArgumentValue(p, params.Arguments)
+			if nativeContract && p.In.Kind == state.KindRequestBody {
+				if isMCPAnonymousBody(p) && indirectType(p.Schema.Type()).Kind() == reflect.Struct {
+					value, err = effectiveAnonymousBodyArguments(p, params.Arguments, effective.Body)
+					if err != nil {
+						return nil, jsonrpc.NewInvalidParamsError(err.Error(), nil)
+					}
+					if value == nil {
+						continue
+					}
+				} else if _, present := mcpArgument(p, params.Arguments); !present {
+					continue
+				}
+				p = effectiveBodyParameter(p, effective.Body)
+			}
 			pType := p.Schema.Type()
 			if pType.Kind() == reflect.Ptr {
 				pType = pType.Elem()
 			}
-			value = r.coerceNumericValue(value, pType)
+			if !nativeContract {
+				value = r.coerceNumericValue(value, pType)
+			}
 			var rpcErr *jsonrpc.Error
-			baseURL, body, rpcErr = r.applyParamToRequest(baseURL, values, p, value, uniquePath, uniqueQuery, body)
+			baseURL, body, rpcErr = r.applyParamToRequest(baseURL, values, p, value, uniquePath, uniqueQuery, body, mcpRequestEncoding{preserveEmpty: nativeContract, jsonBody: nativeContract && mcpScalarBody(p)})
 			if rpcErr != nil {
 				return nil, rpcErr
 			}
@@ -970,7 +1038,11 @@ func (r *Router) coerceNumericValue(value interface{}, paramType reflect.Type) i
 }
 
 // applyParamToRequest applies a single parameter into path placeholders, query/form values, or request body.
-func (r *Router) applyParamToRequest(baseURL string, values url.Values, p *state.Parameter, value interface{}, uniquePath, uniqueQuery map[string]bool, body io.Reader) (string, io.Reader, *jsonrpc.Error) {
+func (r *Router) applyParamToRequest(baseURL string, values url.Values, p *state.Parameter, value interface{}, uniquePath, uniqueQuery map[string]bool, body io.Reader, encoding ...mcpRequestEncoding) (string, io.Reader, *jsonrpc.Error) {
+	var wire mcpRequestEncoding
+	if len(encoding) > 0 {
+		wire = encoding[0]
+	}
 	switch p.In.Kind {
 	case state.KindPath:
 		if uniquePath[p.In.Name] {
@@ -997,7 +1069,7 @@ func (r *Router) applyParamToRequest(baseURL string, values url.Values, p *state
 			return baseURL, body, nil
 		}
 		uniqueQuery[queryName] = true
-		if value == nil || value == "" {
+		if value == nil || (value == "" && !wire.preserveEmpty) {
 			return baseURL, body, nil
 		}
 		var encodedValue string
@@ -1018,10 +1090,22 @@ func (r *Router) applyParamToRequest(baseURL string, values url.Values, p *state
 		bodyValue := value
 		if p != nil && !isMCPAnonymousBody(p) {
 			if bodyName := strings.TrimSpace(p.In.Name); bodyName != "" {
-				bodyValue = map[string]interface{}{bodyName: value}
+				payload := map[string]interface{}{}
+				if body != nil {
+					decoder := json.NewDecoder(body)
+					decoder.UseNumber()
+					if err := decoder.Decode(&payload); err != nil {
+						return baseURL, body, jsonrpc.NewInvalidParamsError("cannot merge named body parameters: "+err.Error(), nil)
+					}
+					if payload == nil {
+						payload = map[string]interface{}{}
+					}
+				}
+				payload[bodyName] = value
+				bodyValue = payload
 			}
 		}
-		if text, ok := bodyValue.(string); ok {
+		if text, ok := bodyValue.(string); ok && !wire.jsonBody {
 			body = strings.NewReader(text)
 		} else {
 			data, err := json.Marshal(bodyValue)
@@ -1405,6 +1489,7 @@ func (r *Router) newToolHTTPRequest(ctx context.Context, method, URL string, bod
 	if err != nil {
 		return nil, jsonrpc.NewInvalidRequest(err.Error(), nil)
 	}
+	applyMCPHeaders(ctx, httpRequest)
 	if body != nil {
 		contentType := "application/json"
 		if encoded, ok := body.(*mcpEncodedBody); ok && encoded.contentType != "" {
@@ -1552,10 +1637,11 @@ func (r *Router) matchToolCallComponentURI(aRoute *Route, component *repository.
 func (r *Router) addAuthTokenIfPresent(ctx context.Context, httpRequest *http.Request) {
 	if tokenValue := ctx.Value(authorization.TokenKey); tokenValue != nil {
 		if token, ok := tokenValue.(*authorization.Token); ok {
-			if !strings.HasPrefix(token.Token, "Bearer ") {
-				token.Token = "Bearer " + token.Token
+			value := token.Token
+			if !strings.HasPrefix(value, "Bearer ") {
+				value = "Bearer " + value
 			}
-			httpRequest.Header.Set("Authorization", fmt.Sprintf("%s", token.Token))
+			httpRequest.Header.Set("Authorization", value)
 		}
 	}
 }
@@ -1632,7 +1718,7 @@ func (r *Router) buildToolInputTypeForPath(components *repository.Component, too
 			tag := buildMCPFieldTag(parameter, true)
 			appendField(name, mcpToolParameterType(parameter), tag)
 		case state.KindRequestBody:
-			if isMCPAnonymousBody(parameter) {
+			if isMCPAnonymousBody(parameter) && indirectType(parameter.Schema.Type()).Kind() == reflect.Struct {
 				appendAnonymousBodyFields(&inputFields, uniqueFieldName, parameter.Schema.Type(), hasMultipartFiles || hasRawBlobBody)
 				continue
 			}
@@ -1674,35 +1760,29 @@ func buildMCPFieldTag(parameter *state.Parameter, defaultOptional bool) reflect.
 
 func buildMCPFieldTagWithRequired(parameter *state.Parameter, defaultOptional, forceRequired bool) reflect.StructTag {
 	if parameter == nil {
-		return reflect.StructTag(`json:",omitempty"`)
+		return `json:",omitempty"`
 	}
-	var parts []string
-	jsonTag := `json:",omitempty"`
-	if forceRequired {
-		jsonTag = `json:""`
-	}
-	if !forceRequired && parameter.Schema != nil && parameter.Schema.Type() != nil && parameter.Schema.Type().Kind() == reflect.Slice {
-		parts = append(parts, jsonTag, `optional:"true"`)
+	field := &xcontract.Field{Name: parameter.Name, Tag: reflect.StructTag(parameter.Tag)}
+	field = field.SetTag("json", ",omitempty")
+	if forceRequired || parameter.IsRequired() {
+		field = field.Required()
 	} else {
-		parts = append(parts, jsonTag)
-		if !forceRequired && (strings.Contains(parameter.Tag, "optional") || strings.Contains(parameter.Tag, `required:"false"`) || defaultOptional) {
-			parts = append(parts, `optional:"true"`)
-		}
+		field = field.Optional()
 	}
 	if description := strings.TrimSpace(parameter.Description); description != "" {
-		parts = append(parts, `description:`+strconv.Quote(description))
+		field = field.SetDescription(description)
 	}
 	if example := strings.TrimSpace(parameter.Example); example != "" {
-		parts = append(parts, `example:`+strconv.Quote(example))
+		field = field.SetExample(example)
 	}
-	return reflect.StructTag(strings.Join(parts, " "))
+	return field.Tag
 }
 
 func toolArgumentValue(parameter *state.Parameter, arguments map[string]interface{}) interface{} {
 	if parameter == nil {
 		return nil
 	}
-	if isMCPAnonymousBody(parameter) && parameter.Schema != nil {
+	if isMCPAnonymousBody(parameter) && parameter.Schema != nil && indirectType(parameter.Schema.Type()).Kind() == reflect.Struct {
 		return anonymousBodyArgumentValue(arguments, parameter.Schema.Type())
 	}
 	for _, candidate := range toolArgumentCandidates(parameter) {

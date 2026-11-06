@@ -31,6 +31,7 @@ import (
 	"github.com/viant/datly/view/state/kind/locator"
 	"github.com/viant/datly/view/tags"
 	"github.com/viant/tagly/format/text"
+	"github.com/viant/x/shape"
 	"github.com/viant/xdatly/docs"
 	xhandler "github.com/viant/xdatly/handler"
 	hstate "github.com/viant/xdatly/handler/state"
@@ -54,12 +55,13 @@ type (
 		indexedView     view.NamedViews
 		SourceURL       string
 
-		dispatcher contract.Dispatcher
-		types      *xreflect.Types
-		ioConfig   *config.IOConfig
-		doc        docs.Service
-		embedFs    *embed.FS
-		with       []string
+		contractPlans *contractPlanCache
+		dispatcher    contract.Dispatcher
+		types         *xreflect.Types
+		ioConfig      *config.IOConfig
+		doc           docs.Service
+		embedFs       *embed.FS
+		with          []string
 	}
 
 	ComponentOption func(c *Component) error
@@ -373,9 +375,15 @@ func (c *Component) UnmarshalFunc(request *http.Request) shared.Unmarshal {
 type UnmarshalOption func(*unmarshalOptions)
 
 type unmarshalOptions struct {
-	request      *http.Request
-	contentType  string
-	interceptors json.UnmarshalerInterceptors
+	request        *http.Request
+	representation *shape.Representation
+	contentType    string
+	interceptors   json.UnmarshalerInterceptors
+}
+
+// WithUnmarshalRepresentation selects immutable caller metadata for JSON decoding.
+func WithUnmarshalRepresentation(metadata *shape.Representation) UnmarshalOption {
+	return func(o *unmarshalOptions) { o.representation = metadata }
 }
 
 // WithUnmarshalRequest supplies an http request for content-type detection and transforms.
@@ -409,6 +417,22 @@ func (c *Component) UnmarshalFor(opts ...UnmarshalOption) shared.Unmarshal {
 		}
 	}
 
+	if options.representation != nil && options.representation.Changed() {
+		return func(data []byte, dest interface{}) error {
+			if len(c.UnmarshallerInterceptors()) > 0 || len(options.interceptors) > 0 {
+				return fmt.Errorf("dynamic contract does not support legacy JSON interceptors")
+			}
+			decoder := c.Content.Marshaller.JSON.ContractDecoder()
+			if decoder == nil {
+				return fmt.Errorf("configured JSON decoder does not support contract metadata")
+			}
+			metadata, err := decoderRepresentation(options.representation, dest)
+			if err != nil {
+				return err
+			}
+			return decoder.UnmarshalWithRepresentation(data, dest, metadata)
+		}
+	}
 	// Resolve content type if request present
 	contentType := options.contentType
 	if contentType == "" && options.request != nil {
@@ -477,10 +501,16 @@ func (c *Component) UnmarshalFor(opts ...UnmarshalOption) shared.Unmarshal {
 type MarshalOption func(*marshalOptions)
 
 type marshalOptions struct {
-	request *http.Request
-	format  string
-	field   string
-	filters []*json.FilterEntry
+	representation *shape.Representation
+	request        *http.Request
+	format         string
+	field          string
+	filters        []*json.FilterEntry
+}
+
+// WithRepresentation selects immutable caller metadata for JSON encoding.
+func WithRepresentation(metadata *shape.Representation) MarshalOption {
+	return func(o *marshalOptions) { o.representation = metadata }
 }
 
 // WithRequest supplies an http request for deriving format and state-based exclusions.
@@ -527,6 +557,25 @@ func (c *Component) MarshalFunc(opts ...MarshalOption) shared.Marshal {
 	filters := options.filters
 
 	return func(src interface{}) ([]byte, error) {
+		if options.representation != nil && options.representation.Changed() {
+			if format != content.JSONFormat {
+				return nil, fmt.Errorf("dynamic contract output requires JSON")
+			}
+			engine := c.Content.Marshaller.JSON.ContractEncoder()
+			if native, ok := engine.(*content.StructologyJSONRuntime); ok {
+				return native.Marshal(src, filters, options.representation)
+			}
+			if standard, ok := engine.(*content.StandardJSONRuntime); ok {
+				return standard.Marshal(src, filters, options.representation)
+			}
+			if encoder := engine; encoder != nil {
+				if len(filters) > 0 {
+					return nil, fmt.Errorf("configured contract encoder does not support field filters")
+				}
+				return encoder.MarshalWithRepresentation(src, options.representation)
+			}
+			return nil, fmt.Errorf("configured JSON encoder does not support contract metadata")
+		}
 		return c.Content.Marshal(format, field, src, filters)
 	}
 }

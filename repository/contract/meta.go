@@ -13,13 +13,15 @@ type Meta struct {
 }
 
 type ModelContextProtocol struct {
-	MCPTool             bool `json:"MCPTool" yaml:"MCPTool"`
-	MCPResource         bool `json:",omitempty" yaml:"MCPResource"`
-	MCPTemplateResource bool `json:",omitempty" yaml:"MCPTemplateResource"`
+	// MCPRoutes optionally exposes exact declared METHOD:/path targets with distinct names.
+	MCPRoutes           map[string]*Meta `json:",omitempty" yaml:"MCPRoutes,omitempty"`
+	MCPTool             bool             `json:"MCPTool" yaml:"MCPTool"`
+	MCPResource         bool             `json:",omitempty" yaml:"MCPResource"`
+	MCPTemplateResource bool             `json:",omitempty" yaml:"MCPTemplateResource"`
 }
 
 func (m *ModelContextProtocol) HasMCPIntegration() bool {
-	return m != nil && (m.MCPTool || m.MCPResource || m.MCPTemplateResource)
+	return m != nil && (m.MCPTool || len(m.MCPRoutes) > 0 || m.MCPResource || m.MCPTemplateResource)
 }
 
 func (m *Meta) Build(name string, from string, aPath *Path) *Meta {

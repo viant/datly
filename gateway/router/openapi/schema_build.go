@@ -2,10 +2,12 @@ package openapi
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
+	"github.com/viant/tagly/choice"
 	"github.com/viant/tagly/format/text"
 	ftime "github.com/viant/tagly/format/time"
 	"github.com/viant/xreflect"
@@ -76,8 +78,24 @@ func (c *SchemaContainer) addStructSchema(ctx context.Context, component *Compon
 	rootTable := rootTable(component)
 	table := schema.tag.Table
 
-	for i := 0; i < rType.NumField(); i++ {
-		field := rType.Field(i)
+	fields := make([]reflect.StructField, 0, rType.NumField())
+	if metadata := schema.representation; metadata != nil {
+		for metadata.Original().Kind() == reflect.Pointer {
+			metadata = metadata.Elem()
+		}
+		selected, err := metadata.JSONFields()
+		if err != nil {
+			return err
+		}
+		for _, field := range selected {
+			fields = append(fields, field.Field.StructField())
+		}
+	} else {
+		for i := 0; i < rType.NumField(); i++ {
+			fields = append(fields, rType.Field(i))
+		}
+	}
+	for _, field := range fields {
 		if shouldSkipStructField(field) {
 			continue
 		}
@@ -106,7 +124,7 @@ func (c *SchemaContainer) addStructSchema(ctx context.Context, component *Compon
 		}
 
 		updatedDocumentation(aTag, component.component.Docs(), fieldSchema)
-		if field.Anonymous {
+		if field.Anonymous && strings.Split(field.Tag.Get("json"), ",")[0] == "" {
 			if childKey := recursionTypeKey(fieldSchema.rType); childKey != "" && c.visitingTypes[childKey] > 0 {
 				// Avoid anonymous self/embed loops while preserving named-schema recursion via createSchema.
 				continue
@@ -122,7 +140,7 @@ func (c *SchemaContainer) addStructSchema(ctx context.Context, component *Compon
 			return err
 		}
 		dst.Properties[fieldSchema.fieldName] = childSchema
-		if !aTag.IsNullable {
+		if aTag.Required {
 			dst.Required = append(dst.Required, fieldSchema.fieldName)
 		}
 	}
@@ -254,7 +272,13 @@ func (c *SchemaContainer) interfaceVariants(ctx context.Context, component *Comp
 }
 
 func (c *SchemaContainer) addMapSchema(ctx context.Context, component *ComponentSchema, dst *openapi3.Schema, schema *Schema, rType reflect.Type) error {
-	valueSchema, err := c.mapValueSchema(ctx, component, schema, rType.Elem())
+	var valueSchema *openapi3.Schema
+	var err error
+	if schema.representation != nil {
+		valueSchema, err = c.createSchema(ctx, component, schema.SliceItem(rType))
+	} else {
+		valueSchema, err = c.mapValueSchema(ctx, component, schema, rType.Elem())
+	}
 	if err != nil {
 		return err
 	}
@@ -321,6 +345,15 @@ func (c *SchemaContainer) createSchema(ctx context.Context, componentSchema *Com
 	// Resolve a schema name that is unique per type identity so same-named types
 	// from different packages do not collide in a shared (aggregate) spec.
 	schemaName := c.resolveSchemaName(fieldSchema.tag.TypeName, fieldSchema.rType)
+	if schemaName != "" && fieldSchema.representation != nil && fieldSchema.representation.Changed() {
+		schemaName += fmt.Sprintf("_%x", sha256.Sum256([]byte(fmt.Sprintf("%t:%s", fieldSchema.isInput, fieldSchema.representation.Signature()))))[:17]
+	} else if schemaName != "" && choice.HasEnum(fieldSchema.rType) {
+		if fieldSchema.isInput {
+			schemaName += "_Input"
+		} else {
+			schemaName += "_Output"
+		}
+	}
 
 	if schemaName != "" {
 		if _, ok := c.generatedSchemas[schemaName]; ok {
@@ -329,12 +362,12 @@ func (c *SchemaContainer) createSchema(ctx context.Context, componentSchema *Com
 	}
 
 	if apiType, format, ok := c.asOpenApiType(fieldSchema.rType); ok {
-		return &openapi3.Schema{
+		return fieldEnum(&openapi3.Schema{
 			Type:        apiType,
 			Format:      format,
 			Description: description,
 			Example:     exampleValueForType(fieldSchema.rType, example),
-		}, nil
+		}, fieldSchema)
 	}
 
 	// Mark named schemas as in-progress before generation so recursive graphs

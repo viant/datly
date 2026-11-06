@@ -48,20 +48,22 @@ require (
 require (
 	github.com/golang-jwt/jwt/v5 v5.2.2
 	github.com/viant/aerospike v0.2.11-0.20241108195857-ed524b97800d
+	github.com/viant/bindly v0.5.1-0.20261106060239-7e1b52bdd7da
 	github.com/viant/firebase v0.1.1
 	github.com/viant/jsonrpc v0.25.1-0.20261021031150-a24a3b9ae218
 	github.com/viant/mcp v0.19.1-0.20260810230811-de146552d03f
-	github.com/viant/mcp-protocol v0.16.0
-	github.com/viant/structology v0.10.1-0.20260915165514-89d421971772
-	github.com/viant/tagly v0.3.1-0.20260914020630-eadee36c3630
-	github.com/viant/x v0.5.1-0.20260915043005-1bc42b9eef47
-	github.com/viant/xdatly v0.5.4-0.20260306062123-17850ac34977
+	github.com/viant/mcp-protocol v0.19.2-0.20261106071121-951fd3d1d7e0
+	github.com/viant/structology v0.10.2-0.20261106143941-ed3b2d84154c
+	github.com/viant/tagly v0.4.2-0.20261106060238-fe360d6f7ac4
+	github.com/viant/x v0.6.1-0.20261106041415-0487ec66884b
+	github.com/viant/xdatly v0.5.4-0.20261106191133-de5f4f9a90c1
 	github.com/viant/xdatly/extension v0.0.0-20231013204918-ecf3c2edf259
 	github.com/viant/xdatly/handler v0.0.0-20260922183211-34eaa9f4902b
 	github.com/viant/xdatly/types/core v0.0.0-20250307183722-8c84fc717b52
 	github.com/viant/xdatly/types/custom v0.0.0-20240801144911-4c2bfca4c23a
 	github.com/viant/xlsy v0.3.1
 	github.com/viant/xmlify v0.1.1
+	github.com/xuri/excelize/v2 v2.8.0
 	golang.org/x/net v0.57.0
 	golang.org/x/tools v0.47.0
 	modernc.org/sqlite v1.18.1
@@ -151,8 +153,10 @@ require (
 	github.com/spiffe/go-spiffe/v2 v2.6.0 // indirect
 	github.com/viant/gosh v0.2.1 // indirect
 	github.com/viant/igo v0.2.0 // indirect
+	github.com/xeipuuv/gojsonpointer v0.0.0-20180127040702-4e3ac2762d5f // indirect
+	github.com/xeipuuv/gojsonreference v0.0.0-20180127040603-bd5ef7bd5415 // indirect
+	github.com/xeipuuv/gojsonschema v1.2.0 // indirect
 	github.com/xuri/efp v0.0.0-20230802181842-ad255f2331ca // indirect
-	github.com/xuri/excelize/v2 v2.8.0 // indirect
 	github.com/xuri/nfp v0.0.0-20230819163627-dc951e3ffe1a // indirect
 	github.com/yuin/gopher-lua v1.1.1 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
@@ -164,6 +168,7 @@ require (
 	go.opentelemetry.io/otel/sdk v1.44.0 // indirect
 	go.opentelemetry.io/otel/sdk/metric v1.44.0 // indirect
 	go.opentelemetry.io/otel/trace v1.44.0 // indirect
+	go.yaml.in/yaml/v3 v3.0.6 // indirect
 	golang.org/x/crypto v0.54.0 // indirect
 	golang.org/x/sync v0.22.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
@@ -188,3 +193,7 @@ require (
 	modernc.org/strutil v1.1.3 // indirect
 	modernc.org/token v1.0.0 // indirect
 )
+
+replace google.golang.org/grpc/stats/opentelemetry => google.golang.org/grpc v1.77.0
+
+exclude google.golang.org/grpc/stats/opentelemetry v0.0.0-20240907200651-3ffb98b2c93a
