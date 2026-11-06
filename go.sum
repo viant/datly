@@ -1167,6 +1167,8 @@ github.com/viant/mcp-protocol v0.19.2-0.20261106041415-5280ed5df48d h1:1+DfUrVJW
 github.com/viant/mcp-protocol v0.19.2-0.20261106041415-5280ed5df48d/go.mod h1:aIspjnR3WXyP2+BDM1CdCu/L7hpQtEz6cD36rz0qZ0k=
 github.com/viant/mcp-protocol v0.19.2-0.20261106060239-b663e93c5972 h1:rPgxsAc1H03k00HLhNe2WGvOF4T2LT5uIayGerHZLG0=
 github.com/viant/mcp-protocol v0.19.2-0.20261106060239-b663e93c5972/go.mod h1:OKHFdMOdfz0HfvO/FcQdDd9wo8f9N1SoaBLenQMlwgY=
+github.com/viant/mcp-protocol v0.19.2-0.20261106071121-951fd3d1d7e0 h1:xBJqAgYgz6V/0MKWBLKaKAaiquSX9RCPVsjzGJiUTkw=
+github.com/viant/mcp-protocol v0.19.2-0.20261106071121-951fd3d1d7e0/go.mod h1:/Wd+h5LDuseCfrrkPj4w9FC/yqi8rzwvO3dQ4H60+fg=
 github.com/viant/parsly v0.3.3 h1:7ytgfLOG4Ils+wviGacWxRD0gAUvVEH/iGsSE+UI8YM=
 github.com/viant/parsly v0.3.3/go.mod h1:85fneXJbErKMGhSQto3A5ElTQCwl3t74U9cSV0waBHw=
 github.com/viant/scy v0.35.1-0.20260914041206-699e6c909726 h1:vXZewpcbOqVvj1yNxwT5mLZzVZXcJViKzv22a0v2uK0=
@@ -1243,6 +1245,8 @@ github.com/viant/structology v0.10.2-0.20261106041415-f131ad778c85 h1:i4NjoOKCGD
 github.com/viant/structology v0.10.2-0.20261106041415-f131ad778c85/go.mod h1:sNNuCH9Zt+QUNeV1slf/QKBdOdUIj0AVdhDFR09+8Ig=
 github.com/viant/structology v0.10.2-0.20261106060238-ca90155f0f98 h1:9zy1SkATxRNtixTqJ4tMSfPyy1ee6NFRQoGAhWmgN20=
 github.com/viant/structology v0.10.2-0.20261106060238-ca90155f0f98/go.mod h1:1kHdAa1cVRhmdSVGZKwR63yUkxr5tAMZ2XD+OkO0HIY=
+github.com/viant/structology v0.10.2-0.20261106071121-906c12343bcc h1:B27L8elSCEKrwCAMkmVNTAr+CUjxtyaHXsbtyTR01EQ=
+github.com/viant/structology v0.10.2-0.20261106071121-906c12343bcc/go.mod h1:5UXd12H/1ZiZ3QVWUErna+C08vdtr5lWwT2Fn9l80pM=
 github.com/viant/structql v0.5.5-0.20261008164328-d0b837beaa3a h1:op4JW0fS/TDcF5GqsjNcVVKlw1xsjYRz2tS3jMm2WaM=
 github.com/viant/structql v0.5.5-0.20261008164328-d0b837beaa3a/go.mod h1:nm9AYnAuSKH7b7pG+dKVxbQrr1Mgp1CQEMvUwwkE+I8=
 github.com/viant/structql v0.5.5-0.20261012183420-6a47e96ff5b5 h1:gJLgcwcRvCS4MI59UBbokZKVMUk+etcsC4UkAtSSC7s=
