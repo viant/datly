@@ -13,6 +13,12 @@ resources and component contracts. Regenerate as projections and schemas evolve:
 carry type/nullability changes forward, remove generator-owned fields no longer
 projected, and preserve authored hooks and protected edits.
 
+**One model, caller-specific API contracts.** Adapt field visibility, requiredness,
+pricing choices and JSON representations to the caller and operation. Dynamic
+contracts apply the selected policy to MCP/OpenAPI discovery and configured JSON
+encoding/decoding, while your application keeps its linked Go types.
+[Explore dynamic contracts](doc/dynamic-contract.md).
+
 Datly is a programmable data application platform that connects databases,
 business logic and delivery. Compose typed data graphs across databases,
 orchestrate reads and mutations with scoped dependency injection, and expose
@@ -32,7 +38,36 @@ From a single endpoint to a data-driven service spanning multiple databases,
 Datly brings query execution, dependency injection, business workflows, analytics
 and API delivery into one programmable platform.
 
-**Start here:** [Programming model: DAO/service → components](doc/programming-model.md) · [DQL and grammar](doc/dql.md) · [Reader/writer hook flows](doc/hooks.md) · [Generated mutators](doc/generated-mutator.md) · [Errors and output](doc/errors-and-output.md) · [Transcription](doc/authoring.md) · [Security and internal calls](doc/security.md) · [All guides](doc/README.md)
+**Start here:** [Programming model: DAO/service → components](doc/programming-model.md) · [DQL and grammar](doc/dql.md) · [Reader/writer hook flows](doc/hooks.md) · [Generated mutators](doc/generated-mutator.md) · [Dynamic contracts](doc/dynamic-contract.md) · [Errors and output](doc/errors-and-output.md) · [Transcription](doc/authoring.md) · [Security and internal calls](doc/security.md) · [All guides](doc/README.md)
+
+## Dynamic contracts: adapt the API to the caller
+
+Expose a different public contract for each role or operation without maintaining
+separate DTOs, schema builders and JSON adapters. A `Contract` hook binds the state
+needed for its decision—such as verified claims or an auth-context component—and
+returns field-level adjustments. The selected contract drives both what clients
+discover and how the configured codecs handle their JSON.
+
+| Use case | Result |
+| --- | --- |
+| Keep commission private for a role | The effective schema and JSON response omit the property; effective JSON input ignores it |
+| Offer role-specific pricing models | Publish the selected enum choices while preserving their stored codes |
+| Accept readable names, retain numeric storage | Decode `{"pricingModel":"usage"}` into Go integer `10`; independently choose literal or ordinal response JSON |
+| Describe sparse PATCH input | Make non-key fields optional while retaining authored primary-key requirements |
+
+The hook can live on an input, output, domain/view type or nested composite.
+Contracts compose through slices, maps and embeddings; enclosing policies have
+final authority. Application storage stays linked, unchanged subtrees retain their
+identity, and named variants reuse immutable metadata and separate codec plans.
+Authorization decisions still run for each invocation.
+
+This keeps field exposure, API discovery and JSON representation aligned. Business
+authorization, record access and writer validation remain with their native owners.
+
+[Feature and focused use cases](doc/dynamic-contract.md) ·
+[Separate enum input/output examples](doc/dynamic-contract.md#use-case-accept-enum-input) ·
+[Sparse PATCH and primary keys](doc/contract-operation.md) ·
+[Field methods and resulting schemas](doc/contract-field-examples.md)
 
 ## From DAO/service layers to generated components
 
@@ -85,6 +120,7 @@ show the exact callback order for each operation.
 | Business behavior | Services and callbacks | Reusable services, scoped DI and typed hooks at defined phases |
 | Database changes | Manually reconcile query and DTO changes | Re-transcribe, inspect protected generated diffs, rebuild and publish |
 | Delivery | Controller-specific endpoint integration | Shared component contract exposed through HTTP and MCP |
+| Caller-specific representation | Separate DTOs, schema variants and serializer rules | Composable policies align caller-specific schemas with JSON encoding/decoding |
 
 **Reader and writer generation are separate choices.** Datly does not automatically
 put both into one generated struct. Share domain contracts where appropriate and
