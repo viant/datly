@@ -75,11 +75,26 @@ membership validation.
   families reproduced on a clean pre-change HEAD snapshot with its published
   dependencies. Architecture failures also reproduced on that snapshot; the local
   untracked legacy e2e tree adds unrelated architecture findings.
-- Dependency publication, final version pins, and workspace-free release validation
-  are still required. V0 implementation follows v1 verification.
+- Feature commits are published and exact revisions are pinned in the module
+  manifests. Standalone dependency suites and Datly runtime/registry/compiler,
+  HTTP/OpenAPI, MCP/tool/invocation, output, bootstrap and documentation tests pass
+  with GOWORK=off. The manifest-pin commits still need publication; V0 follows.
+- The broad local `go mod verify` check reports a modified cached
+  `modernc.org/cc/v3@v3.36.3` directory. That unrelated cache entry was not altered
+  during pinning; the global cache verification result is not clean.
 
 The actual Platform `adorder.AdorderView` benchmark has 153 direct fields and 430
 visited fields. Metadata-only measurements on M5 Max: nil policy 2.7 ns/0 allocations;
 full no-op traversal 17.7 us; one edit 35.4 us; nested edits 67.2 us; skip all children
 7.1 us; plain metadata-cache lookup 10.4 ns/0 allocations. These exclude authentication,
 binding, schema serialization and codec execution.
+
+## Published feature revisions
+
+| Dependency | Pinned revision |
+|---|---|
+| x | `v0.6.1-0.20261106041415-0487ec66884b` |
+| Structology | `v0.10.2-0.20261106041415-f131ad778c85` |
+| Bindly | `v0.5.1-0.20261106041415-daa8f9128968` |
+| MCP protocol | `v0.19.2-0.20261106041415-5280ed5df48d` |
+| Xdatly v1 | `v1.0.1-0.20261106041415-485a3c7ca5fa` |
