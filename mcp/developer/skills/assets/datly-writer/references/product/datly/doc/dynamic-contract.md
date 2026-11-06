@@ -1,154 +1,310 @@
-# Caller-dependent contracts
+# Dynamic contracts
 
-Use a `Contract` method on a linked input, output, domain type or nested composite
-to select the fields and annotations exposed to the current caller:
+Dynamic contracts make the public shape of a Datly API depend on **who is calling**
+and **which operation is being performed**. You can reuse one application model
+while adapting what clients discover, send and receive.
+
+An API contract describes its exposed properties, their names and requiredness,
+enum choices, JSON representations, descriptions and examples. A dynamic contract
+selects those details for the current request. For example, a response can omit
+commission for one role, a request can accept a pricing name while the handler uses
+a numeric code, and PATCH can publish a sparse schema while preserving key fields.
+
+Datly applies the selected contract to **MCP/OpenAPI discovery and the configured
+JSON encoding/decoding path**. The result is an executable representation rule:
+a field hidden from that contract is omitted from JSON output and ignored by its
+effective JSON input decoder, not merely removed from a documentation page.
+
+## What it achieves
+
+Ordinary Go struct tags describe one fixed representation. When different callers
+or operations need different representations, separate DTOs and separate schema or
+serialization rules can become difficult to keep consistent. Dynamic contracts
+keep those variations in a policy associated with the linked model.
+
+| Use case | Desired contract |
+|---|---|
+| A caller cannot access commission | Remove the commission property from that caller's effective schema and JSON representation |
+| Requests use readable pricing names | Accept a literal such as `"usage"`, then give the handler its stored code, such as `10` |
+| Responses should show readable pricing names | Emit `"usage"` for stored code `10` and advertise a string response property |
+| Roles have different pricing choices | Advertise the appropriate choice domain without renumbering persisted codes |
+| POST and PATCH share a model | Retain creation requirements for POST; make non-key fields optional in the selected PATCH contract |
+
+The application keeps its **original Go fields, types and business values**. Policies
+change the exposed field metadata and wire representation. Unchanged contracts and
+subtrees retain their linked identity, and equivalent named variants can be reused.
+
+Use this feature for representation and field exposure. Endpoint authorization,
+record access, allowed transitions and business validation remain with their native
+owners. In particular, advertising a smaller enum is not a permission check, and
+changing PATCH schema requiredness does not itself change the writer's mutation policy.
+
+## How it works
+
+A linked input, output, domain/view type or nested composite can implement:
 
 ```go
 Contract(context.Context, bindly.Binder) (*contract.Policy, error)
 ```
 
-Import `github.com/viant/bindly` and `github.com/viant/xdatly/contract`. The host
-supplies the native binder; the application chooses the state to bind. The same
-method source works in both supported Datly versions.
+The public packages are `github.com/viant/bindly` and
+`github.com/viant/xdatly/contract`. The same method signature works in both supported
+Datly versions.
 
-Start with the role-based example below, or use the [direct operation example](contract-operation.md)
-when you only need POST/PATCH requiredness rules. [Field/schema examples](contract-field-examples.md)
-show the published OpenAPI result of each kind of adjustment.
+1. **Bind the decision state.** The hook uses the supplied binder to obtain verified
+   claims, an auth-context component, headers, the target operation, or other native
+   binding sources. Hooks receive fresh metadata receivers; they do not assume the
+   business input has already been populated.
+2. **Return a policy.** Compute decisions once, then return a stable `Policy.Name`
+   and a `Field` callback. Return `nil, nil` if the linked contract needs no edits.
+3. **Adjust field metadata.** The host traverses the linked graph, including nested
+   containers and embeddings. Nested contracts run first; enclosing policies run last.
+   Callbacks can change field names and tags, not field types or storage layout.
+4. **Reuse equivalent variants.** Named policies can reuse immutable effective
+   metadata. Authorization still runs for each invocation. `NoCache: true` or an
+   empty name disables Contract variant reuse.
+5. **Use the selected contract.** Schema consumers describe the selected fields and
+   wire types; metadata-aware codecs read/write the linked values accordingly.
+   Codec plans are cached separately for each effective representation.
 
-## Application example
+```mermaid
+flowchart LR
+    A[Caller and target operation] --> B[Bind policy state]
+    B --> C[Contract policy]
+    D[Linked Go model] --> E[Effective field metadata]
+    C --> E
+    E --> F[MCP / OpenAPI schemas]
+    E --> G[Configured JSON codecs]
+    G --> H[Original linked application values]
+```
+
+The implementation uses `viant/x/shape` metadata over the original types. Unchanged
+subtrees keep their linked identity. This also supports method-bearing embeddings
+without requiring an anonymous replacement struct for every adjustment. Where a
+supported consumer needs a reflected type, it can be materialized from the selected
+variant; application storage remains canonical.
+
+Schema discovery does not run the target business handler. It does execute the
+policy hook and any dependencies that the hook explicitly binds, such as an auth
+component. Custom JSON/Text methods continue to own their complete representation;
+see the codec boundaries below before trying to rewrite inside those owners.
+
+## Choose a focused example
+
+The snippets below are independent use cases, not one large combined policy.
+Callback snippets belong in `Policy.Field`; method-body snippets belong inside your
+`Contract(ctx, binder)` method. The snippets use `context`, `fmt` and `reflect` as
+needed, alongside the two public packages above.
+
+- [Hide commission](dynamic-contract.md#use-case-hide-commission)
+- [Accept enum input](dynamic-contract.md#use-case-accept-enum-input)
+- [Format enum output](dynamic-contract.md#use-case-format-enum-output)
+- [Narrow input choices by role](dynamic-contract.md#use-case-narrow-input-choices-by-role)
+- [Sparse PATCH with primary keys](contract-operation.md)
+- [All Field methods and schema fragments](contract-field-examples.md)
+
+## Use case: hide commission
+
+**When:** a response contains a commission field that some callers must not see.
+Attach the hook to the output type for a response-only rule. Reusing the hooked type
+in an input graph applies the rule there too.
 
 ```go
-package catalog
-
-import (
-	"context"
-	"fmt"
-	"reflect"
-
-	"github.com/viant/bindly"
-	"github.com/viant/xdatly/contract"
-)
-
-type CatalogItem struct {
-	ID           string                                              `json:"id" sqlx:"ID,primaryKey" required:"true"`
-	Title        string                                              `json:"title" validate:"required"`
-	Commission   float64                                             `json:"commission"`
-	PricingModel int                                                 `json:"pricingModel" choice:"0:fixed" choice:"10:usage" choice:"20:subscription"`
-	Has          *struct{ ID, Title, PricingModel, Commission bool } `json:"-" setMarker:"true"`
-}
-
-type Authorization struct {
-	CanViewCommission bool
-	Role              string
-}
-
-func (*CatalogItem) Contract(ctx context.Context, binder bindly.Binder) (*contract.Policy, error) {
-	// The application chooses the state type and fields. Auth can instead be
-	// verified JWT claims through the configured JwtClaim codec, or other
-	// native locator/component data. Binding does not call this state's Init.
-	var state struct {
-		Auth   *Authorization `parameter:",kind=component,in=GET:/auth/context,required=true"`
-		Method string         `parameter:",kind=contract,in=method"`
-		Debug  bool           `parameter:",kind=header,in=X-Debug"`
-	}
-	if err := binder.Bind(ctx, &state); err != nil {
-		return nil, err
-	}
-	if state.Auth == nil {
-		return nil, fmt.Errorf("authorization context required")
-	}
-	// Compute permissions once. The name describes equivalent metadata edits,
-	// not a caller identity. Include every decision that affects the result.
-	showCommission := state.Auth.CanViewCommission
-	creating := state.Method == "POST"
-
-	// Select the enum domain and wire representation from verified role data.
-	// Explicit ordinals keep storage stable when a role sees only a subset.
-	var choices []string
-	var outputStyle, pricingDescription string
-	switch state.Auth.Role {
-	case "editor":
-		choices = []string{"0:fixed", "20:subscription"}
-		outputStyle = "literal"
-		pricingDescription = "An editor can select fixed or subscription."
-	case "finance":
-		choices = []string{"0:fixed", "10:usage", "20:subscription"}
-		outputStyle = "ordinal"
-		pricingDescription = "Finance users can also select usage."
-	default:
-		return nil, fmt.Errorf("unsupported role %q", state.Auth.Role)
-	}
-
-	// Version this name if the role-to-schema rules change without a reload.
-	// All choices above are determined by role; no permission is recomputed
-	// inside the field callback.
-	name := fmt.Sprintf("catalog-item:v1:%s:commission=%t:create=%t", state.Auth.Role, showCommission, creating)
-	return &contract.Policy{Name: name, Field: func(parentPath string, parentType reflect.Type, field *contract.Field) (*contract.Field, error) {
-		if parentType != reflect.TypeFor[CatalogItem]() {
-			return nil, nil
-		}
-		switch field.Name {
-		case "Commission":
-			if !showCommission {
-				return field.Hide(), nil
-			}
-		case "Title":
-			if creating {
-				return field.Required(), nil
-			}
-			return field.Optional(), nil
-		case "PricingModel":
-			return field.SetEnum(choices...).
-				SetTag("enumAccept", "literal").
-				SetTag("enumStyle", outputStyle).
-				SetDescription(pricingDescription), nil
-		}
-		return nil, nil
-	}}, nil
-}
-
-type Input struct {
-	Body []*CatalogItem `parameter:",kind=body,required=true"`
-}
-
-type Output struct {
-	Data []*CatalogItem `json:"data"`
+type CatalogOutput struct {
+    Title      string  `json:"title"`
+    Commission float64 `json:"commission"`
 }
 ```
 
-For the `PricingModel` field, the same linked `int` now has these caller-specific contracts:
+First bind your existing authorization component. Its result determines whether the
+field is visible; the component itself owns verification:
 
-| Verified role | Effective choices | Input schema / JSON | Go storage | Output schema / JSON |
+```go
+var state struct {
+    Auth *Authorization `parameter:",kind=component,in=GET:/auth/context,required=true"`
+}
+if err := binder.Bind(ctx, &state); err != nil {
+    return nil, err
+}
+if state.Auth == nil {
+    return nil, fmt.Errorf("authorization context required")
+}
+```
+
+Here `Authorization` is your application's result type and has a
+`CanViewCommission bool` permission. In this method, select the policy once:
+
+```go
+if state.Auth.CanViewCommission {
+    return nil, nil
+}
+return &contract.Policy{
+    Name: "catalog:commission:hidden:r1",
+    Field: func(_ string, parent reflect.Type, field *contract.Field) (*contract.Field, error) {
+        if parent == reflect.TypeFor[CatalogOutput]() && field.Name == "Commission" {
+            return field.Hide(), nil
+        }
+        return nil, nil
+    },
+}, nil
+```
+
+The same handler result yields different JSON responses:
+
+```json
+{"title":"Example","commission":0.15}
+```
+
+```json
+{"title":"Example"}
+```
+
+The second caller's schema has no `commission` property. The original Go value still
+contains `Commission`; the policy does not clear business data. A hidden field needs
+no public description.
+
+## Use case: accept enum input
+
+**When:** request JSON should use one representation while Go storage uses another.
+`enumAccept` controls input only. Define stable codes with explicit choices:
+
+```go
+type PricingInput struct {
+    PricingModel int `json:"pricingModel" choice:"0:fixed" choice:"10:usage" choice:"20:subscription" enumAccept:"literal"`
+}
+```
+
+The request is a JSON string, and the handler receives an integer:
+
+```json
+{"pricingModel":"usage"}
+```
+
+```go
+input.PricingModel == 10
+```
+
+Different input settings give these results, using the same choice mapping:
+
+| Go field type | `enumAccept` | Accepted request JSON | Go value after decoding | Input schema type |
 |---|---|---|---|---|
-| `editor` | `0:fixed`, `20:subscription` | string enum `["fixed", "subscription"]`; `{"pricingModel":"subscription"}` | `PricingModel == 20` | string enum `["fixed", "subscription"]`; `{"pricingModel":"subscription"}` |
-| `finance` | `0:fixed`, `10:usage`, `20:subscription` | string enum `["fixed", "usage", "subscription"]`; `{"pricingModel":"usage"}` | `PricingModel == 10` | integer enum `[0, 10, 20]`; `{"pricingModel":10}` |
+| `int` | omitted or `ordinal` | `{"pricingModel":10}` | `10` | integer |
+| `int` | `literal` | `{"pricingModel":"usage"}` | `10` | string |
+| `string` | omitted or `literal` | `{"pricingModel":"usage"}` | `"usage"` | string |
+| `string` | `ordinal` | `{"pricingModel":10}` | `"usage"` | integer |
 
-These are individual catalog items; `Input.Body` and `Output.Data` carry the
-same policy through their slices automatically. `SetEnum` replaces the original
-choice group, so the editor schema does not retain `usage`. Using explicit codes
-means `subscription` remains `20`, rather than becoming ordinal `1` when the domain narrows.
-MCP and OpenAPI publish the selected domain and wire type for each direction.
+To select the input form dynamically, the relevant field callback is small:
 
-An enum domain is not a substitute for permission/transition validation. Keep that
-validation in the existing business/validator path. Cross-form conversion requires
-a matching choice: with the editor's literal output, returning stored value `10`
-would fail because that role's mapping omits `usage`. Return records within that
-domain, or keep a complete domain for output when all stored pricing models must be readable.
+```go
+if parentType == reflect.TypeFor[PricingInput]() && field.Name == "PricingModel" {
+    return field.SetTag("enumAccept", "literal"), nil
+}
+return nil, nil
+```
 
-The native dispatcher owns the `/auth/context` component's resolution and execution.
-The target business handler does not run during schema discovery. JWT codecs use
-the session's configured verifier; raw JWT decoding is not authorization.
-`kind=contract` method/path values come from the registered target route, not the
-outer OpenAPI GET or MCP POST request. Metadata-state bindings cannot replace them.
-The host owns provider precedence, verifier selection, component resolution and
-codec execution. Bind only the state needed to select the policy.
+`PricingInput` is the hooked input/domain type containing that field. Use a policy
+name that identifies this input decision. The selected JSON form is exclusive:
+`literal` does not also accept numeric JSON just because the Go field is an integer.
 
-## Related examples
+## Use case: format enum output
 
-- [Direct POST/PATCH example](contract-operation.md): `IsPK()` and `Optional()`,
-  preserving primary keys while clearing other requirements on PATCH.
-- [Field methods and schema output](contract-field-examples.md): OpenAPI before/after
-  fragments, descriptions, examples, renaming, and enum wire forms.
+**When:** the response should use a different representation from the stored Go value.
+`enumStyle` controls output only; it does not change what requests accept.
+
+```go
+type PricingOutput struct {
+    PricingModel int `json:"pricingModel" choice:"0:fixed" choice:"10:usage" choice:"20:subscription" enumStyle:"literal"`
+}
+```
+
+A handler result with `PricingModel == 10` is encoded as:
+
+```json
+{"pricingModel":"usage"}
+```
+
+Different output settings give these results:
+
+| Go field type and value | `enumStyle` | Response JSON | Output schema type |
+|---|---|---|---|
+| `int`, `10` | omitted or `ordinal` | `{"pricingModel":10}` | integer |
+| `int`, `10` | `literal` | `{"pricingModel":"usage"}` | string |
+| `string`, `"usage"` | omitted or `literal` | `{"pricingModel":"usage"}` | string |
+| `string`, `"usage"` | `ordinal` | `{"pricingModel":10}` | integer |
+
+The output-only field callback is:
+
+```go
+if parentType == reflect.TypeFor[PricingOutput]() && field.Name == "PricingModel" {
+    return field.SetTag("enumStyle", "literal"), nil
+}
+return nil, nil
+```
+
+`PricingOutput` is the hooked response/domain type containing that field. Input and
+output are independent: `enumAccept:"literal" enumStyle:"ordinal"` accepts
+`{"pricingModel":"usage"}`, keeps Go integer `10`, and emits `{"pricingModel":10}`.
+MCP/OpenAPI describe the corresponding input and output types separately.
+
+## Use case: narrow input choices by role
+
+**When:** callers should be offered different pricing choices. This example changes
+only the input domain; it does not hide commission or change response formatting.
+Use the same native auth binding shown above, with `Authorization.Role` supplied
+as a verified string value by your existing auth component.
+
+Select the choices once in the Contract method:
+
+```go
+var choices []string
+switch state.Auth.Role {
+case "editor":
+    choices = []string{"0:fixed", "20:subscription"}
+case "finance":
+    choices = []string{"0:fixed", "10:usage", "20:subscription"}
+default:
+    return nil, fmt.Errorf("unsupported role %q", state.Auth.Role)
+}
+```
+
+Return a named policy over the input type. The callback uses those decisions:
+
+```go
+return &contract.Policy{
+    Name: "pricing-input:r1:" + state.Auth.Role,
+    Field: func(_ string, parent reflect.Type, field *contract.Field) (*contract.Field, error) {
+        if parent == reflect.TypeFor[PricingInput]() && field.Name == "PricingModel" {
+            return field.SetEnum(choices...).SetTag("enumAccept", "literal"), nil
+        }
+        return nil, nil
+    },
+}, nil
+```
+
+| Role | Advertised input choices | Request example | Decoded integer |
+|---|---|---|---|
+| editor | fixed, subscription | `{"pricingModel":"subscription"}` | `20` |
+| finance | fixed, usage, subscription | `{"pricingModel":"usage"}` | `10` |
+
+`SetEnum` replaces the original choice group. Explicit codes ensure subscription
+remains `20` when usage is omitted. Enforce allowed operations in the business
+validation path as well; enum metadata is not an authorization mechanism.
+
+Keep a complete choice mapping on a separate output type when responses must still
+represent every stored pricing model. If a narrowed mapping is also used for output,
+encoding a stored value missing from that mapping fails when conversion is needed.
+
+## More Contract documentation
+
+| Read next | Covers |
+|---|---|
+| [POST/PATCH Contract example](contract-operation.md) | Direct `IsPK()` / `Optional()` rule, pricing/commission schema results, and cache keys |
+| [Field methods and schema output](contract-field-examples.md) | Each kind of field edit, descriptions/examples, enum forms, and renaming |
+| [Field API reference below](dynamic-contract.md#every-field-method) | All helper methods and copy-on-write behavior |
+| [Policy cache keys below](dynamic-contract.md#policy-cache-key-examples) | Stable names, empty names and explicit `NoCache` |
+| [Enum JSON reference](enum-json.md) | Complete choice syntax, wire forms and codec ownership |
+| [Contract feature boundaries](dynamic-contract-boundaries.md) | Custom JSON methods and supported rewriting boundaries |
+| [Selectors and formats](selectors-and-formats.md) | Native view selectors and output formats |
 
 ## DQL and named operations
 
@@ -262,7 +418,7 @@ and continues traversal. Returning a non-nil error aborts contract resolution.
 | `Err() error` | Returns a recorded helper error without checking the original field type. |
 | `Validate(originalType reflect.Type) error` | Checks recorded errors, a valid Go field identifier, tag syntax and choices against the original type. Datly calls this with the canonical field type; normal hooks need not call it themselves. |
 
-For example, inside a callback that has matched the business type and field name:
+For a matched `PricingInput.PricingModel` field using literal input, for example:
 
 ```go
 return field.
@@ -280,7 +436,7 @@ parameter to a different HTTP binding or replace the configured codec.
 
 `Field.Name` is the effective field name seen by metadata consumers. The original
 linked struct still has its original Go field name and storage. Changing `Name`
-alone does not override an explicit `json` tag: `PricingModel` has `json:"pricingModel"` above,
+alone does not override an explicit `json` tag: the pricing field has `json:"pricingModel"`,
 so changing only `Name` would leave its JSON key as `pricingModel`.
 
 To expose that field as `billingModel` in JSON/OpenAPI and `BillingModel` in MCP, a matching
@@ -292,22 +448,20 @@ case "PricingModel":
     rewritten.Name = "BillingModel" // effective metadata name; must be a Go identifier
     return rewritten.
         SetTag("json", "billingModel,omitempty").
-        SetTag("mcp", "name=BillingModel,aliases=billingModel").
-        SetEnum(choices...).
-        SetTag("enumAccept", "literal").
-        SetTag("enumStyle", outputStyle), nil
+        SetTag("mcp", "name=BillingModel,aliases=billingModel"), nil
 ```
 
-For a finance user, JSON input is now `{"billingModel":"usage"}` and JSON output is
-`{"billingModel":10}`. MCP advertises `BillingModel` and normalizes its authored alias `billingModel`
-to the JSON key. The handler still reads/writes **`CatalogItem.PricingModel`**, with type
+With the literal input and literal output types shown above, JSON input and output
+use `{"billingModel":"usage"}`. This edit changes the property name only; the enum
+settings remain those of the selected input/output contract. MCP advertises `BillingModel` and normalizes its authored alias `billingModel`
+to the JSON key. The handler still reads/writes **the original `PricingModel` Go field**, with type
 **`int`**; it does not gain a `BillingModel` Go member. Presence flags likewise
 continue to use the canonical field identity. Avoid exposed-name/alias collisions.
 If the rename is conditional on role, include that decision in `Policy.Name` too.
 
 The callback's `parentPath` is the canonical parent path, excluding the current
-field; `parentType` is the original linked parent type. For example, a catalog item
-member inside `Input.Body` has parent path `Body[]` and parent type `CatalogItem`.
+field; `parentType` is the original linked parent type. For example, a `PricingInput`
+member inside a body slice has parent path `Body[]` and parent type `PricingInput`.
 The root parent path is empty, and map values use `{}` in traversal paths. Parent
 policies run after nested policies and inspect accumulated name/tag edits, so a
 nested policy may already have changed `field.Name`. Match the original parent type
@@ -351,11 +505,9 @@ before URL encoding; explicit empty literals and bare scalar JSON bodies are pre
 Storage can differ from either wire type. Unknown cross-form conversions fail;
 ordinary choices do not install implicit membership validation.
 
-In the application example, the finance sends `{"pricingModel":"usage"}`, the handler
-receives integer `10`, and output is `{"pricingModel":10}`. The editor sends and receives
-`"subscription"` while the handler still uses integer `20`. Role selection changes both
-choices and output style without changing `CatalogItem.PricingModel`'s Go type. Large explicit
-integer ordinals retain their exact values through the shared Tagly enum plan.
+The input and output use cases above show these settings independently. The
+configured codec and the published schema use the same selected annotations. Large
+explicit integer ordinals retain their exact values through the shared Tagly enum plan.
 
 ## Cache and validation
 
