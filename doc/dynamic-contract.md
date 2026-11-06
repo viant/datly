@@ -66,6 +66,7 @@ Callback snippets belong in `Policy.Field`; method-body snippets belong inside y
 needed, alongside the two public packages above.
 
 - [Hide commission](#use-case-hide-commission)
+- [Include metrics only when requested](#use-case-include-metrics-only-when-requested)
 - [Accept enum input](#use-case-accept-enum-input)
 - [Format enum output](#use-case-format-enum-output)
 - [Narrow input choices by role](#use-case-narrow-input-choices-by-role)
@@ -131,6 +132,89 @@ The same handler result yields different JSON responses:
 The second caller's schema has no `commission` property. The original Go value still
 contains `Commission`; the policy does not clear business data. A hidden field needs
 no public description.
+
+## Use case: include metrics only when requested
+
+**When:** ordinary responses should contain only business data, but a caller can
+request the existing metrics output with `X-Include-Metrics: true`.
+
+Add the native metrics binding to your existing `Output` type:
+
+```go
+Metrics response.Metrics `parameter:",kind=output,in=metrics" json:"metrics,omitempty"`
+```
+
+Import `github.com/viant/xdatly/handler/response` as `response`.
+
+The equivalent DQL declaration is:
+
+```sql
+#set($_ = $Metrics<?>(output/metrics).WithTag('json:"metrics,omitempty"'))
+```
+
+Put the Contract hook on `Output`. In its method body, bind the optional header:
+
+```go
+var state struct {
+    IncludeMetrics bool `parameter:",kind=header,in=X-Include-Metrics"`
+}
+if err := binder.Bind(ctx, &state); err != nil {
+    return nil, err
+}
+if state.IncludeMetrics {
+    return nil, nil // Keep the declared metrics field visible.
+}
+```
+
+When the header is absent or false, return a policy that hides only `Output.Metrics`:
+
+```go
+return &contract.Policy{
+    Name: "output:metrics:hidden:r1",
+    Field: func(_ string, parent reflect.Type, field *contract.Field) (*contract.Field, error) {
+        if parent == reflect.TypeFor[Output]() && field.Name == "Metrics" {
+            return field.Hide(), nil
+        }
+        return nil, nil
+    },
+}, nil
+```
+
+The header changes field exposure, not the `output/metrics` binding. Datly still
+owns populating the metric values. Use a caller-provided header only as a presentation
+preference; if metrics require a permission, check that permission before returning
+the visible contract.
+
+| Request header | Response and schema |
+|---|---|
+| Absent | No `metrics` property |
+| `X-Include-Metrics: false` | No `metrics` property |
+| `X-Include-Metrics: true` | The schema exposes `metrics`; JSON includes it when metrics are available |
+
+Without the header, an example response is:
+
+```json
+{"data":[{"id":1}]}
+```
+
+With the header, the same response can include populated native metrics:
+
+```json
+{"data":[{"id":1}],"metrics":[{"view":"records","rows":1,"elapsedMs":2}]}
+```
+
+The metric values above are illustrative. `omitempty` still omits an empty metrics
+collection; the header does not manufacture data or turn metric capture on. The
+hidden policy has a stable cache name, while each request still reads its own header.
+A request with the header set to true returns the original linked contract, so a
+previous hidden selection cannot suppress metrics for that caller.
+
+Send the same header when fetching caller-specific OpenAPI or MCP discovery if you
+want the described schema to include `metrics`. The hook controls the JSON body
+field; diagnostic response headers, logging, tracing and SQL disclosure keep their
+existing configuration and authorization rules.
+
+For this example, use your own `X-Include-Metrics` header; it is not an alias for the built-in diagnostic metrics header.
 
 ## Use case: accept enum input
 
