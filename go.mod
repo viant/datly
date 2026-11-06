@@ -14,16 +14,16 @@ require (
 	github.com/viant/gmetric v0.3.2
 	github.com/viant/govalidator v0.3.4-0.20260913213120-027a9dd54d73
 	github.com/viant/mcp v0.24.2-0.20261102163024-7166d81ea725
-	github.com/viant/mcp-protocol v0.19.2-0.20261106041415-5280ed5df48d
+	github.com/viant/mcp-protocol v0.19.2-0.20261106060239-b663e93c5972
 	github.com/viant/parsly v0.3.3
 	github.com/viant/sqlparser v0.13.1-0.20261021204353-1c20a82bbb29
 	github.com/viant/sqlx v0.26.2-0.20261031214940-7cb396a51254
-	github.com/viant/structology v0.10.2-0.20261106041415-f131ad778c85
+	github.com/viant/structology v0.10.2-0.20261106060238-ca90155f0f98
 	github.com/viant/structql v0.5.5-0.20261012183420-6a47e96ff5b5
-	github.com/viant/tagly v0.4.2-0.20261028223500-81e046a19ef9
+	github.com/viant/tagly v0.4.2-0.20261106060238-fe360d6f7ac4
 	github.com/viant/velty v0.4.1-0.20260915052314-fca47c0595f8
 	github.com/viant/x v0.6.1-0.20261106041415-0487ec66884b
-	github.com/viant/xdatly v1.0.1-0.20261106041415-485a3c7ca5fa
+	github.com/viant/xdatly v1.0.1-0.20261106051919-85c143c30bf6
 	github.com/viant/xreflect v0.7.5-0.20260314170600-13f09f37d46e
 	github.com/viant/xunsafe v0.11.0
 	github.com/xeipuuv/gojsonschema v1.2.0
@@ -124,7 +124,7 @@ require (
 	github.com/go-viper/mapstructure/v2 v2.2.1 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/viant/afs v1.30.1-0.20260914155934-90e95d483861
-	github.com/viant/bindly v0.5.1-0.20261106041415-daa8f9128968
+	github.com/viant/bindly v0.5.1-0.20261106060239-7e1b52bdd7da
 	github.com/viant/godiff v0.4.3-0.20260914060527-9f2005ca82e8
 	github.com/viant/jsonrpc v0.25.1
 	github.com/viant/scy v0.35.1-0.20260914041206-699e6c909726

@@ -120,8 +120,9 @@ binding, schema serialization and codec execution.
 
 | Dependency | Pinned revision |
 |---|---|
+| Tagly | `v0.4.2-0.20261106060238-fe360d6f7ac4` |
 | x | `v0.6.1-0.20261106041415-0487ec66884b` |
-| Structology | `v0.10.2-0.20261106041415-f131ad778c85` |
-| Bindly | `v0.5.1-0.20261106041415-daa8f9128968` |
-| MCP protocol | `v0.19.2-0.20261106041415-5280ed5df48d` |
-| Xdatly v1 | `v1.0.1-0.20261106041415-485a3c7ca5fa` |
+| Structology | `v0.10.2-0.20261106060238-ca90155f0f98` |
+| Bindly | `v0.5.1-0.20261106060239-7e1b52bdd7da` |
+| MCP protocol | `v0.19.2-0.20261106060239-b663e93c5972` |
+| Xdatly v1 | `v1.0.1-0.20261106051919-85c143c30bf6` |
