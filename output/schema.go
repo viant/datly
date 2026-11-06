@@ -127,11 +127,28 @@ func (b *jsonSchemaBuilder) value(t reflect.Type, ref, path string, representati
 			if example, ok := field.field.Tag.Lookup("example"); ok {
 				item["examples"] = []any{example}
 			}
+			enumeration, err := choice.ParseEnum(field.field.Tag, field.field.Type)
+			if err != nil {
+				return nil, err
+			}
+			if enumeration != nil {
+				if field.quoted {
+					return nil, fmt.Errorf("enumStyle conflicts with quoted JSON")
+				}
+				item["type"] = enumeration.WireType(false)
+				delete(item, "format")
+				values := enumeration.WireValues(false)
+				if field.nullable || field.field.Type.Kind() == reflect.Pointer {
+					item["type"] = []string{enumeration.WireType(false), "null"}
+					values = append(values, nil)
+				}
+				item["enum"] = values
+			}
 			constraint, err := choice.Parse(field.field.Tag, field.field.Type)
 			if err != nil {
 				return nil, err
 			}
-			if constraint != nil {
+			if constraint != nil && enumeration == nil {
 				values := constraint.WireValues()
 				compatible := item["type"] == constraint.JSONType()
 				if types, ok := item["type"].([]string); ok {

@@ -12,6 +12,7 @@ import (
 	bodyprovider "github.com/viant/bindly/provider/body"
 	"github.com/viant/bindly/xform"
 	"github.com/viant/datly/spec"
+	"github.com/viant/tagly/choice"
 	xshape "github.com/viant/x/shape"
 	xcontract "github.com/viant/xdatly/contract"
 )
@@ -20,6 +21,7 @@ import (
 // source, including its filtering and presence ownership. The effective type
 // changes; the configured decoder implementation does not.
 type configuredJSONDecoder struct {
+	enumeration     *choice.Enum
 	metadataDecoder xcontract.JSONDecoder
 	metadata        *xshape.Representation
 	projection      *xshape.ValueProjection
@@ -105,6 +107,13 @@ func (d *configuredJSONDecoder) Transform(ctx context.Context, _ locator.Resolve
 	if !ok {
 		return nil, fmt.Errorf("configured JSON decoder requires native raw input, got %T", value)
 	}
+	if d.enumeration != nil {
+		converted, err := d.enumeration.DecodeJSON(raw)
+		if err != nil {
+			return nil, err
+		}
+		raw = converted
+	}
 	if d.required {
 		if err := bodyprovider.ValidateRequired(raw, d.target, d.metadata); err != nil {
 			return nil, err
@@ -159,4 +168,10 @@ func (d *configuredJSONDecoder) WithRepresentation(metadata *xshape.Representati
 type metadataBodyDecoder struct {
 	bodyprovider.Decoder
 	xcontract.JSONDecoder
+}
+
+func (d *configuredJSONDecoder) WithEnum(plan *choice.Enum) (xform.Transformer, error) {
+	copy := *d
+	copy.enumeration = plan
+	return &copy, nil
 }

@@ -17,6 +17,7 @@ import (
 	"github.com/viant/datly/spec"
 	"github.com/viant/mcp-protocol/schema"
 	"github.com/viant/mcp-protocol/schema/fieldname"
+	"github.com/viant/tagly/choice"
 	xshape "github.com/viant/x/shape"
 )
 
@@ -314,6 +315,14 @@ func (c *Compiler) compileExternal(inputField registry.InputField, field reflect
 	}
 	// Public requiredness follows authored binding and field requirements.
 	// Path identity remains required regardless of the Go value's nullability.
+	enumeration, err := choice.ParseEnum(field.Tag, field.Type)
+	if err != nil {
+		return Argument{}, false, err
+	}
+	if enumeration != nil {
+		argument.enumeration = enumeration
+		argument.wireSchema = &spec.WireSchema{Type: enumeration.WireType(true), Enum: enumeration.WireValues(true), Nullable: field.Type.Kind() == reflect.Pointer}
+	}
 	argument.schemaRequired = required || argument.sourceKind == "path" || fieldname.Required(field)
 	if memberRequired, associated := wholeBodyMemberSchemaRequired(argument); associated && !required {
 		argument.schemaRequired = memberRequired

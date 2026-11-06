@@ -135,6 +135,20 @@ func (c *RouteInputContract) metadataFields(effective reflect.Type, metadata *xs
 			f.binding.Required = &flag
 			f.effectiveRequired = &flag
 		}
+		if original.Tag != projected.Tag {
+			f.binding, err = EnumBinding(f.binding, projected)
+			if err != nil {
+				return nil, err
+			}
+		}
+		enumeration, err := choice.ParseEnum(projected.Tag, projected.Type)
+		if err != nil {
+			return nil, err
+		}
+		if enumeration != nil {
+			f.wireSchema = &spec.WireSchema{Type: enumeration.WireType(true), Enum: enumeration.WireValues(true), Nullable: projected.Type.Kind() == reflect.Pointer}
+			continue
+		}
 		if !strings.Contains(string(original.Tag), "choice:") && !strings.Contains(string(projected.Tag), "choice:") {
 			continue
 		}

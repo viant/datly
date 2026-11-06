@@ -46,6 +46,12 @@ func (c *RouteInputContract) withEffectiveInput(effective reflect.Type, represen
 	for i, original := range c.fields {
 		updated := metadata[i]
 		binding := cloneBindingSpec(original.binding)
+		if updated.metadataField != nil {
+			binding, err = EnumBinding(binding, *updated.metadataField)
+			if err != nil {
+				return nil, err
+			}
+		}
 		transport := (spec.BindSource{Kind: binding.Location.Kind}).RequestValue()
 		if transport {
 			hidden, err := updated.Internal()

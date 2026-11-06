@@ -75,7 +75,24 @@ func (b *schemaBuilder) enumSchema(schema *openapi3.Schema, path []string, value
 }
 
 // fieldEnum retains the native typed choice domain on the effective field.
-func (b *schemaBuilder) fieldEnum(schema *openapi3.Schema, field reflect.StructField, quoted bool) (*openapi3.Schema, error) {
+func (b *schemaBuilder) fieldEnum(schema *openapi3.Schema, field reflect.StructField, quoted bool, inputs ...bool) (*openapi3.Schema, error) {
+	input := len(inputs) > 0 && inputs[0]
+	enumeration, err := choice.ParseEnum(field.Tag, field.Type)
+	if err != nil {
+		return nil, err
+	}
+	if enumeration != nil {
+		if quoted {
+			return nil, fmt.Errorf("enum representation conflicts with quoted JSON")
+		}
+		copy := *schema
+		copy.Type = enumeration.WireType(input)
+		copy.Format = ""
+		copy.Min = nil
+		copy.Max = nil
+		result, _ := b.enumSchema(&copy, nil, enumeration.WireValues(input), 0)
+		return result, nil
+	}
 	constraint, err := choice.Parse(field.Tag, field.Type)
 	if err != nil || constraint == nil {
 		return schema, err

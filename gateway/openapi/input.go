@@ -3,6 +3,7 @@ package openapi
 import (
 	"fmt"
 	documentation "github.com/viant/datly/documentation"
+	"github.com/viant/tagly/choice"
 	"reflect"
 	"strings"
 
@@ -70,6 +71,10 @@ func (b *inputBuilder) build(fields []registry.InputField, operation *openapi3.O
 		if strictValue {
 			sourceType = (xshape.Runtime{}).Indirect(sourceType)
 		}
+		schemaField, fieldErr := field.StructField()
+		if fieldErr != nil {
+			return fieldErr
+		}
 		originalDocs := b.schemas.docs
 		if owned := field.Documentation(); owned != nil {
 			b.schemas.docs = owned
@@ -80,7 +85,17 @@ func (b *inputBuilder) build(fields []registry.InputField, operation *openapi3.O
 		if err != nil {
 			return fmt.Errorf("input %s: %w", field.Path(), err)
 		}
-		if wire := field.WireSchema(); wire != nil && len(wire.Enum) > 0 {
+		enumeration, enumErr := choice.ParseEnum(schemaField.Tag, schemaField.Type)
+		if enumErr != nil {
+			return enumErr
+		}
+		if enumeration != nil {
+			schema, err = b.schemas.fieldEnum(schema, schemaField, false, true)
+			if err != nil {
+				return err
+			}
+		}
+		if wire := field.WireSchema(); wire != nil && len(wire.Enum) > 0 && enumeration == nil {
 			schema, _ = b.schemas.enumSchema(schema, nil, wire.Enum, 0)
 		}
 		for path, wire := range field.WireSchemas() {

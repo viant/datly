@@ -14,7 +14,8 @@ A policy returns a stable `Name` and a `Field` callback. The callback receives t
 canonical parent path, original parent type, and editable field name/tags. Match both
 the business type and field name for targeted rules. `Hide`, `Required`, `Optional`,
 `SetEnum`, `SetDescription`, `SetExample`, `SetTag` and `RemoveTag` preserve unrelated
-metadata. Fields are optional unless explicitly required. Entity validation tags
+metadata. Fields are optional unless explicitly required. For ordinal/literal JSON conversion, see [enum JSON representations](enum-json.md).
+Entity validation tags
 and native insert/update presence validation retain their own behavior.
 
 ## Storage and codecs

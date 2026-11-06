@@ -97,7 +97,7 @@ func (b *schemaBuilder) object(key schemaKey) (*openapi3.Schema, error) {
 				property.Example = annotation.Example
 			}
 		}
-		property, err = b.fieldEnum(property, field.StructField(), projected.Quoted)
+		property, err = b.fieldEnum(property, field.StructField(), projected.Quoted, input)
 		if err != nil {
 			return nil, err
 		}

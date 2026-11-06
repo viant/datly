@@ -15,11 +15,13 @@ import (
 	"github.com/viant/datly/spec"
 	"github.com/viant/mcp-protocol/schema"
 	"github.com/viant/mcp-protocol/schema/fieldname"
+	"github.com/viant/tagly/choice"
 	xshape "github.com/viant/x/shape"
 )
 
 // Argument is an immutable public projection of one canonical input field.
 type Argument struct {
+	enumeration      *choice.Enum
 	schemaField      *xshape.JSONField
 	representation   *xshape.Representation
 	documentation    *docs.Snapshot
@@ -123,6 +125,17 @@ func (p *Plan) scope(ctx context.Context, arguments map[string]interface{}) (*re
 	// request/body providers and Bindly decoder. Wire representations stay owned
 	// by their declared authority; unannotated arguments retain their exact path.
 	for _, argument := range p.args {
+		if argument.enumeration != nil {
+			if value, present := normalized[argument.publicName]; present {
+				raw, err := json.Marshal(value)
+				if err != nil {
+					return nil, err
+				}
+				if _, err = argument.enumeration.DecodeJSON(raw); err != nil {
+					return nil, fmt.Errorf("MCP argument %s: %w", argument.publicName, err)
+				}
+			}
+		}
 		if argument.sourceKind != "body" || argument.wireType != nil || argument.wireSchema != nil || (hasWireRepresentation(argument.wireSchemas) && p.caseFormat == "") {
 			continue
 		}
