@@ -32,14 +32,14 @@ func (*codecVariantRecord) Contract(ctx context.Context, binder bindly.Binder) (
 		switch f.Name {
 		case "Secret":
 			if role == "reader" {
-				return f.Clone().Hide(), nil
+				return f.Hide(), nil
 			}
 		case "Mode":
 			style := "ordinal"
 			if role == "reader" {
 				style = "literal"
 			}
-			return f.Clone().SetTag("enumAccept", style).SetTag("enumStyle", style), nil
+			return f.SetTag("enumAccept", style).SetTag("enumStyle", style), nil
 		}
 		return nil, nil
 	}}, nil

@@ -56,7 +56,7 @@ require (
 	github.com/viant/structology v0.10.2-0.20261106143941-ed3b2d84154c
 	github.com/viant/tagly v0.4.2-0.20261106060238-fe360d6f7ac4
 	github.com/viant/x v0.6.1-0.20261106041415-0487ec66884b
-	github.com/viant/xdatly v0.5.4-0.20261106145236-a46b07653307
+	github.com/viant/xdatly v0.5.4-0.20261106152222-677343fe50a9
 	github.com/viant/xdatly/extension v0.0.0-20231013204918-ecf3c2edf259
 	github.com/viant/xdatly/handler v0.0.0-20260922183211-34eaa9f4902b
 	github.com/viant/xdatly/types/core v0.0.0-20250307183722-8c84fc717b52

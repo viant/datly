@@ -48,7 +48,7 @@ func (*mcpContractRow) Contract(ctx context.Context, binder bindly.Binder) (*xco
 			return f.Hide(), nil
 		case "Mode":
 			if op.Debug {
-				f.SetDescription("debug")
+				f = f.SetDescription("debug")
 			}
 			if op.Method == "POST" {
 				return f.SetTag("enumAccept", "literal").SetTag("enumStyle", "ordinal").Required(), nil
