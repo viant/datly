@@ -205,7 +205,7 @@ type mcpRenamedBody struct {
 func (*mcpRenamedBody) Contract(context.Context, bindly.Binder) (*xcontract.Policy, error) {
 	return &xcontract.Policy{Name: "rename", Field: func(_ string, parent reflect.Type, f *xcontract.Field) (*xcontract.Field, error) {
 		if parent == reflect.TypeFor[mcpRenamedBody]() && f.Name == "Value" {
-			return f.SetTag("json", "amount").SetTag("mcp", "name=Amount,aliases=amountAlias"), nil
+			return f.SetTag("json", "amount").SetTag("mcp", "aliases=amountAlias").SetMCPName("Amount"), nil
 		}
 		return nil, nil
 	}}, nil
