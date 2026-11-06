@@ -12,16 +12,32 @@ when your Go model stores its numeric code.
 
 ## What you can do
 
-- **Keep commission private.** Finance users see `"commission": 0.15`. Other
-  callers do not see that field in the response or in their API schema.
-- **Accept names instead of codes.** A client sends `"pricingModel": "usage"`.
-  Your handler receives integer `10`.
-- **Choose response formatting separately.** The handler returns integer `10`.
-  You can return `"pricingModel": "usage"` or `"pricingModel": 10` to the client.
-- **Offer choices by role.** Editors see `fixed` and `subscription`; finance
-  users also see `usage`. Stored codes stay the same for every role.
-- **Make PATCH sparse.** Keep `id` required, but allow a request such as
-  `{"id":"r-1","commission":0.12}` without resending the title or pricing model.
+These examples show how a policy can change the same API for different callers:
+
+- **Show commission to finance users only.** When a finance user fetches a catalog
+  item, the response includes `"commission": 0.15`. When an editor fetches the same
+  item, that field is absent. The editor's API schema also omits it.
+
+- **Let callers send pricing names.** When an editor creates an item, they send
+  `{"pricingModel":"subscription"}`. Datly converts `"subscription"` to `20`
+  before calling the handler, so the application continues to use its integer code.
+
+- **Return a name or a code according to the caller.** In this example, when an
+  editor fetches an item, the response contains `{"pricingModel":"subscription"}`.
+  When a finance user fetches that same item, it contains `{"pricingModel":20}`.
+  Both responses come from the same Go value, `PricingModel == 20`.
+
+- **Give each role its own pricing options.** When an editor requests the API
+  schema, the `pricingModel` choices are `fixed` and `subscription`. When a finance
+  user requests it, `usage` is also listed. The subscription code remains `20` for
+  both roles; changing the choice list does not change stored values.
+
+- **Use different requirements for creation and partial updates.** When a finance
+  user creates an item with POST, the schema requires `id`, `title`, `pricingModel`
+  and `commission`. Later, they can PATCH just
+  `{"id":"r-1","commission":0.12}`. The PATCH schema requires the key but does
+  not require the unchanged title or pricing model. The existing sparse-update
+  writer changes commission and keeps those omitted values.
 
 ## Why it matters
 
