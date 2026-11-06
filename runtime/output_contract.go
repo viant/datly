@@ -3,6 +3,8 @@ package runtime
 import (
 	"context"
 	"fmt"
+	dexec "github.com/viant/datly/exec"
+	"github.com/viant/datly/spec"
 
 	"github.com/viant/datly/runtime/output"
 	"github.com/viant/datly/runtime/registry"
@@ -45,6 +47,13 @@ func (r *Runtime) ResolveOutputByRoute(ctx context.Context, method, path string)
 		return nil, err
 	}
 	if registered.Output != nil {
+		endpoint, found := r.bundle.RouteByMethodPath(method, path)
+		if !found || endpoint == nil {
+			return nil, fmt.Errorf("output route metadata missing")
+		}
+		if effective, ok := dexec.SelectedContract(ctx, dexec.ComponentTarget{Component: component.Key, Route: spec.RouteRef{Method: endpoint.Method, Path: endpoint.Path}}); ok && (effective.Output != registered.OutputType || effective.OutputRepresentation != nil) {
+			return registered.Output.WithContract(effective.Output, effective.OutputRepresentation)
+		}
 		return registered.Output, nil
 	}
 	// Match NewRuntime's support for registrations with an implicit output plan,

@@ -99,7 +99,7 @@ func TestAnonymousCustomJSONAndWholeBodyXLS(t *testing.T) {
 }
 
 type anonymousSchemaBody struct {
-	ID       int                  `json:"id" mcp:"name=Identifier"`
+	ID       int                  `json:"id" mcp:"name=Identifier" required:"true"`
 	Pointer  *int                 `json:"pointer"`
 	Empty    int                  `json:"empty,omitempty"`
 	Optional int                  `json:"optional" optional:"true"`

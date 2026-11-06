@@ -2,6 +2,7 @@ package writer
 
 import (
 	"context"
+	"github.com/viant/bindly"
 	"github.com/viant/datly/internal/dialectcontext"
 	"github.com/viant/datly/spec"
 	"github.com/viant/sqlx/metadata/info"
@@ -25,7 +26,7 @@ func (d *reconciliationBatchDML) Execute(sql string, args ...any) error {
 
 type reconciliationBatchBinder struct{ d *reconciliationBatchDML }
 
-func (*reconciliationBatchBinder) Bind(context.Context, any) error { return nil }
+func (*reconciliationBatchBinder) Bind(context.Context, any, ...bindly.BindOption) error { return nil }
 func (b *reconciliationBatchBinder) Lookup(context.Context, h.ValueKey) (any, bool, error) {
 	return b.d, true, nil
 }

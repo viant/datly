@@ -5,16 +5,19 @@ import (
 	"github.com/viant/datly/spec"
 	"github.com/viant/mcp-protocol/schema/fieldname"
 	"github.com/viant/mcp-protocol/schema/jsonschema"
+	xshape "github.com/viant/x/shape"
 	"reflect"
 	"sort"
 	"strings"
 )
 
 type schemaProjector struct {
-	docs       *docs.Snapshot
-	schemas    map[string]*spec.WireSchema
-	wireType   reflect.Type
-	caseFormat string
+	field          *xshape.JSONField
+	representation *xshape.Representation
+	docs           *docs.Snapshot
+	schemas        map[string]*spec.WireSchema
+	wireType       reflect.Type
+	caseFormat     string
 }
 
 func schemaForType(t reflect.Type, _ map[reflect.Type]bool) (map[string]interface{}, error) {
@@ -43,7 +46,7 @@ func (p *schemaProjector) argument(t reflect.Type, path, property string, schema
 			example = annotation.Example
 		}
 		return annotation.Description, example
-	}}).Compile(jsonschema.Request{Type: t, Path: path, Property: property})
+	}}).Compile(jsonschema.Request{Field: p.field, Type: t, Path: path, Property: property, Representation: p.representation})
 	if err != nil {
 		return nil, err
 	}
@@ -286,4 +289,10 @@ func canonicalSchemaPath(t reflect.Type, path string, visibility fieldname.Visib
 }
 func excludedMCPMember(field reflect.StructField) bool {
 	return strings.TrimSpace(field.Tag.Get("mcp")) == "-"
+}
+
+func representationVisibility(metadata *xshape.Representation, formats ...string) fieldname.Visibility {
+	visibility := memberNameVisibility(formats...)
+	visibility.Representation = metadata
+	return visibility
 }

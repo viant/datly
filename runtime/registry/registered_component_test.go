@@ -7,6 +7,7 @@ import (
 	"github.com/viant/bindly/locator"
 	docs "github.com/viant/datly/documentation"
 	dexec "github.com/viant/datly/exec"
+	rcontract "github.com/viant/datly/runtime/contract"
 	rhandler "github.com/viant/datly/runtime/handler"
 	"github.com/viant/datly/spec"
 )
@@ -14,6 +15,7 @@ import (
 func TestRegisteredComponentRetainsOnlyApprovedRuntimeCarrierFields(t *testing.T) {
 	typeOf := reflect.TypeOf(RegisteredComponent{})
 	expected := map[string]reflect.Type{
+		"ContractState": reflect.TypeFor[*rcontract.StatePlans](),
 		"Documentation": reflect.TypeFor[*docs.Snapshot](),
 		"Component":     reflect.TypeFor[*spec.Component](),
 		"Input":         reflect.TypeFor[*InputContract](),

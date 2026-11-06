@@ -10,8 +10,15 @@ import (
 
 // input selects request-provider encoding rather than applying JSON byte rules
 // to repeated query/form values. Conversion itself remains owned by Bindly.
-func (b *schemaBuilder) input(t reflect.Type, kind string) (*openapi3.Schema, error) {
-	schema, err := b.schema(t, true)
+func (b *schemaBuilder) input(t reflect.Type, kind string, representations ...*xshape.Representation) (*openapi3.Schema, error) {
+	var metadata *xshape.Representation
+	if len(representations) > 0 {
+		metadata = representations[0]
+	}
+	for metadata != nil && metadata.Original() != t && metadata.Original().Kind() == reflect.Pointer {
+		metadata = metadata.Elem()
+	}
+	schema, err := b.schemaRepresentation(t, true, metadata)
 	if err != nil {
 		return nil, err
 	}

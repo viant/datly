@@ -17,6 +17,7 @@ import (
 	"github.com/viant/tagly/format/text"
 	ftime "github.com/viant/tagly/format/time"
 	xshape "github.com/viant/x/shape"
+	xcontract "github.com/viant/xdatly/contract"
 )
 
 type Marshaller interface{ Marshal(any) ([]byte, error) }
@@ -35,6 +36,11 @@ type Compiler struct {
 
 // Plan contains registered output authority, never invocation input or rows.
 type Plan struct {
+	representation      *xshape.Representation
+	effectiveSource     reflect.Type
+	projections         sync.Map
+	compileInput        CompileInput
+	compiler            Compiler
 	responseCompression *spec.ResponseCompression
 	typeOf              reflect.Type
 	format              string
@@ -65,7 +71,10 @@ type Result struct {
 }
 
 func (c Compiler) Compile(input CompileInput) (*Plan, error) {
-	p := &Plan{typeOf: input.Type, format: "json", selectableRows: input.SelectableRows}
+	p := &Plan{typeOf: input.Type, format: "json", selectableRows: input.SelectableRows, compileInput: input, compiler: c}
+	if input.Component != nil {
+		p.compileInput.Component = input.Component.Clone()
+	}
 	if input.Component != nil && input.Component.RootView != nil && input.Component.RootView.Selector != nil && input.Component.RootView.Selector.AllowFields {
 		p.selectableRows = true
 	}
@@ -238,6 +247,9 @@ func (p *Plan) JSONOnly() bool {
 	if p == nil {
 		return false
 	}
+	if p.effectiveSource != nil || p.representation != nil {
+		return true
+	}
 	if p.custom != nil {
 		return true
 	}
@@ -342,15 +354,31 @@ func (p *Plan) transformedJSON() bool {
 }
 
 func (p *Plan) marshalJSON(ctx context.Context, value any, custom bool) ([]byte, error) {
+	selection := dexec.SelectedOutputFields(ctx, value)
+	var projectionErr error
+	value, projectionErr = p.effectiveValue(value)
+	if projectionErr != nil {
+		return nil, projectionErr
+	}
 	if custom && p.custom != nil {
+		if p.representation != nil {
+			encoder, ok := p.custom.(xcontract.JSONEncoder)
+			if !ok {
+				return nil, fmt.Errorf("configured JSON encoder does not accept representation metadata")
+			}
+			return encoder.MarshalWithRepresentation(value, p.representation)
+		}
 		return p.custom.Marshal(value)
 	}
-	selection := dexec.SelectedOutputFields(ctx, value)
 	if !p.transformedJSON() {
-		if selection != nil {
-			return structjson.MarshalStandard(value, structjson.WithPathFieldExcluder(selection))
+		var options []structjson.Option
+		if p.representation != nil {
+			options = append(options, structjson.WithRepresentation(p.representation))
 		}
-		return json.Marshal(value)
+		if selection != nil {
+			options = append(options, structjson.WithPathFieldExcluder(selection))
+		}
+		return structjson.MarshalStandard(value, options...)
 	}
 	if selection == nil && p.jsonEncoder != nil {
 		return p.jsonEncoder.Marshal(value)
@@ -371,6 +399,9 @@ func (p *Plan) marshalJSON(ctx context.Context, value any, custom bool) ([]byte,
 
 func (p *Plan) jsonOptions() []structjson.Option {
 	var options []structjson.Option
+	if p.representation != nil {
+		options = append(options, structjson.WithRepresentation(p.representation))
+	}
 	if p.nilSlicePolicy == "empty_array" {
 		options = append(options, structjson.WithNilSlicePolicy(structjson.NilSliceAsEmptyArray))
 	}

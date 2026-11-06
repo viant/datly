@@ -60,7 +60,7 @@ func TestJSONSchemaMatchesEncoder(t *testing.T) {
 				rowName, idName, recordName = "rows", "id", "recordCount"
 			}
 			require.Contains(t, properties, recordName)
-			require.NotContains(t, document["required"], recordName, "nil embedded pointer may omit promoted fields")
+			require.Empty(t, document["required"], "fields without explicit requirements remain optional")
 			rowSchema := properties[rowName].(map[string]any)["items"].(map[string]any)
 			require.Contains(t, rowSchema["properties"], idName)
 			require.Contains(t, rowSchema["properties"], "Exact_Name")

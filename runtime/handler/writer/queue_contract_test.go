@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/viant/bindly"
 	"github.com/viant/datly/internal/testharness/sqlite"
 	rhandler "github.com/viant/datly/runtime/handler"
 	"github.com/viant/datly/spec"
@@ -101,7 +102,7 @@ type qcBinder struct {
 	mode    string
 }
 
-func (b *qcBinder) Bind(_ context.Context, value any) error {
+func (b *qcBinder) Bind(_ context.Context, value any, options ...bindly.BindOption) error {
 	if h, ok := value.(*qcHook); ok {
 		h.mode = b.mode
 		h.input = b.journal.input

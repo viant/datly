@@ -91,7 +91,7 @@ type trackingCapabilityBinder struct {
 	lookups []xhandler.ValueKey
 }
 
-func (*trackingCapabilityBinder) Bind(context.Context, any) error {
+func (*trackingCapabilityBinder) Bind(context.Context, any, ...bindly.BindOption) error {
 	return nil
 }
 

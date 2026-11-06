@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"reflect"
 
+	"github.com/viant/mcp-protocol/schema/fieldname"
+
 	"github.com/viant/datly/gateway/openapi/openapi3"
 	"github.com/viant/datly/internal/inputvisibility"
 	xshape "github.com/viant/x/shape"
@@ -24,6 +26,10 @@ func (b *schemaBuilder) object(key schemaKey) (*openapi3.Schema, error) {
 		return nil, err
 	}
 	identity := t.PkgPath() + ":" + expression
+	metadataKey := ""
+	if key.representation != nil {
+		metadataKey = key.representation.Signature()
+	}
 	if previous := b.identities[identity]; previous != nil && previous != t {
 		return nil, fmt.Errorf("schema identity collision for %s", t)
 	}
@@ -32,7 +38,7 @@ func (b *schemaBuilder) object(key schemaKey) (*openapi3.Schema, error) {
 	if input {
 		mode = "Input"
 	}
-	name := fmt.Sprintf("%s_%x", mode, sha256.Sum256([]byte(b.scope+":"+key.path+":"+t.PkgPath()+":"+expression)))
+	name := fmt.Sprintf("%s_%x", mode, sha256.Sum256([]byte(b.scope+":"+key.path+":"+t.PkgPath()+":"+expression+metadataKey)))
 	if owner, ok := b.owners[name]; ok && owner != key {
 		return nil, fmt.Errorf("schema identity collision for %s", t)
 	}
@@ -43,13 +49,18 @@ func (b *schemaBuilder) object(key schemaKey) (*openapi3.Schema, error) {
 	b.schemas[name] = s
 	s.Type = "object"
 	s.Properties = openapi3.Schemas{}
-	fields, err := xshape.Linked(t).JSONFields()
+	var fields []xshape.JSONField
+	if key.representation != nil {
+		fields, err = key.representation.JSONFields()
+	} else {
+		fields, err = xshape.Linked(t).JSONFields()
+	}
 	if err != nil {
 		return nil, err
 	}
 	for _, projected := range fields {
 		field := projected.Field
-		if input && inputvisibility.Internal(t, field.Index) {
+		if input && inputvisibility.InternalRepresentation(t, field.Index, key.representation) {
 			continue
 		}
 		if field.Tag.Get("setMarker") == "true" {
@@ -65,7 +76,11 @@ func (b *schemaBuilder) object(key schemaKey) (*openapi3.Schema, error) {
 		}
 		b.path += field.Name
 		annotation := b.docs.StructField(b.path, field.StructField())
-		property, err := b.schema(field.ReflectedType, input)
+		var child *xshape.Representation
+		if key.representation != nil {
+			child = key.representation.FieldShapeByIndex(field.Index)
+		}
+		property, err := b.schemaRepresentation(field.ReflectedType, input, child)
 		b.path = parentPath
 		if err != nil {
 			return nil, fmt.Errorf("%s.%s: %w", t, field.Name, err)
@@ -82,8 +97,12 @@ func (b *schemaBuilder) object(key schemaKey) (*openapi3.Schema, error) {
 				property.Example = annotation.Example
 			}
 		}
+		property, err = b.fieldEnum(property, field.StructField(), projected.Quoted)
+		if err != nil {
+			return nil, err
+		}
 		s.Properties[name] = property
-		if !input && !projected.MayOmit() {
+		if fieldname.Required(field.StructField()) {
 			s.Required = append(s.Required, name)
 		}
 	}

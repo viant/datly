@@ -158,35 +158,14 @@ func (h *Handler) serveHTTP(writer stdhttp.ResponseWriter, req *stdhttp.Request)
 			return
 		}
 	}
-	// Reject an unsupported representation before executing a reader or writer.
-	// In particular, a JSON-only public projection must not be bypassed by
-	// requesting CSV/XML/XLSX after a mutation has already been committed.
-	contract, formatErr := h.runtime.ResolveOutputByRoute(req.Context(), req.Method, escapedPath)
-	if formatErr != nil {
-		h.writeOutputError(req.Context(), writer, formatErr)
-		return
-	}
-	if !contract.TransportReady() {
-		if source, ok := contract.FormatSelector(); ok && source.Kind == "header" {
-			writer.Header().Add("Vary", "Accept")
-		}
-		format, selectedErr := h.outputFormatWithDefault(req, contract)
-		if selectedErr == nil && format != "json" && format != "tabular" {
-			_, selectedErr = contract.Wire(format)
-		}
-		if selectedErr != nil {
-			code := xresponse.ErrorStatusCode(selectedErr, stdhttp.StatusNotAcceptable)
-			message := stdhttp.StatusText(code)
-			writeJSON(writer, code, xresponse.Status{Status: "error", Message: message, Error: message})
-			return
-		}
-	}
+
 	started := time.Now()
 	ctx := req.Context()
 	if !internallog.HTTPObserved(ctx) {
 		ctx = context.WithValue(ctx, xexec.ContextKey, xexec.NewContext(req.Method, req.RequestURI, req.Header, h.version))
 	}
 	ctx = dexec.CaptureOutputSelection(ctx)
+	ctx = dexec.CaptureContracts(ctx)
 	asyncRoute := h.asyncRoute(req)
 	var asyncService AsyncService
 	if asyncRoute != nil {
@@ -227,6 +206,41 @@ func (h *Handler) serveHTTP(writer stdhttp.ResponseWriter, req *stdhttp.Request)
 			h.logger.Error("failed to clean up HTTP request scope", err)
 		}
 	}()
+	target, found := h.runtime.ComponentTargetByMethodPath(req.Method, escapedPath)
+	if !found {
+		writeJSON(writer, stdhttp.StatusNotFound, xresponse.Status{Status: "error", Message: "not found"})
+		return
+	}
+	effective, contractErr := h.runtime.ResolveContract(ctx, target, requestScope)
+	if contractErr != nil {
+		code := xresponse.ErrorStatusCode(contractErr, stdhttp.StatusInternalServerError)
+		writeJSON(writer, code, xresponse.Status{Status: "error", Message: dexec.ErrorMessage(contractErr, code)})
+		return
+	}
+	dexec.PublishContract(ctx, target, effective)
+	// Reject an unsupported representation before executing a reader or writer.
+	// In particular, a JSON-only public projection must not be bypassed by
+	// requesting CSV/XML/XLSX after a mutation has already been committed.
+	contract, formatErr := h.runtime.ResolveOutputByRoute(ctx, req.Method, escapedPath)
+	if formatErr != nil {
+		h.writeOutputError(req.Context(), writer, formatErr)
+		return
+	}
+	if !contract.TransportReady() {
+		if source, ok := contract.FormatSelector(); ok && source.Kind == "header" {
+			writer.Header().Add("Vary", "Accept")
+		}
+		format, selectedErr := h.outputFormatWithDefault(req, contract)
+		if selectedErr == nil && format != "json" && format != "tabular" {
+			_, selectedErr = contract.Wire(format)
+		}
+		if selectedErr != nil {
+			code := xresponse.ErrorStatusCode(selectedErr, stdhttp.StatusNotAcceptable)
+			message := stdhttp.StatusText(code)
+			writeJSON(writer, code, xresponse.Status{Status: "error", Message: message, Error: message})
+			return
+		}
+	}
 	var actual any
 	var execErr error
 	if asyncRoute != nil {

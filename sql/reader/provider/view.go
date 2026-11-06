@@ -175,9 +175,12 @@ type scopeBinder struct {
 	scope locator.Scope
 }
 
-func (b scopeBinder) Bind(ctx context.Context, target any) error {
+func (b scopeBinder) Bind(ctx context.Context, target any, options ...bindly.BindOption) error {
 	if b.scope == nil {
 		return fmt.Errorf("binding scope is required")
+	}
+	if len(options) != 0 {
+		return fmt.Errorf("view binding uses its active locator scope; Bind options are unsupported")
 	}
 	return b.scope.BindTarget(ctx, target)
 }

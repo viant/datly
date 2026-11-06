@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/viant/bindly"
 	rhandler "github.com/viant/datly/runtime/handler"
 	"github.com/viant/datly/spec"
 	h "github.com/viant/xdatly/handler"
@@ -76,7 +77,7 @@ type keylessAuxiliaryBinder struct {
 	probe *keylessAuxiliaryProbe
 }
 
-func (binder *keylessAuxiliaryBinder) Bind(_ context.Context, value any) error {
+func (binder *keylessAuxiliaryBinder) Bind(_ context.Context, value any, options ...bindly.BindOption) error {
 	hook, ok := value.(*keylessAuxiliaryHook)
 	if !ok {
 		binder.t.Fatalf("unexpected binding %T", value)

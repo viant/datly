@@ -169,7 +169,7 @@ func TestBootstrapTransportDocumentAndHTTP(t *testing.T) {
 	require.Len(t, response.Properties["detail"].AnyOf, 2)
 	require.NotContains(t, response.Properties, "Internal")
 	require.NotContains(t, response.Properties, "Has")
-	require.Contains(t, response.Required, "detail")
+	require.NotContains(t, response.Required, "detail")
 	require.NotContains(t, response.Required, "tags")
 	require.NotNil(t, response.Properties["tags"].AdditionalProperties)
 	require.Equal(t, "date-time", response.Properties["at"].Format)

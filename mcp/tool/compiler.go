@@ -177,7 +177,7 @@ func (c *Compiler) Compile(input Input) (*Plan, error) {
 		if argument.customJSONBody {
 			format = ""
 		}
-		property, err := (&schemaProjector{docs: owner, schemas: argument.wireSchemas, wireType: argument.wireType, caseFormat: format}).argument(sourceType, argument.path, argument.publicName, argument.wireSchema)
+		property, err := (&schemaProjector{field: argument.schemaField, representation: argument.representation, docs: owner, schemas: argument.wireSchemas, wireType: argument.wireType, caseFormat: format}).argument(sourceType, argument.path, argument.publicName, argument.wireSchema)
 		if err != nil {
 			return nil, fmt.Errorf("compile MCP tool %q argument %q: %w", name, argument.publicName, err)
 		}
@@ -238,6 +238,7 @@ func (c *Compiler) Compile(input Input) (*Plan, error) {
 		return nil, fmt.Errorf("compile MCP tool %q output schema: %w", name, outputErr)
 	}
 	return &Plan{
+		compilerInput: input, strictArguments: c.strictArguments,
 		metadata: schema.Tool{Meta: metadata, Name: name, Description: &description, InputSchema: inputSchema, OutputSchema: outputSchema},
 		target:   exec.ComponentTarget{Component: input.Component, Route: input.Contract.Route()},
 		input:    input.Contract, args: arguments, binding: binding, caseFormat: input.CaseFormat,
@@ -297,17 +298,13 @@ func (c *Compiler) compileExternal(inputField registry.InputField, field reflect
 		return Argument{}, false, fmt.Errorf("field %q has no canonical public name", inputField.Path())
 	}
 	argument := Argument{
-		publicName: publicName, aliases: aliases, path: inputField.Path(),
+		representation: inputField.Representation(),
+		publicName:     publicName, aliases: aliases, path: inputField.Path(),
 		sourceKind: strings.ToLower(strings.TrimSpace(binding.Location.Kind)), sourceName: binding.Location.In,
 		sourceType: inputField.SourceType(), destinationType: inputField.DestinationType(),
 		wireSchema: inputField.WireSchema(), wireSchemas: inputField.WireSchemas(), wireType: inputField.WireType(), required: required, bodyNullPolicy: binding.BodyNullPolicy,
 	}
-	// Match original discovery tags independently of runtime requiredness.
-	// A required binding still rejects omission at invocation; it must not
-	// override legacy optional query fields or whole-body member tags.
-	sourceTag := string(field.Tag)
 	if param, ok := binding.Extension.(*spec.Parameter); ok && param != nil {
-		sourceTag = param.Tag
 		// Fields accepts HTTP-style CSV strings as well as native MCP arrays.
 		// Use canonical selector metadata: relation-specific public names need not
 		// be named Fields and unrelated string lists may contain literal commas.
@@ -315,18 +312,14 @@ func (c *Compiler) compileExternal(inputField registry.InputField, field reflect
 		argument.description = strings.TrimSpace(param.Description)
 		argument.example = strings.TrimSpace(param.Example)
 	}
-	argument.schemaRequired = legacyNamedSchemaRequired(argument.sourceKind, binding.URI != "", inputField.DestinationType(), sourceTag)
-	// Named, non-nullable body members with an explicit required binding must
-	// advertise the same omission contract that invocation enforces. Preserve
-	// legacy pointer/slice and query discovery semantics.
-	if argument.sourceKind == "body" && argument.sourceName != "" && required {
-		kind := inputField.DestinationType().Kind()
-		if kind != reflect.Ptr && kind != reflect.Slice && kind != reflect.Map && kind != reflect.Interface {
-			argument.schemaRequired = true
-		}
-	}
-	if memberRequired, associated := wholeBodyMemberSchemaRequired(argument); associated {
+	// Public requiredness follows authored binding and field requirements.
+	// Path identity remains required regardless of the Go value's nullability.
+	argument.schemaRequired = required || argument.sourceKind == "path" || fieldname.Required(field)
+	if memberRequired, associated := wholeBodyMemberSchemaRequired(argument); associated && !required {
 		argument.schemaRequired = memberRequired
+	}
+	if effective, ok := inputField.EffectiveRequired(); ok {
+		argument.schemaRequired = effective
 	}
 	return argument, true, nil
 }
@@ -383,24 +376,4 @@ func validateToolName(name string) error {
 		return fmt.Errorf("MCP tool name %q contains unsupported character %q", name, char)
 	}
 	return nil
-}
-
-// legacyNamedSchemaRequired reproduces the original adapter's synthetic tag
-// before asking its existing reflector for advertised requiredness. In
-// particular, a URI-associated pointer is not made required by json:"" alone.
-func legacyNamedSchemaRequired(kind string, uriAssociated bool, typ reflect.Type, sourceTag string) bool {
-	if typ == nil {
-		return false
-	}
-	force := kind == "path" && uriAssociated
-	tag := `json:",omitempty"`
-	if force {
-		tag = `json:""`
-	}
-	if !force && (typ.Kind() == reflect.Slice || kind == "query" || kind == "form" || strings.Contains(sourceTag, "optional") || strings.Contains(sourceTag, `required:"false"`)) {
-		tag += ` optional:"true"`
-	}
-	projected := reflect.StructOf([]reflect.StructField{{Name: "Value", Type: typ, Tag: reflect.StructTag(tag)}})
-	_, required := schema.StructToProperties(projected)
-	return len(required) > 0
 }

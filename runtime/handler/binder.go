@@ -18,8 +18,13 @@ func NewBinder(injector *bindly.Injector, input any) *Binder {
 	return &Binder{injector: injector, input: input}
 }
 
-func (b *Binder) Bind(ctx context.Context, target any) error {
-	return b.injector.Bind(ctx, target, bindly.WithSource(b.input))
+func (b *Binder) Bind(ctx context.Context, target any, options ...bindly.BindOption) error {
+	if len(options) == 0 {
+		return b.injector.Bind(ctx, target, bindly.WithSource(b.input))
+	}
+	// Keep the canonical input as the default source. Explicit options have
+	// the same last-option-wins semantics as the native Bindly call.
+	return b.injector.Bind(ctx, target, append([]bindly.BindOption{bindly.WithSource(b.input)}, options...)...)
 }
 
 func (b *Binder) Lookup(ctx context.Context, key xhandler.ValueKey) (any, bool, error) {

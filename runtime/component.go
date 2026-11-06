@@ -409,6 +409,26 @@ func (r *Runtime) invokeComponent(ctx context.Context, request dexec.ComponentRe
 	if err != nil {
 		return nil, err
 	}
+	var effectiveContract *dexec.EffectiveContract
+	if selected, ok := dexec.SelectedContract(ctx, target); ok && len(stack) == 0 {
+		effectiveContract = &selected
+	} else {
+		effectiveContract, err = r.resolveContract(ctx, target, effectiveScope, false)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if effectiveContract.Input != inputRoute.Type() || effectiveContract.InputRepresentation != nil {
+		if effectiveContract.InputRepresentation != nil {
+			inputRoute, err = inputRoute.WithInputRepresentation(effectiveContract.InputRepresentation)
+		} else {
+			inputRoute, err = inputRoute.WithEffectiveInput(effectiveContract.Input)
+		}
+		if err != nil {
+			return nil, err
+		}
+	}
+	dexec.PublishContract(ctx, target, effectiveContract)
 	if registered.Component.Settings != nil && registered.Component.Settings.IgnoreEmptyQueryParameters != nil {
 		ctx = requestprovider.WithQueryPolicy(ctx, requestprovider.QueryPolicy{IgnoreEmptyParameters: *registered.Component.Settings.IgnoreEmptyQueryParameters})
 	}

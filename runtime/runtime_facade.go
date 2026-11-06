@@ -38,6 +38,7 @@ type Runtime struct {
 	relatedExposure       sync.Map
 	relatedMetadata       sync.Map
 	outputCapabilityPlans sync.Map
+	contractPlans         sync.Map
 	canonicalConstants    map[string]locator.Provider
 	lazyConstants         sync.Map
 	invoker               *handlerengine.Engine

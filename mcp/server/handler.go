@@ -141,9 +141,26 @@ func (h *Handler) ListTools(ctx context.Context, request *jsonrpc.TypedRequest[*
 	}
 	result, protocolErr := h.DefaultHandler.ListTools(ctx, request)
 	if result != nil {
+		result.TtlMs = h.toolsListTtlMs
 		visible := result.Tools[:0]
 		for _, entry := range result.Tools {
 			if authorizeCatalogTool(ctx, h.service, entry.Name, "discover") == nil && authorizeCatalogTool(ctx, h.service, entry.Name, "describe") == nil {
+				if describer, ok := h.service.(interface {
+					DescribeTool(context.Context, schema.Tool) (schema.Tool, bool, error)
+				}); ok {
+					var err error
+					name := entry.Name
+					var dynamic bool
+					entry, dynamic, err = describer.DescribeTool(ctx, entry)
+					if err != nil {
+						log.Printf("MCP contract description failed tool=%q error=%q", name, err)
+						return nil, jsonrpc.NewInternalError("MCP tool description is unavailable", nil)
+					}
+					// Caller-dependent metadata is not a retained client lease.
+					if dynamic {
+						result.TtlMs = 0
+					}
+				}
 				visible = append(visible, entry)
 			}
 		}
@@ -151,7 +168,7 @@ func (h *Handler) ListTools(ctx context.Context, request *jsonrpc.TypedRequest[*
 		// Catalog visibility is filtered above for this caller. The producer grants
 		// only a private metadata lease; tool execution retains its authorization.
 		result.CacheScope = schema.ListToolsResultCacheScopePrivate
-		result.TtlMs = h.toolsListTtlMs
+
 		sort.SliceStable(result.Tools, func(i, j int) bool { return result.Tools[i].Name < result.Tools[j].Name })
 	}
 	return result, protocolErr

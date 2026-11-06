@@ -116,7 +116,7 @@ func TestManagerAsyncReloadPinsAcceptedWorkSQLite(t *testing.T) {
 	// The already accepted execution stays in generation 1; pending/new work uses
 	// generation 2, including a submitter carrying an older HTTP/MCP context pin.
 	fresh := f.schedule(t, pinned)
-	require.Contains(t, fresh.Plan.SQL, "name AS value")
+	require.Contains(t, fresh.Plan.Query, "name AS value")
 	result, err := f.manager.HandleJob(pinned, f.event(pending))
 	require.NoError(t, err)
 	encoded, err := json.Marshal(result)

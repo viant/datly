@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/viant/bindly"
 	rhandler "github.com/viant/datly/runtime/handler"
 	"github.com/viant/datly/runtime/handler/writer"
 	"github.com/viant/datly/spec"
@@ -44,7 +45,7 @@ func (d *physicalRoleDML) Insert(table string, v any) error {
 
 type physicalRoleBinder struct{ data *physicalRoleDML }
 
-func (*physicalRoleBinder) Bind(context.Context, any) error { return nil }
+func (*physicalRoleBinder) Bind(context.Context, any, ...bindly.BindOption) error { return nil }
 func (b *physicalRoleBinder) Lookup(_ context.Context, k xhandler.ValueKey) (any, bool, error) {
 	switch k {
 	case xhandler.FrameworkValidatorKey:

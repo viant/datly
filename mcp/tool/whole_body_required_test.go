@@ -6,7 +6,9 @@ import (
 	"testing"
 )
 
-type singleSliceBody struct{ Values []int }
+type singleSliceBody struct {
+	Values []int `required:"true"`
+}
 
 func (*singleSliceBody) UnmarshalJSON([]byte) error { return nil }
 
@@ -17,7 +19,7 @@ type optionalSliceBody struct {
 func (*optionalSliceBody) UnmarshalJSON([]byte) error { return nil }
 
 type renamedSliceBody struct {
-	Values []int `json:"values"`
+	Values []int `json:"values" required:"true"`
 }
 
 func (*renamedSliceBody) UnmarshalJSON([]byte) error { return nil }

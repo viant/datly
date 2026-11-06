@@ -82,6 +82,19 @@ func (s *Snapshot) addView(path string, view *spec.View, active map[*spec.View]b
 // StructField is called by existing schema projectors with their canonical field
 // and path. SQLX and Datly tag owners supply aliases and explicit annotations.
 func (s *Snapshot) StructField(path string, field reflect.StructField) Annotation {
+	result := s.structField(path, field)
+	// Effective contract annotations override inherited/source documentation,
+	// including an explicitly empty replacement.
+	if value, ok := field.Tag.Lookup("description"); ok {
+		result.Description = value
+	}
+	if value, ok := field.Tag.Lookup("example"); ok {
+		result.Example = value
+	}
+	return result
+}
+
+func (s *Snapshot) structField(path string, field reflect.StructField) Annotation {
 	mapping := sqlxio.ParseTag(field.Tag)
 	column := mapping.Name()
 	if column == "" {

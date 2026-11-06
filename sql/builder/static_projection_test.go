@@ -7,6 +7,7 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/viant/bindly"
 	"github.com/viant/datly/data"
 	readerpredicate "github.com/viant/datly/runtime/predicate/velty"
 	"github.com/viant/datly/spec"
@@ -27,7 +28,7 @@ func (e *staticCountingEvaluator) Evaluate(ctx context.Context, in sqltemplate.I
 
 type staticTestBinder struct{ input any }
 
-func (b staticTestBinder) Bind(context.Context, any) error { return nil }
+func (b staticTestBinder) Bind(context.Context, any, ...bindly.BindOption) error { return nil }
 func (b staticTestBinder) Lookup(_ context.Context, key xhandler.ValueKey) (any, bool, error) {
 	return b.input, key == xhandler.InputKey, nil
 }

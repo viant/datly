@@ -102,7 +102,7 @@ type countedSelectorBinder struct {
 	values xstate.Selectors
 }
 
-func (*countedSelectorBinder) Bind(context.Context, any) error { return nil }
+func (*countedSelectorBinder) Bind(context.Context, any, ...bindly.BindOption) error { return nil }
 func (b *countedSelectorBinder) Lookup(context.Context, xhandler.ValueKey) (any, bool, error) {
 	b.calls++
 	return b.values, len(b.values) > 0, nil

@@ -59,7 +59,14 @@ func (c *Compiler) CompileBindings() ([]bindly.BindingSpec, error) {
 	if err != nil {
 		return nil, err
 	}
-	return buildBindingSpecs(c.publicComponent, input.InputType, codecs, input.TypeLookup)
+	bindings, err := buildBindingSpecs(c.publicComponent, input.InputType, codecs, input.TypeLookup)
+	if err != nil {
+		return nil, err
+	}
+	if err = c.configureJSONDecoder(bindings); err != nil {
+		return nil, err
+	}
+	return bindings, nil
 }
 
 func (c *Compiler) Compile() (*Result, error) { return c.compile(false) }

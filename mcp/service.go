@@ -61,6 +61,7 @@ type ComponentRouteResolver interface {
 }
 
 type Service struct {
+	contractResolver         exec.ContractResolver
 	catalog                  *Catalog
 	registry                 *mcpserver.Registry
 	resources                *mcpresource.Handler

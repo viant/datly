@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/viant/bindly"
 	"github.com/viant/bindly/locator"
 	"github.com/viant/datly/bootstrap"
 	"github.com/viant/datly/data"
@@ -100,7 +101,7 @@ type boundInputBinder struct {
 	input any
 }
 
-func (b boundInputBinder) Bind(context.Context, any) error { return nil }
+func (b boundInputBinder) Bind(context.Context, any, ...bindly.BindOption) error { return nil }
 
 func (b boundInputBinder) Lookup(_ context.Context, key xhandler.ValueKey) (any, bool, error) {
 	if key != xhandler.InputKey {

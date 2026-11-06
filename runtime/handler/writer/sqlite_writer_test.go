@@ -16,6 +16,7 @@ import (
 	sqldml "github.com/viant/datly/sql/dml"
 	xhandler "github.com/viant/xdatly/handler"
 
+	"github.com/viant/bindly"
 	_ "github.com/viant/sqlx/metadata/product/sqlite"
 )
 
@@ -133,7 +134,7 @@ func (*sqReplaceHooks) Init(_ context.Context, entity *sqParent, state xhandler.
 
 type sqBinder struct{ data *sqldml.Data }
 
-func (b *sqBinder) Bind(context.Context, any) error { return nil }
+func (b *sqBinder) Bind(context.Context, any, ...bindly.BindOption) error { return nil }
 func (b *sqBinder) Lookup(_ context.Context, key xhandler.ValueKey) (any, bool, error) {
 	switch key {
 	case xhandler.FrameworkValidatorKey:

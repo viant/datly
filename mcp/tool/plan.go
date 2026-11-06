@@ -15,10 +15,13 @@ import (
 	"github.com/viant/datly/spec"
 	"github.com/viant/mcp-protocol/schema"
 	"github.com/viant/mcp-protocol/schema/fieldname"
+	xshape "github.com/viant/x/shape"
 )
 
 // Argument is an immutable public projection of one canonical input field.
 type Argument struct {
+	schemaField      *xshape.JSONField
+	representation   *xshape.Representation
 	documentation    *docs.Snapshot
 	publicName       string
 	aliases          []string
@@ -62,12 +65,14 @@ func (a Argument) Example() string     { return a.example }
 
 // Plan is one immutable exact-route MCP tool plan.
 type Plan struct {
-	metadata   schema.Tool
-	target     exec.ComponentTarget
-	input      *registry.RouteInputContract
-	args       []Argument
-	binding    *mcpinput.Plan
-	caseFormat string
+	compilerInput   Input
+	strictArguments bool
+	metadata        schema.Tool
+	target          exec.ComponentTarget
+	input           *registry.RouteInputContract
+	args            []Argument
+	binding         *mcpinput.Plan
+	caseFormat      string
 }
 
 func (p *Plan) Metadata() schema.Tool {
@@ -129,14 +134,14 @@ func (p *Plan) scope(ctx context.Context, arguments map[string]interface{}) (*re
 		if argument.customJSONBody {
 			format = ""
 		}
-		names, e := fieldname.HasNames(argument.sourceType, memberNameVisibility(format))
+		names, e := fieldname.HasNames(argument.sourceType, representationVisibility(argument.representation, format))
 		if e != nil {
 			return nil, e
 		}
 		if !names {
 			continue
 		}
-		value, e = fieldname.Normalize(argument.sourceType, value, memberNameVisibility(format))
+		value, e = fieldname.Normalize(argument.sourceType, value, representationVisibility(argument.representation, format))
 		if e != nil {
 			return nil, fmt.Errorf("normalize MCP argument %q: %w", argument.publicName, e)
 		}

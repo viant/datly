@@ -9,10 +9,8 @@ import (
 	"github.com/viant/datly/spec"
 )
 
-// Legacy discovery leaves these pointer and slice fields optional, even when
-// runtime binding requires them. Preserve omission rejection and alias handling
-// independently of the advertised required list.
-func TestCompilerSeparatesLegacyDiscoveryFromRuntimeRequiredness(t *testing.T) {
+// Authored requirements apply to nullable fields as well as scalar fields.
+func TestCompilerAdvertisesRuntimeRequiredness(t *testing.T) {
 	type input struct {
 		Value *string `json:"value,omitempty" mcp:"name=Value,aliases=value"`
 	}
@@ -38,7 +36,7 @@ func TestCompilerSeparatesLegacyDiscoveryFromRuntimeRequiredness(t *testing.T) {
 					t.Fatal(err)
 				}
 				metadata := plan.Metadata().InputSchema
-				if len(metadata.Required) != 0 || len(metadata.Properties) != 1 || metadata.Properties["Value"] == nil {
+				if !reflect.DeepEqual(metadata.Required, []string{"Value"}) || len(metadata.Properties) != 1 || metadata.Properties["Value"] == nil {
 					t.Fatalf("schema = %+v", metadata)
 				}
 				if _, err := plan.Scope(nil); err == nil {

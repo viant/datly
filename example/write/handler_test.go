@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/viant/bindly"
 	rhandler "github.com/viant/datly/runtime/handler"
 	xhandler "github.com/viant/xdatly/handler"
 	xresponse "github.com/viant/xdatly/response"
@@ -64,7 +65,7 @@ type handlerTestBinder struct {
 	data xhandler.Data
 }
 
-func (*handlerTestBinder) Bind(context.Context, any) error {
+func (*handlerTestBinder) Bind(context.Context, any, ...bindly.BindOption) error {
 	return nil
 }
 

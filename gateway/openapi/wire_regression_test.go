@@ -106,7 +106,7 @@ func TestCompiledOutputPlanControlsDocumentation(t *testing.T) {
 				require.NotContains(t, root.Properties, "detail")
 				require.NotContains(t, root.Required, "detail")
 			} else {
-				require.Contains(t, root.Required, "detail")
+				require.NotContains(t, root.Required, "detail")
 			}
 
 			rt, err := druntime.NewRuntime([]*registry.RegisteredComponent{entry})

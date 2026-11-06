@@ -9,6 +9,7 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/viant/bindly"
 	"github.com/viant/datly/internal/testharness/sqlite"
 	rhandler "github.com/viant/datly/runtime/handler"
 	"github.com/viant/datly/spec"
@@ -182,7 +183,7 @@ func (s *failingCapturedRegistrar) RegisterExecutionGuard(func(context.Context) 
 
 type failingCapturedBinder struct{ service *failingCapturedRegistrar }
 
-func (b *failingCapturedBinder) Bind(context.Context, any) error { return nil }
+func (b *failingCapturedBinder) Bind(context.Context, any, ...bindly.BindOption) error { return nil }
 func (b *failingCapturedBinder) Lookup(_ context.Context, key xhandler.ValueKey) (any, bool, error) {
 	if key == xhandler.DMLKey {
 		return b.service, true, nil

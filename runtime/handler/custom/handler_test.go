@@ -18,7 +18,7 @@ type testBinder struct {
 	input any
 }
 
-func (b *testBinder) Bind(context.Context, any) error {
+func (b *testBinder) Bind(context.Context, any, ...bindly.BindOption) error {
 	return nil
 }
 

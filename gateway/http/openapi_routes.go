@@ -3,7 +3,9 @@ package http
 import (
 	"context"
 	"fmt"
+	rcontract "github.com/viant/datly/runtime/contract"
 	"net/url"
+	"reflect"
 	"strings"
 
 	"github.com/viant/datly/gateway/openapi"
@@ -133,7 +135,34 @@ func (d *documentRoutes) compile(ctx context.Context, request openapi.Request, a
 	if err != nil {
 		return nil, err
 	}
-	result := &documentRoute{snapshot: snapshot, handler: handler}
+	// Keep the selected route slice detached from the aggregate's staging loop.
+	request.Routes = append([]spec.RouteRef{}, request.Routes...)
+	result := &documentRoute{snapshot: snapshot, handler: handler, request: request, options: options}
+	for _, entry := range request.Components {
+		selected := false
+		for _, route := range entry.Component.Routes {
+			for _, ref := range request.Routes {
+				if route.Method == ref.Method && route.Path == ref.Path {
+					selected = true
+				}
+			}
+		}
+		if !selected {
+			continue
+		}
+		for _, typ := range []reflect.Type{entry.Input.Type(), entry.OutputType} {
+			if typ == nil {
+				continue
+			}
+			plan, err := rcontract.New(typ, 0)
+			if err != nil {
+				return nil, err
+			}
+			if plan.Dynamic() {
+				result.dynamic = true
+			}
+		}
+	}
 	if access != nil {
 		result.access = *access
 	}

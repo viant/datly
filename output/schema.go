@@ -6,11 +6,14 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+
+	"github.com/viant/mcp-protocol/schema/fieldname"
 	"strings"
 	"time"
 
 	"github.com/francoispqt/gojay"
 	"github.com/viant/mcp-protocol/schema/jsonschema"
+	"github.com/viant/tagly/choice"
 	xshape "github.com/viant/x/shape"
 )
 
@@ -43,7 +46,7 @@ func (p *Plan) JSONSchema() (map[string]any, error) {
 		t = t.Elem()
 	}
 	b := jsonSchemaBuilder{plan: p, active: map[reflect.Type]string{}}
-	return b.value(t, "#", "")
+	return b.value(t, "#", "", representationForType(p.representation, t))
 }
 
 type jsonSchemaBuilder struct {
@@ -51,9 +54,14 @@ type jsonSchemaBuilder struct {
 	active map[reflect.Type]string
 }
 
-func (b *jsonSchemaBuilder) value(t reflect.Type, ref, path string) (map[string]any, error) {
+func (b *jsonSchemaBuilder) value(t reflect.Type, ref, path string, representations ...*xshape.Representation) (map[string]any, error) {
+	representation := representationForType(firstRepresentation(representations), t)
+	var child *xshape.Representation
+	if representation != nil {
+		child = representation.Elem()
+	}
 	if t.Kind() == reflect.Pointer {
-		item, err := b.value(t.Elem(), ref, path)
+		item, err := b.value(t.Elem(), ref, path, child)
 		return nullableJSONSchema(item), err
 	}
 	if t == reflect.TypeFor[time.Time]() {
@@ -77,7 +85,7 @@ func (b *jsonSchemaBuilder) value(t reflect.Type, ref, path string) (map[string]
 	result := map[string]any{}
 	switch t.Kind() {
 	case reflect.Struct:
-		fields, err := b.plan.jsonSchemaFields(t, path, false, map[reflect.Type]bool{})
+		fields, err := b.plan.jsonSchemaFields(t, path, false, map[reflect.Type]bool{}, representation)
 		if err != nil {
 			return nil, err
 		}
@@ -89,7 +97,7 @@ func (b *jsonSchemaBuilder) value(t reflect.Type, ref, path string) (map[string]
 			}
 			item, declared, err := jsonschema.ScalarWireSchema(field.field)
 			if !declared {
-				item, err = b.value(field.field.Type, ref+"/properties/"+schemaPointerToken(field.name), field.path)
+				item, err = b.value(field.field.Type, ref+"/properties/"+schemaPointerToken(field.name), field.path, field.representation)
 			}
 			if err != nil {
 				return nil, err
@@ -116,6 +124,29 @@ func (b *jsonSchemaBuilder) value(t reflect.Type, ref, path string) (map[string]
 			if description := field.field.Tag.Get("description"); description != "" {
 				item["description"] = description
 			}
+			if example, ok := field.field.Tag.Lookup("example"); ok {
+				item["examples"] = []any{example}
+			}
+			constraint, err := choice.Parse(field.field.Tag, field.field.Type)
+			if err != nil {
+				return nil, err
+			}
+			if constraint != nil {
+				values := constraint.WireValues()
+				compatible := item["type"] == constraint.JSONType()
+				if types, ok := item["type"].([]string); ok {
+					for _, typ := range types {
+						compatible = compatible || typ == constraint.JSONType()
+					}
+				}
+				if field.quoted || !compatible {
+					return nil, fmt.Errorf("field %s choice conflicts with JSON wire type", field.name)
+				}
+				if field.nullable || field.field.Type.Kind() == reflect.Pointer {
+					values = append(values, nil)
+				}
+				item["enum"] = values
+			}
 			properties[field.name] = item
 			if field.required && !b.plan.selectableRowPath(path) {
 				required = append(required, field.name)
@@ -129,7 +160,7 @@ func (b *jsonSchemaBuilder) value(t reflect.Type, ref, path string) (map[string]
 		if !b.plan.transformedJSON() && t.Kind() == reflect.Slice && t.Elem().Kind() == reflect.Uint8 && !hasJSONSchemaMarshaler(t.Elem()) {
 			return nullableJSONSchema(map[string]any{"type": "string", "format": "byte"}), nil
 		}
-		item, err := b.value(t.Elem(), ref+"/items", path)
+		item, err := b.value(t.Elem(), ref+"/items", path, child)
 		if err != nil {
 			return nil, err
 		}
@@ -140,7 +171,7 @@ func (b *jsonSchemaBuilder) value(t reflect.Type, ref, path string) (map[string]
 			result = nullableJSONSchema(result)
 		}
 	case reflect.Map:
-		item, err := b.value(t.Elem(), ref+"/additionalProperties", path)
+		item, err := b.value(t.Elem(), ref+"/additionalProperties", path, child)
 		if err != nil {
 			return nil, err
 		}
@@ -215,15 +246,28 @@ func schemaPointerToken(name string) string {
 
 // Standard JSON and transformed JSON have different embedding and tag rules.
 // Standard field dominance remains owned by x/shape, just as in Structology.
-func (p *Plan) standardSchemaFields(t reflect.Type, path string) ([]jsonSchemaField, error) {
-	fields, err := xshape.Linked(t).JSONFields()
+func (p *Plan) standardSchemaFields(t reflect.Type, path string, representations ...*xshape.Representation) ([]jsonSchemaField, error) {
+	representation := representationForType(firstRepresentation(representations), t)
+	var fields []xshape.JSONField
+	var err error
+	if representation != nil {
+		fields, err = representation.JSONFields()
+	} else {
+		fields, err = xshape.Linked(t).JSONFields()
+	}
 	if err != nil {
 		return nil, err
 	}
 	result := make([]jsonSchemaField, 0, len(fields))
 	for _, field := range fields {
-		result = append(result, jsonSchemaField{field: field.Field.StructField(), name: field.Name,
-			path: schemaFieldPath(path, field.Field.Name), required: !field.MayOmit(), quoted: field.Quoted})
+		var child *xshape.Representation
+		canonicalName := field.Field.Name
+		if representation != nil {
+			child = representation.FieldShapeByIndex(field.Field.Index)
+			canonicalName = t.FieldByIndex(field.Field.Index).Name
+		}
+		result = append(result, jsonSchemaField{representation: child, field: field.Field.StructField(), name: field.Name,
+			path: schemaFieldPath(path, canonicalName), required: fieldname.Required(field.Field.StructField()), quoted: field.Quoted})
 	}
 	return result, nil
 }

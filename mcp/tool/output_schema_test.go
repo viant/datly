@@ -58,5 +58,5 @@ func TestOutputSchemaPreservesNumericNames(t *testing.T) {
 	require.Len(t, result.Properties, 2)
 	require.Contains(t, result.Properties, "sampleSeen1Day")
 	require.Contains(t, result.Properties, "sampleSeen7Day")
-	require.ElementsMatch(t, []string{"sampleSeen1Day", "sampleSeen7Day"}, result.Required)
+	require.Empty(t, result.Required)
 }

@@ -3,6 +3,7 @@ package reader_test
 import (
 	"context"
 	"github.com/stretchr/testify/require"
+	"github.com/viant/bindly"
 	"github.com/viant/datly/internal/testharness/sqlite"
 	"github.com/viant/datly/spec"
 	dsql "github.com/viant/datly/sql"
@@ -16,7 +17,7 @@ import (
 
 type sourceGuardBinder struct{ selectors xstate.Selectors }
 
-func (b sourceGuardBinder) Bind(context.Context, any) error { return nil }
+func (b sourceGuardBinder) Bind(context.Context, any, ...bindly.BindOption) error { return nil }
 func (b sourceGuardBinder) Lookup(_ context.Context, key xhandler.ValueKey) (any, bool, error) {
 	return b.selectors, key == xhandler.SelectorsKey, nil
 }

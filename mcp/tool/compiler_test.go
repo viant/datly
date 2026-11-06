@@ -29,7 +29,7 @@ type toolInput struct {
 }
 
 type anonymousPayload struct {
-	Name   string `json:"name"`
+	Name   string `json:"name" required:"true"`
 	Count  int    `json:"count,omitempty"`
 	Hidden string `json:"-"`
 }
@@ -76,7 +76,7 @@ func TestCompilerBuildsSchemaAndBindingFromRouteContract(t *testing.T) {
 	metadata := plan.Metadata()
 	if metadata.Name != "search.run" || metadata.Description == nil || *metadata.Description != "Run search" ||
 		metadata.InputSchema.Type != "object" || len(metadata.InputSchema.Properties) != 3 ||
-		len(metadata.InputSchema.Required) != 0 {
+		!reflect.DeepEqual(metadata.InputSchema.Required, []string{"Identifier", "search_terms"}) {
 		t.Fatalf("metadata = %+v", metadata)
 	}
 	search := metadata.InputSchema.Properties["search_terms"]
@@ -89,7 +89,7 @@ func TestCompilerBuildsSchemaAndBindingFromRouteContract(t *testing.T) {
 	payload := metadata.InputSchema.Properties["payload"]
 	properties, ok := payload["properties"].(map[string]interface{})
 	if !ok || properties["when"].(map[string]interface{})["format"] != "date-time" ||
-		properties["tags"].(map[string]interface{})["type"] != "array" || !reflect.DeepEqual(payload["required"], []string{"when", "tags"}) {
+		properties["tags"].(map[string]interface{})["type"] != "array" || payload["required"] != nil {
 		t.Fatalf("payload schema = %+v", payload)
 	}
 	args := plan.Arguments()

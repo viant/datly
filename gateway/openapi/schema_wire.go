@@ -5,12 +5,14 @@ import (
 	"fmt"
 	"reflect"
 
+	"github.com/viant/mcp-protocol/schema/fieldname"
+
 	"github.com/viant/datly/gateway/openapi/openapi3"
 	jsonmarshal "github.com/viant/structology/encoding/json/marshal"
 )
 
-// wire lowers serializer-owned facts to OpenAPI. No Go fields, tags, exclusions,
-// naming or omission policies are interpreted in this path.
+// wire lowers serializer-owned shapes and names to OpenAPI. Explicit field
+// requirements and choice annotations supplement those serializer facts.
 func (b *schemaBuilder) wire(shape *jsonmarshal.WireShape) (*openapi3.Schema, error) {
 	key := wireKey{shape: shape, path: b.path}
 	if existing := b.activeWires[shape]; existing != nil {
@@ -29,7 +31,11 @@ func (b *schemaBuilder) wire(shape *jsonmarshal.WireShape) (*openapi3.Schema, er
 	result := &openapi3.Schema{Nullable: shape.Nullable(), Format: shape.Format()}
 	switch shape.Kind() {
 	case reflect.Struct:
-		name := fmt.Sprintf("Wire_%x", sha256.Sum256([]byte(b.scope+":"+b.path+":"+shape.Source().String())))
+		metadataKey := ""
+		if representation := shape.Representation(); representation != nil {
+			metadataKey = representation.Signature()
+		}
+		name := fmt.Sprintf("Wire_%x", sha256.Sum256([]byte(b.scope+":"+b.path+":"+shape.Source().String()+metadataKey)))
 		ref := &openapi3.Schema{Ref: "#/components/schemas/" + name}
 		b.wires[key] = ref
 		b.activeWires[shape] = ref
@@ -60,8 +66,12 @@ func (b *schemaBuilder) wire(shape *jsonmarshal.WireShape) (*openapi3.Schema, er
 					property.Example = annotation.Example
 				}
 			}
+			property, err = b.fieldEnum(property, field.Field(), false)
+			if err != nil {
+				return nil, err
+			}
 			result.Properties[field.Name()] = property
-			if field.Required() {
+			if fieldname.Required(field.Field()) {
 				result.Required = append(result.Required, field.Name())
 			}
 		}

@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/viant/bindly"
 	rhandler "github.com/viant/datly/runtime/handler"
 	"github.com/viant/datly/spec"
 	h "github.com/viant/xdatly/handler"
@@ -88,7 +89,7 @@ type outputlessAuxiliaryBinder struct {
 	probe *outputlessAuxiliaryProbe
 }
 
-func (binder *outputlessAuxiliaryBinder) Bind(_ context.Context, value any) error {
+func (binder *outputlessAuxiliaryBinder) Bind(_ context.Context, value any, options ...bindly.BindOption) error {
 	hook, ok := value.(*outputlessAuxiliaryHook)
 	if !ok {
 		binder.t.Fatalf("unexpected binding %T", value)
@@ -277,7 +278,7 @@ func (*outputlessCollectionHook) Validate(context.Context, *outputlessCollection
 
 type outputlessCollectionBinder struct{}
 
-func (*outputlessCollectionBinder) Bind(context.Context, any) error { return nil }
+func (*outputlessCollectionBinder) Bind(context.Context, any, ...bindly.BindOption) error { return nil }
 func (*outputlessCollectionBinder) Lookup(context.Context, h.ValueKey) (any, bool, error) {
 	return nil, false, fmt.Errorf("unexpected physical capability")
 }

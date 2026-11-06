@@ -33,10 +33,13 @@ type Config struct {
 }
 
 type Request struct {
-	Target exec.ComponentTarget
-	Scope  *requestprovider.Scope
-	Method string
-	URI    string
+	// PrepareScope selects a caller-effective argument mapping after tool
+	// authorization. The transport retains ownership of closing the result.
+	PrepareScope func(*exec.EffectiveContract) (*requestprovider.Scope, error)
+	Target       exec.ComponentTarget
+	Scope        *requestprovider.Scope
+	Method       string
+	URI          string
 }
 
 type Invoker struct {
@@ -71,12 +74,31 @@ func (i *Invoker) Execute(ctx context.Context, request Request) (*Execution, *js
 		}
 	}
 	ctx = exec.CaptureOutputSelection(ctx)
+	ctx = exec.CaptureContracts(ctx)
 	execContext := newExecutionContext(ctx, request)
 	ctx = xexec.WithContext(ctx, execContext)
 	if _, ok := xmcp.LookupContext(ctx); !ok {
 		ctx = xmcp.WithContext(ctx, i.mcp)
 	}
 	scope := request.Scope
+	if request.PrepareScope != nil {
+		var effective *exec.EffectiveContract
+		if resolver, ok := i.component.(exec.ContractResolver); ok {
+			authScope := AuthorizationScope(ctx)
+			var err error
+			effective, err = resolver.ResolveContract(ctx, request.Target, authScope)
+			authScope.Close()
+			if err != nil {
+				return nil, jsonrpc.NewInvalidRequest("MCP contract authorization or preparation failed", nil)
+			}
+			exec.PublishContract(ctx, request.Target, effective)
+		}
+		var err error
+		scope, err = request.PrepareScope(effective)
+		if err != nil {
+			return nil, jsonrpc.NewInvalidParamsError(err.Error(), nil)
+		}
+	}
 	if header := authorizationHeader(ctx); header != "" {
 		scope = scope.WithHeader("Authorization", header)
 	}
@@ -137,6 +159,16 @@ func authorizationHeader(ctx context.Context) string {
 		return value
 	}
 	return "Bearer " + value
+}
+
+// AuthorizationScope uses the same verified protocol credential as tool calls.
+// Metadata has no business arguments; only the existing credential is projected.
+func AuthorizationScope(ctx context.Context) *requestprovider.Scope {
+	scope := requestprovider.NewValues()
+	if header := authorizationHeader(ctx); header != "" {
+		scope = scope.WithHeader("Authorization", header)
+	}
+	return scope
 }
 
 type requestContext struct {

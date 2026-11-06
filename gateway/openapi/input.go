@@ -28,6 +28,13 @@ func (b *inputBuilder) build(fields []registry.InputField, operation *openapi3.O
 	}
 	body := &bodyBuilder{}
 	for _, field := range fields {
+		internal, err := field.Internal()
+		if err != nil {
+			return err
+		}
+		if internal {
+			continue
+		}
 		binding := field.Binding()
 		kind := binding.Location.Kind
 		switch kind {
@@ -68,7 +75,7 @@ func (b *inputBuilder) build(fields []registry.InputField, operation *openapi3.O
 			b.schemas.docs = owned
 		}
 		b.schemas.path = field.Path()
-		schema, err := b.schemas.input(sourceType, kind)
+		schema, err := b.schemas.input(sourceType, kind, field.Representation())
 		b.schemas.path = ""
 		if err != nil {
 			return fmt.Errorf("input %s: %w", field.Path(), err)

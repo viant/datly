@@ -45,3 +45,40 @@ func TestGeneratedModuleHonorsSelectedModfile(t *testing.T) {
 		t.Fatalf("got %v", err)
 	}
 }
+
+func TestSourceGoCommandHonorsSelectedDependencyGraph(t *testing.T) {
+	root := t.TempDir()
+	original := "module github.com/viant/datly\ngo 1.25\n"
+	for name, content := range map[string]string{"go.mod": original, "go.sum": ""} {
+		if err := os.WriteFile(filepath.Join(root, name), []byte(content), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	selected := filepath.Join(t.TempDir(), "selected.mod")
+	if err := os.WriteFile(selected, []byte(original+"replace example.com/dependency => ../local\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("DATLY_TEST_XDATLY_DIR", "")
+	t.Setenv("DATLY_TEST_MODFILE", selected)
+	command := SourceGoCommand(t, root, "build", "./cmd/example")
+	var modfile string
+	for _, argument := range command.Args {
+		if strings.HasPrefix(argument, "-modfile=") {
+			modfile = strings.TrimPrefix(argument, "-modfile=")
+		}
+	}
+	if modfile == "" {
+		t.Fatal("source build discarded selected dependency graph")
+	}
+	content, err := os.ReadFile(modfile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(content), "example.com/dependency") {
+		t.Fatal("source build lost local dependency")
+	}
+	actual, err := os.ReadFile(filepath.Join(root, "go.mod"))
+	if err != nil || string(actual) != original {
+		t.Fatal("source module was modified")
+	}
+}

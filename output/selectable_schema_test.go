@@ -11,16 +11,16 @@ import (
 
 func TestSelectableRowSchemaPreservesTypesAndEnvelopeRequirements(t *testing.T) {
 	type row struct {
-		Publisher   string `json:"publisher"`
-		Genre       string `json:"genre"`
-		Impressions int    `json:"impressions"`
+		Publisher   string `json:"publisher" required:"true"`
+		Genre       string `json:"genre" required:"true"`
+		Impressions int    `json:"impressions" required:"true"`
 	}
 	type metadata struct {
-		Trace string `json:"trace"`
+		Trace string `json:"trace" required:"true"`
 	}
 	type envelope struct {
-		Data     []row    `json:"data"`
-		Metadata metadata `json:"metadata"`
+		Data     []row    `json:"data" required:"true"`
+		Metadata metadata `json:"metadata" required:"true"`
 	}
 	for _, kind := range []string{"static", "reader", "handler"} {
 		t.Run(kind, func(t *testing.T) {
