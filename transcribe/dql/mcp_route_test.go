@@ -69,3 +69,20 @@ func TestMCPRouteNewFormDiagnosticsAndGlobalCompatibility(t *testing.T) {
 	require.Equal(t, "docs/original.md", component.Routes[0].MCP[0].DescriptionPath)
 	require.Equal(t, "lu", component.Routes[0].MCP[0].CaseFormat)
 }
+
+func TestMCPRouteCreateAndPatchNamesRemainMethodSpecific(t *testing.T) {
+	component, err := parseComponentSource("example.com/app", "Campaign", `#setting($_ = $route('/campaigns','POST','PATCH'))
+#setting($_ = $mcp_route('POST:/campaigns','CreateCampaign','Create campaign'))
+#setting($_ = $mcp_route('PATCH:/campaigns','PatchCampaign','Patch campaign'))
+SELECT 1`)
+	require.NoError(t, err)
+	require.Len(t, component.Routes, 2)
+	names := map[string]string{"POST": "CreateCampaign", "PATCH": "PatchCampaign"}
+	for _, route := range component.Routes {
+		require.Equal(t, "/campaigns", route.Path)
+		require.Len(t, route.MCP, 1)
+		require.Equal(t, names[route.Method], route.MCP[0].Name)
+		delete(names, route.Method)
+	}
+	require.Empty(t, names)
+}
