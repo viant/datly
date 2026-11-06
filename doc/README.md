@@ -1,6 +1,6 @@
 # Datly 
 
-See [caller-dependent contracts](dynamic-contract-v0.md) for authorization-aware MCP/OpenAPI metadata and JSON encoding/decoding.
+See [caller-dependent contracts](dynamic-contract.md) for authorization-aware MCP/OpenAPI metadata and JSON encoding/decoding.
 
 Datly has been design as modern flexible ORM for rapid development. 
 Datly can operate in  **managed** , **autonomous** and **custom mode**.

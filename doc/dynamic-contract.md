@@ -1,4 +1,4 @@
-# Caller-dependent contracts in v0
+# Caller-dependent contracts
 
 The application API is the same as v1. A linked component input, output, domain
 view, or nested composite implements:
