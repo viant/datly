@@ -143,7 +143,7 @@ matched case-insensitively; use the spelling below. Quote textual values.
 
 | Setting | Accepted count | Consumed arguments / checks |
 | --- | --- | --- |
-| `route` | 1+ | absolute quoted URI, then quoted HTTP methods; default GET; one route only |
+| `route` | 1+ | absolute quoted URI, then quoted HTTP methods; default GET; repeat for additional routes; method/path pairs must be unique |
 | `api_key` | 2+ | header, value; further arguments ignored |
 | `connector` | 1+ | last argument is default connector |
 | `sequence_strategy` | exactly 1 | quoted `transient` or `reservation`; singleton, no modifiers; omitted selects native dialect default |
@@ -155,7 +155,9 @@ matched case-insensitively; use the spelling below. Quote textual values.
 | `file_prefix`, `handler_dest`, `lifecycle_dest`, `mutation_dest`, `resources_dest`, `links_dest` | exactly 1 | nonempty quoted value; no fluent tail; duplicate setting fails |
 | `support_dest` | exactly 2 | quoted role and filename; no tail; duplicate role fails |
 | `meta` | 1+ | last argument is nonempty description resource path |
-| `mcp` | 1+ | name (nonempty), optional description, optional description path; arguments after third ignored |
+| `mcp` | 1–4 | name (nonempty), optional description, description path, case format |
+| `mcp_route` | 2–5 | exact declared `METHOD:/path`, tool name, optional description, description path, case format; no fluent tail |
+| `route_name` | exactly 3 | declared path, method, observability name; does not rename the MCP tool |
 | `mcp_folder`, `mcp_skill_folder` | exactly 3 | namespace, root, URI prefix; no tail; skill variant selects `Skills: ["."]` |
 | `report`, `cube` | 0+ | first eight: linked input type, dimensions, measures, filters, orderBy, limit, offset, MCP-tool boolean; later arguments ignored |
 | `cubeCompose` | exactly 1 | boolean; no tail |
@@ -1200,3 +1202,23 @@ write-result carrier as `output/body` with `json:"-" internal:"true"`, and retai
 the business field under `output/result` with its original JSON name. Lifecycle
 hooks prepare that business result. This uses existing output projection behavior;
 private rows are not exposed as public JSON/MCP fields.
+
+## Method-specific MCP exposure
+
+Explicitly declare both targets when exposing separate create and patch tools:
+
+```sql
+#setting($_ = $route('/campaigns', 'POST', 'PATCH'))
+#setting($_ = $mcp_route('POST:/campaigns', 'CreateCampaign'))
+#setting($_ = $mcp_route('PATCH:/campaigns', 'PatchCampaign'))
+```
+
+This maps names to declared routes; it does not duplicate every PATCH automatically.
+Tool names are unique in a shared MCP catalog. `route_name` is an observability name,
+not a substitute for `mcp_route`. Contract hooks can bind the declared target via
+`parameter:",kind=contract,in=method"` and `in=path`, including during discovery.
+Those runtime-owned values differ from the outer MCP/schema-fetch transport method.
+
+A method label does not switch a generated writer's mutation policy. Keep requiredness
+consistent with actual create/update behavior and native presence-aware validation;
+do not remove entity validation tags merely to make PATCH discovery sparse.

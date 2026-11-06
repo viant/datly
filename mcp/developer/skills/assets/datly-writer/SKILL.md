@@ -46,6 +46,13 @@ Scoped non-identity numbering is a separate capability. Its optional ledger is n
 
 ## Read what the task needs
 
+- For caller-dependent schemas, view/domain/composite `Contract(ctx, binder)` hooks,
+  nested delegation, policy-name caching, `SkipChildren()`, and POST/PATCH MCP
+  exposure, read [dynamic contracts](references/product/datly/doc/dynamic-contract-v1.md)
+  and its [codec boundaries](references/product/datly/doc/dynamic-contract-boundaries.md).
+  Use the same contract for discovery and invocation; keep linked storage and
+  presence markers intact. Confirm the selected build includes these APIs.
+
 - For a legacy migration, read [reverse-engineering.md](references/reverse-engineering.md) before authoring. Reconstruct the complete body, Current/auxiliary reads, writable graph, authorization, original ID mechanism, validation/error order and events. A route header or handler registration is not a migrated writer.
 
 - For Go field renames, outer projection versus inner SQL aliases, SQLX/JSON

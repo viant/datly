@@ -292,3 +292,26 @@ expiry, missing credential, denied business identity, and zero protected-table
 reads on failure. Also verify that a component without JWT input has no implicit
 JWT dependency. Certificate/public-key verification and the predicate execution
 path are separate checks; both must pass before claiming the full mechanism.
+
+## Caller-dependent type contracts
+
+A linked view/domain type, Input, Output or composite can implement
+`Contract(context.Context, bindly.Binder) (*contract.Policy, error)` from
+`github.com/viant/xdatly/contract`. Nested implementations are discovered through
+pointers, collection elements/map values and embedded structs. No manual child
+forwarding is needed. Nested policies apply first; enclosing policies apply last.
+
+Use original parent type plus field name for targeted rules. `nil, nil` keeps a
+field unchanged and continues traversal. `field.Clone().SkipChildren()` skips only
+that policy's descendants; nested policies remain independent. Hide retags fields,
+without deleting storage or clearing business values. Presence holders are internal.
+
+Select a stable policy name after resolving current caller state; equal names must
+mean equal edits within the component/route/direction/generation namespace. Cache
+metadata, never authorization results or closures. Nil/no-change policies retain
+linked types and existing codec behavior.
+
+See [the maintained contract guide](../../../datly/doc/dynamic-contract-v1.md) for
+binding, helpers, opt-in codec metadata and trusted `kind=contract` method/path.
+See [the boundaries](../../../datly/doc/dynamic-contract-boundaries.md) before applying
+changes inside a custom JSON/Text owner. V0 support is not implied by v1 availability.

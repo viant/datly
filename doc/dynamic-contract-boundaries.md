@@ -39,7 +39,7 @@ library call or reinterpret the method's aliases and transformations.
 The original projection-only scope required no Structology extension. The user has
 since expanded the requirement to support method-bearing embedded shapes. That
 requires metadata separate from the canonical instance; `viant/x/shape.Representation`
-and Structology support are now being implemented. This expansion does not remove
+and Structology support are implemented in v1. This expansion does not remove
 the custom-JSON-method boundary. Supporting edits inside those methods would still
 require a separate contract-aware codec/delegation API.
 

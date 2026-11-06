@@ -44,6 +44,13 @@ Scoped non-identity numbering is a separate capability. Its optional ledger is n
 
 ## Read what the task needs
 
+- For caller-dependent schemas, view/domain/composite `Contract(ctx, binder)` hooks,
+  nested delegation, policy-name caching, `SkipChildren()`, and POST/PATCH MCP
+  exposure, read [dynamic contracts](references/product/datly/doc/dynamic-contract-v1.md)
+  and its [codec boundaries](references/product/datly/doc/dynamic-contract-boundaries.md).
+  Use the same contract for discovery and invocation; keep linked storage and
+  presence markers intact. Confirm the selected build includes these APIs.
+
 - For Go field renames, outer projection versus inner SQL aliases, SQLX/JSON
   naming, CAST/nullability and regeneration, read the
   [v1 shaping contract](references/product/datly/doc/shaping-contract.md).
