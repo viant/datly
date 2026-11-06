@@ -14,120 +14,122 @@ not replace the v0 handler Binder or migrate ordinary input/output binding.
 ## Application example
 
 ```go
-package campaign
+package catalog
 
 import (
-    "context"
-    "fmt"
-    "reflect"
+	"context"
+	"fmt"
+	"reflect"
 
-    "github.com/viant/bindly"
-    "github.com/viant/xdatly/contract"
+	"github.com/viant/bindly"
+	"github.com/viant/xdatly/contract"
 )
 
-type Campaign struct {
-    Name   string  `json:"name" validate:"required"`
-    Margin float64 `json:"margin"`
-    State  int     `json:"state" choice:"0:draft" choice:"10:active" choice:"20:paused"`
+type CatalogItem struct {
+	ID           string                                              `json:"id" sqlx:"ID,primaryKey" required:"true"`
+	Title        string                                              `json:"title" validate:"required"`
+	Commission   float64                                             `json:"commission"`
+	PricingModel int                                                 `json:"pricingModel" choice:"0:fixed" choice:"10:usage" choice:"20:subscription"`
+	Has          *struct{ ID, Title, PricingModel, Commission bool } `json:"-" setMarker:"true"`
 }
 
 type Authorization struct {
-    CanViewMargin bool
-    Role          string
+	CanViewCommission bool
+	Role              string
 }
 
-func (*Campaign) Contract(ctx context.Context, binder bindly.Binder) (*contract.Policy, error) {
-    // The application chooses the state type and fields. Auth can instead be
-    // verified JWT claims through the configured JwtClaim codec, or other
-    // native locator/component data. Binding does not call this state's Init.
-    var state struct {
-        Auth   *Authorization `parameter:",kind=component,in=GET:/auth/context,required=true"`
-        Method string         `parameter:",kind=contract,in=method"`
-        Debug  bool           `parameter:",kind=header,in=X-Debug"`
-    }
-    if err := binder.Bind(ctx, &state); err != nil {
-        return nil, err
-    }
-    if state.Auth == nil {
-        return nil, fmt.Errorf("authorization context required")
-    }
-    // Compute permissions once. The name describes equivalent metadata edits,
-    // not a caller identity. Include every decision that affects the result.
-    showMargin := state.Auth.CanViewMargin
-    creating := state.Method == "POST"
+func (*CatalogItem) Contract(ctx context.Context, binder bindly.Binder) (*contract.Policy, error) {
+	// The application chooses the state type and fields. Auth can instead be
+	// verified JWT claims through the configured JwtClaim codec, or other
+	// native locator/component data. Binding does not call this state's Init.
+	var state struct {
+		Auth   *Authorization `parameter:",kind=component,in=GET:/auth/context,required=true"`
+		Method string         `parameter:",kind=contract,in=method"`
+		Debug  bool           `parameter:",kind=header,in=X-Debug"`
+	}
+	if err := binder.Bind(ctx, &state); err != nil {
+		return nil, err
+	}
+	if state.Auth == nil {
+		return nil, fmt.Errorf("authorization context required")
+	}
+	// Compute permissions once. The name describes equivalent metadata edits,
+	// not a caller identity. Include every decision that affects the result.
+	showCommission := state.Auth.CanViewCommission
+	creating := state.Method == "POST"
 
-    // Select the enum domain and wire representation from verified role data.
-    // Explicit ordinals keep storage stable when a role sees only a subset.
-    var choices []string
-    var outputStyle, stateDescription string
-    switch state.Auth.Role {
-    case "editor":
-        choices = []string{"0:draft", "20:paused"}
-        outputStyle = "literal"
-        stateDescription = "An editor can select draft or paused."
-    case "publisher":
-        choices = []string{"0:draft", "10:active", "20:paused"}
-        outputStyle = "ordinal"
-        stateDescription = "A publisher can also select active."
-    default:
-        return nil, fmt.Errorf("unsupported role %q", state.Auth.Role)
-    }
+	// Select the enum domain and wire representation from verified role data.
+	// Explicit ordinals keep storage stable when a role sees only a subset.
+	var choices []string
+	var outputStyle, pricingDescription string
+	switch state.Auth.Role {
+	case "editor":
+		choices = []string{"0:fixed", "20:subscription"}
+		outputStyle = "literal"
+		pricingDescription = "An editor can select fixed or subscription."
+	case "finance":
+		choices = []string{"0:fixed", "10:usage", "20:subscription"}
+		outputStyle = "ordinal"
+		pricingDescription = "Finance users can also select usage."
+	default:
+		return nil, fmt.Errorf("unsupported role %q", state.Auth.Role)
+	}
 
-    // Version this name if the role-to-schema rules change without a reload.
-    // All choices above are determined by role; no permission is recomputed
-    // inside the field callback.
-    name := fmt.Sprintf("campaign:v1:%s:margin=%t:create=%t", state.Auth.Role, showMargin, creating)
-    return &contract.Policy{Name: name, Field: func(parentPath string, parentType reflect.Type, field *contract.Field) (*contract.Field, error) {
-        if parentType != reflect.TypeFor[Campaign]() {
-            return nil, nil
-        }
-        switch field.Name {
-        case "Margin":
-            if !showMargin {
-                return field.Hide(), nil
-            }
-        case "Name":
-            if creating {
-                return field.Required(), nil
-            }
-            return field.Optional(), nil
-        case "State":
-            return field.SetEnum(choices...).
-                SetTag("enumAccept", "literal").
-                SetTag("enumStyle", outputStyle).
-                SetDescription(stateDescription), nil
-        }
-        return nil, nil
-    }}, nil
+	// Version this name if the role-to-schema rules change without a reload.
+	// All choices above are determined by role; no permission is recomputed
+	// inside the field callback.
+	name := fmt.Sprintf("catalog-item:v1:%s:commission=%t:create=%t", state.Auth.Role, showCommission, creating)
+	return &contract.Policy{Name: name, Field: func(parentPath string, parentType reflect.Type, field *contract.Field) (*contract.Field, error) {
+		if parentType != reflect.TypeFor[CatalogItem]() {
+			return nil, nil
+		}
+		switch field.Name {
+		case "Commission":
+			if !showCommission {
+				return field.Clone().Hide(), nil
+			}
+		case "Title":
+			if creating {
+				return field.Clone().Required(), nil
+			}
+			return field.Clone().Optional(), nil
+		case "PricingModel":
+			return field.Clone().SetEnum(choices...).
+				SetTag("enumAccept", "literal").
+				SetTag("enumStyle", outputStyle).
+				SetDescription(pricingDescription), nil
+		}
+		return nil, nil
+	}}, nil
 }
 
 type Input struct {
-    Body []*Campaign `parameter:",kind=body"`
+	Body []*CatalogItem `parameter:",kind=body,required=true"`
 }
 
 type Output struct {
-    Data []*Campaign `json:"data"`
+	Data []*CatalogItem `json:"data"`
 }
 ```
 
-For the `State` field, the same linked `int` now has these caller-specific contracts:
+For the `PricingModel` field, the same linked `int` now has these caller-specific contracts:
 
 | Verified role | Effective choices | Input schema / JSON | Go storage | Output schema / JSON |
 |---|---|---|---|---|
-| `editor` | `0:draft`, `20:paused` | string enum `["draft", "paused"]`; `{"state":"paused"}` | `State == 20` | string enum `["draft", "paused"]`; `{"state":"paused"}` |
-| `publisher` | `0:draft`, `10:active`, `20:paused` | string enum `["draft", "active", "paused"]`; `{"state":"active"}` | `State == 10` | integer enum `[0, 10, 20]`; `{"state":10}` |
+| `editor` | `0:fixed`, `20:subscription` | string enum `["fixed", "subscription"]`; `{"pricingModel":"subscription"}` | `PricingModel == 20` | string enum `["fixed", "subscription"]`; `{"pricingModel":"subscription"}` |
+| `finance` | `0:fixed`, `10:usage`, `20:subscription` | string enum `["fixed", "usage", "subscription"]`; `{"pricingModel":"usage"}` | `PricingModel == 10` | integer enum `[0, 10, 20]`; `{"pricingModel":10}` |
 
-These are individual campaign objects; `Input.Body` and `Output.Data` carry the
+These are individual catalog items; `Input.Body` and `Output.Data` carry the
 same policy through their slices automatically. `SetEnum` replaces the original
-choice group, so the editor schema does not retain `active`. Using explicit codes
-means `paused` remains `20`, rather than becoming ordinal `1` when the domain narrows.
+choice group, so the editor schema does not retain `usage`. Using explicit codes
+means `subscription` remains `20`, rather than becoming ordinal `1` when the domain narrows.
 MCP and OpenAPI publish the selected domain and wire type for each direction.
 
 An enum domain is not a substitute for permission/transition validation. Keep that
 validation in the existing business/validator path. Cross-form conversion requires
 a matching choice: with the editor's literal output, returning stored value `10`
-would fail because that role's mapping omits `active`. Return records within that
-domain, or keep a complete domain for output when all stored states must be readable.
+would fail because that role's mapping omits `usage`. Return records within that
+domain, or keep a complete domain for output when all stored pricing models must be readable.
 
 The native dispatcher owns the `/auth/context` component's resolution and execution.
 The target business handler does not run during schema discovery. JWT codecs use
@@ -139,17 +141,24 @@ The native HTTP MCP host copies current transport headers into request scope;
 custom hosts can use `gateway.WithMCPHeaders`. The server-authenticated token keeps
 precedence over raw headers. Framing and content-type headers are not forwarded.
 
+## Related examples
+
+- [Direct POST/PATCH example](contract-operation.md): `IsPK()` and `Optional()`,
+  preserving primary keys while clearing other requirements on PATCH.
+- [Field methods and schema output](contract-field-examples.md): OpenAPI before/after
+  fragments, descriptions, examples, renaming, and enum wire forms.
+
 ## DQL and named operations
 
 V0 can express exact method mappings in its existing leading JSON settings header:
 
 ```sql
 /* {
-  "URI": "/campaigns",
+  "URI": "/catalog/items",
   "Method": "POST,PATCH",
   "MCPRoutes": {
-    "POST:/campaigns": {"Name": "CreateCampaign", "Description": "Create campaigns"},
-    "PATCH:/campaigns": {"Name": "PatchCampaign", "Description": "Patch campaigns"}
+    "POST:/catalog/items": {"Name": "CreateCatalogItem", "Description": "Create catalog items"},
+    "PATCH:/catalog/items": {"Name": "PatchCatalogItem", "Description": "Patch catalog items"}
   }
 } */
 ```
@@ -192,7 +201,8 @@ The callback receives `*contract.Field`, which exposes two editable members:
 offset, index or embedding flag. Read a tag with `field.Tag.Get("json")` or
 `field.Tag.Lookup("required")`; prefer the helpers below for edits.
 
-Mutating helpers update the supplied field and return `*Field` for chaining.
+Mutating helpers update their receiver and return `*Field` for chaining. Call them
+on `field.Clone()` to preserve the callback input.
 They preserve unrelated tags. Helper errors are recorded on the field; Datly checks
 them before publishing a variant. Returning `nil, nil` discards that callback's edit
 and continues traversal. Returning a non-nil error aborts contract resolution.
@@ -201,6 +211,7 @@ and continues traversal. Returning a non-nil error aborts contract resolution.
 |---|---|
 | `Clone() *Field` | Copies name, tags, recorded error and traversal flag; useful when keeping the supplied field unchanged locally. |
 | `Hide() *Field` | Sets `json:"-"`, `internal:"true"`, and `mcp:"-"`. Storage remains present; effective JSON input ignores it and output omits it. |
+| `IsPK() bool` | Recognizes explicit SQLX `primaryKey` / `autoincrement` options without inferring from a field name. It does not modify metadata. |
 | `Required() *Field` | Sets `required:"true"`, removes `optional`, and updates the `required` option in existing `parameter` / `bind` tags. |
 | `Optional() *Field` | Removes `required` and `optional` tags and the `required` option in existing `parameter` / `bind` tags. It does not add `required:"false"`, change nullability, or remove entity `validate` rules. |
 | `SetEnum(values ...string) *Field` | Replaces every `choice` occurrence with the supplied ordered choices. Supports literals and explicit `ordinal:literal` entries. An empty argument list records an error; use `RemoveTag("choice")` to remove the domain. |
@@ -217,8 +228,8 @@ For example, inside a callback that has matched the business type and field name
 
 ```go
 return field.Clone().
-    SetDescription("Caller-visible campaign state").
-    SetExample("paused").
+    SetDescription("Caller-visible pricing model").
+    SetExample("subscription").
     RemoveTag("deprecated"), nil
 ```
 
@@ -231,34 +242,34 @@ parameter to a different HTTP binding or replace the configured codec.
 
 `Field.Name` is the effective field name seen by metadata consumers. The original
 linked struct still has its original Go field name and storage. Changing `Name`
-alone does not override an explicit `json` tag: `State` has `json:"state"` above,
-so changing only `Name` would leave its JSON key as `state`.
+alone does not override an explicit `json` tag: `PricingModel` has `json:"pricingModel"` above,
+so changing only `Name` would leave its JSON key as `pricingModel`.
 
-To expose that field as `status` in JSON/OpenAPI and `Status` in MCP, a matching
+To expose that field as `billingModel` in JSON/OpenAPI and `BillingModel` in MCP, a matching
 callback can return:
 
 ```go
-case "State":
+case "PricingModel":
     rewritten := field.Clone()
-    rewritten.Name = "LifecycleState" // effective metadata name; must be a Go identifier
+    rewritten.Name = "BillingModel" // effective metadata name; must be a Go identifier
     return rewritten.
-        SetTag("json", "status,omitempty").
-        SetTag("mcp", "name=Status,aliases=status").
+        SetTag("json", "billingModel,omitempty").
+        SetTag("mcp", "name=BillingModel,aliases=billingModel").
         SetEnum(choices...).
         SetTag("enumAccept", "literal").
         SetTag("enumStyle", outputStyle), nil
 ```
 
-For a publisher, JSON input is now `{"status":"active"}` and JSON output is
-`{"status":10}`. MCP advertises `Status` and normalizes its authored alias `status`
-to the JSON key. The handler still reads/writes **`Campaign.State`**, with type
-**`int`**; it does not gain a `LifecycleState` Go member. Presence flags likewise
+For a finance user, JSON input is now `{"billingModel":"usage"}` and JSON output is
+`{"billingModel":10}`. MCP advertises `BillingModel` and normalizes its authored alias `billingModel`
+to the JSON key. The handler still reads/writes **`CatalogItem.PricingModel`**, with type
+**`int`**; it does not gain a `BillingModel` Go member. Presence flags likewise
 continue to use the canonical field identity. Avoid exposed-name/alias collisions.
 If the rename is conditional on role, include that decision in `Policy.Name` too.
 
 The callback's `parentPath` is the canonical parent path, excluding the current
-field; `parentType` is the original linked parent type. For example, a campaign
-member inside `Input.Body` has parent path `Body[]` and parent type `Campaign`.
+field; `parentType` is the original linked parent type. For example, a catalog item
+member inside `Input.Body` has parent path `Body[]` and parent type `CatalogItem`.
 The root parent path is empty, and map values use `{}` in traversal paths. Parent
 policies run after nested policies and inspect accumulated name/tag edits, so a
 nested policy may already have changed `field.Name`. Match the original parent type
@@ -294,8 +305,8 @@ recursive edits remain unsupported by the shared walker.
 
 ## Enum wire forms
 
-Repeated `choice:"draft" choice:"active"` declarations use zero-based ordinals.
-`choice:"0:draft" choice:"10:active"` supplies explicit ordinals. Both formats work.
+Repeated `choice:"fixed" choice:"usage"` declarations use zero-based ordinals.
+`choice:"0:fixed" choice:"10:usage"` supplies explicit ordinals. Both formats work.
 `enumAccept:"literal"` controls input JSON/schema and `enumStyle:"ordinal"` controls
 output JSON/schema independently. Each defaults from Go storage: integer means
 ordinal, string means literal. Neither annotation accepts both wire forms. MCP checks the declared JSON form
@@ -303,10 +314,10 @@ before URL encoding; explicit empty literals and bare scalar JSON bodies are pre
 Storage can differ from either wire type. Unknown cross-form conversions fail;
 ordinary choices do not install implicit membership validation.
 
-In the application example, the publisher sends `{"state":"active"}`, the handler
-receives integer `10`, and output is `{"state":10}`. The editor sends and receives
-`"paused"` while the handler still uses integer `20`. Role selection changes both
-choices and output style without changing `Campaign.State`'s Go type. Large explicit
+In the application example, the finance sends `{"pricingModel":"usage"}`, the handler
+receives integer `10`, and output is `{"pricingModel":10}`. The editor sends and receives
+`"subscription"` while the handler still uses integer `20`. Role selection changes both
+choices and output style without changing `CatalogItem.PricingModel`'s Go type. Large explicit
 integer ordinals retain their exact values through the shared Tagly enum plan.
 
 ## Cache and validation
@@ -314,13 +325,36 @@ integer ordinals retain their exact values through the shared Tagly enum plan.
 Each component generation owns bounded caches, partitioned by registered method,
 path, direction and original type. Policy names include nested owner paths. Policy
 selection still runs for each request; only immutable metadata is cached. Empty
-names disable variant retention. An MCP invocation shares its selected policy with
+names disable variant retention. `NoCache: true` explicitly bypasses reuse even for a
+named policy; it does not invalidate older entries or disable unrelated codec caches. An MCP invocation shares its selected policy with
 its routed HTTP handler within that invocation, without caching authentication.
 
-Tests cover native JWT verification and component-backed state, linked/no-op reuse,
-nested-first composition, per-policy pruning, map/slice composites, multilevel
-method-bearing embeddings, enum wire changes, configured codecs, presence tracking,
-method-specific MCP discovery/calls, OpenAPI, view metadata and unchanged catalogs.
-Benchmarks are in `service/contract/benchmark_test.go`; run with `-benchmem`.
+Named variants let codecs reuse separate plans for each effective schema. A variant
+must never share another variant's hidden fields, names or enum conversions.
+Reusing a named policy reuses its immutable representation; current authorization
+still runs for each invocation. Rebuilding equivalent unnamed representations does
+not guarantee the same codec-cache identity.
 
-See [validation details](dynamic-contract-v0-validation.md) for dependency revisions, test scope and baseline failures.
+## Policy cache key examples
+
+A name identifies equivalent field edits, rather than a caller ID or token:
+
+```go
+policy := &contract.Policy{
+    Name: fmt.Sprintf("catalog:v2:%s:commission=%t", role, canViewCommission),
+    Field: rewrite,
+}
+```
+
+The role and permission decisions are computed once before constructing the callback.
+For an uncached selection, leave `Name` empty or use the explicit opt-in bypass:
+
+```go
+policy := &contract.Policy{Name: "catalog-live", NoCache: true, Field: rewrite}
+```
+
+Here `rewrite` is your field callback. Empty names and `NoCache: true` both prevent
+Contract variant reuse. A bypass on any parent/nested policy bypasses the composed
+variant. Named policies remain cached by default, preserving existing behavior.
+Authorization is still resolved on each invocation. See the [operation example](contract-operation.md)
+for the full cache behavior table and sparse-PATCH example.

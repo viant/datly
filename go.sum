@@ -1201,6 +1201,8 @@ github.com/viant/sqlx v0.26.1-0.20260922182806-031ed89ced07 h1:ZW1tGyekedfDt4cVn
 github.com/viant/sqlx v0.26.1-0.20260922182806-031ed89ced07/go.mod h1:a2zmxRYAe8yt3rbcIPittWSy2V60UT3e+7m8m0We2QU=
 github.com/viant/structology v0.10.2-0.20261106071121-906c12343bcc h1:B27L8elSCEKrwCAMkmVNTAr+CUjxtyaHXsbtyTR01EQ=
 github.com/viant/structology v0.10.2-0.20261106071121-906c12343bcc/go.mod h1:5UXd12H/1ZiZ3QVWUErna+C08vdtr5lWwT2Fn9l80pM=
+github.com/viant/structology v0.10.2-0.20261106143941-ed3b2d84154c h1:/1HWX0eDnUU4ThxMJEa+co6RiYNGsDtV6Z2yljcoyp4=
+github.com/viant/structology v0.10.2-0.20261106143941-ed3b2d84154c/go.mod h1:5UXd12H/1ZiZ3QVWUErna+C08vdtr5lWwT2Fn9l80pM=
 github.com/viant/structql v0.5.4 h1:bMdcOpzU8UMoe5OBcyJVRxLAndvU1oj3ysvPUgBckCI=
 github.com/viant/structql v0.5.4/go.mod h1:nm9AYnAuSKH7b7pG+dKVxbQrr1Mgp1CQEMvUwwkE+I8=
 github.com/viant/tagly v0.4.2-0.20261106060238-fe360d6f7ac4 h1:YemH0LJ8+XObvgyKS0yoQobZWK5qBaz4KElJOZnyXaY=
@@ -1215,6 +1217,8 @@ github.com/viant/x v0.6.1-0.20261106041415-0487ec66884b h1:0JPaEl3YxP6IvqX6dJGd+
 github.com/viant/x v0.6.1-0.20261106041415-0487ec66884b/go.mod h1:Ud4v5LGA8uA0EfmuO4H0t0YgAq2FNLnh3ydQUjBdaLI=
 github.com/viant/xdatly v0.5.4-0.20261106070245-f15dd254a94a h1:qI3kamwCjfUtsMMc1jcHDH4EWzOsVuEzkVVLmIvu5MY=
 github.com/viant/xdatly v0.5.4-0.20261106070245-f15dd254a94a/go.mod h1:7cJWPyfL5nsjCXrGaW6O3ybXMmYSkN18VNpfkpez6Cc=
+github.com/viant/xdatly v0.5.4-0.20261106145236-a46b07653307 h1:bq3AiNByKV4BVpO/0ZB2n+sJGh0nxAPn1teUuoRv/TQ=
+github.com/viant/xdatly v0.5.4-0.20261106145236-a46b07653307/go.mod h1:QWGEQ/HQxkYwzQz66tXJ9DA/CsDN6OsBhHkgF0gQAJY=
 github.com/viant/xdatly/extension v0.0.0-20231013204918-ecf3c2edf259 h1:9Yry3PUBDzc4rWacOYvAq/TKrTV0agvMF0gwm2gaoHI=
 github.com/viant/xdatly/extension v0.0.0-20231013204918-ecf3c2edf259/go.mod h1:fb8YgbVadk8X5ZLz49LWGzWmQlZd7Y/I5wE0ru44bIo=
 github.com/viant/xdatly/handler v0.0.0-20260922183211-34eaa9f4902b h1:8yc4DWcEpXQm283qEqTDtRQXmCsuVpOVCOcbdxjS/SM=
