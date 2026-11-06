@@ -119,6 +119,23 @@ Both methods replace/add their respective tags and retain other annotations.
 Use an example compatible with the selected wire type. MCP exposes the corresponding
 annotation as `examples: [0.15]` rather than OpenAPI 3's `example: 0.15`.
 
+## MCP-only naming
+
+`field.SetMCPName("BillingModel")` changes the MCP property name while keeping the
+existing JSON key, Go field and binding location. It preserves aliases and other
+MCP tag options:
+
+```go
+// Before: json:"pricingModel" mcp:"name=LegacyName,aliases=pricing"
+return field.SetMCPName("BillingModel"), nil
+// After:  json:"pricingModel" mcp:"name=BillingModel,aliases=pricing"
+```
+
+```yaml
+# MCP input property; HTTP JSON/OpenAPI still use pricingModel
+BillingModel: {type: string, enum: [fixed, usage, subscription]}
+```
+
 ## Name, JSON name and MCP name
 
 `Name` is an editable member, not a method. For a matched `PricingModel` field:
@@ -127,7 +144,7 @@ annotation as `examples: [0.15]` rather than OpenAPI 3's `example: 0.15`.
 renamed := field.Clone()
 renamed.Name = "BillingModel"
 return renamed.SetTag("json", "billingModel").
-    SetTag("mcp", "name=BillingModel,aliases=billingModel"), nil
+    SetTag("mcp", "aliases=billingModel").SetMCPName("BillingModel"), nil
 ```
 
 ```yaml

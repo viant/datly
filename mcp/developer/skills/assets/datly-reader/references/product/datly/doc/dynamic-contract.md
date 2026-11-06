@@ -87,6 +87,7 @@ needed, alongside the two public packages above.
 - [Format enum output](dynamic-contract.md#use-case-format-enum-output)
 - [Narrow input choices by role](dynamic-contract.md#use-case-narrow-input-choices-by-role)
 - [Sparse PATCH with primary keys](contract-operation.md)
+- [MCP-only field names](dynamic-contract.md#give-an-mcp-field-a-different-name)
 - [All Field methods and schema fragments](contract-field-examples.md)
 
 ## Use case: hide commission
@@ -478,6 +479,7 @@ and continues traversal. Returning a non-nil error aborts contract resolution.
 | `Required() *Field` | Sets `required:"true"`, removes `optional`, and updates the `required` option in existing `parameter` / `bind` tags. |
 | `Optional() *Field` | Removes `required` and `optional` tags and the `required` option in existing `parameter` / `bind` tags. It does not add `required:"false"`, change nullability, or remove entity `validate` rules. |
 | `SetEnum(values ...string) *Field` | Replaces every `choice` occurrence with the supplied ordered choices. Supports literals and explicit `ordinal:literal` entries. An empty argument list records an error; use `RemoveTag("choice")` to remove the domain. |
+| `SetMCPName(name string) *Field` | Sets the public MCP field name, preserving aliases and unrelated MCP options. Go/JSON names and native binding locations stay unchanged. |
 | `SetDescription(value string) *Field` | Replaces/adds `description`. |
 | `SetExample(value string) *Field` | Replaces/adds `example`. Choose an example compatible with the exposed wire form; different input/output forms may need separate owner policies or no shared example. |
 | `SetTag(key, value string) *Field` | Replaces all occurrences of that key with one value, or adds it if absent. For repeated choices, use `SetEnum`. |
@@ -496,10 +498,41 @@ return field.
     RemoveTag("deprecated"), nil
 ```
 
-There are no dedicated `SetEnumAccept`, `SetEnumStyle`, or `Rename` methods.
-Use `SetTag("enumAccept", "literal")`, `SetTag("enumStyle", "ordinal")`,
-and assign `Name` directly. `SetTag` only changes metadata: it does not move a
+Use `SetMCPName("BillingModel")` for an MCP-only name change. Use
+`SetTag("enumAccept", "literal")` and `SetTag("enumStyle", "ordinal")` for enum
+formats. There is no generic `Rename` method; assign `Name` on an explicit clone
+when changing the effective Go metadata name. `SetTag` only changes metadata: it does not move a
 parameter to a different HTTP binding or replace the configured codec.
+
+## Give an MCP field a different name
+
+Use this when MCP clients should see `BillingModel` while the HTTP JSON key remains
+`pricingModel`. Start with the field's ordinary JSON name and optional aliases:
+
+```go
+PricingModel int `json:"pricingModel" mcp:"aliases=pricing"`
+```
+
+In the matched field callback:
+
+```go
+return field.SetMCPName("BillingModel"), nil
+```
+
+The resulting MCP schema property is:
+
+```json
+{"properties":{"BillingModel":{"type":"integer"}}}
+```
+
+MCP accepts `{"BillingModel":10}` and retains the existing `pricing` alias. The
+native request still binds the `pricingModel` JSON field, and the handler still uses
+its original `PricingModel` Go member. HTTP JSON/OpenAPI names do not change.
+
+`SetMCPName` replaces either a positional MCP name or `name=...` and keeps unrelated
+MCP options. Use the returned field. An empty name, a comma-containing name or an
+MCP-hidden field records an error; `mcp:"-"` must be explicitly removed before
+renaming. A name change does not itself expose a JSON/internal-hidden field.
 
 ## Even the exposed field name can change
 
@@ -517,7 +550,8 @@ case "PricingModel":
     rewritten.Name = "BillingModel" // effective metadata name; must be a Go identifier
     return rewritten.
         SetTag("json", "billingModel,omitempty").
-        SetTag("mcp", "name=BillingModel,aliases=billingModel"), nil
+        SetTag("mcp", "aliases=billingModel").
+        SetMCPName("BillingModel"), nil
 ```
 
 With the literal input and literal output types shown above, JSON input and output
