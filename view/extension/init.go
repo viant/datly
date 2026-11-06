@@ -82,6 +82,7 @@ func InitRegistry() {
 			xreflect.NewType("auth.Token", xreflect.WithReflectType(reflect.TypeOf(&auth.Token{}))),
 			xreflect.NewType("Token", xreflect.WithReflectType(reflect.TypeOf(&auth.Token{}))),
 			xreflect.NewType("time.Location", xreflect.WithReflectType(reflect.TypeOf(&time.Location{}))),
+			xreflect.NewType("content.StandardJSONRuntime", xreflect.WithReflectType(reflect.TypeOf(rcontent.StandardJSONRuntime{}))),
 			xreflect.NewType("content.StructologyJSONRuntime", xreflect.WithReflectType(reflect.TypeOf(rcontent.StructologyJSONRuntime{}))),
 			xreflect.NewType("content.LegacyJSONRuntime", xreflect.WithReflectType(reflect.TypeOf(rcontent.LegacyJSONRuntime{}))),
 			xreflect.NewType("content.StructologyTabularJSONRuntime", xreflect.WithReflectType(reflect.TypeOf(rcontent.StructologyTabularJSONRuntime{}))),

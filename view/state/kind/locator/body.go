@@ -11,6 +11,7 @@ import (
 	"sync"
 
 	"github.com/viant/datly/shared"
+	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view/state/kind"
 	"github.com/viant/structology"
 	hstate "github.com/viant/xdatly/handler/state"
@@ -42,6 +43,22 @@ func (r *Body) Value(ctx context.Context, rType reflect.Type, name string) (inte
 	// Multipart handling
 	if r.isMultipart {
 		return r.handleMultipartValue(rType, name)
+	}
+
+	// Raw non-struct body descriptors have no selectors. Decode directly
+	// into their declared storage rather than constructing a struct-only state.
+	if name == "" && rType != nil && rType.Kind() != reflect.Map && types.EnsureStruct(rType) == nil {
+		if r.err != nil {
+			return nil, false, r.err
+		}
+		if len(r.body) == 0 {
+			return nil, false, nil
+		}
+		destination := reflect.New(rType)
+		if err = r.unmarshal(r.body, destination.Interface()); err != nil {
+			return nil, false, err
+		}
+		return destination.Elem().Interface(), true, nil
 	}
 
 	if len(r.body) > 0 {

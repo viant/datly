@@ -11,6 +11,7 @@ import (
 	structjson "github.com/viant/structology/encoding/json"
 	"github.com/viant/tagly/format"
 	"github.com/viant/tagly/format/text"
+	"github.com/viant/x/shape"
 	"github.com/viant/xreflect"
 	"github.com/viant/xunsafe"
 )
@@ -138,6 +139,8 @@ func (m *StructologyJSONRuntime) marshalOptions(options []interface{}) ([]struct
 			continue
 		}
 		switch actual := option.(type) {
+		case *shape.Representation:
+			result = append(result, structjson.WithRepresentation(actual))
 		case []*legacyjson.FilterEntry:
 			filters = append(filters, actual...)
 		case legacyjson.MarshalerInterceptors:
@@ -173,6 +176,8 @@ func (m *StructologyJSONRuntime) unmarshalOptions(options []interface{}) ([]stru
 			continue
 		}
 		switch actual := option.(type) {
+		case *shape.Representation:
+			result = append(result, structjson.WithRepresentation(actual))
 		case legacyjson.UnmarshalerInterceptors:
 			if len(actual) > 0 {
 				return nil, fmt.Errorf("structology engine does not support legacy unmarshal interceptors")
@@ -295,4 +300,68 @@ func (d datlyPathNameTransformer) TransformPath(_ []string, fieldName string) st
 		fromCaseFormat = detected
 	}
 	return fromCaseFormat.Format(fieldName, d.caseFormat)
+}
+
+// MarshalWithRepresentation retains runtime configuration while selecting caller metadata.
+func (m *StructologyJSONRuntime) MarshalWithRepresentation(src any, metadata *shape.Representation) ([]byte, error) {
+	return m.Marshal(src, metadata)
+}
+func (m *StructologyJSONRuntime) UnmarshalWithRepresentation(data []byte, dest any, metadata *shape.Representation) error {
+	return m.Unmarshal(data, dest, metadata)
+}
+
+// StandardJSONRuntime uses encoding/json semantics with opt-in enum/contract
+// metadata supplied by Structology's standard engine.
+type StandardJSONRuntime struct{ StructologyJSONRuntime }
+
+func (m *StandardJSONRuntime) standardOptions(options []interface{}) ([]structjson.Option, error) {
+	var result []structjson.Option
+	var filters []*legacyjson.FilterEntry
+	for _, option := range options {
+		if option == nil {
+			continue
+		}
+		switch actual := option.(type) {
+		case *shape.Representation:
+			result = append(result, structjson.WithRepresentation(actual))
+		case []*legacyjson.FilterEntry:
+			filters = append(filters, actual...)
+		case *http.Request:
+		case legacyjson.UnmarshalerInterceptors:
+			if len(actual) > 0 {
+				return nil, fmt.Errorf("standard JSON engine does not support legacy interceptors")
+			}
+		case legacyjson.MarshalerInterceptors:
+			if len(actual) > 0 {
+				return nil, fmt.Errorf("standard JSON engine does not support legacy interceptors")
+			}
+		default:
+			return nil, fmt.Errorf("standard JSON engine does not support option %T", option)
+		}
+	}
+	if excluder := newDatlyPathFieldExcluder(m.config, filters); excluder != nil {
+		result = append(result, structjson.WithPathFieldExcluder(excluder))
+	}
+	return result, nil
+}
+func (m *StandardJSONRuntime) Marshal(src any, options ...interface{}) ([]byte, error) {
+	opts, err := m.standardOptions(options)
+	if err != nil {
+		return nil, err
+	}
+	return structjson.MarshalStandard(src, opts...)
+}
+func (m *StandardJSONRuntime) Unmarshal(data []byte, dest any, options ...interface{}) error {
+	opts, err := m.standardOptions(options)
+	if err != nil {
+		return err
+	}
+	opts = append(opts, structjson.WithPresenceTracking(true))
+	return structjson.UnmarshalStandard(data, dest, opts...)
+}
+func (m *StandardJSONRuntime) MarshalWithRepresentation(src any, metadata *shape.Representation) ([]byte, error) {
+	return m.Marshal(src, metadata)
+}
+func (m *StandardJSONRuntime) UnmarshalWithRepresentation(data []byte, dest any, metadata *shape.Representation) error {
+	return m.Unmarshal(data, dest, metadata)
 }

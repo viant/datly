@@ -132,6 +132,12 @@ func (t *Type) SetType(rType reflect.Type) {
 		return
 	}
 	t.Schema.SetType(rType)
+	if types.EnsureStruct(rType) == nil {
+		// Raw body descriptors can be scalars/maps/arrays; they have no struct
+		// selectors. Their decoder retains the declared type directly.
+		t.stateType = nil
+		return
+	}
 	t.stateType = structology.NewStateType(rType)
 }
 
@@ -318,6 +324,9 @@ func BuildSchema(field *reflect.StructField, pTag *tags.Parameter, result *Param
 
 func (t *Type) buildParameters() error {
 	structType := types.EnsureStruct(t.Schema.Type())
+	if structType == nil {
+		return nil
+	}
 	for i := 0; i < structType.NumField(); i++ {
 		parameter, err := t.buildParameter(structType.Field(i))
 		if err != nil {

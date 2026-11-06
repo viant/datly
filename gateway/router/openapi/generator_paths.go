@@ -23,15 +23,28 @@ func (g *generator) generatePaths(ctx context.Context, components *repository.Se
 			continue
 		}
 
+		target := provider.Path()
+		if target.Method == "" {
+			target.Method = component.Method
+		}
+		if target.URI == "" {
+			target.URI = component.URI
+		}
 		componentSchema := NewComponentSchema(components, component, container)
+		if resolver, ok := ctx.Value(contractResolverKey{}).(ContractResolver); ok {
+			componentSchema.effective, err = resolver(ctx, component, target)
+			if err != nil {
+				return nil, nil, err
+			}
+		}
 		operation, err := g.generateOperation(ctx, componentSchema)
 		if err != nil {
 			retErr = err
 		}
 
 		pathItem := &openapi.PathItem{}
-		attachOperation(pathItem, component.Method, operation)
-		builder.AddPath(component.URI, pathItem)
+		attachOperation(pathItem, target.Method, operation)
+		builder.AddPath(target.URI, pathItem)
 	}
 
 	return container, builder.paths, retErr

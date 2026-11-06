@@ -2,6 +2,7 @@ package content
 
 import (
 	"fmt"
+	xcontract "github.com/viant/xdatly/contract"
 	"reflect"
 	"strings"
 
@@ -54,10 +55,12 @@ type (
 	}
 
 	Codec struct {
-		rType     reflect.Type
-		TypeName  string
-		unmarshal shared.Unmarshal
-		marshal   shared.Marshal
+		contractEncoder xcontract.JSONEncoder
+		contractDecoder xcontract.JSONDecoder
+		rType           reflect.Type
+		TypeName        string
+		unmarshal       shared.Unmarshal
+		marshal         shared.Marshal
 	}
 
 	JSON struct {
@@ -156,6 +159,8 @@ func (u *Codec) init(lookupType xreflect.LookupType, requireMarshal, requireUnma
 	}
 	u.rType = rType
 	value := reflect.New(rType).Interface()
+	u.contractEncoder, _ = value.(xcontract.JSONEncoder)
+	u.contractDecoder, _ = value.(xcontract.JSONDecoder)
 	unmarshal, ok := value.(Unmarshaller)
 	if ok {
 		u.unmarshal = unmarshal.Unmarshal
@@ -539,4 +544,21 @@ func (c *Content) tabJSONInterceptors(field string, data interface{}) json.Marsh
 		return c.TabularJSON.OutputMarshaller.Marshal(data)
 	}
 	return interceptors
+}
+
+// ContractEncoder/ContractDecoder retain configured codec ownership. A custom
+// codec must explicitly opt in to metadata; it is never silently substituted.
+func (j *JSON) ContractEncoder() xcontract.JSONEncoder {
+	if j.CanMarshal() {
+		return j.marshalCodec.contractEncoder
+	}
+	encoder, _ := j.RuntimeMarshallerEngine().(xcontract.JSONEncoder)
+	return encoder
+}
+func (j *JSON) ContractDecoder() xcontract.JSONDecoder {
+	if j.CanUnmarshal() {
+		return j.unmarshalCodec.contractDecoder
+	}
+	decoder, _ := j.RuntimeUnmarshallerEngine().(xcontract.JSONDecoder)
+	return decoder
 }

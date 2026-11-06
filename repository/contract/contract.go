@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/viant/datly/repository/codegen"
 	"github.com/viant/datly/service"
+	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
 	"net/http"
@@ -119,7 +120,7 @@ func (c *Contract) BodyType() reflect.Type {
 		return nil
 	}
 	rType := c.Input.Body.Schema.Type()
-	if rType != nil && rType.Kind() == reflect.Map {
+	if rType != nil && types.EnsureStruct(rType) == nil {
 		return reflect.TypeOf(struct {
 		}{})
 	}

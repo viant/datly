@@ -2,6 +2,10 @@ package session
 
 import (
 	"context"
+	"github.com/viant/datly/view"
+	"github.com/viant/datly/view/extension"
+	"github.com/viant/datly/view/state/kind/locator"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -53,5 +57,28 @@ func TestSessionCodecOptionsUseConfiguredVerifierRules(t *testing.T) {
 	claims, ok := actual.(*jwtclaims.Claims)
 	if !ok || claims.UserID != 73 {
 		t.Fatalf("claims=%T %+v", actual, actual)
+	}
+
+	resource := &view.Resource{}
+	resource.SetTypes(extension.Config.Types)
+	resource.SetCodecs(extension.Config.Codecs)
+	aView := &view.View{}
+	aView.SetResource(resource)
+	for _, tokenValue := range []string{token, "invalid", "", token} {
+		req := httptest.NewRequest("GET", "http://localhost/schema", nil)
+		req.Header.Set("Authorization", tokenValue)
+		opts := []locator.Option{locator.WithRequest(req)}
+		scope := &Session{cache: newCache(), Options: Options{resource: aView.Resource(), auth: authService, kindLocator: locator.NewKindsLocator(nil, opts...), locatorOptions: opts}}
+		var bound struct {
+			Claims *jwtclaims.Claims `parameter:",kind=header,in=Authorization,dataType=string,required=true" codec:"JwtClaim"`
+		}
+		err = scope.ContractBinder("PATCH", "/campaigns").Bind(ctx, &bound)
+		if tokenValue == token {
+			if err != nil || bound.Claims == nil || bound.Claims.UserID != 73 {
+				t.Fatalf("contract JWT: %+v %v", bound, err)
+			}
+		} else if err == nil {
+			t.Fatalf("accepted invalid JWT %q", tokenValue)
+		}
 	}
 }

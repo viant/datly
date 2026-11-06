@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"fmt"
+	nethttp "net/http"
 
 	"github.com/viant/afs"
 	"github.com/viant/afs/http"
@@ -128,6 +129,10 @@ func (s *Server) ListenAndServe() error {
 		}
 	} else {
 		httpServer := s.server.HTTP(context.Background(), ":"+strconv.Itoa(*s.config.Port))
+		transportHandler := httpServer.Handler
+		httpServer.Handler = nethttp.HandlerFunc(func(w nethttp.ResponseWriter, r *nethttp.Request) {
+			transportHandler.ServeHTTP(w, r.WithContext(gateway.WithMCPHeaders(r.Context(), r.Header)))
+		})
 		err := httpServer.ListenAndServe()
 		if err != nil {
 			// Handle error starting the SSE server

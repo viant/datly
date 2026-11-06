@@ -489,7 +489,7 @@ func (r *Router) buildMCPIntegrations(ctx context.Context, item *path.Item, aPat
 	build("template_resource", aPath.MCPTemplateResource, func() error {
 		return r.buildTemplateResourceIntegration(item, aPath, aRoute, provider)
 	})
-	build("tool", aPath.MCPTool, func() error {
+	build("tool", aPath.MCPTool || len(aPath.MCPRoutes) > 0, func() error {
 		return r.buildToolsIntegration(item, aPath, aRoute, provider)
 	})
 }

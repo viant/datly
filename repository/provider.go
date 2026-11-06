@@ -47,3 +47,6 @@ func (p *Provider) Component(ctx context.Context, opts ...Option) (*Component, e
 func NewProvider(path contract.Path, control *version.Control, newComponent func(ctx context.Context, opts ...Option) (*Component, error)) *Provider {
 	return &Provider{path: path, control: control, newComponent: newComponent}
 }
+
+// Path returns the immutable route identity used to register this provider.
+func (p *Provider) Path() contract.Path { return p.path }

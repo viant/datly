@@ -457,6 +457,10 @@ func (s *Session) populateParameterInBackground(ctx context.Context, parameter *
 //}
 
 func (s *Session) populateParameter(ctx context.Context, parameter *state.Parameter, aState *structology.State, options *Options) error {
+	parameter, hidden := repository.EffectiveParameter(parameter, options.contractInput)
+	if hidden {
+		return nil
+	}
 	value, has, err := s.LookupValue(ctx, parameter, options)
 	if err != nil {
 		return err
@@ -860,8 +864,27 @@ func (s *Session) lookupValue(ctx context.Context, parameter *state.Parameter, o
 		return nil, false, fmt.Errorf("failed to locate parameter: %v, %w", parameter.Name, err)
 	}
 
-	if value, has, err = parameterLocator.Value(ctx, parameter.OutputType(), parameter.In.Name); err != nil {
+	if body, bodyErr := enumBodyLocator(parameter, opts); bodyErr != nil {
+		return nil, false, bodyErr
+	} else if body != nil {
+		parameterLocator = body
+	}
+	enumeration, err := parameterEnum(parameter)
+	if err != nil {
 		return nil, false, err
+	}
+	lookupType := parameter.OutputType()
+	if enumeration != nil {
+		lookupType = reflect.TypeFor[string]()
+	}
+	if value, has, err = parameterLocator.Value(ctx, lookupType, parameter.In.Name); err != nil {
+		return nil, false, err
+	}
+	if enumeration != nil && has {
+		value, err = decodeParameterEnum(enumeration, value)
+		if err != nil {
+			return nil, false, err
+		}
 	}
 	if parameter.In.Kind == state.KindConst && !has { //if parameter is const and has no value, use default value
 		value, has = parameter.Value, true

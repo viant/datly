@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"embed"
+	"github.com/viant/x/shape"
 
 	"github.com/viant/datly/repository"
 	"github.com/viant/datly/service/auth"
@@ -16,6 +17,7 @@ import (
 
 type (
 	Options struct {
+		contractInput       *shape.Representation
 		state               *view.State
 		resource            state.Resource
 		namespacedView      view.NamespacedView

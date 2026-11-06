@@ -121,3 +121,14 @@ func TestResource_extractRuleSetting_InvalidCubeComposeDirective(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid $cubeCompose directive")
 }
+
+func TestResourceExtractSettingsMCPMethodContracts(t *testing.T) {
+	resource := &Resource{Rule: NewRule(), rule: &options.Rule{}}
+	dql := `/* {"URI":"/campaigns","Method":"POST,PATCH","MCPRoutes":{"POST:/campaigns":{"Name":"CreateCampaign"},"PATCH:/campaigns":{"Name":"PatchCampaign"}}} */
+SELECT 1`
+	require.NoError(t, resource.extractRuleSetting(&dql))
+	require.Len(t, resource.Rule.MCPRoutes, 2)
+	assert.Equal(t, "CreateCampaign", resource.Rule.MCPRoutes["POST:/campaigns"].Name)
+	assert.Equal(t, "PatchCampaign", resource.Rule.MCPRoutes["PATCH:/campaigns"].Name)
+	assert.Equal(t, "POST,PATCH", resource.Rule.Method)
+}
