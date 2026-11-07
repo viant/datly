@@ -1021,10 +1021,31 @@ func freshBorrowedForeignTypes(ctx context.Context, source *Source, text string,
 			err = originErr
 			return false
 		}
-		err = catalog.Register(origin, typ)
+		err = registerBorrowedForeignType(catalog, origin, typ)
 		return err == nil
 	})
 	return catalog, err
+}
+
+// A fresh catalog already owns standard runtime types. Source selection can
+// enrich those same compiled identities with declaration metadata. Reuse the
+// established runtime link operation only for that exact identity overlap;
+// different identities and source-only collisions remain strict registrations.
+func registerBorrowedForeignType(catalog *typecatalog.Catalog, origin typecatalog.TypeOrigin, typ *x.Type) error {
+	prior, found, err := catalog.Resolve(typecatalog.TranscribeAuthority, typ.Key())
+	if err != nil {
+		return err
+	}
+	if found && typ.Type != nil && prior.Type == typ.Type {
+		priorOrigin, _, err := catalog.Origin(typecatalog.TranscribeAuthority, typ.Key())
+		if err != nil {
+			return err
+		}
+		if priorOrigin == origin {
+			return catalog.LinkRuntimeAll(origin, typ)
+		}
+	}
+	return catalog.Register(origin, typ)
 }
 
 // Reuse ordinary destination, contract-name and resource preparation for every
