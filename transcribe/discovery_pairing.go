@@ -7,6 +7,7 @@ import (
 
 	"github.com/viant/datly/bootstrap"
 	"github.com/viant/datly/spec"
+	"github.com/viant/datly/transcribe/internal/dependency"
 	"github.com/viant/datly/typecatalog"
 )
 
@@ -51,11 +52,21 @@ func (c *discoveryCompilation) declaredPackageSource(ctx context.Context, source
 	var matched *bootstrap.PackageComponentSource
 	conflict := false
 	for _, candidate := range candidates {
+		contractsMatch := input != nil && output != nil && input.Descriptor != nil && output.Descriptor != nil && input.Identity == candidate.InputType.Key() && output.Identity == candidate.OutputType.Key()
+		if !contractsMatch {
+			// Unselected sibling contracts do not share this DQL's import scope.
+			// Route holders already carry canonical route identity; retain collisions
+			// without resolving unrelated input/output fields through our resolver.
+			for _, route := range candidate.Routes {
+				_, overlaps := declaredRoutesMatch(authoredRoutes, []*spec.Route{{Path: route.Tag.Path, Method: route.Tag.Method}})
+				conflict = conflict || overlaps
+			}
+			continue
+		}
 		component, err := resolvePackageDeclarations(candidate, resolver)
 		if err != nil {
 			return nil, err
 		}
-		contractsMatch := input != nil && output != nil && input.Descriptor != nil && output.Descriptor != nil && input.Identity == candidate.InputType.Key() && output.Identity == candidate.OutputType.Key()
 		allRoutes, anyRoute := declaredRoutesMatch(authoredRoutes, component.Routes)
 		if !contractsMatch || !allRoutes {
 			conflict = conflict || anyRoute || contractsMatch
@@ -64,7 +75,15 @@ func (c *discoveryCompilation) declaredPackageSource(ctx context.Context, source
 		if matched != nil {
 			return nil, fmt.Errorf("declared package %q has ambiguous component authority for the explicit routes and contracts", pkg)
 		}
+		loader := &dependency.Loader{Workspace: c.workspace, Catalog: c.catalog, Registry: c.discovery.Registry}
+		if err := loader.LoadPredicates(ctx, component, typeContext); err != nil {
+			return nil, err
+		}
+		if err := loader.LoadCodecs(ctx, component, typeContext); err != nil {
+			return nil, err
+		}
 		matched = candidate
+
 	}
 	if matched == nil {
 		if conflict {
@@ -93,7 +112,7 @@ func (c *discoveryCompilation) declaredPackageCandidates(ctx context.Context, pk
 			return nil, err
 		}
 	}
-	candidates, _, err := selected.packageSources(ctx, c.catalog, c.workspace, files)
+	candidates, _, err := selected.packageSources(ctx, c.catalog, c.workspace, files, true)
 	if err != nil {
 		return nil, err
 	}
