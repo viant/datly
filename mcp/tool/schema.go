@@ -137,6 +137,12 @@ func wireSchemaMap(schema *spec.WireSchema) map[string]interface{} {
 		result["anyOf"] = alternatives
 		return result
 	}
+	if schema.Minimum != nil {
+		result["minimum"] = *schema.Minimum
+	}
+	if schema.Maximum != nil {
+		result["maximum"] = *schema.Maximum
+	}
 	if schema.Pattern != "" {
 		result["pattern"] = schema.Pattern
 	}

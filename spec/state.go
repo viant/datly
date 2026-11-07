@@ -54,6 +54,8 @@ type Codec struct {
 // WireSchema is discovery-only metadata for a public wire contract. Runtime
 // binding continues to use the compiled source and destination types.
 type WireSchema struct {
+	Minimum   *float64      `json:"minimum,omitempty"`
+	Maximum   *float64      `json:"maximum,omitempty"`
 	AnyOf     []*WireSchema `json:"anyOf,omitempty"`
 	Pattern   string        `json:"pattern,omitempty"`
 	MinLength *int          `json:"minLength,omitempty"`
@@ -74,6 +76,14 @@ func (s *WireSchema) Clone() *WireSchema {
 	}
 	result := *s
 	result.Enum = append([]any(nil), s.Enum...)
+	if s.Minimum != nil {
+		value := *s.Minimum
+		result.Minimum = &value
+	}
+	if s.Maximum != nil {
+		value := *s.Maximum
+		result.Maximum = &value
+	}
 	if s.AnyOf != nil {
 		result.AnyOf = make([]*WireSchema, len(s.AnyOf))
 		for i, child := range s.AnyOf {

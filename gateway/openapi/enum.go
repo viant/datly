@@ -3,6 +3,7 @@ package openapi
 import (
 	"fmt"
 	"github.com/viant/datly/gateway/openapi/openapi3"
+	"github.com/viant/datly/runtime/registry"
 	"github.com/viant/tagly/choice"
 	"reflect"
 	"strings"
@@ -17,7 +18,7 @@ func (b *schemaBuilder) enumSchema(schema *openapi3.Schema, path []string, value
 	copy := *schema
 	if len(path) == 0 {
 		copy.Enum = append([]any(nil), values...)
-		if copy.Nullable {
+		if copy.Nullable && len(copy.Enum) > 0 {
 			hasNull := false
 			for _, value := range copy.Enum {
 				if value == nil {
@@ -95,14 +96,18 @@ func (b *schemaBuilder) fieldEnum(schema *openapi3.Schema, field reflect.StructF
 				copy.Enum = nil
 				copy.AnyOf = nil
 				copy.Nullable = false
-				if len(domain.Integers) > 0 {
+				if domain.OpenIntegers {
+					copy.AnyOf = append(copy.AnyOf, &openapi3.Schema{Type: "integer", Min: registry.ExactSchemaIntegerBound(domain.Minimum), Max: registry.ExactSchemaIntegerBound(domain.Maximum)})
+				} else if len(domain.Integers) > 0 {
 					values := make([]any, len(domain.Integers))
 					for i, value := range domain.Integers {
 						values[i] = value
 					}
 					copy.AnyOf = append(copy.AnyOf, &openapi3.Schema{Type: "integer", Enum: values})
 				}
-				if len(domain.Strings) > 0 {
+				if domain.OpenStrings {
+					copy.AnyOf = append(copy.AnyOf, &openapi3.Schema{Type: "string"})
+				} else if len(domain.Strings) > 0 {
 					values := make([]any, len(domain.Strings))
 					for i, value := range domain.Strings {
 						values[i] = value

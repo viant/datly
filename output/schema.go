@@ -298,9 +298,15 @@ func applyJSONSchemaChoices(item map[string]any, field jsonSchemaField) error {
 		values := enumeration.WireValues(false)
 		if field.nullable || field.field.Type.Kind() == reflect.Pointer {
 			item["type"] = []string{enumeration.WireType(false), "null"}
-			values = append(values, nil)
+			if len(values) > 0 {
+				values = append(values, nil)
+			}
 		}
-		item["enum"] = values
+		if len(values) > 0 {
+			item["enum"] = values
+		} else {
+			delete(item, "enum")
+		}
 	}
 	constraint, err := choice.Parse(field.field.Tag, field.field.Type)
 	if err != nil {
