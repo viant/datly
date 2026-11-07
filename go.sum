@@ -1105,6 +1105,8 @@ github.com/viant/bindly v0.5.1-0.20261107201955-0292b7f5e47b h1:MbaSpYZmY2X5oil+
 github.com/viant/bindly v0.5.1-0.20261107201955-0292b7f5e47b/go.mod h1:zZ73RShwVGt41kq5g5Qp1YKiW3N0gCtvfHPZwUMPMbs=
 github.com/viant/bindly v0.5.1-0.20261107203546-63e26bb4fe14 h1:4nh6X7C9tyPCqczPWXmbLoElwMlOXjdHx6kdS3BforA=
 github.com/viant/bindly v0.5.1-0.20261107203546-63e26bb4fe14/go.mod h1:es7imftdRHIiATHDIYSFxrEMft/CMPVOtqQm5XcwwjA=
+github.com/viant/bindly v0.5.1-0.20261107205515-3ed664692639 h1:MS0KlfLBkLchuz1wfuLQxqZT02RbdlcM527m3e4gkEM=
+github.com/viant/bindly v0.5.1-0.20261107205515-3ed664692639/go.mod h1:26rgRaT44S0RR3ZlldWKSqWp8/MjvGD1IAIEx7VTfyI=
 github.com/viant/gmetric v0.3.2 h1:zTdW9QrPk2P0i/do9fokxtHesFQCvYqIc5Yktzmyxtg=
 github.com/viant/gmetric v0.3.2/go.mod h1:3WGxSMCL+owUb0HewYXMLxkoen8e8MlX1Vd2C6tJ5qw=
 github.com/viant/godiff v0.4.3-0.20260914060527-9f2005ca82e8 h1:PCgpoW8IwGsYDs805dCXp25vLTWkakpfvIYll0Twir4=
@@ -1171,6 +1173,8 @@ github.com/viant/tagly v0.4.2-0.20261107201725-921cda4735cc h1:Bik3//LZqakb2CYT6
 github.com/viant/tagly v0.4.2-0.20261107201725-921cda4735cc/go.mod h1:PauQQkHmAvL5lFGr4gIgi+PE0aUPggBIBYN34sX2Oes=
 github.com/viant/tagly v0.4.2-0.20261107203350-aa97b3f5387b h1:xPcY8qEHuHjJE5g/sL9ffXK/Jf+akZgljyEPN1CDAHA=
 github.com/viant/tagly v0.4.2-0.20261107203350-aa97b3f5387b/go.mod h1:PauQQkHmAvL5lFGr4gIgi+PE0aUPggBIBYN34sX2Oes=
+github.com/viant/tagly v0.4.2-0.20261107205332-17e01080a347 h1:VAq7QGA44iLZVQ3i9LRQtgEC5mdCwD49JFltW9kKKYQ=
+github.com/viant/tagly v0.4.2-0.20261107205332-17e01080a347/go.mod h1:PauQQkHmAvL5lFGr4gIgi+PE0aUPggBIBYN34sX2Oes=
 github.com/viant/toolbox v0.24.0/go.mod h1:OxMCG57V0PXuIP2HNQrtJf2CjqdmbrOx5EkMILuUhzM=
 github.com/viant/toolbox v0.34.5/go.mod h1:OxMCG57V0PXuIP2HNQrtJf2CjqdmbrOx5EkMILuUhzM=
 github.com/viant/toolbox v0.39.0 h1:za80N68bwfMNbdt9MbzegGY/4j6GWaMR2Pk/edl7jmI=

@@ -5,6 +5,7 @@ import (
 	"github.com/viant/bindly"
 	bindstate "github.com/viant/bindly/state"
 	"github.com/viant/datly/spec"
+	"github.com/xeipuuv/gojsonschema"
 	"reflect"
 	"strings"
 	"testing"
@@ -79,12 +80,19 @@ func TestJSONXSchemaProjectionBoundaries(t *testing.T) {
 		}
 		_, flag, _ := schemaMember(projected, []string{"rows", "flag"})
 		raw, _ := json.Marshal(flag["type"])
-		expected := `["integer","null"]`
 		if native {
-			expected = `["integer","null","boolean"]`
-		}
-		if string(raw) != expected {
-			t.Fatalf("native=%v types=%s", native, raw)
+			validator, err := gojsonschema.NewSchema(gojsonschema.NewGoLoader(flag))
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, value := range []any{true, false, 17, nil} {
+				result, err := validator.Validate(gojsonschema.NewGoLoader(value))
+				if err != nil || !result.Valid() {
+					t.Fatalf("native value %v rejected: %v", value, err)
+				}
+			}
+		} else if string(raw) != `["integer","null"]` {
+			t.Fatalf("generic types changed: %s", raw)
 		}
 		_, plain, _ := schemaMember(projected, []string{"rows", "plain"})
 		raw, _ = json.Marshal(plain["type"])

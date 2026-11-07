@@ -43,7 +43,7 @@ func (p *schemaProjector) argument(t reflect.Type, path, property string, schema
 	if p.wireType != nil {
 		visibility.FallbackName = nil
 	}
-	inputAlternatives := map[string]bool{}
+	jsonxAlternatives := map[string]*spec.WireSchema{}
 	scalarAlternatives := map[string]map[string]interface{}{}
 	aliasPriorityPaths := map[string]bool{}
 	var timePolicyErr error
@@ -80,16 +80,10 @@ func (p *schemaProjector) argument(t reflect.Type, path, property string, schema
 					scalarAlternatives[path] = wireSchemaMap(registry.EnumInputSchema(enumeration, field.Type.Kind() == reflect.Pointer))
 				}
 			}
-			base := field.Type
-			for base.Kind() == reflect.Pointer {
-				base = base.Elem()
-			}
-			if base.Kind() == reflect.Int && !fieldname.CustomJSON(field.Type) {
-				for _, option := range strings.Split(field.Tag.Get("jsonx"), ",") {
-					if strings.TrimSpace(option) == "boolToInt" {
-						inputAlternatives[path] = true
-					}
-				}
+			if policy, err := registry.JSONXInputSchema(field); err != nil {
+				timePolicyErr = err
+			} else if policy != nil {
+				jsonxAlternatives[path] = policy
 			}
 		}
 		annotation := p.docs.StructField(path, field)
@@ -104,26 +98,6 @@ func (p *schemaProjector) argument(t reflect.Type, path, property string, schema
 	}
 	if timePolicyErr != nil {
 		return nil, timePolicyErr
-	}
-	for fieldPath := range inputAlternatives {
-		parts := strings.Split(canonicalSchemaPath(t, fieldPath, visibility), ".")
-		_, child, _ := schemaMember(result, parts[1:])
-		if child == nil {
-			continue
-		}
-		switch kinds := child["type"].(type) {
-		case string:
-			if kinds == "integer" {
-				child["type"] = []string{"integer", "boolean", "null"}
-			}
-		case []string:
-			for _, kind := range kinds {
-				if kind == "integer" {
-					child["type"] = append(append([]string(nil), kinds...), "boolean")
-					break
-				}
-			}
-		}
 	}
 	for fieldPath, alternatives := range scalarAlternatives {
 		parts := strings.Split(canonicalSchemaPath(t, fieldPath, visibility), ".")
@@ -142,6 +116,47 @@ func (p *schemaProjector) argument(t reflect.Type, path, property string, schema
 		canonicalPath := canonicalSchemaPath(t, schemaPath, visibility)
 		if !aliasPriorityPaths[canonicalPath] {
 			applyWireSchema(result, canonicalPath, schema, nativeAliases)
+		}
+	}
+	for fieldPath, policy := range jsonxAlternatives {
+		parts := strings.Split(canonicalSchemaPath(t, fieldPath, visibility), ".")
+		_, child, _ := schemaMember(result, parts[1:])
+		if child == nil {
+			continue
+		}
+		items := child["items"]
+		minItems := child["minItems"]
+		alternatives := wireSchemaMap(policy)
+		if len(policy.AnyOf) == 0 {
+			ordinary := map[string]any{}
+			for key, value := range child {
+				ordinary[key] = value
+			}
+			alternatives = map[string]any{"anyOf": []any{ordinary, map[string]any{"type": "null"}}}
+		}
+		if branches, ok := alternatives["anyOf"].([]any); ok {
+			for _, value := range branches {
+				branch := value.(map[string]any)
+				if branch["type"] == "array" {
+					if items != nil {
+						branch["items"] = map[string]any{"anyOf": []any{items, map[string]any{"type": "null"}}}
+					}
+					if minItems != nil {
+						branch["minItems"] = minItems
+					}
+				}
+			}
+		}
+		for _, key := range []string{"type", "enum", "format", "anyOf", "oneOf", "allOf", "pattern", "minLength", "maxLength", "minimum", "maximum", "items", "minItems", "maxItems"} {
+			delete(child, key)
+		}
+		for key, value := range alternatives {
+			child[key] = value
+		}
+		for ownerPath, owner := range p.schemas {
+			if owner != nil && owner.Required && !owner.Nullable && canonicalSchemaPath(t, ownerPath, visibility) == canonicalSchemaPath(t, fieldPath, visibility) {
+				removeSchemaNull(child)
+			}
 		}
 	}
 	return result, nil
