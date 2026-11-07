@@ -4,7 +4,6 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"reflect"
-	"strings"
 
 	"github.com/viant/mcp-protocol/schema/fieldname"
 	"github.com/viant/tagly/format"
@@ -92,22 +91,6 @@ func (b *schemaBuilder) object(key schemaKey) (*openapi3.Schema, error) {
 		if projected.Quoted {
 			property = &openapi3.Schema{Type: "string", Nullable: field.ReflectedType.Kind() == reflect.Pointer}
 		}
-		if input && property.Type == "integer" {
-			base := field.ReflectedType
-			for base.Kind() == reflect.Pointer {
-				base = base.Elem()
-			}
-			if base.Kind() == reflect.Int {
-				for _, option := range strings.Split(field.Tag.Get("jsonx"), ",") {
-					if strings.TrimSpace(option) == "boolToInt" {
-						integer := *property
-						integer.Nullable = true
-						property = &openapi3.Schema{AnyOf: openapi3.SchemaList{&integer, {Type: "boolean"}}}
-						break
-					}
-				}
-			}
-		}
 		if input {
 			if timeSchema, timeErr := timeInputSchema(field.StructField()); timeErr != nil {
 				return nil, timeErr
@@ -127,6 +110,12 @@ func (b *schemaBuilder) object(key schemaKey) (*openapi3.Schema, error) {
 		property, err = b.fieldEnum(property, field.StructField(), projected.Quoted, input)
 		if err != nil {
 			return nil, err
+		}
+		if input {
+			property, err = jsonxInputSchema(field.StructField(), property)
+			if err != nil {
+				return nil, err
+			}
 		}
 		s.Properties[name] = property
 		isRequired := fieldname.Required(field.StructField())

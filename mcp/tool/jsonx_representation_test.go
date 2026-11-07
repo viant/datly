@@ -35,7 +35,7 @@ func TestJSONXSchemaUsesEffectiveRouteTags(t *testing.T) {
 	if enabled == nil {
 		t.Fatalf("missing effective field: %+v", projected)
 	}
-	raw, err := json.Marshal(enabled["type"])
+	raw, err := json.Marshal(enabled)
 	if err != nil {
 		t.Fatal(err)
 	}
