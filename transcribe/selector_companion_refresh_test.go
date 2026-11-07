@@ -9,17 +9,26 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"github.com/viant/datly/internal/testharness"
+	"github.com/viant/datly/spec"
 	"github.com/viant/datly/transcribe/column"
 )
 
 func TestGeneratedSelectorCompanionAddsNamespacedBindings(t *testing.T) {
+	testGeneratedSelectorCompanionRefresh(t, false)
+}
+
+func TestGeneratedSelectorCompanionReplacesQuerySource(t *testing.T) {
+	testGeneratedSelectorCompanionRefresh(t, true)
+}
+
+func testGeneratedSelectorCompanionRefresh(t *testing.T, replaceSource bool) {
 	ctx := context.Background()
 	root := t.TempDir()
 	testharness.WriteGeneratedGoMod(t, root)
 	db := testharness.NewSQLiteHarness(t)
 	require.NoError(t, db.ExecStatements(ctx, "CREATE TABLE records(id INTEGER,label TEXT)"))
 	refiner := column.New(column.Connections{"main": db.DB})
-	const initial = `#package('example.com/generated/rows')
+	initial := `#package('example.com/generated/rows')
 #setting($_ = $route('/rows','GET'))
 #setting($_ = $input_type('Input'))
 #setting($_ = $output_type('Output'))
@@ -27,6 +36,9 @@ func TestGeneratedSelectorCompanionAddsNamespacedBindings(t *testing.T) {
 #define($_ = $Fields<[]string>(query/fields).QuerySelector('r'))
 #define($_ = $Page<int>(query/page).QuerySelector('r'))
 SELECT r.*,CAST(r.id AS int),type(r,'Row') FROM (SELECT id,label FROM records WHERE id >= $ID) r`
+	if replaceSource {
+		initial = strings.Replace(initial, "SELECT r.*", "#define($_ = $OrderBy<[]string>(query/sort).QuerySelector('r'))\nSELECT r.*", 1)
+	}
 	result, err := NewCompiler().Compile(ctx, &Source{Name: "Rows", Scope: "example.com/generated/source", Text: initial, Connector: "main", ColumnRefiner: refiner})
 	require.NoError(t, err)
 	_, err = (Generator{Operation: "get"}).Generate(ctx, GenerationRequest{Compiled: result, Destination: root})
@@ -35,6 +47,9 @@ SELECT r.*,CAST(r.id AS int),type(r,'Row') FROM (SELECT id,label FROM records WH
 #define($_ = $Offset<int>(query/r_offset).QuerySelector('r'))
 #define($_ = $OrderBy<[]string>(query/r_orderby).QuerySelector('r'))
 SELECT r.*`, 1)
+	if replaceSource {
+		expanded = strings.Replace(expanded, "#define($_ = $OrderBy<[]string>(query/sort).QuerySelector('r'))\n", "", 1)
+	}
 	writeSourceFile(t, root, "source/Rows.dql", expanded)
 	compile := func() *ProjectGeneration {
 		project, e := (&Discovery{BaseDir: root, Include: []string{"example.com/generated/source"}, SourceFile: "Rows.dql", Connector: "main", ColumnRefiner: refiner}).Compile(ctx)
@@ -43,6 +58,49 @@ SELECT r.*`, 1)
 		return project
 	}
 	project := compile()
+	if replaceSource {
+		for _, mutation := range []string{"source", "view", "type", "predicate", "default", "required", "route", "owner"} {
+			t.Run("reject changed replacement/"+mutation, func(t *testing.T) {
+				result := project.Components[0]
+				changed := result.Component.Clone()
+				for _, p := range changed.Parameters {
+					if p.QuerySelector == nil || p.QuerySelector.Property != spec.SelectorPropertyOrderBy {
+						continue
+					}
+					switch mutation {
+					case "source":
+						p.Source.Name = "unreviewed"
+					case "view":
+						p.QuerySelector.View = "unreviewed"
+					case "type":
+						p.TypeExpr = "string"
+					case "predicate":
+						p.Predicates = []*spec.Predicate{{}}
+					case "default":
+						value := "id"
+						p.Value = &value
+					case "required":
+						value := true
+						p.Required = &value
+					case "route":
+						changed.Routes[0].Path = "/unreviewed"
+					case "owner":
+						changed.Settings.Mutation = "insert"
+					}
+				}
+				_, err := (&discoveryInputCompiler{component: changed, source: result.Source, resolver: result.TypeResolver, declarations: result.Declarations, viewBindings: result.ViewBindings, views: result.Views}).compile()
+				require.Error(t, err)
+			})
+		}
+	}
+	if replaceSource {
+		t.Logf("package=%+v", project.Components[0].Source.PackageComponent)
+		for _, p := range project.Components[0].Component.Parameters {
+			if p.QuerySelector != nil {
+				t.Logf("selector name=%s source=%s view=%s property=%s", p.Name, p.Source.Name, p.QuerySelector.View, p.QuerySelector.Property)
+			}
+		}
+	}
 	_, err = (Generator{Operation: "get"}).Generate(ctx, GenerationRequest{Compiled: project.Components[0], Destination: root})
 	require.NoError(t, err)
 	snapshot := func() map[string]string {
@@ -75,6 +133,9 @@ SELECT r.*`, 1)
 		}
 	}
 	require.NotEmpty(t, holder)
+	if replaceSource {
+		require.NotContains(t, holder, "in=sort")
+	}
 	for _, tag := range []string{"in=r_limit", "in=r_offset", "in=r_orderby"} {
 		require.Contains(t, holder, tag)
 	}

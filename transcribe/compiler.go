@@ -342,6 +342,14 @@ func (c *componentCompilation) compileViews(ctx context.Context) error {
 	if err := resolveQuerySelectorViews(component); err != nil {
 		return err
 	}
+	if c.authored != nil {
+		selectorAuthority := component.Clone()
+		selectorAuthority.Parameters = c.authored.Clone().Parameters
+		if err := resolveQuerySelectorViews(selectorAuthority); err != nil {
+			return err
+		}
+		link.RetireSelectorSources(component, selectorAuthority)
+	}
 	if _, err := bootstrap.NormalizeCodecReferences(component, compiledTypeContext); err != nil {
 		return err
 	}

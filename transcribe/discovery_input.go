@@ -75,7 +75,11 @@ func (c *discoveryInputCompiler) compile() (*column.TemplateInput, error) {
 		if err != nil {
 			return nil, err
 		}
-		selected, err := selectorcompanion.SelectContracts(c.component, input, output, c.resolver.Descriptor)
+		selectorContract, err := c.selectorDiscoveryContract()
+		if err != nil {
+			return nil, err
+		}
+		selected, err := selectorcompanion.SelectContracts(selectorContract, input, output, c.resolver.Descriptor)
 		if err != nil {
 			return nil, fmt.Errorf("transcribe column: %w", err)
 		}
@@ -84,8 +88,12 @@ func (c *discoveryInputCompiler) compile() (*column.TemplateInput, error) {
 			return nil, err
 		}
 		parameters = nil
+		selectedIdentities := map[string]bool{}
+		for _, parameter := range selected.Parameters {
+			selectedIdentities[parameter.Identity()] = true
+		}
 		for _, p := range c.component.Parameters {
-			if !selected.Contains(p) {
+			if p == nil || !selectedIdentities[p.Identity()] {
 				parameters = append(parameters, p)
 			}
 		}

@@ -130,6 +130,28 @@ func retiredSelectorTransport(candidate *spec.Parameter, authored []*spec.Parame
 	return false
 }
 
+// RetireSelectorSources repeats source retirement after SQL aliases have been
+// resolved to canonical view names. It retains the already compiled parameter
+// declarations rather than overlaying their types or predicates a second time.
+func RetireSelectorSources(component, authored *spec.Component) {
+	if component == nil || authored == nil {
+		return
+	}
+	identities := map[string]bool{}
+	for _, parameter := range authored.Parameters {
+		if parameter != nil {
+			identities[parameter.Identity()] = true
+		}
+	}
+	kept := component.Parameters[:0]
+	for _, parameter := range component.Parameters {
+		if parameter == nil || identities[parameter.Identity()] || !retiredSelectorTransport(parameter, authored.Parameters) {
+			kept = append(kept, parameter)
+		}
+	}
+	component.Parameters = kept
+}
+
 // An input field generated from a selector uses its transport source name.
 // On package-linked regeneration that field may therefore be named Sort while
 // the authored selector remains OrderBy(query/sort). Only reconcile that exact
