@@ -13,7 +13,7 @@ func (a *Artifact) Registration(runtime registry.RegisteredComponent) (*registry
 	if a == nil || a.Component == nil || a.Input == nil {
 		return nil, fmt.Errorf("compiled component artifact is incomplete")
 	}
-	if runtime.Component != nil || runtime.Input != nil || runtime.Output != nil || runtime.OutputType != nil {
+	if runtime.Component != nil || runtime.Input != nil || runtime.Output != nil || runtime.OutputType != nil || runtime.ContractState != nil {
 		return nil, fmt.Errorf("registration metadata is owned by the compiled artifact")
 	}
 	if a.Handler != nil {
@@ -30,6 +30,7 @@ func (a *Artifact) Registration(runtime registry.RegisteredComponent) (*registry
 	runtime.Input = a.Input
 	runtime.Output = a.Output
 	runtime.OutputType = a.outputType
+	runtime.ContractState = a.contractState
 	runtime.Providers = append([]locator.Provider(nil), runtime.Providers...)
 	return &runtime, nil
 }

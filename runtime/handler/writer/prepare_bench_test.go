@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/viant/bindly"
 	rhandler "github.com/viant/datly/runtime/handler"
 	xhandler "github.com/viant/xdatly/handler"
 )
@@ -19,7 +20,7 @@ type fakeCapabilities struct {
 	validations [][]xhandler.ValidationOptions
 }
 
-func (f *fakeCapabilities) Bind(context.Context, any) error { return nil }
+func (f *fakeCapabilities) Bind(context.Context, any, ...bindly.BindOption) error { return nil }
 func (f *fakeCapabilities) Lookup(_ context.Context, key xhandler.ValueKey) (any, bool, error) {
 	switch key {
 	case xhandler.FrameworkValidatorKey, xhandler.DMLKey, xhandler.SequencerKey, xhandler.TransactionStarterKey:

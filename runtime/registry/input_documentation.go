@@ -30,6 +30,11 @@ func (c *InputContract) WithDocumentation(snapshot *docs.Snapshot) *InputContrac
 func (f InputField) Documentation() *docs.Snapshot { return f.documentation }
 func (f InputField) Origin() spec.RouteRef         { return f.origin }
 func (f InputField) StructField() (reflect.StructField, error) {
+	if f.metadataField != nil {
+		field := *f.metadataField
+		field.Index = append([]int(nil), field.Index...)
+		return field, nil
+	}
 	return xshape.Linked(f.owner).StructField(f.path)
 }
 
@@ -40,5 +45,5 @@ func (f InputField) Internal() (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	return inputvisibility.Internal(f.owner, field.Index), nil
+	return inputvisibility.InternalRepresentation(f.owner, field.Index, f.ownerRepresentation), nil
 }

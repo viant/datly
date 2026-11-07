@@ -5,17 +5,20 @@ import (
 	"github.com/viant/datly/spec"
 	"github.com/viant/mcp-protocol/schema/fieldname"
 	"github.com/viant/mcp-protocol/schema/jsonschema"
+	xshape "github.com/viant/x/shape"
 	"reflect"
 	"sort"
 	"strings"
 )
 
 type schemaProjector struct {
-	docs       *docs.Snapshot
-	schemas    map[string]*spec.WireSchema
-	wireType   reflect.Type
-	caseFormat string
-	nativeBody bool
+	nativeBody     bool
+	field          *xshape.JSONField
+	representation *xshape.Representation
+	docs           *docs.Snapshot
+	schemas        map[string]*spec.WireSchema
+	wireType       reflect.Type
+	caseFormat     string
 }
 
 func schemaForType(t reflect.Type, _ map[reflect.Type]bool) (map[string]interface{}, error) {
@@ -33,7 +36,7 @@ func (p *schemaProjector) argument(t reflect.Type, path, property string, schema
 		}
 		authority = map[reflect.Type]reflect.Type{source: p.wireType}
 	}
-	visibility := memberNameVisibility(p.caseFormat)
+	visibility := representationVisibility(p.representation, p.caseFormat)
 	if p.wireType != nil {
 		visibility.FallbackName = nil
 	}
@@ -58,7 +61,7 @@ func (p *schemaProjector) argument(t reflect.Type, path, property string, schema
 			example = annotation.Example
 		}
 		return annotation.Description, example
-	}}).Compile(jsonschema.Request{Type: t, Path: path, Property: property})
+	}}).Compile(jsonschema.Request{Field: p.field, Type: t, Path: path, Property: property, Representation: p.representation})
 	if err != nil {
 		return nil, err
 	}
@@ -302,6 +305,9 @@ func canonicalSchemaPath(t reflect.Type, path string, visibility fieldname.Visib
 			if fieldname.CustomJSON(t) {
 				visibility.FallbackName = nil
 			}
+			if visibility.Representation != nil {
+				visibility.Representation = visibility.Representation.Elem()
+			}
 			t = t.Elem()
 		}
 		if t == nil || t.Kind() != reflect.Struct {
@@ -318,6 +324,7 @@ func canonicalSchemaPath(t reflect.Type, path string, visibility fieldname.Visib
 		for _, entry := range entries {
 			if parts[i] == entry.Field.Name || parts[i] == entry.JSONName || parts[i] == entry.Name.Public {
 				parts[i], t, found = entry.Name.Public, entry.Field.Type, true
+				visibility.Representation = entry.Representation
 				break
 			}
 		}
@@ -329,4 +336,10 @@ func canonicalSchemaPath(t reflect.Type, path string, visibility fieldname.Visib
 }
 func excludedMCPMember(field reflect.StructField) bool {
 	return strings.TrimSpace(field.Tag.Get("mcp")) == "-"
+}
+
+func representationVisibility(metadata *xshape.Representation, formats ...string) fieldname.Visibility {
+	visibility := memberNameVisibility(formats...)
+	visibility.Representation = metadata
+	return visibility
 }

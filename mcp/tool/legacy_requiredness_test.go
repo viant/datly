@@ -1,30 +1,30 @@
 package tool
 
 import (
+	"github.com/viant/bindly"
+	"github.com/viant/bindly/state"
+	"github.com/viant/datly/spec"
 	"reflect"
 	"testing"
 )
 
-func TestLegacyNamedSchemaRequiredness(t *testing.T) {
+func TestExplicitNamedSchemaRequiredness(t *testing.T) {
 	for _, tc := range []struct {
-		name, kind string
-		uri        bool
-		typ        reflect.Type
-		tag        string
-		want       bool
+		kind     string
+		required bool
+		want     bool
 	}{
-		{"required query remains advertised optional", "query", false, reflect.TypeFor[int](), `parameter:",required=true"`, false},
-		{"required form remains advertised optional", "form", false, reflect.TypeFor[int](), "", false},
-		{"URI scalar", "path", true, reflect.TypeFor[int](), "", true},
-		{"URI pointer", "path", true, reflect.TypeFor[*int](), "", false},
-		{"unscoped path", "path", false, reflect.TypeFor[int](), "", false},
-		{"body scalar", "body", false, reflect.TypeFor[int](), "", false},
-		{"body slice", "body", false, reflect.TypeFor[[]int](), "", false},
-		{"body optional", "body", false, reflect.TypeFor[struct{ ID int }](), `optional:"true"`, false},
+		{"query", false, false}, {"query", true, true}, {"form", true, true},
+		{"path", false, true}, {"body", false, false}, {"body", true, true},
 	} {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := legacyNamedSchemaRequired(tc.kind, tc.uri, tc.typ, tc.tag); got != tc.want {
-				t.Fatalf("got %t want %t", got, tc.want)
+		t.Run(tc.kind, func(t *testing.T) {
+			contract := testRouteContract(t, reflect.TypeFor[struct{ Value *int }](), []bindly.BindingSpec{{Path: "Value", Location: state.Location{Kind: tc.kind, In: "value"}, Required: &tc.required}})
+			plan, err := NewCompiler().Compile(Input{Contract: contract, Exposure: &spec.MCPExposure{Kind: spec.MCPExposureTool, Name: "example"}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := len(plan.Metadata().InputSchema.Required) > 0; got != tc.want {
+				t.Fatalf("required=%v want %v", got, tc.want)
 			}
 		})
 	}

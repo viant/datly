@@ -30,18 +30,22 @@ type RouteInput struct {
 
 // InputField is one canonical route-effective component input field.
 type InputField struct {
-	owner           reflect.Type
-	origin          spec.RouteRef
-	documentation   *docs.Snapshot
-	path            string
-	destinationType reflect.Type
-	binding         bindly.BindingSpec
-	anonymous       bool
-	dependency      *spec.RouteRef
-	verifiedJWT     bool
-	wireSchema      *spec.WireSchema
-	wireSchemas     map[string]*spec.WireSchema
-	wireType        reflect.Type
+	representation      *xshape.Representation
+	ownerRepresentation *xshape.Representation
+	metadataField       *reflect.StructField
+	effectiveRequired   *bool
+	owner               reflect.Type
+	origin              spec.RouteRef
+	documentation       *docs.Snapshot
+	path                string
+	destinationType     reflect.Type
+	binding             bindly.BindingSpec
+	anonymous           bool
+	dependency          *spec.RouteRef
+	verifiedJWT         bool
+	wireSchema          *spec.WireSchema
+	wireSchemas         map[string]*spec.WireSchema
+	wireType            reflect.Type
 }
 
 // RouteInputContract is the exact binding contract for one component route.
@@ -320,7 +324,17 @@ func (c *RouteInputContract) Fields() []InputField {
 	return result
 }
 
-func (f InputField) Path() string                  { return f.path }
+func (f InputField) Path() string                           { return f.path }
+func (f InputField) Representation() *xshape.Representation { return f.representation }
+
+// EffectiveRequired reports an explicit caller-policy metadata override, separate
+// from legacy discovery defaults. It never mutates the executable input plan.
+func (f InputField) EffectiveRequired() (bool, bool) {
+	if f.effectiveRequired == nil {
+		return false, false
+	}
+	return *f.effectiveRequired, true
+}
 func (f InputField) WireType() reflect.Type        { return f.wireType }
 func (f InputField) DestinationType() reflect.Type { return f.destinationType }
 func (f InputField) SourceType() reflect.Type {

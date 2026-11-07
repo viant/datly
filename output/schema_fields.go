@@ -4,6 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+
+	"github.com/viant/mcp-protocol/schema/fieldname"
+	xshape "github.com/viant/x/shape"
 	"strings"
 
 	"github.com/viant/tagly/format"
@@ -11,18 +14,20 @@ import (
 )
 
 type jsonSchemaField struct {
-	field      reflect.StructField
-	name       string
-	path       string
-	required   bool
-	quoted     bool
-	nullable   bool
-	timeLayout string
+	representation *xshape.Representation
+	field          reflect.StructField
+	name           string
+	path           string
+	required       bool
+	quoted         bool
+	nullable       bool
+	timeLayout     string
 }
 
-func (p *Plan) jsonSchemaFields(t reflect.Type, path string, optional bool, active map[reflect.Type]bool) ([]jsonSchemaField, error) {
+func (p *Plan) jsonSchemaFields(t reflect.Type, path string, optional bool, active map[reflect.Type]bool, representations ...*xshape.Representation) ([]jsonSchemaField, error) {
+	representation := representationForType(firstRepresentation(representations), t)
 	if !p.transformedJSON() {
-		return p.standardSchemaFields(t, path)
+		return p.standardSchemaFields(t, path, representation)
 	}
 	if active[t] {
 		return nil, fmt.Errorf("%w: recursive inline type %s", ErrSchemaUnavailable, t)
@@ -32,11 +37,17 @@ func (p *Plan) jsonSchemaFields(t reflect.Type, path string, optional bool, acti
 	var result []jsonSchemaField
 	inlineCount, explicitSibling := 0, false
 	for i := 0; i < t.NumField(); i++ {
-		field := t.Field(i)
+		original := t.Field(i)
+		field := original
+		var fieldShape *xshape.Representation
+		if representation != nil {
+			field = representation.Field(i)
+			fieldShape = representation.FieldShape(i)
+		}
 		if !field.IsExported() || field.Tag.Get("setMarker") == "true" {
 			continue
 		}
-		name, options, _ := strings.Cut(field.Tag.Get("json"), ",")
+		name, _, _ := strings.Cut(field.Tag.Get("json"), ",")
 		explicit := name != ""
 		if name == "-" || field.Tag.Get("internal") == "true" {
 			continue
@@ -63,14 +74,14 @@ func (p *Plan) jsonSchemaFields(t reflect.Type, path string, optional bool, acti
 		if !caseExplicit {
 			name = p.schemaCaseName(name)
 		}
-		fieldPath := schemaFieldPath(path, field.Name)
+		fieldPath := schemaFieldPath(path, original.Name)
 		inline := field.Anonymous || field.Tag.Get("jsonx") == "inline" || f.Inline
 		if inline && !field.Anonymous {
 			inlineCount++
 		} else if !inline && explicit {
 			explicitSibling = true
 		}
-		if p.exclude.Exclude(path, field.Name) {
+		if p.exclude.Exclude(path, original.Name) {
 			continue
 		}
 		if inline {
@@ -82,19 +93,15 @@ func (p *Plan) jsonSchemaFields(t reflect.Type, path string, optional bool, acti
 			if child.Kind() != reflect.Struct {
 				return nil, fmt.Errorf("%w: opaque inline field %s", ErrSchemaUnavailable, field.Name)
 			}
-			children, err := p.jsonSchemaFields(child, fieldPath, childOptional, active)
+			children, err := p.jsonSchemaFields(child, fieldPath, childOptional, active, representationForType(fieldShape, child))
 			if err != nil {
 				return nil, err
 			}
 			result = append(result, children...)
 			continue
 		}
-		omit := f.Omitempty || p.omitEmpty || optional
-		for _, option := range strings.Split(options, ",") {
-			omit = omit || option == "omitempty"
-		}
-		result = append(result, jsonSchemaField{field: field, name: name, path: fieldPath,
-			required: !omit, nullable: f.IsNullable(), timeLayout: f.TimeLayout})
+		result = append(result, jsonSchemaField{representation: fieldShape, field: field, name: name, path: fieldPath,
+			required: !optional && fieldname.Required(field), nullable: f.IsNullable(), timeLayout: f.TimeLayout})
 	}
 	if inlineCount == 1 && !explicitSibling {
 		return nil, fmt.Errorf("%w: whole-value inline encoding on %s", ErrSchemaUnavailable, t)
@@ -137,7 +144,18 @@ func (p *Plan) SelectorFieldNames(t reflect.Type, path string) ([]SelectorFieldN
 	if t == nil || t.Kind() != reflect.Struct || p.custom != nil || selectorOpaqueJSON(t) {
 		return nil, nil
 	}
-	fields, err := p.jsonSchemaFields(t, path, false, map[reflect.Type]bool{})
+	var representation *xshape.Representation
+	if p.representation != nil {
+		var err error
+		representation, err = p.representation.Lookup(path)
+		if err != nil {
+			return nil, err
+		}
+		for representation.Original().Kind() == reflect.Pointer || representation.Original().Kind() == reflect.Slice || representation.Original().Kind() == reflect.Array {
+			representation = representation.Elem()
+		}
+	}
+	fields, err := p.jsonSchemaFields(t, path, false, map[reflect.Type]bool{}, representation)
 	if err != nil {
 		return nil, err
 	}
@@ -151,4 +169,20 @@ func (p *Plan) SelectorFieldNames(t reflect.Type, path string) ([]SelectorFieldN
 func selectorOpaqueJSON(t reflect.Type) bool {
 	iface := reflect.TypeFor[json.Marshaler]()
 	return t.Implements(iface) || reflect.PointerTo(t).Implements(iface)
+}
+
+func firstRepresentation(representations []*xshape.Representation) *xshape.Representation {
+	if len(representations) == 0 {
+		return nil
+	}
+	return representations[0]
+}
+func representationForType(representation *xshape.Representation, t reflect.Type) *xshape.Representation {
+	if representation == nil || !representation.Changed() {
+		return nil
+	}
+	for representation.Original() != t && representation.Original().Kind() == reflect.Pointer {
+		representation = representation.Elem()
+	}
+	return representation
 }

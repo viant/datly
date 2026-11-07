@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/viant/bindly"
 	rhandler "github.com/viant/datly/runtime/handler"
 	handlerengine "github.com/viant/datly/runtime/handler/engine"
 	h "github.com/viant/xdatly/handler"
@@ -71,7 +72,7 @@ type queueCaps struct {
 	cancel               context.CancelFunc
 }
 
-func (c *queueCaps) Bind(_ context.Context, hook any) error {
+func (c *queueCaps) Bind(_ context.Context, hook any, options ...bindly.BindOption) error {
 	if probe, ok := hook.(*queueProbe); ok {
 		c.probe = probe
 	}

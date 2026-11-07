@@ -26,7 +26,7 @@ func TestCommandHostInvocationLoggerReachesGoBootstrapChild(t *testing.T) {
 	finished := make(chan struct{})
 	go func() {
 		defer close(finished)
-		status <- (command.Service{Holders: []any{components.Component{}}, InvocationLogger: log}).Run(ctx, []string{"run", "-conf", f.Config}, &output, &diagnostics)
+		status <- (command.Service{Holders: []any{components.Component{}, components.MbusComponent{}}, InvocationLogger: log}).Run(ctx, []string{"run", "-conf", f.Config}, &output, &diagnostics)
 	}()
 	t.Cleanup(func() {
 		cancel()
@@ -52,7 +52,7 @@ func TestCommandHostInvocationLoggerReachesGoBootstrapChild(t *testing.T) {
 		t.Fatalf("GoBootstrap child %d %#v %v", result.StatusCode, body, err)
 	}
 	entries := log.Snapshot()
-	if len(entries) != 4 || entries[0].Message != "parent.begin" || entries[1].Message != "reader.input" || entries[2].Message != "parent.end" || entries[3].Message != "reader.output" {
+	if len(entries) != 5 || entries[0].Message != "parent.begin" || entries[1].Message != "reader.input" || entries[2].Message != "parent.end" || entries[3].Message != "reader.output" || entries[4].Message != "HTTP route dispatched through handler engine" || entries[4].Level != "debug" {
 		t.Fatalf("service dropped configured logger %#v", entries)
 	}
 	cancel()
@@ -95,7 +95,7 @@ func TestCommandHostInvocationDifferReachesNativeWriter(t *testing.T) {
 	finished := make(chan struct{})
 	go func() {
 		defer close(finished)
-		status <- (command.Service{Holders: []any{components.Component{}}, InvocationDiffer: differ}).Run(ctx, []string{"run", "-conf", f.Config}, &output, &diagnostics)
+		status <- (command.Service{Holders: []any{components.Component{}, components.MbusComponent{}}, InvocationDiffer: differ}).Run(ctx, []string{"run", "-conf", f.Config}, &output, &diagnostics)
 	}()
 	t.Cleanup(func() {
 		cancel()

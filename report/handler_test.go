@@ -23,7 +23,7 @@ import (
 
 type reportBinder struct{ invoker exec.ComponentInvoker }
 
-func (b reportBinder) Bind(context.Context, any) error { return nil }
+func (b reportBinder) Bind(context.Context, any, ...bindly.BindOption) error { return nil }
 func (b reportBinder) Lookup(_ context.Context, key xhandler.ValueKey) (any, bool, error) {
 	if key == exec.ComponentInvokerKey {
 		return b.invoker, true, nil

@@ -10,6 +10,7 @@ import (
 	"reflect"
 
 	"github.com/viant/bindly/resource"
+	rcontract "github.com/viant/datly/runtime/contract"
 	rhandler "github.com/viant/datly/runtime/handler"
 	handlercompiler "github.com/viant/datly/runtime/handler/compiler"
 	"github.com/viant/datly/runtime/output"
@@ -52,6 +53,7 @@ type ArtifactInput struct {
 // Artifact is bootstrap's compiled output before runtime registration binds a
 // concrete SQL reader execution to its connections and caches.
 type Artifact struct {
+	contractState    *rcontract.StatePlans
 	instanceConst    *constant.Values
 	Documentation    *documentation.Snapshot
 	Handler          rhandler.TypedHandler
@@ -236,7 +238,8 @@ func (c *artifactCompiler) compile() (*Artifact, error) {
 		}
 	}
 	return &Artifact{instanceConst: input.Const, Documentation: docs,
-		Component: component, Input: compiledInput.Input.WithDocumentation(docs),
+		contractState: ContractStatePlans(factory, effective.Resources(input.Resources), c.lookupType),
+		Component:     component, Input: compiledInput.Input.WithDocumentation(docs),
 		Output: outputContract,
 		Reader: readerPlan, ViewDependencies: viewDependencies,
 		Handler: input.Handler, inputType: input.InputType, outputType: input.OutputType,

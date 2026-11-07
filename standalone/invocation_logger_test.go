@@ -28,7 +28,7 @@ func loggerServer(t *testing.T, log *fixture.Logger) *Server {
 	if err != nil {
 		t.Fatal(err)
 	}
-	options := Options{Config: cfg, Holders: []any{components.Component{}}, RequireLinked: true}
+	options := Options{Config: cfg, Holders: []any{components.Component{}, components.MbusComponent{}}, RequireLinked: true}
 	if log != nil {
 		options.InvocationLogger = log
 	}
@@ -109,7 +109,7 @@ func TestHostLoggerDoesNotAuthorizeSpoofedApplicationProvider(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	server, err := New(context.Background(), Options{Config: cfg, Holders: []any{components.Component{}}, InvocationLogger: &fixture.Logger{}, Providers: []locator.Provider{provider.Static(h.ValueKey("logger"), &fixture.Logger{})}})
+	server, err := New(context.Background(), Options{Config: cfg, Holders: []any{components.Component{}, components.MbusComponent{}}, InvocationLogger: &fixture.Logger{}, Providers: []locator.Provider{provider.Static(h.ValueKey("logger"), &fixture.Logger{})}})
 	if err == nil {
 		defer server.Shutdown(context.Background())
 		err = server.Reload(context.Background(), 1)
@@ -135,7 +135,7 @@ func differServer(t *testing.T, mode string, differ xdiffer.Differ, providers ..
 	}
 	cfg.GoBootstrap.LinkedOnly = mode == "linked"
 	cfg.GoBootstrap.EagerComponents = mode == "eager"
-	server, err := New(context.Background(), Options{Config: cfg, Holders: []any{components.Component{}}, RequireLinked: true, InvocationDiffer: differ, Providers: providers})
+	server, err := New(context.Background(), Options{Config: cfg, Holders: []any{components.Component{}, components.MbusComponent{}}, RequireLinked: true, InvocationDiffer: differ, Providers: providers})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -253,7 +253,7 @@ func TestHostDifferDoesNotAuthorizeSpoofedApplicationProvider(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	server, err := New(context.Background(), Options{Config: cfg, Holders: []any{components.Component{}}, InvocationDiffer: ndiffer.New(), Providers: []locator.Provider{provider.Static(h.DifferKey, ndiffer.New())}})
+	server, err := New(context.Background(), Options{Config: cfg, Holders: []any{components.Component{}, components.MbusComponent{}}, InvocationDiffer: ndiffer.New(), Providers: []locator.Provider{provider.Static(h.DifferKey, ndiffer.New())}})
 	if err == nil {
 		defer server.Shutdown(context.Background())
 		err = server.Reload(context.Background(), 1)

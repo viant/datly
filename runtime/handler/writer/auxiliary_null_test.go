@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"github.com/viant/bindly"
 	"github.com/viant/datly/internal/testharness/sqlite"
 	rhandler "github.com/viant/datly/runtime/handler"
 	"github.com/viant/datly/spec"
@@ -368,7 +369,7 @@ type auxiliaryLateChildBinder struct {
 	reverse bool
 }
 
-func (b *auxiliaryLateChildBinder) Bind(_ context.Context, hook any) error {
+func (b *auxiliaryLateChildBinder) Bind(_ context.Context, hook any, options ...bindly.BindOption) error {
 	if p, ok := hook.(*auxiliaryLateChildProbe); ok {
 		p.replace = b.replace
 		p.reverse = b.reverse
@@ -490,7 +491,7 @@ func (b *auxiliarySecondInitBinder) Lookup(ctx context.Context, key h.ValueKey) 
 	return b.sqBinder.Lookup(ctx, key)
 }
 
-func (b *auxiliarySecondInitBinder) Bind(_ context.Context, hook any) error {
+func (b *auxiliarySecondInitBinder) Bind(_ context.Context, hook any, options ...bindly.BindOption) error {
 	switch h := hook.(type) {
 	case *auxiliarySecondInitParent:
 		h.state = b.state
@@ -590,7 +591,7 @@ func (b *auxiliarySiblingLateBinder) Lookup(ctx context.Context, key h.ValueKey)
 	return b.sqBinder.Lookup(ctx, key)
 }
 
-func (b *auxiliarySiblingLateBinder) Bind(_ context.Context, hook any) error {
+func (b *auxiliarySiblingLateBinder) Bind(_ context.Context, hook any, options ...bindly.BindOption) error {
 	if h, ok := hook.(*auxiliarySiblingLateHook); ok {
 		h.state = b.state
 	}
@@ -704,7 +705,7 @@ type auxiliaryNestedReallocateBinder struct {
 	reverse bool
 }
 
-func (b *auxiliaryNestedReallocateBinder) Bind(_ context.Context, hook any) error {
+func (b *auxiliaryNestedReallocateBinder) Bind(_ context.Context, hook any, options ...bindly.BindOption) error {
 	if p, ok := hook.(*auxiliaryNestedReallocateProbe); ok {
 		p.reverse = b.reverse
 		p.input = b.input
@@ -949,7 +950,7 @@ type auxiliaryInPlaceBinder struct {
 	state *auxiliaryInPlaceReplacementState
 }
 
-func (b *auxiliaryInPlaceBinder) Bind(_ context.Context, hook any) error {
+func (b *auxiliaryInPlaceBinder) Bind(_ context.Context, hook any, options ...bindly.BindOption) error {
 	switch p := hook.(type) {
 	case *auxiliaryInPlaceRootHook:
 		p.state = b.state
@@ -1107,7 +1108,7 @@ func (b *auxiliaryFirstInitBinder) Lookup(ctx context.Context, key h.ValueKey) (
 	}
 	return b.sqBinder.Lookup(ctx, key)
 }
-func (b *auxiliaryFirstInitBinder) Bind(_ context.Context, hook any) error {
+func (b *auxiliaryFirstInitBinder) Bind(_ context.Context, hook any, options ...bindly.BindOption) error {
 	switch h := hook.(type) {
 	case *auxiliaryFirstInitParent:
 		h.state = b.state

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/viant/bindly"
 	rhandler "github.com/viant/datly/runtime/handler"
 	"github.com/viant/datly/runtime/handler/writer"
 	"github.com/viant/datly/spec"
@@ -24,7 +25,7 @@ type diagnosticCapabilities struct {
 	parent, child int
 }
 
-func (*diagnosticCapabilities) Bind(context.Context, any) error { return nil }
+func (*diagnosticCapabilities) Bind(context.Context, any, ...bindly.BindOption) error { return nil }
 func (c *diagnosticCapabilities) Lookup(_ context.Context, key h.ValueKey) (any, bool, error) {
 	switch key {
 	case h.FrameworkValidatorKey, h.TransactionStarterKey, h.SequencerKey, h.DMLKey:

@@ -2,6 +2,8 @@ package http
 
 import (
 	"fmt"
+	"github.com/viant/bindly/provider/request"
+	xresponse "github.com/viant/xdatly/response"
 	stdhttp "net/http"
 	"strings"
 
@@ -9,6 +11,9 @@ import (
 )
 
 type documentRoute struct {
+	request  openapi.Request
+	options  openapi.ServeOptions
+	dynamic  bool
 	snapshot *openapi.Snapshot
 	handler  *openapi.Handler
 	access   DocumentAccess
@@ -88,6 +93,28 @@ func (h *Handler) serveDocuments(writer stdhttp.ResponseWriter, req *stdhttp.Req
 	}
 	if isUI {
 		d.serveUI(writer, req)
+	} else if selected.dynamic && (req.Method == "GET" || req.Method == "HEAD") {
+		writer.Header().Set("Cache-Control", "private, no-store")
+		scope, err := request.NewDeferred(req)
+		if err != nil {
+			writer.WriteHeader(500)
+			return true
+		}
+		defer scope.Close()
+		projection := selected.request
+		projection.Contracts = h.runtime
+		projection.Scope = scope
+		snapshot, err := openapi.NewSnapshot(req.Context(), projection)
+		if err != nil {
+			writer.WriteHeader(xresponse.ErrorStatusCode(err, 500))
+			return true
+		}
+		handler, err := snapshot.Handler(selected.options)
+		if err != nil {
+			writer.WriteHeader(500)
+			return true
+		}
+		handler.ServeHTTP(writer, req)
 	} else {
 		selected.handler.ServeHTTP(writer, req)
 	}

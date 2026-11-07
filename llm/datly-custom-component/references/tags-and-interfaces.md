@@ -292,3 +292,40 @@ expiry, missing credential, denied business identity, and zero protected-table
 reads on failure. Also verify that a component without JWT input has no implicit
 JWT dependency. Certificate/public-key verification and the predicate execution
 path are separate checks; both must pass before claiming the full mechanism.
+
+## Caller-dependent type contracts
+
+A linked view/domain type, Input, Output or composite can implement
+`Contract(context.Context, bindly.Binder) (*contract.Policy, error)` from
+`github.com/viant/xdatly/contract`. Nested implementations are discovered through
+pointers, collection elements/map values and embedded structs. No manual child
+forwarding is needed. Nested policies apply first; enclosing policies apply last.
+
+Use original parent type plus field name for targeted rules. `nil, nil` keeps a
+field unchanged and continues traversal. `field.Clone().SkipChildren()` skips only
+that policy's descendants; nested policies remain independent. Hide retags fields,
+without deleting storage or clearing business values. Presence holders are internal.
+
+Select a stable policy name after resolving current caller state; equal names must
+mean equal edits within the component/route/direction/generation namespace. Cache
+metadata, never authorization results or closures. Nil/no-change policies retain
+linked types and existing codec behavior.
+
+See [the maintained contract guide](product/datly/doc/dynamic-contract.md) for
+binding, helpers, opt-in codec metadata and trusted `kind=contract` method/path.
+See [the boundaries](product/datly/doc/dynamic-contract-boundaries.md) before applying
+changes inside a custom JSON/Text owner. V0 support is not implied by v1 availability.
+
+## Enum wire representations
+
+Use repeated `choice:"literal"` declarations for zero-based positions or explicit
+`choice:"ordinal:literal"` pairs for stable codes. `enumAccept` selects one input
+representation (`ordinal` or `literal`); `enumStyle` independently selects output.
+Each defaults to Go storage: integer => ordinal, string => literal. Wire schema
+types can differ from Go field types. Do not advertise Go storage types as MCP or
+OpenAPI wire types when these tags select another representation.
+
+See [enum JSON conversion](product/datly/doc/enum-json.md) for compatibility rules,
+codec support, dynamic Contract overrides and preservation of explicit ordinals.
+Plain encoding/json ignores these tags; use enum-aware codecs or the Structology
+standard-compatible wrappers. Do not add a separate gateway-only mapping.

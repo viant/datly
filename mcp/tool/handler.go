@@ -2,6 +2,7 @@ package tool
 
 import (
 	"context"
+	requestprovider "github.com/viant/bindly/provider/request"
 	"github.com/viant/datly/exec"
 
 	"github.com/viant/datly/mcp/invocation"
@@ -48,13 +49,22 @@ func (h *Handler) Handle(ctx context.Context, request *schema.CallToolRequest) (
 	if h.requireBinding || h.binding != nil {
 		return nil, jsonrpc.NewInvalidParamsError("MCP component wire binding is unsupported; declare component identity on the resource or datasource", nil)
 	}
-	scope, err := h.plan.scope(ctx, request.Params.Arguments)
-	if err != nil {
-		return nil, jsonrpc.NewInvalidParamsError(err.Error(), nil)
-	}
-	defer scope.Close()
+	var scope *requestprovider.Scope
+	defer func() {
+		if scope != nil {
+			scope.Close()
+		}
+	}()
 	execution, protocolErr := h.invoker.Execute(ctx, invocation.Request{
-		Target: h.plan.Target(), Scope: scope, Method: schema.MethodToolsCall, URI: h.plan.Target().String(),
+		Target: h.plan.Target(), Method: schema.MethodToolsCall, URI: h.plan.Target().String(),
+		PrepareScope: func(effective *exec.EffectiveContract) (*requestprovider.Scope, error) {
+			plan, err := h.plan.EffectivePlan(effective)
+			if err != nil {
+				return nil, err
+			}
+			scope, err = plan.scope(ctx, request.Params.Arguments)
+			return scope, err
+		},
 	})
 	if protocolErr != nil {
 		return nil, protocolErr

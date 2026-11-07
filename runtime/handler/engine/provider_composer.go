@@ -127,7 +127,7 @@ func protectedProtocolKind(kind string) bool {
 
 func protectedRuntimeKind(kind string) bool {
 	switch kind {
-	case "input", "param", "caller_output", "component", string(xhandler.DataKey), string(xhandler.DMLKey),
+	case "contract", "input", "param", "caller_output", "component", string(xhandler.DataKey), string(xhandler.DMLKey),
 		string(xhandler.SequencerKey), string(xhandler.FlusherKey),
 		string(dexec.ComponentInvokerKey),
 		string(invocationKind),

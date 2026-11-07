@@ -1,7 +1,10 @@
 package openapi
 
 import (
+	"fmt"
 	"github.com/viant/datly/gateway/openapi/openapi3"
+	"github.com/viant/tagly/choice"
+	"reflect"
 	"strings"
 )
 
@@ -69,4 +72,35 @@ func (b *schemaBuilder) enumSchema(schema *openapi3.Schema, path []string, value
 		}
 	}
 	return schema, false
+}
+
+// fieldEnum retains the native typed choice domain on the effective field.
+func (b *schemaBuilder) fieldEnum(schema *openapi3.Schema, field reflect.StructField, quoted bool, inputs ...bool) (*openapi3.Schema, error) {
+	input := len(inputs) > 0 && inputs[0]
+	enumeration, err := choice.ParseEnum(field.Tag, field.Type)
+	if err != nil {
+		return nil, err
+	}
+	if enumeration != nil {
+		if quoted {
+			return nil, fmt.Errorf("enum representation conflicts with quoted JSON")
+		}
+		copy := *schema
+		copy.Type = enumeration.WireType(input)
+		copy.Format = ""
+		copy.Min = nil
+		copy.Max = nil
+		result, _ := b.enumSchema(&copy, nil, enumeration.WireValues(input), 0)
+		return result, nil
+	}
+	constraint, err := choice.Parse(field.Tag, field.Type)
+	if err != nil || constraint == nil {
+		return schema, err
+	}
+	values := constraint.WireValues()
+	if quoted || schema.Type != constraint.JSONType() {
+		return nil, fmt.Errorf("field %s choice conflicts with JSON wire type", field.Name)
+	}
+	result, _ := b.enumSchema(schema, nil, values, 0)
+	return result, nil
 }

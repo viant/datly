@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/viant/bindly"
 	rhandler "github.com/viant/datly/runtime/handler"
 	"github.com/viant/datly/spec"
 	h "github.com/viant/xdatly/handler"
@@ -78,7 +79,7 @@ func (*auxiliaryGraphBadQueuePhase) AfterQueueInput(context.Context, *auxiliaryG
 
 type auxiliaryGraphBinder struct{ probe *auxiliaryGraphProbe }
 
-func (b *auxiliaryGraphBinder) Bind(_ context.Context, value any) error {
+func (b *auxiliaryGraphBinder) Bind(_ context.Context, value any, options ...bindly.BindOption) error {
 	hook := value.(*auxiliaryGraphHook)
 	hook.probe = b.probe
 	b.probe.bind++

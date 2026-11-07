@@ -3,6 +3,7 @@ package openapi
 import (
 	"fmt"
 	documentation "github.com/viant/datly/documentation"
+	dexec "github.com/viant/datly/exec"
 	"reflect"
 	"strings"
 
@@ -21,10 +22,15 @@ type pathBuilder struct {
 }
 
 func (b *pathBuilder) add(entry *registry.RegisteredComponent, endpoint *spec.Route) error {
+	return b.addEffective(entry, endpoint, nil)
+}
+
+func (b *pathBuilder) addEffective(entry *registry.RegisteredComponent, endpoint *spec.Route, effective *dexec.EffectiveContract) error {
 	template, err := route.CompilePathTemplate(endpoint.Path)
 	if err != nil {
 		return err
 	}
+
 	path := template.Path()
 	shape := path
 	for _, name := range template.Parameters() {
@@ -37,6 +43,27 @@ func (b *pathBuilder) add(entry *registry.RegisteredComponent, endpoint *spec.Ro
 	fields, err := b.inputs.FieldsFor(entry.Component.Key, spec.RouteRef{Method: endpoint.Method, Path: endpoint.Path})
 	if err != nil {
 		return err
+	}
+	if effective != nil {
+		routeInput, ok := entry.Input.ForRoute(spec.RouteRef{Method: endpoint.Method, Path: endpoint.Path})
+		if !ok {
+			return fmt.Errorf("effective contract route missing")
+		}
+		if effective.InputRepresentation != nil {
+			fields, err = routeInput.MetadataRepresentation(effective.InputRepresentation, fields)
+		} else {
+			fields, err = routeInput.MetadataFields(effective.Input, fields)
+		}
+		if err != nil {
+			return err
+		}
+		copy := *entry
+		copy.OutputType = effective.Output
+		copy.Output, err = entry.Output.WithContract(effective.Output, effective.OutputRepresentation)
+		if err != nil {
+			return err
+		}
+		entry = &copy
 	}
 	for name, schema := range entry.Documentation.Schemas() {
 		if previous := b.document.Components.Schemas[name]; previous != nil && !reflect.DeepEqual(previous, schema) {

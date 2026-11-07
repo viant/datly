@@ -247,7 +247,7 @@ func applyTestSDKSource(file *modfile.File) error {
 func SourceGoCommand(t testing.TB, root, verb string, args ...string) *exec.Cmd {
 	t.Helper()
 	flags := []string{verb}
-	if os.Getenv("DATLY_TEST_XDATLY_DIR") != "" {
+	if os.Getenv("DATLY_TEST_XDATLY_DIR") != "" || os.Getenv("DATLY_TEST_MODFILE") != "" {
 		file, source, err := (GeneratedModule{SourceRoot: root}).source()
 		if err != nil {
 			t.Fatal(err)

@@ -94,14 +94,14 @@ func (b *componentBinder) invoke(ctx context.Context) error {
 	b.binder = rhandler.NewBinder(scope, b.result)
 	return nil
 }
-func (b *componentBinder) Bind(ctx context.Context, target any) error {
+func (b *componentBinder) Bind(ctx context.Context, target any, options ...bindly.BindOption) error {
 	if err := b.invoke(ctx); err != nil {
 		return err
 	}
 	if b.result == nil {
 		return fmt.Errorf("component returned no result to bind")
 	}
-	return b.binder.Bind(ctx, target)
+	return b.binder.Bind(ctx, target, options...)
 }
 func (b *componentBinder) Lookup(ctx context.Context, key xhandler.ValueKey) (any, bool, error) {
 	if key != xhandler.ResultKey {

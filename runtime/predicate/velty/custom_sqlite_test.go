@@ -34,7 +34,7 @@ type scopedPredicateBinder struct {
 	injector *bindly.Injector
 }
 
-func (b scopedPredicateBinder) Bind(ctx context.Context, target any) error {
+func (b scopedPredicateBinder) Bind(ctx context.Context, target any, options ...bindly.BindOption) error {
 	return b.injector.Bind(ctx, target, bindly.WithSource(b.input))
 }
 

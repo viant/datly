@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/viant/bindly"
 	readerpredicate "github.com/viant/datly/runtime/predicate/velty"
 	sqlmacro "github.com/viant/datly/sql/macro"
 	xhandler "github.com/viant/xdatly/handler"
@@ -15,7 +16,7 @@ import (
 
 type templateBinder map[xhandler.ValueKey]any
 
-func (b templateBinder) Bind(context.Context, any) error { return nil }
+func (b templateBinder) Bind(context.Context, any, ...bindly.BindOption) error { return nil }
 
 func (b templateBinder) Lookup(_ context.Context, key xhandler.ValueKey) (any, bool, error) {
 	value, ok := b[key]

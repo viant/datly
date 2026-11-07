@@ -2,6 +2,7 @@ package compiler
 
 import (
 	"fmt"
+	xshape "github.com/viant/x/shape"
 	"io/fs"
 	"reflect"
 
@@ -59,7 +60,24 @@ func (c *Compiler) CompileBindings() ([]bindly.BindingSpec, error) {
 	if err != nil {
 		return nil, err
 	}
-	return buildBindingSpecs(c.publicComponent, input.InputType, codecs, input.TypeLookup)
+	bindings, err := buildBindingSpecs(c.publicComponent, input.InputType, codecs, input.TypeLookup)
+	if err != nil {
+		return nil, err
+	}
+	if err = c.configureJSONDecoder(bindings); err != nil {
+		return nil, err
+	}
+	for i := range bindings {
+		field, e := xshape.Linked(input.InputType).StructField(bindings[i].Path)
+		if e != nil {
+			return nil, e
+		}
+		bindings[i], e = registry.EnumBinding(bindings[i], field)
+		if e != nil {
+			return nil, e
+		}
+	}
+	return bindings, nil
 }
 
 func (c *Compiler) Compile() (*Result, error) { return c.compile(false) }

@@ -72,6 +72,9 @@ func TestScopedBindingCanonicalOrderAndLease(t *testing.T) {
 			t.Fatal("scoped binder missing")
 		}
 		retained = b
+		if err := b.Bind(ctx, i, bindly.AllowMissingRequired()); err == nil {
+			t.Fatal("scoped binder accepted options outside its canonical plan")
+		}
 		value, found, err := b.Lookup(ctx, xhandler.InputKey)
 		if err != nil || !found || value != i {
 			t.Fatalf("canonical lookup %v %v %v", value, found, err)

@@ -9,6 +9,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/viant/bindly"
 	"github.com/viant/datly/internal/testharness/sqlite"
 	"github.com/viant/datly/spec"
 	xpredicate "github.com/viant/xdatly/predicate"
@@ -74,7 +75,7 @@ type configuredBinder struct {
 	fail   bool
 }
 
-func (b configuredBinder) Bind(_ context.Context, target any) error {
+func (b configuredBinder) Bind(_ context.Context, target any, options ...bindly.BindOption) error {
 	if b.fail {
 		return fmt.Errorf("binding failed")
 	}

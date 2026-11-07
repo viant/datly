@@ -19,7 +19,7 @@ type predicateBinder struct {
 	err   error
 }
 
-func (b predicateBinder) Bind(context.Context, any) error { return nil }
+func (b predicateBinder) Bind(context.Context, any, ...bindly.BindOption) error { return nil }
 
 func (b predicateBinder) Lookup(_ context.Context, key xhandler.ValueKey) (any, bool, error) {
 	if key != xhandler.InputKey {

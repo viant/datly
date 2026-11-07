@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"sync"
 
+	"github.com/viant/bindly"
 	dexec "github.com/viant/datly/exec"
 	"github.com/viant/datly/internal/responsebinding"
 	xbind "github.com/viant/xdatly/bind"
@@ -143,8 +144,8 @@ type lifecycleBinder struct {
 	delegate xhandler.Binder
 }
 
-func (b *lifecycleBinder) Bind(ctx context.Context, target any) error {
-	return b.scope.run(ctx, func(ctx context.Context) error { return b.delegate.Bind(ctx, target) })
+func (b *lifecycleBinder) Bind(ctx context.Context, target any, options ...bindly.BindOption) error {
+	return b.scope.run(ctx, func(ctx context.Context) error { return b.delegate.Bind(ctx, target, options...) })
 }
 func (b *lifecycleBinder) Lookup(ctx context.Context, key xhandler.ValueKey) (value any, found bool, err error) {
 	err = b.scope.run(ctx, func(ctx context.Context) error {

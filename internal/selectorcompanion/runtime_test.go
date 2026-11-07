@@ -216,7 +216,7 @@ type delegatingBinder struct {
 	failure error
 }
 
-func (b *delegatingBinder) Bind(_ context.Context, target any) error {
+func (b *delegatingBinder) Bind(_ context.Context, target any, options ...bindly.BindOption) error {
 	b.input = target
 	return b.failure
 }

@@ -215,7 +215,15 @@ func (c *serviceCompiler) publish(ctx context.Context, catalog *Catalog, policy 
 			return nil
 		}
 		return func(ctx context.Context, value any) ([]byte, error) {
-			encoded, err := plan.Encode(ctx, "json", value)
+			selected := plan
+			if effective, ok := exec.SelectedContract(ctx, target); ok && (effective.Output != plan.Type() || effective.OutputRepresentation != nil) {
+				var err error
+				selected, err = plan.WithContract(effective.Output, effective.OutputRepresentation)
+				if err != nil {
+					return nil, err
+				}
+			}
+			encoded, err := selected.Encode(ctx, "json", value)
 			return encoded.Data, err
 		}
 	}, DeclaredError: func(target exec.ComponentTarget) invocation.ErrorProjector {
@@ -304,7 +312,8 @@ func (c *serviceCompiler) publish(ctx context.Context, catalog *Catalog, policy 
 	if err := registerSkillToolBridge(protocolRegistry, c.config.AuthorizeCatalogResource, c.config.AuthorizeResource); err != nil {
 		return nil, err
 	}
-	return &Service{catalog: catalog, registry: protocolRegistry, resources: resourceHandler, policy: policy, authorizeResource: c.config.AuthorizeResource, authorizeCatalogTool: c.config.AuthorizeCatalogTool, authorizeCatalogResource: c.config.AuthorizeCatalogResource}, nil
+	resolver, _ := c.config.Invoker.(exec.ContractResolver)
+	return &Service{contractResolver: resolver, catalog: catalog, registry: protocolRegistry, resources: resourceHandler, policy: policy, authorizeResource: c.config.AuthorizeResource, authorizeCatalogTool: c.config.AuthorizeCatalogTool, authorizeCatalogResource: c.config.AuthorizeCatalogResource}, nil
 }
 
 func resourceBaseURI(value string) string {

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/stretchr/testify/require"
+	"github.com/viant/bindly"
 	httpgateway "github.com/viant/datly/gateway/http"
 	rhandler "github.com/viant/datly/runtime/handler"
 	"github.com/viant/datly/spec"
@@ -200,7 +201,7 @@ func TestComposeProjectionRelationsRejectSourceEnvelopePolicies(t *testing.T) {
 
 type projectionNoInvokeBinder struct{ lookups int }
 
-func (*projectionNoInvokeBinder) Bind(context.Context, any) error { return nil }
+func (*projectionNoInvokeBinder) Bind(context.Context, any, ...bindly.BindOption) error { return nil }
 func (b *projectionNoInvokeBinder) Lookup(context.Context, xhandler.ValueKey) (any, bool, error) {
 	b.lookups++
 	return nil, false, fmt.Errorf("invoker must not be reached")

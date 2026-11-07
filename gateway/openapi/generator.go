@@ -4,6 +4,7 @@ package openapi
 import (
 	"context"
 	"fmt"
+	dexec "github.com/viant/datly/exec"
 	"strings"
 
 	"github.com/viant/datly/gateway/openapi/openapi3"
@@ -19,6 +20,10 @@ type Visibility interface {
 }
 
 type Request struct {
+	// Contracts and Scope are supplied only for caller-specific publication.
+	// Static snapshots and trusted exports omit them.
+	Contracts  dexec.ContractResolver
+	Scope      dexec.ProviderScope
 	Info       openapi3.Info
 	Components []*registry.RegisteredComponent
 	Visibility Visibility
@@ -97,7 +102,14 @@ func (Generator) Generate(ctx context.Context, request Request) (*openapi3.OpenA
 					return nil, fmt.Errorf("visibility catalog disagrees with route %s %s", endpoint.Method, endpoint.Path)
 				}
 			}
-			if err := paths.add(entry, endpoint); err != nil {
+			var effective *dexec.EffectiveContract
+			if request.Contracts != nil {
+				effective, err = request.Contracts.ResolveContract(ctx, dexec.ComponentTarget{Component: entry.Component.Key, Route: spec.RouteRef{Method: endpoint.Method, Path: endpoint.Path}}, request.Scope)
+				if err != nil {
+					return nil, fmt.Errorf("OpenAPI contract %s %s: %w", endpoint.Method, endpoint.Path, err)
+				}
+			}
+			if err := paths.addEffective(entry, endpoint, effective); err != nil {
 				return nil, fmt.Errorf("OpenAPI %s %s: %w", endpoint.Method, endpoint.Path, err)
 			}
 		}

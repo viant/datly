@@ -220,7 +220,7 @@ func TestPlainJSONWireMatchesStandardHTTP(t *testing.T) {
 			for _, name := range tc.names {
 				require.Contains(t, root.Properties, name)
 			}
-			require.ElementsMatch(t, tc.required, root.Required)
+			require.Empty(t, root.Required, "omission behavior does not imply requiredness")
 			for name, kind := range tc.types {
 				require.Equal(t, kind, proof.schema(root.Properties[name]).Type, name)
 			}

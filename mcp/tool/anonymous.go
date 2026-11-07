@@ -10,6 +10,7 @@ import (
 	"github.com/viant/datly/runtime/registry"
 	"github.com/viant/mcp-protocol/schema"
 	"github.com/viant/mcp-protocol/schema/fieldname"
+	"github.com/viant/mcp-protocol/schema/jsonschema"
 	xshape "github.com/viant/x/shape"
 )
 
@@ -43,18 +44,35 @@ func (c *Compiler) compileAnonymousBody(inputField registry.InputField, caseForm
 	if sourceType != destinationType {
 		return nil, fmt.Errorf("anonymous body field %q requires matching source and destination structs, got %v and %v", inputField.Path(), inputField.SourceType(), inputField.DestinationType())
 	}
-	fields, err := xshape.Linked(sourceType).JSONFields()
+	metadata := inputField.Representation()
+	for metadata != nil && metadata.Original().Kind() == reflect.Pointer {
+		metadata = metadata.Elem()
+	}
+	var fields []xshape.JSONField
+	var err error
+	if metadata != nil {
+		fields, err = metadata.JSONFields()
+	} else {
+		fields, err = xshape.Linked(sourceType).JSONFields()
+	}
 	if err != nil {
 		return nil, err
 	}
 	_, requiredNames := schema.StructToProperties(sourceType)
+	if metadata != nil {
+		published, e := (jsonschema.Reflector{}).Compile(jsonschema.Request{Type: sourceType, Representation: metadata})
+		if e != nil {
+			return nil, e
+		}
+		requiredNames, _ = published["required"].([]string)
+	}
 	required := make(map[string]bool, len(requiredNames))
 	for _, name := range requiredNames {
 		required[name] = true
 	}
 	result := make([]Argument, 0, len(fields))
 	for _, projected := range fields {
-		if !projected.Field.Exported || inputvisibility.Internal(sourceType, projected.Field.Index) {
+		if !projected.Field.Exported || inputvisibility.InternalRepresentation(sourceType, projected.Field.Index, metadata) {
 			continue
 		}
 		field := projected.Field.StructField()
@@ -79,8 +97,15 @@ func (c *Compiler) compileAnonymousBody(inputField registry.InputField, caseForm
 			goName = field.Name
 			aliases = append(aliases, goName)
 		}
+		var childMetadata *xshape.Representation
+		if metadata != nil {
+			childMetadata = metadata.FieldShapeByIndex(projected.Field.Index)
+		}
+		selectedField := projected
 		result = append(result, Argument{
-			documentation: inputField.Documentation(), publicName: publicName, aliases: aliases, path: inputField.Path() + "." + field.Name,
+			schemaField:    &selectedField,
+			representation: childMetadata,
+			documentation:  inputField.Documentation(), publicName: publicName, aliases: aliases, path: inputField.Path() + "." + field.Name,
 			sourceKind: "body", sourceName: projected.Name,
 			sourceType: field.Type, destinationType: field.Type,
 			parentBodyType: inputField.SourceType(), parentBodySource: binding.Location.In, customJSONBody: customJSONBody,

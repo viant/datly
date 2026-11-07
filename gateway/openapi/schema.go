@@ -6,6 +6,7 @@ import (
 	"fmt"
 	documentation "github.com/viant/datly/documentation"
 	jsonmarshal "github.com/viant/structology/encoding/json/marshal"
+	xshape "github.com/viant/x/shape"
 	"reflect"
 	"time"
 
@@ -13,9 +14,10 @@ import (
 )
 
 type schemaKey struct {
-	typeOf reflect.Type
-	input  bool
-	path   string
+	representation *xshape.Representation
+	typeOf         reflect.Type
+	input          bool
+	path           string
 }
 
 // schemaBuilder owns OpenAPI projection, not Go field/type discovery. All field
@@ -42,11 +44,26 @@ func newSchemaBuilder(schemas openapi3.Schemas) *schemaBuilder {
 }
 
 func (b *schemaBuilder) schema(t reflect.Type, input bool) (*openapi3.Schema, error) {
+	return b.schemaRepresentation(t, input, nil)
+}
+
+func (b *schemaBuilder) schemaRepresentation(t reflect.Type, input bool, representation *xshape.Representation) (*openapi3.Schema, error) {
+	if representation != nil && !representation.Changed() {
+		representation = nil
+	}
+	if representation != nil && representation.Original() != t {
+		return nil, fmt.Errorf("schema representation type mismatch: %s versus %s", representation.Original(), t)
+	}
+	var element *xshape.Representation
+	if representation != nil {
+		element = representation.Elem()
+	}
+
 	if t == nil {
 		return nil, fmt.Errorf("schema type is missing")
 	}
 	if t.Kind() == reflect.Pointer {
-		result, err := b.schema(t.Elem(), input)
+		result, err := b.schemaRepresentation(t.Elem(), input, element)
 		if err != nil {
 			return nil, err
 		}
@@ -66,7 +83,7 @@ func (b *schemaBuilder) schema(t reflect.Type, input bool) (*openapi3.Schema, er
 	if t.Implements(textContract) || reflect.PointerTo(t).Implements(textContract) {
 		return &openapi3.Schema{Type: "string"}, nil
 	}
-	key := schemaKey{t, input, b.path}
+	key := schemaKey{typeOf: t, input: input, path: b.path, representation: representation}
 	if name, ok := b.names[key]; ok {
 		return &openapi3.Schema{Ref: "#/components/schemas/" + name}, nil
 	}
@@ -106,7 +123,7 @@ func (b *schemaBuilder) schema(t reflect.Type, input bool) (*openapi3.Schema, er
 		}
 		s.Type = "array"
 		var err error
-		s.Items, err = b.schema(t.Elem(), input)
+		s.Items, err = b.schemaRepresentation(t.Elem(), input, element)
 		if err != nil {
 			return nil, err
 		}
@@ -118,13 +135,21 @@ func (b *schemaBuilder) schema(t reflect.Type, input bool) (*openapi3.Schema, er
 			s.MaxItems = &size
 		}
 	case reflect.Map:
-		if t.Key().Kind() != reflect.String {
-			return nil, fmt.Errorf("map %s has non-string keys", t)
+		// Native JSON bodies encode integer keys as object member names.
+		// Text key ownership follows the selected input/output direction.
+		switch t.Key().Kind() {
+		case reflect.String, reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64, reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
+		default:
+			supported := !input && t.Key().Implements(reflect.TypeFor[encoding.TextMarshaler]())
+			supported = supported || input && reflect.PointerTo(t.Key()).Implements(reflect.TypeFor[encoding.TextUnmarshaler]())
+			if !supported {
+				return nil, fmt.Errorf("map %s has unsupported JSON keys", t)
+			}
 		}
 		s.Type = "object"
 		s.Nullable = true
 		var err error
-		s.AdditionalProperties, err = b.schema(t.Elem(), input)
+		s.AdditionalProperties, err = b.schemaRepresentation(t.Elem(), input, element)
 		if err != nil {
 			return nil, err
 		}

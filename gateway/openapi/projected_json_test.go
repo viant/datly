@@ -161,11 +161,7 @@ func TestProjectedJSONPlanAndHTTP(t *testing.T) {
 				require.NotContains(t, child.Properties, "secret")
 				require.Equal(t, "date", child.Properties["at"].Format)
 				require.Equal(t, "array", child.Properties["bytes"].Type)
-				if omit {
-					require.Empty(t, root.Required)
-				} else {
-					require.Contains(t, root.Required, "payload")
-				}
+				require.Empty(t, root.Required, "omission behavior does not imply requiredness")
 				encoded, err := entry.Output.Encode(context.Background(), "json", value)
 				require.NoError(t, err)
 				rt, err := druntime.NewRuntime([]*registry.RegisteredComponent{entry})

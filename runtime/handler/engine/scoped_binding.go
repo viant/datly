@@ -111,7 +111,10 @@ func (b *scopedBinder) run(call context.Context, fn func(context.Context) error)
 	}
 	return err
 }
-func (b *scopedBinder) Bind(ctx context.Context, target any) error {
+func (b *scopedBinder) Bind(ctx context.Context, target any, options ...bindly.BindOption) error {
+	if len(options) != 0 {
+		return fmt.Errorf("scoped binding owns the canonical source and scope plan; Bind options are unsupported")
+	}
 	return b.BindScope(ctx, target, "")
 }
 func (b *scopedBinder) BindScope(ctx context.Context, target any, scope string) error {

@@ -6,6 +6,7 @@ import (
 
 	"github.com/viant/bindly/locator"
 	dexec "github.com/viant/datly/exec"
+	rcontract "github.com/viant/datly/runtime/contract"
 	rhandler "github.com/viant/datly/runtime/handler"
 	"github.com/viant/datly/spec"
 )
@@ -14,6 +15,7 @@ import (
 // by the thin root runtime facade while richer registration behavior is moved
 // out of root.
 type RegisteredComponent struct {
+	ContractState *rcontract.StatePlans
 	Documentation *documentation.Snapshot
 	Component     *spec.Component
 	Input         *InputContract

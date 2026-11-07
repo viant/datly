@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/viant/bindly"
 	"github.com/viant/datly/data"
 	"github.com/viant/datly/spec"
 	dsql "github.com/viant/datly/sql"
@@ -34,7 +35,7 @@ func TestFieldSelectorRejectsSuppliedEmptyColumn(t *testing.T) {
 	}
 }
 
-func (b selectorBinder) Bind(context.Context, any) error { return nil }
+func (b selectorBinder) Bind(context.Context, any, ...bindly.BindOption) error { return nil }
 func (b selectorBinder) Lookup(_ context.Context, key xhandler.ValueKey) (any, bool, error) {
 	if key != xhandler.SelectorsKey || b.selectors == nil {
 		return nil, false, nil

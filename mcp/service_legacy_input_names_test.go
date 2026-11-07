@@ -41,7 +41,7 @@ func TestMCPDefaultInputNamesPreserveLegacyDespiteHTTPCaseFormat(t *testing.T) {
 			}
 			require.Contains(t, props["Children"]["items"].(map[string]any)["properties"], "MetricID")
 			require.NotContains(t, props, "Has")
-			require.Contains(t, tool.Metadata.InputSchema.Required, "Id")
+			require.Empty(t, tool.Metadata.InputSchema.Required)
 			result, rpcErr := tool.Handler(context.Background(), &schema.CallToolRequest{Method: schema.MethodToolsCall, Params: schema.CallToolRequestParams{Name: "LegacyNames", Arguments: map[string]any{"Id": 7, "Name": "legacy", "AutoAdvertising": false, "Children": []any{map[string]any{"MetricID": 11}}, "Exact_Name": "explicit", "AccountingId": 9}}})
 			require.Nil(t, rpcErr)
 			require.False(t, result.IsError != nil && *result.IsError)
