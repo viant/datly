@@ -65,7 +65,7 @@ func (p *schemaProjector) argument(t reflect.Type, path, property string, schema
 			policy, err := format.Parse(field.Tag)
 			if err != nil {
 				timePolicyErr = err
-			} else if policy.InputNamesPriority == "alias" || policy.InputGroup != "" {
+			} else if policy.InputNamesPriority == "alias" || policy.InputGroup != "" || policy.InputUnless != "" {
 				runtimeSelectionPaths[canonicalSchemaPath(t, path, visibility)] = true
 			}
 		}
