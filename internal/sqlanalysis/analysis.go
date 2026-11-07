@@ -81,7 +81,7 @@ func prepare(SQL string, validate InputValidator) (string, *query.Select, error)
 		if strings.HasPrefix(SQL[pos:], "$Unsafe.") {
 			return "", nil, fmt.Errorf("unsupported dynamic SQL structure at byte %d: Unsafe SQL fragments have no static identity", pos)
 		}
-		if !strings.HasPrefix(SQL[pos:], "${") && !strings.HasPrefix(SQL[pos:], "$predicate.") {
+		if !strings.HasPrefix(SQL[pos:], "${") && !strings.HasPrefix(SQL[pos:], "$predicate.") && !strings.HasPrefix(SQL[pos:], "$criteria.") {
 			continue
 		}
 		cursor := parsly.NewCursor("", input, 0)
@@ -91,12 +91,28 @@ func prepare(SQL string, validate InputValidator) (string, *query.Select, error)
 			return "", nil, fmt.Errorf("malformed SQL template at byte %d: %w", pos, err)
 		}
 		if selector.ID != "predicate" {
-			if validate == nil {
-				return "", nil, fmt.Errorf("unsupported dynamic SQL structure at byte %d: input declaration context is unavailable", pos)
-			}
-			path, err := validate(selector)
-			if err != nil {
-				return "", nil, fmt.Errorf("static SQL input at byte %d: %w", pos, err)
+			var path string
+			if selector.ID == "criteria" {
+				// AppendBinding always emits a bound value, never SQL identity.
+				// Inspect its call shape without evaluating the operand. The
+				// existing AST value-position checks still constrain placement.
+				method, ok := selector.X.(*veltyexpr.Select)
+				if !ok || method.ID != "AppendBinding" {
+					return "", nil, fmt.Errorf("unsupported SQL criteria call at byte %d", pos)
+				}
+				call, ok := method.X.(*veltyexpr.Call)
+				if !ok || len(call.Args) != 1 || call.X != nil {
+					return "", nil, fmt.Errorf("AppendBinding requires one argument and no chained access at byte %d", pos)
+				}
+				path = "criteria.AppendBinding"
+			} else {
+				if validate == nil {
+					return "", nil, fmt.Errorf("unsupported dynamic SQL structure at byte %d: input declaration context is unavailable", pos)
+				}
+				path, err = validate(selector)
+				if err != nil {
+					return "", nil, fmt.Errorf("static SQL input at byte %d: %w", pos, err)
+				}
 			}
 			marker := fmt.Sprintf(":%svalue_%d", prefix, len(values))
 			values[marker] = path
