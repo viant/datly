@@ -96,11 +96,36 @@ func (l *Loader) mergeParams(base, authored []*spec.Parameter) ([]*spec.Paramete
 		if err != nil {
 			return nil, err
 		}
-		if !consumedBase[identity] {
+		if !consumedBase[identity] && !retiredSelectorTransport(param, authored) {
 			result = append(result, param)
 		}
 	}
 	return result, nil
+}
+
+// Authored selector declarations own their transport key on regeneration.
+// Retire only generated transport aliases for that same view/property; manual
+// parameters and selectors on other views remain independent declarations.
+func retiredSelectorTransport(candidate *spec.Parameter, authored []*spec.Parameter) bool {
+	if candidate.EmitOutput || candidate.QuerySelector == nil || !strings.EqualFold(candidate.Source.Kind, "query") {
+		return false
+	}
+	source := strings.TrimLeft(strings.TrimSpace(candidate.Source.Name), "_")
+	if source == "" || candidate.Name != text.DetectCaseFormat(source).Format(source, text.CaseFormatUpperCamel) {
+		return false
+	}
+	for _, param := range authored {
+		if param == nil || param.EmitOutput || param.QuerySelector == nil || !strings.EqualFold(param.Source.Kind, "query") {
+			continue
+		}
+		property, canonical := spec.SelectorPropertyForParam(param.Name)
+		if canonical && property == param.QuerySelector.Property && property == candidate.QuerySelector.Property &&
+			strings.EqualFold(param.QuerySelector.View, candidate.QuerySelector.View) &&
+			!strings.EqualFold(param.Source.Name, candidate.Source.Name) {
+			return true
+		}
+	}
+	return false
 }
 
 // An input field generated from a selector uses its transport source name.

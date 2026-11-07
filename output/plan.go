@@ -36,6 +36,7 @@ type Compiler struct {
 
 // Plan contains registered output authority, never invocation input or rows.
 type Plan struct {
+	declaredTime        bool
 	representation      *xshape.Representation
 	effectiveSource     reflect.Type
 	projections         sync.Map
@@ -174,6 +175,7 @@ func (c Compiler) Compile(input CompileInput) (*Plan, error) {
 			}
 		}
 	}
+	p.declaredTime = declaredTimeOutput(input.Type, nil, map[reflect.Type]bool{})
 	var err error
 	p.rows, err = compileRows(input)
 	if err != nil {
@@ -350,7 +352,7 @@ func (p *Plan) disposition(format string) string {
 }
 
 func (p *Plan) transformedJSON() bool {
-	return p.nilSlicePolicy == "empty_array" || p.caseFormat != "" || p.timeLayout != "" || len(p.exclude) > 0 || p.omitEmpty
+	return p.declaredTime || p.nilSlicePolicy == "empty_array" || p.caseFormat != "" || p.timeLayout != "" || len(p.exclude) > 0 || p.omitEmpty
 }
 
 func (p *Plan) marshalJSON(ctx context.Context, value any, custom bool) ([]byte, error) {

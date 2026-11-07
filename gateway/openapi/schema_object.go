@@ -105,6 +105,13 @@ func (b *schemaBuilder) object(key schemaKey) (*openapi3.Schema, error) {
 				}
 			}
 		}
+		if input {
+			if timeSchema, timeErr := timeInputSchema(field.StructField()); timeErr != nil {
+				return nil, timeErr
+			} else if timeSchema != nil {
+				property = timeSchema
+			}
+		}
 		if annotation.Description != "" || annotation.Example != "" {
 			if property.Ref != "" {
 				property = &openapi3.Schema{AllOf: openapi3.SchemaList{property}}

@@ -114,3 +114,25 @@ func TestCanonicalSideSelectorRetiresFormerCodecBridge(t *testing.T) {
 	require.NotNil(t, base.Codec)
 	require.Equal(t, "string", base.OutputTypeExpr)
 }
+
+func TestAuthoredSelectorSourceChangeRetiresGeneratedTransport(t *testing.T) {
+	old := selectorParam("Sort", "sort", "value", spec.SelectorPropertyOrderBy)
+	canonical := selectorParam("OrderBy", "_orderby", "value", spec.SelectorPropertyOrderBy)
+	fields := selectorParam("Fields", "fields", "value", spec.SelectorPropertyFields)
+	child := selectorParam("ChildSort", "childSort", "child", spec.SelectorPropertyOrderBy)
+	ordinary := &spec.Parameter{Name: "Sort", Source: spec.BindSource{Kind: "header", Name: "sort"}}
+	for _, alreadyGenerated := range []bool{false, true} {
+		base := []*spec.Parameter{old, fields, child, ordinary}
+		if alreadyGenerated {
+			base = append(base, selectorParam("Orderby", "_orderby", "value", spec.SelectorPropertyOrderBy))
+		}
+		got, err := (&Loader{}).mergeParams(base, []*spec.Parameter{canonical})
+		require.NoError(t, err)
+		require.Len(t, got, 4, "authored source must retire only the obsolete generated root OrderBy transport")
+		require.Equal(t, "_orderby", got[0].Source.Name)
+		require.Same(t, fields, got[1])
+		require.Same(t, child, got[2])
+		require.Same(t, ordinary, got[3])
+		require.Equal(t, "sort", old.Source.Name, "inherited contract must remain unchanged")
+	}
+}

@@ -59,9 +59,10 @@ func applyBodyFormat(field reflect.StructField, binding *bindly.BindingSpec) err
 }
 
 type bodyFormatPlan struct {
-	layout string
-	item   *bodyFormatPlan
-	fields []bodyFormatField
+	layout     string
+	nativeTime bool
+	item       *bodyFormatPlan
+	fields     []bodyFormatField
 }
 type bodyFormatField struct {
 	name string
@@ -121,7 +122,9 @@ func compileBodyFormat(target reflect.Type, memo map[reflect.Type]*bodyFormatPla
 			if err != nil {
 				return nil, err
 			}
-			if formatting != nil && formatting.TimeLayout != "" {
+			if formatting.HasTimeInputPolicy() {
+				child = &bodyFormatPlan{nativeTime: true}
+			} else if formatting != nil && formatting.TimeLayout != "" {
 				child = &bodyFormatPlan{layout: formatting.TimeLayout}
 			}
 		} else {
@@ -379,7 +382,7 @@ func bodyTimeSchema(plan *bodyFormatPlan, target reflect.Type, path []string) *b
 		target = target.Elem()
 	}
 	if len(path) == 0 {
-		if target != reflect.TypeFor[time.Time]() || (plan != nil && plan.layout != "") {
+		if target != reflect.TypeFor[time.Time]() || (plan != nil && (plan.layout != "" || plan.nativeTime)) {
 			return plan
 		}
 		return &bodyFormatPlan{layout: time.RFC3339}

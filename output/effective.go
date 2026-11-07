@@ -90,7 +90,9 @@ func (p *Plan) WithRepresentation(metadata *xshape.Representation) (*Plan, error
 		return nil, err
 	}
 	result.representation = metadata
-	if result.jsonEncoder != nil {
+	result.declaredTime = declaredTimeOutput(result.typeOf, metadata, map[reflect.Type]bool{})
+	if result.jsonEncoder != nil || (result.custom == nil && result.declaredTime) {
+		result.standardJSON = nil
 		result.jsonEncoder, err = structjson.NewMarshaller(result.typeOf, result.jsonOptions()...)
 		if err != nil {
 			return nil, err

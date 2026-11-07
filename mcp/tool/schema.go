@@ -44,8 +44,14 @@ func (p *schemaProjector) argument(t reflect.Type, path, property string, schema
 	}
 	inputAlternatives := map[string]bool{}
 	scalarAlternatives := map[string]map[string]interface{}{}
+	var timePolicyErr error
 	result, err := (jsonschema.Reflector{FallbackName: visibility.FallbackName, WireTypes: authority, ExcludeInternal: visibility.ExcludeInternal, ExcludeField: visibility.ExcludeField, Annotate: func(path string, field reflect.StructField) (string, any) {
 		if p.nativeBody && p.wireType == nil {
+			if policy, err := registry.TimeInputSchema(field); err != nil {
+				timePolicyErr = err
+			} else if policy != nil {
+				scalarAlternatives[path] = wireSchemaMap(policy)
+			}
 			if enumeration, enumErr := choice.ParseEnum(field.Tag, field.Type); enumErr == nil && enumeration != nil {
 				if domain := enumeration.InputDomain(); domain != nil {
 					scalarAlternatives[path] = wireSchemaMap(registry.EnumInputSchema(enumeration, field.Type.Kind() == reflect.Pointer))
@@ -72,6 +78,9 @@ func (p *schemaProjector) argument(t reflect.Type, path, property string, schema
 	}}).Compile(jsonschema.Request{Field: p.field, Type: t, Path: path, Property: property, Representation: p.representation})
 	if err != nil {
 		return nil, err
+	}
+	if timePolicyErr != nil {
+		return nil, timePolicyErr
 	}
 	for fieldPath := range inputAlternatives {
 		parts := strings.Split(canonicalSchemaPath(t, fieldPath, visibility), ".")
