@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/viant/mcp-protocol/schema/fieldname"
+	"github.com/viant/tagly/format"
 
 	"github.com/viant/datly/gateway/openapi/openapi3"
 	"github.com/viant/datly/internal/inputvisibility"
@@ -59,6 +60,8 @@ func (b *schemaBuilder) object(key schemaKey) (*openapi3.Schema, error) {
 	if err != nil {
 		return nil, err
 	}
+	var inputNames []format.InputName
+	var inputPolicies []*format.Tag
 	for _, projected := range fields {
 		field := projected.Field
 		if input && inputvisibility.InternalRepresentation(t, field.Index, key.representation) {
@@ -126,8 +129,23 @@ func (b *schemaBuilder) object(key schemaKey) (*openapi3.Schema, error) {
 			return nil, err
 		}
 		s.Properties[name] = property
-		if fieldname.Required(field.StructField()) {
+		isRequired := fieldname.Required(field.StructField())
+		if input {
+			metadata, err := format.Parse(field.Tag)
+			if err != nil {
+				return nil, fmt.Errorf("%s.%s: %w", t, field.Name, err)
+			}
+			inputNames = append(inputNames, format.InputName{Name: name, Aliases: metadata.InputNames})
+			inputPolicies = append(inputPolicies, metadata)
+			isRequired = projectInputAliases(s, name, property, metadata, isRequired)
+		}
+		if isRequired {
 			s.Required = append(s.Required, name)
+		}
+	}
+	if input {
+		if _, err := format.NewInputNameMatcher(inputNames, inputPolicies...); err != nil {
+			return nil, err
 		}
 	}
 	return &openapi3.Schema{Ref: "#/components/schemas/" + name}, nil

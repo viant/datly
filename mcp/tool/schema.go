@@ -7,6 +7,7 @@ import (
 	"github.com/viant/mcp-protocol/schema/fieldname"
 	"github.com/viant/mcp-protocol/schema/jsonschema"
 	"github.com/viant/tagly/choice"
+	"github.com/viant/tagly/format"
 	xshape "github.com/viant/x/shape"
 	"reflect"
 	"sort"
@@ -44,9 +45,31 @@ func (p *schemaProjector) argument(t reflect.Type, path, property string, schema
 	}
 	inputAlternatives := map[string]bool{}
 	scalarAlternatives := map[string]map[string]interface{}{}
+	aliasPriorityPaths := map[string]bool{}
 	var timePolicyErr error
-	result, err := (jsonschema.Reflector{FallbackName: visibility.FallbackName, WireTypes: authority, ExcludeInternal: visibility.ExcludeInternal, ExcludeField: visibility.ExcludeField, Annotate: func(path string, field reflect.StructField) (string, any) {
-		if p.nativeBody && p.wireType == nil {
+	nativeAliases := p.nativeBody && p.wireType == nil
+	var requireField func(string, reflect.StructField) bool
+	if nativeAliases {
+		requiredPaths := map[string]bool{}
+		for schemaPath, field := range p.schemas {
+			if field != nil && field.Required {
+				requiredPaths[canonicalSchemaPath(t, schemaPath, visibility)] = true
+			}
+		}
+		requireField = func(path string, _ reflect.StructField) bool {
+			return requiredPaths[canonicalSchemaPath(t, path, visibility)]
+		}
+	}
+	result, err := (jsonschema.Reflector{InputAliases: nativeAliases, RequireField: requireField, FallbackName: visibility.FallbackName, WireTypes: authority, ExcludeInternal: visibility.ExcludeInternal, ExcludeField: visibility.ExcludeField, Annotate: func(path string, field reflect.StructField) (string, any) {
+		if nativeAliases {
+			policy, err := format.Parse(field.Tag)
+			if err != nil {
+				timePolicyErr = err
+			} else if policy.InputNamesPriority == "alias" {
+				aliasPriorityPaths[canonicalSchemaPath(t, path, visibility)] = true
+			}
+		}
+		if nativeAliases && !aliasPriorityPaths[canonicalSchemaPath(t, path, visibility)] {
 			if policy, err := registry.TimeInputSchema(field); err != nil {
 				timePolicyErr = err
 			} else if policy != nil {
@@ -116,7 +139,10 @@ func (p *schemaProjector) argument(t reflect.Type, path, property string, schema
 		}
 	}
 	for schemaPath, schema := range p.schemas {
-		applyWireSchema(result, canonicalSchemaPath(t, schemaPath, visibility), schema)
+		canonicalPath := canonicalSchemaPath(t, schemaPath, visibility)
+		if !aliasPriorityPaths[canonicalPath] {
+			applyWireSchema(result, canonicalPath, schema, nativeAliases)
+		}
 	}
 	return result, nil
 }
@@ -170,7 +196,7 @@ func wireSchemaMap(schema *spec.WireSchema) map[string]interface{} {
 	return result
 }
 
-func applyWireSchema(root map[string]interface{}, path string, schema *spec.WireSchema) {
+func applyWireSchema(root map[string]interface{}, path string, schema *spec.WireSchema, requiredProjected ...bool) {
 	if root == nil || schema == nil || strings.TrimSpace(path) == "" {
 		return
 	}
@@ -191,10 +217,10 @@ func applyWireSchema(root map[string]interface{}, path string, schema *spec.Wire
 		}
 		return
 	}
-	applyWireSchemaParts(root, parts, schema)
+	applyWireSchemaParts(root, parts, schema, requiredProjected...)
 }
 
-func applyWireSchemaParts(node map[string]interface{}, parts []string, schema *spec.WireSchema) bool {
+func applyWireSchemaParts(node map[string]interface{}, parts []string, schema *spec.WireSchema, requiredProjected ...bool) bool {
 	node, child, propertyName := schemaMember(node, parts)
 	if child == nil {
 		return false
@@ -203,7 +229,9 @@ func applyWireSchemaParts(node map[string]interface{}, parts []string, schema *s
 		mergeWireSchema(child, schema)
 	}
 	if schema.Required {
-		addRequiredProperty(node, propertyName)
+		if len(requiredProjected) == 0 || !requiredProjected[0] {
+			addRequiredProperty(node, propertyName)
+		}
 		if !schema.Nullable {
 			removeSchemaNull(child)
 		}
@@ -330,6 +358,9 @@ func schemaObjectNode(node map[string]interface{}) map[string]interface{} {
 	if items, ok := node["items"].(map[string]interface{}); ok {
 		return schemaObjectNode(items)
 	}
+	if values, ok := node["additionalProperties"].(map[string]interface{}); ok {
+		return schemaObjectNode(values)
+	}
 	for _, key := range []string{"anyOf", "oneOf", "allOf"} {
 		list, _ := node[key].([]interface{})
 		for _, item := range list {
@@ -357,7 +388,7 @@ func memberNameVisibility(formats ...string) fieldname.Visibility {
 func canonicalSchemaPath(t reflect.Type, path string, visibility fieldname.Visibility) string {
 	parts := strings.Split(path, ".")
 	for i := 1; i < len(parts); i++ {
-		for t != nil && (t.Kind() == reflect.Pointer || t.Kind() == reflect.Slice || t.Kind() == reflect.Array) {
+		for t != nil && (t.Kind() == reflect.Pointer || t.Kind() == reflect.Slice || t.Kind() == reflect.Array || t.Kind() == reflect.Map) {
 			if fieldname.CustomJSON(t) {
 				visibility.FallbackName = nil
 			}
