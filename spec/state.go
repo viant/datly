@@ -54,8 +54,8 @@ type Codec struct {
 // WireSchema is discovery-only metadata for a public wire contract. Runtime
 // binding continues to use the compiled source and destination types.
 type WireSchema struct {
-	Minimum   *float64      `json:"minimum,omitempty"`
-	Maximum   *float64      `json:"maximum,omitempty"`
+	Minimum   *json.Number  `json:"minimum,omitempty"`
+	Maximum   *json.Number  `json:"maximum,omitempty"`
 	AnyOf     []*WireSchema `json:"anyOf,omitempty"`
 	Pattern   string        `json:"pattern,omitempty"`
 	MinLength *int          `json:"minLength,omitempty"`

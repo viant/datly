@@ -2,6 +2,7 @@ package openapi
 
 import (
 	"crypto/sha256"
+	"encoding/json"
 	"fmt"
 	"reflect"
 
@@ -123,7 +124,7 @@ func (b *schemaBuilder) wire(shape *jsonmarshal.WireShape) (*openapi3.Schema, er
 		result.Format = "int64"
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
 		result.Type = "integer"
-		zero := float64(0)
+		zero := json.Number("0")
 		result.Min = &zero
 	case reflect.Float32:
 		result.Type = "number"

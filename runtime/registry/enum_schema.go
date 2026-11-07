@@ -39,15 +39,11 @@ func EnumInputSchema(enumeration *choice.Enum, nullable bool) *spec.WireSchema {
 	return result
 }
 
-// ExactSchemaIntegerBound avoids narrowing accepted integers through float64 rounding.
-func ExactSchemaIntegerBound(value json.Number) *float64 {
-	integer, ok := new(big.Int).SetString(string(value), 10)
+// ExactSchemaIntegerBound preserves integer bounds through JSON serialization.
+func ExactSchemaIntegerBound(value json.Number) *json.Number {
+	_, ok := new(big.Int).SetString(string(value), 10)
 	if !ok {
 		return nil
 	}
-	bound, accuracy := new(big.Float).SetInt(integer).Float64()
-	if accuracy != big.Exact {
-		return nil
-	}
-	return &bound
+	return &value
 }

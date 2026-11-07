@@ -90,6 +90,21 @@ func prepare(SQL string, validate InputValidator) (string, *query.Select, error)
 		if err != nil {
 			return "", nil, fmt.Errorf("malformed SQL template at byte %d: %w", pos, err)
 		}
+		if selector.ID == "criteria" {
+			if method, ok := selector.X.(*veltyexpr.Select); ok && method.ID == "In" {
+				if err := validateCriteriaIn(method, validate); err != nil {
+					return "", nil, fmt.Errorf("static criteria.In at byte %d: %w", pos, err)
+				}
+				// In emits only a condition (including false for an empty set).
+				// Mask it like an existing predicate, not a selectable SQL value.
+				marker := fmt.Sprintf("%s%d", prefix, len(markers))
+				markers[marker] = ""
+				result.WriteString(SQL[previous:pos])
+				result.WriteString(" (" + marker + " = 1) ")
+				previous = cursor.Pos
+				continue
+			}
+		}
 		if selector.ID != "predicate" {
 			var path string
 			if selector.ID == "criteria" {
@@ -144,6 +159,49 @@ func prepare(SQL string, validate InputValidator) (string, *query.Select, error)
 		return "", nil, err
 	}
 	return analysis, parsed, nil
+}
+
+func validateCriteriaIn(method *veltyexpr.Select, validate InputValidator) error {
+	call, ok := method.X.(*veltyexpr.Call)
+	if !ok || len(call.Args) != 2 || call.X != nil {
+		return fmt.Errorf("requires two arguments and no chained access")
+	}
+	column, ok := call.Args[0].(*veltyexpr.Literal)
+	if !ok || column.RType != reflect.TypeFor[string]() {
+		return fmt.Errorf("column must be a static qualified identifier")
+	}
+	for _, part := range strings.Split(column.Value, ".") {
+		if part == "" {
+			return fmt.Errorf("column must be a static qualified identifier")
+		}
+		for i, r := range part {
+			if !(r == '_' || r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || i > 0 && r >= '0' && r <= '9') {
+				return fmt.Errorf("column must be a static qualified identifier")
+			}
+		}
+	}
+	value, ok := call.Args[1].(*veltyexpr.Select)
+	if !ok {
+		return fmt.Errorf("values must be an input reference")
+	}
+	for current := value; current != nil; {
+		if current.ID == "" {
+			return fmt.Errorf("values must be an input reference")
+		}
+		if current.X == nil {
+			break
+		}
+		next, ok := current.X.(*veltyexpr.Select)
+		if !ok {
+			return fmt.Errorf("values must not evaluate a function or index")
+		}
+		current = next
+	}
+	if validate != nil {
+		_, err := validate(value)
+		return err
+	}
+	return nil
 }
 
 func predicateAnalysisKeyword(selector *veltyexpr.Select) (string, error) {

@@ -106,7 +106,7 @@ func (b *schemaBuilder) schemaRepresentation(t reflect.Type, input bool, represe
 		s.Format = "int64"
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 		s.Type = "integer"
-		zero := float64(0)
+		zero := json.Number("0")
 		s.Min = &zero
 	case reflect.Float32:
 		s.Type = "number"

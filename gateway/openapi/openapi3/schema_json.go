@@ -72,7 +72,11 @@ func (s Schema) MarshalYAML() (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	var object map[string]any
-	err = json.Unmarshal(data, &object)
-	return object, err
+	// JSON is valid YAML; retain numeric scalar lexemes instead of decoding
+	// through float64 and rounding integer schema bounds.
+	var document yaml.Node
+	if err = yaml.Unmarshal(data, &document); err != nil {
+		return nil, err
+	}
+	return document.Content[0], nil
 }

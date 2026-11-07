@@ -27,13 +27,13 @@ func TestOpenScalarStorageBoundsAndClone(t *testing.T) {
 	}
 	schema := EnumInputSchema(p, false)
 	integer := schema.AnyOf[0]
-	if integer.Minimum == nil || *integer.Minimum != -128 || integer.Maximum == nil || *integer.Maximum != 127 {
+	if integer.Minimum == nil || *integer.Minimum != "-128" || integer.Maximum == nil || *integer.Maximum != "127" {
 		t.Fatalf("bounds=%+v", integer)
 	}
 	cloned := schema.Clone()
-	*cloned.AnyOf[0].Minimum = 0
-	*cloned.AnyOf[0].Maximum = 0
-	if *integer.Minimum != -128 || *integer.Maximum != 127 {
+	*cloned.AnyOf[0].Minimum = "0"
+	*cloned.AnyOf[0].Maximum = "0"
+	if *integer.Minimum != "-128" || *integer.Maximum != "127" {
 		t.Fatal("clone aliases storage bounds")
 	}
 }

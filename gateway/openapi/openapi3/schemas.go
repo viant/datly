@@ -2,6 +2,8 @@
 // See LICENSE and NOTICE. Mutable document-loading methods are intentionally omitted.
 package openapi3
 
+import "encoding/json"
+
 type (
 	Schemas map[string]*Schema
 
@@ -43,10 +45,10 @@ type (
 		Title      string   `json:"title,omitempty" yaml:"title,omitempty"`
 		MultipleOf *float64 `json:"multipleOf,omitempty" yaml:"multipleOf,omitempty"`
 
-		Max          *float64 `json:"maximum,omitempty" yaml:"maximum,omitempty"`
-		ExclusiveMax bool     `json:"exclusiveMaximum,omitempty" yaml:"exclusiveMaximum,omitempty"`
-		Min          *float64 `json:"minimum,omitempty" yaml:"minimum,omitempty"`
-		ExclusiveMin bool     `json:"exclusiveMinimum,omitempty" yaml:"exclusiveMinimum,omitempty"`
+		Max          *json.Number `json:"maximum,omitempty" yaml:"maximum,omitempty"`
+		ExclusiveMax bool         `json:"exclusiveMaximum,omitempty" yaml:"exclusiveMaximum,omitempty"`
+		Min          *json.Number `json:"minimum,omitempty" yaml:"minimum,omitempty"`
+		ExclusiveMin bool         `json:"exclusiveMinimum,omitempty" yaml:"exclusiveMinimum,omitempty"`
 
 		MaxLength *uint64 `json:"maxLength,omitempty" yaml:"maxLength,omitempty"`
 		MinLength uint64  `json:"minLength,omitempty" yaml:"minLength,omitempty"`
