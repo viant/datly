@@ -3,6 +3,7 @@ package compiler
 import (
 	"github.com/viant/datly/data"
 	"github.com/viant/datly/output"
+	dsql "github.com/viant/datly/sql"
 	sqlxio "github.com/viant/sqlx/io"
 	"reflect"
 	"strings"
@@ -61,7 +62,8 @@ func (b *planCompiler) compilePublicFields(views *viewSet, rootPath string) erro
 						source = column.Name
 					}
 					alternatives, verified := selectorColumnAliases(rowType, field.Index, source)
-					view.SelectorFields = append(view.SelectorFields, data.SelectorField{GoName: field.GoName, PublicName: field.PublicName, Column: source, ColumnAliases: alternatives, VerifiedColumnAliases: verified, Index: field.Index})
+					alias, aliasColumns := selectorSourceAlias(rowType, field.Index)
+					view.SelectorFields = append(view.SelectorFields, data.SelectorField{GoName: field.GoName, PublicName: field.PublicName, Column: source, ColumnAliases: alternatives, VerifiedColumnAliases: verified, SourceAlias: alias, SourceAliasColumns: aliasColumns, Index: field.Index})
 				}
 			}
 			for _, relation := range view.Relations {
@@ -93,6 +95,51 @@ func (b *planCompiler) compilePublicFields(views *viewSet, rootPath string) erro
 		return nil
 	}
 	return visit(views.root, rootPath)
+}
+
+// Only an explicit source tag preserves the legacy distinction between SQL
+// selection and the requested public field mask. SQLX alternatives alone do not.
+func selectorSourceAlias(rowType reflect.Type, index []int) (string, []string) {
+	if rowType == nil || len(index) == 0 {
+		return "", nil
+	}
+	field := rowType.FieldByIndex(index)
+	alias := strings.TrimSpace(field.Tag.Get("source"))
+	if alias == "" || field.Tag.Get("internal") == "true" {
+		return "", nil
+	}
+	// Include hidden declarations in collision checks. A visible field cannot
+	// acquire another field's identity merely because that field is excluded.
+	for _, other := range reflect.VisibleFields(rowType) {
+		if reflect.DeepEqual(other.Index, index) {
+			continue
+		}
+		names := []string{other.Name, strings.Split(other.Tag.Get("json"), ",")[0], other.Tag.Get("source")}
+		if metadata := sqlxio.ParseTag(other.Tag); metadata != nil {
+			names = append(names, strings.Split(metadata.Column, "|")...)
+		}
+		// Use the same identifier equivalence as projection membership. A
+		// quoted source must not bypass a plain hidden or duplicate identity.
+		if dsql.ProjectionNames(names).Matches(alias) {
+			return "", nil
+		}
+	}
+	metadata := sqlxio.ParseTag(field.Tag)
+	if metadata == nil || metadata.Transient {
+		return "", nil
+	}
+	var verified []string
+	for _, name := range strings.Split(metadata.Column, "|") {
+		name = strings.TrimSpace(name)
+		matched, err := sqlxio.NewMatcher(nil).Match(rowType, sqlxio.NamesToColumns([]string{name}))
+		if name != "" && err == nil && len(matched) == 1 && reflect.DeepEqual(matched[0].FieldIndex(), index) {
+			verified = append(verified, name)
+		}
+	}
+	if len(verified) == 0 {
+		return "", nil
+	}
+	return alias, verified
 }
 
 // Read alternatives from the actual output-visible field once, during compilation.

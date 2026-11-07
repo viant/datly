@@ -23,6 +23,7 @@ type SelectorProjection struct {
 
 type ProjectionColumn struct {
 	names      ProjectionNames
+	sourceOnly ProjectionNames
 	order      string
 	source     string
 	expression string
@@ -199,7 +200,7 @@ func (p SelectorProjection) selectColumns(columns []ProjectionColumn, selected [
 	for _, name := range selected {
 		match := -1
 		for i, col := range columns {
-			if !col.Matches(name) {
+			if !col.Matches(name) && !col.sourceOnly.Matches(name) {
 				continue
 			}
 			if match != -1 {
@@ -418,6 +419,76 @@ func (p SelectorProjection) applyMappings(columns []ProjectionColumn) {
 	for i := range columns {
 		columns[i].names = append(columns[i].names, aliases[i]...)
 	}
+	p.applySourceAliases(columns)
+}
+
+// Source-only aliases select an existing result without becoming ordering or
+// public-output names. The ordinary SQLX/public mapping above remains authority.
+func (p SelectorProjection) applySourceAliases(columns []ProjectionColumn) {
+	for _, field := range p.View.SelectorFields {
+		if field.SourceAlias == "" || field.Holder || field.OutputOnly {
+			continue
+		}
+		found := -1
+		for i, column := range columns {
+			if !column.Matches(field.GoName) {
+				continue
+			}
+			if found >= 0 {
+				found = -2
+				break
+			}
+			found = i
+		}
+		if found < 0 {
+			continue
+		}
+		verified := false
+		for _, name := range field.SourceAliasColumns {
+			verified = verified || name == columns[found].output
+		}
+		if !verified {
+			continue
+		}
+		collision := false
+		for _, column := range columns {
+			collision = collision || column.Matches(field.SourceAlias)
+		}
+		for _, other := range p.View.SelectorFields {
+			if other.GoName != field.GoName && (ProjectionNames{other.SourceAlias, other.PublicName, other.GoName, other.Column}).Matches(field.SourceAlias) {
+				collision = true
+			}
+		}
+		if !collision {
+			columns[found].sourceOnly = append(columns[found].sourceOnly, field.SourceAlias)
+		}
+	}
+}
+
+// SourceOnlySelection identifies a declared, verified SQL selection whose
+// requested spelling has no public identity. Ordinary unknown fields stay errors
+// in the normal selection path; this never grants arbitrary empty-output masks.
+func (p SelectorProjection) SourceOnlySelection(name string) (bool, error) {
+	if p.View == nil {
+		return false, nil
+	}
+	candidate := false
+	for _, field := range p.View.SelectorFields {
+		candidate = candidate || field.SourceAlias != "" && (ProjectionNames{field.SourceAlias}).Matches(name)
+	}
+	if !candidate {
+		return false, nil
+	}
+	columns, _, err := p.columns()
+	if err != nil {
+		return false, err
+	}
+	for _, column := range columns {
+		if column.sourceOnly.Matches(name) {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // TableColumn keeps physical output names unless the canonical view explicitly

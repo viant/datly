@@ -22,8 +22,12 @@ type SelectorField struct {
 	// VerifiedColumnAliases scan into this exact Go field using SQLX's matcher.
 	// Keep unverified alternatives above so projection ambiguity stays visible.
 	VerifiedColumnAliases []string
-	Holder                bool
-	Index                 []int
+	// SourceAlias is explicit source-tag provenance, not a SQLX alternative.
+	// SourceAliasColumns are exact SQL results verified to scan into this field.
+	SourceAlias        string
+	SourceAliasColumns []string
+	Holder             bool
+	Index              []int
 }
 
 type View struct {

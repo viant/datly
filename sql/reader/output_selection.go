@@ -55,6 +55,17 @@ func (s *outputSelection) view(plan *ViewPlan, path []string) error {
 				}
 			}
 			if !relation {
+				if source := plan.View.Spec.Source; source != nil {
+					sourceOnly, err := (dsql.SelectorProjection{SQL: source.SQL, View: plan.View}).SourceOnlySelection(name)
+					if err != nil {
+						return err
+					}
+					if sourceOnly {
+						// Keep the explicit scope even when no public fields remain.
+						// Structology's native filter then emits one empty object per row.
+						continue
+					}
+				}
 				if field := outputOnlySelectorField(plan.View, name); field != nil {
 					scope.Indexes = append(scope.Indexes, field.Index)
 					continue
