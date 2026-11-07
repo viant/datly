@@ -2,6 +2,7 @@ package companionsecured
 
 import (
 	"context"
+	"errors"
 	"github.com/viant/scy/auth/jwt"
 	"github.com/viant/xdatly"
 	legacy "github.com/viant/xdatly/handler/response"
@@ -20,7 +21,7 @@ type AuthInput struct {
 type AuthOutput struct{ Allowed bool }
 type Output struct {
 	legacy.Status `parameter:"Status,kind=output,in=status" json:",omitempty"`
-	Data          []*Row `parameter:"Data,kind=output,in=view" view:"secured,type=Row,limit=2" sql:"SELECT id,label FROM records" json:"data"`
+	Data          []*Row `parameter:"Data,kind=output,in=view" view:"secured,type=Row,limit=2" sql:"SELECT r.* FROM (SELECT id,label FROM records) r" json:"data"`
 }
 type Row struct {
 	ID    int    `sqlx:"id" json:"id"`
@@ -41,6 +42,9 @@ var Inputs chan *Input
 func (i *Input) Init(context.Context) error {
 	if Inputs != nil {
 		Inputs <- i
+	}
+	if i.ID == -1 {
+		return errors.New("fixture input initialization failed")
 	}
 	return nil
 }

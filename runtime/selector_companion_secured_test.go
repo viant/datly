@@ -42,6 +42,14 @@ import (
 )
 
 func TestSelectorCompanionNativeOwnerAuthOrderingAndIsolation(t *testing.T) {
+	testSelectorCompanionAuthOrdering(t, false)
+}
+
+func TestSelectorCompanionLegacyPageWithInputInit(t *testing.T) {
+	testSelectorCompanionAuthOrdering(t, true)
+}
+
+func testSelectorCompanionAuthOrdering(t *testing.T, legacyPage bool) {
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		t.Fatal(err)
@@ -73,6 +81,9 @@ func TestSelectorCompanionNativeOwnerAuthOrderingAndIsolation(t *testing.T) {
 	component, err := found.Components[0].Resolve(reflect.TypeFor[fixture.Input](), reflect.TypeFor[fixture.Output]())
 	if err != nil {
 		t.Fatal(err)
+	}
+	if legacyPage {
+		component.Settings = &spec.Settings{IgnoreEmptyQueryParameters: new(bool)}
 	}
 	artifact, err := bootstrap.BuildArtifact(bootstrap.ArtifactInput{Component: component, InputType: reflect.TypeFor[fixture.Input](), OutputType: reflect.TypeFor[fixture.Output](), CodecFactory: factory})
 	if err != nil {
@@ -130,6 +141,12 @@ func TestSelectorCompanionNativeOwnerAuthOrderingAndIsolation(t *testing.T) {
 		{"absent selectors", token, "?id=5", 200, 1},
 		{"selected recovery", token, "?fields=id&page=1&id=5", 200, 1},
 	} {
+		if legacyPage && tc.name == "companion conversion before Input Init" {
+			tc.query = "?_page=bad"
+		}
+		if legacyPage && tc.name == "projection with nominal owner" {
+			tc.query = "?fields=missing&_page=bad"
+		}
 		t.Run(tc.name, func(t *testing.T) {
 			beforeAuth, beforeReads, beforeInputs := authCalls.Load(), reads.Load(), len(fixture.Inputs)
 			request := httptest.NewRequest("GET", "/companion-secured"+tc.query, nil)
@@ -144,8 +161,11 @@ func TestSelectorCompanionNativeOwnerAuthOrderingAndIsolation(t *testing.T) {
 			if tc.code != 200 && reads.Load() != beforeReads {
 				t.Fatal("failure reached protected SQL")
 			}
-			if tc.name != "projection with nominal owner" && tc.code != 200 && len(fixture.Inputs) != beforeInputs {
+			if tc.name != "projection with nominal owner" && !(legacyPage && tc.code == 400) && tc.code != 200 && len(fixture.Inputs) != beforeInputs {
 				t.Fatal("binding failure reached public Init")
+			}
+			if legacyPage && tc.code == 400 && len(fixture.Inputs) != beforeInputs+1 {
+				t.Fatal("reader failure must follow exactly one Init")
 			}
 			if tc.name == "projection with nominal owner" {
 				want := `{"status":"error","message":"Bad Request","errors":[{"view":"secured","parameter":"Fields","statusCode":400,"message":"Bad Request"}],"data":[]}`
@@ -164,6 +184,27 @@ func TestSelectorCompanionNativeOwnerAuthOrderingAndIsolation(t *testing.T) {
 				}
 			}
 		})
+	}
+	if legacyPage {
+		beforeInputs, beforeReads := len(fixture.Inputs), reads.Load()
+		request := httptest.NewRequest("GET", "/companion-secured?id=-1&fields=missing&_page=bad", nil)
+		request.Header.Set("Authorization", token)
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, request)
+		if rec.Code != 500 || len(fixture.Inputs) != beforeInputs+1 || reads.Load() != beforeReads {
+			t.Fatalf("Init failure must precede Fields/Page and SQL: status=%d callbacks=%d reads=%d", rec.Code, len(fixture.Inputs)-beforeInputs, reads.Load()-beforeReads)
+		}
+		for _, query := range []string{"?page=", "?page=0", "?page=bad&_page=1"} {
+			before := len(fixture.Inputs)
+			request := httptest.NewRequest("GET", "/companion-secured"+query, nil)
+			request.Header.Set("Authorization", token)
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, request)
+			if rec.Code != 200 || len(fixture.Inputs) != before+1 || !strings.Contains(rec.Body.String(), `"id":1`) {
+				t.Fatalf("legacy page %s: status=%d callbacks=%d body=%s", query, rec.Code, len(fixture.Inputs)-before, rec.Body.String())
+			}
+		}
+		return
 	}
 	// A direct native call retains the actual projection cause and canonical owner.
 	target, _ := rt.ComponentTargetByMethodPath("GET", "/companion-secured")

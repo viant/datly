@@ -215,7 +215,9 @@ func NewBindingPlan(component *spec.Component, selected *Selection, input reflec
 		return result, nil
 	}
 	if component.Settings != nil && component.Settings.IgnoreEmptyQueryParameters != nil && !*component.Settings.IgnoreEmptyQueryParameters {
-		if reflect.PointerTo(input).Implements(reflect.TypeFor[xhandler.Initializer]()) || reflect.PointerTo(input).Implements(reflect.TypeFor[xhandler.InvokerInitializer]()) || reflect.PointerTo(input).Implements(reflect.TypeFor[xmcp.Initializer]()) {
+		// Ordinary Init runs after public/auth binding and before reader Fields
+		// and deferred Page evaluation. It cannot observe the private companion.
+		if reflect.PointerTo(input).Implements(reflect.TypeFor[xhandler.InvokerInitializer]()) || reflect.PointerTo(input).Implements(reflect.TypeFor[xmcp.Initializer]()) {
 			return nil, fmt.Errorf("deferred companion Page does not support input callbacks")
 		}
 		executable := make([]bindly.BindingSpec, 0)

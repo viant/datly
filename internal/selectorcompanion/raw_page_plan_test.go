@@ -160,7 +160,7 @@ func TestDeferredPageRejectsProviderSubstitutionBeforeAnyResolution(t *testing.T
 		t.Fatal(err)
 	}
 }
-func TestDeferredPageRejectsInputInitializer(t *testing.T) {
+func TestDeferredPageSupportsInputInitializer(t *testing.T) {
 	found, err := bootstrap.ReflectSelectedPackages([]string{reflect.TypeFor[securedfixture.Component]().PkgPath()}, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -171,8 +171,8 @@ func TestDeferredPageRejectsInputInitializer(t *testing.T) {
 	}
 	c.Settings = &spec.Settings{IgnoreEmptyQueryParameters: new(bool)}
 	_, err = compiler.New(compiler.Input{Component: c, InputType: reflect.TypeFor[securedfixture.Input]()}).Describe()
-	if err == nil || !strings.Contains(err.Error(), "input callbacks") {
-		t.Fatalf("initializer mode admitted: %v", err)
+	if err != nil {
+		t.Fatalf("existing page policy must support a reader Init callback: %v", err)
 	}
 }
 func TestDeferredPageLateFailurePreservesCanonicalBindingCause(t *testing.T) {
