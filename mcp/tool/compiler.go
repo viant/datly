@@ -177,7 +177,7 @@ func (c *Compiler) Compile(input Input) (*Plan, error) {
 		if argument.customJSONBody {
 			format = ""
 		}
-		property, err := (&schemaProjector{docs: owner, schemas: argument.wireSchemas, wireType: argument.wireType, caseFormat: format}).argument(sourceType, argument.path, argument.publicName, argument.wireSchema)
+		property, err := (&schemaProjector{docs: owner, schemas: argument.wireSchemas, wireType: argument.wireType, caseFormat: format, nativeBody: argument.sourceKind == "body" && !argument.customJSONBody}).argument(sourceType, argument.path, argument.publicName, argument.wireSchema)
 		if err != nil {
 			return nil, fmt.Errorf("compile MCP tool %q argument %q: %w", name, argument.publicName, err)
 		}
@@ -316,6 +316,20 @@ func (c *Compiler) compileExternal(inputField registry.InputField, field reflect
 		argument.example = strings.TrimSpace(param.Example)
 	}
 	argument.schemaRequired = legacyNamedSchemaRequired(argument.sourceKind, binding.URI != "", inputField.DestinationType(), sourceTag)
+	// An explicitly authored schema tag can retain required discovery for a
+	// native whole-body array without making the HTTP/MCP binding mandatory.
+	// Leave other shapes, wire overrides and legacy inference unchanged.
+	if !required && argument.sourceKind == "body" && argument.sourceName == "" &&
+		argument.wireType == nil && argument.wireSchema == nil && len(argument.wireSchemas) == 0 &&
+		reflect.StructTag(sourceTag).Get("required") == "true" {
+		typ := inputField.DestinationType()
+		for typ.Kind() == reflect.Pointer {
+			typ = typ.Elem()
+		}
+		if typ.Kind() == reflect.Slice && !fieldname.CustomJSON(typ) && inputField.SourceType() == inputField.DestinationType() {
+			argument.schemaRequired = true
+		}
+	}
 	// Named, non-nullable body members with an explicit required binding must
 	// advertise the same omission contract that invocation enforces. Preserve
 	// legacy pointer/slice and query discovery semantics.

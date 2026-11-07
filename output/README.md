@@ -102,3 +102,18 @@ Go values. Plain `encoding/json` and persistence serialization remain unchanged.
 Existing CSV/XML/XLS formats remain available for their supported shapes; tabular
 JSON applies the same policy to the surrounding envelope as ordinary JSON, while its
 row representation remains tabular. This option does not make a component JSON-only.
+
+### Inline map schema metadata
+
+Native `format:"inline=true"` fields of type `map[string]any` contribute keys
+at the containing object level. OpenAPI and MCP output discovery use the
+serializer's wire metadata for these fields; no custom marshaler is required.
+Their additional values are unconstrained. A map can overwrite earlier typed
+fields, so those properties also become unconstrained. A later unconditional
+typed field restores its type; an optional field does not, because an earlier
+map value can survive when the field is omitted. Required presence is preserved
+independently of value type.
+
+This describes parsed JSON with last-member-wins semantics. It does not change
+encoding or eliminate duplicate JSON members. Typed inline maps and opaque raw
+inline JSON remain unsupported by this metadata extension.

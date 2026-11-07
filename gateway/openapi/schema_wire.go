@@ -37,6 +37,13 @@ func (b *schemaBuilder) wire(shape *jsonmarshal.WireShape) (*openapi3.Schema, er
 		b.schemas[name] = result
 		result.Type = "object"
 		result.Properties = openapi3.Schemas{}
+		if additional := shape.Additional(); additional != nil {
+			var err error
+			result.AdditionalProperties, err = b.wire(additional)
+			if err != nil {
+				return nil, err
+			}
+		}
 		for _, field := range shape.Properties() {
 			parent := b.path
 			if b.path != "" {

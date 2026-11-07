@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"reflect"
+	"strings"
 
 	"github.com/viant/datly/gateway/openapi/openapi3"
 	"github.com/viant/datly/internal/inputvisibility"
@@ -72,6 +73,22 @@ func (b *schemaBuilder) object(key schemaKey) (*openapi3.Schema, error) {
 		}
 		if projected.Quoted {
 			property = &openapi3.Schema{Type: "string", Nullable: field.ReflectedType.Kind() == reflect.Pointer}
+		}
+		if input && property.Type == "integer" {
+			base := field.ReflectedType
+			for base.Kind() == reflect.Pointer {
+				base = base.Elem()
+			}
+			if base.Kind() == reflect.Int {
+				for _, option := range strings.Split(field.Tag.Get("jsonx"), ",") {
+					if strings.TrimSpace(option) == "boolToInt" {
+						integer := *property
+						integer.Nullable = true
+						property = &openapi3.Schema{AnyOf: openapi3.SchemaList{&integer, {Type: "boolean"}}}
+						break
+					}
+				}
+			}
 		}
 		if annotation.Description != "" || annotation.Example != "" {
 			if property.Ref != "" {

@@ -11,6 +11,7 @@ import (
 
 	"github.com/francoispqt/gojay"
 	"github.com/viant/mcp-protocol/schema/jsonschema"
+	jsonmarshal "github.com/viant/structology/encoding/json/marshal"
 	xshape "github.com/viant/x/shape"
 )
 
@@ -19,14 +20,31 @@ import (
 var ErrSchemaUnavailable = errors.New("output JSON schema unavailable")
 
 // JSONSchema describes JSON output using the compiled presentation settings.
-// Unlike Wire, this discovery path permits dynamic leaves (including Status.Error).
-// Field naming is kept here, beside the encoder, rather than in MCP input binding.
+// Native JSON uses serializer-owned wire facts; standard JSON retains its
+// standard field-dominance path. Dynamic leaves remain unconstrained.
 func (p *Plan) JSONSchema() (map[string]any, error) {
 	if p == nil || p.typeOf == nil {
 		return nil, nil
 	}
 	if p.custom != nil || p.TransportReady() {
 		return nil, ErrSchemaUnavailable
+	}
+	if p.transformedJSON() && p.jsonEncoder != nil {
+		shape, err := p.jsonEncoder.Wire()
+		if err != nil {
+			return nil, fmt.Errorf("%w: %v", ErrSchemaUnavailable, err)
+		}
+		// Match the existing root presentation convention.
+		base := shape
+		for base.Kind() == reflect.Pointer {
+			base = base.Element()
+		}
+		if p.nilSlicePolicy != "empty_array" || base.Kind() != reflect.Slice {
+			for shape.Kind() == reflect.Pointer {
+				shape = shape.Element()
+			}
+		}
+		return p.nativeSchema(shape, "#", "", map[*jsonmarshal.WireShape]string{})
 	}
 	t := p.typeOf
 	// Preserve root slice pointer nullability when empty-array presentation

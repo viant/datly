@@ -1099,6 +1099,8 @@ github.com/viant/bindly v0.4.1-0.20261020114552-79f0b7e785ef h1:xumfBbaADGUvSXe/
 github.com/viant/bindly v0.4.1-0.20261020114552-79f0b7e785ef/go.mod h1:2S+CsLqdGI1+s7BSuEWx/+ew8p+/Ax7Xi3HKGiE3/O8=
 github.com/viant/bindly v0.4.1-0.20261021172156-afd22f40fbb8 h1:nL0WC7i8EKYFQeQ9GcFwpd1dDEMPq9oHxRIFswjXiEY=
 github.com/viant/bindly v0.4.1-0.20261021172156-afd22f40fbb8/go.mod h1:2S+CsLqdGI1+s7BSuEWx/+ew8p+/Ax7Xi3HKGiE3/O8=
+github.com/viant/bindly v0.5.1-0.20261107051156-dcdc5fe99b89 h1:H9atP29gWteLljt3MN2lKJCRZQy8/+3fQtSrSz0nxrs=
+github.com/viant/bindly v0.5.1-0.20261107051156-dcdc5fe99b89/go.mod h1:nSQxlc5IYg3u7hQOn2V6bNvZAqaRVk+eKwkKh0m04Dw=
 github.com/viant/gmetric v0.3.2 h1:zTdW9QrPk2P0i/do9fokxtHesFQCvYqIc5Yktzmyxtg=
 github.com/viant/gmetric v0.3.2/go.mod h1:3WGxSMCL+owUb0HewYXMLxkoen8e8MlX1Vd2C6tJ5qw=
 github.com/viant/godiff v0.4.3-0.20260914060527-9f2005ca82e8 h1:PCgpoW8IwGsYDs805dCXp25vLTWkakpfvIYll0Twir4=
@@ -1219,6 +1221,10 @@ github.com/viant/structology v0.10.2-0.20261028223423-51b95943c499 h1:kBDSsUVrsJ
 github.com/viant/structology v0.10.2-0.20261028223423-51b95943c499/go.mod h1:sNNuCH9Zt+QUNeV1slf/QKBdOdUIj0AVdhDFR09+8Ig=
 github.com/viant/structology v0.10.2-0.20261102014542-ba7e5d63f2e7 h1:O4GtP0mqu/X52z9Xl1Zqvco/BPL2YF2zHxDsFi8x4Fo=
 github.com/viant/structology v0.10.2-0.20261102014542-ba7e5d63f2e7/go.mod h1:sNNuCH9Zt+QUNeV1slf/QKBdOdUIj0AVdhDFR09+8Ig=
+github.com/viant/structology v0.10.2-0.20261106041415-f131ad778c85 h1:i4NjoOKCGDBt/jg+ZGme5vh7K8u9mM/qBijkvXzGMK8=
+github.com/viant/structology v0.10.2-0.20261106041415-f131ad778c85/go.mod h1:sNNuCH9Zt+QUNeV1slf/QKBdOdUIj0AVdhDFR09+8Ig=
+github.com/viant/structology v0.10.2-0.20261107051833-6b2104dc4e04 h1:MCWG9Dvq1otV30PQ5pI6CStxHSLMe3r0dxRCstsR78o=
+github.com/viant/structology v0.10.2-0.20261107051833-6b2104dc4e04/go.mod h1:5UXd12H/1ZiZ3QVWUErna+C08vdtr5lWwT2Fn9l80pM=
 github.com/viant/structql v0.5.5-0.20261008164328-d0b837beaa3a h1:op4JW0fS/TDcF5GqsjNcVVKlw1xsjYRz2tS3jMm2WaM=
 github.com/viant/structql v0.5.5-0.20261008164328-d0b837beaa3a/go.mod h1:nm9AYnAuSKH7b7pG+dKVxbQrr1Mgp1CQEMvUwwkE+I8=
 github.com/viant/structql v0.5.5-0.20261012183420-6a47e96ff5b5 h1:gJLgcwcRvCS4MI59UBbokZKVMUk+etcsC4UkAtSSC7s=
@@ -1227,6 +1233,8 @@ github.com/viant/tagly v0.4.1-0.20261007173811-969600917520 h1:A5CLCHytLRaDNTOeh
 github.com/viant/tagly v0.4.1-0.20261007173811-969600917520/go.mod h1:PauQQkHmAvL5lFGr4gIgi+PE0aUPggBIBYN34sX2Oes=
 github.com/viant/tagly v0.4.2-0.20261028223500-81e046a19ef9 h1:1HAzpvVIgdyoej/NrAeubCC18cpxWljVaVk4YVNhaMA=
 github.com/viant/tagly v0.4.2-0.20261028223500-81e046a19ef9/go.mod h1:PauQQkHmAvL5lFGr4gIgi+PE0aUPggBIBYN34sX2Oes=
+github.com/viant/tagly v0.4.2-0.20261107044640-f8cc13f24ac5 h1:7T6sobnQ8KB/T+r75YnvmzEB8n2aflh6l7s7u93Zgvo=
+github.com/viant/tagly v0.4.2-0.20261107044640-f8cc13f24ac5/go.mod h1:PauQQkHmAvL5lFGr4gIgi+PE0aUPggBIBYN34sX2Oes=
 github.com/viant/toolbox v0.24.0/go.mod h1:OxMCG57V0PXuIP2HNQrtJf2CjqdmbrOx5EkMILuUhzM=
 github.com/viant/toolbox v0.34.5/go.mod h1:OxMCG57V0PXuIP2HNQrtJf2CjqdmbrOx5EkMILuUhzM=
 github.com/viant/toolbox v0.39.0 h1:za80N68bwfMNbdt9MbzegGY/4j6GWaMR2Pk/edl7jmI=
@@ -1239,6 +1247,8 @@ github.com/viant/x v0.5.1-0.20261019170608-3c4033ed8ccd h1:ZH6JNMvkJBQu9/WG+3Hzj
 github.com/viant/x v0.5.1-0.20261019170608-3c4033ed8ccd/go.mod h1:Ud4v5LGA8uA0EfmuO4H0t0YgAq2FNLnh3ydQUjBdaLI=
 github.com/viant/x v0.5.1-0.20261023202900-f9ec3e0a7de4 h1:QJl4j6Z8NxtDKZZ4kDq7MqHxl+DihJtnR1jokuKE0B0=
 github.com/viant/x v0.5.1-0.20261023202900-f9ec3e0a7de4/go.mod h1:Ud4v5LGA8uA0EfmuO4H0t0YgAq2FNLnh3ydQUjBdaLI=
+github.com/viant/x v0.6.1-0.20261106041415-0487ec66884b h1:0JPaEl3YxP6IvqX6dJGd+o0jYJlJE/ldW+WaevMkmZc=
+github.com/viant/x v0.6.1-0.20261106041415-0487ec66884b/go.mod h1:Ud4v5LGA8uA0EfmuO4H0t0YgAq2FNLnh3ydQUjBdaLI=
 github.com/viant/xdatly v1.0.1-0.20261005144549-60dd64a21442 h1:CYcLESFw+DqAkVxc12Bveg2+Iuq0MHkW2f8Rxg6tQy4=
 github.com/viant/xdatly v1.0.1-0.20261005144549-60dd64a21442/go.mod h1:ubkUNBQv1if6sPTZCP5Qm9Opf+JZBIAxAWIqHX7U2Mo=
 github.com/viant/xdatly v1.0.1-0.20261011023101-d5ce35689c9c h1:Y4YT8yWyxiGlHBDZyRTiw9j/iBfApnGkGpk/j00mbbU=

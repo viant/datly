@@ -41,3 +41,36 @@ member when the surrounding ordinary JSON body uses formatted names.
 Tool compilation rejects ambiguous public spellings. Supplying multiple spellings
 for one member also remains an invocation error. Formatting does not infer field
 presence, add runtime required checks, or change authorization.
+
+## Required discovery for native array bodies
+
+For an optional whole-body native slice, an explicitly authored `required:"true"`
+tag marks its named MCP argument as required in discovery without changing runtime
+omission or null handling. For example, retain a bare HTTP array and expose `Ids`:
+
+```sql
+#define($_ = $Body<*associate.CreativeIdsBody>(body/).Optional().WithTag('mcp:"name=Ids" required:"true"'))
+```
+
+Here `CreativeIdsBody` is a named `[]int` with no custom JSON methods. Its MCP
+schema retains array/null types and integer items. The schema tag does not make
+the runtime binding required. This explicit declaration applies only to a direct
+whole-body native slice with matching source and destination types and no wire
+override. Untagged arrays, query parameters, named body members, and nested-member
+requiredness keep their existing behavior.
+
+### Native integer input alternatives
+
+For native body fields, `jsonx:"boolToInt,null=omit"` on an `int` or
+`*int` declares boolean-to-integer input conversion and null omission in the
+native body provider. MCP input projection retains integer/null and adds boolean;
+it does not restrict integer values to 0 or 1. Untagged fields and output schemas
+retain their existing types. Internal and MCP-hidden members remain excluded.
+Explicit wire-schema declarations remain authoritative. This requires a body
+provider version implementing the same policy; schema metadata alone does not
+perform conversion. Custom decoder ownership and transcribed component contracts
+must be validated before adopting the policy in an application.
+
+OpenAPI input discovery represents the same native integer policy with its
+existing `anyOf` schema: nullable integer or boolean. Response schemas and
+untagged fields retain their existing representation.

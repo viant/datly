@@ -15,6 +15,7 @@ type schemaProjector struct {
 	schemas    map[string]*spec.WireSchema
 	wireType   reflect.Type
 	caseFormat string
+	nativeBody bool
 }
 
 func schemaForType(t reflect.Type, _ map[reflect.Type]bool) (map[string]interface{}, error) {
@@ -36,7 +37,21 @@ func (p *schemaProjector) argument(t reflect.Type, path, property string, schema
 	if p.wireType != nil {
 		visibility.FallbackName = nil
 	}
+	inputAlternatives := map[string]bool{}
 	result, err := (jsonschema.Reflector{FallbackName: visibility.FallbackName, WireTypes: authority, ExcludeInternal: visibility.ExcludeInternal, ExcludeField: visibility.ExcludeField, Annotate: func(path string, field reflect.StructField) (string, any) {
+		if p.nativeBody && p.wireType == nil {
+			base := field.Type
+			for base.Kind() == reflect.Pointer {
+				base = base.Elem()
+			}
+			if base.Kind() == reflect.Int && !fieldname.CustomJSON(field.Type) {
+				for _, option := range strings.Split(field.Tag.Get("jsonx"), ",") {
+					if strings.TrimSpace(option) == "boolToInt" {
+						inputAlternatives[path] = true
+					}
+				}
+			}
+		}
 		annotation := p.docs.StructField(path, field)
 		var example any
 		if annotation.Example != "" {
@@ -46,6 +61,26 @@ func (p *schemaProjector) argument(t reflect.Type, path, property string, schema
 	}}).Compile(jsonschema.Request{Type: t, Path: path, Property: property})
 	if err != nil {
 		return nil, err
+	}
+	for fieldPath := range inputAlternatives {
+		parts := strings.Split(canonicalSchemaPath(t, fieldPath, visibility), ".")
+		_, child, _ := schemaMember(result, parts[1:])
+		if child == nil {
+			continue
+		}
+		switch kinds := child["type"].(type) {
+		case string:
+			if kinds == "integer" {
+				child["type"] = []string{"integer", "boolean", "null"}
+			}
+		case []string:
+			for _, kind := range kinds {
+				if kind == "integer" {
+					child["type"] = append(append([]string(nil), kinds...), "boolean")
+					break
+				}
+			}
+		}
 	}
 	for schemaPath, schema := range p.schemas {
 		applyWireSchema(result, canonicalSchemaPath(t, schemaPath, visibility), schema)
@@ -101,35 +136,43 @@ func applyWireSchema(root map[string]interface{}, path string, schema *spec.Wire
 }
 
 func applyWireSchemaParts(node map[string]interface{}, parts []string, schema *spec.WireSchema) bool {
-	if len(parts) == 0 {
+	node, child, propertyName := schemaMember(node, parts)
+	if child == nil {
 		return false
+	}
+	if schema.Type != "" {
+		mergeWireSchema(child, schema)
+	}
+	if schema.Required {
+		addRequiredProperty(node, propertyName)
+		if !schema.Nullable {
+			removeSchemaNull(child)
+		}
+	}
+	if schema.MinItems > 0 {
+		child["minItems"] = schema.MinItems
+	}
+	return true
+}
+
+func schemaMember(node map[string]interface{}, parts []string) (map[string]interface{}, map[string]interface{}, string) {
+	if len(parts) == 0 {
+		return nil, nil, ""
 	}
 	node = schemaObjectNode(node)
 	properties, _ := node["properties"].(map[string]interface{})
 	if properties == nil {
-		return false
+		return nil, nil, ""
 	}
 	propertyName := schemaPropertyName(properties, parts[0])
 	child, _ := properties[propertyName].(map[string]interface{})
 	if child == nil {
-		return false
+		return nil, nil, ""
 	}
 	if len(parts) == 1 {
-		if schema.Type != "" {
-			mergeWireSchema(child, schema)
-		}
-		if schema.Required {
-			addRequiredProperty(node, propertyName)
-			if !schema.Nullable {
-				removeSchemaNull(child)
-			}
-		}
-		if schema.MinItems > 0 {
-			child["minItems"] = schema.MinItems
-		}
-		return true
+		return node, child, propertyName
 	}
-	return applyWireSchemaParts(child, parts[1:], schema)
+	return schemaMember(child, parts[1:])
 }
 
 func addRequiredProperty(parent map[string]interface{}, name string) {
