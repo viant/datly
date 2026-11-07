@@ -3,6 +3,7 @@ package selectorcompanion
 import (
 	"context"
 	"fmt"
+	"github.com/viant/datly/spec"
 	"reflect"
 	"strconv"
 
@@ -37,7 +38,11 @@ func (p *pageSource) resolve(ctx context.Context) (int, error) {
 	if locator == nil {
 		return 0, p.failure(fmt.Errorf("native query locator is missing"))
 	}
-	for index, name := range []string{p.binding.Location.In, "_page"} {
+	property := spec.SelectorPropertyPage
+	if parameter, ok := p.binding.Extension.(*spec.Parameter); ok && parameter.QuerySelector != nil {
+		property = parameter.QuerySelector.Property
+	}
+	for index, name := range []string{p.binding.Location.In, "_" + string(property)} {
 		raw, present, err := locator.Value(ctx, nil, name)
 		if err != nil {
 			return 0, p.failure(err)
@@ -71,12 +76,12 @@ func (p *pageSource) resolve(ctx context.Context) (int, error) {
 			page, err = strconv.Atoi(text)
 		}
 		if err != nil {
-			if index == 0 && p.legacy {
+			if index == 0 && (p.legacy || property != spec.SelectorPropertyPage) {
 				continue
 			}
 			return 0, p.failure(err)
 		}
-		if page < 1 && p.legacy {
+		if page < 1 && p.legacy && property == spec.SelectorPropertyPage {
 			page = 1
 		}
 		return page, nil

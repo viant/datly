@@ -183,7 +183,7 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 		// handler's child owns conversion, authorization order and reader policy.
 		selectors = nil
 	}
-	if selectors != nil && selectors.DeferredPage() {
+	if selectors != nil && selectors.DeferredNumeric() {
 		if _, ok := request.Handler.(rhandler.InputCapturer); ok {
 			return nil, fmt.Errorf("deferred companion Page does not support input capture callbacks")
 		}

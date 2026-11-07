@@ -3,8 +3,10 @@ package selectorcompanion
 import (
 	"context"
 	"errors"
+	"github.com/viant/datly/spec"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 
 	"github.com/viant/bindly"
@@ -157,5 +159,57 @@ func TestDeferredPageFallbackKeepsAuthoredErrorMetadata(t *testing.T) {
 	var failure *bindly.BindingError
 	if !errors.As(err, &failure) || failure.Code != 422 || failure.Message != binding.ErrorMessage || failure.In != "page" || failure.Name != "Page" || failure.Cause == nil {
 		t.Fatalf("authored binding metadata lost: %v", err)
+	}
+}
+
+// This matrix checks conversion against the pinned legacy session oracle; the
+// reader tests separately check scope, projection ordering and executed windows.
+func TestRootNumericAliasConversionMatchesLegacySession(t *testing.T) {
+	for _, property := range []spec.SelectorProperty{spec.SelectorPropertyLimit, spec.SelectorPropertyOffset} {
+		for _, tc := range []struct {
+			name, query string
+			want        int
+			invalid     bool
+		}{
+			{"absent", "", 0, false},
+			{"empty remains zero", "q=&ALIAS=3", 0, false},
+			{"negative remains negative", "q=-2&ALIAS=3", -2, false},
+			{"valid primary wins", "q=2&ALIAS=3", 2, false},
+			{"malformed primary absent alias", "q=abc", 0, false},
+			{"malformed primary valid alias", "q=abc&ALIAS=3", 3, false},
+			{"overflow primary valid alias", "q=999999999999999999999999&ALIAS=3", 3, false},
+			{"malformed alias", "q=abc&ALIAS=abc", 0, true},
+			{"empty alias", "q=abc&ALIAS=", 0, false},
+			{"repeated primary", "q=2&q=3&ALIAS=4", 0, true},
+			{"repeated alias", "ALIAS=2&ALIAS=3", 0, true},
+		} {
+			t.Run(string(property)+"/"+tc.name, func(t *testing.T) {
+				query := strings.ReplaceAll(tc.query, "ALIAS", "_"+string(property))
+				scope, err := requestprovider.New(httptest.NewRequest("GET", "/rows?"+query, nil))
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer scope.Close()
+				binding := pageTestBinding()
+				binding.Name = string(property)
+				binding.Path = string(property)
+				binding.Location.In = "q"
+				binding.Extension = &spec.Parameter{QuerySelector: &spec.QuerySelectorBinding{Property: property, View: "rows"}}
+				source, err := newPageSource(scope.Query(), binding)
+				if err != nil {
+					t.Fatal(err)
+				}
+				got, err := source.resolve(t.Context())
+				if got != tc.want || (err != nil) != tc.invalid {
+					t.Fatalf("got %d, %v; want %d, invalid=%v", got, err, tc.want, tc.invalid)
+				}
+				if err != nil {
+					var owned *bindly.BindingError
+					if !errors.As(err, &owned) || owned.Name != string(property) || owned.In != "q" {
+						t.Fatalf("lost authored binding: %v", err)
+					}
+				}
+			})
+		}
 	}
 }

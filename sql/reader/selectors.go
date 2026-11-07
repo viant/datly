@@ -2,7 +2,9 @@ package reader
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"github.com/viant/datly/internal/sqlanalysis"
 	"reflect"
 	"strings"
 
@@ -30,7 +32,7 @@ func resolveInvocationSelectors(ctx context.Context, session *Session, input ref
 		source := input
 		if session.Artifact.companionSelectors[index] {
 			source = companion
-			if binding.Property == spec.SelectorPropertyPage && session.Artifact.selectorCompanion.RawPageField(binding.FieldIndex) {
+			if session.Artifact.selectorCompanion.RawPageField(binding.FieldIndex) {
 				continue
 			}
 		}
@@ -43,7 +45,7 @@ func resolveInvocationSelectors(ctx context.Context, session *Session, input ref
 			selector = &xstate.Selector{}
 			result[binding.View] = selector
 		}
-		if session.Artifact.selectorCompanion != nil && session.Artifact.selectorCompanion.DeferredPage() && binding.Property == spec.SelectorPropertyFields {
+		if session.Artifact.selectorCompanion != nil && session.Artifact.selectorCompanion.DeferredNumeric() && binding.Property == spec.SelectorPropertyFields {
 			// Validate only the final merged Fields; an explicit root selector can
 			// replace this query list before its names acquire execution authority.
 			selector.Fields = make([]string, field.Len())
@@ -85,7 +87,7 @@ func resolveInvocationSelectors(ctx context.Context, session *Session, input ref
 		return nil, nil
 	}
 	for view, selector := range result {
-		if session.Artifact.selectorCompanion != nil && session.Artifact.selectorCompanion.DeferredPage() {
+		if session.Artifact.selectorCompanion != nil && session.Artifact.selectorCompanion.DeferredNumeric() {
 			for _, name := range append(append([]string(nil), selector.Fields...), selector.Columns...) {
 				if strings.TrimSpace(name) != "" {
 					continue
@@ -130,8 +132,67 @@ func resolveInvocationSelectors(ctx context.Context, session *Session, input ref
 			return nil, failure
 		}
 	}
+	resolveNumeric := func() error {
+		if plan := session.Artifact.selectorCompanion; plan != nil && plan.HasPageSources() {
+			for _, parameter := range plan.PageParameters() {
+				property := parameter.QuerySelector.Property
+				if property == spec.SelectorPropertyPage {
+					continue
+				}
+				view, err := session.Artifact.ViewIndex.Resolve(parameter.QuerySelector.View)
+				if err != nil {
+					return err
+				}
+				if overrides[view] {
+					continue
+				}
+				value, err := plan.ResolvePageParameter(ctx, binder, input.Interface(), parameter)
+				if err != nil {
+					return err
+				}
+				selector := result[view]
+				if selector == nil {
+					selector = &xstate.Selector{}
+					result[view] = selector
+				}
+				if property == spec.SelectorPropertyLimit {
+					selector.Limit = value
+				} else {
+					selector.Offset = value
+				}
+			}
+		}
+		return nil
+	}
+	if plan := session.Artifact.selectorCompanion; plan != nil && !plan.DeferredPage() {
+		if plan.DeferredNumeric() {
+			root := session.Artifact.Root.View
+			fields := viewProjection(root, result[root])
+			if len(fields) > 0 && root.Spec.Source != nil {
+				// Use the normal projection owner only when checked source analysis can
+				// prove membership without evaluating a template. Uncertain membership
+				// remains the builder's responsibility and never rejects a SQL shape here.
+				if source, _, analysisErr := sqlanalysis.Checked(root.Spec.Source.SQL, nil); analysisErr == nil {
+					_, projectionErr := (dsql.SelectorProjection{SQL: source, View: root}).Columns(fields)
+					var unknown *dsql.UnknownProjectionColumnError
+					if errors.As(projectionErr, &unknown) {
+						if owned := session.selectorError(root, unknown, session.selectorOwned); owned != nil {
+							return nil, owned
+						}
+						return nil, invalidSelectorFieldCause("Fields", "unknown field in the declared source projection", unknown)
+					}
+				}
+			}
+		}
+		if err := resolveNumeric(); err != nil {
+			return nil, err
+		}
+	}
 	if plan := session.Artifact.selectorCompanion; plan != nil && plan.HasPageSources() && !plan.DeferredPage() {
 		for _, parameter := range plan.PageParameters() {
+			if parameter.QuerySelector.Property != spec.SelectorPropertyPage {
+				continue
+			}
 			view, err := session.Artifact.ViewIndex.Resolve(parameter.QuerySelector.View)
 			if err != nil {
 				return nil, err
@@ -171,9 +232,12 @@ func resolveInvocationSelectors(ctx context.Context, session *Session, input ref
 			}
 			return nil, invalidSelectorFieldCause("Fields", "unknown field in the declared source projection", err)
 		}
+		if err := resolveNumeric(); err != nil {
+			return nil, err
+		}
 		session.staticSelection = selection
 		session.staticFields = finalFields
-		if !rootOverride {
+		if !rootOverride && plan.DeferredPage() {
 			page, err := plan.ResolvePage(ctx, binder, input.Interface())
 			if err != nil {
 				session.selectorFailure = err

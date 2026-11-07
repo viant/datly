@@ -12,6 +12,7 @@ import (
 	"github.com/viant/bindly/locator"
 	requestprovider "github.com/viant/bindly/provider/request"
 	"github.com/viant/datly/bootstrap"
+	numericfixture "github.com/viant/datly/bootstrap/testdata/companionnumeric"
 	pagefixture "github.com/viant/datly/bootstrap/testdata/companionpage"
 	callbackfixture "github.com/viant/datly/bootstrap/testdata/companionpagecallbacks"
 	securedfixture "github.com/viant/datly/bootstrap/testdata/companionsecured"
@@ -148,7 +149,7 @@ func TestDeferredPageRejectsProviderSubstitutionBeforeAnyResolution(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, providers := range [][]locator.Provider{{custom}, {priorityProvider{Provider: native}}, {composed}, {native, custom}, nil} {
+	for _, providers := range [][]locator.Provider{{custom}, {priorityProvider{Provider: native}}, {composed}, {native, custom}} {
 		if err := plan.ValidateProviders(providers); err == nil {
 			t.Fatalf("unknown/composed query authority accepted: %#v", providers)
 		}
@@ -242,5 +243,55 @@ func TestBoundCompanionCarriesAbsentDeferredPage(t *testing.T) {
 	}
 	if _, err := plan.Value(first, &pagefixture.Input{}); err == nil {
 		t.Fatal("different public input admitted")
+	}
+}
+
+func TestDeferredPageAllowsAbsentQueryForTypedComposition(t *testing.T) {
+	plan := compiledPage(t)
+	if err := plan.ValidateProviders(nil); err != nil {
+		t.Fatalf("absent optional transport source: %v", err)
+	}
+	input := &pagefixture.Input{ID: 7}
+	companion := reflect.New(plan.Type()).Interface()
+	carried, err := plan.CarryPage(&delegatingBinder{}, input, companion, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	page, err := plan.ResolvePage(t.Context(), carried, input)
+	if err != nil || page != 0 {
+		t.Fatalf("absent Page=%d error=%v", page, err)
+	}
+	if input.ID != 7 {
+		t.Fatal("typed public input changed")
+	}
+}
+
+func TestDeferredNumericWithoutPageRejectsProviderSubstitution(t *testing.T) {
+	found, err := bootstrap.ReflectSelectedPackages([]string{reflect.TypeFor[numericfixture.Component]().PkgPath()}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c, err := found.Components[0].Resolve(reflect.TypeFor[numericfixture.Input](), reflect.TypeFor[numericfixture.Output]())
+	if err != nil {
+		t.Fatal(err)
+	}
+	compiled, err := compiler.New(compiler.Input{Component: c, InputType: reflect.TypeFor[numericfixture.Input]()}).Compile()
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan := compiled.SelectorPlan
+	calls := 0
+	custom := provider.Named("query", func(context.Context, reflect.Type, string) (any, bool, error) { calls++; return "3", true, nil })
+	if err := plan.ValidateProviders([]locator.Provider{custom}); err == nil {
+		t.Fatal("deferred numeric selector accepted custom query authority")
+	}
+	if calls != 0 {
+		t.Fatal("rejected provider was evaluated")
+	}
+	if err := plan.ValidateProviders(nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := plan.ValidateProviders([]locator.Provider{requestprovider.NewValues().Query()}); err != nil {
+		t.Fatal(err)
 	}
 }

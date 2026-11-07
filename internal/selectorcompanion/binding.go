@@ -230,7 +230,7 @@ func NewBindingPlan(component *spec.Component, selected *Selection, input reflec
 				}
 				selected := b
 				result.deferredBinding = &selected
-			} else {
+			} else if !legacyRootNumeric(component, parameter, b) {
 				executable = append(executable, b)
 			}
 		}
@@ -247,7 +247,7 @@ func NewBindingPlan(component *spec.Component, selected *Selection, input reflec
 	}
 	ordinary := make([]bindly.BindingSpec, 0)
 	for _, binding := range selectors {
-		if binding.Extension.(*spec.Parameter).QuerySelector.Property == spec.SelectorPropertyPage && binding.DefaultValue == nil && (binding.Required == nil || !*binding.Required) && (result.IsDeferredPage(binding.Extension.(*spec.Parameter)) || unlimitedPageView(component, binding.Extension.(*spec.Parameter))) {
+		if legacyRootNumeric(component, binding.Extension.(*spec.Parameter), binding) || binding.Extension.(*spec.Parameter).QuerySelector.Property == spec.SelectorPropertyPage && binding.DefaultValue == nil && (binding.Required == nil || !*binding.Required) && (result.IsDeferredPage(binding.Extension.(*spec.Parameter)) || unlimitedPageView(component, binding.Extension.(*spec.Parameter))) {
 			result.pageBindings = append(result.pageBindings, binding)
 		} else {
 			ordinary = append(ordinary, binding)
@@ -283,8 +283,15 @@ func NewBindingPlan(component *spec.Component, selected *Selection, input reflec
 
 func (p *BindingPlan) ValidateProviders(providers []locator.Provider, resolvedPaths ...string) error {
 	if p.DeferredPage() {
-		if _, err := p.pageSource(providers); err != nil {
+		if _, err := p.querySource(providers, *p.deferredBinding); err != nil {
 			return err
+		}
+	}
+	for _, binding := range p.pageBindings {
+		if binding.Extension.(*spec.Parameter).QuerySelector.Property != spec.SelectorPropertyPage {
+			if _, err := p.querySource(providers, binding); err != nil {
+				return err
+			}
 		}
 	}
 	priorities := map[string]int{}
@@ -310,7 +317,7 @@ func (p *BindingPlan) ValidateProviders(providers []locator.Provider, resolvedPa
 				if i == 0 {
 					continue
 				}
-				if b.Location.Kind == "query" && (b.Required == nil || !*b.Required) && !p.DeferredPage() {
+				if b.Location.Kind == "query" && (b.Required == nil || !*b.Required) {
 					continue
 				}
 				return fmt.Errorf("selector companion provider %s is not in the composed invocation", b.Location.Kind)
@@ -502,12 +509,20 @@ func (p *BindingPlan) CarryPage(binder xhandler.Binder, input, value any, provid
 	c := wrapped.(*carrier)
 	c.pages = map[*spec.Parameter]*pageSource{}
 	if p.DeferredPage() {
-		c.page, err = p.pageSource(providers)
+		c.page, err = p.querySource(providers, *p.deferredBinding)
 		if err != nil {
 			return nil, err
 		}
 	}
 	for _, binding := range p.pageBindings {
+		if parameter := binding.Extension.(*spec.Parameter); parameter.QuerySelector.Property != spec.SelectorPropertyPage {
+			source, err := p.querySource(providers, binding)
+			if err != nil {
+				return nil, err
+			}
+			c.pages[parameter] = source
+			continue
+		}
 		var query locator.Provider
 		for _, candidate := range providers {
 			if candidate != nil && candidate.Kind() == "query" {
@@ -545,7 +560,7 @@ func (p *BindingPlan) ResolvePage(ctx context.Context, binder xhandler.Binder, i
 	return c.page.resolve(ctx)
 }
 
-func (p *BindingPlan) pageSource(providers []locator.Provider) (*pageSource, error) {
+func (p *BindingPlan) querySource(providers []locator.Provider, binding bindly.BindingSpec) (*pageSource, error) {
 	var query locator.Provider
 	for _, provider := range providers {
 		if provider != nil && provider.Kind() == "query" {
@@ -555,7 +570,12 @@ func (p *BindingPlan) pageSource(providers []locator.Provider) (*pageSource, err
 			query = provider
 		}
 	}
-	return newPageSource(query, *p.deferredBinding)
+	if query == nil {
+		// Typed component composition may have no transport query source. Page
+		// is optional here, so preserve absence without borrowing request state.
+		return &pageSource{binding: binding, legacy: true}, nil
+	}
+	return newPageSource(query, binding)
 }
 
 func (p *BindingPlan) authority() *BindingPlan {
@@ -647,6 +667,37 @@ func unlimitedPageView(component *spec.Component, parameter *spec.Parameter) boo
 	}
 	for _, view := range component.Views {
 		if find(view) {
+			return true
+		}
+	}
+	return false
+}
+
+// legacyRootNumeric retains root Limit/Offset conversion in the same invocation
+// source as Page. Ordinary query fields and child selectors keep native binding.
+func legacyRootNumeric(component *spec.Component, parameter *spec.Parameter, binding bindly.BindingSpec) bool {
+	if component.Settings == nil || component.Settings.IgnoreEmptyQueryParameters == nil || *component.Settings.IgnoreEmptyQueryParameters || component.RootView == nil || parameter.QuerySelector == nil || binding.DefaultValue != nil || binding.Required != nil && *binding.Required {
+		return false
+	}
+	property := parameter.QuerySelector.Property
+	if property != spec.SelectorPropertyLimit && property != spec.SelectorPropertyOffset {
+		return false
+	}
+	target := parameter.QuerySelector.View
+	return strings.EqualFold(target, component.RootView.CanonicalName()) || strings.EqualFold(target, component.RootView.Name)
+}
+
+// DeferredNumeric reports root numeric selectors whose native query conversion
+// must follow authorization and source projection validation.
+func (p *BindingPlan) DeferredNumeric() bool {
+	if p == nil {
+		return false
+	}
+	if p.DeferredPage() {
+		return true
+	}
+	for _, binding := range p.pageBindings {
+		if binding.Extension.(*spec.Parameter).QuerySelector.Property != spec.SelectorPropertyPage {
 			return true
 		}
 	}

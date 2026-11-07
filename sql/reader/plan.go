@@ -134,6 +134,9 @@ func NewPlan(config PlanConfig) (*Plan, error) {
 		}
 		for _, binding := range companion.Bindings() {
 			p := binding.Extension.(*spec.Parameter)
+			if !companion.IsDeferredPage(p) {
+				continue
+			}
 			view, err := config.ViewIndex.Resolve(p.QuerySelector.View)
 			if err != nil || view != root.View {
 				return nil, fmt.Errorf("deferred companion selectors must target the exact reader root")
