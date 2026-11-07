@@ -9,6 +9,21 @@ import (
 )
 
 func projectInputAliases(object *openapi3.Schema, canonical string, property *openapi3.Schema, policy *format.Tag, required bool) bool {
+	if policy.InputGroup != "" {
+		description := fmt.Sprintf("Native input source group %s, priority %s, canonical case %s. The highest-priority present admitted source wins; null participates. Losing values and required presence have a conservative discovery schema; runtime selection and validation remain authoritative.", policy.InputGroup, policy.InputPriority, policy.InputCase)
+		object.Properties[canonical] = &openapi3.Schema{Description: description}
+		excluded := map[string]bool{}
+		for _, name := range strings.Split(policy.InputNamesExclude, "|") {
+			excluded[name] = true
+		}
+		for _, alias := range strings.Split(policy.InputNames, "|") {
+			if alias != "" && alias != canonical && !excluded[alias] {
+				object.Properties[alias] = &openapi3.Schema{Description: description}
+			}
+		}
+		object.Description = strings.TrimSpace(object.Description + " " + description)
+		return false
+	}
 	if policy.InputNames == "" {
 		return required
 	}
