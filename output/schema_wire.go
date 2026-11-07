@@ -2,6 +2,7 @@ package output
 
 import (
 	"fmt"
+	"github.com/viant/mcp-protocol/schema/fieldname"
 	jsonmarshal "github.com/viant/structology/encoding/json/marshal"
 	"reflect"
 )
@@ -46,8 +47,18 @@ func (p *Plan) nativeSchema(s *jsonmarshal.WireShape, ref, path string, active m
 			if description := field.Field().Tag.Get("description"); description != "" {
 				value["description"] = description
 			}
+			if example, ok := field.Field().Tag.Lookup("example"); ok {
+				value["examples"] = []any{example}
+			}
+			// Inline maps can replace prior fields with arbitrary values.
+			// Only retain choices where the serializer still guarantees a typed value.
+			if field.Shape().Kind() != reflect.Interface {
+				if err := applyJSONSchemaChoices(value, jsonSchemaField{field: field.Field(), name: field.Name(), nullable: field.Shape().Nullable()}); err != nil {
+					return nil, err
+				}
+			}
 			properties[field.Name()] = value
-			if field.Required() && !p.selectableRowPath(path) {
+			if field.Required() && fieldname.Required(field.Field()) && !p.selectableRowPath(path) {
 				required = append(required, field.Name())
 			}
 		}

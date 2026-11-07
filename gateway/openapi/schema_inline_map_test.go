@@ -11,9 +11,9 @@ import (
 
 func TestWireInlineMapSchema(t *testing.T) {
 	type response struct {
-		Status   string         `json:"status"`
+		Status   string         `json:"status" required:"true"`
 		Extras   map[string]any `format:"inline=true"`
-		Data     int            `json:"data"`
+		Data     int            `json:"data" required:"true"`
 		Optional string         `json:"optional,omitempty"`
 	}
 	shape, err := jsonmarshal.New(nil, nil, false, true, "", "", nil).Wire(reflect.TypeFor[response]())

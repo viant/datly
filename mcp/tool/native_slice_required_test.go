@@ -17,8 +17,8 @@ func TestNativeSliceSchemaRequiredTag(t *testing.T) {
 		{"explicit whole body", "body", "", `mcp:"name=Ids" required:"true"`, true},
 		{"untagged whole body", "body", "", `mcp:"name=Ids"`, false},
 		{"false whole body", "body", "", `mcp:"name=Ids" required:"false"`, false},
-		{"query unchanged", "query", "ids", `mcp:"name=Ids" required:"true"`, false},
-		{"named body unchanged", "body", "ids", `mcp:"name=Ids" required:"true"`, false},
+		{"explicit query schema", "query", "ids", `mcp:"name=Ids" required:"true"`, true},
+		{"explicit named body schema", "body", "ids", `mcp:"name=Ids" required:"true"`, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			typ := reflect.StructOf([]reflect.StructField{{Name: "Body", Type: reflect.TypeFor[*[]int](), Tag: reflect.StructTag(tc.tag)}})
