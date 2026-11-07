@@ -24,7 +24,7 @@ type pageSource struct {
 }
 
 func newPageSource(provider locator.Provider, binding bindly.BindingSpec) (*pageSource, error) {
-	if provider == nil || reflect.TypeOf(provider) != nativeQueryProviderType || reflect.ValueOf(provider).IsNil() || provider.Kind() != "query" || binding.Location.Kind != "query" || binding.Location.In == "" {
+	if !nativeQueryAuthority(provider) || binding.Location.Kind != "query" || binding.Location.In == "" {
 		return nil, fmt.Errorf("deferred companion Page requires the exact native query provider")
 	}
 	return &pageSource{provider: provider, binding: binding, legacy: true}, nil

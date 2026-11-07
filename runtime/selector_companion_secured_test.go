@@ -49,7 +49,11 @@ func TestSelectorCompanionLegacyPageWithInputInit(t *testing.T) {
 	testSelectorCompanionAuthOrdering(t, true)
 }
 
-func testSelectorCompanionAuthOrdering(t *testing.T, legacyPage bool) {
+func TestSelectorCompanionComposedQueryKeepsAuthAndFieldsOrdering(t *testing.T) {
+	testSelectorCompanionAuthOrdering(t, true, true)
+}
+
+func testSelectorCompanionAuthOrdering(t *testing.T, legacyPage bool, composedQuery ...bool) {
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		t.Fatal(err)
@@ -117,9 +121,19 @@ func testSelectorCompanionAuthOrdering(t *testing.T, legacyPage bool) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	var numericLookups atomic.Int64
+	var queryProviders []locator.Provider
+	if len(composedQuery) > 0 && composedQuery[0] {
+		queryProviders = []locator.Provider{handlerprovider.Named("query", func(_ context.Context, _ reflect.Type, name string) (any, bool, error) {
+			if name == "page" || name == "_page" {
+				numericLookups.Add(1)
+			}
+			return nil, false, nil
+		})}
+	}
 	rt, err := druntime.NewRuntime([]*registry.RegisteredComponent{
 		{Component: authArtifact.Component, Input: authArtifact.Input, Output: authArtifact.Output, OutputType: reflect.TypeFor[fixture.AuthOutput](), Handler: authHandler},
-		{Component: artifact.Component, Input: artifact.Input, Output: artifact.Output, OutputType: reflect.TypeFor[fixture.Output](), Reader: execution},
+		{Component: artifact.Component, Input: artifact.Input, Output: artifact.Output, OutputType: reflect.TypeFor[fixture.Output](), Reader: execution, Providers: queryProviders},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -149,6 +163,7 @@ func testSelectorCompanionAuthOrdering(t *testing.T, legacyPage bool) {
 		}
 		t.Run(tc.name, func(t *testing.T) {
 			beforeAuth, beforeReads, beforeInputs := authCalls.Load(), reads.Load(), len(fixture.Inputs)
+			beforeNumeric := numericLookups.Load()
 			request := httptest.NewRequest("GET", "/companion-secured"+tc.query, nil)
 			if tc.credential != "" {
 				request.Header.Set("Authorization", tc.credential)
@@ -157,6 +172,9 @@ func testSelectorCompanionAuthOrdering(t *testing.T, legacyPage bool) {
 			handler.ServeHTTP(rec, request)
 			if rec.Code != tc.code || authCalls.Load()-beforeAuth != tc.auth {
 				t.Fatalf("ordering/status=%d auth=%d body=%s", rec.Code, authCalls.Load()-beforeAuth, rec.Body.String())
+			}
+			if (tc.code == 401 || tc.code == 403 || tc.name == "projection with nominal owner") && numericLookups.Load() != beforeNumeric {
+				t.Fatal("composed numeric lookup preceded authorization or Fields validation")
 			}
 			if tc.code != 200 && reads.Load() != beforeReads {
 				t.Fatal("failure reached protected SQL")

@@ -53,13 +53,13 @@ func TestCubeEmitsSelectorAliasBinding(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, fragment := range []string{"func (v *SpendCubeMeasures) UnmarshalJSON", `"metric_25": "metric25"`} {
+	for _, fragment := range []string{`format:"inputNames=metric_25"`, `json:"metric25,omitempty"`} {
 		if !strings.Contains(string(content), fragment) {
 			t.Fatalf("missing %s:\n%s", fragment, content)
 		}
 	}
-	if strings.Contains(string(content), "func (v *SpendCubeFilters) UnmarshalJSON") || strings.Contains(string(content), "func (v *SpendCubeInput) UnmarshalJSON") {
-		t.Fatal("decoder acquired filter or input ownership")
+	if strings.Contains(string(content), "UnmarshalJSON") || strings.Contains(string(content), "MarshalJSON") {
+		t.Fatal("generated public contract must use tags, not custom JSON methods")
 	}
 	runtimeTest := strings.ReplaceAll(cubeAliasRuntimeTest, "CUBE_PACKAGE", generated.Plan.PackageName())
 	if err = os.WriteFile(filepath.Join(root, "reporting", "alias_runtime_test.go"), []byte(runtimeTest), 0600); err != nil {
@@ -89,6 +89,7 @@ import (
  hp "github.com/viant/datly/runtime/handler/provider"
  "github.com/viant/datly/spec"
  "github.com/viant/datly/tag"
+ structjson "github.com/viant/structology/encoding/json"
  xh "github.com/viant/xdatly/handler"
  xs "github.com/viant/xdatly/state"
 )
@@ -129,7 +130,7 @@ func TestGeneratedSelectorAliasRequestAndHandler(t *testing.T){
   if invoker.calls!=1{t.Fatal("report handler did not delegate")}
  }
  var selection SpendCubeMeasures
- if err=json.Unmarshal([]byte("{\"metric25\":false,\"metric_25\":true,\"metric25\":null}"),&selection);err!=nil||!selection.Metric25{t.Fatalf("ordered aliases/null: %+v %v",selection,err)}
+ if err=structjson.UnmarshalStandard([]byte("{\"metric25\":false,\"metric_25\":true,\"metric25\":null}"),&selection);err!=nil||!selection.Metric25{t.Fatalf("ordered aliases/null: %+v %v",selection,err)}
  wire,err:=json.Marshal(selection);if err!=nil||strings.Contains(string(wire),"metric_25")||!strings.Contains(string(wire),"metric25"){t.Fatalf("canonical wire: %s %v",wire,err)}
  rowWire,err:=json.Marshal(SpendRow{});if err!=nil||!strings.Contains(string(rowWire),"metric_25"){t.Fatalf("reader wire changed: %s %v",rowWire,err)}
 }

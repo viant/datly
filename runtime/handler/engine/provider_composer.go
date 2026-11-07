@@ -6,6 +6,7 @@ import (
 
 	"github.com/viant/bindly/locator"
 	dexec "github.com/viant/datly/exec"
+	"github.com/viant/datly/internal/selectorcompanion"
 	rhandler "github.com/viant/datly/runtime/handler"
 	xhandler "github.com/viant/xdatly/handler"
 )
@@ -90,6 +91,9 @@ func (providerComposer) compose(input providerComposition) ([]locator.Provider, 
 		provider, composeErr := locator.ComposeProviders(kind, layers...)
 		if composeErr != nil {
 			return nil, composeErr
+		}
+		if kind == "query" {
+			provider = selectorcompanion.CarryQueryAuthority(provider, protocol[kind])
 		}
 		result = append(result, provider)
 	}

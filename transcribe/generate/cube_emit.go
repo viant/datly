@@ -47,6 +47,7 @@ func (p *Plan) cubeFileText() (string, error) {
 				}
 				if field.Type.Kind() == reflect.Struct {
 					sectionName := cube.Name + field.Name
+					aliases := cubeSelectorAliases(field, cube.Definition)
 					var section strings.Builder
 					fmt.Fprintf(&section, "type %s struct {\n", sectionName)
 					for j := 0; j < field.Type.NumField(); j++ {
@@ -64,23 +65,29 @@ func (p *Plan) cubeFileText() (string, error) {
 							fmt.Fprintf(&sections, "type %s %s\n", markerName, markerType)
 							memberType = "*" + markerName
 						}
-						fmt.Fprintf(&section, "%s %s %s\n", member.Name, memberType, goliteral.StructTag(generatedStructTag(string(member.Tag))))
+						memberTag := string(member.Tag)
+						canonical := strings.Split(member.Tag.Get("json"), ",")[0]
+						if canonical == "" {
+							canonical = member.Name
+						}
+						var names []string
+						for alias, owner := range aliases {
+							if owner == canonical {
+								names = append(names, alias)
+							}
+						}
+						if len(names) > 0 {
+							sort.Strings(names)
+							policy := member.Tag.Get("format")
+							if policy != "" {
+								policy += ","
+							}
+							memberTag = replaceStructTag(memberTag, "format", policy+"inputNames="+strings.Join(names, "|"))
+						}
+						fmt.Fprintf(&section, "%s %s %s\n", member.Name, memberType, goliteral.StructTag(generatedStructTag(memberTag)))
 					}
 					section.WriteString("}\n")
 					sections.WriteString(section.String())
-					aliases := cubeSelectorAliases(field, cube.Definition)
-					if len(aliases) != 0 {
-						fmt.Fprintf(&sections, "func (v *%s) UnmarshalJSON(data []byte) error {type plain %s;return %s.UnmarshalSelectorJSON(data,(*plain)(v),map[string]string{", sectionName, sectionName, reportAlias)
-						keys := make([]string, 0, len(aliases))
-						for key := range aliases {
-							keys = append(keys, key)
-						}
-						sort.Strings(keys)
-						for _, key := range keys {
-							fmt.Fprintf(&sections, "%q:%q,", key, aliases[key])
-						}
-						sections.WriteString("})}\n")
-					}
 					if _, ok := field.Type.FieldByName("Has"); ok {
 						for j := 0; j < field.Type.NumField(); j++ {
 							member := field.Type.Field(j)
