@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/viant/datly/internal/httpserver"
+	"github.com/viant/datly/mcp/invocation"
 	"github.com/viant/jsonrpc/transport/server/stdio"
 	upstream "github.com/viant/mcp/server"
 	"github.com/viant/mcp/server/auth"
@@ -115,6 +116,11 @@ func (s *Server) HTTP() (*http.Server, error) {
 	defer s.mu.Unlock()
 	if s.httpServer == nil {
 		s.httpServer = s.upstream.HTTP(context.Background(), s.config.Transport.Address)
+		next := s.httpServer.Handler
+		s.httpServer.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			ctx := invocation.WithHTTPHeaders(r.Context(), r.Header)
+			next.ServeHTTP(w, r.WithContext(ctx))
+		})
 		s.httpServer.ReadHeaderTimeout = s.config.Transport.ReadHeaderTimeout
 		s.httpServer.IdleTimeout = s.config.Transport.IdleTimeout
 		httpserver.Defaults(s.httpServer)

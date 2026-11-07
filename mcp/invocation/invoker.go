@@ -5,7 +5,6 @@ import (
 	"context"
 	"strings"
 
-	"github.com/viant/bindly/locator"
 	requestprovider "github.com/viant/bindly/provider/request"
 	"github.com/viant/datly/exec"
 	"github.com/viant/jsonrpc"
@@ -102,9 +101,9 @@ func (i *Invoker) Execute(ctx context.Context, request Request) (*Execution, *js
 	if header := authorizationHeader(ctx); header != "" {
 		scope = scope.WithHeader("Authorization", header)
 	}
-	var providers []locator.Provider
-	if scope != nil {
-		providers = scope.Providers()
+	providers, err := requestProviders(ctx, scope)
+	if err != nil {
+		return nil, jsonrpc.NewInternalError("MCP request provider preparation failed", nil)
 	}
 	result, err := i.component.InvokeComponent(ctx, exec.ComponentRequest{
 		Target: request.Target, Providers: providers,
@@ -162,13 +161,10 @@ func authorizationHeader(ctx context.Context) string {
 }
 
 // AuthorizationScope uses the same verified protocol credential as tool calls.
-// Metadata has no business arguments; only the existing credential is projected.
+// Metadata has no business arguments; request headers and the verified
+// credential are projected through the same native binder as tool execution.
 func AuthorizationScope(ctx context.Context) *requestprovider.Scope {
-	scope := requestprovider.NewValues()
-	if header := authorizationHeader(ctx); header != "" {
-		scope = scope.WithHeader("Authorization", header)
-	}
-	return scope
+	return requestprovider.NewValues(requestprovider.WithHeaders(RequestHeaders(ctx)))
 }
 
 type requestContext struct {
