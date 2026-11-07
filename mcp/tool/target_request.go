@@ -4,6 +4,8 @@ import (
 	"context"
 	"io"
 	"net/http"
+
+	"github.com/viant/datly/mcp/invocation"
 )
 
 // targetRequest carries compiler-owned route metadata, never an MCP argument.
@@ -14,5 +16,6 @@ func (p *Plan) targetRequest(ctx context.Context, body io.Reader) (*http.Request
 		return nil, err
 	}
 	request.RequestURI = request.URL.RequestURI()
+	request.Header = invocation.RequestHeaders(ctx)
 	return request, nil
 }

@@ -231,6 +231,16 @@ want the described schema to include `metrics`. The hook controls the JSON body
 field; diagnostic response headers, logging, tracing and SQL disclosure keep their
 existing configuration and authorization rules.
 
+For MCP over HTTP, send these headers on the actual `tools/list` or `tools/call`
+HTTP request. Datly carries each request's headers into the native header binder
+for contract selection and component execution, including repeated header values.
+Headers are not retained as session preferences. The verified MCP authorization
+credential takes precedence over the raw transport header and tool arguments.
+This does not alter JSON-RPC, protocol negotiation or session headers, and does
+not automatically forward headers through an upstream client or proxy. Stdio MCP
+has no HTTP headers; an absent metrics header therefore selects the default
+hidden contract.
+
 See [native metrics and diagnostic headers](observability.md#capture-export-and-privacy) for their separate controls.
 
 ## Use case: accept enum input

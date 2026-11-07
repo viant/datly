@@ -91,7 +91,7 @@ func initializeWireSession(t *testing.T, baseURL string) string {
 	return sessionID
 }
 
-func postWireRequest(t *testing.T, endpoint string, payload interface{}, sessionID, token string) (*wireResponse, http.Header, int) {
+func postWireRequest(t *testing.T, endpoint string, payload interface{}, sessionID, token string, extraHeaders ...http.Header) (*wireResponse, http.Header, int) {
 	t.Helper()
 	data, err := json.Marshal(payload)
 	if err != nil {
@@ -120,6 +120,11 @@ func postWireRequest(t *testing.T, endpoint string, payload interface{}, session
 	}
 	if token != "" {
 		request.Header.Set("Authorization", token)
+	}
+	for _, headers := range extraHeaders {
+		for name, values := range headers {
+			request.Header[name] = append([]string(nil), values...)
+		}
 	}
 	response, err := http.DefaultClient.Do(request)
 	if err != nil {
