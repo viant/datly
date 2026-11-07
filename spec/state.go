@@ -54,10 +54,14 @@ type Codec struct {
 // WireSchema is discovery-only metadata for a public wire contract. Runtime
 // binding continues to use the compiled source and destination types.
 type WireSchema struct {
-	Enum     []any  `json:"enum,omitempty"`
-	Type     string `json:"type,omitempty"`
-	Format   string `json:"format,omitempty"`
-	Nullable bool   `json:"nullable,omitempty"`
+	AnyOf     []*WireSchema `json:"anyOf,omitempty"`
+	Pattern   string        `json:"pattern,omitempty"`
+	MinLength *int          `json:"minLength,omitempty"`
+	MaxLength *int          `json:"maxLength,omitempty"`
+	Enum      []any         `json:"enum,omitempty"`
+	Type      string        `json:"type,omitempty"`
+	Format    string        `json:"format,omitempty"`
+	Nullable  bool          `json:"nullable,omitempty"`
 	// Required advertises presence of this nested member. An empty Type retains
 	// the reflected shape (including array items) while adding this constraint.
 	Required bool `json:"required,omitempty"`
@@ -70,6 +74,20 @@ func (s *WireSchema) Clone() *WireSchema {
 	}
 	result := *s
 	result.Enum = append([]any(nil), s.Enum...)
+	if s.AnyOf != nil {
+		result.AnyOf = make([]*WireSchema, len(s.AnyOf))
+		for i, child := range s.AnyOf {
+			result.AnyOf[i] = child.Clone()
+		}
+	}
+	if s.MinLength != nil {
+		value := *s.MinLength
+		result.MinLength = &value
+	}
+	if s.MaxLength != nil {
+		value := *s.MaxLength
+		result.MaxLength = &value
+	}
 	return &result
 }
 

@@ -321,7 +321,7 @@ func (c *Compiler) compileExternal(inputField registry.InputField, field reflect
 	}
 	if enumeration != nil {
 		argument.enumeration = enumeration
-		argument.wireSchema = &spec.WireSchema{Type: enumeration.WireType(true), Enum: enumeration.WireValues(true), Nullable: field.Type.Kind() == reflect.Pointer}
+		argument.wireSchema = registry.EnumInputSchema(enumeration, field.Type.Kind() == reflect.Pointer)
 	}
 	argument.schemaRequired = required || argument.sourceKind == "path" || fieldname.Required(field)
 	if memberRequired, associated := wholeBodyMemberSchemaRequired(argument); associated && !required {

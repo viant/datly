@@ -465,6 +465,14 @@ func validateWireSchema(schema *spec.WireSchema) error {
 	if schema == nil {
 		return nil
 	}
+	if len(schema.AnyOf) > 0 {
+		for _, child := range schema.AnyOf {
+			if err := validateWireSchema(child); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
 	switch schema.Type {
 	case "string":
 	case "boolean", "integer", "number":

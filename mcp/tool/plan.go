@@ -272,7 +272,7 @@ func cloneSchemaValue(value interface{}) interface{} {
 // Requiredness metadata does not replace the reflected wire representation.
 func hasWireRepresentation(schemas map[string]*spec.WireSchema) bool {
 	for _, schema := range schemas {
-		if schema != nil && schema.Type != "" {
+		if schema != nil && (schema.Type != "" || len(schema.AnyOf) > 0) {
 			return true
 		}
 	}

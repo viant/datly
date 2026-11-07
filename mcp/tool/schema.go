@@ -2,9 +2,11 @@ package tool
 
 import (
 	docs "github.com/viant/datly/documentation"
+	"github.com/viant/datly/runtime/registry"
 	"github.com/viant/datly/spec"
 	"github.com/viant/mcp-protocol/schema/fieldname"
 	"github.com/viant/mcp-protocol/schema/jsonschema"
+	"github.com/viant/tagly/choice"
 	xshape "github.com/viant/x/shape"
 	"reflect"
 	"sort"
@@ -41,8 +43,14 @@ func (p *schemaProjector) argument(t reflect.Type, path, property string, schema
 		visibility.FallbackName = nil
 	}
 	inputAlternatives := map[string]bool{}
+	scalarAlternatives := map[string]map[string]interface{}{}
 	result, err := (jsonschema.Reflector{FallbackName: visibility.FallbackName, WireTypes: authority, ExcludeInternal: visibility.ExcludeInternal, ExcludeField: visibility.ExcludeField, Annotate: func(path string, field reflect.StructField) (string, any) {
 		if p.nativeBody && p.wireType == nil {
+			if enumeration, enumErr := choice.ParseEnum(field.Tag, field.Type); enumErr == nil && enumeration != nil {
+				if domain := enumeration.InputDomain(); domain != nil {
+					scalarAlternatives[path] = wireSchemaMap(registry.EnumInputSchema(enumeration, field.Type.Kind() == reflect.Pointer))
+				}
+			}
 			base := field.Type
 			for base.Kind() == reflect.Pointer {
 				base = base.Elem()
@@ -85,6 +93,19 @@ func (p *schemaProjector) argument(t reflect.Type, path, property string, schema
 			}
 		}
 	}
+	for fieldPath, alternatives := range scalarAlternatives {
+		parts := strings.Split(canonicalSchemaPath(t, fieldPath, visibility), ".")
+		_, child, _ := schemaMember(result, parts[1:])
+		if child == nil {
+			continue
+		}
+		for _, key := range []string{"type", "enum", "format", "anyOf", "oneOf", "allOf", "pattern", "minLength", "maxLength"} {
+			delete(child, key)
+		}
+		for key, value := range alternatives {
+			child[key] = value
+		}
+	}
 	for schemaPath, schema := range p.schemas {
 		applyWireSchema(result, canonicalSchemaPath(t, schemaPath, visibility), schema)
 	}
@@ -96,6 +117,26 @@ func wireSchemaMap(schema *spec.WireSchema) map[string]interface{} {
 		return nil
 	}
 	result := map[string]interface{}{}
+	if len(schema.AnyOf) > 0 {
+		alternatives := make([]any, 0, len(schema.AnyOf)+1)
+		for _, child := range schema.AnyOf {
+			alternatives = append(alternatives, wireSchemaMap(child))
+		}
+		if schema.Nullable {
+			alternatives = append(alternatives, map[string]any{"type": "null"})
+		}
+		result["anyOf"] = alternatives
+		return result
+	}
+	if schema.Pattern != "" {
+		result["pattern"] = schema.Pattern
+	}
+	if schema.MinLength != nil {
+		result["minLength"] = *schema.MinLength
+	}
+	if schema.MaxLength != nil {
+		result["maxLength"] = *schema.MaxLength
+	}
 	if len(schema.Enum) > 0 {
 		values := append([]any(nil), schema.Enum...)
 		if schema.Nullable {
@@ -124,7 +165,7 @@ func applyWireSchema(root map[string]interface{}, path string, schema *spec.Wire
 		parts = parts[1:]
 	}
 	if len(parts) == 0 {
-		if schema.Type == "" {
+		if schema.Type == "" && len(schema.AnyOf) == 0 {
 			return
 		}
 		for key := range root {
@@ -143,7 +184,7 @@ func applyWireSchemaParts(node map[string]interface{}, parts []string, schema *s
 	if child == nil {
 		return false
 	}
-	if schema.Type != "" {
+	if schema.Type != "" || len(schema.AnyOf) > 0 {
 		mergeWireSchema(child, schema)
 	}
 	if schema.Required {
@@ -243,7 +284,7 @@ func removeSchemaNull(node map[string]interface{}) {
 }
 
 func mergeWireSchema(target map[string]interface{}, schema *spec.WireSchema) {
-	for _, key := range []string{"$ref", "anyOf", "oneOf", "allOf", "items", "properties", "additionalProperties", "format", "type"} {
+	for _, key := range []string{"$ref", "anyOf", "oneOf", "allOf", "items", "properties", "additionalProperties", "format", "type", "enum", "pattern", "minLength", "maxLength"} {
 		delete(target, key)
 	}
 	for key, value := range wireSchemaMap(schema) {

@@ -59,6 +59,9 @@ type enumInput struct {
 }
 
 func (e *enumInput) WireSourceType() reflect.Type {
+	if e.plan.Accept == choice.Scalar {
+		return reflect.TypeFor[any]()
+	}
 	if e.plan.Accept == choice.Literal {
 		return reflect.TypeFor[string]()
 	}
@@ -92,7 +95,7 @@ func (e *enumInput) sourceType() reflect.Type {
 	if e.raw {
 		return reflect.TypeFor[json.RawMessage]()
 	}
-	if e.plan.Accept == choice.Literal {
+	if e.plan.Accept == choice.Literal || e.plan.Accept == choice.Scalar {
 		return reflect.TypeFor[string]()
 	}
 	return reflect.TypeFor[json.Number]()

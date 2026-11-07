@@ -90,6 +90,35 @@ func (b *schemaBuilder) fieldEnum(schema *openapi3.Schema, field reflect.StructF
 		copy.Format = ""
 		copy.Min = nil
 		copy.Max = nil
+		if input {
+			if domain := enumeration.InputDomain(); domain != nil {
+				copy.Enum = nil
+				copy.AnyOf = nil
+				copy.Nullable = false
+				if len(domain.Integers) > 0 {
+					values := make([]any, len(domain.Integers))
+					for i, value := range domain.Integers {
+						values[i] = value
+					}
+					copy.AnyOf = append(copy.AnyOf, &openapi3.Schema{Type: "integer", Enum: values})
+				}
+				if len(domain.Strings) > 0 {
+					values := make([]any, len(domain.Strings))
+					for i, value := range domain.Strings {
+						values[i] = value
+					}
+					copy.AnyOf = append(copy.AnyOf, &openapi3.Schema{Type: "string", Enum: values})
+				}
+				for _, alternative := range domain.StringAlternatives {
+					length := uint64(alternative.Length)
+					copy.AnyOf = append(copy.AnyOf, &openapi3.Schema{Type: "string", Pattern: alternative.Pattern, MinLength: length, MaxLength: &length})
+				}
+				if schema.Nullable {
+					copy.AnyOf = append(copy.AnyOf, &openapi3.Schema{Type: "string", Nullable: true, Enum: []any{nil}})
+				}
+				return &copy, nil
+			}
+		}
 		result, _ := b.enumSchema(&copy, nil, enumeration.WireValues(input), 0)
 		return result, nil
 	}

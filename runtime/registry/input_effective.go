@@ -146,7 +146,7 @@ func (c *RouteInputContract) metadataFields(effective reflect.Type, metadata *xs
 			return nil, err
 		}
 		if enumeration != nil {
-			f.wireSchema = &spec.WireSchema{Type: enumeration.WireType(true), Enum: enumeration.WireValues(true), Nullable: projected.Type.Kind() == reflect.Pointer}
+			f.wireSchema = EnumInputSchema(enumeration, projected.Type.Kind() == reflect.Pointer)
 			continue
 		}
 		if !strings.Contains(string(original.Tag), "choice:") && !strings.Contains(string(projected.Tag), "choice:") {
