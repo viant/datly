@@ -129,7 +129,7 @@ func NewPlan(config PlanConfig) (*Plan, error) {
 		}
 	}
 	if companion := result.selectorCompanion; companion != nil && companion.DeferredPage() {
-		if root == nil || root.View == nil || root.View.Spec.Source == nil || root.View.Spec.Source.SQL == "" {
+		if root == nil || root.View == nil || root.View.Spec.Source == nil {
 			return nil, fmt.Errorf("deferred companion Page requires resolved root SQL")
 		}
 		for _, binding := range companion.Bindings() {
@@ -143,9 +143,11 @@ func NewPlan(config PlanConfig) (*Plan, error) {
 			}
 		}
 		result.staticTemplate = root.Template
-		result.staticProjection, err = dsql.NewStaticProjection(root.View.Spec.Source.SQL, root.View, nil)
-		if err != nil {
-			return nil, fmt.Errorf("deferred companion Page projection: %w", err)
+		// Static projection is an optimization for proven sources, not an
+		// admission restriction on otherwise supported native reader SQL.
+		projection, projectionErr := dsql.NewStaticProjection(root.View.Spec.Source.SQL, root.View, nil)
+		if projectionErr == nil {
+			result.staticProjection = projection
 		}
 	}
 	return result, nil

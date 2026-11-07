@@ -164,7 +164,7 @@ func resolveInvocationSelectors(ctx context.Context, session *Session, input ref
 		}
 		return nil
 	}
-	if plan := session.Artifact.selectorCompanion; plan != nil && !plan.DeferredPage() {
+	if plan := session.Artifact.selectorCompanion; plan != nil && (!plan.DeferredPage() || session.Artifact.staticProjection == nil) {
 		if plan.DeferredNumeric() {
 			root := session.Artifact.Root.View
 			fields := viewProjection(root, result[root])
@@ -225,18 +225,20 @@ func resolveInvocationSelectors(ctx context.Context, session *Session, input ref
 	if plan := session.Artifact.selectorCompanion; plan != nil && plan.DeferredPage() {
 		root := session.Artifact.Root.View
 		finalFields := viewProjection(root, result[root])
-		selection, err := session.Artifact.staticProjection.Select(finalFields)
-		if err != nil {
-			if owned := session.selectorError(root, err, session.selectorOwned); owned != nil {
-				return nil, owned
+		if session.Artifact.staticProjection != nil {
+			selection, err := session.Artifact.staticProjection.Select(finalFields)
+			if err != nil {
+				if owned := session.selectorError(root, err, session.selectorOwned); owned != nil {
+					return nil, owned
+				}
+				return nil, invalidSelectorFieldCause("Fields", "unknown field in the declared source projection", err)
 			}
-			return nil, invalidSelectorFieldCause("Fields", "unknown field in the declared source projection", err)
+			if err := resolveNumeric(); err != nil {
+				return nil, err
+			}
+			session.staticSelection = selection
+			session.staticFields = finalFields
 		}
-		if err := resolveNumeric(); err != nil {
-			return nil, err
-		}
-		session.staticSelection = selection
-		session.staticFields = finalFields
 		if !rootOverride && plan.DeferredPage() {
 			page, err := plan.ResolvePage(ctx, binder, input.Interface())
 			if err != nil {
