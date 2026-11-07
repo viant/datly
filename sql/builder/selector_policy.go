@@ -81,6 +81,13 @@ func (b *Builder) resolveControls(options *builderOptions, excludePagination boo
 		resolver.sourceOrdering = true
 	}
 
+	if resolver.sourceOrdering && options.staticProjection != nil {
+		// Build already verified the exact source, evaluator, and Fields owner.
+		// Proven source ordering uses the ordinary projection path; the static
+		// token must not be reused for its rewritten owner SQL.
+		options.staticProjection = nil
+		resolver.staticProjection = nil
+	}
 	if excludePagination && len(options.projection) == 0 && options.selector != nil {
 		resolver.ordinalReference = options.selector.Columns
 	}
@@ -556,9 +563,6 @@ func (r *selectorResolver) orderingSource(base *spec.ViewControls, input *xstate
 		}
 		if !authorized {
 			return "", invalidOrdering("order by field %q is not in source projection", item.name)
-		}
-		if r.staticProjection != nil {
-			return "", invalidOrdering("static companion projection cannot replace its checked source scope")
 		}
 		sourceSQL := r.sqlText
 		if r.sourceSQL != "" {
