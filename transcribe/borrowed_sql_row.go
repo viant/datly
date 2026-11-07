@@ -984,6 +984,9 @@ func freshBorrowedForeignTypes(ctx context.Context, source *Source, text string,
 	if _, err := loader.LoadImports(ctx, imports); err != nil {
 		return nil, err
 	}
+	if err := loadBorrowedExternalTypes(ctx, source, workspace, staged, imports); err != nil {
+		return nil, err
+	}
 	component := (&spec.Component{Parameters: prepared.Directives.Params, Views: prepared.Directives.Views}).Clone()
 	if err := loader.LoadCodecs(ctx, component, link.TypeContext(source.Scope, "", prepared.TypeContext)); err != nil {
 		return nil, err

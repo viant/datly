@@ -63,6 +63,9 @@ func (d *Discovery) CompileSource(ctx context.Context, source *Source) (*Result,
 	if err != nil {
 		return nil, err
 	}
+	if err := loadBorrowedExternalSourceTypes(ctx, source, workspace, catalog); err != nil {
+		return nil, err
+	}
 	assets, err := (packageresources.Loader{Workspace: workspace, Packages: imports, Holders: staged.Holders}).Load(ctx)
 	if err != nil {
 		return nil, err

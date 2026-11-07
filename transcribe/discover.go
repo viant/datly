@@ -153,6 +153,23 @@ func (d *Discovery) Compile(ctx context.Context) (*ProjectGeneration, error) {
 	if err != nil {
 		return nil, err
 	}
+	if dependencySource.dependencySnapshot != nil {
+		// The batch shares one catalog/snapshot: select its external import
+		// union once, rather than rerunning Go selection for each source.
+		imports := map[string]bool{}
+		for _, file := range files {
+			content, err := os.ReadFile(file.Path)
+			if err != nil {
+				return nil, err
+			}
+			if err := addBorrowedExternalSourceImports(string(content), imports); err != nil {
+				return nil, err
+			}
+		}
+		if err := loadBorrowedExternalTypes(ctx, dependencySource, workspace, catalog, imports); err != nil {
+			return nil, err
+		}
+	}
 	packagePaths = append(packagePaths, dqlImports...)
 	declaredResources, err := declaredResourcePackages(ctx, workspace, files)
 	if err != nil {
