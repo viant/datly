@@ -1,10 +1,14 @@
 package tool
 
 import (
+	"bytes"
 	"encoding/json"
+	"github.com/viant/bindly"
+	bindstate "github.com/viant/bindly/state"
 	"github.com/viant/datly/runtime/registry"
 	"github.com/viant/datly/spec"
 	"github.com/viant/tagly/choice"
+	"github.com/xeipuuv/gojsonschema"
 	"reflect"
 	"testing"
 )
@@ -38,5 +42,39 @@ func TestScalarInt64MCPPersistedBounds(t *testing.T) {
 	}
 	if string(wire["minimum"]) != "-9223372036854775808" || string(wire["maximum"]) != "9223372036854775807" {
 		t.Fatalf("rounded persisted MCP bounds: %s", data)
+	}
+}
+
+func TestScalarInt64CompiledToolBoundaryValidation(t *testing.T) {
+	binding := bindly.BindingSpec{Path: "Body", Name: "Body", Location: bindstate.Location{Kind: "body"}}
+	contract := testRouteContract(t, reflect.TypeFor[openScalarToolInput](), []bindly.BindingSpec{binding})
+	plan, err := NewCompiler().Compile(Input{Component: spec.Key{Kind: spec.KindComponent, Scope: "test", Name: "BoundedMode"}, Exposure: &spec.MCPExposure{Kind: spec.MCPExposureTool, Name: "bounded_mode"}, Contract: contract})
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := json.Marshal(plan.Metadata())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(data, []byte(`"minimum":-9223372036854775808`)) || !bytes.Contains(data, []byte(`"maximum":9223372036854775807`)) {
+		t.Fatalf("compiled metadata rounded bounds: %s", data)
+	}
+	schema, err := json.Marshal(plan.Metadata().InputSchema)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		value string
+		valid bool
+	}{{"-9223372036854775808", true}, {"9223372036854775807", true}, {"-9223372036854775809", false}, {"9223372036854775808", false}} {
+		t.Run(tc.value, func(t *testing.T) {
+			result, err := gojsonschema.Validate(gojsonschema.NewBytesLoader(schema), gojsonschema.NewStringLoader(`{"Body":{"mode":`+tc.value+`}}`))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if result.Valid() != tc.valid {
+				t.Fatalf("valid=%v expected=%v errors=%v", result.Valid(), tc.valid, result.Errors())
+			}
+		})
 	}
 }
