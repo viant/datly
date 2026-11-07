@@ -118,9 +118,8 @@ func (c exposurePublic) catalog(t *testing.T, selection exposureSelection) {
 		if extension, ok := input.AdditionalProperties.(map[string]any); ok && len(extension) == 0 {
 			input.AdditionalProperties = nil
 		}
-		// Legacy discovery leaves query fields optional; check() independently
-		// verifies that runtime invocation rejects the missing required tenant.
-		expected := schema.ToolInputSchema{Type: "object", Properties: map[string]map[string]any{"tenant": {"type": "integer"}}}
+		// The authored tenant requirement is visible in both schema and binding.
+		expected := schema.ToolInputSchema{Type: "object", Properties: map[string]map[string]any{"tenant": {"type": "integer"}}, Required: []string{"tenant"}}
 		if !reflect.DeepEqual(input, expected) {
 			t.Fatalf("%s business schema=%+v", tool.Name, tool.InputSchema)
 		}

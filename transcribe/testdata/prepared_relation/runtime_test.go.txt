@@ -1,6 +1,7 @@
 package generated
 
 import (
+	"github.com/viant/bindly"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -55,7 +56,7 @@ func (preparedReads) Projection(name string) (handler.ReadProjection, error) {
 	}
 	return nil, fmt.Errorf("unknown read %s", name)
 }
-func (*preparedBinder) Bind(context.Context, any) error { return nil }
+func (*preparedBinder) Bind(context.Context, any, ...bindly.BindOption) error { return nil }
 func (b *preparedBinder) Lookup(_ context.Context, key handler.ValueKey) (any, bool, error) {
 	switch key {
 	case handler.FrameworkValidatorKey:

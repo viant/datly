@@ -69,9 +69,9 @@ func(*BatchLifecycle)Finalize(_ context.Context,input *EventsInput,output *Event
 		t.Fatal(err)
 	}
 	runtime := `package generated
-import("context";"encoding/json";"fmt";"reflect";"testing";"github.com/viant/datly/bootstrap";rhandler "github.com/viant/datly/runtime/handler";"github.com/viant/datly/runtime/handler/writer";dtag "github.com/viant/datly/tag";handler "github.com/viant/xdatly/handler")
+import("github.com/viant/bindly";"context";"encoding/json";"fmt";"reflect";"testing";"github.com/viant/datly/bootstrap";rhandler "github.com/viant/datly/runtime/handler";"github.com/viant/datly/runtime/handler/writer";dtag "github.com/viant/datly/tag";handler "github.com/viant/xdatly/handler")
 type resultBinder struct{}
-func(resultBinder)Bind(context.Context,any)error{return nil}
+func(resultBinder)Bind(context.Context,any,...bindly.BindOption)error{return nil}
 func(resultBinder)Lookup(context.Context,handler.ValueKey)(any,bool,error){return nil,false,fmt.Errorf("unexpected database capability")}
 func TestGeneratedAuxiliaryListResult(t *testing.T){
  holder:=reflect.TypeFor[EventsComponent]();field,_:=holder.FieldByName("Contract");tag,ok,err:=dtag.ParseComponent(field.Tag);if err!=nil||!ok{t.Fatal(err)};if tag.Handler!=""{t.Fatal("custom factory retained")}

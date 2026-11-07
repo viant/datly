@@ -120,11 +120,11 @@ func(h *IsolatedLifecycle)Validate(ctx context.Context,input *EventsInput,state 
 func(h *IsolatedLifecycle)Finalize(ctx context.Context,input *EventsInput,output *EventsOutput,outcome handler.Outcome)error{if h.input!=input||h.output!=output{return fmt.Errorf("wrong completion state")};return nil}
 `
 const auxiliaryLifecycleRuntimeSource = `package events
-import("context";"fmt";"reflect";"testing";"sync";rhandler "github.com/viant/datly/runtime/handler";"github.com/viant/datly/runtime/handler/writer";"github.com/viant/datly/spec";handler "github.com/viant/xdatly/handler")
+import("github.com/viant/bindly";"context";"fmt";"reflect";"testing";"sync";rhandler "github.com/viant/datly/runtime/handler";"github.com/viant/datly/runtime/handler/writer";"github.com/viant/datly/spec";handler "github.com/viant/xdatly/handler")
 var linkedBatchType=reflect.TypeOf(BatchLifecycle{})
 var linkedIsolatedType=reflect.TypeOf(IsolatedLifecycle{})
 type batchBinder struct{}
-func(batchBinder)Bind(context.Context,any)error{return nil}
+func(batchBinder)Bind(context.Context,any,...bindly.BindOption)error{return nil}
 func(batchBinder)Lookup(context.Context,handler.ValueKey)(any,bool,error){return nil,false,fmt.Errorf("unexpected database capability lookup")}
 func TestAuxiliaryCanonicalInputOnce(t *testing.T){
  component:=&spec.Component{Key:spec.Key{Scope:linkedBatchType.PkgPath()},Settings:&spec.Settings{},RootView:&spec.View{Name:"e",Source:&spec.ViewSource{Table:"events"}}}

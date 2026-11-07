@@ -31,6 +31,28 @@ func TestConditionalSQLAlternatives(t *testing.T) {
 		})
 	}
 }
+
+func TestConditionalSQLIndexedComponentBinding(t *testing.T) {
+	source := `#set($SelectedId = $Dependency.Data[0].Id)
+SELECT id FROM records WHERE id = $SelectedId`
+	variants, err := ConditionalSQL(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"\nSELECT id FROM records WHERE id = ${Dependency.Data[0].Id}"}
+	if !reflect.DeepEqual(variants, want) {
+		t.Fatalf("got %#v, want %#v", variants, want)
+	}
+}
+
+func TestConditionalSQLRejectsEvaluatedIndexBindings(t *testing.T) {
+	for _, selector := range []string{"$Dependency.Data[$Index].Id", "$Dependency.Data[1.5].Id", "$Dependency.Data[0].Lookup()"} {
+		source := "#set($SelectedId = " + selector + ") SELECT id FROM records WHERE id=$SelectedId"
+		if _, err := ConditionalSQL(source); err == nil {
+			t.Fatalf("accepted evaluated selector %s", selector)
+		}
+	}
+}
 func TestConditionalSQLRejectsMalformedAndUnbounded(t *testing.T) {
 	for _, source := range []string{"SELECT id #if($A)", "SELECT id #end", "SELECT id #else", "SELECT id #elseif($A)", "SELECT id #if($A WHERE id=1 #end", distinctConditionalColumns(7)} {
 		if _, err := ConditionalSQL(source); err == nil {

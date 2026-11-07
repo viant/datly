@@ -25,7 +25,7 @@ require (
 	github.com/viant/x v0.6.1-0.20261106041415-0487ec66884b
 	github.com/viant/xdatly v1.0.1-0.20261106191133-04634a407286
 	github.com/viant/xreflect v0.7.5-0.20260314170600-13f09f37d46e
-	github.com/viant/xunsafe v0.11.0
+	github.com/viant/xunsafe v0.11.1
 	github.com/xeipuuv/gojsonschema v1.2.0
 	github.com/xuri/excelize/v2 v2.8.0
 	github.com/yuin/goldmark v1.4.13

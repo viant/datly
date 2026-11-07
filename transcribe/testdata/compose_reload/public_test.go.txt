@@ -220,7 +220,7 @@ func (c composeClient) schemas(t *testing.T) {
 		}
 		// Compose exposes the current optional semantic prefix and transport page.
 		// SQL has no omission tag; optional controls must not become required.
-		if actual.Type != "object" || len(actual.Properties) != 4 || !reflect.DeepEqual(actual.Required, []string{"sql"}) {
+		if actual.Type != "object" || len(actual.Properties) != 4 || !reflect.DeepEqual(actual.Required, []string{"cubes", "sql"}) {
 			t.Fatalf("business input schema: %s", data)
 		}
 		if actual.Properties["sql"].Type != "string" {
@@ -230,7 +230,7 @@ func (c composeClient) schemas(t *testing.T) {
 			t.Fatalf("optional result limit schema: %s", data)
 		}
 		page := actual.Properties["page"]
-		if !reflect.DeepEqual(page.Type, []any{"object", "null"}) || len(page.Properties) != 2 || !reflect.DeepEqual(page.Required, []string{"limit", "offset"}) || page.Properties["limit"].Type != "integer" || page.Properties["offset"].Type != "integer" {
+		if !reflect.DeepEqual(page.Type, []any{"object", "null"}) || len(page.Properties) != 2 || len(page.Required) != 0 || page.Properties["limit"].Type != "integer" || page.Properties["offset"].Type != "integer" {
 			t.Fatalf("optional transport page schema: %s", data)
 		}
 		cubes := actual.Properties["cubes"]

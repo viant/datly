@@ -3,6 +3,7 @@ package sqlanalysis
 import (
 	"fmt"
 	"reflect"
+	"strconv"
 	"strings"
 
 	"github.com/viant/parsly"
@@ -291,12 +292,24 @@ func (c *conditionalContext) selector(value ast.Expression, bindings map[string]
 		path = bound
 	}
 	for child := s.X; child != nil; {
-		member, ok := child.(*expr.Select)
-		if !ok {
+		switch member := child.(type) {
+		case *expr.Select:
+			path += "." + member.ID
+			child = member.X
+		case *expr.SliceIndex:
+			index, ok := member.X.(*expr.Literal)
+			if !ok || index.RType != reflect.TypeFor[int]() {
+				return "", fmt.Errorf("conditional SQL bindings require a constant nonnegative index")
+			}
+			n, err := strconv.Atoi(index.Value)
+			if err != nil || n < 0 {
+				return "", fmt.Errorf("conditional SQL bindings require a constant nonnegative index")
+			}
+			path += "[" + strconv.Itoa(n) + "]"
+			child = member.Y
+		default:
 			return "", fmt.Errorf("unsupported conditional SQL binding expression")
 		}
-		path += "." + member.ID
-		child = member.X
 	}
 	return path, nil
 }
