@@ -162,6 +162,7 @@ type BindingPlan struct {
 	absentPlan                *bindly.Plan
 	owner                     *BindingPlan
 	transportOnly             bool
+	rootAliases               []rootAliasPlan
 }
 
 func NewBindingPlan(component *spec.Component, selected *Selection, input reflect.Type, publicPlan, companionPlan *bindly.Plan, public, selectors []bindly.BindingSpec) (*BindingPlan, error) {
@@ -277,6 +278,9 @@ func NewBindingPlan(component *spec.Component, selected *Selection, input reflec
 	if err != nil {
 		return nil, err
 	}
+	if err = result.compileRootAliases(component, injector); err != nil {
+		return nil, err
+	}
 	return result, nil
 
 }
@@ -379,6 +383,9 @@ func (p *BindingPlan) Bind(ctx context.Context, scope *bindly.Injector, input an
 		plan = p.deferredPlan
 	}
 	if err := scope.Bind(ctx, target, bindly.WithPlan(plan), bindly.WithSource(input)); err != nil {
+		return nil, err
+	}
+	if err := p.bindRootAliases(ctx, scope, input, target, providers); err != nil {
 		return nil, err
 	}
 	return target, nil
