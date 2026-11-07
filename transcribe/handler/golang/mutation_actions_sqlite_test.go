@@ -60,7 +60,7 @@ type Input struct{Orders []*Order;CurrentOrders []*CurrentOrder;CurrentItems []*
 type metadata map[string]handler.ReadProjection
 func(m metadata)Projection(name string)(handler.ReadProjection,error){p,ok:=m[name];if !ok{return nil,fmt.Errorf("missing read metadata %s",name)};return p,nil}
 type binder struct{data *dml.Data;input *Input}
-func(b binder)Bind(ctx context.Context,target any)error{a:=target.(*_newEventsHandlerMutationActions);a.DML=b.data;a.Sequencer=b.data;a.Input=b.input;return nil}
+func(b binder)Bind(ctx context.Context,target any, options ...bindly.BindOption)error{if len(options)!=0{return fmt.Errorf("fixture does not support explicit binding options")};a:=target.(*_newEventsHandlerMutationActions);a.DML=b.data;a.Sequencer=b.data;a.Input=b.input;return nil}
 func(b binder)Lookup(context.Context,handler.ValueKey)(any,bool,error){return nil,false,nil}
 func ptr(value int64)*int64{return &value}
 func TestMixedSQL(t *testing.T){

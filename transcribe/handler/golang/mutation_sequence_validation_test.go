@@ -388,7 +388,7 @@ func TestSequenceValidation(t *testing.T){
 type noopSequencer struct{calls int}
 func(s *noopSequencer)Allocate(context.Context,string,any,string)error{s.calls++;return nil}
 type programBinder struct{input *Input;data *dml.Data;sequence *noopSequencer}
-func(b programBinder)Bind(_ context.Context,value any)error{
+func(b programBinder)Bind(_ context.Context,value any, options ...bindly.BindOption)error{if len(options)!=0{return fmt.Errorf("fixture does not support explicit binding options")};
  switch target:=value.(type){
  case *Hooks:target.Input=b.input
  case *ChildHooks:

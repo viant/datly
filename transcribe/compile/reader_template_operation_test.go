@@ -76,7 +76,7 @@ ORDER BY rows.name DESC,rows.id
 }
 
 const generatedLockRuntime = `package records
-import("context";"reflect";"strings";"testing"
+import("fmt";"github.com/viant/bindly";"context";"reflect";"strings";"testing"
  "github.com/viant/bindly/resource"
  "github.com/viant/datly/bootstrap"
  "github.com/viant/datly/internal/testharness/sqlite"
@@ -90,7 +90,7 @@ import("context";"reflect";"strings";"testing"
  xhandler "github.com/viant/xdatly/handler"
 )
 type binder struct{}
-func(binder)Bind(context.Context,any)error{return nil}
+func(binder)Bind(_ context.Context,_ any, options ...bindly.BindOption)error{if len(options)!=0{return fmt.Errorf("fixture does not support explicit binding options")};return nil}
 func(binder)Lookup(context.Context,xhandler.ValueKey)(any,bool,error){return nil,false,nil}
 func TestGeneratedConditionalLockContract(t *testing.T){
  ctx:=context.Background();db:=sqlite.New(t);if err:=db.ExecStatements(ctx,"CREATE TABLE records(id INTEGER PRIMARY KEY,name TEXT)","INSERT INTO records VALUES(1,'committed')","CREATE TABLE children(id INTEGER PRIMARY KEY,parent_id INTEGER,name TEXT)","INSERT INTO children VALUES(1,1,'committed')");err!=nil{t.Fatal(err)}

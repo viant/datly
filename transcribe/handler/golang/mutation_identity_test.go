@@ -187,7 +187,7 @@ func TestPartialProgram(t *testing.T){
 type allocationProbe struct{data *dml.Data;calls int}
 func(p *allocationProbe)Allocate(ctx context.Context,table string,value any,field string)error{p.calls++;return p.data.Allocate(ctx,table,value,field)}
 type actionBinder struct{data *dml.Data;probe *allocationProbe;input *Input}
-func(b actionBinder)Bind(_ context.Context,target any)error{
+func(b actionBinder)Bind(_ context.Context,target any, options ...bindly.BindOption)error{if len(options)!=0{return fmt.Errorf("fixture does not support explicit binding options")};
  a,ok:=target.(*_newEventsHandlerMutationActions);if !ok{return fmt.Errorf("unexpected action binding %T",target)}
  a.DML=b.data;a.Sequencer=b.probe;a.Input=b.input;return nil
 }

@@ -75,7 +75,7 @@ FROM (
 }
 
 const generatedTimestampRuntime = `package records
-import("context";"reflect";"testing";"strings"
+import("fmt";"github.com/viant/bindly";"context";"reflect";"testing";"strings"
  "github.com/viant/bindly/resource"
  "github.com/viant/datly/bootstrap"
  "github.com/viant/datly/internal/testharness/sqlite"
@@ -89,7 +89,7 @@ import("context";"reflect";"testing";"strings"
  xhandler "github.com/viant/xdatly/handler"
 )
 type binder struct{}
-func(binder)Bind(context.Context,any)error{return nil}
+func(binder)Bind(_ context.Context,_ any, options ...bindly.BindOption)error{if len(options)!=0{return fmt.Errorf("fixture does not support explicit binding options")};return nil}
 func(binder)Lookup(context.Context,xhandler.ValueKey)(any,bool,error){return nil,false,nil}
 func TestGeneratedTimestampRuntime(t *testing.T){
  ctx:=context.Background();db:=sqlite.New(t);if err:=db.ExecStatements(ctx,"CREATE TABLE timestamps(id INTEGER PRIMARY KEY,value TEXT)","INSERT INTO timestamps VALUES(1,'2025-12-31T23:59:59.999999999Z'),(2,'2026-01-01 00:00:00.000000001'),(3,'2025-12-31 17:00:00.000000002-07:00'),(4,'2026-01-01T00:00:00.999999999Z')");err!=nil{t.Fatal(err)}

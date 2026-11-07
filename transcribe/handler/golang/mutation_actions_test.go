@@ -26,7 +26,7 @@ func TestMutationActionsSequenceAndOriginalDiff(t *testing.T) {
 		t.Fatal(err)
 	}
 	runEntitySyncFixture(t, semantic, types, `package events
-import("context";"fmt";"testing";"github.com/viant/xdatly/handler")
+import("github.com/viant/bindly";"context";"fmt";"testing";"github.com/viant/xdatly/handler")
 type Marker struct{Id,Name bool};type Record struct{Id *int64;Name string;Has *Marker};type Previous struct{Id *int64;Name string}
 type Input struct{Events []*Record;CurrentEvents []*Previous};type Output struct{Data []*Record}
 type fields struct{};func(fields)Has(name string)bool{return name=="Id"||name=="Name"}
@@ -35,11 +35,11 @@ type metadata struct{};func(metadata)Projection(string)(handler.ReadProjection,e
 type data struct{candidates []*Record;calls int;inserts,updates []*Record;order []string}
 func(d *data)Allocate(ctx context.Context,table string,value any,selector string)error{if table!="EVENTS"||selector!="Id"{return fmt.Errorf("bad sequence authority")};d.calls++;d.candidates=value.([]*Record);for i,r:=range d.candidates{if r.Id==nil||*r.Id==0{v:=int64(100+i);r.Id=&v}};return nil}
 func(d *data)Insert(table string,value any)error{d.inserts=append(d.inserts,value.(*Record));d.order=append(d.order,"insert");return nil};func(d *data)Update(table string,value any)error{d.updates=append(d.updates,value.(*Record));d.order=append(d.order,"update");return nil};func(*data)Delete(string,any)error{return nil};func(*data)Execute(string,...any)error{return nil}
-type binder struct{data *data;input *Input};func(b binder)Bind(ctx context.Context,target any)error{a:=target.(*_newEventsHandlerMutationActions);a.DML=b.data;a.Sequencer=b.data;a.Input=b.input;return nil};func(b binder)Lookup(context.Context,handler.ValueKey)(any,bool,error){return nil,false,nil}
+type binder struct{data *data;input *Input};func(b binder)Bind(ctx context.Context,target any, options ...bindly.BindOption)error{if len(options)!=0{return fmt.Errorf("fixture does not support explicit binding options")};a:=target.(*_newEventsHandlerMutationActions);a.DML=b.data;a.Sequencer=b.data;a.Input=b.input;return nil};func(b binder)Lookup(context.Context,handler.ValueKey)(any,bool,error){return nil,false,nil}
 type reservingData struct{*data;reserved []int64}
 func(d *reservingData)Reserve(_ context.Context,table string,value any,selector string)error{if d.calls!=0||table!="EVENTS"||selector!="Id"{return fmt.Errorf("reservation did not precede allocation")};for _,row:=range value.([]*Record){d.reserved=append(d.reserved,*row.Id);*row.Id=999};return nil}
 type reservationBinder struct{binder;reserved *reservingData}
-func(b reservationBinder)Bind(ctx context.Context,target any)error{if err:=b.binder.Bind(ctx,target);err!=nil{return err};target.(*_newEventsHandlerMutationActions).Sequencer=b.reserved;return nil}
+func(b reservationBinder)Bind(ctx context.Context,target any, options ...bindly.BindOption)error{if len(options)!=0{return fmt.Errorf("fixture does not support explicit binding options")};if err:=b.binder.Bind(ctx,target);err!=nil{return err};target.(*_newEventsHandlerMutationActions).Sequencer=b.reserved;return nil}
 func ptr(v int64)*int64{return &v}
 func TestActions(t *testing.T){
  for _,reserve:=range []bool{false,true}{t.Run(fmt.Sprint(reserve),func(t *testing.T){

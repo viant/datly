@@ -46,10 +46,30 @@ func TestCriteriaInCannotSupplySQLIdentity(t *testing.T) {
 		`SELECT l.ID FROM records l WHERE $criteria.In("l.ID", $Ids.Load())`,
 		`SELECT l.ID FROM records l WHERE $criteria.In("l.ID", $Ids.Values).Other()`,
 		`SELECT l.ID FROM records l ORDER BY $criteria.In("l.ID", $Ids.Values)`,
+		`SELECT l.ID FROM records l WHERE $criteria.In("LOWER(l.ID", $Ids.Values)`,
+		`SELECT l.ID FROM records l WHERE $criteria.In("l.ID FROM other", $Ids.Values)`,
+		`SELECT l.ID FROM records l WHERE $criteria.In("l.ID IN (1) OR 1=1", $Ids.Values)`,
+		`SELECT l.ID FROM records l WHERE $criteria.In("l.ID IN (1) UNION SELECT 1", $Ids.Values)`,
 	} {
 		t.Run(source, func(t *testing.T) {
 			if _, _, err := Parse(source, nil); err == nil {
 				t.Fatal("dynamic identity accepted")
+			}
+		})
+	}
+}
+
+func TestCriteriaInNativeFunctionOperand(t *testing.T) {
+	for _, operand := range []string{"LOWER(r.owner_key)", "LOWER(TRIM(r.owner_key))", "r.owner_key"} {
+		source := `SELECT d.* FROM (SELECT COUNT(DISTINCT r.id) AS total FROM records r WHERE $criteria.In("` + operand + `", $Owners.Keys)) d`
+		t.Run(operand, func(t *testing.T) {
+			original := source
+			_, parsed, err := Parse(source, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if parsed == nil || source != original {
+				t.Fatal("source or projection was lost")
 			}
 		})
 	}
