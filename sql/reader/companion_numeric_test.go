@@ -56,6 +56,13 @@ func TestRootDeferredNumericWithoutPage(t *testing.T) {
 		{"malformed alias rejected", "root_limit=bad&_limit=bad", 0, 0, true},
 		{"repeated numeric rejected", "root_limit=1&root_limit=2", 0, 0, true},
 		{"child cannot borrow root alias", "root_limit=1&limit=bad&_limit=1", 0, 0, true},
+		{"repeated child limit rejected", "root_limit=1&limit=1&limit=2", 0, 0, true},
+		{"repeated child offset rejected", "root_limit=1&limit=1&offset=0&offset=1", 0, 0, true},
+		{"repeated empty child rejected", "root_limit=1&limit=&limit=1", 0, 0, true},
+		{"root alias cannot override child", "root_limit=1&_limit=3&limit=1&offset=0", 1, 10, false},
+
+		{"empty child offset remains zero", "root_limit=1&limit=1&offset=", 1, 10, false},
+		{"child malformed offset cannot borrow alias", "root_limit=1&limit=1&offset=bad&_offset=0", 0, 0, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			scope, err := requestprovider.New(httptest.NewRequest("GET", "/numeric-selectors?"+tc.query, nil))

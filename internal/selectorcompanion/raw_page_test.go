@@ -213,3 +213,51 @@ func TestRootNumericAliasConversionMatchesLegacySession(t *testing.T) {
 		}
 	}
 }
+
+// Child selector conversion follows the pinned legacy Session.SetViewState
+// oracle: only the declared primary is consulted, unlike root alias fallback.
+func TestDeferredChildNumericPrimaryOnly(t *testing.T) {
+	for _, property := range []spec.SelectorProperty{spec.SelectorPropertyLimit, spec.SelectorPropertyOffset} {
+		for _, tc := range []struct {
+			name, query string
+			want        int
+			fail        bool
+		}{
+			{name: "absent"}, {name: "empty", query: "n="}, {name: "valid", query: "n=2", want: 2},
+			{name: "root alias absent from child", query: "_limit=3&_offset=4"},
+			{name: "malformed cannot fallback", query: "n=bad&_limit=3&_offset=4", fail: true},
+			{name: "repeated equal", query: "n=2&n=2", fail: true},
+			{name: "repeated empty", query: "n=&n=2", fail: true},
+			{name: "repeated malformed", query: "n=2&n=bad", fail: true},
+			{name: "overflow", query: "n=999999999999999999999999", fail: true},
+		} {
+			t.Run(string(property)+"/"+tc.name, func(t *testing.T) {
+				scope, err := requestprovider.New(httptest.NewRequest("GET", "/child?"+tc.query, nil), requestprovider.WithIgnoreEmptyQueryParameters(false))
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer scope.Close()
+				binding := pageTestBinding()
+				binding.Name = "Child" + string(property)
+				binding.Path = binding.Name
+				binding.Location.In = "n"
+				binding.Extension = &spec.Parameter{QuerySelector: &spec.QuerySelectorBinding{View: "children", Property: property}}
+				source, err := newPageSource(scope.Query(), binding)
+				if err != nil {
+					t.Fatal(err)
+				}
+				source.primaryOnly = true
+				got, err := source.resolve(t.Context())
+				if (err != nil) != tc.fail || got != tc.want {
+					t.Fatalf("value=%d err=%v", got, err)
+				}
+				if tc.fail {
+					var failure *bindly.BindingError
+					if !errors.As(err, &failure) || failure.Name != binding.Name || failure.Path != binding.Path || failure.In != "n" {
+						t.Fatalf("child error identity lost: %v", err)
+					}
+				}
+			})
+		}
+	}
+}

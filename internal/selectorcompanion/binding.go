@@ -158,11 +158,13 @@ type BindingPlan struct {
 	deferredPlan              *bindly.Plan
 	deferredBinding           *bindly.BindingSpec
 	pageBindings              []bindly.BindingSpec
-	pagePlan                  *bindly.Plan
-	absentPlan                *bindly.Plan
-	owner                     *BindingPlan
-	transportOnly             bool
-	rootAliases               []rootAliasPlan
+	// numericPrimaryOnly is immutable policy keyed by canonical selector identity.
+	numericPrimaryOnly map[*spec.Parameter]bool
+	pagePlan           *bindly.Plan
+	absentPlan         *bindly.Plan
+	owner              *BindingPlan
+	transportOnly      bool
+	rootAliases        []rootAliasPlan
 }
 
 func NewBindingPlan(component *spec.Component, selected *Selection, input reflect.Type, publicPlan, companionPlan *bindly.Plan, public, selectors []bindly.BindingSpec) (*BindingPlan, error) {
@@ -215,6 +217,18 @@ func NewBindingPlan(component *spec.Component, selected *Selection, input reflec
 	if result.transportOnly {
 		return result, nil
 	}
+	result.numericPrimaryOnly = map[*spec.Parameter]bool{}
+	for _, binding := range selectors {
+		parameter := binding.Extension.(*spec.Parameter)
+		field, ok := result.Field(parameter)
+		if !ok || field.Type != reflect.TypeFor[int]() {
+			continue
+		}
+		if legacyNumericBinding(component, parameter, binding) {
+			result.numericPrimaryOnly[parameter] = !rootSelectorTarget(component, parameter.QuerySelector.View)
+		}
+	}
+
 	if component.Settings != nil && component.Settings.IgnoreEmptyQueryParameters != nil && !*component.Settings.IgnoreEmptyQueryParameters {
 		// Ordinary Init runs after public/auth binding and before reader Fields
 		// and deferred Page evaluation. It cannot observe the private companion.
@@ -231,7 +245,7 @@ func NewBindingPlan(component *spec.Component, selected *Selection, input reflec
 				}
 				selected := b
 				result.deferredBinding = &selected
-			} else if !legacyRootNumeric(component, parameter, b) {
+			} else if !result.isDeferredNumeric(parameter) {
 				executable = append(executable, b)
 			}
 		}
@@ -248,7 +262,7 @@ func NewBindingPlan(component *spec.Component, selected *Selection, input reflec
 	}
 	ordinary := make([]bindly.BindingSpec, 0)
 	for _, binding := range selectors {
-		if legacyRootNumeric(component, binding.Extension.(*spec.Parameter), binding) || binding.Extension.(*spec.Parameter).QuerySelector.Property == spec.SelectorPropertyPage && binding.DefaultValue == nil && (binding.Required == nil || !*binding.Required) && (result.IsDeferredPage(binding.Extension.(*spec.Parameter)) || unlimitedPageView(component, binding.Extension.(*spec.Parameter))) {
+		if result.isDeferredNumeric(binding.Extension.(*spec.Parameter)) || binding.Extension.(*spec.Parameter).QuerySelector.Property == spec.SelectorPropertyPage && binding.DefaultValue == nil && (binding.Required == nil || !*binding.Required) && (result.IsDeferredPage(binding.Extension.(*spec.Parameter)) || unlimitedPageView(component, binding.Extension.(*spec.Parameter))) {
 			result.pageBindings = append(result.pageBindings, binding)
 		} else {
 			ordinary = append(ordinary, binding)
@@ -374,7 +388,7 @@ func (p *BindingPlan) Bind(ctx context.Context, scope *bindly.Injector, input an
 		}
 	}
 	for _, provider := range providers {
-		if p.pagePlan != nil && provider != nil && reflect.TypeOf(provider) == nativeQueryProviderType {
+		if p.pagePlan != nil && nativeQueryAuthority(provider) {
 			plan = p.pagePlan
 			break
 		}
@@ -424,7 +438,7 @@ func (p *BindingPlan) CarryBound(binder xhandler.Binder, input any) (xhandler.Bi
 		c.page = &pageSource{binding: *p.deferredBinding, legacy: true}
 	}
 	for _, binding := range p.pageBindings {
-		c.pages[binding.Extension.(*spec.Parameter)] = &pageSource{binding: binding, legacy: p.DeferredPage()}
+		c.pages[binding.Extension.(*spec.Parameter)] = &pageSource{binding: binding, legacy: p.DeferredPage(), primaryOnly: p.numericPrimaryOnly[binding.Extension.(*spec.Parameter)]}
 	}
 	return wrapped, nil
 }
@@ -580,9 +594,13 @@ func (p *BindingPlan) querySource(providers []locator.Provider, binding bindly.B
 	if query == nil {
 		// Typed component composition may have no transport query source. Page
 		// is optional here, so preserve absence without borrowing request state.
-		return &pageSource{binding: binding, legacy: true}, nil
+		return &pageSource{binding: binding, legacy: true, primaryOnly: p.numericPrimaryOnly[binding.Extension.(*spec.Parameter)]}, nil
 	}
-	return newPageSource(query, binding)
+	source, err := newPageSource(query, binding)
+	if err == nil {
+		source.primaryOnly = p.numericPrimaryOnly[binding.Extension.(*spec.Parameter)]
+	}
+	return source, err
 }
 
 func (p *BindingPlan) authority() *BindingPlan {
@@ -680,21 +698,38 @@ func unlimitedPageView(component *spec.Component, parameter *spec.Parameter) boo
 	return false
 }
 
-// legacyRootNumeric retains root Limit/Offset conversion in the same invocation
-// source as Page. Ordinary query fields and child selectors keep native binding.
-func legacyRootNumeric(component *spec.Component, parameter *spec.Parameter, binding bindly.BindingSpec) bool {
-	if component.Settings == nil || component.Settings.IgnoreEmptyQueryParameters == nil || *component.Settings.IgnoreEmptyQueryParameters || component.RootView == nil || parameter.QuerySelector == nil || binding.DefaultValue != nil || binding.Required != nil && *binding.Required {
+// legacyNumericBinding admits only declared optional numeric query selectors on
+// the explicit compatibility path. Root aliases never become child authority.
+func legacyNumericBinding(component *spec.Component, parameter *spec.Parameter, binding bindly.BindingSpec) bool {
+	if component.Settings == nil || component.Settings.IgnoreEmptyQueryParameters == nil || *component.Settings.IgnoreEmptyQueryParameters || component.RootView == nil || parameter.QuerySelector == nil || binding.Location.Kind != "query" || binding.DefaultValue != nil || binding.Required != nil && *binding.Required {
 		return false
 	}
 	property := parameter.QuerySelector.Property
-	if property != spec.SelectorPropertyLimit && property != spec.SelectorPropertyOffset {
-		return false
-	}
-	target := parameter.QuerySelector.View
-	return strings.EqualFold(target, component.RootView.CanonicalName()) || strings.EqualFold(target, component.RootView.Name)
+	return property == spec.SelectorPropertyLimit || property == spec.SelectorPropertyOffset
 }
 
-// DeferredNumeric reports root numeric selectors whose native query conversion
+// Input compilation precedes typed relation hydration. The reader compiler's
+// ViewIndex resolves every target and NewPlan verifies its exact accessor before
+// a reader artifact is executable. These are the ViewIndex root aliases.
+func rootSelectorTarget(component *spec.Component, target string) bool {
+	target = strings.TrimSpace(target)
+	if target == "" {
+		return true
+	}
+	for _, name := range []string{component.Name, component.RootView.Name, component.RootView.Key.Name} {
+		if strings.EqualFold(target, strings.TrimSpace(name)) {
+			return true
+		}
+	}
+	return false
+}
+
+func (p *BindingPlan) isDeferredNumeric(parameter *spec.Parameter) bool {
+	_, ok := p.numericPrimaryOnly[parameter]
+	return ok
+}
+
+// DeferredNumeric reports numeric selectors whose native query conversion
 // must follow authorization and source projection validation.
 func (p *BindingPlan) DeferredNumeric() bool {
 	if p == nil {
