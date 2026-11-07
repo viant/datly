@@ -26,11 +26,11 @@ func TestMutationInsertIdentityReadinessSQLite(t *testing.T) {
 		t.Fatal(err)
 	}
 	runEntitySyncFixture(t, semantic, types, `package events
-import("context";"strings";"testing";"github.com/viant/datly/internal/testharness/sqlite";"github.com/viant/datly/sql/dml";"github.com/viant/xdatly/handler";_ "github.com/viant/sqlx/metadata/product/sqlite")
+import("fmt";"github.com/viant/bindly";"context";"strings";"testing";"github.com/viant/datly/internal/testharness/sqlite";"github.com/viant/datly/sql/dml";"github.com/viant/xdatly/handler";_ "github.com/viant/sqlx/metadata/product/sqlite")
 type Marker struct{Id,Name bool}
 `+"type Record struct{Id int64 `sqlx:\"id,primaryKey\"`;Name string `sqlx:\"name\"`;Has *Marker `sqlx:\"-\" setMarker:\"true\"`}\n"+`
 type Input struct{Events []*Record};type Output struct{Data []*Record}
-type binder struct{data *dml.Data;input *Input};func(b binder)Bind(ctx context.Context,target any)error{a:=target.(*_newEventsHandlerMutationActions);a.DML=b.data;a.Input=b.input;return nil};func(b binder)Lookup(context.Context,handler.ValueKey)(any,bool,error){return nil,false,nil}
+type binder struct{data *dml.Data;input *Input};func(b binder)Bind(ctx context.Context,target any, options ...bindly.BindOption)error{if len(options)!=0{return fmt.Errorf("fixture does not support explicit binding options")};a:=target.(*_newEventsHandlerMutationActions);a.DML=b.data;a.Input=b.input;return nil};func(b binder)Lookup(context.Context,handler.ValueKey)(any,bool,error){return nil,false,nil}
 func TestReadiness(t *testing.T){
  for _,tc:=range []struct{name string;original bool;mutate func(*Record);wantError string;wantID int64}{
   {"original explicit zero",true,nil,"",0},

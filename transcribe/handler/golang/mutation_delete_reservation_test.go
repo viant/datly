@@ -46,7 +46,7 @@ func TestDeleteReservationPolicy(t *testing.T) {
 			// Reuse the existing typed capture, read-evidence and capability fixture.
 			source, _, _ := strings.Cut(deleteAllocationFixture, "func TestFailBeforeAllocation")
 			source = strings.NewReplacer(
-				`"context";`, `"context";"fmt";"reflect";`,
+				`"context";`, `"context";"reflect";`,
 				`type data struct{allocations,writes int}`, `type data struct{allocations,writes,reserves int;reserved,deleted []int64;rejectReserve bool}`,
 				`d.allocations++;return nil`, `d.allocations++;for _,row:=range value.([]*Record){v:=int64(100);row.Id=&v};return nil`,
 				`Allocate(context.Context,string,any,string)`, `Allocate(_ context.Context,_ string,value any,_ string)`,

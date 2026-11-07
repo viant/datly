@@ -33,13 +33,13 @@ func TestDeleteErrorsPrecedeEveryAllocationAndDML(t *testing.T) {
 }
 
 const deleteAllocationFixture = `package events
-import("context";"testing";"github.com/viant/xdatly/handler")
+import("fmt";"github.com/viant/bindly";"context";"testing";"github.com/viant/xdatly/handler")
 type Marker struct{Id,Name,Remove bool};type Record struct{Id *int64;Name string;Remove bool;Has *Marker};type Previous struct{Id *int64}
 type Input struct{Events []*Record;CurrentEvents []*Previous};type Output struct{Data []*Record}
 type projection struct{};func(projection)Has(string)bool{return true};func(projection)RootHolder()string{return ""};func(projection)DirectOutput()bool{return true};func(projection)Fields(int,...handler.ReadStep)(handler.FieldSet,error){return projection{},nil}
 type metadata struct{};func(metadata)Projection(string)(handler.ReadProjection,error){return projection{},nil}
 type data struct{allocations,writes int};func(d *data)Allocate(context.Context,string,any,string)error{d.allocations++;return nil};func(d *data)Insert(string,any)error{d.writes++;return nil};func(d *data)Update(string,any)error{d.writes++;return nil};func(d *data)Delete(string,any)error{d.writes++;return nil};func(d *data)Execute(string,...any)error{d.writes++;return nil}
-type binder struct{data *data;input *Input};func(b binder)Bind(_ context.Context,target any)error{a:=target.(*_newEventsHandlerMutationActions);a.DML=b.data;a.Sequencer=b.data;a.Input=b.input;return nil};func(b binder)Lookup(context.Context,handler.ValueKey)(any,bool,error){return nil,false,nil}
+type binder struct{data *data;input *Input};func(b binder)Bind(_ context.Context,target any, options ...bindly.BindOption)error{if len(options)!=0{return fmt.Errorf("fixture does not support explicit binding options")};a:=target.(*_newEventsHandlerMutationActions);a.DML=b.data;a.Sequencer=b.data;a.Input=b.input;return nil};func(b binder)Lookup(context.Context,handler.ValueKey)(any,bool,error){return nil,false,nil}
 func TestFailBeforeAllocation(t *testing.T){
  for _,unknown:=range []bool{false,true}{
   id:=int64(999);bad:=&Record{};bad.SetRemove(true);if !bad.Has.Remove{t.Fatal("delete setter presence missing")};if unknown{bad.Id=&id;bad.Has.Id=true}
