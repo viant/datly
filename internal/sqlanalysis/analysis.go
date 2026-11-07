@@ -170,15 +170,19 @@ func validateCriteriaIn(method *veltyexpr.Select, validate InputValidator) error
 	if !ok || column.RType != reflect.TypeFor[string]() {
 		return fmt.Errorf("column must be a static qualified identifier")
 	}
-	for _, part := range strings.Split(column.Value, ".") {
-		if part == "" {
-			return fmt.Errorf("column must be a static qualified identifier")
-		}
-		for i, r := range part {
-			if !(r == '_' || r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || i > 0 && r >= '0' && r <= '9') {
-				return fmt.Errorf("column must be a static qualified identifier")
-			}
-		}
+	// Let the SQL parser recognize the authored operand, including native
+	// function expressions. This statement is analysis-only; executable SQL
+	// and its bound values remain untouched.
+	parsed, err := sqlparser.ParseQuery("SELECT 1 WHERE "+column.Value+" IN (NULL)", sqlparser.WithStructuralValidation())
+	if err != nil {
+		return fmt.Errorf("invalid static criteria operand: %w", err)
+	}
+	if parsed.Qualify == nil || parsed.From.X != nil || len(parsed.Joins) != 0 || parsed.Union != nil || len(parsed.GroupBy) != 0 || parsed.Having != nil || parsed.QualifyClause != nil || len(parsed.OrderBy) != 0 || parsed.Limit != nil || parsed.Offset != nil {
+		return fmt.Errorf("criteria operand must not change statement structure")
+	}
+	condition, ok := parsed.Qualify.X.(*expr.Binary)
+	if !ok || !strings.EqualFold(condition.Normalize().Op, "IN") {
+		return fmt.Errorf("criteria operand must be a single SQL value expression")
 	}
 	value, ok := call.Args[1].(*veltyexpr.Select)
 	if !ok {
