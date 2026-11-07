@@ -10,12 +10,15 @@ import (
 // bodyBuilder assembles the single OpenAPI request body from effective bindings.
 // Named body inputs are literal top-level JSON keys, as in Bindly's body source.
 type bodyBuilder struct {
-	properties openapi3.Schemas
-	required   []string
-	whole      *openapi3.Schema
-	media      string
-	count      int
-	mandatory  bool
+	schemas          openapi3.Schemas
+	wholeField       *registry.InputField
+	stagedProperties map[string]bool
+	properties       openapi3.Schemas
+	required         []string
+	whole            *openapi3.Schema
+	media            string
+	count            int
+	mandatory        bool
 }
 
 func (b *bodyBuilder) add(field registry.InputField, schema *openapi3.Schema) error {
@@ -36,13 +39,14 @@ func (b *bodyBuilder) add(field registry.InputField, schema *openapi3.Schema) er
 	}
 	b.count++
 	b.media = media
-	required := binding.Required != nil && *binding.Required
+	required := binding.Required != nil && *binding.Required && binding.Scope == ""
 	b.mandatory = b.mandatory || required
 	if name == "" {
 		if b.whole != nil {
 			return fmt.Errorf("multiple whole-body contracts")
 		}
 		b.whole = schema
+		b.wholeField = &field
 		return nil
 	}
 	if b.properties == nil {
@@ -52,6 +56,10 @@ func (b *bodyBuilder) add(field registry.InputField, schema *openapi3.Schema) er
 		return fmt.Errorf("duplicate body property %q", name)
 	}
 	b.properties[name] = schema
+	if b.stagedProperties == nil {
+		b.stagedProperties = map[string]bool{}
+	}
+	b.stagedProperties[name] = stagedNamedBody(field)
 	if required {
 		b.required = append(b.required, name)
 	}
@@ -72,9 +80,14 @@ func (b *bodyBuilder) build(method string) (*openapi3.RequestBody, error) {
 	schema := &openapi3.Schema{Type: "object", Properties: b.properties, Required: b.required}
 	if b.whole != nil {
 		if len(b.properties) > 0 {
-			return nil, fmt.Errorf("whole-body and selected-body bindings overlap")
+			combined, err := b.composeStagedBody()
+			if err != nil {
+				return nil, err
+			}
+			schema = combined
+		} else {
+			schema = b.whole
 		}
-		schema = b.whole
 	}
 	return &openapi3.RequestBody{Required: b.mandatory, Content: openapi3.Content{b.media: {Schema: schema}}}, nil
 }

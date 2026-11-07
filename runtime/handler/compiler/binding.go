@@ -123,6 +123,10 @@ func bindingSpecFromParam(field reflect.StructField, param *spec.Parameter, tagg
 	if groupErr != nil {
 		return bindly.BindingSpec{}, false, groupErr
 	}
+	presenceOnly := tagged.PresenceOnly
+	if param.PresenceOnly != nil {
+		presenceOnly = *param.PresenceOnly
+	}
 	kind := strings.ToLower(strings.TrimSpace(param.Source.Kind))
 	var defaultValue any
 	if param.Value != nil {
@@ -132,6 +136,7 @@ func bindingSpecFromParam(field reflect.StructField, param *spec.Parameter, tagg
 		if !hasTag {
 			return bindly.BindingSpec{}, false, nil
 		}
+		tagged.PresenceOnly = presenceOnly
 		tagged.ResolutionGroup = group
 		tagged.BodyNullPolicy = param.BodyNullPolicy
 		tagged.Name = param.Name
@@ -166,6 +171,7 @@ func bindingSpecFromParam(field reflect.StructField, param *spec.Parameter, tagg
 		bindingName = field.Name
 	}
 	return bindly.BindingSpec{
+		PresenceOnly:      presenceOnly,
 		ResolutionGroup:   group,
 		BodyNullPolicy:    param.BodyNullPolicy,
 		Path:              field.Name,

@@ -22,12 +22,32 @@ type inputBuilder struct {
 }
 
 func (b *inputBuilder) build(fields []registry.InputField, operation *openapi3.Operation) error {
+	for _, projection := range fields {
+		if !projection.Binding().PresenceOnly {
+			continue
+		}
+		owned := false
+		for _, candidate := range fields {
+			binding := candidate.Binding()
+			internal, err := candidate.Internal()
+			if err != nil {
+				return err
+			}
+			if !internal && !binding.PresenceOnly && binding.Location == projection.Binding().Location && stagedNamedBody(candidate) {
+				owned = true
+				break
+			}
+		}
+		if !owned {
+			return fmt.Errorf("presenceOnly input %s has no public static typed body owner", projection.Path())
+		}
+	}
 	seen := map[string]bool{}
 	paths := map[string]bool{}
 	for _, name := range b.template.Parameters() {
 		paths[name] = false
 	}
-	body := &bodyBuilder{}
+	body := &bodyBuilder{schemas: b.schemas.schemas}
 	for _, field := range fields {
 		internal, err := field.Internal()
 		if err != nil {
@@ -37,13 +57,16 @@ func (b *inputBuilder) build(fields []registry.InputField, operation *openapi3.O
 			continue
 		}
 		binding := field.Binding()
+		if binding.PresenceOnly {
+			return fmt.Errorf("input %s presenceOnly must be internal; a typed transport owner must describe its domain", field.Path())
+		}
 		kind := binding.Location.Kind
 		switch kind {
 		case "path", "query", "header", "cookie", "body", "form":
 		default:
 			continue
 		}
-		if binding.When != "" || binding.Scope != "" || binding.With != "" {
+		if binding.When != "" || binding.With != "" || (binding.Scope != "" && !stagedNamedBody(field)) {
 			return fmt.Errorf("input %s has conditional binding without representable transport authority", field.Path())
 		}
 		name := binding.Location.In
@@ -64,7 +87,7 @@ func (b *inputBuilder) build(fields []registry.InputField, operation *openapi3.O
 			return fmt.Errorf("duplicate transport input %s", key)
 		}
 		seen[key] = true
-		required := kind == "path" || binding.Required != nil && *binding.Required
+		required := kind == "path" || binding.Scope == "" && binding.Required != nil && *binding.Required
 		sourceType := field.SourceType()
 		// Presence remains required while the opted whole body permits literal null.
 		strictValue := (required && binding.BodyNullPolicy == "") || kind != "body"

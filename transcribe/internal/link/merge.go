@@ -251,6 +251,10 @@ func overlayParam(base, authored *spec.Parameter) *spec.Parameter {
 	if authored.ExpectedReturned != nil {
 		result.ExpectedReturned = authoredCopy.ExpectedReturned
 	}
+	if authored.PresenceOnly != nil {
+		v := *authored.PresenceOnly
+		result.PresenceOnly = &v
+	}
 	if authored.BodyNullPolicy != "" {
 		result.BodyNullPolicy = authored.BodyNullPolicy
 	}

@@ -146,6 +146,18 @@ func (p *inputProjection) visit(ref spec.RouteRef, component *spec.Key, selected
 
 func (p *inputProjection) add(field InputField) error {
 	binding := field.binding
+	if binding.PresenceOnly {
+		internal, err := field.Internal()
+		if err != nil {
+			return err
+		}
+		if !internal {
+			return fmt.Errorf("presenceOnly input %s requires internal visibility and a typed transport owner", field.Path())
+		}
+		// Keep the capability in metadata, but it does not own a public value domain.
+		p.fields = append(p.fields, field)
+		return nil
+	}
 	name := binding.Location.In
 	if name == "" && binding.Location.Kind != "body" {
 		name = binding.Name

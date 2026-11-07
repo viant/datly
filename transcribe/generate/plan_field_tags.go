@@ -52,6 +52,9 @@ func fieldTag(param *spec.Parameter, tagName string, metadata []structTagValue) 
 		appendValue("resolutionAfter", strings.Join(param.ResolutionGroup.After, "|"))
 		appendValue("dependsOn", strings.Join(param.ResolutionGroup.DependsOn, "|"))
 	}
+	if param.PresenceOnly != nil {
+		appendValue("presenceOnly", strconv.FormatBool(*param.PresenceOnly))
+	}
 	appendValue("bodyNullPolicy", param.BodyNullPolicy)
 	appendValue("when", param.When)
 	appendValue("scope", param.Scope)

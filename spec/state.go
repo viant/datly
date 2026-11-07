@@ -122,6 +122,7 @@ type ResolutionGroupSpec struct {
 }
 
 type Parameter struct {
+	PresenceOnly    *bool                `json:"presenceOnly,omitempty"`
 	ResolutionGroup *ResolutionGroupSpec `json:"resolutionGroup,omitempty"`
 	Name            string               `json:"name,omitempty"`
 	Declaration     DeclarationKind      `json:"declaration,omitempty"`
