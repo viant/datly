@@ -116,7 +116,11 @@ func (b *schemaBuilder) fieldEnum(schema *openapi3.Schema, field reflect.StructF
 				}
 				for _, alternative := range domain.StringAlternatives {
 					length := uint64(alternative.Length)
-					copy.AnyOf = append(copy.AnyOf, &openapi3.Schema{Type: "string", Pattern: alternative.Pattern, MinLength: length, MaxLength: &length})
+					branch := &openapi3.Schema{Type: "string", Pattern: alternative.Pattern, MinLength: length}
+					if !alternative.VariableLength {
+						branch.MaxLength = &length
+					}
+					copy.AnyOf = append(copy.AnyOf, branch)
 				}
 				if schema.Nullable {
 					copy.AnyOf = append(copy.AnyOf, &openapi3.Schema{Type: "string", Nullable: true, Enum: []any{nil}})
