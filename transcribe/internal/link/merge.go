@@ -111,7 +111,9 @@ func retiredSelectorTransport(candidate *spec.Parameter, authored []*spec.Parame
 		return false
 	}
 	source := strings.TrimLeft(strings.TrimSpace(candidate.Source.Name), "_")
-	if source == "" || candidate.Name != text.DetectCaseFormat(source).Format(source, text.CaseFormatUpperCamel) {
+	property, canonical := spec.SelectorPropertyForParam(candidate.Name)
+	canonicalBinding := canonical && property == candidate.QuerySelector.Property
+	if source == "" || (!canonicalBinding && candidate.Name != text.DetectCaseFormat(source).Format(source, text.CaseFormatUpperCamel)) {
 		return false
 	}
 	for _, param := range authored {

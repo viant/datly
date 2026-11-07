@@ -1,6 +1,8 @@
 package link
 
 import (
+	dtag "github.com/viant/datly/tag"
+	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -135,4 +137,22 @@ func TestAuthoredSelectorSourceChangeRetiresGeneratedTransport(t *testing.T) {
 		require.Same(t, ordinary, got[3])
 		require.Equal(t, "sort", old.Source.Name, "inherited contract must remain unchanged")
 	}
+}
+
+func TestAuthoredSelectorSourceChangeRetiresCanonicalGeneratedBinding(t *testing.T) {
+	// Generated companion fields retain a canonical parameter name even when
+	// their Go field is named after the former transport key.
+	field, _ := reflect.TypeFor[struct {
+		Sort []string `parameter:"OrderBy,kind=query,in=sort,dataType=[]string,required=false" querySelector:"view=value,property=orderBy"`
+	}]().FieldByName("Sort")
+	metadata, err := dtag.ParseField(field)
+	require.NoError(t, err)
+	require.Equal(t, "OrderBy", metadata.Binding.Name)
+	old := selectorParam(metadata.Binding.Name, metadata.Binding.Location.In, metadata.QuerySelector.View, metadata.QuerySelector.Property)
+	authored := selectorParam("OrderBy", "_orderby", "value", spec.SelectorPropertyOrderBy)
+	got, err := (&Loader{}).mergeParams([]*spec.Parameter{old}, []*spec.Parameter{authored})
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	require.Equal(t, "_orderby", got[0].Source.Name)
+	require.Equal(t, "sort", old.Source.Name)
 }
