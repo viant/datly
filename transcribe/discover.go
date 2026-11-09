@@ -115,7 +115,7 @@ func (d *Discovery) Compile(ctx context.Context) (*ProjectGeneration, error) {
 	if _, err = d.loadTypeIncludes(ctx, catalog, workspace); err != nil {
 		return nil, err
 	}
-	packageSources, packagePaths, err := d.packageSources(ctx, catalog, workspace, inventory)
+	packageSources, packagePaths, err := d.packageSources(ctx, catalog, workspace, inventory, false)
 	if err != nil {
 		return nil, err
 	}
@@ -152,6 +152,23 @@ func (d *Discovery) Compile(ctx context.Context) (*ProjectGeneration, error) {
 	dqlImports, err := (&dependency.Loader{Workspace: workspace, Catalog: catalog, Registry: d.Registry, Snapshot: dependencySource.dependencySnapshot}).Load(ctx, files)
 	if err != nil {
 		return nil, err
+	}
+	if dependencySource.dependencySnapshot != nil {
+		// The batch shares one catalog/snapshot: select its external import
+		// union once, rather than rerunning Go selection for each source.
+		imports := map[string]bool{}
+		for _, file := range files {
+			content, err := os.ReadFile(file.Path)
+			if err != nil {
+				return nil, err
+			}
+			if err := addBorrowedExternalSourceImports(string(content), imports); err != nil {
+				return nil, err
+			}
+		}
+		if err := loadBorrowedExternalTypes(ctx, dependencySource, workspace, catalog, imports); err != nil {
+			return nil, err
+		}
 	}
 	packagePaths = append(packagePaths, dqlImports...)
 	declaredResources, err := declaredResourcePackages(ctx, workspace, files)
@@ -305,7 +322,7 @@ func (d *Discovery) loadTypeIncludes(ctx context.Context, catalog *typecatalog.C
 	return (&dependency.Loader{Workspace: workspace, Catalog: catalog, Registry: d.Registry}).LoadImports(ctx, imports)
 }
 
-func (d *Discovery) packageSources(ctx context.Context, catalog *typecatalog.Catalog, workspace *xmodule.Workspace, inventory discoveryFiles) (map[string]*bootstrap.PackageComponentSource, []string, error) {
+func (d *Discovery) packageSources(ctx context.Context, catalog *typecatalog.Catalog, workspace *xmodule.Workspace, inventory discoveryFiles, declarationsOnly bool) (map[string]*bootstrap.PackageComponentSource, []string, error) {
 	files, err := inventory.selectFiles(ctx, d.Include, d.Exclude)
 	if err != nil {
 		return nil, nil, err
@@ -425,15 +442,17 @@ func (d *Discovery) packageSources(ctx context.Context, catalog *typecatalog.Cat
 		for _, component := range components {
 			// Package loading collects declarations before authored sources claim
 			// their holders. Unclaimed packages are admitted in compilePackages.
-			resolved, err := resolvePackageDeclarations(component, resolver)
-			if err != nil {
-				return nil, nil, err
-			}
-			if err := (&dependency.Loader{Workspace: workspace, Catalog: catalog, Registry: d.Registry}).LoadPredicates(ctx, resolved, resolutionContext); err != nil {
-				return nil, nil, err
-			}
-			if err := (&dependency.Loader{Workspace: workspace, Catalog: catalog, Registry: d.Registry}).LoadCodecs(ctx, resolved, resolutionContext); err != nil {
-				return nil, nil, err
+			if !declarationsOnly {
+				resolved, err := resolvePackageDeclarations(component, resolver)
+				if err != nil {
+					return nil, nil, err
+				}
+				if err := (&dependency.Loader{Workspace: workspace, Catalog: catalog, Registry: d.Registry}).LoadPredicates(ctx, resolved, resolutionContext); err != nil {
+					return nil, nil, err
+				}
+				if err := (&dependency.Loader{Workspace: workspace, Catalog: catalog, Registry: d.Registry}).LoadCodecs(ctx, resolved, resolutionContext); err != nil {
+					return nil, nil, err
+				}
 			}
 			identity := packageSourceIdentity(packagePath, component.ComponentName())
 			if selected[identity] != nil {

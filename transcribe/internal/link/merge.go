@@ -2,6 +2,7 @@ package link
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 
 	"github.com/viant/datly/spec"
@@ -250,6 +251,10 @@ func overlayParam(base, authored *spec.Parameter) *spec.Parameter {
 	if authored.ExpectedReturned != nil {
 		result.ExpectedReturned = authoredCopy.ExpectedReturned
 	}
+	if authored.PresenceOnly != nil {
+		v := *authored.PresenceOnly
+		result.PresenceOnly = &v
+	}
 	if authored.BodyNullPolicy != "" {
 		result.BodyNullPolicy = authored.BodyNullPolicy
 	}
@@ -299,6 +304,13 @@ func overlayParam(base, authored *spec.Parameter) *spec.Parameter {
 	}
 	if authored.Codec != nil {
 		result.Codec = authoredCopy.Codec
+	} else if value, explicit := reflect.StructTag(authored.Tag).Lookup("codec"); explicit && value == "" {
+		// Explicit empty transport tags retire inherited metadata as well as
+		// its rendered tag. Omission still preserves a linked contract.
+		result.Codec = nil
+	}
+	if value, explicit := reflect.StructTag(authored.Tag).Lookup("wireType"); explicit && value == "" {
+		result.WireTypeExpr = ""
 	}
 	if authored.QuerySelector != nil {
 		result.QuerySelector = authoredCopy.QuerySelector

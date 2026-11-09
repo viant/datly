@@ -90,6 +90,9 @@ func (c *Compiler) Compile(input Input) (*Plan, error) {
 	}
 	for _, inputField := range fields {
 		binding := inputField.Binding()
+		if binding.PresenceOnly {
+			return nil, fmt.Errorf("compile MCP tool %q: presenceOnly source projection has no MCP transport authority", name)
+		}
 		compileField := c.fields[strings.ToLower(strings.TrimSpace(binding.Location.Kind))]
 		if compileField == nil {
 			continue

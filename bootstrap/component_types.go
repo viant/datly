@@ -2,6 +2,7 @@ package bootstrap
 
 import (
 	"fmt"
+	"go/token"
 	"strconv"
 	"strings"
 
@@ -22,6 +23,12 @@ func (r *packageComponentResolver) fieldTypeExpression(field xshape.Field) (stri
 }
 
 func (r *packageComponentResolver) importAlias(packagePath, qualifier string) string {
+	// Reflected package paths may end in a nonidentifier (for example a
+	// hyphenated directory). An explicit import alias is independent of that
+	// basename; preserve package identity and use the existing collision allocator.
+	if !token.IsIdentifier(qualifier) || qualifier == "_" {
+		qualifier = "pkg"
+	}
 	packagePath = strings.TrimSpace(packagePath)
 	if r.component.TypeContext == nil {
 		r.component.TypeContext = &spec.TypeContext{}

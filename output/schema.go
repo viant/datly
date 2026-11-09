@@ -293,6 +293,28 @@ func applyJSONSchemaChoices(item map[string]any, field jsonSchemaField) error {
 		if field.quoted {
 			return fmt.Errorf("enumStyle conflicts with quoted JSON")
 		}
+		if domain := enumeration.OutputDomain(); domain != nil {
+			// Replace storage constraints, retaining descriptive field metadata.
+			for _, key := range []string{"type", "format", "enum", "minimum", "maximum", "properties", "additionalProperties", "required", "items", "$ref", "allOf", "oneOf", "anyOf", "not", "multipleOf", "exclusiveMinimum", "exclusiveMaximum", "minLength", "maxLength", "pattern", "minItems", "maxItems", "uniqueItems", "minProperties", "maxProperties"} {
+				delete(item, key)
+			}
+			branches := []any{}
+			if domain.OpenIntegers {
+				branches = append(branches, map[string]any{"type": "integer", "minimum": domain.Minimum, "maximum": domain.Maximum})
+			} else if len(domain.Integers) > 0 {
+				branches = append(branches, map[string]any{"type": "integer", "enum": domain.Integers})
+			}
+			if domain.OpenStrings {
+				branches = append(branches, map[string]any{"type": "string"})
+			} else if len(domain.Strings) > 0 {
+				branches = append(branches, map[string]any{"type": "string", "enum": domain.Strings})
+			}
+			if domain.Nullable || field.nullable || field.field.Type.Kind() == reflect.Pointer {
+				branches = append(branches, map[string]any{"type": "null"})
+			}
+			item["anyOf"] = branches
+			return nil
+		}
 		item["type"] = enumeration.WireType(false)
 		delete(item, "format")
 		values := enumeration.WireValues(false)
@@ -307,6 +329,7 @@ func applyJSONSchemaChoices(item map[string]any, field jsonSchemaField) error {
 		} else {
 			delete(item, "enum")
 		}
+		return nil
 	}
 	constraint, err := choice.Parse(field.field.Tag, field.field.Type)
 	if err != nil {

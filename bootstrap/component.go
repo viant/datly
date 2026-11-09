@@ -800,6 +800,10 @@ func (r *packageComponentResolver) param(role contractRole, field xshape.Field, 
 		Activation: activationFromBinding(binding.URI), ResourceRef: resourceFromBinding(binding.URI, binding.ResourceRef), Async: binding.Async,
 		ErrorStatusCode: binding.ErrorCode, ErrorMessage: binding.ErrorMessage,
 	}
+	if binding.PresenceOnly {
+		v := true
+		param.PresenceOnly = &v
+	}
 	if binding.ResolutionGroup != nil {
 		group := binding.ResolutionGroup
 		param.ResolutionGroup = &spec.ResolutionGroupSpec{Name: group.Name, Mode: string(group.Mode), After: append([]string(nil), group.After...), DependsOn: append([]string(nil), group.DependsOn...)}

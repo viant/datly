@@ -14,6 +14,8 @@ func EnumInputSchema(enumeration *choice.Enum, nullable bool) *spec.WireSchema {
 	if domain == nil {
 		return result
 	}
+	result.Type, result.Enum = "", nil
+	result.Nullable = nullable || domain.Nullable
 	if domain.OpenIntegers {
 		result.AnyOf = append(result.AnyOf, &spec.WireSchema{Type: "integer", Minimum: ExactSchemaIntegerBound(domain.Minimum), Maximum: ExactSchemaIntegerBound(domain.Maximum)})
 	} else if len(domain.Integers) > 0 {
@@ -34,7 +36,11 @@ func EnumInputSchema(enumeration *choice.Enum, nullable bool) *spec.WireSchema {
 	}
 	for _, alternative := range domain.StringAlternatives {
 		length := alternative.Length
-		result.AnyOf = append(result.AnyOf, &spec.WireSchema{Type: "string", Pattern: alternative.Pattern, MinLength: &length, MaxLength: &length})
+		branch := &spec.WireSchema{Type: "string", Pattern: alternative.Pattern, MinLength: &length}
+		if !alternative.VariableLength {
+			branch.MaxLength = &length
+		}
+		result.AnyOf = append(result.AnyOf, branch)
 	}
 	return result
 }

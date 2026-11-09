@@ -45,7 +45,7 @@ func (p *schemaProjector) argument(t reflect.Type, path, property string, schema
 	}
 	jsonxAlternatives := map[string]*spec.WireSchema{}
 	scalarAlternatives := map[string]map[string]interface{}{}
-	aliasPriorityPaths := map[string]bool{}
+	runtimeSelectionPaths := map[string]bool{}
 	var timePolicyErr error
 	nativeAliases := p.nativeBody && p.wireType == nil
 	var requireField func(string, reflect.StructField) bool
@@ -65,11 +65,11 @@ func (p *schemaProjector) argument(t reflect.Type, path, property string, schema
 			policy, err := format.Parse(field.Tag)
 			if err != nil {
 				timePolicyErr = err
-			} else if policy.InputNamesPriority == "alias" {
-				aliasPriorityPaths[canonicalSchemaPath(t, path, visibility)] = true
+			} else if policy.InputNamesPriority == "alias" || policy.InputGroup != "" || policy.InputUnless != "" {
+				runtimeSelectionPaths[canonicalSchemaPath(t, path, visibility)] = true
 			}
 		}
-		if nativeAliases && !aliasPriorityPaths[canonicalSchemaPath(t, path, visibility)] {
+		if nativeAliases && !runtimeSelectionPaths[canonicalSchemaPath(t, path, visibility)] {
 			if policy, err := registry.TimeInputSchema(field); err != nil {
 				timePolicyErr = err
 			} else if policy != nil {
@@ -114,7 +114,7 @@ func (p *schemaProjector) argument(t reflect.Type, path, property string, schema
 	}
 	for schemaPath, schema := range p.schemas {
 		canonicalPath := canonicalSchemaPath(t, schemaPath, visibility)
-		if !aliasPriorityPaths[canonicalPath] {
+		if !runtimeSelectionPaths[canonicalPath] {
 			applyWireSchema(result, canonicalPath, schema, nativeAliases)
 		}
 	}

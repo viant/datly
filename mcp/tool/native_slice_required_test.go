@@ -15,6 +15,7 @@ func TestNativeSliceSchemaRequiredTag(t *testing.T) {
 		want                bool
 	}{
 		{"explicit whole body", "body", "", `mcp:"name=Ids" required:"true"`, true},
+		{"generated optional whole body with schema requirement", "body", "", `mcp:"name=Ids" parameter:"Body,kind=body,in=,required=false" required:"true"`, true},
 		{"untagged whole body", "body", "", `mcp:"name=Ids"`, false},
 		{"false whole body", "body", "", `mcp:"name=Ids" required:"false"`, false},
 		{"explicit query schema", "query", "ids", `mcp:"name=Ids" required:"true"`, true},
