@@ -74,9 +74,12 @@ func (b *schemaBuilder) wire(shape *jsonmarshal.WireShape) (*openapi3.Schema, er
 					property.Example = annotation.Example
 				}
 			}
-			property, err = b.fieldEnum(property, field.Field(), false)
-			if err != nil {
-				return nil, err
+			// An inline map may replace this field with an arbitrary value.
+			if field.Shape().Kind() != reflect.Interface {
+				property, err = b.fieldEnum(property, field.Field(), false)
+				if err != nil {
+					return nil, err
+				}
 			}
 			result.Properties[field.Name()] = property
 			if fieldname.Required(field.Field()) {

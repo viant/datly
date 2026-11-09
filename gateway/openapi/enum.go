@@ -91,8 +91,23 @@ func (b *schemaBuilder) fieldEnum(schema *openapi3.Schema, field reflect.StructF
 		copy.Format = ""
 		copy.Min = nil
 		copy.Max = nil
-		if input {
-			if domain := enumeration.InputDomain(); domain != nil {
+		{
+			domain := enumeration.OutputDomain()
+			if input {
+				domain = enumeration.InputDomain()
+			}
+			if domain != nil {
+				copy.Type = ""
+				copy.Ref = ""
+				copy.AllOf, copy.OneOf = nil, nil
+				copy.Not, copy.Items = nil, nil
+				copy.Properties, copy.Required = nil, nil
+				copy.AdditionalProperties, copy.AdditionalPropertiesAllowed = nil, nil
+				copy.MultipleOf = nil
+				copy.ExclusiveMin, copy.ExclusiveMax = false, false
+				copy.MaxLength, copy.MinLength, copy.Pattern = nil, 0, ""
+				copy.MaxItems, copy.MinItems, copy.UniqueItems = nil, 0, false
+				copy.MaxProps, copy.MinProps = nil, 0
 				copy.Enum = nil
 				copy.AnyOf = nil
 				copy.Nullable = false
@@ -115,6 +130,9 @@ func (b *schemaBuilder) fieldEnum(schema *openapi3.Schema, field reflect.StructF
 					copy.AnyOf = append(copy.AnyOf, &openapi3.Schema{Type: "string", Enum: values})
 				}
 				for _, alternative := range domain.StringAlternatives {
+					if domain.OpenStrings {
+						break
+					}
 					length := uint64(alternative.Length)
 					branch := &openapi3.Schema{Type: "string", Pattern: alternative.Pattern, MinLength: length}
 					if !alternative.VariableLength {
@@ -122,7 +140,7 @@ func (b *schemaBuilder) fieldEnum(schema *openapi3.Schema, field reflect.StructF
 					}
 					copy.AnyOf = append(copy.AnyOf, branch)
 				}
-				if schema.Nullable {
+				if schema.Nullable || domain.Nullable {
 					copy.AnyOf = append(copy.AnyOf, &openapi3.Schema{Type: "string", Nullable: true, Enum: []any{nil}})
 				}
 				return &copy, nil
