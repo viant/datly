@@ -11,9 +11,10 @@ import (
 // RelationSelection is an immutable, trusted invocation control. It narrows
 // relation loading independently of scalar SQL projection and grants no access.
 type RelationSelection struct {
-	target  ComponentTarget
-	view    string
-	holders []string
+	target        ComponentTarget
+	view          string
+	holders       []string
+	omittedOutput *string
 }
 type relationSelectionKey struct{}
 
@@ -30,6 +31,23 @@ func NewRelationSelection(target ComponentTarget, view string, holders ...string
 	target.Route.Method = strings.ToUpper(strings.TrimSpace(target.Route.Method))
 	target.Route.Path = strings.TrimSpace(target.Route.Path)
 	return &RelationSelection{target: target, view: strings.TrimSpace(view), holders: append([]string{}, holders...)}
+}
+
+// NewDerivedOutputOmission skips one named derived output for this exact
+// reader invocation. The ordinary row relations and scalar selection are preserved.
+func NewDerivedOutputOmission(target ComponentTarget, view, holder string) *RelationSelection {
+	selection := NewRelationSelection(target, view)
+	selection.omittedOutput = &holder
+	return selection
+}
+
+// OmittedDerivedOutput returns the top-level holder omitted by its owning reader.
+func OmittedDerivedOutput(ctx context.Context, component spec.Key) (view, holder string, ok bool) {
+	selection, _ := ctx.Value(relationSelectionKey{}).(RelationSelection)
+	if selection.omittedOutput == nil || selection.target.Component != component {
+		return "", "", false
+	}
+	return selection.view, *selection.omittedOutput, true
 }
 
 // EnterRelationSelection shadows parent state at every component boundary.
@@ -49,7 +67,7 @@ func EnterRelationSelection(ctx context.Context, target ComponentTarget, selecti
 // The bool distinguishes an explicit empty set from ordinary relation loading.
 func SelectedRelations(ctx context.Context, component spec.Key) (string, []string, bool) {
 	selection, _ := ctx.Value(relationSelectionKey{}).(RelationSelection)
-	if selection.view == "" || selection.target.Component != component {
+	if selection.omittedOutput != nil || selection.view == "" || selection.target.Component != component {
 		return "", nil, false
 	}
 	return selection.view, append([]string{}, selection.holders...), true

@@ -21,6 +21,19 @@ func (e *Execution) ValidateRelationSelection(ctx context.Context) error {
 
 func (s *Session) configureRelationSelection(ctx context.Context) error {
 	s.relationSelection = nil
+	s.omittedOutput = ""
+	if name, holder, omit := dexec.OmittedDerivedOutput(ctx, s.Component.Key); omit {
+		view := s.Artifact.Root.View
+		if view.Spec.CanonicalName() == name {
+			for _, relation := range view.Relations {
+				if relation.IsOutput() && relation.Holder == holder && holder != "" {
+					s.omittedOutput = holder
+					return nil
+				}
+			}
+		}
+		return fmt.Errorf("unknown derived output holder %q on root view %q", holder, name)
+	}
 	name, names, present := dexec.SelectedRelations(ctx, s.Component.Key)
 	if !present {
 		return nil

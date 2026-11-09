@@ -43,7 +43,9 @@ func (s *Service) bindOutputRelations(ctx context.Context, session *Session, inp
 				return fmt.Errorf("duplicate or conflicting output holder %s", relation.Relation.Holder)
 			}
 			holders[relation.Relation.Holder] = true
-			selected = append(selected, relation)
+			if session == nil || relation.Relation.Holder != session.omittedOutput {
+				selected = append(selected, relation)
+			}
 		}
 	}
 	if len(selected) == 0 {

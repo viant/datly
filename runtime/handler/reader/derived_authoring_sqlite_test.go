@@ -7,7 +7,9 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/stretchr/testify/require"
 	"github.com/viant/datly/bootstrap"
+	"github.com/viant/datly/exec"
 	"github.com/viant/datly/internal/testharness"
 	"github.com/viant/datly/internal/testharness/sqlite"
 	"github.com/viant/datly/spec"
@@ -115,4 +117,43 @@ SELECT r.id,r.name,set_limit(r,1) FROM records r WHERE r.tenant_id=:TenantID ORD
 			})
 		}
 	}
+}
+
+func TestDerivedOutputOmissionSkipsOnlySelectedQuery(t *testing.T) {
+	type output struct {
+		Data   []*derivedAuthoringRow  `json:"data" parameter:"Data,kind=output,in=view" view:"Records,limit=1" sql:"SELECT id,name FROM records WHERE tenant_id=:TenantID ORDER BY id"`
+		Totals *derivedAuthoringTotals `json:"totals" parameter:"Totals,kind=output,in=derived" view:"Totals" sql:"SELECT COUNT(*) AS count FROM ($View.Records.NonWindowSQL) parent JOIN count_guard ON 1=1"`
+		Bounds *derivedAuthoringBounds `json:"bounds" parameter:"Bounds,kind=output,in=derived" view:"Bounds" sql:"SELECT MIN(id) AS minimum, MAX(id) AS maximum FROM ($View.Records.NonWindowSQL) parent"`
+	}
+	ctx := context.Background()
+	db := sqlite.New(t)
+	require.NoError(t, db.ExecStatements(ctx, "CREATE TABLE records(tenant_id INTEGER,id INTEGER,name TEXT)", "INSERT INTO records VALUES(7,1,'one'),(7,2,'two'),(8,20,'other')", "CREATE TABLE count_guard(id INTEGER)", "INSERT INTO count_guard VALUES (1)"))
+	component := &spec.Component{Key: spec.Key{Kind: spec.KindComponent, Scope: "example.com/records", Name: "Records"}, Name: "Records"}
+	artifact, err := buildArtifact(bootstrap.ArtifactInput{Component: component, InputType: reflect.TypeOf(derivedAuthoringInput{}), OutputType: reflect.TypeOf(output{})})
+	require.NoError(t, err)
+	target := exec.ComponentTarget{Component: component.Key}
+	read := func(omit *exec.RelationSelection) (*output, error) {
+		child, err := exec.EnterRelationSelection(ctx, target, omit)
+		if err != nil {
+			return nil, err
+		}
+		result, err := NewService().Read(child, &Session{Component: artifact.Component, OutputType: reflect.TypeOf(output{}), Input: routeInput(t, artifact), Artifact: artifact.Reader, SQL: &dsql.SQLComponent{DB: db.DB}, Scope: testharness.Request{}.WithQuery(url.Values{"tenantId": {"7"}})})
+		if err != nil {
+			return nil, err
+		}
+		return result.(*output), nil
+	}
+	ordinary, err := read(nil)
+	require.NoError(t, err)
+	require.Equal(t, 2, ordinary.Totals.Count)
+	require.NoError(t, db.ExecStatements(ctx, "DROP TABLE count_guard"))
+	scoped, err := read(exec.NewDerivedOutputOmission(target, "Records", "Totals"))
+	require.NoError(t, err)
+	require.Nil(t, scoped.Totals)
+	require.Equal(t, ordinary.Data, scoped.Data)
+	require.Equal(t, ordinary.Bounds, scoped.Bounds)
+	_, err = read(nil)
+	require.ErrorContains(t, err, "count_guard")
+	_, err = read(exec.NewDerivedOutputOmission(target, "Records", "Data"))
+	require.ErrorContains(t, err, "unknown derived output holder")
 }
