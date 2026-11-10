@@ -41,6 +41,8 @@ func TestInvocationLoggerReceivesHTTPFailuresAcrossReload(t *testing.T) {
 			}
 			require.Equal(t, 2, strings.Count(output.String(), `"msg":"HTTP route execution failed"`))
 			require.Equal(t, 2, strings.Count(output.String(), `"level":"ERROR"`))
+			require.NotContains(t, output.String(), `"!BADKEY"`)
+			require.Equal(t, 2, strings.Count(output.String(), `"error":`))
 		})
 	}
 }

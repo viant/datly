@@ -192,7 +192,7 @@ func (h *Handler) serveHTTP(writer stdhttp.ResponseWriter, req *stdhttp.Request)
 	if scopeErr != nil {
 		recordHTTPError(ctx, scopeErr)
 		if h.logger != nil {
-			h.logger.Error("HTTP request preparation failed", scopeErr)
+			h.logger.Error("HTTP request preparation failed", "error", scopeErr)
 		} else {
 			log.Printf("HTTP request preparation failed: %+v", scopeErr)
 		}
@@ -203,7 +203,7 @@ func (h *Handler) serveHTTP(writer stdhttp.ResponseWriter, req *stdhttp.Request)
 	}
 	defer func() {
 		if err := requestScope.Close(); err != nil && h.logger != nil {
-			h.logger.Error("failed to clean up HTTP request scope", err)
+			h.logger.Error("failed to clean up HTTP request scope", "error", err)
 		}
 	}()
 	target, found := h.runtime.ComponentTargetByMethodPath(req.Method, escapedPath)
@@ -254,7 +254,7 @@ func (h *Handler) serveHTTP(writer stdhttp.ResponseWriter, req *stdhttp.Request)
 	recordHTTPError(ctx, execErr)
 	if h.logger != nil {
 		if execErr != nil {
-			h.logger.Error("HTTP route execution failed", execErr)
+			h.logger.Error("HTTP route execution failed", "error", execErr)
 		} else {
 			h.logger.Debug("HTTP route dispatched through handler engine")
 		}

@@ -41,7 +41,7 @@ func (h *Handler) writeEncoded(ctx context.Context, writer stdhttp.ResponseWrite
 func (h *Handler) writeOutputError(ctx context.Context, writer stdhttp.ResponseWriter, err error) {
 	recordHTTPError(ctx, err)
 	if h.logger != nil {
-		h.logger.Error("failed to encode HTTP output", err)
+		h.logger.Error("failed to encode HTTP output", "error", err)
 	}
 	writer.Header().Del("Content-Length")
 	writer.Header().Del("Content-Encoding")
