@@ -1,3 +1,38 @@
+# Native object-or-array record input
+
+A whole-body record slice can accept either one JSON record or an array with
+the input-only `jsonx:"objectToSlice"` policy:
+
+```go
+type Input struct {
+    Body []Pair `parameter:"Body,kind=body" jsonx:"objectToSlice"`
+}
+```
+
+For generated inputs, retain the same tag in the authoritative DQL declaration:
+
+```sql
+#define($_ = $Body<[]Pair>(body/).Optional().WithTag('jsonx:"objectToSlice"'))
+```
+
+The object form produces one typed element; arrays retain order. An explicit
+empty array remains a nonnil empty slice, while null produces a nil slice and
+an absent body remains absent. Required binding still rejects absent or nil
+values and empty collections. `null=omit` may be combined with the policy to treat explicit null as
+absent. Scalar roots and malformed JSON fail through normal input errors.
+
+The policy applies to direct slices of records, including named slice types.
+It does not override a collection or record's custom JSON/Text methods, alter
+output serialization, or replace the native record decoder. Nested names,
+visibility, aliases, presence and numeric decoding retain their existing
+owners. Nested record fields can use the same policy through native `jsonx`
+field decoding; a selected body binding does not acquire a whole-body policy.
+
+HTTP and MCP share the typed binding path. MCP uses a named body argument for
+the union, and discovery retains the full record schema for both the object
+alternative and array items. Case formatting and explicit member names apply
+recursively to both forms. Generic `encoding/json` does not interpret this tag.
+
 # Nested authored JSON date formats
 
 Canonical body binding honors an explicitly authored `format:"timeLayout=..."` or `format:"dateFormat=..."` on nested `time.Time` / `*time.Time` fields. DQL column tags remain the contract authority; keep the generated original Go body shape.

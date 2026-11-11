@@ -108,6 +108,29 @@ func (b *inputBuilder) build(fields []registry.InputField, operation *openapi3.O
 		if err != nil {
 			return fmt.Errorf("input %s: %w", field.Path(), err)
 		}
+		rootRecordCollection := false
+		if kind == "body" && name == "" && binding.BodyInputTag != "" {
+			// The normalized binding owns the transport policy, including explicit
+			// policies without a corresponding tag on the destination field.
+			policyField := schemaField
+			policyField.Tag = binding.BodyInputTag
+			policy, policyErr := registry.JSONXInputSchema(policyField)
+			if policyErr != nil {
+				return policyErr
+			}
+			if policy != nil {
+				for _, branch := range policy.AnyOf {
+					if branch.Type == "object" {
+						rootRecordCollection = true
+						schema, err = b.schemas.jsonxInputSchema(policyField, schema)
+						if err != nil {
+							return err
+						}
+						break
+					}
+				}
+			}
+		}
 		enumeration, enumErr := choice.ParseEnum(schemaField.Tag, schemaField.Type)
 		if enumErr != nil {
 			return enumErr
@@ -135,10 +158,8 @@ func (b *inputBuilder) build(fields []registry.InputField, operation *openapi3.O
 				return fmt.Errorf("enum schema path %s is not represented", path)
 			}
 		}
-		if strictValue && schema.Nullable {
-			copy := *schema
-			copy.Nullable = false
-			schema = &copy
+		if strictValue {
+			schema = strictInputValue(schema, required && rootRecordCollection)
 		}
 		description := ""
 		example := ""

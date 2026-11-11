@@ -43,6 +43,7 @@ type Argument struct {
 	parentBodySource string
 	anonymousGoName  string
 	bodyNullPolicy   string
+	bodyInputTag     reflect.StructTag
 	required         bool
 	// Schema parity must not introduce a new runtime missing-argument check.
 	// schemaRequired is the complete advertised value, separate from runtime required.

@@ -86,7 +86,7 @@ func TestScopedJWTOlderReaderGraphDestinationProjectsWithoutMutation(t *testing.
 	require.NoError(t, err)
 	require.Len(t, tools.Tools, 1)
 	require.Len(t, tools.Tools[0].InputSchema.Properties, 1)
-	require.NotNil(t, tools.Tools[0].InputSchema.Properties["Query"])
+	require.NotNil(t, tools.Tools[0].InputSchema.Properties["query"])
 	require.Zero(t, invoker.calls)
 	after, err := json.Marshal(&persisted)
 	require.NoError(t, err)

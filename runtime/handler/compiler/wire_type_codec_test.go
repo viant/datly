@@ -80,11 +80,11 @@ func TestExplicitWireTypePreservesRawMessageCodecBinding(t *testing.T) {
 			require.NoError(t, err)
 			require.Zero(t, factory.calls)
 			props := plan.Metadata().InputSchema.Properties
-			require.Empty(t, props["Other"])
+			require.Empty(t, props["other"])
 			if explicit {
-				require.Contains(t, props["Data"], "items")
+				require.Contains(t, props["data"], "items")
 			} else {
-				require.Empty(t, props["Data"])
+				require.Empty(t, props["data"])
 			}
 			for _, raw := range []string{`{"data":[{"id":7}]}`, `{"data":[]}`, `{"data":null}`, `{}`, `{"data":{}}`} {
 				t.Run(raw, func(t *testing.T) {
@@ -92,7 +92,7 @@ func TestExplicitWireTypePreservesRawMessageCodecBinding(t *testing.T) {
 					require.NoError(t, json.Unmarshal([]byte(raw), &object))
 					args := map[string]interface{}{}
 					if value, ok := object["data"]; ok {
-						args["Data"] = value
+						args["data"] = value
 					}
 					scope, err := plan.Scope(args)
 					require.NoError(t, err)

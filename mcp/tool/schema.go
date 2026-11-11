@@ -16,6 +16,7 @@ import (
 
 type schemaProjector struct {
 	nativeBody     bool
+	rootInputTag   reflect.StructTag
 	field          *xshape.JSONField
 	representation *xshape.Representation
 	docs           *docs.Snapshot
@@ -48,6 +49,19 @@ func (p *schemaProjector) argument(t reflect.Type, path, property string, schema
 	runtimeSelectionPaths := map[string]bool{}
 	var timePolicyErr error
 	nativeAliases := p.nativeBody && p.wireType == nil
+	if nativeAliases && p.rootInputTag != "" {
+		policy, err := registry.JSONXInputSchema(reflect.StructField{Type: t, Tag: p.rootInputTag})
+		if err != nil {
+			return nil, err
+		}
+		if policy != nil {
+			for _, branch := range policy.AnyOf {
+				if branch.Type == "object" {
+					jsonxAlternatives[path] = policy
+				}
+			}
+		}
+	}
 	var requireField func(string, reflect.StructField) bool
 	if nativeAliases {
 		requiredPaths := map[string]bool{}
@@ -121,6 +135,9 @@ func (p *schemaProjector) argument(t reflect.Type, path, property string, schema
 	for fieldPath, policy := range jsonxAlternatives {
 		parts := strings.Split(canonicalSchemaPath(t, fieldPath, visibility), ".")
 		_, child, _ := schemaMember(result, parts[1:])
+		if fieldPath == path {
+			child = result
+		}
 		if child == nil {
 			continue
 		}
@@ -137,6 +154,14 @@ func (p *schemaProjector) argument(t reflect.Type, path, property string, schema
 		if branches, ok := alternatives["anyOf"].([]any); ok {
 			for _, value := range branches {
 				branch := value.(map[string]any)
+				if branch["type"] == "object" {
+					if record, ok := items.(map[string]any); ok {
+						delete(branch, "type")
+						for key, value := range record {
+							branch[key] = value
+						}
+					}
+				}
 				if branch["type"] == "array" {
 					if items != nil {
 						branch["items"] = map[string]any{"anyOf": []any{items, map[string]any{"type": "null"}}}

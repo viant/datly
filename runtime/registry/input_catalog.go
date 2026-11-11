@@ -3,6 +3,7 @@ package registry
 import (
 	"fmt"
 	"reflect"
+	"sort"
 	"strings"
 
 	"github.com/viant/datly/runtime/route"
@@ -171,7 +172,7 @@ func (p *inputProjection) add(field InputField) error {
 		prior := previous.binding
 		// Different consumers may bind the same request value. Merge identical wire
 		// contracts and requiredness; incompatible constraints must not be discarded.
-		if previous.SourceType() != field.SourceType() || previous.wireType != field.wireType || prior.When != binding.When || prior.Scope != binding.Scope || prior.With != binding.With ||
+		if bodyInputPolicyIdentity(prior.BodyInputTag) != bodyInputPolicyIdentity(binding.BodyInputTag) || previous.SourceType() != field.SourceType() || previous.wireType != field.wireType || prior.When != binding.When || prior.Scope != binding.Scope || prior.With != binding.With ||
 			!reflect.DeepEqual(prior.MinAllowedRecords, binding.MinAllowedRecords) || !reflect.DeepEqual(prior.MaxAllowedRecords, binding.MaxAllowedRecords) ||
 			!reflect.DeepEqual(prior.ExpectedReturned, binding.ExpectedReturned) || !reflect.DeepEqual(prior.DefaultValue, binding.DefaultValue) {
 			return fmt.Errorf("conflicting transitive transport input %s", key)
@@ -196,4 +197,21 @@ func (p *inputProjection) add(field InputField) error {
 	p.locations[key] = len(p.fields)
 	p.fields = append(p.fields, field)
 	return nil
+}
+
+// Root JSON policy option order and redundant declarations do not change the
+// admitted value domain. Other struct tag metadata belongs to separate owners.
+func bodyInputPolicyIdentity(tag reflect.StructTag) string {
+	options := map[string]bool{}
+	for _, option := range strings.Split(tag.Get("jsonx"), ",") {
+		if option = strings.TrimSpace(option); option != "" {
+			options[option] = true
+		}
+	}
+	values := make([]string, 0, len(options))
+	for option := range options {
+		values = append(values, option)
+	}
+	sort.Strings(values)
+	return strings.Join(values, ",")
 }

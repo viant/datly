@@ -2100,3 +2100,7 @@ rsc.io/quote/v3 v3.1.0/go.mod h1:yEA65RcK8LyAZtP9Kv3t0HmxON59tX3rD+tICJqUlj0=
 rsc.io/sampler v1.3.0/go.mod h1:T1hPZKmBbMNahiBKFy5HrXp6adAjACjK9JXDnKaTXpA=
 sourcegraph.com/sourcegraph/go-diff v0.5.0/go.mod h1:kuch7UrkMzY0X+p9CRK03kfuPQ2zzQcaEFbx8wA8rck=
 sourcegraph.com/sqs/pbtypes v0.0.0-20180604144634-d3ebe8f20ae4/go.mod h1:ketZ/q3QxT9HOBeFhu6RdvsftgpsbFHBF5Cas6cDKZ0=
+github.com/viant/tagly v0.4.2-0.20261111223836-05766879fae0 h1:D1vVSLxj/kxiqjReB4mlwTKWYhhFq+V3ImY9cMuXLao=
+github.com/viant/tagly v0.4.2-0.20261111223836-05766879fae0/go.mod h1:PauQQkHmAvL5lFGr4gIgi+PE0aUPggBIBYN34sX2Oes=
+github.com/viant/bindly v0.5.1-0.20261111225140-63f7e859cfe9 h1:YdTjtfZLt5hxgbVJQO1F6mGjHhqcSnfO/fdBL7rdpfQ=
+github.com/viant/bindly v0.5.1-0.20261111225140-63f7e859cfe9/go.mod h1:D0vTc9LYOWmdt39L8sP7gFg7sQNFLgXy783bkJG+PT8=
