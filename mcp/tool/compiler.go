@@ -247,7 +247,7 @@ func (c *Compiler) Compile(input Input) (*Plan, error) {
 			metadata["datly/httpSchemas"] = input.Documentation.Schemas()
 		}
 	}
-	if input.Output == nil && input.OutputType != nil && input.CaseFormat != "" {
+	if input.Output == nil && input.OutputType != nil {
 		var err error
 		input.Output, err = (output.Compiler{}).Compile(output.CompileInput{Type: input.OutputType})
 		if err != nil {
@@ -260,6 +260,11 @@ func (c *Compiler) Compile(input Input) (*Plan, error) {
 		if err != nil {
 			return nil, fmt.Errorf("compile MCP tool %q output case format: %w", name, err)
 		}
+	}
+	var visibilityErr error
+	input.Output, visibilityErr = input.Output.WithMCPVisibility()
+	if visibilityErr != nil {
+		return nil, fmt.Errorf("compile MCP output visibility: %w", visibilityErr)
 	}
 	outputSchema, outputErr := outputContractSchema(input.OutputType, input.Output)
 	if outputErr != nil {

@@ -33,6 +33,12 @@ MCP discovery; internal fields and presence markers remain hidden.
 This setting controls inputs only. Output schemas and result encoding continue
 to use the component's output contract and HTTP case format together.
 
+A native output field tagged `mcp:"-"` is omitted from the MCP output schema
+and JSON result, including nested fields and typed error payloads. The HTTP
+JSON contract retains its own visibility. Caller-selected Contract metadata
+is preserved before applying the MCP exclusions. Complete custom JSON owners
+and recursive edits retain the dynamic-contract boundaries.
+
 Formatting does not replace a custom JSON decoder's wire contract or an explicit
 whole-argument wire representation. Such owners retain their existing field
 spelling. Nested scalar wire-schema metadata stays associated with its original

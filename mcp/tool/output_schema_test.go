@@ -60,3 +60,15 @@ func TestOutputSchemaPreservesNumericNames(t *testing.T) {
 	require.Contains(t, result.Properties, "sampleSeen7Day")
 	require.Empty(t, result.Required)
 }
+
+func TestCompilerHidesMCPOutputWithoutPreparedPlan(t *testing.T) {
+	type result struct {
+		Visible string `json:"visible"`
+		Secret  string `json:"secret" mcp:"-"`
+	}
+	contract := testRouteContract(t, reflect.TypeFor[struct{}](), nil)
+	plan, err := NewCompiler().Compile(Input{Component: spec.Key{Kind: spec.KindComponent, Name: "Visibility"}, Exposure: &spec.MCPExposure{Kind: spec.MCPExposureTool, Name: "visibility"}, Contract: contract, OutputType: reflect.TypeFor[result]()})
+	require.NoError(t, err)
+	require.Contains(t, plan.Metadata().OutputSchema.Properties, "visible")
+	require.NotContains(t, plan.Metadata().OutputSchema.Properties, "secret")
+}

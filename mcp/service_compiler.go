@@ -230,12 +230,10 @@ func (c *serviceCompiler) publish(ctx context.Context, catalog *Catalog, policy 
 			if plan == nil {
 				return nil, nil
 			}
-			if effective, ok := exec.SelectedContract(ctx, target); ok && (effective.Output != plan.Type() || effective.OutputRepresentation != nil) {
-				var err error
-				plan, err = plan.WithContract(effective.Output, effective.OutputRepresentation)
-				if err != nil {
-					return nil, err
-				}
+			var err error
+			plan, err = effectiveMCPOutput(ctx, target, plan)
+			if err != nil {
+				return nil, err
 			}
 			return exec.NewSelectorPresentation(target, func(rowType reflect.Type, path string) ([]exec.SelectorFieldName, error) {
 				fields, err := plan.SelectorFieldNames(rowType, path)
@@ -254,13 +252,9 @@ func (c *serviceCompiler) publish(ctx context.Context, catalog *Catalog, policy 
 				return nil
 			}
 			return func(ctx context.Context, value any) ([]byte, error) {
-				selected := plan
-				if effective, ok := exec.SelectedContract(ctx, target); ok && (effective.Output != plan.Type() || effective.OutputRepresentation != nil) {
-					var err error
-					selected, err = plan.WithContract(effective.Output, effective.OutputRepresentation)
-					if err != nil {
-						return nil, err
-					}
+				selected, err := effectiveMCPOutput(ctx, target, plan)
+				if err != nil {
+					return nil, err
 				}
 				encoded, err := selected.Encode(ctx, "json", value)
 				return encoded.Data, err
@@ -280,7 +274,7 @@ func (c *serviceCompiler) publish(ctx context.Context, catalog *Catalog, policy 
 			}
 		}, ErrorOutput: func(target exec.ComponentTarget) invocation.OutputEncoder {
 			plan := selectPlan(target)
-			if plan == nil || plan.NilSlicePolicy() != "empty_array" {
+			if plan == nil {
 				return nil
 			}
 			declared := plan.Type()
@@ -295,7 +289,11 @@ func (c *serviceCompiler) publish(ctx context.Context, catalog *Catalog, policy 
 				if declared == nil || actual != declared {
 					return json.Marshal(body)
 				}
-				encoded, err := plan.Encode(ctx, "json", body)
+				selected, err := effectiveMCPOutput(ctx, target, plan)
+				if err != nil {
+					return nil, err
+				}
+				encoded, err := selected.Encode(ctx, "json", body)
 				return encoded.Data, err
 			}
 		}})
@@ -372,4 +370,17 @@ func validateExposedRoute(component *spec.Component, route *spec.Route) error {
 		return fmt.Errorf("MCP route %s is guarded by an HTTP API key", (spec.RouteRef{Method: route.Method, Path: route.Path}).String())
 	}
 	return nil
+}
+
+// effectiveMCPOutput retains the selected caller contract and reapplies the
+// transport's visibility without changing the shared component output plan.
+func effectiveMCPOutput(ctx context.Context, target exec.ComponentTarget, plan *output.Plan) (*output.Plan, error) {
+	if effective, ok := exec.SelectedContract(ctx, target); ok && (effective.Output != plan.Type() || effective.OutputRepresentation != nil) {
+		selected, err := plan.WithContract(effective.Output, effective.OutputRepresentation)
+		if err != nil {
+			return nil, err
+		}
+		return selected.WithMCPVisibility()
+	}
+	return plan, nil
 }
