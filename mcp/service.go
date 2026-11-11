@@ -61,6 +61,7 @@ type ComponentRouteResolver interface {
 }
 
 type Service struct {
+	client                   xmcp.Client
 	contractResolver         exec.ContractResolver
 	catalog                  *Catalog
 	registry                 *mcpserver.Registry

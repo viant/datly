@@ -4,13 +4,14 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/viant/mcp-protocol/schema/fieldname"
 	xshape "github.com/viant/x/shape"
 	xcontract "github.com/viant/xdatly/contract"
 )
 
 type mcpFieldKey struct{ path, name string }
 
-// WithMCPVisibility applies MCP exclusions to transport-local metadata. The
+// WithMCPVisibility applies MCP names and exclusions to transport-local metadata. The
 // native schema and encoder share this representation; HTTP retains its plan.
 func (p *Plan) WithMCPVisibility() (*Plan, error) {
 	if p == nil || p.typeOf == nil {
@@ -32,9 +33,23 @@ func (p *Plan) WithMCPVisibility() (*Plan, error) {
 		name, _, _ := strings.Cut(selected.Tag.Get("json"), ",")
 		if name == "-" || selected.Tag.Get("internal") == "true" {
 			selected.SkipChildren = true
-		} else if visibility, _, _ := strings.Cut(selected.Tag.Get("mcp"), ","); visibility == "-" {
-			field := (&xcontract.Field{Name: selected.Name, Tag: selected.Tag}).Hide()
-			selected.Tag, selected.SkipChildren = field.Tag, true
+		} else {
+			public, err := fieldname.Resolve(reflect.StructField{Name: selected.Name, Tag: selected.Tag}, selected.Name)
+			if err != nil {
+				return nil, err
+			}
+			field := &xcontract.Field{Name: selected.Name, Tag: selected.Tag}
+			if public.Hidden {
+				field = field.Hide()
+				selected.Tag, selected.SkipChildren = field.Tag, true
+			} else if public.Explicit {
+				_, options, _ := strings.Cut(selected.Tag.Get("json"), ",")
+				name := public.Public
+				if options != "" {
+					name += "," + options
+				}
+				selected.Tag = field.SetTag("json", name).Tag
+			}
 		}
 		return &selected, nil
 	})

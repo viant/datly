@@ -19,6 +19,7 @@ func (s *Service) DescribeTool(ctx context.Context, metadata schema.Tool) (schem
 	if !ok {
 		return metadata, false, nil
 	}
+	ctx = invocation.WithMCPContext(ctx, s.client)
 	scope := invocation.AuthorizationScope(ctx)
 	defer scope.Close()
 	effective, err := s.contractResolver.ResolveContract(ctx, plan.Target(), scope)

@@ -352,7 +352,7 @@ func (c *serviceCompiler) publish(ctx context.Context, catalog *Catalog, policy 
 		return nil, err
 	}
 	resolver, _ := c.config.Invoker.(exec.ContractResolver)
-	return &Service{contractResolver: resolver, catalog: catalog, registry: protocolRegistry, resources: resourceHandler, policy: policy, authorizeResource: c.config.AuthorizeResource, authorizeCatalogTool: c.config.AuthorizeCatalogTool, authorizeCatalogResource: c.config.AuthorizeCatalogResource}, nil
+	return &Service{client: c.config.Client, contractResolver: resolver, catalog: catalog, registry: protocolRegistry, resources: resourceHandler, policy: policy, authorizeResource: c.config.AuthorizeResource, authorizeCatalogTool: c.config.AuthorizeCatalogTool, authorizeCatalogResource: c.config.AuthorizeCatalogResource}, nil
 }
 
 func resourceBaseURI(value string) string {

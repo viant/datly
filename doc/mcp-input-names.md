@@ -30,8 +30,12 @@ format. `json:",omitempty"` retains format-based naming. An unset MCP
 format preserves existing Go/JSON names. Use `mcp:"-"` to exclude a member from
 MCP discovery; internal fields and presence markers remain hidden.
 
-This setting controls inputs only. Output schemas and result encoding continue
-to use the component's output contract and HTTP case format together.
+The MCP format also applies to native output schemas and result encoding.
+Explicit JSON names retain their spelling; use an explicit MCP name when the
+public MCP spelling must differ. HTTP retains its existing output contract.
+
+A native output field tagged `mcp:"name=mode"` uses `mode` in the MCP schema
+and encoded result while retaining its original HTTP JSON name.
 
 A native output field tagged `mcp:"-"` is omitted from the MCP output schema
 and JSON result, including nested fields and typed error payloads. The HTTP

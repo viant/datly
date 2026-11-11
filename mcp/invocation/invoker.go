@@ -78,9 +78,7 @@ func (i *Invoker) Execute(ctx context.Context, request Request) (*Execution, *js
 	ctx = exec.CaptureContracts(ctx)
 	execContext := newExecutionContext(ctx, request)
 	ctx = xexec.WithContext(ctx, execContext)
-	if _, ok := xmcp.LookupContext(ctx); !ok {
-		ctx = xmcp.WithContext(ctx, i.mcp)
-	}
+	ctx = WithMCPContext(ctx, i.mcp.Client())
 	scope := request.Scope
 	if request.PrepareScope != nil {
 		var effective *exec.EffectiveContract

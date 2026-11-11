@@ -74,6 +74,38 @@ The hook uses `github.com/viant/bindly` and `github.com/viant/xdatly/contract`.
 Schema discovery runs the hook and any explicitly bound dependencies, such as an
 auth component; it does not run the target business handler.
 
+## Select enum representation by transport
+
+MCP discovery and invocation expose the same protocol context. A Contract hook
+can use `github.com/viant/xdatly/handler/mcp.LookupContext(ctx)` to distinguish
+MCP from HTTP. Use this context rather than a client-supplied flag or header.
+
+For MCP-only enum tokens, leave the choices on the Go field and mark the fields
+managed by your application policy. For example:
+
+```go
+Code int `json:"code" mcpEnum:"true" choice:"0:ASAP" choice:"1:SPEND_EVENLY" enumAccept:"literal" enumStyle:"literal"`
+```
+
+`mcpEnum` is an application-owned marker, not a Datly annotation. Have each
+owning input and output Contract delegate to one shared application policy. That
+policy retains declared metadata for MCP and removes the enum annotations from
+marked fields for HTTP using `Field.RemoveTag`. Remove choices, aliases and any
+associated enum input/output options together. Unmarked, established HTTP enums
+retain their existing metadata. A root policy also covers its nested fields,
+subject to the documented custom-JSON and recursion boundaries.
+
+This keeps integer storage and HTTP values intact while MCP accepts and returns
+literal tokens. Both input and output roots must select the policy, including
+writer responses and corresponding reader outputs. Give reusable variants stable
+policy names; keep the transport gate in one place and compose it with existing
+field policies without replacing authorization. Do not mutate the declared Go
+metadata or change existing JSON names.
+
+The native [transport regression](../mcp/service_enum_scope_test.go) alternates
+MCP discovery/calls and HTTP requests against the same component, checking both
+input and output representations.
+
 ## Choose a focused example
 
 The snippets below are independent use cases, not one large combined policy.
