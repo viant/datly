@@ -1201,6 +1201,8 @@ github.com/viant/tagly v0.4.2-0.20261107221835-115386344f35 h1:opHeNcIU6ItheKkP8
 github.com/viant/tagly v0.4.2-0.20261107221835-115386344f35/go.mod h1:PauQQkHmAvL5lFGr4gIgi+PE0aUPggBIBYN34sX2Oes=
 github.com/viant/tagly v0.4.2-0.20261109165833-97d17304159d h1:mcLo/vmD1T0QswQV8ELJaigqZBSbWbhkhItIrlLGimA=
 github.com/viant/tagly v0.4.2-0.20261109165833-97d17304159d/go.mod h1:PauQQkHmAvL5lFGr4gIgi+PE0aUPggBIBYN34sX2Oes=
+github.com/viant/tagly v0.4.2-0.20261111185601-82d6d5af5b70 h1:FEmzymxPCn0cahYGGZKokf/8Mglov+a253nGav3dw9I=
+github.com/viant/tagly v0.4.2-0.20261111185601-82d6d5af5b70/go.mod h1:PauQQkHmAvL5lFGr4gIgi+PE0aUPggBIBYN34sX2Oes=
 github.com/viant/toolbox v0.24.0/go.mod h1:OxMCG57V0PXuIP2HNQrtJf2CjqdmbrOx5EkMILuUhzM=
 github.com/viant/toolbox v0.34.5/go.mod h1:OxMCG57V0PXuIP2HNQrtJf2CjqdmbrOx5EkMILuUhzM=
 github.com/viant/toolbox v0.39.0 h1:za80N68bwfMNbdt9MbzegGY/4j6GWaMR2Pk/edl7jmI=

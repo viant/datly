@@ -20,7 +20,7 @@ require (
 	github.com/viant/sqlx v0.26.2-0.20261106174837-52540c3f870c
 	github.com/viant/structology v0.10.2-0.20261107222012-8e078e89542f
 	github.com/viant/structql v0.5.5-0.20261012183420-6a47e96ff5b5
-	github.com/viant/tagly v0.4.2-0.20261109165833-97d17304159d
+	github.com/viant/tagly v0.4.2-0.20261111185601-82d6d5af5b70
 	github.com/viant/velty v0.4.1-0.20260915052314-fca47c0595f8
 	github.com/viant/x v0.6.1-0.20261106041415-0487ec66884b
 	github.com/viant/xdatly v1.0.1-0.20261106191133-04634a407286
