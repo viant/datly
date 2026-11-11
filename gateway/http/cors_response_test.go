@@ -41,12 +41,16 @@ func TestCORSExistingConstructorAndOptions(t *testing.T) {
 	f := newConfigFixture(t)
 	origins := []string{"*"}
 	f.component.Routes[0].CORS = &spec.CORS{AllowOrigins: &origins}
+	f.component.Settings.Output = &spec.OutputSettings{Headers: map[string]string{"Cache-Control": "no-store"}}
 	h := NewHandler(f.runtime(t), nil, "test")
 	origins[0] = "changed"
 	req := httptest.NewRequest("GET", "/api/records?tenant=1", nil)
 	req.Header.Set("Origin", "https://allowed.example")
 	res := httptest.NewRecorder()
 	h.ServeHTTP(res, req)
+	if res.Header().Get("Cache-Control") != "no-store" {
+		t.Fatal("static header lost through CORS")
+	}
 	if res.Code != 200 || res.Header().Get("Access-Control-Allow-Origin") != "https://allowed.example" {
 		t.Fatal(res.Header())
 	}

@@ -36,6 +36,7 @@ type Compiler struct {
 
 // Plan contains registered output authority, never invocation input or rows.
 type Plan struct {
+	headers             map[string]string
 	declaredTime        bool
 	representation      *xshape.Representation
 	effectiveSource     reflect.Type
@@ -122,6 +123,11 @@ func (c Compiler) Compile(input CompileInput) (*Plan, error) {
 			p.timeLayout = ftime.DateFormatToTimeLayout(settings.DateFormat)
 		}
 		if settings.Output != nil {
+			var err error
+			p.headers, err = compileHeaders(settings.Output.Headers)
+			if err != nil {
+				return nil, err
+			}
 			p.exclude = exclusions(append([]string(nil), settings.Output.Exclude...))
 			p.omitEmpty = settings.Output.OmitEmpty
 			p.title = settings.Output.Title

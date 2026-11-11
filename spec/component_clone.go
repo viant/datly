@@ -1,6 +1,9 @@
 package spec
 
-import "slices"
+import (
+	"maps"
+	"slices"
+)
 
 // Clone returns an isolated component metadata graph.
 func (c *Component) Clone() *Component {
@@ -48,6 +51,7 @@ func (s *Settings) Clone() *Settings {
 	if s.Output != nil {
 		value := *s.Output
 		value.Exclude = append([]string(nil), s.Output.Exclude...)
+		value.Headers = maps.Clone(s.Output.Headers)
 		result.Output = &value
 	}
 	if s.Const != nil {

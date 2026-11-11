@@ -65,7 +65,14 @@ func (b *responseBuilder) build(entry *registry.RegisteredComponent, endpoint *s
 	if disposition != "" {
 		response.Headers = openapi3.Headers{"Content-Disposition": {Schema: &openapi3.Schema{Type: "string", Enum: []interface{}{disposition}}}}
 	}
+	for name, value := range entry.Output.Headers() {
+		if response.Headers == nil {
+			response.Headers = make(openapi3.Headers)
+		}
+		response.Headers[name] = &openapi3.Parameter{Schema: &openapi3.Schema{Type: "string", Enum: []interface{}{value}}}
+	}
 	if !strings.EqualFold(endpoint.Method, "HEAD") {
+
 		annotation := entry.Documentation.Operation(endpoint.Path, documentation.Annotation{Example: entry.Component.Example})
 		if annotation.Example != "" {
 			if media := content["application/json"]; media != nil {

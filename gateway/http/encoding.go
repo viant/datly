@@ -33,7 +33,20 @@ func (h *Handler) writeEncoded(ctx context.Context, writer stdhttp.ResponseWrite
 	if encoded.ContentDisposition != "" {
 		writer.Header().Set("Content-Disposition", encoded.ContentDisposition)
 	}
+	// Apply only after native encoding succeeds, never on an error body.
+	previous := make(stdhttp.Header)
+	for name, value := range contract.Headers() {
+		previous[name] = append([]string(nil), writer.Header().Values(name)...)
+		writer.Header().Set(name, value)
+	}
 	if err := writeEncodedBytes(writer, request, status, encoded.Data, contract.ResponseCompression()); err != nil {
+		for name, values := range previous {
+			writer.Header().Del(name)
+			for _, value := range values {
+				writer.Header().Add(name, value)
+			}
+		}
+
 		h.writeOutputError(ctx, writer, err)
 	}
 }

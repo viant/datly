@@ -24,7 +24,7 @@ func TestCustomHandlerCanReturnRedirectAndMultipleCookies(t *testing.T) {
 		Origin     string `parameter:"Origin,kind=header,in=Origin"`
 	}
 	component := &spec.Component{Key: spec.Key{Kind: spec.KindComponent, Scope: "example.com/auth", Name: "Start"},
-		Routes: []*spec.Route{{Method: http.MethodGet, Path: "/auth/start"}}}
+		Routes: []*spec.Route{{Method: http.MethodGet, Path: "/auth/start"}}, Settings: &spec.Settings{Output: &spec.OutputSettings{Headers: map[string]string{"X-Typed-Only": "must-not-appear"}}}}
 	artifact, err := bootstrap.BuildArtifact(bootstrap.ArtifactInput{Component: component,
 		InputType: reflect.TypeFor[input](), OutputType: reflect.TypeFor[cookieResponseOutput]()})
 	if err != nil {
@@ -51,6 +51,9 @@ func TestCustomHandlerCanReturnRedirectAndMultipleCookies(t *testing.T) {
 	request.Header.Set("Origin", "https://studio.example")
 	request.AddCookie(&http.Cookie{Name: "studio_login_state", Value: "encrypted-state"})
 	NewHandler(runtime, nil, "test").ServeHTTP(recorder, request)
+	if recorder.Header().Get("X-Typed-Only") != "" {
+		t.Fatal("typed headers applied to explicit response")
+	}
 	if recorder.Code != http.StatusSeeOther || recorder.Header().Get("Location") != "/" || len(recorder.Header().Values("Set-Cookie")) != 2 {
 		t.Fatalf("status=%d headers=%v body=%s", recorder.Code, recorder.Header(), recorder.Body.String())
 	}

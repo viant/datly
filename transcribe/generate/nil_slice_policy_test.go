@@ -14,7 +14,7 @@ import (
 func TestNilSlicePolicyGeneratedMetadataStable(t *testing.T) {
 	for _, policy := range []string{"empty_array", "null"} {
 		t.Run(policy, func(t *testing.T) {
-			component := &spec.Component{Name: "Records", Routes: []*spec.Route{{Path: "/records", Method: "GET"}}, Settings: &spec.Settings{Output: &spec.OutputSettings{NilSlicePolicy: policy}}, RootView: &spec.View{Name: "Records", Columns: []*spec.Column{{Name: "id", Type: spec.TypeRef{Name: "int"}}}}}
+			component := &spec.Component{Name: "Records", Routes: []*spec.Route{{Path: "/records", Method: "GET"}}, Settings: &spec.Settings{Output: &spec.OutputSettings{NilSlicePolicy: policy, Headers: map[string]string{"Cache-Control": "no-store"}}}, RootView: &spec.View{Name: "Records", Columns: []*spec.Column{{Name: "id", Type: spec.TypeRef{Name: "int"}}}}}
 			dir := t.TempDir()
 			first, err := New(Input{Component: component}).Generate(dir)
 			if err != nil {
@@ -52,7 +52,7 @@ func TestNilSlicePolicyGeneratedMetadataStable(t *testing.T) {
 					}
 					var loaded spec.Settings
 					settings.Apply(&loaded)
-					if loaded.Output == nil || loaded.Output.NilSlicePolicy != policy {
+					if loaded.Output == nil || loaded.Output.NilSlicePolicy != policy || loaded.Output.Headers["Cache-Control"] != "no-store" {
 						t.Fatalf("generated descriptor lost policy: %s", raw)
 					}
 					found = true

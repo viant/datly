@@ -74,6 +74,8 @@ type Settings struct {
 
 // OutputSettings describes presentation policy independently of the row shape.
 type OutputSettings struct {
+	// Headers are static HTTP headers for successfully encoded ordinary responses.
+	Headers map[string]string `json:"headers,omitempty"`
 	// NilSlicePolicy selects native JSON slice presentation: empty_array or null.
 	// An empty value leaves the existing encoder selection and defaults unchanged.
 	NilSlicePolicy string   `json:"nilSlicePolicy,omitempty"`
