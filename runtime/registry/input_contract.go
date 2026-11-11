@@ -110,6 +110,9 @@ func NewInputContract(inputType reflect.Type, projection *bindly.Projection, rou
 				return nil, fmt.Errorf("route input contract %s: %w", key, err)
 			}
 			destinationType := destinationField.Type
+			if err := normalizeBodyInputTag(&binding, destinationField); err != nil {
+				return nil, fmt.Errorf("route input contract %s field %s: %w", key, binding.Path, err)
+			}
 			anonymous, err := inputFieldAnonymous(destinationField, binding.Extension)
 			if err != nil {
 				return nil, fmt.Errorf("route input contract %s field %s: %w", key, binding.Path, err)
@@ -645,4 +648,23 @@ func bindingScalarWireSchema(field reflect.StructField, binding bindly.BindingSp
 		return nil
 	}
 	return &spec.WireSchema{Type: pair.Type, Nullable: pair.Nullable}
+}
+
+// normalizeBodyInputTag retains the same authored root policy inferred by the
+// native Bindly plan; RouteInput.Bindings may precede that plan's inference.
+func normalizeBodyInputTag(binding *bindly.BindingSpec, field reflect.StructField) error {
+	if binding.Location.Kind == "body" && binding.Location.In == "" {
+		authored := field.Tag.Get("jsonx")
+		for _, option := range strings.Split(authored, ",") {
+			if strings.TrimSpace(option) != "objectToSlice" {
+				continue
+			}
+			if binding.BodyInputTag != "" && binding.BodyInputTag.Get("jsonx") != authored {
+				return fmt.Errorf("conflicting body input metadata")
+			}
+			binding.BodyInputTag = reflect.StructTag("jsonx:" + strconv.Quote(authored))
+			break
+		}
+	}
+	return binding.ValidateBodyInputTag(field.Type)
 }

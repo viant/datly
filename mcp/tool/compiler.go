@@ -191,22 +191,21 @@ func (c *Compiler) Compile(input Input) (*Plan, error) {
 		if argument.customJSONBody {
 			format = ""
 		}
-		property, err := (&schemaProjector{field: argument.schemaField, representation: argument.representation, docs: owner, schemas: argument.wireSchemas, wireType: argument.wireType, caseFormat: format, nativeBody: argument.sourceKind == "body" && !argument.customJSONBody}).argument(sourceType, argument.path, argument.publicName, argument.wireSchema)
+		property, err := (&schemaProjector{rootInputTag: argument.bodyInputTag, field: argument.schemaField, representation: argument.representation, docs: owner, schemas: argument.wireSchemas, wireType: argument.wireType, caseFormat: format, nativeBody: argument.sourceKind == "body" && !argument.customJSONBody}).argument(sourceType, argument.path, argument.publicName, argument.wireSchema)
 		if err != nil {
 			return nil, fmt.Errorf("compile MCP tool %q argument %q: %w", name, argument.publicName, err)
 		}
 		if argument.required && argument.bodyNullPolicy == "" {
-			if kinds, ok := property["type"].([]string); ok {
-				allowed := make([]string, 0, len(kinds))
-				for _, kind := range kinds {
-					if kind != "null" {
-						allowed = append(allowed, kind)
+			removeSchemaNull(property)
+			if argument.bodyInputTag != "" {
+				branches, _ := property["anyOf"].([]any)
+				for _, alternative := range branches {
+					branch, ok := alternative.(map[string]any)
+					if ok && branch["type"] == "array" {
+						if minimum, exists := branch["minItems"]; !exists || minimum == 0 {
+							branch["minItems"] = 1
+						}
 					}
-				}
-				if len(allowed) == 1 {
-					property["type"] = allowed[0]
-				} else {
-					property["type"] = allowed
 				}
 			}
 		}
@@ -336,6 +335,9 @@ func (c *Compiler) compileExternal(inputField registry.InputField, field reflect
 		sourceKind: strings.ToLower(strings.TrimSpace(binding.Location.Kind)), sourceName: binding.Location.In,
 		sourceType: inputField.SourceType(), destinationType: inputField.DestinationType(),
 		wireSchema: inputField.WireSchema(), wireSchemas: inputField.WireSchemas(), wireType: inputField.WireType(), required: required, bodyNullPolicy: binding.BodyNullPolicy,
+	}
+	if argument.sourceKind == "body" && binding.Location.In == "" {
+		argument.bodyInputTag = binding.BodyInputTag
 	}
 	if param, ok := binding.Extension.(*spec.Parameter); ok && param != nil {
 		// Fields accepts HTTP-style CSV strings as well as native MCP arrays.

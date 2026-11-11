@@ -141,7 +141,7 @@ func TestScopedTransportGenuineCompiledJWTMCPAndOpenAPI(t *testing.T) {
 			t.Fatal("metadata executed component")
 		}
 		properties := tools.Tools[0].InputSchema.Properties
-		if len(properties) != 1 || properties["Query"] == nil {
+		if len(properties) != 1 || properties["query"] == nil {
 			t.Fatal("MCP fields changed", properties)
 		}
 	}

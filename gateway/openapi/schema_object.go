@@ -112,7 +112,7 @@ func (b *schemaBuilder) object(key schemaKey) (*openapi3.Schema, error) {
 			return nil, err
 		}
 		if input {
-			property, err = jsonxInputSchema(field.StructField(), property)
+			property, err = b.jsonxInputSchema(field.StructField(), property)
 			if err != nil {
 				return nil, err
 			}

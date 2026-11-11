@@ -72,7 +72,7 @@ func TestInputCatalogRootAndDependencySelectorOwnership(t *testing.T) {
 	conflictContract, ok := conflict.Input.ForRoute(conflictRef)
 	require.True(t, ok)
 	_, e = tool.NewCompiler().Compile(tool.Input{Fields: conflictFields, Component: conflict.Component.Key, Exposure: &spec.MCPExposure{Kind: spec.MCPExposureTool, Name: "catalog.conflict"}, Contract: conflictContract})
-	require.ErrorContains(t, e, `duplicate public argument "Offset"`, "required child input must not be hidden to suppress an existing conflict")
+	require.ErrorContains(t, e, `duplicate public argument "offset"`, "required child input must not be hidden to suppress an existing conflict")
 	childFields, err := catalog.FieldsFor(child.Component.Key, childRef)
 	require.NoError(t, err)
 	require.Len(t, childFields, 4, "selected child retains its complete standalone side schema")

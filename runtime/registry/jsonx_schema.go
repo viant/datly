@@ -38,6 +38,11 @@ func JSONXInputSchema(field reflect.StructField) (*spec.WireSchema, error) {
 	if domain.Array {
 		result.AnyOf = append(result.AnyOf, &spec.WireSchema{Type: "array"})
 	}
+	if domain.Object {
+		// Consumers replace this branch with the same typed record used by
+		// the array items, including recursive naming and visibility.
+		result.AnyOf = append(result.AnyOf, &spec.WireSchema{Type: "object"})
+	}
 	// null=omit alone does not replace the destination's normal representation.
 	return result, nil
 }
