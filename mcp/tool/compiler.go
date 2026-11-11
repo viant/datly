@@ -131,6 +131,13 @@ func (c *Compiler) Compile(input Input) (*Plan, error) {
 		if !include {
 			continue
 		}
+		if input.CaseFormat != "" {
+			public, err := memberNameVisibility(input.CaseFormat).Resolve(structField, argument.publicName)
+			if err != nil {
+				return nil, fmt.Errorf("compile MCP tool %q: %w", name, err)
+			}
+			argument.publicName = public.Public
+		}
 		if err := registerPublicArgument(publicNames, argument); err != nil {
 			return nil, fmt.Errorf("compile MCP tool %q: %w", name, err)
 		}
@@ -235,6 +242,20 @@ func (c *Compiler) Compile(input Input) (*Plan, error) {
 			}
 			metadata["datly/httpResponses"] = responses
 			metadata["datly/httpSchemas"] = input.Documentation.Schemas()
+		}
+	}
+	if input.Output == nil && input.OutputType != nil && input.CaseFormat != "" {
+		var err error
+		input.Output, err = (output.Compiler{}).Compile(output.CompileInput{Type: input.OutputType})
+		if err != nil {
+			return nil, fmt.Errorf("compile MCP tool %q output: %w", name, err)
+		}
+	}
+	if input.Output != nil && input.CaseFormat != "" {
+		var err error
+		input.Output, err = input.Output.WithCaseFormat(input.CaseFormat)
+		if err != nil {
+			return nil, fmt.Errorf("compile MCP tool %q output case format: %w", name, err)
 		}
 	}
 	outputSchema, outputErr := outputContractSchema(input.OutputType, input.Output)

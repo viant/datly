@@ -61,7 +61,11 @@ func (b *Builder) resolveControls(options *builderOptions, excludePagination boo
 		}
 		source.sqlText = prepared.sql
 	}
-	resolver := selectorResolver{sourceSQL: source.sqlText, policy: policy, sqlText: paginationInspectionSource(source.sqlText), view: source.view, projection: source.projection, reportOrderFields: options.reportOrderFields, staticProjection: options.staticProjection}
+	resolver := selectorResolver{selectorPresentation: options.selectorPresentation, sourceSQL: source.sqlText, policy: policy, sqlText: paginationInspectionSource(source.sqlText), view: source.view, projection: source.projection, reportOrderFields: options.reportOrderFields, staticProjection: options.staticProjection}
+	if source.selector == nil || strings.TrimSpace(source.selector.OrderBy) == "" {
+		// Authored defaults retain their original SQL/Go vocabulary.
+		resolver.selectorPresentation = nil
+	}
 	orderingSQL, err := resolver.orderingSource(options.controls, options.selector)
 	if err != nil {
 		return nil, err
@@ -121,15 +125,16 @@ func applyMatcherWindow(query *cache.ParmetrizedQuery, controls *spec.ViewContro
 }
 
 type selectorResolver struct {
-	staticProjection  *dsql.StaticProjectionSelection
-	sourceSQL         string
-	sourceOrdering    bool
-	reportOrderFields []string
-	ordinalReference  []string
-	projection        []string
-	view              *data.View
-	policy            *spec.Selector
-	sqlText           string
+	selectorPresentation []data.SelectorField
+	staticProjection     *dsql.StaticProjectionSelection
+	sourceSQL            string
+	sourceOrdering       bool
+	reportOrderFields    []string
+	ordinalReference     []string
+	projection           []string
+	view                 *data.View
+	policy               *spec.Selector
+	sqlText              string
 }
 
 func (r selectorResolver) controls(base *spec.ViewControls, input *xstate.Selector, excludePagination bool) (*spec.ViewControls, error) {
@@ -255,6 +260,9 @@ func (r selectorResolver) orderBy(source string) (string, error) {
 	result := make([]string, 0, len(items))
 	for _, item := range items {
 		name, positional, direction := item.name, item.positional, item.direction
+		if !positional {
+			name = presentedOrderName(r.selectorPresentation, name)
+		}
 
 		if positional {
 			if !ordinalPrepared {
@@ -544,7 +552,7 @@ func (r *selectorResolver) orderingSource(base *spec.ViewControls, input *xstate
 		if item.positional {
 			continue
 		}
-		mapped, aliased, e := r.orderAlias(item.name)
+		mapped, aliased, e := r.orderAlias(presentedOrderName(r.selectorPresentation, item.name))
 		if e != nil {
 			return "", invalidOrdering("%s", e)
 		}

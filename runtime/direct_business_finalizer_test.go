@@ -34,8 +34,14 @@ func (*directBusinessLogger) Debug(string, ...any) {}
 func (*directBusinessLogger) Info(string, ...any)  {}
 func (*directBusinessLogger) Warn(string, ...any)  {}
 func (l *directBusinessLogger) Error(msg string, args ...any) {
-	if msg == "HTTP route execution failed" && len(args) > 0 {
-		l.cause, _ = args[0].(error)
+	if msg != "HTTP route execution failed" {
+		return
+	}
+	for i := 0; i+1 < len(args); i += 2 {
+		if key, ok := args[i].(string); ok && key == "error" {
+			l.cause, _ = args[i+1].(error)
+			return
+		}
 	}
 }
 func TestDirectBusinessFinalizerLegacyErrors(t *testing.T) {

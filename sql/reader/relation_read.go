@@ -150,7 +150,7 @@ func (r *relationRead) readBatch(placeholders []interface{}, composite [][]inter
 	}
 	options := []rsql.BuilderOption{
 		rsql.WithBuilderForUpdate(lockRows),
-		rsql.WithBuilderView(view),
+		rsql.WithBuilderView(view), rsql.WithBuilderSelectorPresentation(r.session.selectorPresentation[view]),
 		rsql.WithBuilderCriteriaCompiler(r.plan.Criteria),
 		rsql.WithBuilderSelector(r.selector.forView(view)),
 		rsql.WithBuilderProjection(relationProjection(view, r.selector.forView(view), r.child.Relation())),
@@ -237,7 +237,7 @@ func (r *relationRead) applyWarmupMatcher(ctx context.Context, query, matcher *c
 	projection := relationProjection(view, requestedSelector, r.child.Relation())
 	selector := canonicalWarmupSelector(requestedSelector, settings.FieldNames)
 	identity, err := rsql.NewBuilder().CacheSQL(ctx,
-		rsql.WithBuilderComponent(r.session.Component), rsql.WithBuilderView(view), rsql.WithBuilderCriteriaCompiler(r.plan.Criteria),
+		rsql.WithBuilderComponent(r.session.Component), rsql.WithBuilderView(view), rsql.WithBuilderSelectorPresentation(r.session.selectorPresentation[view]), rsql.WithBuilderCriteriaCompiler(r.plan.Criteria),
 		rsql.WithBuilderSelector(selector), rsql.WithBuilderProjection(viewProjection(view, selector)),
 		rsql.WithBuilderInput(r.input.Elem()), rsql.WithBuilderParameterResolver(r.session.Parameters),
 		rsql.WithBuilderTemplate(r.plan.Template), rsql.WithBuilderBinder(r.binder), rsql.WithBuilderDialect(r.connection.Dialect), rsql.WithBuilderTransactionActive(r.connection.Tx != nil))

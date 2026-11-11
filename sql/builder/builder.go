@@ -429,6 +429,7 @@ func renderCompositeIn(dialect *info.Dialect, columns []string, rowCount int) st
 type BuilderOption func(*builderOptions)
 
 type builderOptions struct {
+	selectorPresentation   []data.SelectorField
 	transactionActive      bool
 	forUpdate              bool
 	component              *spec.Component

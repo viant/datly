@@ -123,6 +123,9 @@ func (b *Builder) prepareCriteria(options *builderOptions) error {
 		}
 		columns = allowed
 	}
+	if err := addPresentedCriteriaAliases(columns, options.selectorPresentation); err != nil {
+		return err
+	}
 	compiler := criteria.Compiler{Columns: columns, Methods: methods}
 	sql, args, used, err := compiler.CompileWithColumns(options.selector.Criteria, options.selector.Placeholders)
 	if err != nil {

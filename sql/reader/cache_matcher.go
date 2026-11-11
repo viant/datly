@@ -127,7 +127,7 @@ func (m rootCacheMatcher) apply(ctx context.Context, connection dsql.Connection)
 		identityCtx = dexec.WithCacheIdentity(identityCtx, name, values)
 	}
 	identity, err := builder.NewBuilder().CacheSQL(identityCtx,
-		builder.WithBuilderComponent(m.session.Component), builder.WithBuilderView(view), builder.WithBuilderCriteriaCompiler(root.Criteria),
+		builder.WithBuilderComponent(m.session.Component), builder.WithBuilderView(view), builder.WithBuilderSelectorPresentation(m.session.selectorPresentation[view]), builder.WithBuilderCriteriaCompiler(root.Criteria),
 		builder.WithBuilderSelector(selector), builder.WithBuilderProjection(viewProjection(view, selector)),
 		builder.WithBuilderInput(input.Elem()), builder.WithBuilderParameterResolver(prepared.Parameters),
 		builder.WithBuilderTemplate(root.Template), builder.WithBuilderBinder(prepared.Binder), builder.WithBuilderDialect(connection.Dialect), builder.WithBuilderTransactionActive(connection.Tx != nil))

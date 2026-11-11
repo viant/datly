@@ -209,57 +209,86 @@ func (c *serviceCompiler) publish(ctx context.Context, catalog *Catalog, policy 
 	for _, registered := range components {
 		outputs[registered.Component.Key.String()] = registered.Output
 	}
-	componentInvoker := invocation.New(invocation.Config{Invoker: c.config.Invoker, Client: c.config.Client, Authorize: c.config.AuthorizeTool, Output: func(target exec.ComponentTarget) invocation.OutputEncoder {
-		plan := outputs[target.Component.String()]
-		if plan == nil {
-			return nil
-		}
-		return func(ctx context.Context, value any) ([]byte, error) {
-			selected := plan
+	newInvoker := func(selectPlan func(exec.ComponentTarget) *output.Plan, presentSelectors bool) *invocation.Invoker {
+		return invocation.New(invocation.Config{Invoker: c.config.Invoker, Client: c.config.Client, Authorize: c.config.AuthorizeTool, SelectorPresentation: func(ctx context.Context, target exec.ComponentTarget) (*exec.SelectorPresentation, error) {
+			if !presentSelectors {
+				return nil, nil
+			}
+			plan := selectPlan(target)
+			if plan == nil {
+				return nil, nil
+			}
 			if effective, ok := exec.SelectedContract(ctx, target); ok && (effective.Output != plan.Type() || effective.OutputRepresentation != nil) {
 				var err error
-				selected, err = plan.WithContract(effective.Output, effective.OutputRepresentation)
+				plan, err = plan.WithContract(effective.Output, effective.OutputRepresentation)
 				if err != nil {
 					return nil, err
 				}
 			}
-			encoded, err := selected.Encode(ctx, "json", value)
-			return encoded.Data, err
-		}
-	}, DeclaredError: func(target exec.ComponentTarget) invocation.ErrorProjector {
-		plan := outputs[target.Component.String()]
-		if plan == nil {
-			return nil
-		}
-		return func(ctx context.Context, status int, cause error) ([]byte, bool, error) {
-			body, applicable, err := plan.ErrorEnvelopeWithCause(exec.ErrorMessage(cause, status), status, cause)
-			if err != nil || !applicable {
-				return nil, applicable, err
+			return exec.NewSelectorPresentation(target, func(rowType reflect.Type, path string) ([]exec.SelectorFieldName, error) {
+				fields, err := plan.SelectorFieldNames(rowType, path)
+				if err != nil {
+					return nil, err
+				}
+				result := make([]exec.SelectorFieldName, len(fields))
+				for i, field := range fields {
+					result[i] = exec.SelectorFieldName{GoName: field.GoName, PublicName: field.PublicName, Index: append([]int(nil), field.Index...)}
+				}
+				return result, nil
+			}), nil
+		}, Output: func(target exec.ComponentTarget) invocation.OutputEncoder {
+			plan := selectPlan(target)
+			if plan == nil {
+				return nil
 			}
-			encoded, err := plan.Encode(ctx, "json", body)
-			return encoded.Data, true, err
-		}
-	}, ErrorOutput: func(target exec.ComponentTarget) invocation.OutputEncoder {
-		plan := outputs[target.Component.String()]
-		if plan == nil || plan.NilSlicePolicy() != "empty_array" {
-			return nil
-		}
-		declared := plan.Type()
-		for declared != nil && declared.Kind() == reflect.Pointer {
-			declared = declared.Elem()
-		}
-		return func(ctx context.Context, body any) ([]byte, error) {
-			actual := reflect.TypeOf(body)
-			for actual != nil && actual.Kind() == reflect.Pointer {
-				actual = actual.Elem()
+			return func(ctx context.Context, value any) ([]byte, error) {
+				selected := plan
+				if effective, ok := exec.SelectedContract(ctx, target); ok && (effective.Output != plan.Type() || effective.OutputRepresentation != nil) {
+					var err error
+					selected, err = plan.WithContract(effective.Output, effective.OutputRepresentation)
+					if err != nil {
+						return nil, err
+					}
+				}
+				encoded, err := selected.Encode(ctx, "json", value)
+				return encoded.Data, err
 			}
-			if declared == nil || actual != declared {
-				return json.Marshal(body)
+		}, DeclaredError: func(target exec.ComponentTarget) invocation.ErrorProjector {
+			plan := selectPlan(target)
+			if plan == nil {
+				return nil
 			}
-			encoded, err := plan.Encode(ctx, "json", body)
-			return encoded.Data, err
-		}
-	}})
+			return func(ctx context.Context, status int, cause error) ([]byte, bool, error) {
+				body, applicable, err := plan.ErrorEnvelopeWithCause(exec.ErrorMessage(cause, status), status, cause)
+				if err != nil || !applicable {
+					return nil, applicable, err
+				}
+				encoded, err := plan.Encode(ctx, "json", body)
+				return encoded.Data, true, err
+			}
+		}, ErrorOutput: func(target exec.ComponentTarget) invocation.OutputEncoder {
+			plan := selectPlan(target)
+			if plan == nil || plan.NilSlicePolicy() != "empty_array" {
+				return nil
+			}
+			declared := plan.Type()
+			for declared != nil && declared.Kind() == reflect.Pointer {
+				declared = declared.Elem()
+			}
+			return func(ctx context.Context, body any) ([]byte, error) {
+				actual := reflect.TypeOf(body)
+				for actual != nil && actual.Kind() == reflect.Pointer {
+					actual = actual.Elem()
+				}
+				if declared == nil || actual != declared {
+					return json.Marshal(body)
+				}
+				encoded, err := plan.Encode(ctx, "json", body)
+				return encoded.Data, err
+			}
+		}})
+	}
+	componentInvoker := newInvoker(func(target exec.ComponentTarget) *output.Plan { return outputs[target.Component.String()] }, false)
 	resourceHandler := mcpresource.NewHandler(catalog.resources, componentInvoker)
 	resourceReadHandler := resourceHandler.Handle
 	if c.config.AuthorizeResource != nil {
@@ -272,7 +301,7 @@ func (c *serviceCompiler) publish(ctx context.Context, catalog *Catalog, policy 
 	}
 	for _, name := range catalog.names {
 		plan, _ := catalog.Tool(name)
-		handler := tool.NewHandler(plan, componentInvoker)
+		handler := tool.NewHandler(plan, newInvoker(func(exec.ComponentTarget) *output.Plan { return plan.OutputPlan() }, true))
 		metadata := plan.Metadata()
 		if c.config.ToolMetadata != nil {
 			values, err := c.config.ToolMetadata(ctx, plan.Target())

@@ -22,8 +22,8 @@ type MCPExposure struct {
 	Description     string          `json:"description,omitempty"`
 	DescriptionPath string          `json:"descriptionPath,omitempty"`
 	MIMEType        string          `json:"mimeType,omitempty"`
-	// CaseFormat customizes implicit MCP input member names only. Empty preserves
-	// legacy Go/JSON spelling, independently of the component's HTTP case format.
+	// CaseFormat customizes implicit MCP tool input and native output member names. Empty preserves
+	// legacy input spelling and the component output policy. Explicit field names win.
 	CaseFormat string `json:"caseFormat,omitempty"`
 }
 

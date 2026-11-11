@@ -27,8 +27,9 @@ type Config struct {
 	// Output selects the component's compiled JSON presentation adapter.
 	Output func(exec.ComponentTarget) OutputEncoder
 	// ErrorOutput selects a compiled adapter for explicit public error bodies.
-	ErrorOutput   func(exec.ComponentTarget) OutputEncoder
-	DeclaredError func(exec.ComponentTarget) ErrorProjector
+	ErrorOutput          func(exec.ComponentTarget) OutputEncoder
+	DeclaredError        func(exec.ComponentTarget) ErrorProjector
+	SelectorPresentation func(context.Context, exec.ComponentTarget) (*exec.SelectorPresentation, error)
 }
 
 type Request struct {
@@ -42,16 +43,17 @@ type Request struct {
 }
 
 type Invoker struct {
-	component     exec.ComponentInvoker
-	mcp           xmcp.Context
-	authorize     func(context.Context, exec.ComponentTarget) error
-	output        func(exec.ComponentTarget) OutputEncoder
-	errorOutput   func(exec.ComponentTarget) OutputEncoder
-	declaredError func(exec.ComponentTarget) ErrorProjector
+	component            exec.ComponentInvoker
+	mcp                  xmcp.Context
+	authorize            func(context.Context, exec.ComponentTarget) error
+	output               func(exec.ComponentTarget) OutputEncoder
+	errorOutput          func(exec.ComponentTarget) OutputEncoder
+	declaredError        func(exec.ComponentTarget) ErrorProjector
+	selectorPresentation func(context.Context, exec.ComponentTarget) (*exec.SelectorPresentation, error)
 }
 
 func New(config Config) *Invoker {
-	return &Invoker{component: config.Invoker, mcp: &requestContext{client: config.Client}, authorize: config.Authorize, output: config.Output, errorOutput: config.ErrorOutput, declaredError: config.DeclaredError}
+	return &Invoker{component: config.Invoker, mcp: &requestContext{client: config.Client}, authorize: config.Authorize, output: config.Output, errorOutput: config.ErrorOutput, declaredError: config.DeclaredError, selectorPresentation: config.SelectorPresentation}
 }
 
 func (i *Invoker) Execute(ctx context.Context, request Request) (*Execution, *jsonrpc.Error) {
@@ -105,8 +107,15 @@ func (i *Invoker) Execute(ctx context.Context, request Request) (*Execution, *js
 	if err != nil {
 		return nil, jsonrpc.NewInternalError("MCP request provider preparation failed", nil)
 	}
+	var presentation *exec.SelectorPresentation
+	if i.selectorPresentation != nil {
+		presentation, err = i.selectorPresentation(ctx, request.Target)
+		if err != nil {
+			return nil, jsonrpc.NewInternalError("MCP selector presentation preparation failed", nil)
+		}
+	}
 	result, err := i.component.InvokeComponent(ctx, exec.ComponentRequest{
-		Target: request.Target, Providers: providers,
+		Target: request.Target, Providers: providers, SelectorPresentation: presentation,
 	})
 	var encode OutputEncoder
 	if i.output != nil {

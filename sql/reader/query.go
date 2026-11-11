@@ -51,7 +51,7 @@ func (e *Execution) PrepareQuery(ctx context.Context, input any, binder xhandler
 	}
 	query, err := builder.NewBuilder().Build(ctx,
 		builder.WithBuilderForUpdate(lockRows),
-		builder.WithBuilderComponent(session.Component), builder.WithBuilderView(root.View),
+		builder.WithBuilderComponent(session.Component), builder.WithBuilderView(root.View), builder.WithBuilderSelectorPresentation(session.selectorPresentation[root.View]),
 		builder.WithBuilderCriteriaCompiler(root.Criteria),
 		builder.WithBuilderSelector(selector), builder.WithBuilderProjection(viewProjection(root.View, selector)),
 		builder.WithBuilderInput(value.Elem()), builder.WithBuilderParameterResolver(resolver),

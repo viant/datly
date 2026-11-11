@@ -215,12 +215,12 @@ func (w *warmupExecution) run(ctx context.Context, plan *ViewPlan, derived *Rela
 			query, err = output.query(ctx, partition)
 		} else {
 			query, err = builder.NewBuilder().CacheSQL(ctx,
-				builder.WithBuilderComponent(w.session.Component), builder.WithBuilderView(view), builder.WithBuilderCriteriaCompiler(plan.Criteria),
+				builder.WithBuilderComponent(w.session.Component), builder.WithBuilderView(view), builder.WithBuilderSelectorPresentation(w.session.selectorPresentation[view]), builder.WithBuilderCriteriaCompiler(plan.Criteria),
 				builder.WithBuilderSelector(selector), builder.WithBuilderProjection(viewProjection(view, selector)),
 				builder.WithBuilderInput(w.input.Elem()), builder.WithBuilderParameterResolver(w.session.Parameters),
 				builder.WithBuilderTemplate(plan.Template), builder.WithBuilderBinder(w.binder), builder.WithBuilderDialect(connection.Dialect))
 			if err == nil && partition != nil {
-				query, err = builder.NewBuilder().ShapeBound(query, builder.WithBuilderView(view), builder.WithBuilderExcludePagination(true), builder.WithBuilderPartition(&builder.PartitionInput{Table: partition.Table, Expression: partition.Expression, Args: partition.Args}))
+				query, err = builder.NewBuilder().ShapeBound(query, builder.WithBuilderView(view), builder.WithBuilderSelectorPresentation(w.session.selectorPresentation[view]), builder.WithBuilderExcludePagination(true), builder.WithBuilderPartition(&builder.PartitionInput{Table: partition.Table, Expression: partition.Expression, Args: partition.Args}))
 			}
 		}
 		if err != nil {

@@ -145,7 +145,7 @@ func (s *Service) readBound(ctx context.Context, session *Session, input reflect
 	rootBuilderOptions := []rsql.BuilderOption{
 		rsql.WithBuilderForUpdate(lockRows),
 		rsql.WithBuilderComponent(session.Component),
-		rsql.WithBuilderView(root.View),
+		rsql.WithBuilderView(root.View), rsql.WithBuilderSelectorPresentation(session.selectorPresentation[root.View]),
 		rsql.WithBuilderCriteriaCompiler(root.Criteria),
 		rsql.WithBuilderSelector(rootSelector),
 		rsql.WithBuilderProjection(viewProjection(root.View, rootSelector)),

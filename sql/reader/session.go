@@ -31,35 +31,36 @@ type Output struct {
 // Session contains only SQL reader execution state. Input binding, transport,
 // handler capabilities, and registration remain runtime concerns.
 type Session struct {
-	relationSelection *relationSelection
-	omittedOutput     string
-	consumer          *xh.RowConsumer
-	metricScope       string
-	observations      map[*data.View]observability.Resolution
-	observationErr    error
-	pendingScope      string
-	recorder          *observability.Recorder
-	metricsMu         sync.Mutex
-	rootRead          *viewRead
-	Component         *spec.Component
-	InputType         reflect.Type
-	OutputType        reflect.Type
-	Artifact          *Plan
-	SQL               *dsql.SQLComponent
-	ReadCaches        map[*data.View]cache.Cache
-	Parameters        sqlx.ParameterResolver
-	CollectProjection bool
-	DryRun            bool
-	RefreshCache      bool
-	CacheOnly         bool
-	QueryScope        *sqlxread.QueryScope
-	ForUpdate         []string
-	outputSlots       map[string][]*readmeta.Record
-	outputAccessors   *outputAccessors
-	staticSelection   *dsql.StaticProjectionSelection
-	staticFields      []string
-	selectorFailure   error
-	selectorOwned     bool
+	selectorPresentation map[*data.View][]data.SelectorField
+	relationSelection    *relationSelection
+	omittedOutput        string
+	consumer             *xh.RowConsumer
+	metricScope          string
+	observations         map[*data.View]observability.Resolution
+	observationErr       error
+	pendingScope         string
+	recorder             *observability.Recorder
+	metricsMu            sync.Mutex
+	rootRead             *viewRead
+	Component            *spec.Component
+	InputType            reflect.Type
+	OutputType           reflect.Type
+	Artifact             *Plan
+	SQL                  *dsql.SQLComponent
+	ReadCaches           map[*data.View]cache.Cache
+	Parameters           sqlx.ParameterResolver
+	CollectProjection    bool
+	DryRun               bool
+	RefreshCache         bool
+	CacheOnly            bool
+	QueryScope           *sqlxread.QueryScope
+	ForUpdate            []string
+	outputSlots          map[string][]*readmeta.Record
+	outputAccessors      *outputAccessors
+	staticSelection      *dsql.StaticProjectionSelection
+	staticFields         []string
+	selectorFailure      error
+	selectorOwned        bool
 	Output
 }
 

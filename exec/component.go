@@ -56,6 +56,8 @@ type ComponentRequest struct {
 	// ReaderOptions apply after canonical input binding, to the target reader's
 	// result graph. Dependency binding retains its own invocation context policy.
 	ReaderOptions *ReaderOptions
+	// SelectorPresentation is trusted, exact-target output naming metadata.
+	SelectorPresentation *SelectorPresentation `json:"-"`
 	// ReportOrdering is explicit report-only ordering permission. It is never
 	// inherited by child calls and does not enable pagination or other selectors.
 	ReportOrdering *ReportOrdering

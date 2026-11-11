@@ -19,6 +19,9 @@ import (
 type invocationSelectors map[*data.View]*xstate.Selector
 
 func resolveInvocationSelectors(ctx context.Context, session *Session, input reflect.Value, binder xhandler.Binder) (invocationSelectors, error) {
+	if err := session.prepareSelectorPresentation(ctx); err != nil {
+		return nil, err
+	}
 	result := invocationSelectors{}
 	var companion reflect.Value
 	if plan := session.Artifact.selectorCompanion; plan != nil {
@@ -103,6 +106,8 @@ func resolveInvocationSelectors(ctx context.Context, session *Session, input ref
 		selector.Columns = append([]string(nil), selector.Columns...)
 		for _, names := range [][]string{selector.Fields, selector.Columns} {
 			for i, name := range names {
+				name = session.presentedSelectorName(view, name)
+				names[i] = name
 				resolved, ambiguous := resolveSelectorField(view, name)
 				if ambiguous {
 					failure := invalidSelectorField(name, "ambiguous public field").(*xresponse.Error)

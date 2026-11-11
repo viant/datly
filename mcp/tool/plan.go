@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	docs "github.com/viant/datly/documentation"
+	"github.com/viant/datly/runtime/output"
 	"reflect"
 
 	requestprovider "github.com/viant/bindly/provider/request"
@@ -136,7 +137,7 @@ func (p *Plan) scope(ctx context.Context, arguments map[string]interface{}) (*re
 				}
 			}
 		}
-		if argument.sourceKind != "body" || argument.wireType != nil || argument.wireSchema != nil || (hasWireRepresentation(argument.wireSchemas) && p.caseFormat == "") {
+		if argument.wireType != nil || argument.wireSchema != nil || (hasWireRepresentation(argument.wireSchemas) && p.caseFormat == "") {
 			continue
 		}
 		value, present := normalized[argument.publicName]
@@ -278,3 +279,6 @@ func hasWireRepresentation(schemas map[string]*spec.WireSchema) bool {
 	}
 	return false
 }
+
+// OutputPlan is the immutable exposure-local native output authority.
+func (p *Plan) OutputPlan() *output.Plan { return p.compilerInput.Output }

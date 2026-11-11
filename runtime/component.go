@@ -401,6 +401,10 @@ func (r *Runtime) invokeComponent(ctx context.Context, request dexec.ComponentRe
 	if err != nil {
 		return nil, err
 	}
+	ctx, err = dexec.EnterSelectorPresentation(ctx, target, request.SelectorPresentation)
+	if err != nil {
+		return nil, err
+	}
 	ctx, err = enterComponent(ctx, target)
 	if err != nil {
 		return nil, err

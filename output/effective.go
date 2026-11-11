@@ -2,10 +2,13 @@ package output
 
 import (
 	"fmt"
+	"github.com/viant/datly/spec"
 	structjson "github.com/viant/structology/encoding/json"
+	"github.com/viant/tagly/format/text"
 	xshape "github.com/viant/x/shape"
 	xcontract "github.com/viant/xdatly/contract"
 	"reflect"
+	"strings"
 	"sync"
 )
 
@@ -121,4 +124,41 @@ func (p *Plan) WithContract(typ reflect.Type, metadata *xshape.Representation) (
 		}
 	}
 	return p.WithRepresentation(metadata)
+}
+
+// WithCaseFormat compiles an immutable transport-local presentation policy.
+// Original compiler lookup, row selection, effective storage and explicit field
+// metadata remain authoritative. Opaque/custom-owned bytes are never rewritten.
+func (p *Plan) WithCaseFormat(format string) (*Plan, error) {
+	if p == nil || strings.TrimSpace(format) == "" {
+		return p, nil
+	}
+	if !text.NewCaseFormat(format).IsDefined() {
+		return nil, fmt.Errorf("invalid output case format %q", format)
+	}
+	if p.TransportReady() || p.custom != nil {
+		return p, nil
+	}
+	input := p.compileInput
+	if input.Component == nil {
+		input.Component = &spec.Component{}
+	} else {
+		input.Component = input.Component.Clone()
+	}
+	if input.Component.Settings == nil {
+		input.Component.Settings = &spec.Settings{}
+	}
+	input.Component.Settings.CaseFormat = format
+	result, err := p.compiler.Compile(input)
+	if err != nil {
+		return nil, err
+	}
+	if p.representation != nil {
+		result, err = result.WithRepresentation(p.representation)
+		if err != nil {
+			return nil, err
+		}
+	}
+	result.effectiveSource = p.effectiveSource
+	return result, nil
 }

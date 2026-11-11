@@ -102,7 +102,7 @@ func (s *Service) nonWindowQuery(ctx context.Context, session *Session, input re
 	builder := rsql.NewBuilder()
 	query, err := builder.Build(ctx,
 		rsql.WithBuilderComponent(session.Component),
-		rsql.WithBuilderView(rootPlan.View),
+		rsql.WithBuilderView(rootPlan.View), rsql.WithBuilderSelectorPresentation(session.selectorPresentation[rootPlan.View]),
 		rsql.WithBuilderCriteriaCompiler(rootPlan.Criteria),
 		rsql.WithBuilderControls(rsql.NonWindowControls(rootSource.Controls, rootSelector)),
 		rsql.WithBuilderSelector(nonWindowSelector),
@@ -125,7 +125,7 @@ func (s *Service) nonWindowQuery(ctx context.Context, session *Session, input re
 	}
 	return builder.QueryMatcher(ctx, query,
 		rsql.WithBuilderComponent(session.Component),
-		rsql.WithBuilderView(rootPlan.View),
+		rsql.WithBuilderView(rootPlan.View), rsql.WithBuilderSelectorPresentation(session.selectorPresentation[rootPlan.View]),
 		rsql.WithBuilderSQL(query.SQL),
 		rsql.WithBuilderSelector(matcherSelector),
 	)
@@ -183,7 +183,7 @@ func (e *outputRelationExecution) query(ctx context.Context, partition *xreader.
 		options := []rsql.BuilderOption{
 			rsql.WithBuilderForUpdate(lockRows),
 			rsql.WithBuilderComponent(e.session.Component),
-			rsql.WithBuilderView(view),
+			rsql.WithBuilderView(view), rsql.WithBuilderSelectorPresentation(e.session.selectorPresentation[view]),
 			rsql.WithBuilderCriteriaCompiler(planned.Target.Criteria),
 			rsql.WithBuilderSelector(e.selectors.forView(view)),
 			rsql.WithBuilderProjection(viewProjection(view, e.selectors.forView(view))),
@@ -216,7 +216,7 @@ func (e *outputRelationExecution) query(ctx context.Context, partition *xreader.
 	options := []rsql.BuilderOption{
 		rsql.WithBuilderForUpdate(lockRows),
 		rsql.WithBuilderDialect(connection.Dialect), rsql.WithBuilderTransactionActive(connection.Tx != nil),
-		rsql.WithBuilderView(view),
+		rsql.WithBuilderView(view), rsql.WithBuilderSelectorPresentation(e.session.selectorPresentation[view]),
 		rsql.WithBuilderCriteriaCompiler(planned.Target.Criteria),
 		rsql.WithBuilderSelector(selector),
 		rsql.WithBuilderProjection(viewProjection(view, selector)),
