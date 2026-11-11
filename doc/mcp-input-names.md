@@ -1,14 +1,14 @@
-# MCP input field names
+# MCP field names
 
-MCP input names preserve legacy Go/JSON spelling by default: `CampaignId` stays
-`CampaignId`, and `MetricID` stays `MetricID`. A component's HTTP `caseFormat`
-does not rename MCP inputs.
+Native MCP members use lowerCamel by default: `CampaignId` becomes `campaignId`
+and `MetricID` becomes `metricId`. Explicit MCP/JSON names and authored case
+overrides retain their precedence. HTTP naming is independent.
 
-To customize implicit input member names, set `caseFormat` on the route's MCP
-exposure. This is opt-in and independent of HTTP. For example, `"lc"` exposes
+To override implicit member names, set `caseFormat` on the route's MCP
+exposure. This is independent of HTTP. For example, `"lc"` exposes
 `AccountID` as `accountId`; `"lu"` exposes it as `account_id`.
 
-In DQL, the fourth optional MCP argument selects the input format:
+In DQL, the fourth optional MCP argument selects the member format:
 
 ```sql
 #setting($_ = $case_format('lc'))
@@ -17,17 +17,17 @@ In DQL, the fourth optional MCP argument selects the input format:
 
 The existing description and description-path arguments retain their positions.
 `mcp_route('POST:/orders', 'Orders', 'Manage orders', '', 'lu')` selects the same
-policy for one route. Omitting the final argument preserves legacy names.
+policy for one route. Omitting the final argument selects the lowerCamel default.
 
 The policy applies to nested ordinary JSON objects and flattened anonymous bodies
-during discovery and invocation. Top-level named parameters retain their logical
-binding names. Derived Cube and CubeCompose tools inherit the source exposure's
+during discovery and invocation. Top-level named parameters use the public naming policy while retaining their
+canonical logical binding paths. Derived Cube and CubeCompose tools inherit the source exposure's
 input format. No per-field JSON name is needed to repeat the format policy.
 
 Explicit `mcp:"AccountingId"` names take precedence over explicit JSON names.
 An explicit `json:"account_id,omitempty"` name takes precedence over the MCP
 format. `json:",omitempty"` retains format-based naming. An unset MCP
-format preserves existing Go/JSON names. Use `mcp:"-"` to exclude a member from
+format selects lowerCamel for implicit names. Use `mcp:"-"` to exclude a member from
 MCP discovery; internal fields and presence markers remain hidden.
 
 The MCP format also applies to native output schemas and result encoding.
