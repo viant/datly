@@ -36,7 +36,7 @@ func TestScalarAliasNestedMCPContract(t *testing.T) {
 		{"integer", 1, true, "SPEND_EVENLY"}, {"numeric string", "0", true, "ASAP"}, {"alias", "eVeN", true, "SPEND_EVENLY"}, {"unicode", "ſPEND_EVENLY", true, "SPEND_EVENLY"}, {"null", nil, true, ""}, {"unknown", 2, false, ""}, {"unknown string", "bad", false, ""}, {"newline", "Even\n", false, ""}, {"boolean", true, false, ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			args := map[string]any{"Body": map[string]any{"rows": []any{map[string]any{"mode": tc.value}}}}
+			args := map[string]any{"body": map[string]any{"rows": []any{map[string]any{"mode": tc.value}}}}
 			result, err := gojsonschema.Validate(gojsonschema.NewGoLoader(plan.Metadata().InputSchema), gojsonschema.NewGoLoader(args))
 			if err != nil {
 				t.Fatal(err)
@@ -89,7 +89,7 @@ func TestScalarAliasTopLevelMCPSchema(t *testing.T) {
 		value any
 		valid bool
 	}{{1, true}, {"Even", true}, {nil, true}, {2, false}, {true, false}, {"Even\n", false}} {
-		args := map[string]any{"Mode": tc.value}
+		args := map[string]any{"mode": tc.value}
 		result, err := gojsonschema.Validate(gojsonschema.NewGoLoader(plan.Metadata().InputSchema), gojsonschema.NewGoLoader(args))
 		if err != nil {
 			t.Fatal(err)
@@ -115,7 +115,7 @@ func TestScalarAliasTopLevelMCPExecution(t *testing.T) {
 		value any
 		want  string
 	}{{1, "SPEND_EVENLY"}, {"eVeN", "SPEND_EVENLY"}, {"0", "ASAP"}} {
-		scope, err := plan.Scope(map[string]any{"Mode": tc.value})
+		scope, err := plan.Scope(map[string]any{"mode": tc.value})
 		if err != nil {
 			t.Fatal(err)
 		}

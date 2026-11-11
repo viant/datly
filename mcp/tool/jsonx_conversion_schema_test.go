@@ -74,7 +74,7 @@ func TestJSONXConversionNativeToolBinding(t *testing.T) {
 	contract := testRouteContract(t, reflect.TypeFor[input](), []bindly.BindingSpec{binding})
 	plan, err := NewCompiler().Compile(Input{Component: spec.Key{Kind: spec.KindComponent, Scope: "test", Name: "JSONXConversions"}, Exposure: &spec.MCPExposure{Kind: spec.MCPExposureTool, Name: "jsonxConversions"}, Contract: contract})
 	require.NoError(t, err)
-	scope, err := plan.Scope(map[string]any{"Body": map[string]any{"active": 1, "catalog": 123.25, "names": "a, b, ,c", "billed": -7}})
+	scope, err := plan.Scope(map[string]any{"body": map[string]any{"active": 1, "catalog": 123.25, "names": "a, b, ,c", "billed": -7}})
 	require.NoError(t, err)
 	defer scope.Close()
 	value, found, err := scope.Body().Locate(nil).Value(t.Context(), reflect.TypeFor[*jsonxConversionSchemaRow](), "")

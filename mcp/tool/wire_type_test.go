@@ -60,7 +60,7 @@ func TestCustomJSONWireAuthority(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	body := schemaObjectNode(fallback.Metadata().InputSchema.Properties["Body"])
+	body := schemaObjectNode(fallback.Metadata().InputSchema.Properties["body"])
 	fields := body["properties"].(map[string]interface{})
 	if !reflect.DeepEqual(fields["lookup"], map[string]interface{}{}) || schemaObjectNode(fields["options"].(map[string]interface{}))["properties"].(map[string]interface{})["labels"] == nil || body["$defs"] == nil {
 		t.Fatalf("original Go shape: %#v", body)
@@ -144,7 +144,7 @@ func TestCustomJSONWireAuthorityRejectsInvalidDeclarations(t *testing.T) {
 	if err != nil {
 		t.Fatalf("anonymous Go JSON projection: %v", err)
 	}
-	if _, exists := plan.Metadata().InputSchema.Properties["Body"]; exists {
+	if _, exists := plan.Metadata().InputSchema.Properties["body"]; exists {
 		t.Fatal("anonymous custom JSON body retained named wrapper")
 	}
 }
@@ -205,7 +205,7 @@ func TestCustomJSONWireRepresentationReflectsGoShape(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	body := schemaObjectNode(plan.Metadata().InputSchema.Properties["Body"])
+	body := schemaObjectNode(plan.Metadata().InputSchema.Properties["body"])
 	if !reflect.DeepEqual(body["type"], []string{"object", "null"}) || !reflect.DeepEqual(body["properties"], map[string]interface{}{"value": map[string]interface{}{"type": "string"}}) {
 		t.Fatalf("custom representation Go shape: %#v", body)
 	}

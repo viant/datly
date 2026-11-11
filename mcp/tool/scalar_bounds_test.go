@@ -68,7 +68,7 @@ func TestScalarInt64CompiledToolBoundaryValidation(t *testing.T) {
 		valid bool
 	}{{"-9223372036854775808", true}, {"9223372036854775807", true}, {"-9223372036854775809", false}, {"9223372036854775808", false}} {
 		t.Run(tc.value, func(t *testing.T) {
-			result, err := gojsonschema.Validate(gojsonschema.NewBytesLoader(schema), gojsonschema.NewStringLoader(`{"Body":{"mode":`+tc.value+`}}`))
+			result, err := gojsonschema.Validate(gojsonschema.NewBytesLoader(schema), gojsonschema.NewStringLoader(`{"body":{"mode":`+tc.value+`}}`))
 			if err != nil {
 				t.Fatal(err)
 			}

@@ -8,9 +8,9 @@ import (
 func TestMCPInputCaseFormatIsIndependentOfHTTP(t *testing.T) {
 	type useCase struct{ description, directive, expected, errorText string }
 	for _, tc := range []useCase{
-		{"legacy default", `$mcp('Orders')`, "", ""},
-		{"global opt in", `$mcp('Orders','List orders','','lu')`, "lu", ""},
-		{"route opt in", `$mcp_route('GET:/orders','Orders','List orders','','lc')`, "lc", ""},
+		{"implicit default", `$mcp('Orders')`, "", ""},
+		{"global override", `$mcp('Orders','List orders','','lu')`, "lu", ""},
+		{"route override", `$mcp_route('GET:/orders','Orders','List orders','','lc')`, "lc", ""},
 		{"invalid global format", `$mcp('Orders','','','typo')`, "", "invalid MCP case format"},
 		{"invalid route format", `$mcp_route('GET:/orders','Orders','','','typo')`, "", "invalid MCP case format"},
 		{"too many global args", `$mcp('Orders','','','lc','extra')`, "", "mcp requires"},

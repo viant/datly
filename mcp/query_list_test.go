@@ -34,7 +34,7 @@ func TestDefaultQueryListsPreserveTypedMCPArrays(t *testing.T) {
 	if !ok {
 		t.Fatal("tool")
 	}
-	result, protocolErr := entry.Handler(context.Background(), &schema.CallToolRequest{Method: schema.MethodToolsCall, Params: schema.CallToolRequestParams{Name: "Lists", Arguments: map[string]any{"IDs": []any{3, 1, 3}, "Labels": []any{"a,b", "c"}}}})
+	result, protocolErr := entry.Handler(context.Background(), &schema.CallToolRequest{Method: schema.MethodToolsCall, Params: schema.CallToolRequestParams{Name: "Lists", Arguments: map[string]any{"idS": []any{3, 1, 3}, "labels": []any{"a,b", "c"}}}})
 	if protocolErr != nil {
 		t.Fatal(protocolErr)
 	}

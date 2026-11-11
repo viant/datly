@@ -52,6 +52,12 @@ Verify the active inputs on each route; base and path variants can be enabled
 separately through the supported metadata. Exposing an MCP tool does not install
 a developer-MCP authoring service.
 
+MCP defaults to lowerCamel for implicit member names throughout native input
+and output graphs, including root and nested query selectors. Its `caseFormat`
+option overrides that default independently of HTTP formatting. Explicit field
+names and aliases retain their authored spelling; resource URI placeholders
+retain their route spelling. A per-exposure `lc` setting is unnecessary.
+
 The [MCP server API](../mcp/server/config.go) supports stdio, SSE and streamable
 transports with native protocol/session handling. Configure either its concrete
 Service or a generation Source such as Manager. The linked standalone host has

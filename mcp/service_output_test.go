@@ -110,7 +110,7 @@ func TestNativeCaseFormatHTTPMCP(t *testing.T) {
 				t.Run(tc.name, func(t *testing.T) {
 					args := map[string]any{}
 					if tc.fields != nil {
-						args["Fields"] = tc.fields
+						args["fields"] = tc.fields
 					}
 					result, rpcErr := tool.Handler(ctx, &schema.CallToolRequest{Method: schema.MethodToolsCall, Params: schema.CallToolRequestParams{Name: "Records", Arguments: args}})
 					require.Nil(t, rpcErr)

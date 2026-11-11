@@ -31,7 +31,7 @@ type numericBoundaryOutput struct{ Children []numericBoundaryChild }
 
 func TestMCPCaseFormatNumericBoundaryGraph(t *testing.T) {
 	ctx := context.Background()
-	component := &spec.Component{Key: spec.Key{Kind: spec.KindComponent, Name: "NumericGraph"}, Routes: []*spec.Route{{Method: "POST", Path: "/numeric-graph", MCP: []*spec.MCPExposure{{Kind: spec.MCPExposureTool, Name: "NumericGraph", CaseFormat: "lc"}}}}}
+	component := &spec.Component{Key: spec.Key{Kind: spec.KindComponent, Name: "NumericGraph"}, Routes: []*spec.Route{{Method: "POST", Path: "/numeric-graph", MCP: []*spec.MCPExposure{{Kind: spec.MCPExposureTool, Name: "NumericGraph"}}}}}
 	artifact, err := bootstrap.BuildArtifact(bootstrap.ArtifactInput{Component: component, InputType: reflect.TypeFor[numericBoundaryInput](), OutputType: reflect.TypeFor[numericBoundaryOutput]()})
 	require.NoError(t, err)
 	var bound *numericBoundaryBody
@@ -80,7 +80,7 @@ func TestMCPCaseFormatNumericBoundarySelectors(t *testing.T) {
 	ctx := context.Background()
 	db := sqlite.New(t)
 	require.NoError(t, db.ExecStatements(ctx, "CREATE TABLE records(channel_v2_id INTEGER,fixed TEXT,secret TEXT)", "INSERT INTO records VALUES(2,'two','hidden'),(1,'one','hidden')"))
-	component := &spec.Component{Key: spec.Key{Kind: spec.KindComponent, Name: "NumericSelectors"}, Routes: []*spec.Route{{Method: "GET", Path: "/numeric-selectors", MCP: []*spec.MCPExposure{{Kind: spec.MCPExposureTool, Name: "NumericSelectors", CaseFormat: "lc"}}}}, RootView: &spec.View{Name: "records", Selector: &spec.Selector{AllowFields: true, AllowOrderBy: true, Orderable: []spec.FieldPath{"channel_v2_id"}}, Source: &spec.ViewSource{SQL: "SELECT channel_v2_id,fixed FROM records"}}}
+	component := &spec.Component{Key: spec.Key{Kind: spec.KindComponent, Name: "NumericSelectors"}, Routes: []*spec.Route{{Method: "GET", Path: "/numeric-selectors", MCP: []*spec.MCPExposure{{Kind: spec.MCPExposureTool, Name: "NumericSelectors"}}}}, RootView: &spec.View{Name: "records", Selector: &spec.Selector{AllowFields: true, AllowOrderBy: true, Orderable: []spec.FieldPath{"channel_v2_id"}}, Source: &spec.ViewSource{SQL: "SELECT channel_v2_id,fixed FROM records"}}}
 	artifact, err := bootstrap.BuildArtifact(bootstrap.ArtifactInput{Component: component, InputType: reflect.TypeFor[publicNamesInput](), OutputType: reflect.TypeFor[numericBoundaryRows](), DirectViewField: "Data"})
 	require.NoError(t, err)
 	reader, err := artifact.ReaderCompilation().NewExecution(bootstrap.ReaderRuntimeConfig{SQL: &dsql.SQLComponent{DB: db.DB}})

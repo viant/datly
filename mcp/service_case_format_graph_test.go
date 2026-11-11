@@ -3,6 +3,7 @@ package mcp_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http/httptest"
 	"reflect"
 	"testing"
@@ -55,7 +56,7 @@ func TestMCPExposureCaseFormatOutputGraphIsolation(t *testing.T) {
 			config.Invoker = rt
 			service, err := mcp.New(config)
 			require.NoError(t, err)
-			for _, tc := range []struct{ name, rows, metric, empty string }{{"GraphCamel", "childRows", "metricId", "emptyRows"}, {"GraphSnake", "child_rows", "metric_id", "empty_rows"}, {"GraphOriginal", "ChildRows", "MetricId", "EmptyRows"}, {"GraphCamel", "childRows", "metricId", "emptyRows"}} {
+			for _, tc := range []struct{ name, rows, metric, empty string }{{"GraphCamel", "childRows", "metricId", "emptyRows"}, {"GraphSnake", "child_rows", "metric_id", "empty_rows"}, {"GraphOriginal", "childRows", "metricId", "emptyRows"}, {"GraphCamel", "childRows", "metricId", "emptyRows"}} {
 				require.NoError(t, service.PrepareTool(ctx, tc.name))
 				tool, ok := service.Registry().ToolRegistry.Get(tc.name)
 				require.True(t, ok)
@@ -80,5 +81,53 @@ func TestMCPExposureCaseFormatOutputGraphIsolation(t *testing.T) {
 			require.NotContains(t, res.Body.String(), `"childRows"`)
 			require.Equal(t, "uc", component.Settings.CaseFormat)
 		})
+	}
+}
+
+type resourceGraphInput struct {
+	ID int `parameter:",kind=query,in=id"`
+}
+
+func TestMCPResourceCaseFormatOutputGraphIsolation(t *testing.T) {
+	for _, template := range []bool{false, true} {
+		for _, tc := range []struct{ format, rows, metric string }{{"", "childRows", "metricId"}, {"lu", "child_rows", "metric_id"}, {"uc", "ChildRows", "MetricId"}} {
+			t.Run(fmt.Sprintf("template=%v/format=%s", template, tc.format), func(t *testing.T) {
+				ctx := context.Background()
+				kind := spec.MCPExposureResource
+				handler := custom.NewFunc[struct{}, graphCaseOutput](func(context.Context, *struct{}) (*graphCaseOutput, error) {
+					return &graphCaseOutput{ChildRows: []graphCaseRow{{MetricID: 7, Fixed: "fixed"}}}, nil
+				})
+				inputType := handler.InputType()
+				uri := "datly://localhost/resource-case"
+				if template {
+					kind = spec.MCPExposureResourceTemplate
+					handler = custom.NewFunc[resourceGraphInput, graphCaseOutput](func(context.Context, *resourceGraphInput) (*graphCaseOutput, error) {
+						return &graphCaseOutput{ChildRows: []graphCaseRow{{MetricID: 7, Fixed: "fixed"}}}, nil
+					})
+					inputType = handler.InputType()
+					uri += "?id=1"
+				}
+				component := &spec.Component{Key: spec.Key{Kind: spec.KindComponent, Name: "ResourceCase"}, Settings: &spec.Settings{CaseFormat: "uc"}, Routes: []*spec.Route{{Method: "GET", Path: "/resource-case", MCP: []*spec.MCPExposure{{Kind: kind, Name: "ResourceCase", CaseFormat: tc.format}}}}}
+				artifact, err := bootstrap.BuildArtifact(bootstrap.ArtifactInput{Component: component, InputType: inputType, OutputType: reflect.TypeFor[graphCaseOutput]()})
+				require.NoError(t, err)
+				registered, err := artifact.Registration(druntime.RegisteredComponent{Handler: handler})
+				require.NoError(t, err)
+				rt, err := druntime.NewRuntime([]*druntime.RegisteredComponent{registered})
+				require.NoError(t, err)
+				t.Cleanup(func() { require.NoError(t, rt.Shutdown(ctx)) })
+				service, err := mcp.New(mcp.Config{Components: []*druntime.RegisteredComponent{registered}, Invoker: rt})
+				require.NoError(t, err)
+				result, rpcErr := service.ReadResource(ctx, &schema.ReadResourceRequest{Method: schema.MethodResourcesRead, Params: schema.ReadResourceRequestParams{Uri: uri}})
+				require.Nil(t, rpcErr)
+				require.Len(t, result.Contents, 1)
+				var body map[string]any
+				require.NoError(t, json.Unmarshal([]byte(result.Contents[0].Text), &body))
+				require.Contains(t, body, tc.rows)
+				rows := body[tc.rows].([]any)
+				require.Equal(t, float64(7), rows[0].(map[string]any)[tc.metric])
+				require.Equal(t, "fixed", rows[0].(map[string]any)["Exact_Name"])
+				require.Equal(t, "uc", component.Settings.CaseFormat)
+			})
+		}
 	}
 }

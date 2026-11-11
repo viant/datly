@@ -31,9 +31,9 @@ type inputCaseRequest struct {
 }
 type inputCaseResult struct{ response.Status }
 
-func TestMCPInputSchemaUsesOptInExposureCaseFormat(t *testing.T) {
+func TestMCPInputSchemaUsesExposureCaseFormat(t *testing.T) {
 	type useCase struct{ description, format, id, name, flag, children, metric string }
-	for _, tc := range []useCase{{"existing Go naming without format", "", "Id", "Name", "AutoAdvertising", "Children", "MetricID"}, {"lower camel component contract", "lc", "id", "name", "autoAdvertising", "children", "metricId"}, {"snake component contract", "lu", "id", "name", "auto_advertising", "children", "metric_id"}, {"dash component contract", "ld", "id", "name", "auto-advertising", "children", "metric-id"}} {
+	for _, tc := range []useCase{{"default lower camel", "", "id", "name", "autoAdvertising", "children", "metricId"}, {"lower camel component contract", "lc", "id", "name", "autoAdvertising", "children", "metricId"}, {"snake component contract", "lu", "id", "name", "auto_advertising", "children", "metric_id"}, {"dash component contract", "ld", "id", "name", "auto-advertising", "children", "metric-id"}} {
 		t.Run(tc.description, func(t *testing.T) {
 			ctx := context.Background()
 			component := &spec.Component{Key: spec.Key{Kind: spec.KindComponent, Name: "InputCase"}, Settings: &spec.Settings{CaseFormat: "lc"}, Routes: []*spec.Route{{Method: "POST", Path: "/input-case", MCP: []*spec.MCPExposure{{Kind: spec.MCPExposureTool, Name: "InputCase", CaseFormat: tc.format}}}}}

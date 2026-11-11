@@ -14,7 +14,7 @@ import (
 	"github.com/viant/mcp-protocol/schema"
 )
 
-func TestMCPDefaultInputNamesPreserveLegacyDespiteHTTPCaseFormat(t *testing.T) {
+func TestMCPDefaultInputNamesDefaultToLowerCamelDespiteHTTPCaseFormat(t *testing.T) {
 	type useCase struct{ description, httpFormat string }
 	for _, tc := range []useCase{{"lower camel HTTP", "lc"}, {"snake HTTP", "lu"}, {"dash HTTP", "ld"}} {
 		t.Run(tc.description, func(t *testing.T) {
@@ -36,13 +36,13 @@ func TestMCPDefaultInputNamesPreserveLegacyDespiteHTTPCaseFormat(t *testing.T) {
 			tool, ok := service.Registry().ToolRegistry.Get("LegacyNames")
 			require.True(t, ok)
 			props := tool.Metadata.InputSchema.Properties
-			for _, name := range []string{"Id", "Name", "AutoAdvertising", "Children", "Exact_Name", "AccountingId"} {
+			for _, name := range []string{"id", "name", "autoAdvertising", "children", "Exact_Name", "AccountingId"} {
 				require.Contains(t, props, name)
 			}
-			require.Contains(t, props["Children"]["items"].(map[string]any)["properties"], "MetricID")
+			require.Contains(t, props["children"]["items"].(map[string]any)["properties"], "metricId")
 			require.NotContains(t, props, "Has")
 			require.Empty(t, tool.Metadata.InputSchema.Required)
-			result, rpcErr := tool.Handler(context.Background(), &schema.CallToolRequest{Method: schema.MethodToolsCall, Params: schema.CallToolRequestParams{Name: "LegacyNames", Arguments: map[string]any{"Id": 7, "Name": "legacy", "AutoAdvertising": false, "Children": []any{map[string]any{"MetricID": 11}}, "Exact_Name": "explicit", "AccountingId": 9}}})
+			result, rpcErr := tool.Handler(context.Background(), &schema.CallToolRequest{Method: schema.MethodToolsCall, Params: schema.CallToolRequestParams{Name: "LegacyNames", Arguments: map[string]any{"id": 7, "name": "legacy", "autoAdvertising": false, "children": []any{map[string]any{"metricId": 11}}, "Exact_Name": "explicit", "AccountingId": 9}}})
 			require.Nil(t, rpcErr)
 			require.False(t, result.IsError != nil && *result.IsError)
 			require.Equal(t, &inputCaseBody{Id: 7, Name: ptrLegacyName("legacy"), AutoAdvertising: ptrLegacyName(false), Children: []inputCaseChild{{MetricID: 11}}, Explicit: "explicit", Named: 9}, bound)

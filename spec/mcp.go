@@ -22,9 +22,17 @@ type MCPExposure struct {
 	Description     string          `json:"description,omitempty"`
 	DescriptionPath string          `json:"descriptionPath,omitempty"`
 	MIMEType        string          `json:"mimeType,omitempty"`
-	// CaseFormat customizes implicit MCP tool input and native output member names. Empty preserves
-	// legacy input spelling and the component output policy. Explicit field names win.
+	// CaseFormat customizes implicit MCP input and native output member names.
+	// Empty defaults to lowerCamel independently of HTTP. Explicit field names win.
 	CaseFormat string `json:"caseFormat,omitempty"`
+}
+
+// EffectiveCaseFormat returns the MCP presentation policy without changing authored metadata.
+func (e *MCPExposure) EffectiveCaseFormat() string {
+	if e != nil && strings.TrimSpace(e.CaseFormat) != "" {
+		return e.CaseFormat
+	}
+	return "lc"
 }
 
 func (e *MCPExposure) ValidateCaseFormat() error {

@@ -32,7 +32,7 @@ func TestJSONXToolNativeBinding(t *testing.T) {
 		expected int
 		present  bool
 	}{{true, 1, true}, {false, 0, true}, {2, 2, true}, {-1, -1, true}, {nil, 0, false}} {
-		scope, err := plan.Scope(map[string]any{"Body": map[string]any{"flag": tc.value, "secret": 8}})
+		scope, err := plan.Scope(map[string]any{"body": map[string]any{"flag": tc.value, "secret": 8}})
 		if err != nil {
 			t.Fatal(err)
 		}

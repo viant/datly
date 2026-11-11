@@ -29,7 +29,7 @@ func TestScalarTrimMCPAdmissionAndBinding(t *testing.T) {
 	}{
 		{" DISPLAY ", true, 1}, {"\t1\r\n", true, 1}, {"\u0085\u00a0\u1680\u2000\u200a\u2028\u2029\u202f\u205f\u3000olv\n", true, 2}, {99, true, 99}, {" 99 ", false, 0}, {"\u180eDISPLAY", false, 0}, {"DISPLAY\ufeff", false, 0},
 	} {
-		args := map[string]any{"Channel": tc.value}
+		args := map[string]any{"channel": tc.value}
 		result, err := gojsonschema.Validate(gojsonschema.NewGoLoader(plan.Metadata().InputSchema), gojsonschema.NewGoLoader(args))
 		require.NoError(t, err)
 		require.Equal(t, tc.valid, result.Valid(), "%v: %v", tc.value, result.Errors())

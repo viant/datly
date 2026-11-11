@@ -60,7 +60,7 @@ func TestNativeInputGroupToolBinding(t *testing.T) {
 		{map[string]any{"low": "ignored", "high": nil}, false, true, 0, true},
 		{map[string]any{"low": true, "HIGH": 2}, true, false, 1, false},
 	} {
-		scope, err := plan.Scope(map[string]any{"Body": tc.data})
+		scope, err := plan.Scope(map[string]any{"body": tc.data})
 		require.NoError(t, err)
 		defer scope.Close()
 		value, found, err := scope.Body().Locate(nil).Value(t.Context(), reflect.TypeFor[*groupedNativeBody](), "")
@@ -93,7 +93,7 @@ func TestNativeInputGroupNestedToolBinding(t *testing.T) {
 	plan, err := NewCompiler().Compile(Input{Component: spec.Key{Kind: spec.KindComponent, Scope: "test", Name: "NestedInputGroup"}, Exposure: &spec.MCPExposure{Kind: spec.MCPExposureTool, Name: "nestedInputGroup"}, Contract: contract})
 	require.NoError(t, err)
 	winner := map[string]any{"low": "ignored", "high": 2}
-	scope, err := plan.Scope(map[string]any{"Body": map[string]any{"rows": []any{winner}, "byName": map[string]any{"x": winner}}})
+	scope, err := plan.Scope(map[string]any{"body": map[string]any{"rows": []any{winner}, "byName": map[string]any{"x": winner}}})
 	require.NoError(t, err)
 	defer scope.Close()
 	value, found, err := scope.Body().Locate(nil).Value(t.Context(), reflect.TypeFor[*body](), "")

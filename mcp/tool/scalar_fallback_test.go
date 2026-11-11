@@ -28,7 +28,7 @@ func TestScalarFallbackToolSchemaAndBinding(t *testing.T) {
 		want     string
 		nilValue bool
 	}{{int64(1), "SPEND_EVENLY", false}, {int64(3), "ASAP", false}, {"other", "ASAP", false}, {"spend_evenly", "SPEND_EVENLY", false}, {"Even", "ASAP", false}, {"1", "ASAP", false}, {nil, "", true}} {
-		args := map[string]any{"Body": map[string]any{"mode": tc.value}}
+		args := map[string]any{"body": map[string]any{"mode": tc.value}}
 		r, err := gojsonschema.Validate(gojsonschema.NewGoLoader(plan.Metadata().InputSchema), gojsonschema.NewGoLoader(args))
 		if err != nil || !r.Valid() {
 			t.Fatalf("value=%v err=%v result=%v", tc.value, err, r)

@@ -76,15 +76,15 @@ func TestCompilerBuildsSchemaAndBindingFromRouteContract(t *testing.T) {
 	metadata := plan.Metadata()
 	if metadata.Name != "search.run" || metadata.Description == nil || *metadata.Description != "Run search" ||
 		metadata.InputSchema.Type != "object" || len(metadata.InputSchema.Properties) != 3 ||
-		!reflect.DeepEqual(metadata.InputSchema.Required, []string{"Identifier", "search_terms"}) {
+		!reflect.DeepEqual(metadata.InputSchema.Required, []string{"identifier", "search_terms"}) {
 		t.Fatalf("metadata = %+v", metadata)
 	}
 	search := metadata.InputSchema.Properties["search_terms"]
 	if search["type"] != "string" || search["description"] != "CSV search terms" {
 		t.Fatalf("search schema = %+v", search)
 	}
-	if metadata.InputSchema.Properties["Identifier"]["type"] != "integer" {
-		t.Fatalf("ID schema = %+v", metadata.InputSchema.Properties["Identifier"])
+	if metadata.InputSchema.Properties["identifier"]["type"] != "integer" {
+		t.Fatalf("ID schema = %+v", metadata.InputSchema.Properties["identifier"])
 	}
 	payload := metadata.InputSchema.Properties["payload"]
 	properties, ok := payload["properties"].(map[string]interface{})
@@ -93,12 +93,12 @@ func TestCompilerBuildsSchemaAndBindingFromRouteContract(t *testing.T) {
 		t.Fatalf("payload schema = %+v", payload)
 	}
 	args := plan.Arguments()
-	if len(args) != 3 || args[0].PublicName() != "Identifier" || args[1].PublicName() != "payload" || args[2].PublicName() != "search_terms" ||
+	if len(args) != 3 || args[0].PublicName() != "identifier" || args[1].PublicName() != "payload" || args[2].PublicName() != "search_terms" ||
 		args[2].SourceType() != reflect.TypeOf("") || args[2].DestinationType() != reflect.TypeOf([]string{}) {
 		t.Fatalf("arguments = %+v", args)
 	}
 	scope, err := plan.Scope(map[string]interface{}{
-		"Identifier": float64(7), "search_terms": "one,two", "payload": map[string]interface{}{"when": "2026-07-14T10:00:00Z", "tags": []interface{}{"a"}},
+		"identifier": float64(7), "search_terms": "one,two", "payload": map[string]interface{}{"when": "2026-07-14T10:00:00Z", "tags": []interface{}{"a"}},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -107,7 +107,7 @@ func TestCompilerBuildsSchemaAndBindingFromRouteContract(t *testing.T) {
 	if err != nil || !ok || searchValue != "one,two" {
 		t.Fatalf("search provider = %#v, %v, %v", searchValue, ok, err)
 	}
-	if _, err = plan.Scope(map[string]interface{}{"Identifier": float64(7)}); err == nil || !strings.Contains(err.Error(), "missing required") {
+	if _, err = plan.Scope(map[string]interface{}{"identifier": float64(7)}); err == nil || !strings.Contains(err.Error(), "missing required") {
 		t.Fatalf("required argument error = %v", err)
 	}
 }
@@ -181,7 +181,7 @@ func TestCompilerDiscoversFormattedDateWireSchemaWithoutChangingBindingSource(t 
 	if field.SourceType() != reflect.TypeFor[any]() {
 		t.Fatalf("runtime source type = %v, want any", field.SourceType())
 	}
-	property := plan.Metadata().InputSchema.Properties["From"]
+	property := plan.Metadata().InputSchema.Properties["from"]
 	if property["type"] != "string" || property["format"] != "date" {
 		t.Fatalf("date schema = %+v", property)
 	}

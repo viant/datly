@@ -110,7 +110,7 @@ func TestExplicitSelectorAliasCodecHTTPMCP(t *testing.T) {
 					handler.ServeHTTP(res, httptest.NewRequest("GET", "/channels?"+url.Values{"fields": tc.fields}.Encode(), nil))
 					args := map[string]any{}
 					if tc.fields != nil {
-						args["Fields"] = tc.fields
+						args["fields"] = tc.fields
 					}
 					result, rpcErr := tool.Handler(ctx, &schema.CallToolRequest{Method: schema.MethodToolsCall, Params: schema.CallToolRequestParams{Name: "Channels", Arguments: args}})
 					if tc.want == "" {

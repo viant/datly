@@ -29,7 +29,7 @@ func TestNativeInputGuardToolBindingAndSchema(t *testing.T) {
 	plan, err := NewCompiler().Compile(Input{Component: spec.Key{Kind: spec.KindComponent, Scope: "test", Name: "Guard"}, Exposure: &spec.MCPExposure{Kind: spec.MCPExposureTool, Name: "guard"}, Contract: contract})
 	require.NoError(t, err)
 	for _, canonical := range []any{nil, 2} {
-		scope, err := plan.Scope(map[string]any{"Body": map[string]any{"canonical": canonical, "rows": []any{map[string]any{"value": "ignored", "Has": map[string]any{"Value": true}}}}})
+		scope, err := plan.Scope(map[string]any{"body": map[string]any{"canonical": canonical, "rows": []any{map[string]any{"value": "ignored", "Has": map[string]any{"Value": true}}}}})
 		require.NoError(t, err)
 		value, found, err := scope.Body().Locate(nil).Value(t.Context(), reflect.TypeFor[*guardedToolBody](), "")
 		require.NoError(t, err)

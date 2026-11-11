@@ -58,7 +58,7 @@ func TestScopedDependencyDocumentationPublicSchemas(t *testing.T) {
 	require.Equal(t, "lazy", childScope, "exercise scoped dependency coverage")
 	plan, err := mcptool.NewCompiler().Compile(mcptool.Input{Fields: fields, Contract: contract, Exposure: &spec.MCPExposure{Kind: spec.MCPExposureTool, Name: "docs.parent"}})
 	require.NoError(t, err)
-	property := plan.Metadata().InputSchema.Properties["Value"]
+	property := plan.Metadata().InputSchema.Properties["value"]
 	require.Equal(t, "public parent description", property["description"])
 	mcpJSON, err := json.Marshal(plan.Metadata())
 	require.NoError(t, err)

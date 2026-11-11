@@ -28,7 +28,7 @@ func TestOpenScalarToolSchemaAndBinding(t *testing.T) {
 		want     int64
 		nilValue bool
 	}{{int64(3), 3, false}, {"other", 0, false}, {"fıxed_budget", 1, false}, {nil, 0, true}} {
-		args := map[string]any{"Body": map[string]any{"mode": tc.value}}
+		args := map[string]any{"body": map[string]any{"mode": tc.value}}
 		r, err := gojsonschema.Validate(gojsonschema.NewGoLoader(plan.Metadata().InputSchema), gojsonschema.NewGoLoader(args))
 		if err != nil || !r.Valid() {
 			t.Fatalf("value=%v err=%v result=%v", tc.value, err, r)

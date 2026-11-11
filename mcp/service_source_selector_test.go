@@ -99,10 +99,10 @@ func TestDeclaredSourceSelectorHTTPMCP(t *testing.T) {
 			} {
 				t.Run(tc.name, func(t *testing.T) {
 					query := url.Values{"fields": tc.fields}
-					args := map[string]any{"Fields": tc.fields}
+					args := map[string]any{"fields": tc.fields}
 					if tc.page != "" {
 						query.Set("page", tc.page)
-						args["Page"] = 1
+						args["page"] = 1
 					}
 					rec := httptest.NewRecorder()
 					handler.ServeHTTP(rec, httptest.NewRequest("GET", "/seed-source?"+query.Encode(), nil))

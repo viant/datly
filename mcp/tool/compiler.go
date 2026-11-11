@@ -26,7 +26,7 @@ type Input struct {
 	Example        string
 	TransportReady bool
 	Documentation  *documentation.Snapshot
-	// CaseFormat is the MCP input fallback naming policy; empty retains legacy names.
+	// CaseFormat overrides the exposure naming policy; empty uses its lowerCamel default.
 	CaseFormat string
 	Component  spec.Key
 	Exposure   *spec.MCPExposure
@@ -74,6 +74,9 @@ func (c *Compiler) Compile(input Input) (*Plan, error) {
 	}
 	if input.Exposure == nil || input.Exposure.Kind != spec.MCPExposureTool {
 		return nil, fmt.Errorf("MCP tool exposure is required")
+	}
+	if strings.TrimSpace(input.CaseFormat) == "" {
+		input.CaseFormat = input.Exposure.EffectiveCaseFormat()
 	}
 	name := strings.TrimSpace(input.Exposure.Name)
 	if err := validateToolName(name); err != nil {

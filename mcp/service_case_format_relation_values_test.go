@@ -58,7 +58,7 @@ func TestExposureCaseFormatRootChildSelectorValues(t *testing.T) {
 	}
 	child := &spec.View{Name: "children", Selector: policy(), Source: &spec.ViewSource{SQL: "SELECT id,parent_id,sample_seen_1_day FROM children"}}
 	root := &spec.View{Name: "parents", Selector: policy(), Source: &spec.ViewSource{SQL: "SELECT id,sample_seen_1_day FROM parents"}, Relations: []*spec.Relation{{Name: "Children", Holder: "Children", Cardinality: spec.CardinalityMany, View: child, On: []*spec.RelationLink{{ParentColumn: "id", ChildColumn: "parent_id"}}}}}
-	component := &spec.Component{Key: spec.Key{Kind: spec.KindComponent, Name: "CaseFormatRelations"}, RootView: root, Routes: []*spec.Route{{Method: "GET", Path: "/case-format-relations", MCP: []*spec.MCPExposure{{Kind: spec.MCPExposureTool, Name: "CaseFormatRelations", CaseFormat: "lc"}}}}}
+	component := &spec.Component{Key: spec.Key{Kind: spec.KindComponent, Name: "CaseFormatRelations"}, RootView: root, Routes: []*spec.Route{{Method: "GET", Path: "/case-format-relations", MCP: []*spec.MCPExposure{{Kind: spec.MCPExposureTool, Name: "CaseFormatRelations"}}}}}
 	artifact, err := bootstrap.BuildArtifact(bootstrap.ArtifactInput{Component: component, InputType: reflect.TypeFor[caseFormatRelationInput](), OutputType: reflect.TypeFor[caseFormatRelationOutput](), DirectViewField: "Data"})
 	require.NoError(t, err)
 	reader, err := artifact.ReaderCompilation().NewExecution(bootstrap.ReaderRuntimeConfig{SQL: &dsql.SQLComponent{DB: db.DB}})

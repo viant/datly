@@ -26,7 +26,7 @@ func TestExposureCaseFormatPublicSelectorValues(t *testing.T) {
 	ctx := context.Background()
 	db := sqlite.New(t)
 	require.NoError(t, db.ExecStatements(ctx, "CREATE TABLE records(campaign_id INTEGER,http_code INTEGER,metric_3 TEXT,secret TEXT,sample_seen_1_day INTEGER)", "INSERT INTO records VALUES(2,202,'second','private',22),(1,201,'first','private',11)"))
-	component := &spec.Component{Key: spec.Key{Kind: spec.KindComponent, Name: "PublicNames"}, Routes: []*spec.Route{{Method: "GET", Path: "/public", MCP: []*spec.MCPExposure{{Kind: spec.MCPExposureTool, Name: "PublicNames", CaseFormat: "lc"}}}}, Settings: &spec.Settings{CaseFormat: ""}, RootView: &spec.View{Name: "records", Selector: &spec.Selector{AllowFields: true, AllowOrderBy: true, Orderable: []spec.FieldPath{"campaign_id"}}, Source: &spec.ViewSource{SQL: "SELECT campaign_id,http_code,metric_3,sample_seen_1_day FROM records"}}}
+	component := &spec.Component{Key: spec.Key{Kind: spec.KindComponent, Name: "PublicNames"}, Routes: []*spec.Route{{Method: "GET", Path: "/public", MCP: []*spec.MCPExposure{{Kind: spec.MCPExposureTool, Name: "PublicNames"}}}}, Settings: &spec.Settings{CaseFormat: ""}, RootView: &spec.View{Name: "records", Selector: &spec.Selector{AllowFields: true, AllowOrderBy: true, Orderable: []spec.FieldPath{"campaign_id"}}, Source: &spec.ViewSource{SQL: "SELECT campaign_id,http_code,metric_3,sample_seen_1_day FROM records"}}}
 	if includeHiddenSQL {
 		component.RootView.Source.SQL = "SELECT campaign_id,http_code,metric_3,secret,sample_seen_1_day FROM records"
 	}

@@ -25,7 +25,7 @@ func TestCompilerReflectsPointerOpaqueBodyGoShape(t *testing.T) {
 		t.Fatal(err)
 	}
 	property := plan.Metadata().InputSchema.Properties["payload"]
-	if property["type"] != "object" || !reflect.DeepEqual(property["properties"], map[string]interface{}{"Value": map[string]interface{}{"type": "string"}}) {
+	if property["type"] != "object" || !reflect.DeepEqual(property["properties"], map[string]interface{}{"value": map[string]interface{}{"type": "string"}}) {
 		t.Fatalf("Go shape: %#v", property)
 	}
 }

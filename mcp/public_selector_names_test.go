@@ -85,6 +85,8 @@ func testCompiledPublicFieldNamesHTTPMCP(t *testing.T, format string, includeHid
 		{"forbidden sort", []string{"campaignId"}, "metric-3 DESC", "", true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			mcpExpected := tc.expected
+			mcpFields := append([]string(nil), tc.fields...)
 			if format == "" {
 				for i, name := range tc.fields {
 					if name == "httpcOde" {
@@ -102,6 +104,7 @@ func testCompiledPublicFieldNamesHTTPMCP(t *testing.T, format string, includeHid
 			if includeHiddenSQL && (tc.name == "hidden SQL" || tc.name == "hidden Go") {
 				tc.bad = false
 				tc.expected = `{"data":[{},{}]}`
+				mcpExpected = tc.expected
 			}
 			q := url.Values{"fields": tc.fields}
 			if tc.name == "CSV fields" {
@@ -112,9 +115,9 @@ func testCompiledPublicFieldNamesHTTPMCP(t *testing.T, format string, includeHid
 			}
 			rec := httptest.NewRecorder()
 			httpHandler.ServeHTTP(rec, httptest.NewRequest("GET", "/public?"+q.Encode(), nil))
-			args := map[string]any{"Fields": tc.fields}
+			args := map[string]any{"fields": mcpFields}
 			if tc.sort != "" {
-				args["OrderBy"] = tc.sort
+				args["orderBy"] = tc.sort
 			}
 			result, rpcErr := tool.Handler(ctx, &schema.CallToolRequest{Method: schema.MethodToolsCall, Params: schema.CallToolRequestParams{Name: "PublicNames", Arguments: args}})
 			if tc.bad {
@@ -127,7 +130,7 @@ func testCompiledPublicFieldNamesHTTPMCP(t *testing.T, format string, includeHid
 			require.Nil(t, rpcErr)
 			body, err := json.Marshal(result.StructuredContent)
 			require.NoError(t, err)
-			require.JSONEq(t, tc.expected, string(body))
+			require.JSONEq(t, mcpExpected, string(body))
 			if includeHiddenSQL && (tc.name == "hidden SQL" || tc.name == "hidden Go") {
 				scope, err := testharness.NewRequest("GET", "/public").WithQuery(q).Scope()
 				require.NoError(t, err)

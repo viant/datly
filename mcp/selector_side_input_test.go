@@ -38,17 +38,17 @@ func TestSelectorSideInputsMCP(t *testing.T) {
 		} `json:"properties"`
 	}
 	require.NoError(t, json.Unmarshal(encoded, &wire))
-	require.Equal(t, "integer", wire.Properties["Page"].Type)
-	require.Equal(t, "array", wire.Properties["Fields"].Type)
+	require.Equal(t, "integer", wire.Properties["page"].Type)
+	require.Equal(t, "array", wire.Properties["fields"].Type)
 	for _, tc := range []struct {
 		arguments map[string]any
 		id        int
 		label     string
 	}{
-		{map[string]any{"Fields": []string{"label"}, "Page": 1}, 0, "one"},
-		{map[string]any{"Fields": "label", "Page": 1}, 0, "one"},
+		{map[string]any{"fields": []string{"label"}, "page": 1}, 0, "one"},
+		{map[string]any{"fields": "label", "page": 1}, 0, "one"},
 		{map[string]any{}, 1, "one"},
-		{map[string]any{"Fields": []string{"id"}, "Page": 1}, 1, ""},
+		{map[string]any{"fields": []string{"id"}, "page": 1}, 1, ""},
 	} {
 		result, err := native.CallTool(t.Context(), &schema.CallToolRequestParams{Name: "records.select", Arguments: tc.arguments})
 		require.NoError(t, err)
@@ -109,14 +109,14 @@ func TestSelectorSideOrderByMCP(t *testing.T) {
 		} `json:"properties"`
 	}
 	require.NoError(t, json.Unmarshal(encoded, &wire))
-	require.Equal(t, "array", wire.Properties["OrderBy"].Type, "%s", encoded)
-	require.NotContains(t, wire.Properties, "Sort")
+	require.Equal(t, "array", wire.Properties["orderBy"].Type, "%s", encoded)
+	require.NotContains(t, wire.Properties, "sort")
 	for _, tc := range []struct {
 		args map[string]any
 		ids  []int
 	}{
-		{map[string]any{"OrderBy": []string{"id DESC"}}, []int{2, 1}},
-		{map[string]any{"OrderBy": []string{"id DESC"}, "Limit": 1, "Page": 2}, []int{1}},
+		{map[string]any{"orderBy": []string{"id DESC"}}, []int{2, 1}},
+		{map[string]any{"orderBy": []string{"id DESC"}, "limit": 1, "page": 2}, []int{1}},
 		{map[string]any{}, []int{1, 2}},
 	} {
 		result, err := native.CallTool(t.Context(), &schema.CallToolRequestParams{Name: "records.select", Arguments: tc.args})
@@ -151,11 +151,11 @@ func TestSelectorSidePostInputsMCP(t *testing.T) {
 		} `json:"properties"`
 	}
 	require.NoError(t, json.Unmarshal(encoded, &wire))
-	require.Equal(t, "integer", wire.Properties["Page"].Type)
-	require.Equal(t, "array", wire.Properties["OrderBy"].Type)
-	require.Equal(t, "integer", wire.Properties["Limit"].Type)
-	require.Equal(t, "integer", wire.Properties["Offset"].Type)
-	for _, args := range []map[string]any{{"Min": 1, "ID": 1, "OrderBy": []string{"id DESC"}, "Limit": 1, "Page": 1}, {"Min": 0, "ID": 2, "Page": 1}} {
+	require.Equal(t, "integer", wire.Properties["page"].Type)
+	require.Equal(t, "array", wire.Properties["orderBy"].Type)
+	require.Equal(t, "integer", wire.Properties["limit"].Type)
+	require.Equal(t, "integer", wire.Properties["offset"].Type)
+	for _, args := range []map[string]any{{"min": 1, "id": 1, "orderBy": []string{"id DESC"}, "limit": 1, "page": 1}, {"min": 0, "id": 2, "page": 1}} {
 		result, err := native.CallTool(t.Context(), &schema.CallToolRequestParams{Name: "records.select", Arguments: args})
 		require.NoError(t, err)
 		require.NotNil(t, result)

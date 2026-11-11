@@ -167,33 +167,33 @@ func TestToolsListUsesVerifiedCallerContractWithoutMutatingCatalog(t *testing.T)
 		if !strings.Contains(string(bodySchema), `"Choice"`) {
 			t.Fatalf("nested MCP name missing: %s", bodySchema)
 		}
-		_, inputSecret := tool.InputSchema.Properties["Secret"]
-		_, outputSecret := tool.OutputSchema.Properties["Secret"]
+		_, inputSecret := tool.InputSchema.Properties["secret"]
+		_, outputSecret := tool.OutputSchema.Properties["secret"]
 		if inputSecret != (subject == "admin") || outputSecret != (subject == "admin") {
 			t.Fatalf("caller %s secret input=%v output=%v", subject, inputSecret, outputSecret)
 		}
 		if subject == "reader" {
 			found := false
 			for _, name := range tool.InputSchema.Required {
-				found = found || name == "Reason"
+				found = found || name == "reason"
 			}
 			if !found {
 				t.Fatal("effective required query field not advertised")
 			}
-			child := tool.OutputSchema.Properties["Child"]
+			child := tool.OutputSchema.Properties["child"]
 			encoded, _ := json.Marshal(child)
 			var members map[string]any
 			if err := json.Unmarshal(encoded, &members); err != nil {
 				t.Fatal(err)
 			}
 			if props, ok := members["properties"].(map[string]any); ok {
-				if _, exists := props["Secret"]; exists {
+				if _, exists := props["secret"]; exists {
 					t.Fatal("nested secret leaked")
 				}
 			} else {
 				t.Fatalf("nested schema properties missing: %s", encoded)
 			}
-			values := tool.InputSchema.Properties["Workflow"]["enum"]
+			values := tool.InputSchema.Properties["workflow"]["enum"]
 			raw, _ := json.Marshal(values)
 			if string(raw) != `["draft"]` {
 				t.Fatalf("choices=%s", raw)
@@ -209,11 +209,11 @@ func TestToolsListUsesVerifiedCallerContractWithoutMutatingCatalog(t *testing.T)
 	}
 	for _, subject := range []string{"reader", "admin"} {
 		ctx := context.WithValue(t.Context(), authorization.TokenKey, &authorization.Token{Token: key.Sign(t, subject, time.Now().Add(time.Hour))})
-		modeName := "Mode"
+		modeName := "mode"
 		if subject == "reader" {
-			modeName = "Workflow"
+			modeName = "workflow"
 		}
-		request := &schema.CallToolRequest{Method: schema.MethodToolsCall, Params: schema.CallToolRequestParams{Name: "DynamicCatalog", Arguments: map[string]any{"Secret": "attack", "Reason": "review", modeName: "approved"}}}
+		request := &schema.CallToolRequest{Method: schema.MethodToolsCall, Params: schema.CallToolRequestParams{Name: "DynamicCatalog", Arguments: map[string]any{"secret": "attack", "reason": "review", modeName: "approved"}}}
 		request.Params.Arguments["body"] = map[string]any{"groups": []any{map[string]any{
 			"label": "group", "rows": []any{[]any{map[string]any{"label": "leaf", "Choice": "approved", "secret": "attack", "Has": map[string]any{"Secret": true}}, nil}},
 			"byId": map[string]any{"5": []any{map[string]any{"choice": "approved", "secret": "attack"}}},
@@ -227,12 +227,12 @@ func TestToolsListUsesVerifiedCallerContractWithoutMutatingCatalog(t *testing.T)
 		if err = json.Unmarshal(encoded, &body); err != nil {
 			t.Fatal(err)
 		}
-		_, secret := body["Secret"]
+		_, secret := body["secret"]
 		if secret != (subject == "admin") {
 			t.Fatalf("output %s: %s", subject, encoded)
 		}
-		child := body["Child"].(map[string]any)
-		_, secret = child["Secret"]
+		child := body["child"].(map[string]any)
+		_, secret = child["secret"]
 		if secret != (subject == "admin") {
 			t.Fatal("nested output policy bypassed")
 		}

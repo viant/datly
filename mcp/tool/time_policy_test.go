@@ -34,7 +34,7 @@ func TestDeclaredTimeMCPInput(t *testing.T) {
 		{"epoch", 0, true, "1970-01-01T00:00:00Z"}, {"date", "2026-11-07", true, "2026-11-07T00:00:00Z"}, {"empty", "", true, "0001-01-01T00:00:00Z"}, {"offset", "2026-11-07T08:00:00-08:00", true, "2026-11-07T16:00:00Z"}, {"null", nil, true, "nil"}, {"bad", "nonsense", false, ""}, {"number string", "123", false, ""}, {"bool", true, false, ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			args := map[string]any{"Body": map[string]any{"stamp": tc.value}}
+			args := map[string]any{"body": map[string]any{"stamp": tc.value}}
 			result, err := gojsonschema.Validate(gojsonschema.NewGoLoader(plan.Metadata().InputSchema), gojsonschema.NewGoLoader(args))
 			if err != nil {
 				t.Fatal(err)

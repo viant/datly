@@ -170,13 +170,13 @@ func (c *serviceCompiler) compileRoute(result *compiledPlans, toolCompiler *tool
 			authoredDescription = registered.Component.Description
 		}
 		exposure.Description = registered.Documentation.Operation(route.Path, documentation.Annotation{Description: authoredDescription}).Description
+		if err := exposure.ValidateCaseFormat(); err != nil {
+			return err
+		}
 		switch exposure.Kind {
 		case spec.MCPExposureTool:
 			fields, err := result.inputs.FieldsFor(registered.Component.Key, ref)
 			if err != nil {
-				return err
-			}
-			if err := exposure.ValidateCaseFormat(); err != nil {
 				return err
 			}
 			plan, compileErr := toolCompiler.Compile(tool.Input{CaseFormat: exposure.CaseFormat, Fields: fields, Example: registered.Documentation.Operation(route.Path, documentation.Annotation{Example: registered.Component.Example}).Example, TransportReady: registered.Output != nil && registered.Output.TransportReady(), Documentation: registered.Documentation, Component: registered.Component.Key, Exposure: exposure, Contract: contract, OutputType: registered.OutputType, Output: registered.Output})
@@ -207,7 +207,19 @@ func (c *serviceCompiler) publish(ctx context.Context, catalog *Catalog, policy 
 	protocolRegistry := mcpserver.NewRegistry()
 	outputs := make(map[string]*output.Plan, len(components))
 	for _, registered := range components {
-		outputs[registered.Component.Key.String()] = registered.Output
+		for _, route := range registered.Component.Routes {
+			for _, exposure := range route.MCP {
+				if exposure == nil || (exposure.Kind != spec.MCPExposureResource && exposure.Kind != spec.MCPExposureResourceTemplate) {
+					continue
+				}
+				plan, err := registered.Output.WithCaseFormat(exposure.EffectiveCaseFormat())
+				if err != nil {
+					return nil, fmt.Errorf("compile MCP resource output: %w", err)
+				}
+				target := exec.ComponentTarget{Component: registered.Component.Key, Route: spec.RouteRef{Method: route.Method, Path: route.Path}}
+				outputs[target.String()] = plan
+			}
+		}
 	}
 	newInvoker := func(selectPlan func(exec.ComponentTarget) *output.Plan, presentSelectors bool) *invocation.Invoker {
 		return invocation.New(invocation.Config{Invoker: c.config.Invoker, Client: c.config.Client, Authorize: c.config.AuthorizeTool, SelectorPresentation: func(ctx context.Context, target exec.ComponentTarget) (*exec.SelectorPresentation, error) {
@@ -288,7 +300,7 @@ func (c *serviceCompiler) publish(ctx context.Context, catalog *Catalog, policy 
 			}
 		}})
 	}
-	componentInvoker := newInvoker(func(target exec.ComponentTarget) *output.Plan { return outputs[target.Component.String()] }, false)
+	componentInvoker := newInvoker(func(target exec.ComponentTarget) *output.Plan { return outputs[target.String()] }, true)
 	resourceHandler := mcpresource.NewHandler(catalog.resources, componentInvoker)
 	resourceReadHandler := resourceHandler.Handle
 	if c.config.AuthorizeResource != nil {

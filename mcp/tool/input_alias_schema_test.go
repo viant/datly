@@ -60,7 +60,7 @@ func TestInputAliasPolicyNativeToolBinding(t *testing.T) {
 		{"canonical wins", map[string]any{"frequencyCapping": map[string]any{"limit": 4}, "frequencyCap": map[string]any{"limit": "invalid"}}, 4, true, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			scope, err := plan.Scope(map[string]any{"Body": tc.body})
+			scope, err := plan.Scope(map[string]any{"body": tc.body})
 			require.NoError(t, err)
 			defer scope.Close()
 			value, found, err := scope.Body().Locate(nil).Value(t.Context(), reflect.TypeFor[*policyAliasSchemaBody](), "")
@@ -84,13 +84,13 @@ func TestRequiredInputAliasToolSchemaAdmission(t *testing.T) {
 	require.NoError(t, err)
 	for _, name := range []string{"frequencyCapping", "frequencyCap"} {
 		t.Run(name, func(t *testing.T) {
-			args := map[string]any{"Body": map[string]any{name: map[string]any{"limit": 2}}}
+			args := map[string]any{"body": map[string]any{name: map[string]any{"limit": 2}}}
 			result, err := gojsonschema.Validate(gojsonschema.NewGoLoader(plan.Metadata().InputSchema), gojsonschema.NewGoLoader(args))
 			require.NoError(t, err)
 			require.True(t, result.Valid(), "canonical or native alias satisfies required input: %v", result.Errors())
 		})
 	}
-	missing, err := gojsonschema.Validate(gojsonschema.NewGoLoader(plan.Metadata().InputSchema), gojsonschema.NewGoLoader(map[string]any{"Body": map[string]any{}}))
+	missing, err := gojsonschema.Validate(gojsonschema.NewGoLoader(plan.Metadata().InputSchema), gojsonschema.NewGoLoader(map[string]any{"body": map[string]any{}}))
 	require.NoError(t, err)
 	require.False(t, missing.Valid(), "alias support must not discard requiredness")
 }
@@ -100,7 +100,7 @@ func TestInputAliasToolSchemaMatchesNativeBinding(t *testing.T) {
 	contract := testRouteContract(t, reflect.TypeFor[aliasSchemaInput](), []bindly.BindingSpec{binding})
 	plan, err := NewCompiler().Compile(Input{Component: spec.Key{Kind: spec.KindComponent, Scope: "test", Name: "Aliases"}, Exposure: &spec.MCPExposure{Kind: spec.MCPExposureTool, Name: "aliases"}, Contract: contract})
 	require.NoError(t, err)
-	args := map[string]any{"Body": map[string]any{"frequencyCap": map[string]any{"limit": 2}}}
+	args := map[string]any{"body": map[string]any{"frequencyCap": map[string]any{"limit": 2}}}
 	scope, err := plan.Scope(args)
 	require.NoError(t, err)
 	defer scope.Close()
@@ -114,7 +114,7 @@ func TestInputAliasToolSchemaMatchesNativeBinding(t *testing.T) {
 	require.True(t, result.Valid(), "schema must admit a body accepted by native binding: %v", result.Errors())
 	// Discovery must describe the alias, rather than admitting it only as an
 	// unconstrained unknown property that hides its accepted nested contract.
-	body := plan.Metadata().InputSchema.Properties["Body"]
+	body := plan.Metadata().InputSchema.Properties["body"]
 	properties, ok := body["properties"].(map[string]interface{})
 	require.True(t, ok, "body schema: %v", body)
 	require.Contains(t, properties, "frequencyCap")
@@ -183,7 +183,7 @@ func TestAliasPriorityToolSchemaAndInvocation(t *testing.T) {
 		{"enum refinement discarded", map[string]any{"mode": map[string]any{}, "legacyMode": "TWO"}, false, nil, newInt(2)},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			args := map[string]any{"Body": tc.body}
+			args := map[string]any{"body": tc.body}
 			result, err := gojsonschema.Validate(gojsonschema.NewGoLoader(plan.Metadata().InputSchema), gojsonschema.NewGoLoader(args))
 			require.NoError(t, err)
 			if !tc.fail {

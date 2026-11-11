@@ -111,12 +111,12 @@ func TestRelationSelectorsNativeMCPMatchesHTTP(t *testing.T) {
 	}
 	require.NoError(t, json.Unmarshal(encoded, &discovery))
 	require.Empty(t, discovery.Required)
-	bindings := map[string]string{"Limit": "root_limit", "Offset": "root_offset", "Page": "root_page", "Fields": "root_fields", "OrderBy": "root_sort", "MatchLimit": "matches.limit", "MatchOffset": "matches.offset", "MatchPage": "matches.page", "MatchFields": "matches.fields", "MatchOrderBy": "matches.sort", "DetailLimit": "matches.details.limit", "DetailOffset": "matches.details.offset", "DetailFields": "matches.details.fields"}
+	bindings := map[string]string{"limit": "root_limit", "offset": "root_offset", "page": "root_page", "fields": "root_fields", "orderBy": "root_sort", "matchLimit": "matches.limit", "matchOffset": "matches.offset", "matchPage": "matches.page", "matchFields": "matches.fields", "matchOrderBy": "matches.sort", "detailLimit": "matches.details.limit", "detailOffset": "matches.details.offset", "detailFields": "matches.details.fields"}
 	require.Len(t, discovery.Properties, len(bindings))
 	for name := range bindings {
 		prop, ok := discovery.Properties[name]
 		require.True(t, ok, "missing %s: %s", name, encoded)
-		if strings.HasSuffix(name, "Fields") || strings.HasSuffix(name, "OrderBy") {
+		if strings.HasSuffix(strings.ToLower(name), "fields") || strings.HasSuffix(strings.ToLower(name), "orderby") {
 			require.Equal(t, "array", prop.Type, name)
 			require.Equal(t, "string", prop.Items.Type, name)
 		} else {
@@ -132,13 +132,13 @@ func TestRelationSelectorsNativeMCPMatchesHTTP(t *testing.T) {
 		projected                           bool
 	}{
 		{name: "omitted optional selectors", args: map[string]any{}, parents: []int{1, 2, 3}, childCount: 3, detailCount: 2},
-		{name: "child page does not page root", args: map[string]any{"MatchLimit": 1, "MatchPage": 2, "MatchOrderBy": []string{"id DESC"}}, parents: []int{1, 2, 3}, childCount: 1, childIndex: 2, detailCount: 2},
-		{name: "child order is independent", args: map[string]any{"MatchLimit": 1, "MatchOrderBy": []string{"id DESC"}}, parents: []int{1, 2, 3}, childCount: 1, childIndex: 3, detailCount: 2},
-		{name: "root order is independent", args: map[string]any{"Limit": 1, "OrderBy": []string{"id DESC"}, "MatchLimit": 1, "MatchPage": 1}, parents: []int{3}, childCount: 1, childIndex: 1, detailCount: 2},
-		{name: "independent root and child offsets", args: map[string]any{"Limit": 1, "Offset": 1, "MatchLimit": 1, "MatchOffset": 2}, parents: []int{2}, childCount: 1, childIndex: 3, detailCount: 2},
-		{name: "root page child first page", args: map[string]any{"Limit": 1, "Page": 3, "MatchLimit": 1, "MatchPage": 1}, parents: []int{3}, childCount: 1, childIndex: 1, detailCount: 2},
-		{name: "array fields and nested selectors", args: map[string]any{"Fields": []string{"matches"}, "MatchFields": []string{"label", "details"}, "MatchLimit": 1, "MatchOffset": 1, "DetailFields": []string{"label"}, "DetailLimit": 1, "DetailOffset": 1}, parents: []int{1, 2, 3}, childCount: 1, childIndex: 2, detailCount: 1, projected: true},
-		{name: "CSV fields and nested selectors", args: map[string]any{"Fields": "matches", "MatchFields": "label,details", "MatchLimit": 1, "MatchOffset": 1, "DetailFields": "label", "DetailLimit": 1, "DetailOffset": 1}, parents: []int{1, 2, 3}, childCount: 1, childIndex: 2, detailCount: 1, projected: true},
+		{name: "child page does not page root", args: map[string]any{"matchLimit": 1, "matchPage": 2, "matchOrderBy": []string{"id DESC"}}, parents: []int{1, 2, 3}, childCount: 1, childIndex: 2, detailCount: 2},
+		{name: "child order is independent", args: map[string]any{"matchLimit": 1, "matchOrderBy": []string{"id DESC"}}, parents: []int{1, 2, 3}, childCount: 1, childIndex: 3, detailCount: 2},
+		{name: "root order is independent", args: map[string]any{"limit": 1, "orderBy": []string{"id DESC"}, "matchLimit": 1, "matchPage": 1}, parents: []int{3}, childCount: 1, childIndex: 1, detailCount: 2},
+		{name: "independent root and child offsets", args: map[string]any{"limit": 1, "offset": 1, "matchLimit": 1, "matchOffset": 2}, parents: []int{2}, childCount: 1, childIndex: 3, detailCount: 2},
+		{name: "root page child first page", args: map[string]any{"limit": 1, "page": 3, "matchLimit": 1, "matchPage": 1}, parents: []int{3}, childCount: 1, childIndex: 1, detailCount: 2},
+		{name: "array fields and nested selectors", args: map[string]any{"fields": []string{"matches"}, "matchFields": []string{"label", "details"}, "matchLimit": 1, "matchOffset": 1, "detailFields": []string{"label"}, "detailLimit": 1, "detailOffset": 1}, parents: []int{1, 2, 3}, childCount: 1, childIndex: 2, detailCount: 1, projected: true},
+		{name: "CSV fields and nested selectors", args: map[string]any{"fields": "matches", "matchFields": "label,details", "matchLimit": 1, "matchOffset": 1, "detailFields": "label", "detailLimit": 1, "detailOffset": 1}, parents: []int{1, 2, 3}, childCount: 1, childIndex: 2, detailCount: 1, projected: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			query := url.Values{}

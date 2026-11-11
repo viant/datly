@@ -27,7 +27,7 @@ func TestScalarUnionNestedMCPContract(t *testing.T) {
 	plan, err := NewCompiler().Compile(Input{Component: spec.Key{Kind: spec.KindComponent, Scope: "test", Name: "FeeUnion"}, Exposure: &spec.MCPExposure{Kind: spec.MCPExposureTool, Name: "feeUnion"}, Contract: contract})
 	require.NoError(t, err)
 	for _, value := range []any{int64(4237), int64(4241), int64(9007199254740993), "AD_SERVING", "unknown", nil} {
-		args := map[string]any{"Body": map[string]any{"rows": []any{map[string]any{"fee": value}}}}
+		args := map[string]any{"body": map[string]any{"rows": []any{map[string]any{"fee": value}}}}
 		result, err := gojsonschema.Validate(gojsonschema.NewGoLoader(plan.Metadata().InputSchema), gojsonschema.NewGoLoader(args))
 		require.NoError(t, err)
 		require.True(t, result.Valid(), "value=%v: %v", value, result.Errors())

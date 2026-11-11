@@ -49,13 +49,13 @@ func TestMCPEnumScalarArgumentsConvertToOppositeStorageTypes(t *testing.T) {
 		t.Fatal(err)
 	}
 	tool, _ := service.Registry().ToolRegistry.Get("EnumArguments")
-	if tool.Metadata.InputSchema.Properties["Code"]["type"] != "string" || tool.Metadata.InputSchema.Properties["Label"]["type"] != "integer" {
+	if tool.Metadata.InputSchema.Properties["code"]["type"] != "string" || tool.Metadata.InputSchema.Properties["label"]["type"] != "integer" {
 		t.Fatal(tool.Metadata.InputSchema)
 	}
 	for _, tc := range []struct {
 		args  map[string]any
 		valid bool
-	}{{map[string]any{"Code": "active", "Label": 10}, true}, {map[string]any{"Code": 10, "Label": 10}, false}, {map[string]any{"Code": "active", "Label": "10"}, false}} {
+	}{{map[string]any{"code": "active", "label": 10}, true}, {map[string]any{"code": 10, "label": 10}, false}, {map[string]any{"code": "active", "label": "10"}, false}} {
 		before := calls
 		result, rpcErr := tool.Handler(t.Context(), &schema.CallToolRequest{Method: schema.MethodToolsCall, Params: schema.CallToolRequestParams{Name: "EnumArguments", Arguments: tc.args}})
 		failed := rpcErr != nil || result == nil || result.IsError != nil && *result.IsError

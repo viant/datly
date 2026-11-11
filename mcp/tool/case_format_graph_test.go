@@ -37,7 +37,7 @@ func TestExposureCaseFormatRootAndChildSelectors(t *testing.T) {
 	for _, tc := range []struct {
 		format string
 		names  []string
-	}{{"lc", []string{"fields", "limit", "offset", "page", "orderBy", "criteria", "childFields", "childLimit", "childOffset", "childPage", "childOrderBy", "childCriteria", "Exact_Name", "AccountingId"}}, {"", []string{"Fields", "Limit", "Offset", "Page", "OrderBy", "Criteria", "ChildFields", "ChildLimit", "ChildOffset", "ChildPage", "ChildOrderBy", "ChildCriteria", "Exact_Name", "AccountingId"}}} {
+	}{{"lc", []string{"fields", "limit", "offset", "page", "orderBy", "criteria", "childFields", "childLimit", "childOffset", "childPage", "childOrderBy", "childCriteria", "Exact_Name", "AccountingId"}}, {"", []string{"fields", "limit", "offset", "page", "orderBy", "criteria", "childFields", "childLimit", "childOffset", "childPage", "childOrderBy", "childCriteria", "Exact_Name", "AccountingId"}}} {
 		plan, err := NewCompiler().Compile(Input{CaseFormat: tc.format, Contract: contract, Exposure: &spec.MCPExposure{Kind: spec.MCPExposureTool, Name: "GraphSelectors"}})
 		require.NoError(t, err)
 		values := map[string]any{}
@@ -91,7 +91,7 @@ func TestExposureCaseFormatNamedBodyRecursiveBinding(t *testing.T) {
 	}
 	type request struct{ Body struct{ ChildRows []*child } }
 	contract := testRouteContract(t, reflect.TypeFor[request](), []bindly.BindingSpec{{Path: "Body", Location: bindstate.Location{Kind: "body", In: "Body"}}})
-	plan, err := NewCompiler().Compile(Input{CaseFormat: "lc", Contract: contract, Exposure: &spec.MCPExposure{Kind: spec.MCPExposureTool, Name: "Nested"}})
+	plan, err := NewCompiler().Compile(Input{Contract: contract, Exposure: &spec.MCPExposure{Kind: spec.MCPExposureTool, Name: "Nested"}})
 	require.NoError(t, err)
 	require.Contains(t, plan.Metadata().InputSchema.Properties, "body")
 	args := map[string]any{"body": map[string]any{"childRows": []any{map[string]any{"metricId": float64(0), "enabled": false, "note": nil}}}}
@@ -112,10 +112,31 @@ func TestExposureCaseFormatNamedBodyRecursiveBinding(t *testing.T) {
 func TestExposureCaseFormatOutputTypeWithoutPrecompiledPlan(t *testing.T) {
 	type response struct{ ChildRows []struct{ MetricID int } }
 	contract := testRouteContract(t, reflect.TypeFor[struct{}](), nil)
-	plan, err := NewCompiler().Compile(Input{CaseFormat: "lc", Contract: contract, OutputType: reflect.TypeFor[response](), Exposure: &spec.MCPExposure{Kind: spec.MCPExposureTool, Name: "TypedOutput"}})
+	plan, err := NewCompiler().Compile(Input{Contract: contract, OutputType: reflect.TypeFor[response](), Exposure: &spec.MCPExposure{Kind: spec.MCPExposureTool, Name: "TypedOutput"}})
 	require.NoError(t, err)
 	require.NotNil(t, plan.OutputPlan())
 	encoded, err := plan.OutputPlan().Encode(context.Background(), "json", response{})
 	require.NoError(t, err)
 	require.Contains(t, string(encoded.Data), `"childRows"`)
+}
+
+func TestExposureCaseFormatJSONTaggedBodyWinner(t *testing.T) {
+	type row struct {
+		Id    int
+		Other string `json:"id"`
+	}
+	type request struct{ Body row }
+	contract := testRouteContract(t, reflect.TypeFor[request](), []bindly.BindingSpec{{Path: "Body", Location: bindstate.Location{Kind: "body", In: "Body"}}})
+	plan, err := NewCompiler().Compile(Input{Contract: contract, Exposure: &spec.MCPExposure{Kind: spec.MCPExposureTool, Name: "TaggedBody"}})
+	require.NoError(t, err)
+	properties := plan.Metadata().InputSchema.Properties["body"]["properties"].(map[string]any)
+	require.Len(t, properties, 1)
+	require.Equal(t, "string", properties["id"].(map[string]any)["type"])
+	scope, err := plan.Scope(map[string]any{"body": map[string]any{"id": "winner"}})
+	require.NoError(t, err)
+	defer scope.Close()
+	value, found, err := scope.Body().Locate(nil).Value(context.Background(), reflect.TypeFor[row](), "Body")
+	require.NoError(t, err)
+	require.True(t, found)
+	require.Equal(t, row{Other: "winner"}, value)
 }
