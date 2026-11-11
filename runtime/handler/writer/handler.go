@@ -1147,6 +1147,10 @@ func (p *Program) captureOriginalAt(record *Record, rows reflect.Value, parent *
 	}
 	for i := 0; i < rows.Len(); i++ {
 		entity := rows.Index(i)
+		if entity.Kind() == reflect.Struct {
+			// Keep identity tied to the original slice element, not a copied record.
+			entity = entity.Addr()
+		}
 		if entity.IsNil() {
 			if p.skipAuxiliaryNull(record, indexed) || p.deferRootNull(record, i, indexed) || p.deferNestedNull(record, p.rowLocation(record, parent, i, indexed), indexed) {
 				continue
