@@ -33,11 +33,16 @@ func TestPreparedColumnsGenerateReaderAndExposureWriter(t *testing.T) {
 			groups := operation == "get"
 			columns := preparedRuleColumns(groups)
 			body := "#define($_ = $Items<[]*Record>(output/view))"
-			if !groups {
+			if groups {
+				body += "\n#define($_ = $Meta<MetaView>(output/summary) /* SELECT COUNT(*) AS count FROM ($View.Records.NonWindowSQL) parent */)"
+			} else {
 				body = "#define($_ = $Data<[]*Record>(output/body))"
 			}
 			text := "#package('records')\n#setting($_ = $input_type('RecordsInput'))\n#setting($_ = $output_type('RecordsOutput'))\n#setting($_ = $route('/records','" + strings.ToUpper(operation) + "'))\n#setting($_ = $connector('catalog'))\n" + body + "\nSELECT r.*, type(r,'Record') FROM rules r"
 			source := &Source{Name: "Records", Scope: "example.com/generated/source", Text: text, PreparedColumns: func(_ context.Context, request column.PreparedColumnRequest) (*column.PreparedColumnResult, error) {
+				if strings.Contains(request.Source.SQL, "$View.Records.NonWindowSQL") {
+					return &column.PreparedColumnResult{Columns: []*spec.Column{{Name: "count", Type: spec.TypeRef{Name: "int"}}}}, nil
+				}
 				if request.Connector != "catalog" || !strings.Contains(request.Source.SQL, "rules") {
 					t.Fatalf("unexpected prepared source: %+v", request)
 				}
@@ -65,6 +70,9 @@ func TestPreparedColumnsGenerateReaderAndExposureWriter(t *testing.T) {
 			}
 			if groups && !strings.Contains(string(before), "Groups") {
 				t.Fatal("optional group column missing")
+			}
+			if groups && (!strings.Contains(string(before), "MetaView") || !strings.Contains(string(before), "Count")) {
+				t.Fatal("prepared summary lost its typed fields")
 			}
 			if !groups && strings.Contains(string(before), "Groups") {
 				t.Fatal("exposure writer gained group column")

@@ -9,6 +9,7 @@ import (
 
 	"github.com/viant/datly/spec"
 	dsql "github.com/viant/datly/sql"
+	sqlmacro "github.com/viant/datly/sql/macro"
 	"github.com/viant/datly/typecatalog"
 	sqlio "github.com/viant/sqlx/io"
 )
@@ -46,8 +47,8 @@ func RefinePrepared(ctx context.Context, component *spec.Component, resources fs
 	}
 	inputs := newAnalysisInputs(component, resolver)
 	visited := map[*spec.View]bool{}
-	var visit func(*spec.View, string) error
-	visit = func(view *spec.View, connector string) error {
+	var visit func(*spec.View, string, string, []string) error
+	visit = func(view *spec.View, connector, parentSQL string, parentAliases []string) error {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
@@ -55,6 +56,7 @@ func RefinePrepared(ctx context.Context, component *spec.Component, resources fs
 			return nil
 		}
 		visited[view] = true
+		var analysisSQL string
 		if view.Source != nil {
 			source := view.Source.Clone()
 			if source.Bindings != nil && strings.TrimSpace(source.Bindings.Connector) != "" {
@@ -67,10 +69,24 @@ func RefinePrepared(ctx context.Context, component *spec.Component, resources fs
 				source.SQL = "SELECT * FROM " + source.Table
 			}
 			if strings.TrimSpace(source.SQL) != "" {
-				SQL, err := projectionAnalysisSQL(source.SQL, inputs)
+				// Reuse native parent-query macro handling on the private analysis
+				// copy. Prepared metadata never evaluates a request or rewrites SQL
+				// retained by the component or supplied to the trusted resolver.
+				candidate := source.SQL
+				if len(sqlmacro.NonWindowSQLAccesses(candidate)) != 0 {
+					if parentSQL == "" {
+						return fmt.Errorf("prepared projection %s requires parent SQL", view.Namespace)
+					}
+					if err := sqlmacro.ValidateNonWindowSQLAliases(candidate, parentAliases...); err != nil {
+						return fmt.Errorf("prepared projection %s: %w", view.Namespace, err)
+					}
+					candidate, _ = sqlmacro.ExpandNonWindowSQL(candidate, parentSQL, parentAliases...)
+				}
+				SQL, err := projectionAnalysisSQL(candidate, inputs)
 				if err != nil {
 					return fmt.Errorf("prepared projection %s: %w", view.Namespace, err)
 				}
+				analysisSQL = SQL
 				metadata, err := resolve(ctx, PreparedColumnRequest{Component: component.Key, View: view.Key, Name: view.CanonicalName(), Namespace: view.Namespace, Connector: connector, Source: source.Clone()})
 				if err != nil {
 					return err
@@ -148,9 +164,13 @@ func RefinePrepared(ctx context.Context, component *spec.Component, resources fs
 				}
 			}
 		}
+		aliases := templateAliases(view)
+		if view == component.RootView {
+			aliases = appendAlias(aliases, component.Name)
+		}
 		for _, relation := range view.Relations {
 			if relation != nil {
-				if err := visit(relation.View, connector); err != nil {
+				if err := visit(relation.View, connector, analysisSQL, aliases); err != nil {
 					return err
 				}
 			}
@@ -161,11 +181,11 @@ func RefinePrepared(ctx context.Context, component *spec.Component, resources fs
 	if component.Settings != nil {
 		connector = component.Settings.DefaultConnector
 	}
-	if err := visit(component.RootView, connector); err != nil {
+	if err := visit(component.RootView, connector, "", nil); err != nil {
 		return err
 	}
 	for _, view := range component.Views {
-		if err := visit(view, connector); err != nil {
+		if err := visit(view, connector, "", nil); err != nil {
 			return err
 		}
 	}

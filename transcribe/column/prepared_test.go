@@ -5,8 +5,45 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/require"
 	"github.com/viant/datly/spec"
 )
+
+func TestPreparedSummaryUsesParentSQLWithoutChangingAuthoredSource(t *testing.T) {
+	rootSQL := "SELECT r.id FROM records r"
+	summarySQL := "SELECT CASE WHEN $View.Limit > 0 THEN COUNT(*) ELSE 0 END AS CNT FROM ($View.Users.NonWindowSQL) parent"
+	for _, alias := range []string{"Users", "", "Wrong"} {
+		t.Run("alias="+alias, func(t *testing.T) {
+			SQL := strings.ReplaceAll(summarySQL, "$View.Users.NonWindowSQL", "$View.NonWindowSQL")
+			if alias != "" {
+				SQL = strings.ReplaceAll(SQL, "$View.NonWindowSQL", "$View."+alias+".NonWindowSQL")
+			}
+			summary := &spec.View{Name: "Totals", Namespace: "t", Source: &spec.ViewSource{SQL: SQL}}
+			root := &spec.View{Name: "Users", Namespace: "r", Source: &spec.ViewSource{SQL: rootSQL}, Relations: []*spec.Relation{{Kind: spec.RelationKindDerived, Holder: "Totals", View: summary}}}
+			component := &spec.Component{Name: "Users", RootView: root}
+			calls := 0
+			err := RefinePrepared(t.Context(), component, nil, func(_ context.Context, request PreparedColumnRequest) (*PreparedColumnResult, error) {
+				calls++
+				name := "id"
+				if request.Name == "Totals" {
+					name = "CNT"
+					require.Equal(t, SQL, request.Source.SQL, "resolver sees detached authored SQL")
+				}
+				return &PreparedColumnResult{Columns: []*spec.Column{{Name: name, Type: spec.TypeRef{Name: "int"}}}}, nil
+			}, nil)
+			if alias == "Wrong" {
+				require.ErrorContains(t, err, "unknown parent view alias")
+				require.Equal(t, 1, calls)
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, 2, calls, "one prepared metadata lookup per view; no database resolver")
+			require.Len(t, summary.Columns, 1)
+			require.Equal(t, SQL, summary.Source.SQL)
+			require.Equal(t, rootSQL, root.Source.SQL)
+		})
+	}
+}
 
 func TestPreparedColumnsRejectDriftAndRetainSQL(t *testing.T) {
 	for _, tc := range []struct {
