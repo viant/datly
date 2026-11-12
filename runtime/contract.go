@@ -18,6 +18,9 @@ type contractPlanEntry struct {
 	once          sync.Once
 	input, output *rcontract.Plan
 	err           error
+	proofMu       sync.Mutex
+	proofReady    bool
+	proof         *contractBindingProof
 }
 
 // ResolveContract runs linked contract hooks using this generation's native
@@ -47,17 +50,9 @@ func (r *Runtime) resolveContract(ctx context.Context, target dexec.ComponentTar
 	if _, ok := entry.Input.ForRoute(target.Route); !ok {
 		return nil, fmt.Errorf("contract route is not registered: %s", target.Route.String())
 	}
-	key := contractPlanKey{component: entry, route: target.Route.String()}
-	stored, _ := r.contractPlans.LoadOrStore(key, &contractPlanEntry{})
-	plans := stored.(*contractPlanEntry)
-	plans.once.Do(func() {
-		plans.input, plans.err = rcontract.New(entry.Input.Type(), 64)
-		if plans.err == nil && entry.OutputType != nil {
-			plans.output, plans.err = rcontract.New(entry.OutputType, 64)
-		}
-	})
-	if plans.err != nil {
-		return nil, plans.err
+	plans, err := r.contractPlansFor(entry, target.Route.String())
+	if err != nil {
+		return nil, err
 	}
 	result := &dexec.EffectiveContract{Input: entry.Input.Type(), Output: entry.OutputType}
 	result.Dynamic = plans.input.Dynamic() || plans.output != nil && plans.output.Dynamic()
@@ -83,7 +78,13 @@ func (r *Runtime) resolveContract(ctx context.Context, target dexec.ComponentTar
 	if err != nil {
 		return nil, err
 	}
-	binder := entry.ContractState.Binder(providers)
+	bindings, _ := ctx.Value(contractBindingsKey{}).(*contractBindings)
+	if bindings == nil || bindings.owner != r {
+		bindings = newContractBindings(r)
+		ctx = context.WithValue(ctx, contractBindingsKey{}, bindings)
+	}
+	result.BindingState = bindings
+	binder := entry.ContractState.Binder(&contractStateBinder{Binder: providers, runtime: r, scope: &contractSourceScope{protocol: scope}, values: bindings})
 	result.InputRepresentation, err = plans.input.ResolveRepresentation(ctx, binder)
 	if err != nil {
 		return nil, err
@@ -95,4 +96,20 @@ func (r *Runtime) resolveContract(ctx context.Context, target dexec.ComponentTar
 		}
 	}
 	return result, nil
+}
+
+func (r *Runtime) contractPlansFor(entry *RegisteredComponent, route string) (*contractPlanEntry, error) {
+	key := contractPlanKey{component: entry, route: route}
+	stored, _ := r.contractPlans.LoadOrStore(key, &contractPlanEntry{})
+	plans := stored.(*contractPlanEntry)
+	plans.once.Do(func() {
+		plans.input, plans.err = rcontract.New(entry.Input.Type(), 64)
+		if plans.err == nil && entry.OutputType != nil {
+			plans.output, plans.err = rcontract.New(entry.OutputType, 64)
+		}
+	})
+	if plans.err != nil {
+		return nil, plans.err
+	}
+	return plans, nil
 }

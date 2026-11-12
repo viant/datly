@@ -16,6 +16,9 @@ type EffectiveContract struct {
 	// Representations are immutable opt-in metadata over the linked types.
 	InputRepresentation  *shape.Representation
 	OutputRepresentation *shape.Representation
+	// BindingState is an invocation-owned, opaque native binding handoff. It is
+	// never wire metadata and must not be retained in a generation-level cache.
+	BindingState any `json:"-" mcp:"-"`
 }
 
 // ContractResolver resolves metadata in the caller's native provider scope.
@@ -31,7 +34,8 @@ type contractCapture struct {
 }
 
 // CaptureContracts installs transport-owned contract evidence for one request.
-// It contains only types, not caller data or policy callbacks.
+// It retains effective metadata and its operation-local binding handoff. Runtime
+// completion releases resolved values; policy callbacks are never retained.
 func CaptureContracts(ctx context.Context) context.Context {
 	return context.WithValue(ctx, contractCaptureKey{}, &contractCapture{values: map[ComponentTarget]EffectiveContract{}})
 }

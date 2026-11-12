@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"github.com/viant/bindly"
 	requestprovider "github.com/viant/bindly/provider/request"
 	"github.com/viant/datly/exec"
 	"github.com/viant/datly/internal/testharness"
@@ -40,6 +41,25 @@ func TestContractDeclaredFailureUsesToolErrorResult(t *testing.T) {
 	result := execution.ToolResult()
 	require.True(t, *result.IsError)
 	require.Equal(t, body, testharness.StructuredObject(t, result.StructuredContent))
+	require.Zero(t, backend.calls)
+	require.False(t, prepared)
+}
+
+func TestContractDependencyFailurePreservesTypedCause(t *testing.T) {
+	cause := errors.New("private dependency diagnostic")
+	backend := &contractFailureInvoker{failure: fmt.Errorf("contract: %w", &bindly.BindingError{Path: "Auth", Code: 503, Cause: cause})}
+	invoker := New(Config{Invoker: backend})
+	prepared := false
+	execution, rpc := invoker.Execute(t.Context(), Request{Target: exec.ComponentTarget{Component: spec.Key{Kind: spec.KindComponent, Name: "Reader"}, Route: spec.RouteRef{Method: "GET", Path: "/reader"}}, Method: "GET", URI: "/reader", PrepareScope: func(*exec.EffectiveContract) (*requestprovider.Scope, error) { prepared = true; return nil, nil }})
+	require.Nil(t, rpc)
+	require.NotNil(t, execution)
+	require.ErrorIs(t, execution.Error(), cause)
+	require.Equal(t, 503, execution.StatusCode())
+	result := execution.ToolResult()
+	require.True(t, *result.IsError)
+	object := testharness.StructuredObject(t, result.StructuredContent)
+	require.EqualValues(t, 503, object["status"])
+	require.Equal(t, "Service Unavailable", object["message"])
 	require.Zero(t, backend.calls)
 	require.False(t, prepared)
 }

@@ -414,13 +414,55 @@ func (r *Runtime) invokeComponent(ctx context.Context, request dexec.ComponentRe
 		return nil, err
 	}
 	var effectiveContract *dexec.EffectiveContract
-	if selected, ok := dexec.SelectedContract(ctx, target); ok && len(stack) == 0 {
+	bindings, _ := ctx.Value(contractBindingsKey{}).(*contractBindings)
+	selected, selectedOK := dexec.SelectedContract(ctx, target)
+	ownsBindings := false
+	var contractSources *contractSourceScope
+	if len(stack) == 0 {
+		bindings, _ = selected.BindingState.(*contractBindings)
+		if bindings != nil && bindings.owner == r && bindings.claim() {
+			ownsBindings = true
+			contractSources = &contractSourceScope{protocol: effectiveScope}
+			valid, proofErr := bindings.matches(ctx, contractSources)
+			if proofErr != nil {
+				bindings.close()
+				return nil, proofErr
+			}
+			if !valid {
+				selectedOK = false
+				bindings.close()
+				bindings = nil
+				ownsBindings = false
+			}
+		} else {
+			bindings = nil
+			if selected.Dynamic {
+				selectedOK = false
+			}
+		}
+		// A context reused by a host must not carry a completed operation's values.
+		ctx = context.WithValue(ctx, contractBindingsKey{}, bindings)
+	}
+	if selectedOK && len(stack) == 0 {
 		effectiveContract = &selected
 	} else {
 		effectiveContract, err = r.resolveContract(ctx, target, effectiveScope, false)
 		if err != nil {
+			if ownsBindings {
+				bindings.close()
+			}
 			return nil, err
 		}
+	}
+	if prepared, ok := effectiveContract.BindingState.(*contractBindings); ok && prepared.owner == r {
+		bindings = prepared
+		if len(stack) == 0 && !ownsBindings {
+			ownsBindings = bindings.claim()
+		}
+		ctx = context.WithValue(ctx, contractBindingsKey{}, bindings)
+	}
+	if ownsBindings {
+		defer bindings.close()
 	}
 	if effectiveContract.Input != inputRoute.Type() || effectiveContract.InputRepresentation != nil {
 		if effectiveContract.InputRepresentation != nil {
@@ -430,6 +472,27 @@ func (r *Runtime) invokeComponent(ctx context.Context, request dexec.ComponentRe
 		}
 		if err != nil {
 			return nil, err
+		}
+	}
+	if bindings != nil && bindings.hasValues() && resolvedInput == nil && request.Input == nil && request.Replay == nil {
+		var specs []bindly.BindingSpec
+		grouped := false
+		for _, field := range inputRoute.Fields() {
+			binding := field.Binding()
+			grouped = grouped || binding.ResolutionGroup != nil
+			specs = append(specs, binding)
+		}
+		if !grouped {
+			if contractSources == nil {
+				contractSources = &contractSourceScope{protocol: effectiveScope}
+			}
+			resolvedInput, resolvedPaths, err = bindings.resolved(ctx, inputRoute.Plan(), specs, contractSources)
+			if err != nil {
+				return nil, err
+			}
+			if len(resolvedPaths) == 0 {
+				resolvedInput = nil
+			}
 		}
 	}
 	dexec.PublishContract(ctx, target, effectiveContract)

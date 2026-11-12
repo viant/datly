@@ -11,7 +11,6 @@ import (
 	"github.com/viant/mcp-protocol/authorization"
 	xexec "github.com/viant/xdatly/exec"
 	xmcp "github.com/viant/xdatly/handler/mcp"
-	"github.com/viant/xdatly/response"
 )
 
 // OutputEncoder applies a compiled presentation contract without exposing its
@@ -89,14 +88,18 @@ func (i *Invoker) Execute(ctx context.Context, request Request) (*Execution, *js
 			effective, err = resolver.ResolveContract(ctx, request.Target, authScope)
 			authScope.Close()
 			if err != nil {
-				if _, declared := response.ErrorBody(err); declared {
-					var encodeError OutputEncoder
-					if i.errorOutput != nil {
-						encodeError = i.errorOutput(request.Target)
-					}
-					return &Execution{err: err, context: execContext, encodingContext: ctx, encodeErrorOutput: encodeError}, nil
+				// Contract dependencies use the same typed execution error path
+				// as business invocation. Preserve private causes and status;
+				// ToolResult owns public sanitization and explicit BodyError.
+				var encodeError OutputEncoder
+				if i.errorOutput != nil {
+					encodeError = i.errorOutput(request.Target)
 				}
-				return nil, jsonrpc.NewInvalidRequest("MCP contract authorization or preparation failed", nil)
+				var projectError ErrorProjector
+				if i.declaredError != nil {
+					projectError = i.declaredError(request.Target)
+				}
+				return &Execution{err: err, context: execContext, encodingContext: ctx, encodeErrorOutput: encodeError, projectError: projectError}, nil
 			}
 			exec.PublishContract(ctx, request.Target, effective)
 		}
