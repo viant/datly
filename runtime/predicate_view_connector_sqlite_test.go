@@ -13,6 +13,7 @@ import (
 
 	"github.com/viant/bindly/locator"
 	"github.com/viant/datly/bootstrap"
+	dexec "github.com/viant/datly/exec"
 	"github.com/viant/datly/internal/testharness"
 	"github.com/viant/datly/runtime/registry"
 	"github.com/viant/datly/spec"
@@ -66,9 +67,11 @@ func (p *lookupScopePredicate) Compute(ctx context.Context, value any) (*xpredic
 }
 
 type lazyLookupInput struct {
-	Actor int              `parameter:"Actor,kind=query,in=actor,required" predicate:"handler,applyWhenAbsent=true,example.LazyLookupScope"`
-	Scope []lookupScopeRow `parameter:"Scope,kind=view,in=Scope,scope=authorization"`
+	Actor int                 `parameter:"Actor,kind=query,in=actor,required" predicate:"handler,applyWhenAbsent=true,example.LazyLookupScope"`
+	Scope []lookupScopeRow    `parameter:"Scope,kind=view,in=Scope,scope=authorization"`
+	Has   *lazyLookupInputHas `setMarker:"true"`
 }
+type lazyLookupInputHas struct{ Actor, Scope bool }
 type lazyLookupScopePredicate struct {
 	Binder xhandler.Binder `bind:"kind=binder,required"`
 }
@@ -185,6 +188,33 @@ func testReaderPredicateView(t *testing.T, lazy bool) {
 				t.Fatalf("expected one scope and one fact read; got %d, %d", scopeReads.Load()-beforeScope, factReads.Load()-beforeFacts)
 			}
 		})
+	}
+	if lazy {
+		for _, actor := range []int{10, 20, 30, 0} {
+			beforeScope, beforeFacts := scopeReads.Load(), factReads.Load()
+			seed := &lazyLookupInput{Actor: actor, Scope: []lookupScopeRow{{Tenant: 999}}, Has: &lazyLookupInputHas{Actor: true, Scope: true}}
+			actual, err := service.InvokeComponent(ctx, dexec.ComponentRequest{Target: dexec.ComponentTarget{Component: artifact.Component.Key, Route: spec.RouteRef{Method: http.MethodGet, Path: "/scoped-records"}}, Input: seed})
+			if err != nil {
+				t.Fatalf("typed actor %d: %v", actor, err)
+			}
+			want := []row{}
+			if actor == 10 {
+				want = []row{{1}, {2}}
+			} else if actor == 20 {
+				want = []row{{3}}
+			}
+			got := actual.(*output).Data
+			if len(got) != len(want) || len(got) > 0 && !reflect.DeepEqual(got, want) {
+				t.Fatalf("typed actor %d returned %v, want %v", actor, got, want)
+			}
+			wantScope := int32(1)
+			if actor == 0 {
+				wantScope = 0
+			}
+			if scopeReads.Load()-beforeScope != wantScope || factReads.Load()-beforeFacts != 1 {
+				t.Fatalf("typed actor %d repeated or eagerly bound scope: scope=%d facts=%d", actor, scopeReads.Load()-beforeScope, factReads.Load()-beforeFacts)
+			}
+		}
 	}
 	if err := directory.ExecStatements(ctx, "DROP TABLE scope_rows"); err != nil {
 		t.Fatal(err)

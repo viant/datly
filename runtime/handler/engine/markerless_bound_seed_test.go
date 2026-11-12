@@ -258,7 +258,7 @@ func TestMarkerlessBoundSeedNilAncestorIsNotAllocatedBySeedInspection(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	plan, err := boundSupplementalPlan(injector, contract, in)
+	plan, err := boundSupplementalPlan(injector, contract, in, false)
 	if err != nil || plan == nil || in.Nested != nil {
 		t.Fatalf("missing ancestor allocated/treated as seed: %+v plan%v err%v", in, plan, err)
 	}
