@@ -8,10 +8,15 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/viant/authz"
+	"github.com/viant/bindly/locator"
+	requestprovider "github.com/viant/bindly/provider/request"
+	dexec "github.com/viant/datly/exec"
 	"github.com/viant/datly/spec"
+	xresponse "github.com/viant/xdatly/response"
 )
 
 // AuthorizationConfig opts all HTTP dispatch into a default authz policy.
@@ -38,6 +43,30 @@ type AuthorizationProvider func(context.Context, *http.Request) (context.Context
 var ErrUnauthenticated = errors.New("HTTP authentication required")
 
 type authorizationFactsKey struct{}
+type authorizationInvokerKey struct{}
+
+// AuthorizationComponentInvoker supplies native component invocation to a trusted
+// identity hook. It is bound to this request's generation and header/query inputs;
+// it never dispatches HTTP or reads the endpoint's request body.
+func AuthorizationComponentInvoker(ctx context.Context) dexec.ComponentInvoker {
+	invoker, _ := ctx.Value(authorizationInvokerKey{}).(dexec.ComponentInvoker)
+	return invoker
+}
+
+type authorizationComponentInvoker struct {
+	owner     dexec.ComponentInvoker
+	request   *http.Request
+	once      sync.Once
+	providers []locator.Provider
+}
+
+func (i *authorizationComponentInvoker) InvokeComponent(ctx context.Context, request dexec.ComponentRequest) (any, error) {
+	i.once.Do(func() {
+		i.providers = requestprovider.NewValues(requestprovider.WithHeaders(i.request.Header), requestprovider.WithQuery(i.request.URL.Query())).Providers()
+	})
+	request.Providers = append(append([]locator.Provider(nil), i.providers...), request.Providers...)
+	return i.owner.InvokeComponent(ctx, request)
+}
 
 // AuthorizationFacts exposes the immutable verified snapshot for this request.
 // It is not a resource authorization decision.
@@ -150,7 +179,8 @@ func (h *Handler) authorizeHTTP(req *http.Request) (*http.Request, error) {
 	if policy.Mode == "public" {
 		return req, nil
 	}
-	ctx, facts, err := g.provider(req.Context(), req)
+	hookContext := context.WithValue(req.Context(), authorizationInvokerKey{}, &authorizationComponentInvoker{owner: h.runtime, request: req})
+	ctx, facts, err := g.provider(hookContext, req.WithContext(hookContext))
 	if err != nil {
 		return req, err
 	}
@@ -188,6 +218,9 @@ func authorizationErrorStatus(err error) int {
 	case errors.Is(err, authz.ErrDenied):
 		return http.StatusForbidden
 	default:
+		if code := xresponse.ErrorStatusCode(err, 0); code >= 400 && code <= 599 {
+			return code
+		}
 		return http.StatusServiceUnavailable
 	}
 }

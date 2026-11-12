@@ -103,3 +103,26 @@ On one Apple M5 Max run, the full status-handler benchmark measured approximatel
 3.1 microseconds disabled and 7.7 microseconds protected with a local fixture
 provider (14 versus 24 allocations). This measures HTTP handling and serialization,
 not network identity latency, database retrieval, or deployed service behavior.
+
+## In-process identity components
+
+The same hook can bind a linked component instead of making an HTTP call:
+
+```go
+invoker := gateway.AuthorizationComponentInvoker(ctx)
+result, err := invoker.InvokeComponent(ctx, exec.ComponentRequest{
+    Target: exec.ComponentTarget{
+        Component: spec.Key{Kind: spec.KindComponent, Scope: "example.com/app/identity", Name: "Identity"},
+        Route: spec.RouteRef{Method: "GET", Path: "/internal/identity"},
+    },
+})
+```
+
+The invoker is bound to the current request generation and supplies native header
+and query providers. A component can declare a verified JWT input and ordinary
+component/context dependencies; binding, validation and database access stay with
+those native owners. The hook maps the typed result to `authz.Facts`. Mark an
+identity-only component internal to omit it from public HTTP/MCP catalogs.
+Invocation does not recursively enter HTTP dispatch, and it does not consume the
+protected endpoint's request body. Body-dependent business authorization remains
+with that endpoint. External identity providers continue to use the same hook.
