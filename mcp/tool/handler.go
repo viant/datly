@@ -49,6 +49,10 @@ func (h *Handler) Handle(ctx context.Context, request *schema.CallToolRequest) (
 	if h.requireBinding || h.binding != nil {
 		return nil, jsonrpc.NewInvalidParamsError("MCP component wire binding is unsupported; declare component identity on the resource or datasource", nil)
 	}
+	selected, selectErr := h.plan.SelectPath(request.Params.Arguments)
+	if selectErr != nil {
+		return nil, jsonrpc.NewInvalidParamsError(selectErr.Error(), nil)
+	}
 	var scope *requestprovider.Scope
 	defer func() {
 		if scope != nil {
@@ -56,9 +60,9 @@ func (h *Handler) Handle(ctx context.Context, request *schema.CallToolRequest) (
 		}
 	}()
 	execution, protocolErr := h.invoker.Execute(ctx, invocation.Request{
-		Target: h.plan.Target(), Method: schema.MethodToolsCall, URI: h.plan.Target().String(),
+		Target: selected.Target(), Method: schema.MethodToolsCall, URI: selected.Target().String(),
 		PrepareScope: func(effective *exec.EffectiveContract) (*requestprovider.Scope, error) {
-			plan, err := h.plan.EffectivePlan(effective)
+			plan, err := selected.EffectivePlan(effective)
 			if err != nil {
 				return nil, err
 			}

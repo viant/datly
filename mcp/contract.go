@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"github.com/viant/datly/mcp/invocation"
+	"github.com/viant/datly/mcp/tool"
 	"github.com/viant/mcp-protocol/schema"
 )
 
@@ -30,10 +31,26 @@ func (s *Service) DescribeTool(ctx context.Context, metadata schema.Tool) (schem
 	if err != nil {
 		return schema.Tool{}, false, err
 	}
+	dynamic := effective.Dynamic
+	for _, variant := range plan.PathVariants() {
+		selected, e := s.contractResolver.ResolveContract(ctx, variant.Plan.Target(), scope)
+		if e != nil {
+			return schema.Tool{}, false, e
+		}
+		alternative, e := variant.Plan.EffectiveMetadata(selected)
+		if e != nil {
+			return schema.Tool{}, false, e
+		}
+		updated, e = tool.MergePathMetadata(updated, alternative)
+		if e != nil {
+			return schema.Tool{}, false, e
+		}
+		dynamic = dynamic || selected.Dynamic
+	}
 	metadata.InputSchema = updated.InputSchema
 	// The upstream handler may have removed output schema for an old protocol.
 	if metadata.OutputSchema != nil {
 		metadata.OutputSchema = updated.OutputSchema
 	}
-	return metadata, effective.Dynamic, nil
+	return metadata, dynamic, nil
 }

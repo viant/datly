@@ -13,7 +13,7 @@ func (p *Plan) EffectiveMetadata(effective *exec.EffectiveContract) (schema.Tool
 		return schema.Tool{}, err
 	}
 	result := p.Metadata()
-	updated := compiled.Metadata()
+	updated := cloneTool(compiled.metadata)
 	result.InputSchema = updated.InputSchema
 	result.OutputSchema = updated.OutputSchema
 	return result, nil

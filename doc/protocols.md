@@ -52,6 +52,23 @@ Verify the active inputs on each route; base and path variants can be enabled
 separately through the supported metadata. Exposing an MCP tool does not install
 a developer-MCP authoring service.
 
+For a single public read tool covering collection and identity lookups, set
+`pathMcpEnabled:"false"` on the existing `WithURI` parameter:
+
+```sql
+#setting($_ = $mcp('get_things', 'Retrieve authorized things'))
+#define($_ = $Id<[]int>(path/id).WithURI('/{id}').WithTag('pathMcpEnabled:"false"'))
+```
+
+The GET tool publishes the identity argument as optional. Omission selects the
+collection input contract; supplying a nonempty identity selects the existing
+path input contract. Native binding and authorization execute for that selected
+route. The argument keeps its declared scalar or array type and MCP name/aliases.
+Null or empty identities are rejected rather than becoming unfiltered reads.
+HTTP paths, query parameters and predicates retain their existing bindings.
+Without this annotation, separately named path tools retain their existing
+behavior. This consolidation applies to GET tools only.
+
 MCP defaults to lowerCamel for implicit member names throughout native input
 and output graphs, including root and nested query selectors. Its `caseFormat`
 option overrides that default independently of HTTP formatting. Explicit field

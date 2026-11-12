@@ -69,6 +69,7 @@ func (a Argument) Example() string     { return a.example }
 
 // Plan is one immutable exact-route MCP tool plan.
 type Plan struct {
+	variants        []PathVariant
 	compilerInput   Input
 	strictArguments bool
 	metadata        schema.Tool
@@ -83,7 +84,11 @@ func (p *Plan) Metadata() schema.Tool {
 	if p == nil {
 		return schema.Tool{}
 	}
-	return cloneTool(p.metadata)
+	result := cloneTool(p.metadata)
+	for _, variant := range p.variants {
+		result, _ = MergePathMetadata(result, variant.Plan.Metadata())
+	}
+	return result
 }
 
 func (p *Plan) Target() exec.ComponentTarget {

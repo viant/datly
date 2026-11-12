@@ -141,6 +141,9 @@ func (c *serviceCompiler) plans(components []*registry.RegisteredComponent) (*co
 				return nil, err
 			}
 		}
+		if err := c.compilePathVariants(result, toolCompiler, registered); err != nil {
+			return nil, err
+		}
 	}
 	return result, nil
 }
@@ -311,7 +314,11 @@ func (c *serviceCompiler) publish(ctx context.Context, catalog *Catalog, policy 
 	}
 	for _, name := range catalog.names {
 		plan, _ := catalog.Tool(name)
-		handler := tool.NewHandler(plan, newInvoker(func(exec.ComponentTarget) *output.Plan { return plan.OutputPlan() }, true))
+		toolOutputs := map[string]*output.Plan{plan.Target().String(): plan.OutputPlan()}
+		for _, variant := range plan.PathVariants() {
+			toolOutputs[variant.Plan.Target().String()] = variant.Plan.OutputPlan()
+		}
+		handler := tool.NewHandler(plan, newInvoker(func(target exec.ComponentTarget) *output.Plan { return toolOutputs[target.String()] }, true))
 		metadata := plan.Metadata()
 		if c.config.ToolMetadata != nil {
 			values, err := c.config.ToolMetadata(ctx, plan.Target())
