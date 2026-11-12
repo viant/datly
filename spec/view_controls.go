@@ -44,6 +44,8 @@ const (
 	ViewControlSelectorFilterable         = "selector_filterable"
 	ViewControlSelectorNamespace          = "selector_namespace"
 	ViewControlSelectorSQLMethods         = "selector_sql_methods"
+
+	ViewControlSelectorRequireLimitForOffset = "selector_require_limit_for_offset"
 )
 
 // ViewControls are the query-shaping controls derived from authored SQL-ish

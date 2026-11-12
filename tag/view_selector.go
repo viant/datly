@@ -48,6 +48,10 @@ func (v *View) applySelectorOption(key, value string) (bool, error) {
 		parsed, err := parseBool(key, value)
 		v.ensureSelector().NoLimit = parsed
 		return true, err
+	case "selectorrequirelimitforoffset":
+		parsed, err := parseBool(key, value)
+		v.ensureSelector().RequireLimitForOffset = parsed
+		return true, err
 	case "selectororderbycolumns":
 		aliases, err := parseFieldPathMap(value)
 		v.ensureSelector().OrderAliases = aliases

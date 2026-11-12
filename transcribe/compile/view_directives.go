@@ -74,7 +74,7 @@ func parseViewDirective(item *query.Item) (viewDirective, bool, error) {
 		spec.ViewControlConcurrency, spec.ViewControlEntityHooks,
 		spec.ViewControlSelectorFields, spec.ViewControlSelectorOrderBy, spec.ViewControlSelectorCriteria,
 		spec.ViewControlSelectorLimit, spec.ViewControlSelectorOffset, spec.ViewControlSelectorPage,
-		spec.ViewControlSelectorDefaultOrder, spec.ViewControlSelectorDefaultLimit, spec.ViewControlSelectorNoLimit,
+		spec.ViewControlSelectorDefaultOrder, spec.ViewControlSelectorDefaultLimit, spec.ViewControlSelectorNoLimit, spec.ViewControlSelectorRequireLimitForOffset,
 		spec.ViewControlSelectorFilterable, spec.ViewControlSelectorNamespace, spec.ViewControlSelectorSQLMethods:
 	default:
 		return viewDirective{}, false, nil
@@ -183,7 +183,7 @@ func containsViewDirective(source node.Node) bool {
 			spec.ViewControlConcurrency, spec.ViewControlEntityHooks,
 			spec.ViewControlSelectorFields, spec.ViewControlSelectorOrderBy, spec.ViewControlSelectorCriteria,
 			spec.ViewControlSelectorLimit, spec.ViewControlSelectorOffset, spec.ViewControlSelectorPage,
-			spec.ViewControlSelectorDefaultOrder, spec.ViewControlSelectorDefaultLimit, spec.ViewControlSelectorNoLimit,
+			spec.ViewControlSelectorDefaultOrder, spec.ViewControlSelectorDefaultLimit, spec.ViewControlSelectorNoLimit, spec.ViewControlSelectorRequireLimitForOffset,
 			spec.ViewControlSelectorFilterable, spec.ViewControlSelectorNamespace, spec.ViewControlSelectorSQLMethods:
 			return true
 		}
@@ -312,7 +312,7 @@ func viewDirectiveValue(name string, argument int, source node.Node) (string, bo
 		switch name {
 		case spec.ViewControlUseConnector, spec.ViewControlUseCache, spec.ViewControlCacheWarmup:
 		case spec.ViewControlSelectorFields, spec.ViewControlSelectorOrderBy, spec.ViewControlSelectorCriteria,
-			spec.ViewControlSelectorLimit, spec.ViewControlSelectorOffset, spec.ViewControlSelectorPage, spec.ViewControlSelectorNoLimit:
+			spec.ViewControlSelectorLimit, spec.ViewControlSelectorOffset, spec.ViewControlSelectorPage, spec.ViewControlSelectorNoLimit, spec.ViewControlSelectorRequireLimitForOffset:
 			if !strings.EqualFold(actual.Name, "true") && !strings.EqualFold(actual.Name, "false") {
 				return "", false
 			}
@@ -500,7 +500,7 @@ func applyViewDirectives(root *spec.View, directives []viewDirective) error {
 			}
 			relation.MatchStrategy = spec.MatchStrategy(directive.value)
 		case spec.ViewControlSelectorFields, spec.ViewControlSelectorOrderBy, spec.ViewControlSelectorCriteria,
-			spec.ViewControlSelectorLimit, spec.ViewControlSelectorOffset, spec.ViewControlSelectorPage, spec.ViewControlSelectorNoLimit:
+			spec.ViewControlSelectorLimit, spec.ViewControlSelectorOffset, spec.ViewControlSelectorPage, spec.ViewControlSelectorNoLimit, spec.ViewControlSelectorRequireLimitForOffset:
 			if target.Selector == nil {
 				target.Selector = &spec.Selector{}
 			}
@@ -521,6 +521,8 @@ func applyViewDirectives(root *spec.View, directives []viewDirective) error {
 				property = spec.SelectorPropertyPage
 			case spec.ViewControlSelectorNoLimit:
 				target.Selector.NoLimit = value
+			case spec.ViewControlSelectorRequireLimitForOffset:
+				target.Selector.RequireLimitForOffset = value
 			}
 			if property != "" {
 				if err := target.Selector.SetPermission(property, value); err != nil {
@@ -552,7 +554,7 @@ func applyViewDirectives(root *spec.View, directives []viewDirective) error {
 func selectorBooleanDirective(name string) bool {
 	switch name {
 	case spec.ViewControlSelectorFields, spec.ViewControlSelectorOrderBy, spec.ViewControlSelectorCriteria,
-		spec.ViewControlSelectorLimit, spec.ViewControlSelectorOffset, spec.ViewControlSelectorPage, spec.ViewControlSelectorNoLimit:
+		spec.ViewControlSelectorLimit, spec.ViewControlSelectorOffset, spec.ViewControlSelectorPage, spec.ViewControlSelectorNoLimit, spec.ViewControlSelectorRequireLimitForOffset:
 		return true
 	default:
 		return false

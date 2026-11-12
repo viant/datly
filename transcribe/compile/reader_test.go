@@ -296,6 +296,7 @@ func TestReaderCompileLowersSelectorPolicyDirectives(t *testing.T) {
 	actual, err := NewReader().Compile(ReadInput{View: &spec.View{Name: "Records", Source: &spec.ViewSource{}}, SQL: `SELECT r.*,
 selector_fields(r,true), selector_order_by(r,true), selector_criteria(r,true),
 selector_limit(r,true), selector_offset(r,true), selector_page(r,true),
+selector_require_limit_for_offset(r,true),
 selector_default_order(r,'created_at DESC'), selector_default_limit(r,100), selector_no_limit(r,false),
 selector_filterable(r,'id,name'), selector_namespace(r,'records'),
 selector_sql_methods(r,'[{"name":"lower","args":["string"]}]')
@@ -305,7 +306,7 @@ FROM records r`})
 	}
 	selector := actual.Selector
 	if selector == nil || !selector.AllowFields || !selector.AllowOrderBy || !selector.AllowCriteria || !selector.AllowLimit || !selector.AllowOffset || !selector.AllowPage ||
-		selector.DefaultOrder != "created_at DESC" || selector.DefaultLimit != 100 || selector.NoLimit || selector.Namespace != "records" ||
+		selector.DefaultOrder != "created_at DESC" || selector.DefaultLimit != 100 || selector.NoLimit || !selector.RequireLimitForOffset || selector.Namespace != "records" ||
 		len(selector.Filterable) != 2 || len(selector.SQLMethods) != 1 || selector.SQLMethods[0].Name != "lower" {
 		t.Fatalf("selector=%+v", selector)
 	}

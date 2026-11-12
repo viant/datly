@@ -162,7 +162,7 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 			return nil, err
 		}
 	}
-	readerScoped := request.CanonicalReader && request.Input.HasNamedScopes()
+	readerScoped := request.CanonicalReader && readerHasNamedViewScope(request.Input)
 	if readerScoped {
 		if request.ResolvedInput != nil || request.Replay != nil {
 			return nil, fmt.Errorf("named reader scopes do not yet support resolved input or replay")
@@ -757,6 +757,15 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 			}
 			if guardErr = guarded.CapturedExecutionGuardRegistered(invocation); guardErr != nil {
 				return finish(nil, guardErr)
+			}
+		}
+	}
+	if request.CanonicalReader {
+		if reader, ok := request.Handler.(interface {
+			ValidateSelectorWindow(context.Context, rhandler.Invocation) error
+		}); ok {
+			if err := reader.ValidateSelectorWindow(ctx, invocation); err != nil {
+				return finish(nil, err)
 			}
 		}
 	}

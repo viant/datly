@@ -173,6 +173,9 @@ func (v View) Value() (string, error) {
 		if v.Selector.NoLimit {
 			values = append(values, "selectorNoLimit=true")
 		}
+		if v.Selector.RequireLimitForOffset {
+			values = append(values, "selectorRequireLimitForOffset=true")
+		}
 		if len(v.Selector.OrderAliases) > 0 {
 			aliases := make([]string, 0, len(v.Selector.OrderAliases))
 			for alias, target := range v.Selector.OrderAliases {

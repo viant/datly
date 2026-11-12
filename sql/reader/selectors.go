@@ -4,14 +4,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/viant/datly/internal/sqlanalysis"
+	"net/http"
 	"reflect"
 	"strings"
 
 	"github.com/viant/datly/data"
+	"github.com/viant/datly/internal/sqlanalysis"
 	"github.com/viant/datly/spec"
 	dsql "github.com/viant/datly/sql"
 	xhandler "github.com/viant/xdatly/handler"
+	legacyresponse "github.com/viant/xdatly/handler/response"
 	xresponse "github.com/viant/xdatly/response"
 	xstate "github.com/viant/xdatly/state"
 )
@@ -258,7 +260,33 @@ func resolveInvocationSelectors(ctx context.Context, session *Session, input ref
 			selector.Page = page
 		}
 	}
+	if index := session.Artifact.ViewIndex; index != nil {
+		for _, view := range index.explicitOffsetLimit {
+			selector := result[view]
+			if selector != nil && selector.Offset > 0 && selector.Limit == 0 && selector.Page == 0 {
+				return nil, offsetWithoutLimit(view.Spec.Name)
+			}
+		}
+	}
 	return result, nil
+}
+
+var errOffsetWithoutLimit = errors.New("can't use offset without limit")
+
+func offsetWithoutLimit(view string) error {
+	const code = http.StatusBadRequest
+	cause := fmt.Errorf("%w - view: %s", errOffsetWithoutLimit, strings.ToLower(view))
+	payload := struct {
+		legacyresponse.Status
+		Data []any `json:"data"`
+	}{
+		Status: legacyresponse.Status{
+			Status: "error", Message: cause.Error(),
+			Errors: []legacyresponse.Error{{Code: code, Message: cause.Error()}},
+		},
+		Data: []any{},
+	}
+	return &xresponse.Error{Code: code, Payload: payload, Cause: cause}
 }
 
 func lookupSelectors(ctx context.Context, binder xhandler.Binder) (xstate.Selectors, error) {

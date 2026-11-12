@@ -8,6 +8,7 @@ import (
 	"github.com/viant/datly/internal/drainowner"
 	rhandler "github.com/viant/datly/runtime/handler"
 	"github.com/viant/datly/runtime/registry"
+	"github.com/viant/datly/spec"
 	xhandler "github.com/viant/xdatly/handler"
 	xlogger "github.com/viant/xdatly/logger"
 	"reflect"
@@ -36,6 +37,21 @@ type scopedBinder struct {
 	active   bool
 	closed   bool
 	escaped  bool
+}
+
+// A named view opts the native reader into deferred binding. Scope labels on
+// ordinary inputs also occur on readers that bind all their inputs eagerly.
+func readerHasNamedViewScope(route *registry.RouteInputContract) bool {
+	if !route.HasNamedScopes() {
+		return false
+	}
+	for _, field := range route.Fields() {
+		binding := field.Binding()
+		if binding.Scope != "" && binding.Location.Kind == string(spec.KindView) {
+			return true
+		}
+	}
+	return false
 }
 
 func newScopedBinder(ctx context.Context, injector *bindly.Injector, input any, route *registry.RouteInputContract, data *dataScope, phases *rhandler.PhaseScope) *scopedBinder {

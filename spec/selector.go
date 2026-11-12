@@ -25,6 +25,10 @@ type Selector struct {
 	SQLMethods    []SQLMethod          `json:"sqlMethods,omitempty"`
 	Orderable     []FieldPath          `json:"orderable,omitempty"`
 	OrderAliases  map[string]FieldPath `json:"orderAliases,omitempty"`
+
+	// RequireLimitForOffset requires a positive explicit limit for an offset
+	// when the request has no page selector.
+	RequireLimitForOffset bool `json:"requireLimitForOffset,omitempty"`
 }
 
 // SQLMethod permits one named SQL function in client criteria. Argument types

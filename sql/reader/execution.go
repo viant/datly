@@ -2,6 +2,7 @@ package reader
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/viant/datly/observability"
 	"reflect"
@@ -116,6 +117,23 @@ func (e *Execution) Read(ctx context.Context, input any, binder xhandler.Binder,
 	session.Parameters = resolver
 	session.applyReadOptions(ctx)
 	return e.service.Read(ctx, session, input, binder)
+}
+
+// ValidateSelectorWindow uses the same selector resolution as Read without
+// executing SQL, evaluating predicates or changing the bound input.
+func (e *Execution) ValidateSelectorWindow(ctx context.Context, input any, binder xhandler.Binder) error {
+	index := e.config.Plan.ViewIndex
+	if index == nil || len(index.explicitOffsetLimit) == 0 {
+		return nil
+	}
+	session := e.session()
+	session.applyReadOptions(ctx)
+	_, err := resolveInvocationSelectors(ctx, session, reflect.ValueOf(input), binder)
+	if errors.Is(err, errOffsetWithoutLimit) {
+		return err
+	}
+	// Other selector errors retain their existing position after Init.
+	return nil
 }
 
 func (e *Execution) WarmupTargets() []dexec.ReaderWarmupTarget {
