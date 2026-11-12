@@ -57,6 +57,11 @@ func (p SelectorProjection) Prepare(selected []string) (result *Projection, fail
 			return nil, err
 		}
 	}
+	if view != nil && view.IsGroupable() {
+		if projected, handled, err := renderStarProjection(sqlText, nil, view, p.Dialect, outputs); handled || err != nil {
+			return projected, err
+		}
+	}
 	if projected, handled, err := prepareStarProjectionWithOutputs(sqlText, selected, view, p.Dialect, outputs); handled || err != nil {
 		return projected, err
 	}
@@ -108,6 +113,14 @@ func (p SelectorProjection) prepare(selected []string) (*Projection, error) {
 	}
 	if projected != sqlText {
 		inspected = nil
+	}
+	// Defaults are output conversion, not grouping expressions. Keep them in
+	// the same outer renderer used by full-shape reads so NULL and zero groups
+	// are not merged by a rewritten ordinal GROUP BY.
+	if p.View != nil && p.View.IsGroupable() {
+		if outer, handled, err := renderStarProjection(projected, nil, p.View, p.Dialect, chosen); handled || err != nil {
+			return outer, err
+		}
 	}
 	source, err := applyNullProjectionInspected(projected, p.View, inspected)
 	return &Projection{Source: source}, err
