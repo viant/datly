@@ -72,3 +72,13 @@ func TestEmptyLookupRejectsUnprovenDynamicSourceAtRegistration(t *testing.T) {
 	require.NoError(t, err)
 	require.Nil(t, plan)
 }
+
+func TestEmptyLookupGeneratedPrimaryKeyUsesSQLSource(t *testing.T) {
+	type input struct{ Id []int }
+	component := &spec.Component{Routes: []*spec.Route{{Method: "GET", Path: "/records/{id}"}}, Parameters: []*spec.Parameter{{Name: "Id", Source: spec.BindSource{Kind: "path", Name: "id"}, Predicates: []*spec.Predicate{{Name: "in", Args: []string{"a", "ID"}}}}, {Name: "Auth", Predicates: []*spec.Predicate{{Name: "handler", Auth: true}}}}}
+	view := &data.View{Spec: spec.View{Source: &spec.ViewSource{SQL: "SELECT records.* FROM (SELECT a.* FROM records a) records"}, Columns: []*spec.Column{{Name: "Id", Source: "ID", PrimaryKey: true}}}, Columns: []*data.Column{{Name: "Id", Column: "ID", Tag: `sqlx:"ID,primaryKey=true"`}}}
+	plan, err := compileEmptyLookup(Config{Component: component, InputType: reflect.TypeFor[input](), Plan: &Plan{Root: &ViewPlan{View: view}}})
+	require.NoError(t, err)
+	require.NotNil(t, plan)
+	require.Len(t, plan.routes[spec.RouteRef{Method: "GET", Path: "/records/{id}"}], 1)
+}

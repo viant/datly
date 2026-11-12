@@ -87,12 +87,25 @@ func compileEmptyLookup(config Config) (*emptyLookupPlan, error) {
 		}
 		metadata := sqlxio.ParseTag(reflect.StructTag(column.Tag))
 		if metadata != nil && metadata.PrimaryKey {
-			keyNames[column.Column] = true
+			name := column.Output
+			if name == "" {
+				name = column.Column
+			}
+			keyNames[name] = true
 		}
 	}
 	for _, column := range config.Plan.Root.View.Spec.Columns {
 		if column != nil && column.PrimaryKey {
-			keyNames[column.Name] = true
+			// Name is the Go member; Source/Output are the native SQL
+			// projection identity. Generated Id and SQL ID are one key.
+			name := column.Output
+			if name == "" {
+				name = column.Source
+			}
+			if name == "" {
+				name = column.Name
+			}
+			keyNames[name] = true
 		}
 	}
 	if len(keyNames) == 0 {

@@ -62,7 +62,7 @@ func TestReaderAuthEmptyHTTPAndMCP(t *testing.T) {
 	require.NoError(t, db.ExecStatements(context.Background(), "CREATE TABLE records(id INTEGER, tenant INTEGER, name TEXT, archived INTEGER)", "INSERT INTO records VALUES(1,7,'one',0),(2,8,'two',0),(3,8,'archived',1)", "CREATE TABLE accounts(id INTEGER,name TEXT)", "INSERT INTO accounts VALUES(1,'account')", "CREATE TABLE watches(record_id INTEGER,contact_id INTEGER)", "INSERT INTO watches VALUES(1,0)", "CREATE TABLE model_status(record_id INTEGER,status INTEGER)", "INSERT INTO model_status VALUES(1,2)"))
 	types := typecatalog.NewCatalog()
 	require.NoError(t, types.Register(typecatalog.TypeOriginPackage, &x.Type{Type: reflect.TypeFor[authEmptyPredicate](), PkgPath: "example.com/auth", Name: "Scope"}))
-	component := &spec.Component{Key: spec.Key{Kind: spec.KindComponent, Name: "AuthEmpty"}, RootView: &spec.View{Name: "Records", Selector: &spec.Selector{AllowOffset: true, AllowLimit: true}, Source: &spec.ViewSource{SQL: `SELECT r.id, acc.name AS account_name,
+	component := &spec.Component{Key: spec.Key{Kind: spec.KindComponent, Name: "AuthEmpty"}, RootView: &spec.View{Name: "Records", Columns: []*spec.Column{{Name: "ID", Source: "id", PrimaryKey: true}}, Selector: &spec.Selector{AllowOffset: true, AllowLimit: true}, Source: &spec.ViewSource{SQL: `SELECT r.id, acc.name AS account_name,
  EXISTS(SELECT 1 FROM watches w WHERE w.record_id = r.id AND w.contact_id = ${Claim.UserID}) AS watching,
  (SELECT CASE WHEN COUNT(*) = 1 THEN MAX(m.status) ELSE 0 END FROM model_status m WHERE m.record_id = r.id) AS model_status
  FROM records r JOIN accounts acc ON acc.id = 1
