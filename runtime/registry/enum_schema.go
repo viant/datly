@@ -9,13 +9,13 @@ import (
 
 // EnumInputSchema describes the same accepted domain used by native binding.
 func EnumInputSchema(enumeration *choice.Enum, nullable bool) *spec.WireSchema {
-	result := &spec.WireSchema{Type: enumeration.WireType(true), Enum: enumeration.WireValues(true), Nullable: nullable}
+	result := &spec.WireSchema{Type: enumeration.WireType(true), Enum: enumeration.WireValues(true), Nullable: nullable && enumeration.AllowsNullInput()}
 	domain := enumeration.InputDomain()
 	if domain == nil {
 		return result
 	}
 	result.Type, result.Enum = "", nil
-	result.Nullable = nullable || domain.Nullable
+	result.Nullable = (nullable || domain.Nullable) && enumeration.AllowsNullInput()
 	if domain.OpenIntegers {
 		result.AnyOf = append(result.AnyOf, &spec.WireSchema{Type: "integer", Minimum: ExactSchemaIntegerBound(domain.Minimum), Maximum: ExactSchemaIntegerBound(domain.Maximum)})
 	} else if len(domain.Integers) > 0 {

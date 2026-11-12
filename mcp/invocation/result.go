@@ -3,6 +3,7 @@ package invocation
 import (
 	"compress/gzip"
 	"compress/zlib"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -10,8 +11,10 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/viant/bindly"
 	"github.com/viant/datly/exec"
 	"github.com/viant/mcp-protocol/schema"
+	"github.com/viant/tagly/choice"
 	"github.com/viant/xdatly/response"
 )
 
@@ -154,6 +157,14 @@ func errorResult(status int, err error) *schema.CallToolResult {
 		status = http.StatusInternalServerError
 	}
 	message := exec.ErrorMessage(err, status)
+	// Explicit bodies and declared projectors have already retained precedence.
+	// The fallback may publish this constant validation reason, never wrapper text.
+	var binding *bindly.BindingError
+	authored := errors.As(err, &binding) && binding.Message != ""
+	if !authored && status == http.StatusBadRequest && errors.Is(err, choice.ErrNullInput) &&
+		!errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
+		message = choice.ErrNullInput.Error()
+	}
 	payload := map[string]interface{}{"status": status, "error": true, "message": message}
 	encoded, _ := json.Marshal(payload)
 	isError := true
