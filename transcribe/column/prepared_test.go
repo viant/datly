@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"testing/fstest"
 
 	"github.com/stretchr/testify/require"
 	"github.com/viant/datly/spec"
@@ -114,6 +115,38 @@ func TestPreparedCompositePredicatePreservesSource(t *testing.T) {
 				require.Error(t, err)
 				require.Zero(t, calls)
 			}
+		})
+	}
+}
+
+func TestPreparedEmbeddedAuxiliarySource(t *testing.T) {
+	for _, tc := range []struct {
+		name, sql, table string
+		auxiliary, valid bool
+	}{
+		{"embedded primary", `SELECT r.id FROM (records) r`, "records", true, true},
+		{"nested primary", `SELECT x.id FROM (SELECT r.id FROM (records) r) x`, "records", true, true},
+		{"metadata table optional", `SELECT r.id FROM (records) r`, "", true, true},
+		{"joined auxiliary is not owner", `SELECT r.id FROM records r JOIN (other) o ON r.id=o.id`, "records", false, true},
+		{"wrong metadata table", `SELECT r.id FROM (records) r`, "other", true, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			const token = "${embed:sql/records.sql}"
+			const authored = "SELECT r.* FROM (" + token + ") r"
+			view := &spec.View{Name: "Records", Source: &spec.ViewSource{SQL: authored, Embeds: []*spec.EmbeddedSQLRef{{Path: "sql/records.sql", Raw: token}}}}
+			resources := fstest.MapFS{"sql/records.sql": &fstest.MapFile{Data: []byte(tc.sql)}}
+			err := RefinePrepared(t.Context(), &spec.Component{RootView: view}, resources, func(context.Context, PreparedColumnRequest) (*PreparedColumnResult, error) {
+				return &PreparedColumnResult{Table: tc.table, Columns: []*spec.Column{{Name: "id", Source: "id", Type: spec.TypeRef{Name: "int"}, PrimaryKey: true}}}, nil
+			}, nil)
+			require.Equal(t, authored, view.Source.SQL)
+			if !tc.valid {
+				require.ErrorContains(t, err, "does not match SQL source")
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, tc.auxiliary, view.Auxiliary)
+			require.Equal(t, "records", view.Source.Table)
+			require.True(t, view.Columns[0].PrimaryKey)
 		})
 	}
 }

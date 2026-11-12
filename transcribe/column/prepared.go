@@ -134,8 +134,21 @@ func RefinePrepared(ctx context.Context, component *spec.Component, resources fs
 						}
 					}
 				}
+				// Resource expansion may reveal an authored nonmutating physical
+				// source. Reuse ordinary discovery's parser-owned classification.
+				physicalTable := directSourceTable(SQL)
+				if auxiliaryTable := explicitAuxiliarySource(SQL); auxiliaryTable != "" {
+					physicalTable = auxiliaryTable
+					if source.Table == "" {
+						source.Table = auxiliaryTable
+						view.Auxiliary = true
+						if view.Source.Table == "" {
+							view.Source.Table, view.Source.TableInferred = auxiliaryTable, true
+						}
+					}
+				}
 				if metadata.Table != "" {
-					if directSourceTable(SQL) != metadata.Table || source.Table != "" && source.Table != metadata.Table {
+					if physicalTable != metadata.Table || source.Table != "" && source.Table != metadata.Table {
 						return fmt.Errorf("prepared table %s does not match SQL source", metadata.Table)
 					}
 					source.Table = metadata.Table
