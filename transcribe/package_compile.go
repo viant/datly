@@ -375,6 +375,17 @@ func (c *descriptorPackageCompilation) compile(ctx context.Context) (*Result, er
 	// Concrete linked contracts are the runtime authority for reachable view
 	// shapes. Source AST remains useful for metadata, but it cannot manufacture
 	// reflect.Type values for imported structs in another module.
+	// Current view declarations may introduce import aliases absent from the
+	// holder file. Use their merged canonical scope for the first descriptor
+	// lookup too; rebuild again below after attaching concrete runtime types.
+	declarationContext := compileTypeContext(c.source, component.TypeContext)
+	declarationContext.PackageDir = c.packageSource.Routes[0].Dir
+	declarationContext.PackageName = c.packageSource.Routes[0].PackageName
+	declarationContext.PackagePath = c.packageSource.Routes[0].PackagePath
+	resolver, err = typecatalog.NewResolver(c.catalog, typecatalog.PackageAuthority, declarationContext)
+	if err != nil {
+		return nil, err
+	}
 	linkedViews := newPackageViewResolver(component, resolver)
 	linkedRoot, err := linkedViews.rootDescriptorFromMetadata()
 	if err != nil {

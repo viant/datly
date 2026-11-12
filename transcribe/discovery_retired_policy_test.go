@@ -53,6 +53,9 @@ FROM (${embed:sql/records.sql}) r JOIN (children) c ON c.record_id=r.id`
 	require.NoError(t, os.WriteFile(filepath.Join(root, "records/methods.go"), []byte("package records\nfunc (*Row) Existing() string {return \"kept\"}\n"), 0600))
 	require.NoError(t, os.MkdirAll(filepath.Join(root, "source"), 0700))
 	text = strings.Replace(text, "#package('records')", "#package('example.com/generated/records')", 1)
+	text = strings.Replace(text, "#setting($_ = $route", "#import('self','example.com/generated/records')\n#setting($_ = $route", 1)
+	text = strings.Replace(text, "$Current<[]*Row>(view/Current)", "$Current<[]*Row>(view/Current).WithTypeName('self.Row')", 1)
+	text = strings.Replace(text, "SELECT r.*,type(r,'Row') FROM records r", "SELECT id,name FROM records", 1)
 	path := filepath.Join(root, "source/Records.dql")
 	require.NoError(t, os.WriteFile(path, []byte(text), 0600))
 	discovery := &Discovery{BaseDir: root, PreparedColumns: prepared}
@@ -72,6 +75,13 @@ FROM (${embed:sql/records.sql}) r JOIN (children) c ON c.record_id=r.id`
 		require.NoError(t, readErr)
 		require.Equal(t, stale, string(unchanged))
 	}
+	badViewType := strings.Replace(text, "WithTypeName('self.Row')", "WithTypeName('self.Child')", 1)
+	require.NoError(t, os.WriteFile(path, []byte(badViewType), 0600))
+	_, err = discovery.TranscribeBatch(ctx, BatchRequest{Generator: generator, Destination: root, Rules: []BatchRule{{Source: path}}})
+	require.ErrorContains(t, err, "does not match package type")
+	unchanged, readErr := os.ReadFile(input)
+	require.NoError(t, readErr)
+	require.Equal(t, stale, string(unchanged))
 	require.NoError(t, os.WriteFile(path, []byte(text), 0600))
 	for range 2 {
 		_, err = discovery.TranscribeBatch(ctx, BatchRequest{Generator: generator, Destination: root, Rules: []BatchRule{{Source: path}}})

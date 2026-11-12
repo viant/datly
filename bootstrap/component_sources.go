@@ -170,6 +170,11 @@ func (s *PackageComponentSource) resolveDescriptors(types *typecatalog.Resolver,
 		}
 	}
 	if authored != nil {
+		// View expressions belong to the current source's import scope. Descriptor
+		// imports are merged and checked by ContractResolver below.
+		if authored.TypeContext != nil {
+			combined.TypeContext = authored.TypeContext.Clone()
+		}
 		if authored.RootView != nil {
 			combined.RootView = authored.RootView.Clone()
 		}
