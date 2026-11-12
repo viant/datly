@@ -154,6 +154,12 @@ func (p *Plan) SelectorFieldNames(t reflect.Type, path string) ([]SelectorFieldN
 		for representation.Original().Kind() == reflect.Pointer || representation.Original().Kind() == reflect.Slice || representation.Original().Kind() == reflect.Array {
 			representation = representation.Elem()
 		}
+		// Internal Current readers can share this component without belonging to
+		// its public output graph. Representation indexes belong to one exact
+		// storage type; do not apply them to an unrelated reader row.
+		if representation.Original() != t {
+			return nil, nil
+		}
 	}
 	fields, err := p.jsonSchemaFields(t, path, false, map[reflect.Type]bool{}, representation)
 	if err != nil {
