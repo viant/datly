@@ -176,7 +176,7 @@ func TestGeneratedReaderSelectorMCP(t *testing.T) {
  sourceTool,ok:=service.Catalog().Tool("SpendRead");if !ok{t.Fatal("reader MCP tool missing")}
  sourceWire,_:=json.Marshal(sourceTool.Metadata().InputSchema)
  var sourceSchema struct{Properties map[string]struct{Type string}};if err:=json.Unmarshal(sourceWire,&sourceSchema);err!=nil{t.Fatal(err)}
- for name,typ:=range map[string]string{"Limit":"integer","Page":"integer","Fields":"array","OrderBy":"array"}{if sourceSchema.Properties[name].Type!=typ{t.Fatalf("MCP selector %s: schema %s",name,sourceWire)}}
+ for name,typ:=range map[string]string{"limit":"integer","page":"integer","fields":"array","orderBy":"array"}{if sourceSchema.Properties[name].Type!=typ{t.Fatalf("MCP selector %s: schema %s",name,sourceWire)}}
  }
 func TestLinkedCubeRegistrationMCPAndDependency(t *testing.T) {
  ctx:=context.Background()

@@ -200,8 +200,18 @@ func (c composeClient) schemas(t *testing.T) {
             if err != nil { t.Fatal(err) }
             var cube businessSchema
             if err := json.Unmarshal(data, &cube); err != nil { t.Fatal(err) }
-            dimensions, measures := cube.Properties["dimensions"], cube.Properties["measures"]
-            if len(dimensions.Properties) != 1 || dimensions.Properties[cubeWireName(dimensionOutput)].Type != "boolean" || len(measures.Properties) != 1 || measures.Properties[cubeWireName(measureOutput)].Type != "boolean" { t.Fatalf("public cube schema changed: %s", data) }
+            for section, output := range map[string]string{"dimensions": dimensionOutput, "measures": measureOutput} {
+                canonical := cubeWireName(output)
+                expected := map[string]bool{canonical: true}
+                // Generated native inputNames tags retain the SQL selector alias.
+                // cubeSelectorAliases excludes aliases differing only by case.
+                if !strings.EqualFold(output, canonical) { expected[output] = true }
+                properties := cube.Properties[section].Properties
+                if len(properties) != len(expected) { t.Fatalf("public cube %s schema changed: %s", section, data) }
+                for name, property := range properties {
+                    if !expected[name] || property.Type != "boolean" { t.Fatalf("public cube %s selector %q changed: %s", section, name, data) }
+                }
+            }
         }
 		if tool.Name != "SpendCubeCompose" {
 			continue

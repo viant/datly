@@ -261,9 +261,9 @@ func overlayParam(base, authored *spec.Parameter) *spec.Parameter {
 	if authored.QueryListCSV {
 		result.QueryListCSV = true
 	}
-	if authored.When != "" {
-		result.When = authored.When
-	}
+	// The authored declaration owns its guard, including removal. Keeping a
+	// previous generated guard would silently skip the view after regeneration.
+	result.When = authored.When
 	if authored.Scope != "" {
 		result.Scope = authored.Scope
 	}
