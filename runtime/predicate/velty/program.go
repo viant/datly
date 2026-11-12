@@ -3,6 +3,7 @@ package velty
 import (
 	"context"
 	"fmt"
+	"github.com/viant/datly/internal/invocationbinder"
 	"github.com/viant/datly/internal/predicatereplay"
 	"reflect"
 	"strings"
@@ -47,7 +48,7 @@ func (p *Program) NewContext(ctx context.Context, binder xhandler.Binder, append
 	if !ok {
 		return nil, fmt.Errorf("predicate input is not available")
 	}
-	result := newContext(p, ctx, input, appendArgs)
+	result := newContext(p, invocationbinder.With(ctx, binder), input, appendArgs)
 	result.binder = binder
 	return result, nil
 }

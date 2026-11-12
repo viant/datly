@@ -24,6 +24,7 @@ func validateScopedRequest(r Request) error {
 // scopedBinder is one invocation lease over the existing composed injector.
 // It owns neither providers, data roots nor transaction completion.
 type scopedBinder struct {
+	delegate xhandler.Binder
 	ctx      context.Context
 	injector *bindly.Injector
 	input    any
@@ -112,6 +113,9 @@ func (b *scopedBinder) run(call context.Context, fn func(context.Context) error)
 	return err
 }
 func (b *scopedBinder) Bind(ctx context.Context, target any, options ...bindly.BindOption) error {
+	if b.delegate != nil {
+		return b.run(ctx, func(ctx context.Context) error { return b.delegate.Bind(ctx, target, options...) })
+	}
 	if len(options) != 0 {
 		return fmt.Errorf("scoped binding owns the canonical source and scope plan; Bind options are unsupported")
 	}
@@ -143,7 +147,11 @@ func (b *scopedBinder) BindScope(ctx context.Context, target any, scope string) 
 func (b *scopedBinder) Lookup(ctx context.Context, key xhandler.ValueKey) (value any, found bool, err error) {
 	err = b.run(ctx, func(ctx context.Context) error {
 		var err error
-		value, found, err = rhandler.NewBinder(b.injector, b.input).Lookup(ctx, key)
+		delegate := b.delegate
+		if delegate == nil {
+			delegate = rhandler.NewBinder(b.injector, b.input)
+		}
+		value, found, err = delegate.Lookup(ctx, key)
 		return err
 	})
 	return

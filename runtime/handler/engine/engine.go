@@ -162,6 +162,15 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 			return nil, err
 		}
 	}
+	readerScoped := request.CanonicalReader && request.Input.HasNamedScopes()
+	if readerScoped {
+		if request.BoundInput != nil || request.ResolvedInput != nil || request.Replay != nil {
+			return nil, fmt.Errorf("named reader scopes do not yet support prepared input or replay")
+		}
+		if err := request.Input.PrepareScopePlans(); err != nil {
+			return nil, err
+		}
+	}
 	ctx, completeSelection := dexec.ScopeOutputSelection(ctx)
 	inputType := request.Input.Type()
 	if inputType == nil || inputType.Kind() != reflect.Struct {
@@ -171,11 +180,11 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 	if inputPlan == nil {
 		return nil, fmt.Errorf("route input contract %s requires a Bindly plan", request.Input.Route().String())
 	}
-	if scoped {
+	if scoped || readerScoped {
 		inputPlan, _ = request.Input.ScopePlan("")
 	}
 	selectors := request.Input.SelectorPlan()
-	if selectors != nil && (!selectors.TransportOnly() && !request.CanonicalReader || scoped || request.BoundInput != nil && selectors.TransportOnly() || request.Replay != nil || selectors.PublicPlan() != inputPlan) {
+	if selectors != nil && (!selectors.TransportOnly() && !request.CanonicalReader || scoped || request.BoundInput != nil && selectors.TransportOnly() || request.Replay != nil || selectors.PublicPlan() != request.Input.Plan()) {
 		return nil, fmt.Errorf("selector companion requires compatible canonical binding without scoped execution or replay")
 	}
 	if selectors != nil && selectors.TransportOnly() {
@@ -507,6 +516,7 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 	runtimeProviders = append(runtimeProviders, handlerprovider.CallerOutput(request.BindingOutput))
 	runtimeProviders = append(runtimeProviders, handlerprovider.Parameter())
 	runtimeProviders = append(runtimeProviders, handlerprovider.Input())
+	runtimeProviders = append(runtimeProviders, handlerprovider.InvocationBinder())
 	runtimeProviders = append(runtimeProviders, handlerprovider.New(invocationKind, func(ctx context.Context) (any, bool, error) {
 		return handlerexec.InvocationFromContext(ctx), true, nil
 	}))
@@ -712,6 +722,12 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 		if err != nil {
 			return finish(nil, err)
 		}
+	}
+	if readerScoped {
+		scopedLease = newScopedBinder(ctx, scope, input, request.Input, data, phases)
+		scopedLease.delegate = binder
+		binder = scopedLease
+		defer scopedLease.close()
 	}
 	invocation.Binder = binder
 	if guarded, ok := request.Handler.(rhandler.CapturedExecutionGuard); ok {

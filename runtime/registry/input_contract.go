@@ -50,17 +50,18 @@ type InputField struct {
 
 // RouteInputContract is the exact binding contract for one component route.
 type RouteInputContract struct {
-	selectors  *selectorcompanion.BindingPlan
-	route      spec.RouteRef
-	inputType  reflect.Type
-	plan       *bindly.Plan
-	contract   *InputContract
-	fields     []InputField
-	replay     *bindly.ReplayPlan
-	replayErr  error
-	scopeOnce  sync.Once
-	scopePlans map[string]*bindly.Plan
-	scopeErr   error
+	selectors   *selectorcompanion.BindingPlan
+	route       spec.RouteRef
+	inputType   reflect.Type
+	plan        *bindly.Plan
+	contract    *InputContract
+	fields      []InputField
+	replay      *bindly.ReplayPlan
+	replayErr   error
+	scopeOnce   sync.Once
+	scopePlans  map[string]*bindly.Plan
+	scopeErr    error
+	namedScopes bool
 }
 
 // InputContract owns the canonical component input type and its route-effective
@@ -167,8 +168,12 @@ func NewInputContract(inputType reflect.Type, projection *bindly.Projection, rou
 			replay, replayErr = replay.Prepare(projection, verifiedPaths...)
 		}
 
+		namedScopes := false
+		for _, field := range fields {
+			namedScopes = namedScopes || field.binding.Scope != ""
+		}
 		result.routes[key] = &RouteInputContract{
-			route: route.Route, inputType: inputType, plan: route.Plan, selectors: route.Selectors, contract: result, fields: fields, replay: replay, replayErr: replayErr,
+			route: route.Route, inputType: inputType, plan: route.Plan, selectors: route.Selectors, contract: result, fields: fields, replay: replay, replayErr: replayErr, namedScopes: namedScopes,
 		}
 	}
 	return result, nil
@@ -668,3 +673,6 @@ func normalizeBodyInputTag(binding *bindly.BindingSpec, field reflect.StructFiel
 	}
 	return binding.ValidateBodyInputTag(field.Type)
 }
+
+// HasNamedScopes reports compiled route metadata without scanning on invocation.
+func (c *RouteInputContract) HasNamedScopes() bool { return c != nil && c.namedScopes }

@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -24,7 +25,9 @@ import (
 type predicateAccessInput struct {
 	Tenant int `parameter:"Tenant,kind=query,in=tenant,required"`
 }
-type predicateAccessOutput struct{ Tenant int }
+type predicateAccessOutput struct {
+	Tenant int `json:"-"`
+}
 type dependentPredicate struct {
 	Access *predicateAccessOutput `bind:"kind=component,in=GET:/predicate-access,required"`
 }
@@ -37,6 +40,11 @@ func (p *dependentPredicate) Compute(_ context.Context, value any) (*xpredicate.
 }
 
 func TestCustomPredicateBindsComponentResultSQLite(t *testing.T) {
+	// A native dependency carries the typed value, not its public JSON shape.
+	wire, err := json.Marshal(predicateAccessOutput{Tenant: 7})
+	if err != nil || string(wire) != "{}" {
+		t.Fatalf("private scope field appeared in JSON: %s, %v", wire, err)
+	}
 	h := testharness.NewSQLiteHarness(t)
 	if err := h.ExecStatements(context.Background(), "CREATE TABLE records (id INTEGER, tenant_id INTEGER)", "INSERT INTO records VALUES (1, 7), (2, 7), (3, 8)"); err != nil {
 		t.Fatal(err)
