@@ -123,7 +123,9 @@ func (l *Loader) mergeRoutes(base, authored []*spec.Route) ([]*spec.Route, error
 		if err := item.ValidateRequestBodyMode(); err != nil {
 			return nil, err
 		}
-		if len(item.MCP) == 0 {
+		// DQL owns its route exposure: removing mcp(...) must retire the old
+		// generated tool. Package-only overlays retain package authority.
+		if len(item.MCP) == 0 && !l.DQLAuthored {
 			if inherited := baseByIdentity[identity]; inherited != nil {
 				inherited = inherited.Clone()
 				item.MCP = inherited.MCP

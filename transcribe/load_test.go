@@ -104,10 +104,11 @@ func TestComponentLoaderRejectsConflictingPackageRouteMarshallers(t *testing.T) 
 func TestComponentLoaderMergesRouteMCPByExactRouteAuthority(t *testing.T) {
 	packageExposure := &spec.MCPExposure{Kind: spec.MCPExposureTool, Name: "package.users", Description: "Package users"}
 	tests := []struct {
-		name      string
-		authored  *spec.Route
-		want      string
-		wantCount int
+		name        string
+		authored    *spec.Route
+		want        string
+		wantCount   int
+		dqlAuthored bool
 	}{
 		{
 			name:     "exact route inherits package exposure",
@@ -118,6 +119,16 @@ func TestComponentLoaderMergesRouteMCPByExactRouteAuthority(t *testing.T) {
 			name:     "authored exposure wins",
 			authored: &spec.Route{Method: "GET", Path: "/users", MCP: []*spec.MCPExposure{{Kind: spec.MCPExposureTool, Name: "dql.users"}}},
 			want:     "dql.users", wantCount: 1,
+		},
+		{
+			name:        "DQL omission retires package tool",
+			authored:    &spec.Route{Method: "GET", Path: "/users"},
+			dqlAuthored: true, wantCount: 0,
+		},
+		{
+			name:        "explicit DQL tool remains exposed",
+			authored:    &spec.Route{Method: "GET", Path: "/users", MCP: []*spec.MCPExposure{{Kind: spec.MCPExposureTool, Name: "get_users"}}},
+			dqlAuthored: true, want: "get_users", wantCount: 1,
 		},
 		{
 			name:      "changed route does not inherit",
@@ -132,6 +143,7 @@ func TestComponentLoaderMergesRouteMCPByExactRouteAuthority(t *testing.T) {
 			}}}
 			loaded, err := (&link.Loader{
 				PackageComponent:  packageComponent,
+				DQLAuthored:       test.dqlAuthored,
 				AuthoredComponent: &spec.Component{Routes: []*spec.Route{test.authored}},
 			}).Load()
 			if err != nil {
@@ -139,6 +151,9 @@ func TestComponentLoaderMergesRouteMCPByExactRouteAuthority(t *testing.T) {
 			}
 			if len(loaded.Routes) != 1 || len(loaded.Routes[0].MCP) != test.wantCount {
 				t.Fatalf("routes = %+v", loaded.Routes)
+			}
+			if loaded.Routes[0].Path != test.authored.Path || loaded.Routes[0].Internal {
+				t.Fatal("MCP retirement changed HTTP route visibility")
 			}
 			if test.wantCount > 0 && loaded.Routes[0].MCP[0].Name != test.want {
 				t.Fatalf("route exposure = %+v", loaded.Routes[0].MCP)
@@ -159,7 +174,7 @@ func TestCompilerMergesDQLAndPackageRouteMCPAuthority(t *testing.T) {
 		mcp  string
 		want string
 	}{
-		{name: "package exposure inherited", want: "package.users"},
+		{name: "DQL without MCP retires package exposure", want: ""},
 		{name: "DQL exposure wins", mcp: "#settings($_ = $mcp('dql.users', 'DQL users'))\n", want: "dql.users"},
 	}
 	for _, test := range tests {
@@ -177,11 +192,23 @@ SELECT id FROM users`,
 			if err != nil {
 				t.Fatal(err)
 			}
-			if len(result.Component.Routes) != 1 || len(result.Component.Routes[0].MCP) != 1 ||
-				result.Component.Routes[0].MCP[0].Name != test.want {
-				t.Fatalf("route exposure = %+v", result.Component.Routes)
+			if len(result.Component.Routes) != 1 {
+				t.Fatalf("routes = %+v", result.Component.Routes)
 			}
-			result.Component.Routes[0].MCP[0].Description = "changed"
+			route := result.Component.Routes[0]
+			if route.Internal || route.Path != "/users" {
+				t.Fatal("HTTP route changed")
+			}
+			if test.want == "" {
+				if len(route.MCP) != 0 {
+					t.Fatalf("retired MCP exposure restored: %+v", route.MCP)
+				}
+			} else {
+				if len(route.MCP) != 1 || route.MCP[0].Name != test.want {
+					t.Fatalf("route exposure = %+v", route.MCP)
+				}
+				route.MCP[0].Description = "changed"
+			}
 			if packageComponent.Routes[0].MCP[0].Description != "Package users" {
 				t.Fatal("compiled route exposure aliases package authority")
 			}
