@@ -37,6 +37,8 @@ func (a *RouteActivation) Matches(path string) bool {
 }
 
 type Predicate struct {
+	// Auth marks this occurrence as an authorization restriction.
+	Auth            bool     `json:"auth,omitempty"`
 	Group           int      `json:"group,omitempty"`
 	Name            string   `json:"name,omitempty"`
 	Args            []string `json:"args,omitempty"`

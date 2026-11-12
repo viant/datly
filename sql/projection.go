@@ -152,3 +152,10 @@ func (p *Projection) orderScopeColumns() []ProjectionColumn {
 	}
 	return p.columns
 }
+
+// ExistenceProjection uses the native result-wrapper projection. The inner
+// reader query keeps joins, lifecycle filters, grouping and source semantics.
+// Only a constant is delivered to the caller of the diagnostic query.
+func ExistenceProjection() *Projection {
+	return &Projection{outer: []string{"1 AS datly_exists"}}
+}

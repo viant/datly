@@ -3,6 +3,7 @@ package reader
 import (
 	"context"
 	"fmt"
+	"github.com/viant/datly/internal/readerlookup"
 	xh "github.com/viant/xdatly/handler"
 
 	dexec "github.com/viant/datly/exec"
@@ -33,6 +34,7 @@ func (h *Handler) Execute(ctx context.Context, invocation rhandler.Invocation) (
 	if h.options != nil {
 		ctx = h.options.Context(ctx)
 	}
+	ctx = readerlookup.WithRoute(ctx, h.input.Route())
 	resolver := sqlx.ParameterResolver(h.input.Resolver(invocation.Input))
 	if h.rows != nil {
 		reader, ok := h.reader.(dexec.RowReader)

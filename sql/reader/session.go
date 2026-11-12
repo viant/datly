@@ -31,6 +31,7 @@ type Output struct {
 // Session contains only SQL reader execution state. Input binding, transport,
 // handler capabilities, and registration remain runtime concerns.
 type Session struct {
+	emptyLookup          *emptyLookupPlan
 	selectorPresentation map[*data.View][]data.SelectorField
 	relationSelection    *relationSelection
 	omittedOutput        string

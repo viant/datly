@@ -69,6 +69,7 @@ type Compiler struct {
 }
 
 type compiled struct {
+	analysisSQL      string
 	constants        *constantBindings
 	allowEmptyInput  bool
 	unsafeRegistered bool
@@ -181,7 +182,8 @@ func (c Compiler) Compile() (Evaluator, error) {
 		return nil, err
 	}
 	var nullableTypes []reflect.Type
-	source, err = bindEmittedInputVariables(source, root, spans, bindings, &nullableTypes)
+	var analysisSQL string
+	source, analysisSQL, err = bindEmittedInputVariables(source, root, spans, bindings, &nullableTypes)
 	if err != nil {
 		return nil, err
 	}
@@ -193,7 +195,7 @@ func (c Compiler) Compile() (Evaluator, error) {
 	if predicateUsed {
 		predicateProgram = c.Predicate
 	}
-	return &compiled{constants: constants, allowEmptyInput: allowEmptyInput, unsafeRegistered: unsafeUsed || fullInput,
+	return &compiled{analysisSQL: analysisSQL, constants: constants, allowEmptyInput: allowEmptyInput, unsafeRegistered: unsafeUsed || fullInput,
 		exec:          exec,
 		newState:      newState,
 		inputType:     inputType,
@@ -458,3 +460,11 @@ func variableValue(value reflect.Value) any {
 	}
 	return value.Interface()
 }
+
+// AnalysisSQL is a detached, input-free source for structural analysis. Native
+// emission spans replace bound values with placeholders; this is never executed.
+func (c *compiled) AnalysisSQL() string { return c.analysisSQL }
+
+// UsesPredicates distinguishes root template predicate usage from metadata
+// belonging only to a child view in the same component.
+func (c *compiled) UsesPredicates() bool { return c.predicate != nil }

@@ -30,6 +30,9 @@ func PredicateValue(predicate *spec.Predicate) (string, error) {
 	if predicate.Group > 0 {
 		values = append(values, "group="+strconv.Itoa(predicate.Group))
 	}
+	if predicate.Auth {
+		values = append(values, "auth=true")
+	}
 	if predicate.ApplyWhenAbsent {
 		values = append(values, "applyWhenAbsent=true")
 	}
@@ -110,6 +113,13 @@ func ParsePredicates(structTag reflect.StructTag) ([]*spec.Predicate, error) {
 				}
 				predicate.Group = group
 				return nil
+			case "auth":
+				value, err := decodeScalarValue(rawValue)
+				if err != nil {
+					return err
+				}
+				predicate.Auth, err = parseBool("predicate auth", value)
+				return err
 			case "applywhenabsent":
 				if keyErr != nil {
 					break

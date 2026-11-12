@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/viant/datly/internal/predicatereplay"
 	"github.com/viant/xdatly/handler/runtimecache"
 	xreader "github.com/viant/xdatly/reader"
 	"reflect"
@@ -52,6 +53,7 @@ func NewService(options ...Option) *Service {
 // Read executes a compiled reader request with input already prepared by the
 // unified handler engine. Binding and transport concerns stay outside SQL.
 func (s *Service) Read(ctx context.Context, session *Session, input any, binder xhandler.Binder) (_ any, err error) {
+	ctx = predicatereplay.Without(ctx)
 	if session != nil {
 		session.Projection = nil
 		session.outputSlots = nil
@@ -158,7 +160,12 @@ func (s *Service) readBound(ctx context.Context, session *Session, input reflect
 	if session.staticSelection != nil {
 		rootBuilderOptions = append(rootBuilderOptions, rsql.WithBuilderProjection(session.staticFields), rsql.WithBuilderStaticProjection(session.staticSelection, session.Artifact.staticTemplate))
 	}
-	query, err := rsql.NewBuilder().Build(ctx, rootBuilderOptions...)
+	buildContext := ctx
+	var emptyReplay *predicatereplay.State
+	if session.emptyLookup.eligible(ctx, input, rootSelector, root) {
+		buildContext, emptyReplay = predicatereplay.Capture(ctx)
+	}
+	query, err := rsql.NewBuilder().Build(buildContext, rootBuilderOptions...)
 	if err != nil {
 		// Only this Build's direct native projection failure can use the
 		// declared root selector. Callback/child/SQL/hook errors lack that origin.
@@ -193,7 +200,15 @@ func (s *Service) readBound(ctx context.Context, session *Session, input reflect
 		outputType = outputType.Elem()
 	}
 	if session.consumer != nil {
-		return s.consumeRoot(ctx, session, rootConnection, query, outputType, session.Artifact.DirectOutput)
+		actual, rows, err := s.consumeRoot(ctx, session, rootConnection, query, outputType, session.Artifact.DirectOutput)
+		if err != nil {
+			return nil, err
+		}
+		if rows == 0 && emptyReplay.HasAuthorization() && session.emptyLookup.usedIdentity(ctx, emptyReplay) {
+			return nil, s.classifyEmpty(ctx, session, rootConnection, rootBuilderOptions, emptyReplay)
+		}
+		read.done(rows, nil)
+		return actual, nil
 	}
 	actual, rootCollector, rootField, rootDest, err := s.readRoot(ctx, session, rootConnection, query, rootBuilderOptions, session.Artifact.OutputViewField, outputType, session.Artifact.DirectOutput)
 	if err != nil {
@@ -202,6 +217,9 @@ func (s *Service) readBound(ctx context.Context, session *Session, input reflect
 	rows := 0
 	if rootCollector != nil {
 		rows = rootCollector.Len()
+	}
+	if rows == 0 && rootCollector != nil && emptyReplay.HasAuthorization() && session.emptyLookup.usedIdentity(ctx, emptyReplay) {
+		return nil, s.classifyEmpty(ctx, session, rootConnection, rootBuilderOptions, emptyReplay)
 	}
 	read.done(rows, nil)
 	relationScheduler := newRelationScheduler(ctx, s.relationConcurrency())

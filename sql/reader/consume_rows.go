@@ -65,11 +65,11 @@ func (s *Session) validateConsumer() error {
 	return nil
 }
 
-func (s *Service) consumeRoot(ctx context.Context, session *Session, connection dsql.Connection, query *cache.ParmetrizedQuery, outputType reflect.Type, direct bool) (any, error) {
+func (s *Service) consumeRoot(ctx context.Context, session *Session, connection dsql.Connection, query *cache.ParmetrizedQuery, outputType reflect.Type, direct bool) (any, int, error) {
 	// Streaming callbacks run with the cursor open. Transactional reader hooks
 	// normally drain first to permit nested reads; that path remains unchanged.
 	if connection.Tx != nil {
-		return nil, fmt.Errorf("row consumption does not support an active transaction")
+		return nil, 0, fmt.Errorf("row consumption does not support an active transaction")
 	}
 	root := session.Artifact.Root
 	typ := root.Collector.Schema.RowType()
@@ -95,12 +95,11 @@ func (s *Service) consumeRoot(ctx context.Context, session *Session, connection 
 	// SQLX interprets io.EOF as its internal early-stop signal. A consumer,
 	// codec or hook EOF is still a failure of this invocation, not success.
 	if visitorError != nil {
-		return nil, visitorError
+		return nil, count, visitorError
 	}
 	if err != nil {
-		return nil, err
+		return nil, count, err
 	}
-	session.rootRead.done(count, nil)
 	var output any
 	if direct {
 		output = reflect.MakeSlice(outputType, 0, 0).Interface()
@@ -108,7 +107,7 @@ func (s *Service) consumeRoot(ctx context.Context, session *Session, connection 
 		output = reflect.New(outputType).Interface()
 	}
 	session.Data = output
-	return output, nil
+	return output, count, nil
 }
 
 // Do not unwrap while SQLX owns the callback: its EOF sentinel means success.

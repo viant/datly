@@ -3,6 +3,7 @@ package velty
 import (
 	"context"
 	"fmt"
+	"github.com/viant/datly/internal/predicatereplay"
 	xhandler "github.com/viant/xdatly/handler"
 	xpredicate "github.com/viant/xdatly/predicate"
 	"reflect"
@@ -43,8 +44,19 @@ func (c *Context) expandGroup(group int, operator string) (string, error) {
 		return "", nil
 	}
 	fragments := make([]string, 0)
-	for index, predicate := range c.program.predicates {
-		if predicate.group != group {
+	for _, index := range c.program.groups[group] {
+		predicate := c.program.predicates[index]
+		occurrence := &c.program.predicates[index]
+		if fragment, args, replay, err := predicatereplay.Lookup(c.ctx, occurrence, predicate.auth); replay {
+			if err != nil {
+				return "", err
+			}
+			if fragment != "" {
+				fragments = append(fragments, fragment)
+				if c.append != nil {
+					c.append(args...)
+				}
+			}
 			continue
 		}
 		value, present, err := predicateValue(c.input, predicate)
@@ -52,6 +64,7 @@ func (c *Context) expandGroup(group int, operator string) (string, error) {
 			return "", err
 		}
 		if !predicate.applyWhenAbsent && !present {
+			predicatereplay.Record(c.ctx, occurrence, predicate.definition, "", nil)
 			continue
 		}
 		var fragment string
@@ -92,6 +105,7 @@ func (c *Context) expandGroup(group int, operator string) (string, error) {
 			}
 		}
 		fragment = strings.TrimSpace(fragment)
+		predicatereplay.Record(c.ctx, occurrence, predicate.definition, fragment, args)
 		if fragment == "" {
 			continue
 		}

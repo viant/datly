@@ -18,6 +18,7 @@ import (
 
 // Config contains immutable dependencies for a registered reader execution.
 type Config struct {
+	emptyLookup     *emptyLookupPlan
 	metricScope     string
 	observations    map[*data.View]observability.Resolution
 	observationErr  error
@@ -67,6 +68,11 @@ func NewExecution(config Config, options ...Option) (*Execution, error) {
 	if err := validateExecutionOptions(execution.config.Plan, config.SQL); err != nil {
 		return nil, err
 	}
+	lookup, err := compileEmptyLookup(config)
+	if err != nil {
+		return nil, err
+	}
+	execution.config.emptyLookup = lookup
 	return execution, nil
 }
 
@@ -164,6 +170,7 @@ func (e *Execution) session() *Session {
 		return nil
 	}
 	return &Session{
+		emptyLookup:     e.config.emptyLookup,
 		Component:       e.config.Component,
 		metricScope:     e.config.metricScope,
 		observations:    e.config.observations,

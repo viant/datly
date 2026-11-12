@@ -769,3 +769,49 @@ configuration pairs into arbitrary fields. The compiled argument plan contains
 immutable scalars, and every Compute call receives its own argument slice.
 Binding errors, cancellation handled by the existing lifecycle, and handler
 errors retain their normal propagation; denied authorization must return an error.
+
+### Identity reads: forbidden versus missing
+
+Mark each authorization predicate occurrence with the existing tag syntax:
+
+```sql
+#define($_ = $Auth<*auth.Output>(component/GET:/v1/api/auth)
+    .Tag('predicate:"handler,example.com/security.Scope,auth=true"'))
+```
+
+`auth=true` is predicate metadata, not a handler argument. Other occurrences on
+that same input remain ordinary predicates. Existing unmarked readers retain
+their empty-result behavior. No additional output field or lifecycle hook is
+required. To preserve an empty response on a marked reader, tag its root output:
+
+```sql
+#define($_ = $Data<[]*Record>(output/view).Tag('onEmpty:"empty"'))
+```
+
+An eligible GET identity read first executes its normal authorized root query.
+If the complete root result is empty, one existence query omits only the marked
+root authorization occurrences. It retains the identity and ordinary predicates,
+joins, source SQL, and lifecycle restrictions. Existence yields typed HTTP 403;
+absence yields typed HTTP 404. MCP uses the same native error path. A nonempty
+result, including a partially authorized batch of IDs, triggers no probe.
+
+Eligibility uses the native compiled route placeholders and activation metadata,
+complete root primary-key metadata, and parser-proven column lineage. Every key
+must have an active path-bound `equal` or `in` predicate in this root evaluation.
+Column/member names alone do not establish identity. Missing key evidence,
+parent-only filters, ordinary collections, and later selector pages retain normal
+empty responses. Source-authored offsets and zero limits also retain normal empty responses.
+Unsupported dynamic source structures fail during reader registration through the
+existing checked SQL analysis. Partitioned identity roots require the empty-output
+opt-out. SQLX `primaryKey` tags and canonical schema primary keys supply key facts.
+
+Probe metadata is prepared with the registered reader revision. Bound predicate
+fragments and arguments are retained only for this root invocation and replayed
+for the probe; authorization handlers and component inputs are not rebound. The
+probe uses the native result-wrapper projection and row executor, returns only a
+constant, loads no relations or totals, and does not use a shared existence cache.
+It reuses an active transaction and the invocation deadline, query guard, and query
+scope. Probe failures preserve their causes instead of becoming 403/404. Without
+a shared transaction snapshot, concurrent creation/deletion may change the
+classification between the two reads. SQLite HTTP/MCP tests exercise the full
+path; no deployed database parity is implied by those tests.

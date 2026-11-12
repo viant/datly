@@ -158,6 +158,11 @@ func parseDeclarations(blocks []directiveBlock) (result []*spec.Parameter, spans
 			FormatSelector:  options.formatSelector,
 			Raw:             strings.TrimSpace(block.body),
 		}
+		tagPredicates, err := tag.ParsePredicates(reflect.StructTag(tag.CanonicalFieldTag(param.Tag)))
+		if err != nil {
+			return nil, nil, nil, fmt.Errorf("parameter %s: %w", holder, err)
+		}
+		param.Predicates = append(param.Predicates, tagPredicates...)
 		if err := applySelectorTag(param); err != nil {
 			return nil, nil, nil, fmt.Errorf("parameter %s: %w", holder, err)
 		}

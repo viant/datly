@@ -3,6 +3,7 @@ package velty
 import (
 	"context"
 	"fmt"
+	"github.com/viant/datly/internal/predicatereplay"
 	"reflect"
 	"strings"
 
@@ -19,6 +20,7 @@ const VariableName = "predicate"
 type LookupType func(name string) (reflect.Type, error)
 
 type Program struct {
+	groups     map[int][]int
 	predicates []compiledPredicate
 }
 
@@ -34,6 +36,7 @@ func (*Program) ContextType() reflect.Type {
 }
 
 func (p *Program) NewContext(ctx context.Context, binder xhandler.Binder, appendArgs func(...any)) (any, error) {
+	ctx = predicatereplay.ForProgram(ctx, p)
 	if binder == nil {
 		return nil, fmt.Errorf("predicate input binder is required")
 	}
@@ -50,6 +53,8 @@ func (p *Program) NewContext(ctx context.Context, binder xhandler.Binder, append
 }
 
 type compiledPredicate struct {
+	definition      *spec.Predicate
+	auth            bool
 	group           int
 	fieldName       string
 	fieldIndex      []int
@@ -68,7 +73,7 @@ type compiledMarker struct {
 }
 
 func Compile(input CompileInput) (*Program, error) {
-	program := &Program{}
+	program := &Program{groups: map[int][]int{}}
 	component := input.Component
 	if !hasPredicateMetadata(component) {
 		return program, nil
@@ -100,6 +105,8 @@ func Compile(input CompileInput) (*Program, error) {
 			}
 			compiled := compiledPredicate{
 				group:           definition.Group,
+				auth:            definition.Auth,
+				definition:      definition,
 				fieldName:       field.Name,
 				fieldIndex:      append([]int(nil), field.Index...),
 				marker:          marker,
@@ -120,6 +127,7 @@ func Compile(input CompileInput) (*Program, error) {
 			if err != nil {
 				return nil, fmt.Errorf("compile predicate %s for %s: %w", definition.Name, param.Name, err)
 			}
+			program.groups[definition.Group] = append(program.groups[definition.Group], len(program.predicates))
 			program.predicates = append(program.predicates, compiled)
 		}
 	}

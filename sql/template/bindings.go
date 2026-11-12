@@ -22,7 +22,7 @@ type sourceReplacement struct {
 // bindEmittedInputVariables mirrors Datly's SQL sanitization boundary: input
 // values used as template decisions stay typed, while values emitted into SQL
 // become named placeholders consumed by the shared SQL binder.
-func bindEmittedInputVariables(source string, root *stmt.Block, spans map[ast.Node]veltyparser.NodeSpan, bindings []variableBinding, nullableTypes *[]reflect.Type) (string, error) {
+func bindEmittedInputVariables(source string, root *stmt.Block, spans map[ast.Node]veltyparser.NodeSpan, bindings []variableBinding, nullableTypes *[]reflect.Type) (string, string, error) {
 	byName := make(map[string]variableBinding, len(bindings))
 	for _, binding := range bindings {
 		byName[binding.name] = binding
@@ -31,22 +31,24 @@ func bindEmittedInputVariables(source string, root *stmt.Block, spans map[ast.No
 	identifier.CollectLocalVariables(root.Statements(), locals)
 	var replacements []sourceReplacement
 	if err := collectInputReplacements(source, root.Statements(), spans, byName, locals, &replacements, nullableTypes); err != nil {
-		return "", err
+		return "", "", err
 	}
 	if len(replacements) == 0 {
-		return source, nil
+		return source, source, nil
 	}
 	sort.Slice(replacements, func(i, j int) bool {
 		return replacements[i].start > replacements[j].start
 	})
 	result := source
+	analysis := source
 	for _, replacement := range replacements {
 		if replacement.start < 0 || replacement.end < replacement.start || replacement.end > len(result) {
-			return "", fmt.Errorf("bind emitted SQL template variable: invalid source span [%d:%d]", replacement.start, replacement.end)
+			return "", "", fmt.Errorf("bind emitted SQL template variable: invalid source span [%d:%d]", replacement.start, replacement.end)
 		}
 		result = result[:replacement.start] + replacement.value + result[replacement.end:]
+		analysis = analysis[:replacement.start] + "?" + analysis[replacement.end:]
 	}
-	return result, nil
+	return result, analysis, nil
 }
 
 func collectInputReplacements(source string, statements []ast.Statement, spans map[ast.Node]veltyparser.NodeSpan, bindings map[string]variableBinding, locals map[string]bool, replacements *[]sourceReplacement, nullableTypes *[]reflect.Type) error {
