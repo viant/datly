@@ -214,7 +214,11 @@ func (h *Handler) serveHTTP(writer stdhttp.ResponseWriter, req *stdhttp.Request)
 	effective, contractErr := h.runtime.ResolveContract(ctx, target, requestScope)
 	if contractErr != nil {
 		code := xresponse.ErrorStatusCode(contractErr, stdhttp.StatusInternalServerError)
-		writeJSON(writer, code, xresponse.Status{Status: "error", Message: dexec.ErrorMessage(contractErr, code)})
+		if body, declared := xresponse.ErrorBody(contractErr); declared {
+			writeJSON(writer, code, body)
+		} else {
+			writeJSON(writer, code, xresponse.Status{Status: "error", Message: dexec.ErrorMessage(contractErr, code)})
+		}
 		return
 	}
 	dexec.PublishContract(ctx, target, effective)

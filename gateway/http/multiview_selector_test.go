@@ -219,9 +219,16 @@ func TestHTTPMultiViewOmittedNestedViewDoesNotQuery(t *testing.T) {
 	require.JSONEq(t, `{"rows":[{"product":[{"display_name":"second"}]}]}`, response.Body.String())
 }
 
-func TestHTTPMultiViewRejectsTwoArgumentSelector(t *testing.T) {
-	_, err := transcribe.NewCompiler().Compile(context.Background(), &transcribe.Source{Scope: "example.com/inventory", Name: "Invalid", Text: strings.Replace(multiviewSource, "QuerySelector('products')", "QuerySelector('products','fields')", 1)})
-	require.Error(t, err)
+func TestHTTPMultiViewAcceptsExplicitSelectorProperty(t *testing.T) {
+	result, err := transcribe.NewCompiler().Compile(context.Background(), &transcribe.Source{Scope: "example.com/inventory", Name: "Explicit", Text: strings.Replace(multiviewSource, "QuerySelector('products')", "QuerySelector('products','fields')", 1)})
+	require.NoError(t, err)
+	found := false
+	for _, parameter := range result.Component.Parameters {
+		if parameter.QuerySelector != nil && parameter.QuerySelector.View == "products" && parameter.QuerySelector.Property == spec.SelectorPropertyFields {
+			found = true
+		}
+	}
+	require.True(t, found)
 }
 
 func TestMCPMultiViewSelectedPayloadRetainsTypedResult(t *testing.T) {
