@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/viant/datly/internal/sqlanalysis"
 	"github.com/viant/datly/spec"
 	dsql "github.com/viant/datly/sql"
 	sqlmacro "github.com/viant/datly/sql/macro"
@@ -81,6 +82,12 @@ func RefinePrepared(ctx context.Context, component *spec.Component, resources fs
 						return fmt.Errorf("prepared projection %s: %w", view.Namespace, err)
 					}
 					candidate, _ = sqlmacro.ExpandNonWindowSQL(candidate, parentSQL, parentAliases...)
+				}
+				// Reuse ordinary discovery's parser-validated treatment of runtime
+				// tuple predicates on the private analysis copy only.
+				candidate, err := sqlanalysis.DiscoveryPredicates(candidate)
+				if err != nil {
+					return fmt.Errorf("prepared projection %s: %w", view.Namespace, err)
 				}
 				SQL, err := projectionAnalysisSQL(candidate, inputs)
 				if err != nil {

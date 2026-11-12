@@ -86,3 +86,34 @@ func TestPreparedColumnsRejectDriftAndRetainSQL(t *testing.T) {
 		})
 	}
 }
+
+func TestPreparedCompositePredicatePreservesSource(t *testing.T) {
+	for _, tc := range []struct {
+		name, sql string
+		valid     bool
+	}{
+		{"generated current", `SELECT r.id FROM records r WHERE $criteria.CompositeIn("r", $Unsafe.ProjectKeys($Body, $Current))`, true},
+		{"projection rejected", `SELECT $criteria.CompositeIn("r", $Keys) AS id FROM records r`, false},
+		{"invalid arity", `SELECT r.id FROM records r WHERE $criteria.CompositeIn("r")`, false},
+		{"chained call", `SELECT r.id FROM records r WHERE $criteria.CompositeIn("r", $Keys).Other()`, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			view := &spec.View{Name: "Current", Source: &spec.ViewSource{SQL: tc.sql}}
+			calls := 0
+			err := RefinePrepared(t.Context(), &spec.Component{RootView: view}, nil, func(_ context.Context, request PreparedColumnRequest) (*PreparedColumnResult, error) {
+				calls++
+				require.Equal(t, tc.sql, request.Source.SQL)
+				return &PreparedColumnResult{Columns: []*spec.Column{{Name: "id", Type: spec.TypeRef{Name: "int"}}}}, nil
+			}, nil)
+			require.Equal(t, tc.sql, view.Source.SQL)
+			if tc.valid {
+				require.NoError(t, err)
+				require.Equal(t, 1, calls)
+				require.Len(t, view.Columns, 1)
+			} else {
+				require.Error(t, err)
+				require.Zero(t, calls)
+			}
+		})
+	}
+}
