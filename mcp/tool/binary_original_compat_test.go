@@ -51,7 +51,7 @@ func originalBinaryPlan(t *testing.T, hybrid bool) *Plan {
 		typ = reflect.TypeOf(originalHybridInput{})
 		bindings = []bindly.BindingSpec{{Path: "Body", Location: bindstate.Location{Kind: "body", In: "body"}}}
 	}
-	plan, err := NewCompiler().Compile(Input{Component: spec.Key{Kind: spec.KindComponent, Scope: "example.com/files", Name: "upload"}, Exposure: &spec.MCPExposure{Kind: spec.MCPExposureTool, Name: "files.upload"}, Contract: testRouteContract(t, typ, bindings)})
+	plan, err := NewCompiler().Compile(Input{CaseFormat: "uc", Component: spec.Key{Kind: spec.KindComponent, Scope: "example.com/files", Name: "upload"}, Exposure: &spec.MCPExposure{Kind: spec.MCPExposureTool, Name: "files.upload"}, Contract: testRouteContract(t, typ, bindings)})
 	require.NoError(t, err)
 	return plan
 }

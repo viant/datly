@@ -227,7 +227,7 @@ func (c *Compiler) Compile(input Input) (*Plan, error) {
 			SplitCSVString: argument.querySelectorCSV,
 		}
 	}
-	projectBinarySchema(arguments, &inputSchema)
+	projectBinarySchema(arguments, &inputSchema, input.CaseFormat)
 	binding, err := c.binding.Compile(bindingArguments)
 	if err != nil {
 		return nil, fmt.Errorf("compile MCP tool %q binding: %w", name, err)

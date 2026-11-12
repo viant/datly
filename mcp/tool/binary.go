@@ -51,7 +51,7 @@ func descriptorSchema() map[string]interface{} {
 	// Original MCP blob descriptors require data; filename and MIME type are optional.
 	return map[string]interface{}{"type": "object", "required": []string{"data"}, "properties": map[string]interface{}{"data": map[string]interface{}{"type": "string", "description": "Base64-encoded blob data"}, "filename": map[string]interface{}{"type": "string", "description": "Multipart filename"}, "mimeType": map[string]interface{}{"type": "string", "description": "Blob media type"}}}
 }
-func projectBinarySchema(args []Argument, s *schema.ToolInputSchema) {
+func projectBinarySchema(args []Argument, s *schema.ToolInputSchema, format string) {
 	files, raw := binaryCapabilities(args)
 	for _, a := range args {
 		if fileArgument(a) {
@@ -67,14 +67,16 @@ func projectBinarySchema(args []Argument, s *schema.ToolInputSchema) {
 		}
 	}
 	if files {
-		if _, exists := s.Properties["Payload"]; !exists {
-			s.Properties["Payload"] = map[string]interface{}{"type": "object", "additionalProperties": true, "description": "Optional action-specific multipart form fields. Each member is written as a separate form field alongside Files."}
+		name := caseFormattedFallback(reflect.StructField{}, "Payload", format)
+		if _, exists := s.Properties[name]; !exists {
+			s.Properties[name] = map[string]interface{}{"type": "object", "additionalProperties": true, "description": "Optional action-specific multipart form fields. Each member is written as a separate form field alongside Files."}
 		}
 	}
 	if raw {
-		if _, exists := s.Properties["Blob"]; !exists {
-			s.Properties["Blob"] = descriptorSchema()
-			s.Properties["Blob"]["description"] = "Base64-encoded binary request body; use instead of JSON when supported"
+		name := caseFormattedFallback(reflect.StructField{}, "Blob", format)
+		if _, exists := s.Properties[name]; !exists {
+			s.Properties[name] = descriptorSchema()
+			s.Properties[name]["description"] = "Base64-encoded binary request body; use instead of JSON when supported"
 		}
 	}
 	if files || raw {
@@ -101,10 +103,29 @@ func (p *Plan) binaryArguments(args map[string]interface{}) (map[string]interfac
 			declared[alias] = true
 		}
 	}
+	// Synthetic arguments use the same naming policy as declared arguments.
+	// Normalize to internal keys once; declared names retain ownership, and the
+	// advertised spelling takes precedence over historical aliases.
+	aliases := map[string]string{}
+	public := map[string]string{}
+	for canonical, enabled := range map[string]bool{"Payload": files, "Blob": raw} {
+		if !enabled {
+			continue
+		}
+		name := caseFormattedFallback(reflect.StructField{}, canonical, p.caseFormat)
+		public[canonical] = name
+		aliases[canonical], aliases[strings.ToLower(canonical)], aliases[name] = canonical, canonical, canonical
+	}
 	ordinary := map[string]interface{}{}
 	for k, v := range args {
-		if !declared[k] && (files && k == "Payload" || raw && (k == "Blob" || k == "blob")) {
-			synthetic[k] = v
+		if canonical, ok := aliases[k]; ok && !declared[k] {
+			if preferred, present := args[public[canonical]]; present && !declared[public[canonical]] {
+				synthetic[canonical] = preferred
+			} else if original, present := args[canonical]; present && !declared[canonical] {
+				synthetic[canonical] = original
+			} else {
+				synthetic[canonical] = v
+			}
 		} else {
 			ordinary[k] = v
 		}

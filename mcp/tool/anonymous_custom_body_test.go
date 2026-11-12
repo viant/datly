@@ -57,7 +57,7 @@ func TestAnonymousCustomJSONAndWholeBodyXLS(t *testing.T) {
 	require.NoError(t, err)
 	properties := plan.Metadata().InputSchema.Properties
 	require.Contains(t, properties, "data")
-	require.Contains(t, properties, "Blob")
+	require.Contains(t, properties, "blob")
 	for _, name := range []string{"Body", "Has", "JSONCalls", "XLSCalls", "Raw"} {
 		require.NotContains(t, properties, name)
 	}
