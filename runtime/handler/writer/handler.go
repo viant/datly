@@ -1152,7 +1152,7 @@ func (p *Program) captureOriginalAt(record *Record, rows reflect.Value, parent *
 			entity = entity.Addr()
 		}
 		if entity.IsNil() {
-			if p.skipAuxiliaryNull(record, indexed) || p.deferRootNull(record, i, indexed) || p.deferNestedNull(record, p.rowLocation(record, parent, i, indexed), indexed) {
+			if p.deferRootNull(record, i, indexed) || p.deferNestedNull(record, p.rowLocation(record, parent, i, indexed), indexed) {
 				continue
 			}
 			return fmt.Errorf("writer row %d is nil", i)
@@ -1343,11 +1343,6 @@ func (p *Program) prepare(ctx context.Context, binder xhandler.Binder) (err erro
 		// deletion rows derived from the assembled Previous graph. Rebuild frames
 		// once after Init so those new rows participate in validation, ordering and
 		// DML without invoking Init twice for the original topology.
-		// Validate surviving first-pass identities before the rebuild can recapture them.
-		// Init-cleared auxiliary subtrees remain eligible for bounded pruning.
-		if err = p.discardInitializedAuxiliaryNullFrames(); err != nil {
-			return err
-		}
 		p.frames = &MutationFrames{}
 		if err = p.buildRecordFrames(ctx, binder, p.metadata.Root, entities, nil); err != nil {
 			return err
@@ -1356,12 +1351,6 @@ func (p *Program) prepare(ctx context.Context, binder xhandler.Binder) (err erro
 			return err
 		}
 		for _, frame := range p.frames.Rows {
-			if p.skippedAuxiliaryAncestor(frame) != nil {
-				continue
-			}
-			if err = p.validateAuxiliaryFrameIdentity(frame); err != nil {
-				return err
-			}
 			if err = p.applyInvariants(frame); err != nil {
 				return err
 			}
@@ -1373,9 +1362,6 @@ func (p *Program) prepare(ctx context.Context, binder xhandler.Binder) (err erro
 					return err
 				}
 			}
-		}
-		if err = p.discardInitializedAuxiliaryNullFrames(); err != nil {
-			return err
 		}
 		if err = p.orderFramesByReferences(); err != nil {
 			return err
@@ -1460,9 +1446,6 @@ func (p *Program) prepare(ctx context.Context, binder xhandler.Binder) (err erro
 		}
 	}
 
-	if err = p.validateAuxiliaryTopology(); err != nil {
-		return err
-	}
 	if err = p.preflightQueueContracts(ctx, binder); err != nil {
 		return err
 	}
@@ -1521,9 +1504,6 @@ func (p *Program) prepare(ctx context.Context, binder xhandler.Binder) (err erro
 			return fmt.Errorf("AfterSequence changed finite_reconciliation allocated graph or evidence")
 		}
 	}
-	if err = p.validateAuxiliaryTopology(); err != nil {
-		return err
-	}
 	if err = p.reconcileLinks(true); err != nil {
 		return err
 	}
@@ -1563,9 +1543,6 @@ func (p *Program) prepare(ctx context.Context, binder xhandler.Binder) (err erro
 		return err
 	}
 
-	if err = p.validateAuxiliaryTopology(); err != nil {
-		return err
-	}
 	if err = p.validateActionPolicyFacts(); err != nil {
 		return err
 	}
@@ -1588,12 +1565,6 @@ func (p *Program) prepare(ctx context.Context, binder xhandler.Binder) (err erro
 func (p *Program) queuePhysical(ctx context.Context, binder xhandler.Binder, dml xhandler.DML, action *Action, frame *Frame, queued *bool, deleteBatch ...func() error) error {
 	if err := p.validateActionPolicyFacts(); err != nil {
 		return err
-	}
-	if err := p.validateAuxiliaryFrameIdentity(frame); err != nil {
-		return err
-	}
-	if invalid := p.skippedAuxiliaryAncestor(frame); invalid != nil {
-		return fmt.Errorf("writer row at %s is nil", invalid.Location)
 	}
 	var err error
 	value := action.Entity.Interface()
@@ -2016,15 +1987,6 @@ func (p *Program) callEntityHook(ctx context.Context, name string, frame *Frame)
 	if err := p.validateActionPolicyFacts(); err != nil {
 		return err
 	}
-	if err := p.validateAuxiliaryFrameIdentity(frame); err != nil {
-		return err
-	}
-	if invalid := p.skippedAuxiliaryAncestor(frame); invalid != nil {
-		if name == "Init" {
-			return nil
-		}
-		return fmt.Errorf("writer row at %s is nil", invalid.Location)
-	}
 	// Init can invalidate a later collection slot after frames were built.
 	// Never pass that null to an entity hook or dereference its frame. Only the
 	// approved root policy can retain it until initial structural validation.
@@ -2052,14 +2014,6 @@ func (p *Program) callEntityHook(ctx context.Context, name string, frame *Frame)
 	}
 	if err := p.validateActionPolicyFacts(); err != nil {
 		return err
-	}
-	if err := p.validateAuxiliaryFrameIdentity(frame); err != nil {
-		return err
-	}
-	if name != "Init" {
-		if invalid := p.skippedAuxiliaryAncestor(frame); invalid != nil {
-			return fmt.Errorf("writer row at %s is nil", invalid.Location)
-		}
 	}
 	return nil
 }
@@ -2330,7 +2284,7 @@ func (p *Program) buildEntityFrame(ctx context.Context, binder xhandler.Binder, 
 	{
 		i := position
 		if entity.IsNil() {
-			if p.skipAuxiliaryNull(record, indexed) || (parent == nil && p.deferRootNull(record, i, indexed)) || p.deferNestedNull(record, p.rowLocation(record, parent, i, indexed), indexed) {
+			if (parent == nil && p.deferRootNull(record, i, indexed)) || p.deferNestedNull(record, p.rowLocation(record, parent, i, indexed), indexed) {
 				return nil
 			}
 			return fmt.Errorf("writer row %d is nil", i)

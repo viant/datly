@@ -145,7 +145,7 @@ func (p *Program) callAfterQueueInput(ctx context.Context, binder xhandler.Binde
 	p.afterQueueInputStarted, p.afterQueueInputSnapshot = true, before
 	p.guardMu.Unlock()
 	defer func() {
-		err = errors.Join(err, ctx.Err(), p.validateAfterQueueInputState(), p.validateAuxiliaryTopology(), p.validateActionPolicyFacts(), p.validateActionPolicyActions(), p.validateQueuedContractState(ctx, binder))
+		err = errors.Join(err, ctx.Err(), p.validateAfterQueueInputState(), p.validateActionPolicyFacts(), p.validateActionPolicyActions(), p.validateQueuedContractState(ctx, binder))
 	}()
 	results := p.hook.MethodByName("AfterQueueInput").Call([]reflect.Value{reflect.ValueOf(ctx), reflect.ValueOf(p.input), reflect.ValueOf(p.output)})
 	return methodError("AfterQueueInput", results)

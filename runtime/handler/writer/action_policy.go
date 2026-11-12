@@ -229,9 +229,6 @@ func (p *Program) validateActionPolicyFacts() error {
 		if frame == nil {
 			continue
 		}
-		if p.skippedAuxiliaryAncestor(frame) != nil {
-			continue
-		}
 		for owner := frame; owner != nil; owner = owner.Parent {
 			live := p.liveFrameEntity(owner)
 			original := owner.framedEntity

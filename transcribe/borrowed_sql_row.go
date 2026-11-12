@@ -66,19 +66,6 @@ func borrowedLeafContract(ctx context.Context, result *Result, view *spec.View, 
 		return gen.BorrowedLeafContract{}, err
 	}
 	origin := facts.Identity
-	comparisonView := view
-	if view.Auxiliary && view != result.Component.RootView && view.NestedNullPolicy == "skip-auxiliary" {
-		// Validate the original collection role before detaching it. A shared row
-		// comparison must not manufacture eligibility for an invalid policy.
-		if err := (&gen.Input{Component: result.Component}).ValidateLifecycleTarget(true); err != nil {
-			return gen.BorrowedLeafContract{}, err
-		}
-		// Independent row generation promotes this leaf to a root. Its nested
-		// auxiliary traversal policy remains on the canonical/runtime occurrence,
-		// while the physical owner's shared row and Has contract stays unchanged.
-		comparisonView = view.Clone()
-		comparisonView.NestedNullPolicy = ""
-	}
 	comparisonInput, err := borrowedGenerationInput(ctx, result, declaration.Package)
 	if err != nil {
 		return gen.BorrowedLeafContract{}, err
@@ -95,9 +82,9 @@ func borrowedLeafContract(ctx context.Context, result *Result, view *spec.View, 
 		if err != nil {
 			return contract, err
 		}
-		contract, err = gen.BorrowedLeafContractFromPlan(plan, comparisonView, declaration.Package, declaration.Type, origin.Connector, origin.Catalog, origin.Schema, origin.Table)
+		contract, err = gen.BorrowedLeafContractFromPlan(plan, view, declaration.Package, declaration.Type, origin.Connector, origin.Catalog, origin.Schema, origin.Table)
 	} else {
-		contract, err = gen.BorrowedLeafContractFor(result.Component, comparisonView, declaration.Package, declaration.Type, origin.Connector, origin.Catalog, origin.Schema, origin.Table, comparisonInput)
+		contract, err = gen.BorrowedLeafContractFor(result.Component, view, declaration.Package, declaration.Type, origin.Connector, origin.Catalog, origin.Schema, origin.Table, comparisonInput)
 	}
 
 	if err != nil {

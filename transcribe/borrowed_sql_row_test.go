@@ -38,170 +38,6 @@ func borrowedAuxiliaryNullComparisonFixture(t *testing.T) (*Result, *spec.View, 
 	return &Result{Component: component, Source: &Source{Name: "Public", ColumnRefiner: refiner}}, leaf, declaration
 }
 
-func TestBorrowedAuxiliaryNestedNullComparisonClone(t *testing.T) {
-	result, leaf, declaration := borrowedAuxiliaryNullComparisonFixture(t)
-	withoutPolicy, err := borrowedLeafContract(context.Background(), result, leaf, declaration, false)
-	require.NoError(t, err)
-	leaf.NestedNullPolicy = "skip-auxiliary"
-	before, err := json.Marshal(result.Component)
-	require.NoError(t, err)
-	withPolicy, err := borrowedLeafContract(context.Background(), result, leaf, declaration, false)
-	require.NoError(t, err)
-	require.NoError(t, gen.CompareBorrowedLeafContracts(withoutPolicy, withPolicy))
-	require.Equal(t, "skip-auxiliary", leaf.NestedNullPolicy)
-	after, err := json.Marshal(result.Component)
-	require.NoError(t, err)
-	require.JSONEq(t, string(before), string(after), "comparison mutated canonical policy, source or native fields")
-	// The public generic helper retains its strict detached-root semantics.
-	_, err = gen.BorrowedLeafContractFor(result.Component, leaf, declaration.Package, declaration.Type, "main", "", "main", "records")
-	require.ErrorContains(t, err, "nested_null_policy requires")
-}
-
-func TestBorrowedAuxiliaryNestedNullComparisonRejectsMisuse(t *testing.T) {
-	for _, name := range []string{"writable", "one", "unknown", "initial-validation", "root-policy", "root", "derived", "get", "off-path", "current"} {
-		t.Run(name, func(t *testing.T) {
-			result, leaf, declaration := borrowedAuxiliaryNullComparisonFixture(t)
-			leaf.NestedNullPolicy = "skip-auxiliary"
-			switch name {
-			case "writable":
-				leaf.Auxiliary = false
-			case "one":
-				leaf.Cardinality = spec.CardinalityOne
-			case "unknown":
-				leaf.NestedNullPolicy = "unknown"
-			case "initial-validation":
-				leaf.NestedNullPolicy = "initial-validation"
-			case "root-policy":
-				leaf.RootNullPolicy = "skip-auxiliary"
-			case "root":
-				result.Component.RootView = leaf
-			case "derived":
-				result.Component.RootView.Relations[0].Kind = spec.RelationKindDerived
-			case "get":
-				result.Component.Routes = []*spec.Route{{Method: "GET"}}
-			case "off-path", "current":
-				result.Component.RootView.Relations = nil
-				result.Component.Views = []*spec.View{leaf}
-				if name == "current" {
-					result.Component.Parameters = append(result.Component.Parameters, &spec.Parameter{Name: "CurrentRows", TypeExpr: "[]*Row", Source: spec.BindSource{Kind: "view", Name: "Rows"}})
-				}
-			}
-			before, err := json.Marshal(result.Component)
-			require.NoError(t, err)
-			_, err = borrowedLeafContract(context.Background(), result, leaf, declaration, false)
-			require.Error(t, err, "invalid canonical role policy was normalized")
-			after, err := json.Marshal(result.Component)
-			require.NoError(t, err)
-			require.JSONEq(t, string(before), string(after))
-		})
-	}
-}
-
-func TestBorrowedAuxiliaryNestedNullResolvedSourcesAndPhysicalGuards(t *testing.T) {
-	for _, encoding := range []string{"inline", "uri", "embed"} {
-		for _, sourceKind := range []string{"direct", "join", "cte", "computed", "duplicate", "unresolved"} {
-			t.Run(encoding+"/"+sourceKind, func(t *testing.T) {
-				result, leaf, declaration := borrowedAuxiliaryNullComparisonFixture(t)
-				leaf.NestedNullPolicy = "skip-auxiliary"
-				sql := leaf.Source.SQL
-				switch sourceKind {
-				case "join":
-					sql += " JOIN parents p ON p.id=r.parent_id"
-				case "cte":
-					sql = "WITH selected AS (SELECT * FROM records) SELECT r.id,r.parent_id,r.name FROM selected r"
-				case "computed":
-					sql = "SELECT r.id,r.parent_id,r.name||'' AS name FROM records r"
-				case "duplicate":
-					sql = "SELECT r.id,r.parent_id,r.name,r.name FROM records r"
-				}
-				resources, err := resource.New().WithDefault(fstest.MapFS{"records.sql": {Data: []byte(sql)}})
-				require.NoError(t, err)
-				result.Source.Resources = resources
-				leaf.Source.SQL = sql
-				switch encoding {
-				case "uri":
-					leaf.Source.SQL, leaf.Source.URI = "", "records.sql"
-				case "embed":
-					leaf.Source.SQL = "${embed:records.sql}"
-					leaf.Source.Embeds = []*spec.EmbeddedSQLRef{{Path: "records.sql", Raw: leaf.Source.SQL}}
-				}
-				if sourceKind == "unresolved" {
-					leaf.Source.SQL, leaf.Source.URI = "", "missing.sql"
-				}
-				before, err := json.Marshal(result.Component)
-				require.NoError(t, err)
-				_, err = borrowedLeafContract(context.Background(), result, leaf, declaration, false)
-				if sourceKind == "direct" {
-					require.NoError(t, err)
-				} else {
-					require.Error(t, err, "physical source proof bypassed by role normalization")
-				}
-				after, marshalErr := json.Marshal(result.Component)
-				require.NoError(t, marshalErr)
-				require.JSONEq(t, string(before), string(after))
-				data, readErr := fs.ReadFile(resources, "records.sql")
-				require.NoError(t, readErr)
-				require.Equal(t, sql, string(data))
-			})
-		}
-	}
-}
-
-func TestBorrowedAuxiliaryNestedNullRetainsComparisonAuthority(t *testing.T) {
-	result, leaf, declaration := borrowedAuxiliaryNullComparisonFixture(t)
-	leaf.NestedNullPolicy = "skip-auxiliary"
-	actual, err := borrowedLeafContract(context.Background(), result, leaf, declaration, false)
-	require.NoError(t, err)
-	for _, name := range []string{"physical", "omission", "package", "name", "connector", "schema", "table", "fields", "type", "tag", "has", "wrapper", "root-policy", "initial-validation", "cardinality", "writer-policy"} {
-		t.Run(name, func(t *testing.T) {
-			changed := (&gen.BorrowedRowAuthority{Expected: actual}).Clone().Expected
-			switch name {
-			case "physical":
-				changed.Physical[0] ^= 1
-			case "omission":
-				changed.WriterOmitEmpty = !changed.WriterOmitEmpty
-			case "package":
-				changed.Package = "example.com/other"
-			case "name":
-				changed.Name = "OtherRow"
-			case "connector":
-				changed.Connector = "other"
-			case "schema":
-				changed.Schema = "other"
-			case "table":
-				changed.Table = "parents"
-			case "fields":
-				changed.Fields = changed.Fields[1:]
-			case "type":
-				changed.Fields[0].Type = "bool"
-			case "tag":
-				changed.Fields[0].Tag += ` json:"other"`
-			case "has":
-				changed.MarkerFields[0].Name = "Other"
-			case "wrapper":
-				changed.Wrapper = "[]example.com/api.Row"
-			case "root-policy":
-				changed.Metadata.RootNullPolicy = "initial-validation"
-			case "initial-validation":
-				changed.Metadata.NestedNullPolicy = "initial-validation"
-			case "cardinality":
-				changed.Metadata.Cardinality = spec.CardinalityOne
-			case "writer-policy":
-				changed.Metadata.WriterActionPolicy = "insert-delete"
-			}
-			require.Error(t, gen.CompareBorrowedLeafContracts(actual, changed), "nonexception contract authority difference concealed")
-		})
-	}
-	// The same fresh native field constraint application still rejects forged PK
-	// metadata after deriving the comparison with the role-policy exception active.
-	facts, err := result.Source.ColumnRefiner.PhysicalSourceConstraints(context.Background(), "main", leaf)
-	require.NoError(t, err)
-	forged := (&gen.BorrowedRowAuthority{Expected: actual}).Clone().Expected
-	forged.Fields[0].Tag = strings.Replace(forged.Fields[0].Tag, ",primaryKey", ",otherPrimaryKey", 1)
-	require.NotEqual(t, actual.Fields[0].Tag, forged.Fields[0].Tag)
-	require.Error(t, applyBorrowedPhysicalFacts(&forged, facts))
-}
-
 func TestBorrowedResolvedResourceAuthority(t *testing.T) {
 	ctx := context.Background()
 	db := sqlite.New(t, sqlite.WithDSN(filepath.Join(t.TempDir(), "resolved-authority.db")))
@@ -618,7 +454,7 @@ SELECT Records.*,type(Records,'Row') FROM records Records`
 #setting($_ = $output_type('PublicOutput'))
 #setting($_ = $borrow_sql_row('Rows/Records','` + module + `/api','Row','private/Private.dql','Private','Rows'))
 #define($_ = $Rows<[]*PublicView>(body/data).Cardinality('Many').Required())
-SELECT p.*,Records.*,type(p,'PublicView'),type(Records,'Row'),nested_null_policy(Records,'skip-auxiliary') FROM (parents) p JOIN (records) Records ON Records.parent_id=p.id`
+SELECT p.*,Records.*,type(p,'PublicView'),type(Records,'Row') FROM (parents) p JOIN (records) Records ON Records.parent_id=p.id`
 	makeSource := func(scope, name, path, text string) *Source {
 		require.NoError(t, os.WriteFile(path, []byte(text), 0600))
 		return &Source{Scope: scope, Name: name, Path: path, Text: text, Connector: "main", ColumnRefiner: r, Types: typecatalog.NewCatalog()}
@@ -635,7 +471,7 @@ SELECT p.*,Records.*,type(p,'PublicView'),type(Records,'Row'),nested_null_policy
 	// Existing proofs reparse captured Source.Text. A new authored policy must
 	// be validated on fresh admission without changing the publication forest.
 	changedSource := *borrowerSource
-	changedSource.Text = strings.Replace(borrower, "skip-auxiliary", "unknown", 1)
+	changedSource.Text = strings.Replace(borrower, "FROM (parents)", ",nested_null_policy(Records,'skip-auxiliary') FROM (parents)", 1)
 	require.NoError(t, os.WriteFile(borrowerSource.Path, []byte(changedSource.Text), 0600))
 	snapshot := func() map[string]struct {
 		Mode  fs.FileMode

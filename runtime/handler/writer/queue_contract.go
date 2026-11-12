@@ -299,12 +299,6 @@ func (p *Program) queueSourceSlice(ctx context.Context, binder xhandler.Binder, 
 		if err := p.validateActionPolicyFacts(); err != nil {
 			return err
 		}
-		if err := p.validateAuxiliaryFrameIdentity(frame); err != nil {
-			return err
-		}
-		if p.skippedAuxiliaryAncestor(frame) != nil {
-			return fmt.Errorf("writer row at %s is nil", frame.Location)
-		}
 		if frame.Record.Sequence != nil && !linkValueResolved(frame.Entity.Elem().FieldByIndex(frame.Record.Sequence.Index)) {
 			return fmt.Errorf("queue_contract native allocation is unresolved for %s", frame.Location)
 		}

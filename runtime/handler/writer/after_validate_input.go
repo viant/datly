@@ -286,9 +286,6 @@ func (p *Program) refreshPreparation(nodes []*preparationNode, apply bool) error
 			facts.owner = &copy
 		}
 	}
-	if err := p.validateAuxiliaryTopology(); err != nil {
-		return err
-	}
 	if err := p.reconcileLinks(false); err != nil {
 		return err
 	}
@@ -317,9 +314,6 @@ func (p *Program) callAfterValidateInput(ctx context.Context, binder xhandler.Bi
 	}
 	if p.afterValidateInputStarted {
 		return fmt.Errorf("AfterValidateInput execution already attempted; fresh capture required")
-	}
-	if err = p.validateAuxiliaryTopology(); err != nil {
-		return err
 	}
 	if err = p.validateActionPolicyFacts(); err != nil {
 		return err
