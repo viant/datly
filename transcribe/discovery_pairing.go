@@ -7,6 +7,7 @@ import (
 
 	"github.com/viant/datly/bootstrap"
 	"github.com/viant/datly/spec"
+	"github.com/viant/datly/transcribe/dql"
 	"github.com/viant/datly/transcribe/internal/dependency"
 	"github.com/viant/datly/typecatalog"
 )
@@ -48,6 +49,10 @@ func (c *discoveryCompilation) declaredPackageSource(ctx context.Context, source
 	if err != nil {
 		return nil, err
 	}
+	authored, err := dql.ParsePreparedComponentSource(source.Scope, source.Name, prepared)
+	if err != nil {
+		return nil, err
+	}
 	authoredRoutes := prepared.Directives.ComponentRoutes(source.Name, "")
 	var matched *bootstrap.PackageComponentSource
 	conflict := false
@@ -63,7 +68,7 @@ func (c *discoveryCompilation) declaredPackageSource(ctx context.Context, source
 			}
 			continue
 		}
-		component, err := resolvePackageDeclarations(candidate, resolver)
+		component, err := resolvePackageDeclarations(candidate, resolver, authored)
 		if err != nil {
 			return nil, err
 		}
@@ -141,13 +146,16 @@ func declaredRoutesMatch(authored, existing []*spec.Route) (all, any bool) {
 // resolvePackageDeclarations reads current holder contracts without admitting a
 // previously generated executable graph. Copies keep the original metadata
 // locator available to package-only compilation and generation replacement.
-func resolvePackageDeclarations(source *bootstrap.PackageComponentSource, resolver *typecatalog.Resolver) (*spec.Component, error) {
+func resolvePackageDeclarations(source *bootstrap.PackageComponentSource, resolver *typecatalog.Resolver, authored ...*spec.Component) (*spec.Component, error) {
 	copy := *source
 	copy.Routes = make([]*bootstrap.RouteSource, len(source.Routes))
 	for i, route := range source.Routes {
 		detached := *route
 		detached.Tag.ReaderMetadata = ""
 		copy.Routes[i] = &detached
+	}
+	if len(authored) != 0 && authored[0] != nil {
+		return copy.ResolveDeclarations(resolver, authored[0])
 	}
 	return copy.ResolveDescriptors(resolver)
 }

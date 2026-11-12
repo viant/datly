@@ -103,6 +103,17 @@ func GroupPackageComponentSources(routes []*RouteSource, types *typecatalog.Reso
 // ResolveDescriptors reconstructs one canonical component from all grouped
 // route holders. Component-wide metadata must agree exactly across routes.
 func (s *PackageComponentSource) ResolveDescriptors(types *typecatalog.Resolver) (*spec.Component, error) {
+	return s.resolveDescriptors(types, nil)
+}
+
+// ResolveDeclarations retains holder and contract authority while current source
+// declarations replace their exact view sources. Package-only admission remains
+// the strict ResolveDescriptors path.
+func (s *PackageComponentSource) ResolveDeclarations(types *typecatalog.Resolver, authored *spec.Component) (*spec.Component, error) {
+	return s.resolveDescriptors(types, authored)
+}
+
+func (s *PackageComponentSource) resolveDescriptors(types *typecatalog.Resolver, authored *spec.Component) (*spec.Component, error) {
 	if s == nil || len(s.Routes) == 0 {
 		return nil, fmt.Errorf("package component routes are required")
 	}
@@ -158,8 +169,30 @@ func (s *PackageComponentSource) ResolveDescriptors(types *typecatalog.Resolver)
 			}
 		}
 	}
+	if authored != nil {
+		if authored.RootView != nil {
+			combined.RootView = authored.RootView.Clone()
+		}
+		byName := map[string]int{}
+		for i, v := range combined.Views {
+			if v != nil {
+				byName[v.CanonicalName()] = i
+			}
+		}
+		for _, v := range authored.Views {
+			if v == nil {
+				continue
+			}
+			if i, ok := byName[v.CanonicalName()]; ok {
+				combined.Views[i] = v.Clone()
+			} else {
+				combined.Views = append(combined.Views, v.Clone())
+			}
+		}
+	}
 	return (ContractResolver{
 		Component: combined, InputType: s.InputType, OutputType: s.OutputType, Types: types,
+		authored: authored,
 	}).Resolve()
 }
 

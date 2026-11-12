@@ -20,6 +20,7 @@ import (
 // ContractResolver projects canonical linked or synthetic contract types into
 // one component. Existing component metadata retains authority.
 type ContractResolver struct {
+	authored *spec.Component
 	// selectorOutput retains actual output identity when handler-owned output
 	// deliberately suppresses structural output projection.
 	selectorOutput *x.Type
@@ -65,6 +66,7 @@ func (r ContractResolver) Resolve() (*spec.Component, error) {
 
 	resolver := &packageComponentResolver{
 		component: component,
+		authored:  r.authored,
 		types:     r.Types,
 		contracts: []packageContract{
 			{role: inputContract, fields: inputFields, descriptor: r.InputType},
@@ -277,6 +279,8 @@ func (s *RouteSource) componentName() string {
 }
 
 type packageComponentResolver struct {
+	authored              *spec.Component
+	authoredViews         map[contractViewSource]bool
 	types                 *typecatalog.Resolver
 	component             *spec.Component
 	contracts             []packageContract
@@ -302,9 +306,10 @@ type packageContract struct {
 }
 
 type resolvedContractField struct {
-	field    xshape.Field
-	metadata *dtag.Field
-	param    *spec.Parameter
+	field          xshape.Field
+	metadata       *dtag.Field
+	param          *spec.Parameter
+	sourceDeclared bool
 }
 
 func (r contractRole) label() string {
@@ -319,6 +324,7 @@ func (r contractRole) accepts(param *spec.Parameter) bool {
 }
 
 func (r *packageComponentResolver) indexCanonicalMetadata() {
+	r.indexAuthoredViewSources()
 	for index := range r.contracts {
 		r.contracts[index].paramsByField = map[string]*spec.Parameter{}
 	}
@@ -347,7 +353,7 @@ func (r *packageComponentResolver) resolve() (*spec.Component, error) {
 			if err != nil {
 				return nil, err
 			}
-			if resolved == nil {
+			if resolved == nil || resolved.sourceDeclared {
 				continue
 			}
 			if contract.role == outputContract {
@@ -378,9 +384,20 @@ func (r *packageComponentResolver) resolveField(contract *packageContract, field
 	if !field.Exported {
 		return nil, nil
 	}
-	metadata, err := dtag.ParseField(field.StructField())
+	parse := dtag.ParseField
+	if r.authored != nil {
+		parse = dtag.ParseFieldDeclaration
+	}
+	metadata, err := parse(field.StructField())
 	if err != nil {
 		return nil, fmt.Errorf("resolve package %s %s: %w", contract.role.label(), field.Name, err)
+	}
+	sourceDeclared := r.authoredViewSource(contract.role, field, metadata)
+	if r.authored != nil && !sourceDeclared {
+		metadata, err = dtag.ParseField(field.StructField())
+		if err != nil {
+			return nil, fmt.Errorf("resolve package %s %s: %w", contract.role.label(), field.Name, err)
+		}
 	}
 	param := contract.paramsByField[field.Name]
 	if param == nil {
@@ -439,7 +456,7 @@ func (r *packageComponentResolver) resolveField(contract *packageContract, field
 	if err = r.resolveChoiceMetadata(field, param); err != nil {
 		return nil, err
 	}
-	return &resolvedContractField{field: field, metadata: metadata, param: param}, nil
+	return &resolvedContractField{field: field, metadata: metadata, param: param, sourceDeclared: sourceDeclared}, nil
 }
 
 func (r *packageComponentResolver) resolveParamType(role contractRole, field xshape.Field, param *spec.Parameter) error {
@@ -1004,4 +1021,54 @@ func (r *packageComponentResolver) viewScope(field xshape.Field) string {
 		fieldType = fieldType.Elem()
 	}
 	return fieldType.PkgPath()
+}
+
+// Only exact current parameter/view declarations supersede executable field
+// sources. Build this index once with the other canonical contract metadata.
+type contractViewSource struct {
+	role               contractRole
+	name, kind, source string
+}
+
+func viewSourceIdentity(role contractRole, name, kind, source string) contractViewSource {
+	return contractViewSource{role: role, name: name, kind: strings.ToLower(strings.TrimSpace(kind)), source: strings.ToLower(strings.TrimSpace(source))}
+}
+
+func (r *packageComponentResolver) indexAuthoredViewSources() {
+	if r.authored == nil {
+		return
+	}
+	r.authoredViews = map[contractViewSource]bool{}
+	views := map[string]bool{}
+	for _, view := range r.authored.Views {
+		if view != nil && view.Source != nil {
+			views[view.Name] = true
+			views[view.Key.Name] = true
+		}
+	}
+	for _, param := range spec.EffectiveParameters(r.authored.Parameters) {
+		if param == nil {
+			continue
+		}
+		role := inputContract
+		if isOutputParam(param) {
+			role = outputContract
+		}
+		root := param.IsMutationInput() || role == outputContract && strings.EqualFold(param.Source.Kind, "output") && strings.EqualFold(param.Source.Name, "view")
+		if root && r.authored.RootView != nil && r.authored.RootView.Source != nil || strings.EqualFold(param.Source.Kind, "view") && views[param.Source.Name] {
+			r.authoredViews[viewSourceIdentity(role, param.Name, param.Source.Kind, param.Source.Name)] = true
+		}
+	}
+}
+
+func (r *packageComponentResolver) authoredViewSource(role contractRole, field xshape.Field, metadata *dtag.Field) bool {
+	if metadata.Binding == nil {
+		return false
+	}
+	binding := metadata.Binding
+	name := binding.Name
+	if name == "" {
+		name = field.Name
+	}
+	return r.authoredViews[viewSourceIdentity(role, name, binding.Location.Kind, binding.Location.In)]
 }

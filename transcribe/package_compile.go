@@ -10,6 +10,7 @@ import (
 
 	"github.com/viant/datly/bootstrap"
 	"github.com/viant/datly/spec"
+	"github.com/viant/datly/transcribe/dql"
 	gen "github.com/viant/datly/transcribe/generate"
 	"github.com/viant/datly/transcribe/internal/handlergen"
 	"github.com/viant/datly/transcribe/internal/link"
@@ -353,7 +354,15 @@ func (c *descriptorPackageCompilation) compile(ctx context.Context) (*Result, er
 	}
 	var component *spec.Component
 	if strings.TrimSpace(c.source.Text) != "" {
-		component, err = resolvePackageDeclarations(c.packageSource, resolver)
+		preparation, prepareErr := prepareSourceCompilation(ctx, c.source)
+		if prepareErr != nil {
+			return nil, prepareErr
+		}
+		authored, parseErr := dql.ParsePreparedComponentSource(c.source.Scope, c.source.Name, preparation.prepared)
+		if parseErr != nil {
+			return nil, parseErr
+		}
+		component, err = resolvePackageDeclarations(c.packageSource, resolver, authored)
 	} else {
 		component, err = c.packageSource.ResolveDescriptors(resolver)
 	}
@@ -366,12 +375,12 @@ func (c *descriptorPackageCompilation) compile(ctx context.Context) (*Result, er
 	// Concrete linked contracts are the runtime authority for reachable view
 	// shapes. Source AST remains useful for metadata, but it cannot manufacture
 	// reflect.Type values for imported structs in another module.
-	linkedViews := newPackageViewResolver(component, nil)
-	linkedRoot, err := linkedViews.rootDescriptor(c.source.LinkedOutputType)
+	linkedViews := newPackageViewResolver(component, resolver)
+	linkedRoot, err := linkedViews.rootDescriptorFromMetadata()
 	if err != nil {
 		return nil, err
 	}
-	linkedInputs, err := linkedViews.inputDescriptors(c.source.LinkedInputType)
+	linkedInputs, err := linkedViews.inputDescriptorsFromMetadata()
 	if err != nil {
 		return nil, err
 	}

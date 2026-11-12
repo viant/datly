@@ -52,6 +52,16 @@ type Field struct {
 }
 
 func ParseField(field reflect.StructField) (*Field, error) {
+	return parseField(field, true)
+}
+
+// ParseFieldDeclaration reads contract metadata without admitting its executable
+// view source. It is used when an authoritative source replaces that view.
+func ParseFieldDeclaration(field reflect.StructField) (*Field, error) {
+	return parseField(field, false)
+}
+
+func parseField(field reflect.StructField, executable bool) (*Field, error) {
 	field.Tag = reflect.StructTag(CanonicalFieldTag(string(field.Tag)))
 	result := &Field{
 		WireType:      strings.TrimSpace(field.Tag.Get("wireType")),
@@ -96,7 +106,7 @@ func ParseField(field reflect.StructField) (*Field, error) {
 	if ok {
 		result.Component = &component
 	}
-	if value, ok := field.Tag.Lookup(ViewName); ok {
+	if value, ok := field.Tag.Lookup(ViewName); ok && executable {
 		result.View, err = ParseView(value)
 		if err != nil {
 			return nil, err
@@ -130,7 +140,7 @@ func ParseField(field reflect.StructField) (*Field, error) {
 			return nil, err
 		}
 	}
-	if value, ok := field.Tag.Lookup(SQLName); ok {
+	if value, ok := field.Tag.Lookup(SQLName); ok && executable {
 		result.SQL = ParseSQL(value)
 	}
 	if value, ok := field.Tag.Lookup(GroupableName); ok && strings.TrimSpace(value) != "" {
