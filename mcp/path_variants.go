@@ -31,9 +31,8 @@ func (c *serviceCompiler) compilePathVariants(plans *compiledPlans, compiler *to
 				if strings.HasPrefix(path, "/{") {
 					path = strings.TrimRight(base.Path, "/") + path
 				}
-				if !strings.HasPrefix(path, strings.TrimRight(base.Path, "/")+"/") {
-					continue
-				}
+				// The authored activation and exact component-owned route contract
+				// establish ownership; an absolute alternate need not share a URL prefix.
 				ref := spec.RouteRef{Method: base.Method, Path: path}
 				if seen[ref.String()] {
 					continue

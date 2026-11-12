@@ -145,3 +145,45 @@ func TestMCPCollapsedPathPublishesBatchIdentityAndAliases(t *testing.T) {
 	require.NotNil(t, rpcErr)
 	require.Equal(t, before, calls, "conflicting aliases cannot execute")
 }
+
+type relocatedPathInput struct {
+	CampaignID *int `parameter:"CampaignID,kind=path,in=campaignId,uri=/campaign/{campaignId}/flightcap" pathMcpEnabled:"false"`
+}
+
+func TestMCPDeclaredAbsolutePathVariantDoesNotRequireURLPrefix(t *testing.T) {
+	component := &spec.Component{Key: spec.Key{Kind: spec.KindComponent, Name: "Caps"}, Routes: []*spec.Route{{Method: "GET", Path: "/campaign/flightcap", MCP: []*spec.MCPExposure{{Kind: spec.MCPExposureTool, Name: "get_caps"}}}}}
+	artifact, err := bootstrap.BuildArtifact(bootstrap.ArtifactInput{Component: component, InputType: reflect.TypeFor[relocatedPathInput](), OutputType: reflect.TypeFor[collapsedPathOutput]()})
+	require.NoError(t, err)
+	entry, err := artifact.Registration(druntime.RegisteredComponent{Handler: custom.NewFunc(func(_ context.Context, in *relocatedPathInput) (*collapsedPathOutput, error) {
+		return &collapsedPathOutput{ID: in.CampaignID}, nil
+	})})
+	require.NoError(t, err)
+	rt, err := druntime.NewRuntime([]*druntime.RegisteredComponent{entry})
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, rt.Shutdown(context.Background())) })
+	service, err := mcp.New(mcp.Config{Components: []*druntime.RegisteredComponent{entry}, Invoker: rt, StrictArguments: true})
+	require.NoError(t, err)
+	require.Equal(t, []string{"get_caps"}, service.Catalog().ToolNames())
+	tool, ok := service.Registry().ToolRegistry.Get("get_caps")
+	require.True(t, ok)
+	require.Contains(t, tool.Metadata.InputSchema.Properties, "campaignId")
+	for _, args := range []map[string]any{{}, {"campaignId": 42}} {
+		result, rpc := tool.Handler(t.Context(), &schema.CallToolRequest{Method: schema.MethodToolsCall, Params: schema.CallToolRequestParams{Name: "get_caps", Arguments: args}})
+		require.Nil(t, rpc)
+		require.False(t, result.IsError != nil && *result.IsError)
+		encoded, err := json.Marshal(result.StructuredContent)
+		require.NoError(t, err)
+		var output collapsedPathOutput
+		require.NoError(t, json.Unmarshal(encoded, &output))
+		if len(args) == 0 {
+			require.Nil(t, output.ID)
+		} else {
+			require.NotNil(t, output.ID)
+			require.Equal(t, 42, *output.ID)
+		}
+	}
+	response := httptest.NewRecorder()
+	gateway.NewHandler(rt, nil, "test").ServeHTTP(response, httptest.NewRequest("GET", "/campaign/17/flightcap", nil))
+	require.Equal(t, 200, response.Code)
+	require.JSONEq(t, `{"id":17,"name":null}`, response.Body.String())
+}
