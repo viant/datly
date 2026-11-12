@@ -219,10 +219,14 @@ func (p *declarationOptionParser) parse() (declarationOptions, error) {
 				return declarationOptions{}, p.fail(cursor, "parameter %s has duplicate %s options", p.paramName, name)
 			}
 			p.seen[key] = true
-			if len(args) != 1 {
-				return declarationOptions{}, p.fail(cursor, "parameter %s QuerySelector requires exactly one view name", p.paramName)
+			if len(args) < 1 || len(args) > 2 {
+				return declarationOptions{}, p.fail(cursor, "parameter %s QuerySelector requires exactly one view name and an optional property", p.paramName)
 			}
-			property, supported := spec.SelectorPropertyForParam(p.paramName)
+			propertyName := p.paramName
+			if len(args) == 2 {
+				propertyName = trimQuote(args[1])
+			}
+			property, supported := spec.SelectorPropertyForParam(propertyName)
 			viewName := strings.TrimSpace(trimQuote(args[0]))
 			if !supported {
 				return declarationOptions{}, p.fail(cursor, "parameter %s cannot be used as a query selector", p.paramName)

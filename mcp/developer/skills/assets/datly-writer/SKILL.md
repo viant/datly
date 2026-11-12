@@ -27,6 +27,20 @@ physical SQL; retain real `(SELECT ...)` subqueries. Read the
 [auxiliary source contract](references/writer-contract.md#4-dql-graph-and-generated-previous-reads)
 before editing source parentheses or reusing reader SQL in a writer.
 
+## Graph semantics and diagnosis
+
+Outer DQL JOIN/LEFT JOIN/CROSS JOIN spelling describes graph connections, not
+cross-view database join execution. Relation keys and one-to-many/one-to-one
+cardinality determine attachment. SQL inside each view has ordinary SQL semantics.
+Do not rewrite graph syntax to repair a metadata-supplier error.
+
+Before proposing framework changes, trace DQL → compiled graph → generated shape
+→ runtime consumer and reproduce the failure with unchanged source. Follow
+[the native-first diagnosis](https://github.com/viant/datly/blob/v1/llm/datly-native-first/SKILL.md#establish-the-cause-before-proposing-a-fix)
+and [regeneration evidence](https://github.com/viant/datly/blob/v1/llm/datly-authoring/references/v1-gotchas.md#regeneration-evidence).
+Keep MCP-only changes in authored tags and exposure metadata; preserve REST names,
+values, relation cardinality and persistence ownership.
+
 ## Audience and contract
 
 This skill is for application developers, not Datly framework contributors. Explain DQL, Go shapes, tags, base types, interfaces, and behavior in application terms. Do not require knowledge of internal compilers, collectors, registries, or source directories.

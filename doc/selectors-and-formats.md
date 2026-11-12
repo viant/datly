@@ -21,12 +21,14 @@ See the [v1 shaping contract](shaping-contract.md) before changing these names.
 
 ## Scope each selector to a view
 
-Use one-argument `.QuerySelector('inventory')` in DQL or
+Use `.QuerySelector('inventory')` in DQL or
 `querySelector:"inventory"` in Go. The target is the declared view identity,
 not the output holder path or a guessed SQL alias. The selector property comes
 from the declared logical control, such as Fields, OrderBy, Offset, Limit, Page
-or Criteria. Do not use a two-argument selector form or invent a query parameter
-name; binding locations are authored independently.
+or Criteria. An optional second argument overrides that inferred property:
+`.QuerySelector('inventory', 'page')` supports any independently named declaration.
+The existing one-argument form is unchanged. Binding locations are authored
+independently; no prefix or SQL-alias heuristic determines the selector target.
 
 A binding enables its property only if view policy is unspecified. Explicit
 permissions take precedence: `selector_order_by(inventory,false)` in DQL or
@@ -47,16 +49,16 @@ with the target view identity and existing input/output bindings.
 This fragment needs a view named `inventory`. Each explicit `QuerySelector`
 declaration enables its own property on that view; no duplicate
 `selector_fields`, `selector_limit`, or `selector_offset` setting is required.
-For independently named controls, the existing explicit tag supplies both target
-and property, without inferring either from a prefix:
+For independently named controls, prefer the optional explicit property:
 
 ```sql
-#define($_ = $FlightsPage<int>(query/flightsPage).Optional().Tag('querySelector:"view=flights,property=page"'))
-#define($_ = $FlightsFields<[]string>(query/flightsFields).Optional().Tag('querySelector:"view=flights,property=fields"'))
+#define($_ = $FlightsPage<int>(query/flightsPage).Optional().QuerySelector('flights','page'))
+#define($_ = $FlightsFields<[]string>(query/flightsFields).Optional().QuerySelector('flights','fields'))
 ```
 
 These declarations use authored names; automatic relation-prefix generation is
-not implied. Conflicting fluent and tagged selector declarations are rejected.
+not implied. The equivalent explicit `.Tag('querySelector:"view=flights,property=page"')`
+form also remains supported. Conflicting fluent and tagged declarations are rejected.
 
 Child/sibling views have independent controls. Selector policy settings remain
 available for defaults, caps, allowed columns/methods, and selectors injected

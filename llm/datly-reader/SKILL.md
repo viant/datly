@@ -45,8 +45,8 @@ Do not rewrite graph syntax to repair a metadata-supplier error.
 
 Before proposing framework changes, trace DQL → compiled graph → generated shape
 → runtime consumer and reproduce the failure with unchanged source. Follow
-[the native-first diagnosis](../datly-native-first/SKILL.md#establish-the-cause-before-proposing-a-fix)
-and [regeneration evidence](../datly-authoring/references/v1-gotchas.md#regeneration-evidence).
+[the native-first diagnosis](https://github.com/viant/datly/blob/v1/llm/datly-native-first/SKILL.md#establish-the-cause-before-proposing-a-fix)
+and [regeneration evidence](https://github.com/viant/datly/blob/v1/llm/datly-authoring/references/v1-gotchas.md#regeneration-evidence).
 Keep MCP-only changes in authored tags and exposure metadata; preserve REST names,
 values, relation cardinality and persistence ownership.
 

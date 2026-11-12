@@ -12,6 +12,12 @@ func TestExplicitSelectorTagAuthoring(t *testing.T) {
 		want       *spec.QuerySelectorBinding
 		failure    string
 	}{
+		{"explicit fluent property", `$FlightsPage<int>(query/flightsPage).QuerySelector('flights','page')`, &spec.QuerySelectorBinding{View: "flights", Property: spec.SelectorPropertyPage}, ""},
+		{"explicit property overrides name", `$Limit<int>(query/page).QuerySelector('flights','page')`, &spec.QuerySelectorBinding{View: "flights", Property: spec.SelectorPropertyPage}, ""},
+		{"legacy fluent property", `$Page<int>(query/page).QuerySelector('flights')`, &spec.QuerySelectorBinding{View: "flights", Property: spec.SelectorPropertyPage}, ""},
+		{"invalid explicit property", `$FlightsPage<int>(query/flightsPage).QuerySelector('flights','unknown')`, nil, "cannot be used"},
+		{"empty explicit property", `$FlightsPage<int>(query/flightsPage).QuerySelector('flights','')`, nil, "cannot be used"},
+		{"too many arguments", `$Page<int>(query/page).QuerySelector('flights','page','extra')`, nil, "optional property"},
 		{"prefixed", `$FlightsPage<int>(query/flightsPage).Optional().Tag('querySelector:"view=flights,property=page"')`, &spec.QuerySelectorBinding{View: "flights", Property: spec.SelectorPropertyPage}, ""},
 		{"fixed name", `$Fields<[]string>(query/fields).Tag('querySelector:"flights"')`, &spec.QuerySelectorBinding{View: "flights", Property: spec.SelectorPropertyFields}, ""},
 		{"matching declarations", `$Page<int>(query/page).QuerySelector('flights').Tag('querySelector:"view=flights,property=page"')`, &spec.QuerySelectorBinding{View: "flights", Property: spec.SelectorPropertyPage}, ""},

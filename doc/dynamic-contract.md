@@ -102,7 +102,7 @@ policy names; keep the transport gate in one place and compose it with existing
 field policies without replacing authorization. Do not mutate the declared Go
 metadata or change existing JSON names.
 
-The native [transport regression](../mcp/service_enum_scope_test.go) alternates
+The native [transport regression](https://github.com/viant/datly/blob/v1/mcp/service_enum_scope_test.go) alternates
 MCP discovery/calls and HTTP requests against the same component, checking both
 input and output representations.
 
