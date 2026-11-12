@@ -10,6 +10,7 @@ require (
 	github.com/mattn/go-sqlite3 v1.14.16
 	github.com/stretchr/testify v1.12.1
 	github.com/viant/aerospike v0.4.5-0.20261008043351-154a50202766
+	github.com/viant/authz v0.1.2-0.20261112184253-02e92dcfc66b
 	github.com/viant/assertly v0.9.1-0.20220620174148-bab013f93a60
 	github.com/viant/gmetric v0.3.2
 	github.com/viant/govalidator v0.3.4-0.20260913213120-027a9dd54d73

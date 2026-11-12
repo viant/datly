@@ -56,6 +56,9 @@ func (l Loader) Load(ctx context.Context, location string) (*Config, error) {
 	if err := l.decode(ctx, location, c); err != nil {
 		return nil, err
 	}
+	if err := c.resolveHTTP(); err != nil {
+		return nil, err
+	}
 	c.URL = location
 	c.StaticLocalRoot = l.StaticLocalRoot
 	base, _ := afsurl.Split(location, "file")

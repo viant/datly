@@ -36,6 +36,7 @@ import (
 )
 
 type source struct {
+	authorizationProviders  map[string]gateway.AuthorizationProvider
 	linkedArtifact          *exec.LinkedArtifact
 	requireComponentBinding bool
 	toolMetadata            func(context.Context, exec.ComponentTarget) (map[string]interface{}, error)

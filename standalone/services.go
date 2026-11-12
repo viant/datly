@@ -23,6 +23,7 @@ func serviceLogger(diagnostics io.Writer) *slog.Logger {
 
 func (s *source) services(ctx context.Context, logger *slog.Logger) (runtime.ObservabilityConfig, error) {
 	s.http = s.config.Config
+	s.http.AuthorizationProviders = s.authorizationProviders
 	if policy := s.config.Warmup; policy != nil {
 		admin := *policy.Admin
 		s.http.Warmup = &gateway.WarmupConfig{Timeout: time.Duration(policy.TimeoutMs) * time.Millisecond, AdminHeaders: []string{admin.APIKeyHeader}, Authorize: func(ctx context.Context, request *http.Request, _ exec.ComponentTarget) error {

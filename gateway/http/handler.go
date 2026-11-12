@@ -26,6 +26,7 @@ const (
 )
 
 type Handler struct {
+	authorization        *authorizationGate
 	methodMismatchPolicy string
 	pathSemantics        string
 	serviceTimeHeader    string
@@ -88,6 +89,15 @@ func (h *Handler) serveHTTP(writer stdhttp.ResponseWriter, req *stdhttp.Request)
 		writer.WriteHeader(stdhttp.StatusForbidden)
 		return
 	}
+	authorizedRequest, authorizationErr := h.authorizeHTTP(req)
+	if authorizationErr != nil {
+		recordHTTPError(req.Context(), authorizationErr)
+		code := authorizationErrorStatus(authorizationErr)
+		message := stdhttp.StatusText(code)
+		writeJSON(writer, code, xresponse.Status{Status: "error", Message: message, Error: message})
+		return
+	}
+	req = authorizedRequest
 	if h.serveStatus(writer, req) {
 		return
 	}

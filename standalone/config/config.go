@@ -27,7 +27,9 @@ type Config struct {
 	ConstURL string
 	Const    *constant.Values `json:"-"`
 	gateway.Config
-	URL               string `json:"-"`
+	// HTTP optionally groups transport configuration; do not mix with flat transport fields.
+	HTTP              *gateway.Config `json:"HTTP,omitempty"`
+	URL               string          `json:"-"`
 	Version           string
 	Endpoint          Endpoint
 	Info              *openapi3.Info

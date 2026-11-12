@@ -17,6 +17,7 @@ import (
 	"github.com/viant/datly/application"
 	"github.com/viant/datly/bootstrap/connector"
 	dexec "github.com/viant/datly/exec"
+	gateway "github.com/viant/datly/gateway/http"
 	"github.com/viant/datly/internal/httpserver"
 	internallog "github.com/viant/datly/internal/logging"
 	mcpserver "github.com/viant/datly/mcp/server"
@@ -32,9 +33,12 @@ import (
 	xexec "github.com/viant/xdatly/exec"
 	xlogger "github.com/viant/xdatly/logger"
 	xmbus "github.com/viant/xdatly/mbus"
+	"maps"
 )
 
 type Options struct {
+	// AuthorizationProviders are trusted identity adapters referenced by HTTP policy configuration.
+	AuthorizationProviders map[string]gateway.AuthorizationProvider
 	// HTTPMiddleware is statically supplied by the embedding process. It wraps
 	// every HTTP and MCP listener without changing component schemas or claims.
 	HTTPMiddleware func(http.Handler) http.Handler
@@ -155,7 +159,7 @@ func New(ctx context.Context, options Options) (_ *Server, err error) {
 		}
 		options.LinkedArtifact = &artifact
 	}
-	s := &Server{httpMiddleware: options.HTTPMiddleware, source: &source{Workspace: options.Workspace, config: options.Config, resources: options.Resources, holders: append([]any(nil), options.Holders...), invocationLogger: options.InvocationLogger, invocationDiffer: options.InvocationDiffer, invocationMessageBus: options.InvocationMessageBus, providers: providers, requireLinked: options.RequireLinked || options.Holders != nil,
+	s := &Server{httpMiddleware: options.HTTPMiddleware, source: &source{authorizationProviders: maps.Clone(options.AuthorizationProviders), Workspace: options.Workspace, config: options.Config, resources: options.Resources, holders: append([]any(nil), options.Holders...), invocationLogger: options.InvocationLogger, invocationDiffer: options.InvocationDiffer, invocationMessageBus: options.InvocationMessageBus, providers: providers, requireLinked: options.RequireLinked || options.Holders != nil,
 		linkedArtifact: options.LinkedArtifact, requireComponentBinding: options.RequireComponentBinding, toolMetadata: options.ToolMetadata}, done: make(chan struct{}), ready: make(chan struct{}), mcpResourceAuthorizer: options.MCPResourceAuthorizer, mcpBackendForFrontend: options.MCPBackendForFrontend}
 	s.source.codecFactories, err = normalizeCodecs(options.Codecs)
 	if err != nil {
