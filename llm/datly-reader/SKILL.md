@@ -36,6 +36,20 @@ and revision selection, and Query Selectors for ordering and projections. For
 release/revision selection, selector transport names and mutation ownership,
 read [release graph details](references/object-graphs.md).
 
+## Graph semantics and diagnosis
+
+Outer DQL JOIN/LEFT JOIN/CROSS JOIN spelling describes graph connections, not
+cross-view database join execution. Relation keys and one-to-many/one-to-one
+cardinality determine attachment. SQL inside each view has ordinary SQL semantics.
+Do not rewrite graph syntax to repair a metadata-supplier error.
+
+Before proposing framework changes, trace DQL → compiled graph → generated shape
+→ runtime consumer and reproduce the failure with unchanged source. Follow
+[the native-first diagnosis](../datly-native-first/SKILL.md#establish-the-cause-before-proposing-a-fix)
+and [regeneration evidence](../datly-authoring/references/v1-gotchas.md#regeneration-evidence).
+Keep MCP-only changes in authored tags and exposure metadata; preserve REST names,
+values, relation cardinality and persistence ownership.
+
 ## Audience and contract
 
 This skill is for application developers, not Datly framework contributors. Explain DQL, Go shapes, tags, base types, interfaces, and behavior in application terms. Do not require knowledge of internal compilers, collectors, registries, or source directories.

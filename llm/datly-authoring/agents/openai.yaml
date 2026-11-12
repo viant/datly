@@ -1,0 +1,4 @@
+interface:
+  display_name: "Datly 1.0 Authoring"
+  short_description: "Discover and apply canonical Datly 1.0 skills"
+  default_prompt: "Discover the applicable Datly 1.0 skills from the selected v1 tree, read their required references, and complete the Datly 1.0 authoring or architecture task using the selected build without legacy APIs."
