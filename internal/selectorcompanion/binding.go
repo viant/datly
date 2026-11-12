@@ -238,7 +238,7 @@ func NewBindingPlan(component *spec.Component, selected *Selection, input reflec
 		executable := make([]bindly.BindingSpec, 0)
 		for _, b := range selectors {
 			parameter := b.Extension.(*spec.Parameter)
-			if parameter.QuerySelector.Property == spec.SelectorPropertyPage && b.DefaultValue == nil && (b.Required == nil || !*b.Required) {
+			if parameter.QuerySelector.Property == spec.SelectorPropertyPage && component.RootView != nil && rootSelectorTarget(component, parameter.QuerySelector.View) && b.DefaultValue == nil && (b.Required == nil || !*b.Required) {
 				field, ok := result.Field(parameter)
 				if result.deferredBinding != nil || !ok || field.Type != reflect.TypeFor[int]() {
 					return nil, fmt.Errorf("deferred companion Page requires one exact int field")

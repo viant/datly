@@ -66,7 +66,7 @@ func TestSelectorSideInputsMCP(t *testing.T) {
 	}
 }
 
-func selectorSideService(t *testing.T, holder, inputType, outputType reflect.Type, componentName string) *Service {
+func selectorSideService(t *testing.T, holder, inputType, outputType reflect.Type, componentName string, configure ...func(*Config)) *Service {
 	t.Helper()
 	discovered, err := bootstrap.ReflectSelectedPackages([]string{holder.PkgPath()}, nil)
 	require.NoError(t, err)
@@ -90,7 +90,11 @@ func selectorSideService(t *testing.T, holder, inputType, outputType reflect.Typ
 	rt, err := druntime.NewRuntime([]*registry.RegisteredComponent{registered})
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = rt.Shutdown(context.Background()) })
-	service, err := New(Config{Components: []*registry.RegisteredComponent{registered}, Invoker: rt})
+	config := Config{Components: []*registry.RegisteredComponent{registered}, Invoker: rt}
+	for _, apply := range configure {
+		apply(&config)
+	}
+	service, err := New(config)
 	require.NoError(t, err)
 	return service
 }
