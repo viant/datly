@@ -4,7 +4,7 @@ import (
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/view/state"
 	"github.com/viant/datly/view/tags"
-	"github.com/viant/govalidator"
+	"github.com/viant/mcp-protocol/schema/fieldname"
 	"github.com/viant/sqlx/io"
 	"github.com/viant/tagly/format"
 	"github.com/viant/xreflect"
@@ -13,12 +13,14 @@ import (
 
 type (
 	Tag struct {
+		RawTag      reflect.StructTag
 		Format      string
 		Inlined     bool
 		Ignore      bool
 		Description string
 		CaseFormat  string
 
+		Required     bool
 		IsNullable   bool
 		Min          *float64
 		Max          *float64
@@ -35,6 +37,7 @@ type (
 		_tag         format.Tag
 		TypeName     string
 		Parameter    *tags.Parameter
+		IsInput      bool
 		Column       string
 		Table        string
 	}
@@ -43,11 +46,6 @@ type (
 func ParseTag(field reflect.StructField, tag reflect.StructTag, isInput bool, rootTable string) (*Tag, error) {
 
 	aTag, err := format.Parse(tag, "json", "openapi")
-	if err != nil {
-		return &Tag{}, err
-	}
-
-	validationTag := govalidator.ParseTag(string(tag))
 	if err != nil {
 		return &Tag{}, err
 	}
@@ -67,10 +65,12 @@ func ParseTag(field reflect.StructField, tag reflect.StructTag, isInput bool, ro
 	}
 
 	ret := &Tag{
+		RawTag:     tag,
 		Format:     aTag.DateFormat,
 		Inlined:    aTag.Inline,
 		Ignore:     aTag.Ignore,
-		IsNullable: !validationTag.Required && field.Type.Kind() == reflect.Ptr,
+		IsNullable: field.Type.Kind() == reflect.Ptr,
+		Required:   fieldname.Required(reflect.StructField{Tag: tag}),
 		TypeName:   typeName,
 
 		CaseFormat:  aTag.CaseFormat,
@@ -78,10 +78,19 @@ func ParseTag(field reflect.StructField, tag reflect.StructTag, isInput bool, ro
 		Example:     tag.Get(tags.ExampleTag),
 		JSONName:    jsonName,
 		_tag:        *aTag,
+		IsInput:     isInput,
+	}
+
+	// Keep internal runtime-only fields out of OpenAPI schema.
+	if tag.Get("internal") == "true" {
+		ret.Ignore = true
 	}
 
 	if tags, _ := tags.Parse(tag, nil, tags.ParameterTag); tags != nil {
 		ret.Parameter = tags.Parameter
+		if ret.Parameter != nil && ret.Parameter.Required != nil {
+			ret.Required = *ret.Parameter.Required
+		}
 		if parameter := ret.Parameter; parameter != nil && parameter.Kind != "" {
 			switch state.Kind(parameter.Kind) {
 			case state.KindForm, state.KindRequestBody:

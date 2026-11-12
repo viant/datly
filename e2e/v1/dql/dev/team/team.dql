@@ -1,0 +1,5 @@
+#package('github.com/viant/datly/e2e/v1/shape/dev/team/delete')
+#setting($_ = $connector('dev'))
+#setting($_ = $route('/v1/api/shape/dev/team/{teamID}', 'DELETE'))
+
+DELETE FROM TEAM WHERE ID = ${teamID}

@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"fmt"
 	"github.com/viant/datly/repository/contract"
 	"github.com/viant/datly/repository/version"
 	"sync"
@@ -26,12 +27,17 @@ func (p *Provider) Component(ctx context.Context, opts ...Option) (*Component, e
 	p.mux.Lock()
 	defer p.mux.Unlock()
 	if p.control.ChangeKind() == version.ChangeKindDeleted {
-		//TODO maybe return 404 error
+		if p.component != nil {
+			return p.component, nil
+		}
 		return nil, nil
 	}
 	aComponent, err := p.newComponent(ctx, opts...)
 	if err != nil {
 		return nil, err
+	}
+	if aComponent == nil {
+		return nil, fmt.Errorf("component factory returned nil for %s:%s", p.path.Method, p.path.URI)
 	}
 	aComponent.Version.SCN = p.control.SCN
 	p.component = aComponent
@@ -41,3 +47,6 @@ func (p *Provider) Component(ctx context.Context, opts ...Option) (*Component, e
 func NewProvider(path contract.Path, control *version.Control, newComponent func(ctx context.Context, opts ...Option) (*Component, error)) *Provider {
 	return &Provider{path: path, control: control, newComponent: newComponent}
 }
+
+// Path returns the immutable route identity used to register this provider.
+func (p *Provider) Path() contract.Path { return p.path }

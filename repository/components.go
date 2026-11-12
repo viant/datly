@@ -13,6 +13,13 @@ import (
 	"github.com/viant/datly/internal/inference"
 	"github.com/viant/datly/internal/translator/parser"
 	"github.com/viant/datly/repository/codegen"
+	"github.com/viant/datly/repository/shape"
+	shapecolumn "github.com/viant/datly/repository/shape/column"
+	dqlparse "github.com/viant/datly/repository/shape/dql/parse"
+	shapeLoad "github.com/viant/datly/repository/shape/load"
+	shapePlan "github.com/viant/datly/repository/shape/plan"
+	shapeScan "github.com/viant/datly/repository/shape/scan"
+	"github.com/viant/datly/repository/shape/typectx"
 	"github.com/viant/datly/repository/version"
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view"
@@ -24,6 +31,7 @@ import (
 	"gopkg.in/yaml.v3"
 	"path"
 	"reflect"
+	"strings"
 )
 
 type Components struct {
@@ -61,6 +69,9 @@ func (c *Components) Init(ctx context.Context) error {
 		options = append(options, &view.Metrics{Method: c.Components[0].Method, Service: c.options.metrics})
 	}
 	for _, component := range c.Components {
+		if c.options != nil && c.options.legacyTypeContext {
+			component.TypeContext = resolveComponentTypeContext(component)
+		}
 		if len(component.with) > 0 {
 			c.With = append(c.With, component.with...)
 		}
@@ -80,6 +91,9 @@ func (c *Components) Init(ctx context.Context) error {
 	}
 
 	c.ensureNamedViewType(ctx, embedFs, aComponent)
+	if err = c.mergeShapeViews(ctx, aComponent); err != nil {
+		return err
+	}
 
 	if err = c.Resource.Init(ctx, options...); err != nil {
 		return err
@@ -104,6 +118,62 @@ func (c *Components) Init(ctx context.Context) error {
 		}
 	}
 	return nil
+}
+
+func (c *Components) mergeShapeViews(ctx context.Context, aComponent *Component) error {
+	if c.options == nil || !c.options.shapePipeline || aComponent == nil || aComponent.Output.Type.Schema == nil {
+		return nil
+	}
+	rType := c.ReflectType(aComponent.Output.Type.Schema)
+	if rType == nil {
+		return nil
+	}
+	engine := shape.New(
+		shape.WithScanner(shapeScan.New()),
+		shape.WithPlanner(shapePlan.New()),
+		shape.WithLoader(shapeLoad.New()),
+		shape.WithName(aComponent.Path.URI),
+	)
+	source := zeroValue(rType)
+	if source == nil {
+		return nil
+	}
+	artifacts, err := engine.LoadViews(ctx, source)
+	if err != nil {
+		return fmt.Errorf("failed to load shape views for %s: %w", aComponent.Path.URI, err)
+	}
+	if artifacts == nil || artifacts.Resource == nil {
+		return nil
+	}
+	if c.Resource.FSEmbedder == nil && artifacts.Resource.FSEmbedder != nil {
+		c.Resource.FSEmbedder = artifacts.Resource.FSEmbedder
+	}
+	existing := c.Resource.Views.Index()
+	columnDetector := shapecolumn.New()
+	for _, candidate := range artifacts.Views {
+		if candidate == nil {
+			continue
+		}
+		if _, err = existing.Lookup(candidate.Name); err == nil {
+			continue
+		}
+		if candidate.Columns, err = columnDetector.Resolve(ctx, c.Resource, candidate); err != nil {
+			return fmt.Errorf("failed to resolve shape columns for %s: %w", candidate.Name, err)
+		}
+		c.Resource.Views = append(c.Resource.Views, candidate)
+		existing.Register(candidate)
+	}
+	return nil
+}
+
+func zeroValue(rType reflect.Type) interface{} {
+	if rType == nil {
+		return nil
+	}
+	if rType.Kind() == reflect.Ptr {
+		return reflect.New(rType.Elem()).Interface()
+	}
+	return reflect.New(rType).Interface()
 }
 
 func (c *Components) ensureNamedViewType(ctx context.Context, embedFs *embed.FS, aComponent *Component) {
@@ -235,6 +305,9 @@ func (c *Components) updateIOTypeDependencies(ctx context.Context, ioType *state
 						if baseView, _ := c.Resource.View(aView.Ref); baseView != nil {
 							aView = baseView
 						}
+					}
+					if aView.Schema == nil {
+						aView.Schema = parameterViewSchema(parameter)
 					}
 					aView.Schema.SetType(parameter.Schema.Type())
 				}
@@ -371,7 +444,7 @@ func LoadComponents(ctx context.Context, URL string, opts ...Option) (*Component
 			}
 		}
 	}
-	components, err := unmarshalComponent(data)
+	components, err := unmarshalComponent(data, options.legacyTypeContext)
 	if err != nil {
 		return nil, err
 	}
@@ -393,16 +466,46 @@ func LoadComponents(ctx context.Context, URL string, opts ...Option) (*Component
 	return components, nil
 }
 
-func unmarshalComponent(data []byte) (*Components, error) {
+// LoadComponentsFromMap loads components directly from in-memory route/resource model.
+// The input map is expected to follow the same shape as route YAML after unmarshalling.
+func LoadComponentsFromMap(ctx context.Context, model map[string]any, opts ...Option) (*Components, error) {
+	if len(model) == 0 {
+		return nil, fmt.Errorf("components model was empty")
+	}
+	options := NewOptions(opts)
+	components, err := unmarshalComponentMap(model, options.legacyTypeContext)
+	if err != nil {
+		return nil, err
+	}
+	components.options = options
+	components.resources = options.resources
+	if components.Resource == nil {
+		return nil, fmt.Errorf("resources were empty")
+	}
+	if err = components.mergeResources(ctx); err != nil {
+		return nil, err
+	}
+	components.Resource.SetTypes(options.extensions.Types)
+	return components, nil
+}
+
+func unmarshalComponent(data []byte, enableLegacyTypeContext bool) (*Components, error) {
 	aMap := map[string]interface{}{}
 	if err := yaml.Unmarshal(data, &aMap); err != nil {
 		return nil, err
 	}
+	return unmarshalComponentMap(aMap, enableLegacyTypeContext)
+}
+
+func unmarshalComponentMap(aMap map[string]any, enableLegacyTypeContext bool) (*Components, error) {
 	ensureComponents(aMap)
 	components := &Components{}
 	err := toolbox.DefaultConverter.AssignConverted(components, aMap)
 	if err != nil {
 		return nil, err
+	}
+	if enableLegacyTypeContext {
+		applyLegacyTypeContext(aMap, components)
 	}
 	return components, err
 }
@@ -411,4 +514,142 @@ func ensureComponents(aMap map[string]interface{}) {
 	if _, ok := aMap["Components"]; !ok { //backward compatibility
 		aMap["Components"] = aMap["Routes"]
 	}
+}
+
+func applyLegacyTypeContext(source map[string]any, components *Components) {
+	if len(components.Components) == 0 {
+		return
+	}
+	defaultTypeContext := asTypeContext(source["TypeContext"])
+	items := asAnySlice(source["Components"])
+	for i, component := range components.Components {
+		if component == nil {
+			continue
+		}
+		if component.TypeContext != nil {
+			continue
+		}
+		var resolved *typectx.Context
+		if i < len(items) {
+			if itemMap := asStringMap(items[i]); itemMap != nil {
+				resolved = asTypeContext(itemMap["TypeContext"])
+			}
+		}
+		if resolved == nil {
+			resolved = defaultTypeContext
+		}
+		if resolved != nil {
+			component.TypeContext = cloneTypeContext(resolved)
+		}
+	}
+}
+
+func asTypeContext(raw any) *typectx.Context {
+	mapped := asStringMap(raw)
+	if mapped == nil {
+		return nil
+	}
+	ret := &typectx.Context{
+		DefaultPackage: asString(mapped["DefaultPackage"]),
+	}
+	for _, item := range asAnySlice(mapped["Imports"]) {
+		itemMap := asStringMap(item)
+		if itemMap == nil {
+			continue
+		}
+		pkg := asString(itemMap["Package"])
+		if pkg == "" {
+			continue
+		}
+		ret.Imports = append(ret.Imports, typectx.Import{
+			Alias:   asString(itemMap["Alias"]),
+			Package: pkg,
+		})
+	}
+	if ret.DefaultPackage == "" && len(ret.Imports) == 0 {
+		return nil
+	}
+	return ret
+}
+
+func resolveComponentTypeContext(component *Component) *typectx.Context {
+	if component == nil {
+		return nil
+	}
+	if normalized := normalizeTypeContext(component.TypeContext); normalized != nil {
+		return normalized
+	}
+	if component.View == nil || component.View.Template == nil {
+		return nil
+	}
+	source := strings.TrimSpace(component.View.Template.Source)
+	if source == "" {
+		return nil
+	}
+	parsed, err := dqlparse.New().Parse(source)
+	if err != nil || parsed == nil {
+		return nil
+	}
+	return normalizeTypeContext(parsed.TypeContext)
+}
+
+func normalizeTypeContext(input *typectx.Context) *typectx.Context {
+	if input == nil {
+		return nil
+	}
+	ret := &typectx.Context{
+		DefaultPackage: strings.TrimSpace(input.DefaultPackage),
+	}
+	for _, item := range input.Imports {
+		pkg := strings.TrimSpace(item.Package)
+		if pkg == "" {
+			continue
+		}
+		ret.Imports = append(ret.Imports, typectx.Import{
+			Alias:   strings.TrimSpace(item.Alias),
+			Package: pkg,
+		})
+	}
+	if ret.DefaultPackage == "" && len(ret.Imports) == 0 {
+		return nil
+	}
+	return ret
+}
+
+func cloneTypeContext(input *typectx.Context) *typectx.Context {
+	return normalizeTypeContext(input)
+}
+
+func asAnySlice(raw any) []any {
+	switch actual := raw.(type) {
+	case []any:
+		return actual
+	default:
+		return nil
+	}
+}
+
+func asStringMap(raw any) map[string]any {
+	switch actual := raw.(type) {
+	case map[string]any:
+		return actual
+	case map[interface{}]interface{}:
+		result := make(map[string]any, len(actual))
+		for k, v := range actual {
+			result[fmt.Sprint(k)] = v
+		}
+		return result
+	default:
+		return nil
+	}
+}
+
+func asString(raw any) string {
+	if raw == nil {
+		return ""
+	}
+	if value, ok := raw.(string); ok {
+		return value
+	}
+	return fmt.Sprint(raw)
 }

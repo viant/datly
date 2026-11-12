@@ -1,0 +1,18 @@
+[
+  {},
+  {
+    "ID": 1,
+    "NAME": "Team - 1",
+    "ACTIVE": true
+  },
+  {
+    "ID": 2,
+    "NAME": "Team - 2",
+    "ACTIVE": true
+  },
+  {
+    "ID": 3,
+    "NAME": "Team - 3",
+    "ACTIVE": true
+  }
+]

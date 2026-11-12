@@ -1,0 +1,94 @@
+{
+  "data": [
+    {
+      "accountId": 100,
+      "created": "@exists@",
+      "id": 1,
+      "name": "Vendor 1",
+      "products": [
+        {
+          "created": "@exists@",
+          "id": 1,
+          "name": "V1 Product 1",
+          "updated": null,
+          "userCreated": 1,
+          "userUpdated": null
+        },
+        {
+          "created": "@exists@",
+          "id": 2,
+          "name": "V1 Product 2",
+          "status": 1,
+          "updated": null,
+          "userCreated": 1,
+          "userUpdated": null
+        }
+      ],
+      "productsMeta": {
+        "pageCnt": 1,
+        "totalProducts": 2
+      },
+      "updated": null,
+      "userCreated": 1,
+      "userUpdated": null
+    },
+    {
+      "accountId": 101,
+      "created": "@exists@",
+      "id": 2,
+      "name": "Vendor 2",
+      "products": [
+        {
+          "created": "@exists@",
+          "id": 3,
+          "name": "V2 Product 1",
+          "status": 1,
+          "updated": null,
+          "userCreated": 2,
+          "userUpdated": null
+        },
+        {
+          "created": "@exists@",
+          "id": 4,
+          "name": "V2 Product 2",
+          "status": 1,
+          "updated": null,
+          "userCreated": 2,
+          "userUpdated": null
+        },
+        {
+          "created": "@exists@",
+          "id": 5,
+          "name": "V2 Product 3",
+          "status": 1,
+          "updated": null,
+          "userCreated": 2,
+          "userUpdated": null
+        }
+      ],
+      "productsMeta": {
+        "pageCnt": 1,
+        "totalProducts": 3
+      },
+      "updated": null,
+      "userCreated": 2,
+      "userUpdated": null
+    },
+    {
+      "accountId": 100,
+      "created": "@exists@",
+      "id": 3,
+      "name": "Vendor 3",
+      "products": [],
+      "productsMeta": null,
+      "updated": null,
+      "userCreated": 1,
+      "userUpdated": null
+    }
+  ],
+  "meta": {
+    "cnt": 3,
+    "pageCnt": 1
+  },
+  "status": "ok"
+}

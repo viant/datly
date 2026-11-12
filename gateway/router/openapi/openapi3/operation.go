@@ -50,6 +50,9 @@ func (o *Operation) UnmarshalJSON(b []byte) error {
 	if err != nil {
 		return err
 	}
+	if tmp.Responses == nil {
+		tmp.Responses = Responses{}
+	}
 	*o = Operation(tmp)
 	return o.Extension.UnmarshalJSON(b)
 }
@@ -58,6 +61,9 @@ func (o *Operation) MarshalJSON() ([]byte, error) {
 	type temp Operation
 	tmp := temp(*o)
 	tmp.Extension = nil
+	if tmp.Responses == nil {
+		tmp.Responses = Responses{}
+	}
 	data, err := json.Marshal(tmp)
 	if err != nil {
 		return nil, err
@@ -76,7 +82,6 @@ func (o *Operation) MarshalJSON() ([]byte, error) {
 	return res, nil
 }
 
-
 func (o *Operation) UnmarshalYAML(ctx context.Context, fn func(dest interface{}) error) error {
 	type temp Operation
 	tmp := temp(*o)
@@ -90,6 +95,9 @@ func (o *Operation) UnmarshalYAML(ctx context.Context, fn func(dest interface{})
 		return err
 	}
 	tmp.Extension = Extension(ext)
+	if tmp.Responses == nil {
+		tmp.Responses = Responses{}
+	}
 	*o = Operation(tmp)
 	return nil
 }

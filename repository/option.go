@@ -43,6 +43,9 @@ type Options struct {
 	constants            map[string]string
 	substitutes          map[string]view.Substitutes
 	authConfig           aconfig.Config
+	shapePipeline        bool
+	legacyTypeContext    bool
+	refreshDisabled      bool
 }
 
 func (o *Options) UseColumn() bool {
@@ -193,6 +196,14 @@ func WithRefreshFrequency(refreshFrequency time.Duration) Option {
 	}
 }
 
+// WithRefreshDisabled suppresses repository change polling and lazy hot-reload.
+// Disabled by default to preserve existing behavior.
+func WithRefreshDisabled(enabled bool) Option {
+	return func(o *Options) {
+		o.refreshDisabled = enabled
+	}
+}
+
 func WithResourceURL(URL string) Option {
 	return func(o *Options) {
 		o.resourceURL = URL
@@ -239,6 +250,23 @@ func WithDispatcher(fn func(registry *Registry, service *auth.Service) contract.
 func WithPath(aPath *path.Path) Option {
 	return func(o *Options) {
 		o.path = aPath
+	}
+}
+
+// WithShapePipeline enables the repository/shape scan->plan->load pipeline
+// during components initialization.
+// The default is false to preserve existing behavior.
+func WithShapePipeline(enabled bool) Option {
+	return func(o *Options) {
+		o.shapePipeline = enabled
+	}
+}
+
+// WithLegacyTypeContext enables TypeContext enrichment in legacy repository runtime.
+// Disabled by default for rollback safety.
+func WithLegacyTypeContext(enabled bool) Option {
+	return func(o *Options) {
+		o.legacyTypeContext = enabled
 	}
 }
 

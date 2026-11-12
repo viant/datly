@@ -10,14 +10,16 @@ import (
 )
 
 type options struct {
-	config        *Config
-	initializers  []func(config *Config, fs *embed.FS) error
-	extensions    *extension.Registry
-	metrics       *gmetric.Service
-	repository    *repository.Service
-	statusHandler http.Handler
-	embedFs       *embed.FS
-	configURL     string
+	authorizationProviders map[string]AuthorizationProvider
+	config                 *Config
+	initializers           []func(config *Config, fs *embed.FS) error
+	extensions             *extension.Registry
+	metrics                *gmetric.Service
+	repository             *repository.Service
+	statusHandler          http.Handler
+	embedFs                *embed.FS
+	configURL              string
+	refreshDisabled        bool
 }
 
 func newOptions(ctx context.Context, opts ...Option) (*options, error) {
@@ -45,6 +47,14 @@ func newOptions(ctx context.Context, opts ...Option) (*options, error) {
 		result.config = &Config{}
 	}
 
+	if result.authorizationProviders != nil {
+		copy := *result.config
+		copy.AuthorizationProviders = make(map[string]AuthorizationProvider, len(result.authorizationProviders))
+		for name, provider := range result.authorizationProviders {
+			copy.AuthorizationProviders[name] = provider
+		}
+		result.config = &copy
+	}
 	return result, nil
 }
 
@@ -102,4 +112,16 @@ func WithConfigURL(configURL string) Option {
 	return func(o *options) {
 		o.configURL = configURL
 	}
+}
+
+func WithRefreshDisabled(enabled bool) Option {
+	return func(o *options) {
+		o.refreshDisabled = enabled
+	}
+}
+
+// WithAuthorizationProviders registers trusted process-owned identity adapters
+// when configuration is loaded from a file. Provider names are operator-owned.
+func WithAuthorizationProviders(providers map[string]AuthorizationProvider) Option {
+	return func(o *options) { o.authorizationProviders = providers }
 }

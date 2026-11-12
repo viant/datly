@@ -6,6 +6,7 @@ import (
 	"github.com/viant/datly/view/state"
 	"github.com/viant/datly/view/state/kind"
 	"github.com/viant/structology"
+	"reflect"
 )
 
 type Object struct {
@@ -19,7 +20,7 @@ func (p *Object) Names() []string {
 	return nil
 }
 
-func (p *Object) Value(ctx context.Context, names string) (interface{}, bool, error) {
+func (p *Object) Value(ctx context.Context, _ reflect.Type, names string) (interface{}, bool, error) {
 	parameter := p.matchByLocation(names)
 	if parameter == nil {
 		return nil, false, fmt.Errorf("failed to match parameter by location: %v", names)

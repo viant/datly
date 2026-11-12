@@ -42,6 +42,9 @@ func (s *Service) generate(ctx context.Context, options *options.Options) error 
 	if _, err := s.loadPlugin(ctx, options); err != nil {
 		return err
 	}
+	if ruleOption.EffectiveEngine() == "shape" && options.Generate.Operation != "get" {
+		return fmt.Errorf("shape engine currently supports gen get only")
+	}
 	if options.Generate.Operation == "get" {
 		return s.generateGet(ctx, options)
 	}
@@ -144,8 +147,51 @@ func (s *Service) generateGet(ctx context.Context, opts *options.Options) (err e
 	if err = s.translate(ctx, opts); err != nil {
 		return err
 	}
-	if err = s.persistRepository(ctx); err != nil {
-		return err
+	if opts.Rule().EffectiveEngine() != options.EngineShape {
+		if err = s.persistRepository(ctx); err != nil {
+			return err
+		}
+	}
+
+	if opts.Rule().EffectiveEngine() == options.EngineShape {
+		componentURL := url.Join(translate.Repository.RepositoryURL, "Datly", "routes")
+		datlySrv, err := datly.New(ctx, repository.WithComponentURL(componentURL))
+		if err != nil {
+			return err
+		}
+		for i, source := range sources {
+			translate.Rule.Index = i
+			sourceText, loadErr := translate.Rule.LoadSource(ctx, s.fs, source)
+			if loadErr != nil {
+				return loadErr
+			}
+			method, uri := parseShapeRulePath(sourceText, translate.Rule.RuleName(), translate.Repository.APIPrefix)
+			key := uri
+			if !strings.EqualFold(method, "GET") {
+				key = method + ":" + uri
+			}
+			aComponent, compErr := datlySrv.Component(ctx, key)
+			if compErr != nil {
+				return compErr
+			}
+			applyDefaultComponentPackage(aComponent, translate.Rule.ModulePrefix)
+			_, sourceName := path.Split(url.Path(source))
+			sourceName = trimExt(sourceName)
+			var embeds = map[string]string{}
+			var namedResources []string
+			if repo := opts.Repository(); repo != nil && len(repo.SubstitutesURL) > 0 {
+				namedResources = append(namedResources, repo.SubstitutesURL...)
+			}
+			code := aComponent.GenerateOutputCode(ctx, defComp, true, embeds, namedResources...)
+			destURL := path.Join(translate.Rule.ModuleLocation, translate.Rule.ModulePrefix, sourceName+".go")
+			if err = s.fs.Upload(ctx, destURL, file.DefaultFileOsMode, strings.NewReader(code)); err != nil {
+				return err
+			}
+			if err = s.persistEmbeds(ctx, translate.Rule.ModuleLocation, translate.Rule.ModulePrefix, embeds, aComponent); err != nil {
+				return err
+			}
+		}
+		return nil
 	}
 
 	for i, resource := range s.translator.Repository.Resource {
@@ -167,6 +213,7 @@ func (s *Service) generateGet(ctx context.Context, opts *options.Options) (err e
 		if err != nil {
 			return err
 		}
+		applyDefaultComponentPackage(aComponent, modulePrefix)
 		var embeds = map[string]string{}
 		var namedResources []string
 
@@ -188,6 +235,24 @@ func (s *Service) generateGet(ctx context.Context, opts *options.Options) (err e
 
 	}
 	return nil
+}
+
+func applyDefaultComponentPackage(component *repository.Component, modulePrefix string) {
+	if component == nil {
+		return
+	}
+	if component.Output.Type.Package != "" || component.Input.Type.Package != "" {
+		return
+	}
+	modulePrefix = strings.Trim(modulePrefix, "/")
+	if modulePrefix == "" {
+		return
+	}
+	base := path.Base(modulePrefix)
+	if base == "" || base == "." || base == "/" {
+		return
+	}
+	component.Output.Type.Package = strings.ReplaceAll(base, "-", "_")
 }
 
 func (s *Service) persistEmbeds(ctx context.Context, moduleLocation string, modulePrefix string, embeds map[string]string, component *repository.Component) error {
@@ -340,6 +405,7 @@ func (s *Service) buildHandlerIfNeeded(ruleOptions *options.Rule, dSQL *string) 
 	if aType != nil {
 		tmpl.EnsureImports(aType)
 	}
+	addLocalHandlerParameterTypes(&tmpl.Imports, rule.InputType, aState)
 
 	tmpl.State = aState
 	handlerDSQL, err := tmpl.GenerateDSQL(codegen.WithoutBusinessLogic())
@@ -357,6 +423,44 @@ func (s *Service) buildHandlerIfNeeded(ruleOptions *options.Rule, dSQL *string) 
 	handlerDSQL += fmt.Sprintf("$Nop($%v)", name)
 	*dSQL = handlerDSQL
 	return nil
+}
+
+func addLocalHandlerParameterTypes(imports *inference.Imports, inputType string, inputState inference.State) {
+	// A handler input can reference local named structs outside its request body.
+	// Import them explicitly so they are available to runtime type discovery.
+	inputType = state.RawComponentType(inputType)
+	separator := strings.LastIndex(inputType, ".")
+	if separator == -1 {
+		return
+	}
+	inputPackage := strings.Trim(inputType[:separator], "/")
+	if inputPackage == "" {
+		return
+	}
+
+	for _, parameter := range inputState {
+		if parameter == nil || parameter.Schema == nil || parameter.Output != nil {
+			continue
+		}
+
+		parameterType := parameter.Schema.Type()
+		for parameterType != nil && (parameterType.Kind() == reflect.Ptr || parameterType.Kind() == reflect.Slice) {
+			parameterType = parameterType.Elem()
+		}
+		if parameterType == nil || parameterType.Kind() != reflect.Struct || parameterType.Name() == "" {
+			continue
+		}
+
+		packagePath := strings.Trim(parameter.Schema.PackagePath, "/")
+		if packagePath == "" {
+			packagePath = strings.Trim(parameterType.PkgPath(), "/")
+		}
+		if packagePath != inputPackage && !strings.HasSuffix(packagePath, "/"+inputPackage) {
+			continue
+		}
+
+		imports.AddType(inputPackage + "." + parameterType.Name())
+	}
 }
 
 func (s *Service) updateImportPath(path string, file *modfile.Module) string {

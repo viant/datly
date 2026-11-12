@@ -21,11 +21,16 @@ type customMarshaller struct {
 }
 
 func newCustomUnmarshaller(rType reflect.Type, config *config.IOConfig, path string, outputPath string, tag *format.Tag, cache *marshallersCache) (marshaler, error) {
-	marshaller, err := cache.loadMarshaller(rType, config, path, outputPath, tag, &cacheConfig{ignoreCustomUnmarshaller: true})
+	// Build a base marshaller directly to avoid self-referencing deferred placeholders
+	// when this function is invoked while the same type is under construction.
+	marshaller, err := cache.pathCache(path).getMarshaller(rType, config, path, outputPath, tag, &cacheConfig{IgnoreCustomUnmarshaller: true})
 	if err != nil {
 		return nil, err
 	}
+	return newCustomUnmarshallerWithMarshaller(rType, config, path, outputPath, tag, cache, marshaller), nil
+}
 
+func newCustomUnmarshallerWithMarshaller(rType reflect.Type, config *config.IOConfig, path string, outputPath string, tag *format.Tag, cache *marshallersCache, marshaller marshaler) marshaler {
 	return &customMarshaller{
 		valueType:  getXType(rType),
 		addrType:   getXType(reflect.PtrTo(rType)),
@@ -35,7 +40,7 @@ func newCustomUnmarshaller(rType reflect.Type, config *config.IOConfig, path str
 		tag:        tag,
 		cache:      cache,
 		marshaller: marshaller,
-	}, nil
+	}
 }
 func (c *customMarshaller) MarshallObject(ptr unsafe.Pointer, session *MarshallSession) error {
 	return c.marshaller.MarshallObject(ptr, session)
@@ -45,7 +50,7 @@ func (c *customMarshaller) UnmarshallObject(pointer unsafe.Pointer, decoder *goj
 	value := c.valueType.Interface(pointer)
 	asUnmarshaler, ok := value.(UnmarshalerInto)
 	if ok {
-		dst := c.addrType.Value(pointer)
+		dst := reflect.NewAt(c.valueType.Type(), pointer).Interface()
 		return asUnmarshaler.UnmarshalJSONWithOptions(dst, decoder, session.Options...)
 	}
 

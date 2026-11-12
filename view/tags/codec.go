@@ -1,9 +1,9 @@
 package tags
 
 import (
-	"fmt"
-	"github.com/viant/tagly/tags"
 	"strings"
+
+	"github.com/viant/tagly/tags"
 )
 
 // CodecTag codec tag
@@ -31,10 +31,11 @@ func (t *Tag) updatedCodec(key string, value string) (err error) {
 		}
 		tag.Body = string(data)
 	default:
+		expr := key
 		if value != "" {
-			return fmt.Errorf("invalid argument %s", value)
+			expr += " =" + value
 		}
-		tag.Arguments = append(tag.Arguments, key)
+		tag.Arguments = append(tag.Arguments, expr)
 	}
 	return err
 }

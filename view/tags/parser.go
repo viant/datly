@@ -4,14 +4,15 @@ import (
 	"context"
 	"embed"
 	"fmt"
+	"reflect"
+	"strings"
+
 	"github.com/viant/afs"
 	"github.com/viant/afs/storage"
 	"github.com/viant/afs/url"
 	"github.com/viant/tagly/format"
 	"github.com/viant/tagly/tags"
 	"github.com/viant/xreflect"
-	"reflect"
-	"strings"
 )
 
 // ValueTag represents default value tag

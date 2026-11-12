@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/viant/datly/repository/codegen"
 	"github.com/viant/datly/service"
+	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
 	"net/http"
@@ -29,10 +30,10 @@ type (
 // Types returns all types
 func (c *Contract) Types() []*state.Type {
 	var types []*state.Type
-	if c.Input.Type.Type().IsDefined() {
+	if inputType := c.Input.Type.Type(); inputType != nil && inputType.IsDefined() {
 		types = append(types, &c.Input.Type)
 	}
-	if c.Output.Type.Type().IsDefined() {
+	if outputType := c.Output.Type.Type(); outputType != nil && outputType.IsDefined() {
 		types = append(types, &c.Output.Type)
 	}
 	return types
@@ -119,7 +120,7 @@ func (c *Contract) BodyType() reflect.Type {
 		return nil
 	}
 	rType := c.Input.Body.Schema.Type()
-	if rType != nil && rType.Kind() == reflect.Map {
+	if rType != nil && types.EnsureStruct(rType) == nil {
 		return reflect.TypeOf(struct {
 		}{})
 	}

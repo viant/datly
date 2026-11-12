@@ -2,6 +2,7 @@ package state
 
 import (
 	"context"
+	"embed"
 	"github.com/viant/xdatly/codec"
 	"github.com/viant/xreflect"
 )
@@ -22,5 +23,9 @@ type (
 		ExpandSubstitutes(text string) string
 
 		ReverseSubstitutes(text string) string
+
+		EmbedFS() *embed.FS
+
+		SetFSEmbedder(embedder *FSEmbedder)
 	}
 )

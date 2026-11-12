@@ -1,12 +1,14 @@
 package view
 
 import (
+	"strings"
+	"sync"
+
 	"github.com/viant/datly/view/state/predicate"
 	"github.com/viant/sqlx/io/read/cache"
 	"github.com/viant/structology"
 	"github.com/viant/tagly/format/text"
-	"strings"
-	"sync"
+	"github.com/viant/xdatly/handler/state"
 )
 
 // Statelet allows customizing View fetched from Database
@@ -14,9 +16,20 @@ type (
 
 	//InputType represents view state
 	Statelet struct {
-		Template *structology.State
-		QuerySelector
+		//SELECTORS
+		DatabaseFormat text.CaseFormat
+		OutputFormat   text.CaseFormat
+		Template       *structology.State
+		state.QuerySelector
 		QuerySettings
+		filtersMu     sync.Mutex
+		columnNamesMu sync.Mutex
+		initialized   bool
+		WarmupNoLimit bool
+		_columnNames  map[string]bool
+		result        *cache.ParmetrizedQuery
+		predicate.Filters
+		Ignore bool
 	}
 
 	QuerySettings struct {
@@ -24,64 +37,40 @@ type (
 		SyncFlag      bool
 		ContentFormat string
 	}
-
-	QuerySelector struct {
-		//SELECTORS
-		DatabaseFormat text.CaseFormat
-		OutputFormat   text.CaseFormat
-		Columns        []string `json:",omitempty"`
-		Fields         []string `json:",omitempty"`
-		OrderBy        string   `json:",omitempty"`
-		Offset         int      `json:",omitempty"`
-		Limit          int      `json:",omitempty"`
-
-		Criteria     string        `json:",omitempty"`
-		Placeholders []interface{} `json:",omitempty"`
-		Page         int
-		Ignore       bool
-		predicate.Filters
-
-		initialized  bool
-		_columnNames map[string]bool
-		result       *cache.ParmetrizedQuery
-	}
 )
-
-func (s *QuerySelector) CurrentLimit() int {
-	return s.Limit
-}
-
-func (s *QuerySelector) CurrentOffset() int {
-	return s.Offset
-}
-
-func (s *QuerySelector) CurrentPage() int {
-	return s.Page
-}
 
 // Init initializes Statelet
 func (s *Statelet) Init(aView *View) {
-	if aView != nil && s.Template == nil && aView.Template.stateType != nil {
+	if aView != nil && s.Template == nil && aView.Template != nil && aView.Template.stateType != nil {
 		s.Template = aView.Template.stateType.NewState()
 	}
 	if s.initialized {
 		return
 	}
+	s.columnNamesMu.Lock()
 	s._columnNames = Names(s.Columns).Index()
+	s.columnNamesMu.Unlock()
 }
 
 // Has checks if Field is present in Template.Columns
-func (s *QuerySelector) Has(field string) bool {
+func (s *Statelet) Has(field string) bool {
+	s.columnNamesMu.Lock()
+	defer s.columnNamesMu.Unlock()
 	_, ok := s._columnNames[field]
 	return ok
 }
 
-func (s *QuerySelector) Add(fieldName string, isHolder bool) {
+func (s *Statelet) Add(fieldName string, isHolder bool) {
 	toLower := strings.ToLower(fieldName)
+	s.columnNamesMu.Lock()
+	defer s.columnNamesMu.Unlock()
 	if _, ok := s._columnNames[toLower]; ok {
 		return
 	}
 
+	if s._columnNames == nil {
+		s._columnNames = map[string]bool{}
+	}
 	s._columnNames[toLower] = true
 	s._columnNames[fieldName] = true
 
@@ -94,18 +83,38 @@ func (s *QuerySelector) Add(fieldName string, isHolder bool) {
 	}
 }
 
-func (s *QuerySelector) SetCriteria(expanded string, placeholders []interface{}) {
-	s.Criteria = expanded
-	s.Placeholders = placeholders
+func (s *Statelet) SetColumns(columns []string) {
+	s.columnNamesMu.Lock()
+	defer s.columnNamesMu.Unlock()
+	s.Columns = append([]string(nil), columns...)
+	s._columnNames = Names(s.Columns).Index()
+}
+
+// AppendFilters safely appends filters to the selector's Filters to avoid data races.
+func (s *Statelet) AppendFilters(filters predicate.Filters) {
+	if len(filters) == 0 {
+		return
+	}
+	s.filtersMu.Lock()
+	s.Filters = append(s.Filters, filters...)
+	s.filtersMu.Unlock()
+}
+
+// ClearFilters safely clears the selector's filters.
+func (s *Statelet) ClearFilters() {
+	if s == nil {
+		return
+	}
+	s.filtersMu.Lock()
+	s.Filters = nil
+	s.filtersMu.Unlock()
 }
 
 // NewStatelet creates a selector
 func NewStatelet() *Statelet {
 	return &Statelet{
-		QuerySelector: QuerySelector{
-			_columnNames: map[string]bool{},
-			initialized:  true,
-		},
+		_columnNames: map[string]bool{},
+		initialized:  true,
 	}
 }
 
@@ -116,7 +125,7 @@ type State struct {
 }
 
 // QuerySelector returns query selector
-func (s *State) QuerySelector(view *View) *QuerySelector {
+func (s *State) QuerySelector(view *View) *state.QuerySelector {
 	statelet := s.Lookup(view)
 	if statelet == nil {
 		return nil
@@ -169,4 +178,56 @@ func (s *State) Init(aView *View) {
 
 func (s *Statelet) IgnoreRead() {
 	s.Ignore = true
+}
+
+// CloneForSummary creates a lock-safe copy of Statelet state for summary/meta work.
+// It intentionally does not copy mutex or lock-owner bookkeeping.
+func (s *Statelet) CloneForSummary() *Statelet {
+	if s == nil {
+		return NewStatelet()
+	}
+
+	ret := &Statelet{
+		DatabaseFormat: s.DatabaseFormat,
+		OutputFormat:   s.OutputFormat,
+		Template:       s.Template,
+		QuerySettings:  s.QuerySettings,
+		initialized:    s.initialized,
+		WarmupNoLimit:  s.WarmupNoLimit,
+		result:         s.result,
+		Ignore:         s.Ignore,
+		QuerySelector: state.QuerySelector{
+			OrderBy:  s.OrderBy,
+			Offset:   s.Offset,
+			Limit:    s.Limit,
+			Page:     s.Page,
+			Criteria: s.Criteria,
+		},
+	}
+	if len(s.Placeholders) > 0 {
+		ret.Placeholders = append([]interface{}(nil), s.Placeholders...)
+	}
+
+	s.columnNamesMu.Lock()
+	if s._columnNames != nil {
+		ret._columnNames = make(map[string]bool, len(s._columnNames))
+		for k, v := range s._columnNames {
+			ret._columnNames[k] = v
+		}
+	} else {
+		ret._columnNames = map[string]bool{}
+	}
+	if len(s.Fields) > 0 {
+		ret.Fields = append([]string(nil), s.Fields...)
+	}
+	if len(s.Columns) > 0 {
+		ret.Columns = append([]string(nil), s.Columns...)
+	}
+	s.columnNamesMu.Unlock()
+
+	s.filtersMu.Lock()
+	ret.Filters = append(predicate.Filters(nil), s.Filters...)
+	s.filtersMu.Unlock()
+
+	return ret
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/viant/datly/view/state/kind"
 	"os"
+	"reflect"
 )
 
 type Env struct {
@@ -14,7 +15,7 @@ func (v *Env) Names() []string {
 	return os.Environ()
 }
 
-func (v *Env) Value(ctx context.Context, name string) (interface{}, bool, error) {
+func (v *Env) Value(ctx context.Context, _ reflect.Type, name string) (interface{}, bool, error) {
 	ret, ok := v.env[name]
 	return ret, ok, nil
 }

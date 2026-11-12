@@ -3,6 +3,9 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/viant/jsonrpc/transport/client/stdio"
+	"github.com/viant/mcp-protocol/schema"
+	"github.com/viant/mcp/client"
 	"github.com/viant/toolbox"
 	"log"
 	"path/filepath"
@@ -25,10 +28,11 @@ func main() {
 	fmt.Println(args)
 	fmt.Println("Starting MCP client with args:", datlyBin+strings.Join(args, " "))
 
-	c, err := client.NewStdioMCPClient(datlyBin, []string{}, args...)
+	transport, err := stdio.New(datlyBin, stdio.WithArguments(strings.Join(args, " ")))
 	if err != nil {
-		log.Fatalf("Failed to create client: %v", err)
+		log.Fatalf("Failed to create stdio transport: %v", err)
 	}
+	c := client.New("datly-debug", "0.1", transport)
 	defer c.Close()
 
 	// Create context with timeout
@@ -37,14 +41,7 @@ func main() {
 
 	// Initialize the client
 	fmt.Println("Initializing client...")
-	initRequest := mcp.InitializeRequest{}
-	initRequest.Params.ProtocolVersion = mcp.LATEST_PROTOCOL_VERSION
-	initRequest.Params.ClientInfo = mcp.Implementation{
-		Name:    "example-client",
-		Version: "1.0.0",
-	}
-
-	initResult, err := c.Initialize(ctx, initRequest)
+	initResult, err := c.Initialize(ctx)
 	if err != nil {
 		log.Fatalf("Failed to initialize: %v", err)
 	}
@@ -54,26 +51,20 @@ func main() {
 		initResult.ServerInfo.Version,
 	)
 
-	readRequest := mcp.ReadResourceRequest{
-		Request: mcp.Request{
-			Method: string(mcp.MethodResourcesRead),
-		},
-	}
-	readRequest.Params.URI = "datly://localhost/v1/api/dev/vendors/{vendorID}"
-	readRequest.Params.Arguments = map[string]interface{}{
-		"vendorID": "12345", // Example vendor ID to read
-	}
-
-	c.ReadResource(ctx, readRequest) // ensure the client is initialized before proceeding
+	readRequest := &schema.ReadResourceRequestParams{Uri: "datly://localhost/v1/api/dev/vendors/12345"}
+	_, _ = c.ReadResource(ctx, readRequest) // ensure the client is initialized before proceeding
 
 	// List Tools
 	fmt.Println("Listing available tools...")
-	toolsRequest := mcp.ListResourceTemplatesRequest{}
-	tools, err := c.ListResourceTemplates(ctx, toolsRequest)
+	tools, err := c.ListResourceTemplates(ctx, nil)
 	if err != nil {
 		log.Fatalf("Failed to list tools: %v", err)
 	}
 	for _, tool := range tools.ResourceTemplates {
-		fmt.Printf("- %s: %s\n", tool.Name, tool.Description)
+		desc := ""
+		if tool.Description != nil {
+			desc = *tool.Description
+		}
+		fmt.Printf("- %s: %s\n", tool.Name, desc)
 	}
 }

@@ -26,6 +26,6 @@ func (o Options) FormatTag() *format.Tag {
 }
 
 type cacheConfig struct {
-	ignoreCustomUnmarshaller bool
-	ignoreCustomMarshaller   bool
+	IgnoreCustomUnmarshaller bool
+	IgnoreCustomMarshaller   bool
 }

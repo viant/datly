@@ -72,7 +72,7 @@ func (n *NamespacedView) indexView(aView *View, aPath string) {
 		nsView.Root = true
 		nsView.Namespaces = append(nsView.Namespaces, "")
 	}
-	if selector.Namespace != "" {
+	if selector != nil && selector.Namespace != "" {
 		nsView.Namespaces = append(nsView.Namespaces, selector.Namespace)
 	}
 	n.Views = append(n.Views, nsView)

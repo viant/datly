@@ -2,7 +2,7 @@
 secrets.json
 *.db
 local_test.go
-vendor
+vendor/
 datly
 other
 mydb
@@ -10,12 +10,10 @@ tmp/
 *.gz
 .DS_Store
 autogen
-dql
-dql
 *.iml
 *.so
 logs
 .extension
 .datly
 *.zip
-local
+v1/

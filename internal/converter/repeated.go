@@ -9,6 +9,8 @@ import (
 
 type Repeated []string
 
+var intIs64Bit = unsafe.Sizeof(int(0)) == unsafe.Sizeof(uint64(0))
+
 func (r Repeated) AsInts() ([]int, error) {
 	var result = make([]int, 0, len(r))
 	for _, item := range r {
@@ -32,7 +34,14 @@ func (r Repeated) AsUInts() ([]uint, error) {
 	if err != nil {
 		return nil, err
 	}
-	return *(*[]uint)(unsafe.Pointer(&v)), nil
+	if intIs64Bit {
+		return *(*[]uint)(unsafe.Pointer(&v)), nil
+	}
+	result := make([]uint, len(v))
+	for i, item := range v {
+		result[i] = uint(item)
+	}
+	return result, nil
 }
 
 func (r Repeated) AsInt64s() ([]int64, error) {
@@ -40,7 +49,14 @@ func (r Repeated) AsInt64s() ([]int64, error) {
 	if err != nil {
 		return nil, err
 	}
-	return *(*[]int64)(unsafe.Pointer(&v)), nil
+	if intIs64Bit {
+		return *(*[]int64)(unsafe.Pointer(&v)), nil
+	}
+	result := make([]int64, len(v))
+	for i, item := range v {
+		result[i] = int64(item)
+	}
+	return result, nil
 }
 
 func (r Repeated) AsUInt64s() ([]uint64, error) {
@@ -48,7 +64,14 @@ func (r Repeated) AsUInt64s() ([]uint64, error) {
 	if err != nil {
 		return nil, err
 	}
-	return *(*[]uint64)(unsafe.Pointer(&v)), nil
+	if intIs64Bit {
+		return *(*[]uint64)(unsafe.Pointer(&v)), nil
+	}
+	result := make([]uint64, len(v))
+	for i, item := range v {
+		result[i] = uint64(item)
+	}
+	return result, nil
 }
 
 func (r Repeated) AsFloats64() ([]float64, error) {

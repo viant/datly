@@ -2,7 +2,12 @@ package view
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"reflect"
+	"strings"
+	"sync"
+
 	expand "github.com/viant/datly/service/executor/expand"
 	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view/extension"
@@ -12,9 +17,6 @@ import (
 	"github.com/viant/xdatly/predicate"
 	"github.com/viant/xreflect"
 	"github.com/viant/xunsafe"
-	"reflect"
-	"strings"
-	"sync"
 )
 
 type (
@@ -25,6 +27,7 @@ type (
 	predicateKey struct {
 		name      string
 		paramType reflect.Type
+		stateType reflect.Type
 	}
 
 	predicateEvaluatorProvider struct {
@@ -34,6 +37,7 @@ type (
 		state        *expand.NamedVariable
 		hasStateName *expand.NamedVariable
 		handler      codec.PredicateHandler
+		stateType    *structology.StateType
 	}
 
 	PredicateEvaluator struct {
@@ -41,30 +45,53 @@ type (
 		evaluator     *expand.Evaluator
 		valueState    *expand.NamedVariable
 		hasValueState *expand.NamedVariable
+		stateType     *structology.StateType
+		name          string
+		args          []string
 	}
 )
 
 func (e *PredicateEvaluator) Compute(ctx context.Context, value interface{}) (*codec.Criteria, error) {
+	if e.name == extension.PredicateNop {
+		return &codec.Criteria{Expression: ""}, nil
+	}
 	cuxtomCtx, ok := ctx.Value(expand.PredicateCtx).(*expand.Context)
 	if !ok {
 		panic("not found custom ctx")
 	}
+	if err := validatePredicateArgs(e.name, value, e.args); err != nil {
+		return nil, err
+	}
 
 	val := ctx.Value(expand.PredicateState)
-	aState := val.(*structology.State)
-	offset := len(cuxtomCtx.DataUnit.ParamsGroup)
-	evaluate, err := e.Evaluate(cuxtomCtx, aState, value)
+	var aState *structology.State
+	if s, ok := val.(*structology.State); ok {
+		aState = s
+	}
+	if aState == nil && e.stateType != nil {
+		// Initialize state if absent; do not override if provided.
+		aState = e.stateType.NewState()
+	}
+	//  evaluate predicate with an isolated DataUnit to avoid
+	// mutating parent DataUnit and relying on Shrink/restore across nesting.
+	var metaSource expand.Dber
+	if cuxtomCtx.DataUnit != nil {
+		metaSource = cuxtomCtx.DataUnit.MetaSource
+	}
+	isolatedDU := expand.NewDataUnit(metaSource)
+	tmpCtx := *cuxtomCtx
+	tmpCtx.DataUnit = isolatedDU
+
+	evaluate, err := e.Evaluate(&tmpCtx, aState, value)
 	if err != nil {
 		return nil, err
 	}
 
-	placeholderLen := len(evaluate.DataUnit.ParamsGroup) - offset
-	var values = make([]interface{}, placeholderLen)
-	if placeholderLen > 0 {
-		copy(values, evaluate.DataUnit.ParamsGroup[offset:])
-	}
+	// Collect placeholders from the isolated DataUnit and return them
+	// to the caller; do not mutate the parent DataUnit here.
+	values := make([]interface{}, len(isolatedDU.ParamsGroup))
+	copy(values, isolatedDU.ParamsGroup)
 	criteria := &codec.Criteria{Expression: evaluate.Buffer.String(), Placeholders: values}
-	cuxtomCtx.DataUnit.ParamsGroup = cuxtomCtx.DataUnit.ParamsGroup[:offset]
 	return criteria, nil
 }
 
@@ -81,14 +108,21 @@ func (e *PredicateEvaluator) Evaluate(ctx *expand.Context, state *structology.St
 			hasValue = actual != nil
 		}
 	}
-	return e.evaluator.Evaluate(ctx,
-		expand.WithParameterState(state),
+	options := []expand.StateOption{
 		expand.WithNamedVariables(
 			e.valueState.New(value),
 			e.hasValueState.New(hasValue),
 		),
 		expand.WithCustomContext(e.ctx),
-	)
+	}
+	// The built-in expr predicate depends only on FilterValue and its configured
+	// expression. Its owning parameter state may be a generated projection that
+	// intentionally excludes non-predicate inputs, so binding that state can
+	// create a false type mismatch without contributing to the expression.
+	if e.name != extension.PredicateExpr {
+		options = append(options, expand.WithParameterState(state))
+	}
+	return e.evaluator.Evaluate(ctx, options...)
 }
 
 func (c *predicateCache) get(resource *Resource, predicateConfig *extension.PredicateConfig, param *state.Parameter, registry *extension.PredicateRegistry, stateType *structology.StateType) (codec.PredicateHandler, error) {
@@ -97,12 +131,33 @@ func (c *predicateCache) get(resource *Resource, predicateConfig *extension.Pred
 		keyName += strings.Join(predicateConfig.Args, ",")
 	}
 	outputType := param.OutputType()
-	aKey := predicateKey{name: keyName, paramType: outputType}
+	var ownerType reflect.Type
+	if stateType != nil {
+		ownerType = stateType.Type()
+	}
+	aKey := predicateKey{name: keyName, paramType: outputType, stateType: ownerType}
 	var provider, err = c.getEvaluatorProvider(resource, predicateConfig, outputType, registry, aKey, stateType)
 	if err != nil {
 		return nil, err
 	}
 	return provider.new(predicateConfig)
+}
+
+func validatePredicateArgs(name string, value interface{}, args []string) error {
+	if name != extension.PredicateDuration {
+		return nil
+	}
+	filterValue := strings.TrimSpace(strings.ToLower(fmt.Sprint(value)))
+	if filterValue == "" || filterValue == "<nil>" {
+		return nil
+	}
+	switch filterValue {
+	case "month", "thirty_days":
+		if len(args) < 7 || strings.TrimSpace(args[6]) == "" {
+			return errors.New("duration predicate requires MonthDayExpression argument for month/thirty_days")
+		}
+	}
+	return nil
 }
 
 func isCustomPredicate(keyName string) bool {
@@ -150,6 +205,9 @@ func (p *predicateEvaluatorProvider) new(predicateConfig *extension.PredicateCon
 		evaluator:     p.evaluator,
 		valueState:    p.state,
 		hasValueState: p.hasStateName,
+		stateType:     p.stateType,
+		name:          predicateConfig.Name,
+		args:          append([]string{}, predicateConfig.Args...),
 	}, nil
 }
 
@@ -207,5 +265,6 @@ func (p *predicateEvaluatorProvider) init(resource *Resource, predicateConfig *e
 	p.signature = argsIndexed
 	p.state = stateVariable
 	p.hasStateName = hasVariable
+	p.stateType = stateType
 	return nil
 }

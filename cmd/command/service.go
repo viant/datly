@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/viant/afs"
 	"github.com/viant/datly/cmd/options"
+	"github.com/viant/datly/gateway"
 	"github.com/viant/datly/gateway/runtime/standalone"
 	"github.com/viant/datly/internal/asset"
 	"github.com/viant/datly/internal/codegen"
@@ -30,11 +31,12 @@ const (
 
 type (
 	Service struct {
-		fs            afs.Service
-		config        *standalone.Config
-		translator    *translator.Service
-		goBinLocation string
-		Files         asset.Files
+		gatewayOptions []gateway.Option
+		fs             afs.Service
+		config         *standalone.Config
+		translator     *translator.Service
+		goBinLocation  string
+		Files          asset.Files
 	}
 )
 
@@ -61,6 +63,12 @@ func (s *Service) Exec(ctx context.Context, opts *options.Options) error {
 	}
 	if opts.Translate != nil {
 		return s.Translate(ctx, opts)
+	}
+	if opts.Transcribe != nil {
+		return s.Transcribe(ctx, opts)
+	}
+	if opts.Validate != nil {
+		return s.Validate(ctx, opts)
 	}
 
 	if opts.Mcp != nil {
@@ -153,8 +161,9 @@ func (s *Service) generateTemplateFiles(gen *options.Generate, template *codegen
 	return nil
 }
 
-func New() *Service {
+func New(options ...gateway.Option) *Service {
 	return &Service{
-		fs: afs.New(),
+		fs:             afs.New(),
+		gatewayOptions: append([]gateway.Option(nil), options...),
 	}
 }

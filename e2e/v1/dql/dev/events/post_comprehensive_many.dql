@@ -1,0 +1,12 @@
+#package('github.com/viant/datly/e2e/v1/shape/dev/events/comprehensive_many')
+#setting($_ = $connector('dev'))
+#setting($_ = $route('/v1/api/shape/dev/comprehensive/events-many', 'POST'))
+
+
+#set($_ = $Events<?>(body/Data).Cardinality('Many'))
+#set($_ = $Status<?>(output/status).Tag('anonymous:"true"'))
+#set($_ = $Data<?>(body/Data).Output())
+
+
+SELECT events.*
+FROM (SELECT * FROM EVENTS) events
