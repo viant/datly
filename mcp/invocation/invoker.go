@@ -11,6 +11,7 @@ import (
 	"github.com/viant/mcp-protocol/authorization"
 	xexec "github.com/viant/xdatly/exec"
 	xmcp "github.com/viant/xdatly/handler/mcp"
+	"github.com/viant/xdatly/response"
 )
 
 // OutputEncoder applies a compiled presentation contract without exposing its
@@ -88,6 +89,13 @@ func (i *Invoker) Execute(ctx context.Context, request Request) (*Execution, *js
 			effective, err = resolver.ResolveContract(ctx, request.Target, authScope)
 			authScope.Close()
 			if err != nil {
+				if _, declared := response.ErrorBody(err); declared {
+					var encodeError OutputEncoder
+					if i.errorOutput != nil {
+						encodeError = i.errorOutput(request.Target)
+					}
+					return &Execution{err: err, context: execContext, encodingContext: ctx, encodeErrorOutput: encodeError}, nil
+				}
 				return nil, jsonrpc.NewInvalidRequest("MCP contract authorization or preparation failed", nil)
 			}
 			exec.PublishContract(ctx, request.Target, effective)
