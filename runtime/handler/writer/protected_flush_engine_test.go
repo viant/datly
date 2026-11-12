@@ -210,6 +210,7 @@ func TestProtectedFlushNativeEnginePaths(t *testing.T) {
 		grant, buffered, lateFailure, defaultDenied bool
 	}{
 		{name: "root lifecycle", rootNative: true, explicit: true, grant: true, buffered: true},
+		{name: "independent child lifecycle owns completion", rootNative: true, relation: engine.ComponentImperative, buffered: true},
 		{name: "imperative lifecycle and sibling", relation: engine.ComponentImperative, explicit: true, grant: true, buffered: true},
 		{name: "buffered lifecycle and sibling", relation: engine.ComponentBufferedImperative, explicit: true, grant: true, buffered: true},
 		{name: "source-less buffered parent", relation: engine.ComponentBufferedImperative, neutral: true, explicit: true, grant: true, buffered: true},
@@ -230,6 +231,11 @@ func TestProtectedFlushNativeEnginePaths(t *testing.T) {
 			}
 			request := child
 			request.BufferedComponentCalls = test.buffered
+			if test.rootNative && test.relation != "" {
+				// A source-less independent orchestrator supplies this call marker
+				// but no inherited data owner. The child is its own native root.
+				ctx = engine.PrepareComponent(ctx, test.relation, "")
+			}
 			if !test.rootNative {
 				request = engine.Request{Input: protectedEngineRoute(t, reflect.TypeFor[struct{}]()), BoundInput: &struct{}{}, BufferedComponentCalls: test.buffered}
 				if !test.neutral {

@@ -888,7 +888,7 @@ func (h *Handler) execute(ctx context.Context, invocation rhandler.Invocation) (
 	if err = program.prepare(ctx, invocation.Binder); err != nil {
 		return program.output, err
 	}
-	if handlerengine.IsImperativeComponent(ctx) && !program.explicitProtectedFlush() && (program.queueObserver() == nil || len(program.actions.Rows) > 0) {
+	if handlerengine.NeedsImperativePrefix(ctx) && !program.explicitProtectedFlush() && (program.queueObserver() == nil || len(program.actions.Rows) > 0) {
 		flusher, lookupErr := lookup[xhandler.Flusher](ctx, invocation.Binder, xhandler.FlusherKey)
 		if lookupErr != nil {
 			return program.output, lookupErr

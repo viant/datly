@@ -45,6 +45,17 @@ func IsImperativeComponent(ctx context.Context) bool {
 	return ok && scope.relation == ComponentImperative
 }
 
+// NeedsImperativePrefix identifies calls whose writes must become visible to
+// siblings inside a shared owner. An independent child owns its transaction and
+// completes through the ordinary root path, even with an imperative call marker.
+func NeedsImperativePrefix(ctx context.Context) bool {
+	if !IsImperativeComponent(ctx) {
+		return false
+	}
+	data, _ := ctx.Value(dataScopeContextKey{}).(*dataScope)
+	return data != nil && data.parent != nil
+}
+
 // IsBufferedComponent reports the native explicit relation whose journal stays
 // queued until the root owner completes; it retains call-site marker ordering.
 func IsBufferedComponent(ctx context.Context) bool {
