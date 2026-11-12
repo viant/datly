@@ -1,6 +1,8 @@
 package output
 
 import (
+	"encoding/json"
+	"fmt"
 	"reflect"
 	"strings"
 
@@ -17,14 +19,31 @@ func (p *Plan) WithMCPVisibility() (*Plan, error) {
 	if p == nil || p.typeOf == nil {
 		return p, nil
 	}
-	walker, err := xshape.CompileRewrite(p.typeOf)
+	visibilityType := p.typeOf
+	declaredWire := false
+	owner := reflect.New(p.typeOf)
+	if p.typeOf.Kind() == reflect.Pointer {
+		owner = reflect.New(p.typeOf.Elem())
+	}
+	if _, customJSON := owner.Interface().(json.Marshaler); customJSON {
+		if _, declared := owner.Interface().(JSONWireType); declared {
+			wire, err := p.Wire("json")
+			if err != nil {
+				return nil, err
+			}
+			visibilityType, declaredWire = wire.Type, true
+		}
+	}
+	walker, err := xshape.CompileRewrite(visibilityType)
 	if err != nil {
 		return nil, err
 	}
 	// Retain caller-selected metadata while the native walker owns storage,
 	// container traversal, recursion and custom JSON boundaries.
 	edits := map[mcpFieldKey]xshape.FieldMetadata{}
-	mcpEffectiveFields(p.representation, "", edits)
+	if !declaredWire {
+		mcpEffectiveFields(p.representation, "", edits)
+	}
 	metadata, err := walker.RewriteRepresentation(func(path string, _ reflect.Type, original *xshape.FieldMetadata) (*xshape.FieldMetadata, error) {
 		selected := *original
 		if effective, ok := edits[mcpFieldKey{path, original.Name}]; ok {
@@ -55,6 +74,16 @@ func (p *Plan) WithMCPVisibility() (*Plan, error) {
 	})
 	if err != nil {
 		return nil, err
+	}
+	if declaredWire {
+		// The custom encoder owns the value conversion to its declared wire DTO.
+		// Storage/input annotations do not describe that DTO. Preserve the encoder
+		// only when its actual wire shape needs no MCP rewrite; never ignore an
+		// exclusion or rename on the declared wire type.
+		if metadata.Changed() {
+			return nil, fmt.Errorf("custom JSON wire type %s requires an MCP codec projection", visibilityType)
+		}
+		return p, nil
 	}
 	return p.WithRepresentation(metadata)
 }
