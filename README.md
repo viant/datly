@@ -166,3 +166,11 @@ all compatible with Apache License, Version 2. Please see individual files for d
 - Kamil Larysz
 - Adrian Witas
 
+
+### Opt-in HTTP authorization
+
+The master gateway supports named `viant/authz` policies, a default policy,
+route overrides, and exact exclusions. Identity comes from a trusted injected
+provider, using either an external endpoint or native component dispatch.
+See [HTTP authorization](doc/http-authorization.md) and the
+[complete configuration example](doc/examples/http-authorization.yaml).

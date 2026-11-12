@@ -17,6 +17,7 @@ require (
 	github.com/stretchr/testify v1.11.1
 	github.com/viant/afs v1.30.1-0.20260914155934-90e95d483861
 	github.com/viant/afsc v1.16.0
+	github.com/viant/authz v0.1.2-0.20261112184253-02e92dcfc66b
 	github.com/viant/assertly v0.9.1-0.20220620174148-bab013f93a60
 	github.com/viant/bigquery v0.5.2-0.20260803163621-2873b21b58e5
 	github.com/viant/cloudless v1.12.0

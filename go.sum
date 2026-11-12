@@ -1159,6 +1159,8 @@ github.com/viant/assertly v0.4.8/go.mod h1:aGifi++jvCrUaklKEKT0BU95igDNaqkvz+49u
 github.com/viant/assertly v0.9.0/go.mod h1:aGifi++jvCrUaklKEKT0BU95igDNaqkvz+49uaYMPRU=
 github.com/viant/assertly v0.9.1-0.20220620174148-bab013f93a60 h1:VFJvCOHKXv4IqX8rJwn1otpHWQGgMDv2bXtAPgEzndM=
 github.com/viant/assertly v0.9.1-0.20220620174148-bab013f93a60/go.mod h1:aGifi++jvCrUaklKEKT0BU95igDNaqkvz+49uaYMPRU=
+github.com/viant/authz v0.1.2-0.20261112184253-02e92dcfc66b h1:YwG7D7z3wWi+pHAtG4khWyglNtq0pk8n/+pCbhoL7OY=
+github.com/viant/authz v0.1.2-0.20261112184253-02e92dcfc66b/go.mod h1:iazfsC9LZkGsbZY2o/9Aq3p8eHaD09tWudyRN5vQ9eI=
 github.com/viant/bigquery v0.5.2-0.20260803163621-2873b21b58e5 h1:n0b8XMi4UZO532AP17Scc2vCDJTVSMzLHOUXFg5RyvQ=
 github.com/viant/bigquery v0.5.2-0.20260803163621-2873b21b58e5/go.mod h1:IIlW5q1E6xqg1p/91b3AGRCeLVZpRi+9C1kUL9PFNqw=
 github.com/viant/bindly v0.5.1-0.20261106060239-7e1b52bdd7da h1:9lH/an2qruARc9jjL/mdt9evmmMeT1Px8WQ0U/9omso=

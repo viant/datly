@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/google/uuid"
 	"github.com/viant/afs"
 	ahttp "github.com/viant/afs/adapter/http"
 	"github.com/viant/afs/storage"
@@ -13,8 +14,10 @@ import (
 	"github.com/viant/datly/gateway/router/openapi/openapi3"
 	"github.com/viant/datly/gateway/runtime/meta"
 	"github.com/viant/datly/gateway/warmup"
+	"github.com/viant/datly/internal/requesttrace"
 	"github.com/viant/datly/repository"
 	"github.com/viant/datly/repository/contract"
+	"github.com/viant/datly/repository/locator/component/dispatcher"
 	"github.com/viant/datly/repository/path"
 	"github.com/viant/datly/service/operator"
 	"github.com/viant/datly/service/session"
@@ -27,6 +30,7 @@ import (
 	"github.com/viant/xdatly/handler/async"
 	"github.com/viant/xdatly/handler/logger"
 	hstate "github.com/viant/xdatly/handler/state"
+	"time"
 
 	"net/http"
 	"net/url"
@@ -36,17 +40,19 @@ import (
 
 type (
 	Router struct {
-		routeMatcher  *matcher.Matcher
-		apiKeyMatcher *matcher.Matcher
-		repository    *repository.Service
-		operator      *operator.Service
-		config        *Config
-		logger        logger.Logger
-		OpenAPIInfo   openapi3.Info
-		metrics       *gmetric.Service
-		statusHandler http.Handler
-		paths         []*contract.Path
-		mcpRegistry   *serverproto.Registry
+		authorization           *authorizationGate
+		authorizationDispatcher contract.Dispatcher
+		routeMatcher            *matcher.Matcher
+		apiKeyMatcher           *matcher.Matcher
+		repository              *repository.Service
+		operator                *operator.Service
+		config                  *Config
+		logger                  logger.Logger
+		OpenAPIInfo             openapi3.Info
+		metrics                 *gmetric.Service
+		statusHandler           http.Handler
+		paths                   []*contract.Path
+		mcpRegistry             *serverproto.Registry
 	}
 
 	AvailableRoutesError struct {
@@ -88,6 +94,14 @@ func NewRouter(ctx context.Context, components *repository.Service, config *Conf
 			Version: config.Version,
 		},
 	}
+	gate, err := config.authorizationGate()
+	if err != nil {
+		return nil, err
+	}
+	r.authorization = gate
+	if gate != nil {
+		r.authorizationDispatcher = dispatcher.New(components.Registry(), components.Auth())
+	}
 	return r, r.init(ctx)
 }
 
@@ -122,6 +136,21 @@ func (r *Router) handleRoute(writer http.ResponseWriter, request *http.Request) 
 		return http.StatusForbidden, nil
 	}
 	aRoute, err := r.match(request.Method, request.URL.Path, request)
+	if r.authorization != nil {
+		started := time.Now()
+		if requesttrace.Current(request.Context()) == "" {
+			request = request.WithContext(requesttrace.Ensure(request.Context(), uuid.NewString()))
+		}
+		authorized, authErr := r.authorizeHTTP(request, aRoute)
+		if authErr != nil {
+			code := authorizationErrorStatus(authErr)
+			if r.logger != nil {
+				r.logger.Warnc(request.Context(), "HTTP authorization failed", "phase", "authorization", "status", code, "elapsed", time.Since(started), "reqTraceId", requesttrace.Current(request.Context()))
+			}
+			return code, &authorizationFailure{code: code, cause: authErr}
+		}
+		request = authorized
+	}
 	if err != nil {
 		return http.StatusNotFound, err
 	}

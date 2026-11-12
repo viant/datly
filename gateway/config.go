@@ -18,6 +18,7 @@ import (
 
 type (
 	Config struct {
+		AuthorizationProviders map[string]AuthorizationProvider `json:"-" yaml:"-"`
 		ExposableConfig
 		SensitiveConfig `json:",omitempty" yaml:",omitempty"`
 	}
@@ -27,7 +28,8 @@ type (
 	}
 
 	ExposableConfig struct {
-		APIPrefix           string //like /v1/api/
+		Authorization       *AuthorizationConfig `json:"Authorization,omitempty" yaml:"Authorization,omitempty"`
+		APIPrefix           string               //like /v1/api/
 		RouteURL            string
 		ShowAvailableRoutes *bool
 		GoBootstrap         *GoBootstrap
