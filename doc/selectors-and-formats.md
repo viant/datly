@@ -47,6 +47,17 @@ with the target view identity and existing input/output bindings.
 This fragment needs a view named `inventory`. Each explicit `QuerySelector`
 declaration enables its own property on that view; no duplicate
 `selector_fields`, `selector_limit`, or `selector_offset` setting is required.
+For independently named controls, the existing explicit tag supplies both target
+and property, without inferring either from a prefix:
+
+```sql
+#define($_ = $FlightsPage<int>(query/flightsPage).Optional().Tag('querySelector:"view=flights,property=page"'))
+#define($_ = $FlightsFields<[]string>(query/flightsFields).Optional().Tag('querySelector:"view=flights,property=fields"'))
+```
+
+These declarations use authored names; automatic relation-prefix generation is
+not implied. Conflicting fluent and tagged selector declarations are rejected.
+
 Child/sibling views have independent controls. Selector policy settings remain
 available for defaults, caps, allowed columns/methods, and selectors injected
 without a declared field. Offset requires a positive limit; page and limit

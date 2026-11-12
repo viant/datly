@@ -158,6 +158,9 @@ func parseDeclarations(blocks []directiveBlock) (result []*spec.Parameter, spans
 			FormatSelector:  options.formatSelector,
 			Raw:             strings.TrimSpace(block.body),
 		}
+		if err := applySelectorTag(param); err != nil {
+			return nil, nil, nil, fmt.Errorf("parameter %s: %w", holder, err)
+		}
 		key := param.Identity()
 		if existingIndex, ok := indexByKey[key]; ok {
 			existing := result[existingIndex]

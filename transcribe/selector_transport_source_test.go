@@ -33,7 +33,7 @@ func (*Handler) Exec(context.Context,handler.Session,*Input,*Output)error{return
 #setting($_ = $output_type('business.Output'))
 #setting($_ = $mcp('Convert','Custom transport'))
 #define($_ = $Fields<[]string>(query/fields))
-#define($_ = $Page<int>(query/page).QuerySelector('rows'))
+#define($_ = $RowsPage<int>(query/rowsPage).Tag('querySelector:"view=rows,property=page"'))
 #define($_ = $Limit<int>(query/limit).QuerySelector('rows'))`, handlerFixtureModule+"/registration", handlerFixtureModule+"/business")
 	writeSourceHandlerFile(t, root, "dql/convert.dql", source.Text)
 	var before map[string]string
