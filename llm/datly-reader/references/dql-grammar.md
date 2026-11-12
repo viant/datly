@@ -452,6 +452,12 @@ one group or one input. The metadata parser does not impose a nonnegative group
 constraint or a fixed predicate-name enum. Catalog compilation resolves names,
 argument counts and types; do not guess a custom predicate's signature.
 
+A standalone field tag `predicate:"-"` declares no predicate for that tag
+occurrence. It preserves compatibility with older DQL that used this marker;
+new inputs used only by explicit SQL bindings can omit predicate metadata.
+It does not remove other predicate declarations or satisfy a required security
+predicate. The marker is not an executable predicate name for `WithPredicate`.
+
 For built-ins such as `in`, alias and column are separate arguments (`'r', 'id'`),
 not one qualified string. They refer to the SQL where the predicate is expanded;
 the alias is not automatically rewritten to the outer view namespace. Other
