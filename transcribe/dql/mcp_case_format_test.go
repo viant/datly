@@ -13,7 +13,7 @@ func TestMCPInputCaseFormatIsIndependentOfHTTP(t *testing.T) {
 		{"route override", `$mcp_route('GET:/orders','Orders','List orders','','lc')`, "lc", ""},
 		{"invalid global format", `$mcp('Orders','','','typo')`, "", "invalid MCP case format"},
 		{"invalid route format", `$mcp_route('GET:/orders','Orders','','','typo')`, "", "invalid MCP case format"},
-		{"too many global args", `$mcp('Orders','','','lc','extra')`, "", "mcp requires"},
+		{"too many global args", `$mcp('Orders','','','lc',true,'extra')`, "", "mcp requires"},
 	} {
 		t.Run(tc.description, func(t *testing.T) {
 			component, err := parseComponentSource("example.com/app", "Orders", "#setting($_ = $route('/orders','GET'))\n#setting($_ = $case_format('lc'))\n#setting($_ = "+tc.directive+")\nSELECT 1")

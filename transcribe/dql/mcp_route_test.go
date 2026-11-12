@@ -42,7 +42,7 @@ SELECT 1`)
 func TestMCPRouteNewFormDiagnosticsAndGlobalCompatibility(t *testing.T) {
 	for _, tc := range []struct{ name, source, want string }{
 		{"missing name", `#setting($_ = $mcp_route('GET:/a'))`, "mcp_route requires"},
-		{"extra args", `#setting($_ = $mcp_route('GET:/a','a','','','lc','extra'))`, "mcp_route requires"},
+		{"extra args", `#setting($_ = $mcp_route('GET:/a','a','','','lc',true,'extra'))`, "mcp_route requires"},
 		{"modifier", `#setting($_ = $mcp_route('GET:/a','a').Extra())`, "mcp_route requires"},
 		{"bad ref", `#setting($_ = $mcp_route('/a','a'))`, "must use METHOD:/path"},
 		{"empty name", `#setting($_ = $mcp_route('GET:/a',''))`, "empty name"},

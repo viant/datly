@@ -25,6 +25,9 @@ type MCPExposure struct {
 	// CaseFormat customizes implicit MCP input and native output member names.
 	// Empty defaults to lowerCamel independently of HTTP. Explicit field names win.
 	CaseFormat string `json:"caseFormat,omitempty"`
+	// StrictArguments overrides the host policy for this exposure. Nil inherits
+	// the host setting, whose default remains lenient.
+	StrictArguments *bool `json:"strictArguments,omitempty"`
 }
 
 // EffectiveCaseFormat returns the MCP presentation policy without changing authored metadata.
@@ -67,6 +70,10 @@ func (e *MCPExposure) Clone() *MCPExposure {
 		return nil
 	}
 	result := *e
+	if e.StrictArguments != nil {
+		value := *e.StrictArguments
+		result.StrictArguments = &value
+	}
 	return &result
 }
 

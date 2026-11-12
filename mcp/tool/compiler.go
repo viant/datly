@@ -78,6 +78,10 @@ func (c *Compiler) Compile(input Input) (*Plan, error) {
 	if strings.TrimSpace(input.CaseFormat) == "" {
 		input.CaseFormat = input.Exposure.EffectiveCaseFormat()
 	}
+	strictArguments := c.strictArguments
+	if input.Exposure.StrictArguments != nil {
+		strictArguments = *input.Exposure.StrictArguments
+	}
 	name := strings.TrimSpace(input.Exposure.Name)
 	if err := validateToolName(name); err != nil {
 		return nil, err
@@ -156,7 +160,7 @@ func (c *Compiler) Compile(input Input) (*Plan, error) {
 	sort.SliceStable(arguments, func(i, j int) bool { return arguments[i].publicName < arguments[j].publicName })
 	bindingArguments := make([]mcpinput.Argument, len(arguments))
 	inputSchema := schema.ToolInputSchema{Type: "object", Properties: map[string]map[string]interface{}{}}
-	if c.strictArguments {
+	if strictArguments {
 		inputSchema.AdditionalProperties = map[string]interface{}{"additionalProperties": false}
 	}
 	for index, argument := range arguments {
@@ -228,7 +232,11 @@ func (c *Compiler) Compile(input Input) (*Plan, error) {
 		}
 	}
 	projectBinarySchema(arguments, &inputSchema, input.CaseFormat)
-	binding, err := c.binding.Compile(bindingArguments)
+	bindingCompiler := c.binding
+	if strictArguments != c.strictArguments {
+		bindingCompiler = mcpinput.NewCompiler(mcpinput.WithStrictArguments(strictArguments))
+	}
+	binding, err := bindingCompiler.Compile(bindingArguments)
 	if err != nil {
 		return nil, fmt.Errorf("compile MCP tool %q binding: %w", name, err)
 	}
@@ -270,7 +278,7 @@ func (c *Compiler) Compile(input Input) (*Plan, error) {
 		return nil, fmt.Errorf("compile MCP tool %q output schema: %w", name, outputErr)
 	}
 	return &Plan{
-		compilerInput: input, strictArguments: c.strictArguments,
+		compilerInput: input, strictArguments: strictArguments,
 		metadata: schema.Tool{Meta: metadata, Name: name, Description: &description, InputSchema: inputSchema, OutputSchema: outputSchema},
 		target:   exec.ComponentTarget{Component: input.Component, Route: input.Contract.Route()},
 		input:    input.Contract, args: arguments, binding: binding, caseFormat: input.CaseFormat,

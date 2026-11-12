@@ -156,8 +156,8 @@ matched case-insensitively; use the spelling below. Quote textual values.
 | `sql_dest` | exactly 2 | canonical root view or generated SQL field/view name and relative `.sql` destination; duplicate role fails |
 | `support_dest` | exactly 2 | quoted role and filename; no tail; duplicate role fails |
 | `meta` | 1+ | last argument is nonempty description resource path |
-| `mcp` | 1–4 | name (nonempty), optional description, description path, case format |
-| `mcp_route` | 2–5 | exact declared `METHOD:/path`, tool name, optional description, description path, case format; no fluent tail |
+| `mcp` | 1–5 | name (nonempty), optional description, description path, case format, strict-arguments boolean |
+| `mcp_route` | 2–6 | exact declared `METHOD:/path`, tool name, optional description, description path, case format, strict-arguments boolean; no fluent tail |
 | `route_name` | exactly 3 | declared path, method, observability name; does not rename the MCP tool |
 | `mcp_folder`, `mcp_skill_folder` | exactly 3 | namespace, root, URI prefix; no tail; skill variant selects `Skills: ["."]` |
 | `report`, `cube` | 0+ | first eight: linked input type, dimensions, measures, filters, orderBy, limit, offset, MCP-tool boolean; later arguments ignored |
@@ -1316,3 +1316,21 @@ Those runtime-owned values differ from the outer MCP/schema-fetch transport meth
 A method label does not switch a generated writer's mutation policy. Keep requiredness
 consistent with actual create/update behavior and native presence-aware validation;
 do not remove entity validation tags merely to make PATCH discovery sparse.
+
+### Per-tool strict arguments
+
+MCP remains lenient by default. The optional final boolean overrides the host’s
+existing `StrictArguments` setting for one exposure; omitting it inherits that
+setting. `true` rejects undeclared top-level MCP argument names before invocation,
+and `false` explicitly selects lenient handling. This uses the existing argument
+projector and does not change HTTP binding or nested business validation.
+
+```sql
+#setting($_ = $mcp('save_sitelist', 'Save a site list', '', 'lc', true))
+#setting($_ = $mcp_route('POST:/records', 'save_records', '', '', 'lc', true))
+```
+
+The compiled exposure stores this as nullable `strictArguments`. Tools with no
+override retain their previous behavior, including when the host selects strict
+mode globally. Use strict opt-in for workflows that must reject misspelled
+side-effect controls such as `dryRun` instead of ignoring them.

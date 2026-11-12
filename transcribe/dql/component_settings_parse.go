@@ -317,8 +317,8 @@ func parseComponentSettings(blocks []directiveBlock) (ret *componentSettings, er
 			}
 			ret.routeNames = append(ret.routeNames, routeNameSetting{ref: ref, name: value, span: SourceSpan{Start: block.start, End: block.end}})
 		case strings.EqualFold(name, "mcp_route"):
-			if len(args) < 2 || len(args) > 5 || tail != "" {
-				return nil, fmt.Errorf("mcp_route requires METHOD:/path, name, optional description, description path and case format")
+			if len(args) < 2 || len(args) > 6 || tail != "" {
+				return nil, fmt.Errorf("mcp_route requires METHOD:/path, name, optional description, description path, case format and strict arguments")
 			}
 			ref, err := spec.ParseRouteRef(trimQuote(args[0]))
 			if err != nil {
