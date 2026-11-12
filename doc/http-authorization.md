@@ -114,3 +114,14 @@ and `gateway/router/marshal/json` has a map-marshaling panic. The same failures
 were reproduced with the authorization changes removed through a baseline overlay.
 They are not counted as passing or as production validation. No deployment or
 live identity-provider test has been performed.
+
+Application binaries that retain Datly's generation/translation CLI can register
+providers without replacing its startup path:
+
+```go
+err := cmd.RunApp(version, os.Args[1:],
+    gateway.WithAuthorizationProviders(providers))
+```
+
+The optional gateway options are forwarded through the existing command and
+standalone builders. Calls without options retain their previous behavior.

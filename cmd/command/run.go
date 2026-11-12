@@ -55,5 +55,5 @@ func (s *Service) run(ctx context.Context, run *options.Run) (*standalone.Server
 		setter.SetStringIfEmpty(&s.config.Config.MCP.ResourceURL, run.MCPResourceURL)
 		setter.SetStringIfEmpty(&s.config.Config.MCP.AuthorizerMode, run.MCPAuthMode)
 	}
-	return standalone.New(ctx, standalone.WithConfig(s.config))
+	return standalone.New(ctx, standalone.WithConfig(s.config), standalone.WithOptions(s.gatewayOptions...))
 }

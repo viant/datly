@@ -7,9 +7,10 @@ import (
 	"github.com/jessevdk/go-flags"
 	"github.com/viant/datly/cmd/command"
 	soptions "github.com/viant/datly/cmd/options"
+	"github.com/viant/datly/gateway"
 )
 
-func RunApp(version string, args soptions.Arguments) error {
+func RunApp(version string, args soptions.Arguments, gatewayOptions ...gateway.Option) error {
 	options, err := buildOptions(args)
 	if err != nil {
 		return err
@@ -22,7 +23,7 @@ func RunApp(version string, args soptions.Arguments) error {
 	if err := options.Init(context.Background()); err != nil {
 		return err
 	}
-	cmd := command.New()
+	cmd := command.New(gatewayOptions...)
 	return cmd.Exec(context.Background(), options)
 
 }

@@ -36,7 +36,7 @@ func (s *Service) mcp(ctx context.Context, mcpOption *options.Mcp) error {
 	s.config.Logging.EnableTracing = &disabled
 	s.config.Logging.IncludeSQL = &disabled
 
-	service, _, err := standalone.NewService(ctx, standalone.WithConfig(s.config))
+	service, _, err := standalone.NewService(ctx, standalone.WithConfig(s.config), standalone.WithOptions(s.gatewayOptions...))
 	if err != nil {
 		return err
 	}
