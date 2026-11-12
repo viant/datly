@@ -132,8 +132,10 @@ with the target view identity and existing input/output bindings.
 #define($_ = $Limit<int>(query/product_limit).Optional().QuerySelector('products'))
 ```
 
-The selector property is inferred from the logical input kind/name. Do not write
-a two-argument selector form or guess a child view from a JSON holder. Source
+The one-argument form infers the selector property from the fixed declaration
+name. Use `.QuerySelector('flights', 'page')` to specify the property explicitly
+for an independently named declaration such as `FlightsPage`. The target is the
+declared view identity; do not guess it from a JSON holder. Source
 column whitelists remain the selector/builder owner's policy: expose only
 allowed public fields, keep join keys available to the reader when needed, and
 hide selected-away internal keys from payloads. The parent source-membership

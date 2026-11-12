@@ -371,7 +371,7 @@ Write the canonical option names shown here. Do not infer input, field, column o
 | WithDescription(text), Description(text) | 1 | generated HTTP/MCP parameter description |
 | WithExample(value), Example(value) | 1 | illustrative documentation/test value; not a runtime default |
 | Cacheable(bool) | 1 | input cache policy |
-| QuerySelector(view) | 1 | selector binding |
+| QuerySelector(view[, property]) | 1–2 | selector binding; optional property overrides declaration-name inference |
 | WithPredicate(...), Predicate(...) | 1+ | optional leading group number, name, args; repeatable |
 | ApplyWhenAbsentPredicate(...) | 1+ | predicate active when absent |
 | When(condition) | 1 | activation condition |
@@ -397,7 +397,9 @@ View options do not apply to ordinary request parameters. A declaration SQL comm
 
 ### Selector view scoping
 
-`QuerySelector(view)` recognizes declaration names `Fields`, `OrderBy`, `Offset`,
+`QuerySelector(view, property)` explicitly selects `fields`, `orderBy`, `offset`,
+`limit`, `page` or `criteria` for independently named declarations. The existing
+`QuerySelector(view)` form remains backward compatible and recognizes declaration names `Fields`, `OrderBy`, `Offset`,
 `Limit`, `Page` and `Criteria` (case-insensitive). It does not recognize arbitrary
 names such as `OrdersLimit`. The argument selects a registered prepared-view name;
 the request binding remains the authored `(query/location)`. For example:
