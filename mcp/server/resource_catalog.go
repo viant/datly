@@ -96,13 +96,18 @@ func (h *Handler) listResourceCatalog(ctx context.Context, request *jsonrpc.Type
 	return h.listResourceCatalog(ctx, &nativeRequest)
 }
 
-// Forward only the presented credential. The compiled catalog component owns
-// JWT verification and resource policy, exactly as it does for tools/call.
+// Unprotected sources retain their existing resource-catalog-only forwarding.
 func forwardCatalogBearer(service Service, next http.Handler) http.Handler {
 	catalog, ok := service.(resourceCatalog)
 	if !ok || !catalog.SupportsResourceCatalog() {
 		return next
 	}
+	return forwardPresentedBearer(next)
+}
+
+// Forward only the presented credential. Native component codecs and policies
+// own JWT verification and authorization for discovery and invocation alike.
+func forwardPresentedBearer(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Context().Value(authorization.TokenKey) == nil {
 			bearer := strings.TrimSpace(r.Header.Get("Authorization"))

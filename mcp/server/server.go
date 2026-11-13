@@ -53,7 +53,7 @@ func New(config Config) (*Server, error) {
 			if config.Transport.Kind != TransportStdio {
 				options = append(options,
 					upstream.WithAuthorizer(func(next http.Handler) http.Handler {
-						return authorizer.Middleware(forwardCatalogBearer(config.Service, next))
+						return authorizer.Middleware(forwardPresentedBearer(next))
 					}),
 					upstream.WithProtectedResourcesHandler(authorizer.ProtectedResourcesHandler),
 				)

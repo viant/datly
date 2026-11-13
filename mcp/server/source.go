@@ -97,7 +97,7 @@ func (c Config) sourceOptions() []upstream.Option {
 						http.Error(w, "MCP service unavailable", http.StatusServiceUnavailable)
 						return
 					}
-					authorizer.Middleware(forwardCatalogBearer(service, next)).ServeHTTP(w, r)
+					authorizer.Middleware(forwardPresentedBearer(next)).ServeHTTP(w, r)
 					return
 				}
 				if c.BackendForFrontend != nil {
