@@ -79,8 +79,8 @@ func (p *schemaProjector) argument(t reflect.Type, path, property string, schema
 	result, err := (jsonschema.Reflector{InputAliases: nativeAliases, RequireField: requireField, FallbackName: visibility.FallbackName, WireTypes: authority, ExcludeInternal: visibility.ExcludeInternal, ExcludeField: visibility.ExcludeField, Annotate: func(path string, field reflect.StructField) (string, any) {
 		if collection, err := choice.ParseCollectionEnum(field.Tag, field.Type); err != nil {
 			timePolicyErr = err
-		} else if collection != nil && (p.field == nil || path != argumentPath) {
-			timePolicyErr = fmt.Errorf("MCP collection enum %s requires a direct named or flattened body argument", path)
+		} else if collection != nil && (p.field == nil || path != argumentPath) && field.Tag.Get("enumAccept") != "literal" {
+			timePolicyErr = fmt.Errorf("MCP nested collection enum %s requires enumAccept:\"literal\"", path)
 		}
 		if nativeAliases {
 			policy, err := format.Parse(field.Tag)

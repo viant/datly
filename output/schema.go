@@ -289,7 +289,7 @@ func applyJSONSchemaChoices(item map[string]any, field jsonSchemaField) error {
 	if err != nil {
 		return err
 	}
-	if enumeration != nil {
+	if enumeration != nil && enumeration.CollectionItems() == nil {
 		if field.quoted {
 			return fmt.Errorf("enumStyle conflicts with quoted JSON")
 		}
@@ -331,9 +331,12 @@ func applyJSONSchemaChoices(item map[string]any, field jsonSchemaField) error {
 		}
 		return nil
 	}
-	collection, err := choice.ParseCollectionEnum(field.field.Tag, field.field.Type)
-	if err != nil {
-		return err
+	collection := enumeration
+	if collection == nil {
+		collection, err = choice.ParseCollectionEnum(field.field.Tag, field.field.Type)
+		if err != nil {
+			return err
+		}
 	}
 	if collection != nil {
 		items, ok := item["items"].(map[string]any)

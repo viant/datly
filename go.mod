@@ -15,13 +15,13 @@ require (
 	github.com/viant/gmetric v0.3.2
 	github.com/viant/govalidator v0.3.4-0.20260913213120-027a9dd54d73
 	github.com/viant/mcp v0.24.2-0.20261102163024-7166d81ea725
-	github.com/viant/mcp-protocol v0.19.2-0.20261113161226-336e56df5c92
+	github.com/viant/mcp-protocol v0.19.2-0.20261113172249-90a431f4e114
 	github.com/viant/parsly v0.3.3
 	github.com/viant/sqlparser v0.13.1-0.20261021204353-1c20a82bbb29
 	github.com/viant/sqlx v0.26.2-0.20261113032806-87f5818ff1ed
-	github.com/viant/structology v0.10.2-0.20261113154705-bb64b70a292c
+	github.com/viant/structology v0.10.2-0.20261113173642-a0aa1b96b64b
 	github.com/viant/structql v0.5.5-0.20261012183420-6a47e96ff5b5
-	github.com/viant/tagly v0.4.2-0.20261113161213-09846ce6879e
+	github.com/viant/tagly v0.4.2-0.20261113170847-8ebc26802769
 	github.com/viant/velty v0.4.1-0.20260915052314-fca47c0595f8
 	github.com/viant/x v0.6.1-0.20261106041415-0487ec66884b
 	github.com/viant/xdatly v1.0.1-0.20261106191133-04634a407286

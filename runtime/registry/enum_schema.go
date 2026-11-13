@@ -9,6 +9,9 @@ import (
 
 // EnumInputSchema describes the same accepted domain used by native binding.
 func EnumInputSchema(enumeration *choice.Enum, nullable bool) *spec.WireSchema {
+	if collection := enumeration.CollectionItems(); collection != nil {
+		return &spec.WireSchema{Type: "array", Items: &spec.WireSchema{Type: "string", Enum: collection.WireValues()}, Nullable: enumeration.AllowsNullInput()}
+	}
 	result := &spec.WireSchema{Type: enumeration.WireType(true), Enum: enumeration.WireValues(true), Nullable: nullable && enumeration.AllowsNullInput()}
 	domain := enumeration.InputDomain()
 	if domain == nil {

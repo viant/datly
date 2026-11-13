@@ -11,8 +11,9 @@ import (
 
 func TestEffectiveFieldEnumsAcrossOpenAPIRepresentations(t *testing.T) {
 	type record struct {
-		Mode  *int64 `json:"mode" choice:"9007199254740993" choice:"2" required:"true"`
-		Label string `json:"label" choice:"a" choice:"b" description:"Caller-visible label" example:"a"`
+		Mode     *int64   `json:"mode" choice:"9007199254740993" choice:"2" required:"true"`
+		Label    string   `json:"label" choice:"a" choice:"b" description:"Caller-visible label" example:"a"`
+		Channels []string `json:"channels" mcpEnum:"true" enumAccept:"literal" choice:"DISPLAY" choice:"VIDEO"`
 	}
 	for _, mode := range []string{"input", "plain output", "formatted output"} {
 		t.Run(mode, func(t *testing.T) {
@@ -42,6 +43,11 @@ func TestEffectiveFieldEnumsAcrossOpenAPIRepresentations(t *testing.T) {
 			root = b.schemas[strings.TrimPrefix(root.Ref, "#/components/schemas/")]
 			if root == nil {
 				t.Fatal("missing object schema")
+			}
+
+			channels := root.Properties["channels"]
+			if channels.Type != "array" || len(channels.Enum) != 0 || channels.Items == nil || !reflect.DeepEqual(channels.Items.Enum, []any{"DISPLAY", "VIDEO"}) {
+				t.Fatalf("collection schema=%+v", channels)
 			}
 			if !reflect.DeepEqual(root.Properties["mode"].Enum, []any{int64(9007199254740993), int64(2), nil}) {
 				t.Fatalf("enum=%v", root.Properties["mode"].Enum)
