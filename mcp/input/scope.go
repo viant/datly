@@ -165,7 +165,11 @@ func (p *Plan) scope(source Source, request *http.Request, requestOptions []requ
 				return nil, fmt.Errorf("encode named MCP body arguments: %w", err)
 			}
 		}
-		body, err := bodyprovider.New(raw, "application/json", nil, bodyprovider.WithExactFieldNames())
+		bodyOptions := []bodyprovider.Option{bodyprovider.WithExactFieldNames()}
+		if p.strictArguments {
+			bodyOptions = append(bodyOptions, bodyprovider.WithDecoders(strictBodyDecoders))
+		}
+		body, err := bodyprovider.New(raw, "application/json", nil, bodyOptions...)
 		if err != nil {
 			return nil, err
 		}

@@ -45,7 +45,8 @@ type Compiler struct {
 
 type CompilerOption func(*Compiler)
 
-// WithStrictArguments opts into rejecting undeclared tool argument names.
+// WithStrictArguments opts into rejecting undeclared tool arguments and
+// unknown members within ordinary JSON bodies using the native body decoder.
 // Known argument conversion, aliases and required inputs retain their checks.
 func WithStrictArguments(enabled bool) CompilerOption {
 	return func(c *Compiler) { c.strictArguments = enabled }
