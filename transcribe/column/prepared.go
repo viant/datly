@@ -153,7 +153,7 @@ func RefinePrepared(ctx context.Context, component *spec.Component, resources fs
 				}
 				source.SQL = SQL
 				resultView := sqlResultView(view)
-				identities, err := resolveResultSources(resultView.Columns, source)
+				identities, err := resolveResultSources(view.Columns, source)
 				if err != nil {
 					return err
 				}
