@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"context"
+	"github.com/viant/datly/exec"
 	"github.com/viant/datly/mcp/invocation"
 	"github.com/viant/datly/mcp/tool"
 	"github.com/viant/mcp-protocol/schema"
@@ -23,7 +24,11 @@ func (s *Service) DescribeTool(ctx context.Context, metadata schema.Tool) (schem
 	ctx = invocation.WithMCPContext(ctx, s.client)
 	scope := invocation.AuthorizationScope(ctx)
 	defer scope.Close()
-	effective, err := s.contractResolver.ResolveContract(ctx, plan.Target(), scope)
+	resolve := s.contractResolver.ResolveContract
+	if discovery, ok := s.contractResolver.(exec.DiscoveryContractResolver); ok {
+		resolve = discovery.ResolveDiscoveryContract
+	}
+	effective, err := resolve(ctx, plan.Target(), scope)
 	if err != nil {
 		return schema.Tool{}, false, err
 	}
@@ -33,7 +38,7 @@ func (s *Service) DescribeTool(ctx context.Context, metadata schema.Tool) (schem
 	}
 	dynamic := effective.Dynamic
 	for _, variant := range plan.PathVariants() {
-		selected, e := s.contractResolver.ResolveContract(ctx, variant.Plan.Target(), scope)
+		selected, e := resolve(ctx, variant.Plan.Target(), scope)
 		if e != nil {
 			return schema.Tool{}, false, e
 		}

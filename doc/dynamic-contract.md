@@ -70,6 +70,72 @@ the same Go fields and types. Unchanged parts retain their original linked types
 Named policies can reuse the selected metadata and codec plans, while authorization
 is still resolved for each invocation.
 
+## Discover finite output alternatives
+
+When one tool selects among typed response modes from its arguments, discovery
+has no future arguments to select a mode. An output policy may declare
+`DiscoveryAlternatives []*contract.Policy`: complete alternative policies over
+the same linked storage. The selected policy's `Field` continues to own calls
+and HTTP; only MCP discovery enumerates the alternatives.
+
+```go
+selected := modePolicy(request.Mode, request.Fields)
+selected.DiscoveryAlternatives = []*contract.Policy{
+    modePolicy("summary", nil),
+    modePolicy("entries", nil),
+    modePolicy("export", nil),
+}
+return selected, nil
+```
+
+Here `modePolicy` returns an ordinary named field policy: keep its selected typed
+row holder, give that holder the public name `data`, and hide the other holders.
+It must retain the canonical field types and storage. These are policies, not
+application-supplied JSON schemas. If a mode supports a field projection, its
+discovery policy describes all permitted members with projection-compatible
+requiredness; it does not predict a future requested subset.
+
+Each alternative replaces only its declaring owner's selected policy. All other
+nested and enclosing owners compose in the usual order, with enclosing policies
+retaining final authority. Each alternative is a complete policy, including any
+permissions owned by that same declaring owner. Build all alternatives from the
+same current authorization decision. Datly invokes each provider once per
+discovery operation, rather than rebinding authorization per branch.
+
+Discovery publishes `anyOf` over complete object envelopes, preserving the
+homogeneous array shape in each branch. It does not publish an `items:anyOf`
+union. `anyOf` allows overlapping projections, null and empty arrays; `oneOf`
+would reject valid overlapping modes. Existing native schema openness remains
+unchanged. Ordinary output schemas and HTTP behavior remain unchanged when no
+alternatives are declared.
+
+Named variants prepare native schemas once in the existing bounded registration
+cache, separately for declared MCP case formats. A format failure retains its cause
+without suppressing valid sibling formats. Common preparation failures are retried;
+cancellation and dependency failures do not poison retained variants. Current authorization and policy
+hooks still run on every request. `NoCache` and unnamed policies bypass retained
+variant artifacts. Multiple declaring owners form complete combinations bounded
+by that registration's variant capacity (currently 64 in Runtime). A distinct
+retained selected policy also consumes a slot; selection that overlaps a branch
+still permits the full capacity of alternatives. Overflow,
+zero-capacity discovery, nil branches, recursive alternatives, unsupported codecs
+and branch errors fail explicitly. Cancellation and dependency causes propagate;
+the runtime never substitutes a default schema after failure. Calls do not
+prepare discovery branches.
+
+Input execution plans use the same bounded registration-owned variant cache.
+Named policies retain only immutable route/binding metadata; authorization and
+policy hooks still run for every operation. Equivalent warm input variants do
+not recompile their binding plan. `NoCache`, unnamed policies, eviction and a
+new registration generation retain their ordinary preparation behavior.
+
+Native body representation binding preserves the request source's unknown-field
+policy, aliases, declared transformations, decoder ownership and presence.
+Strict MCP admission remains opt-in through `strictArguments: true`; lenient is
+the default. A dynamic Contract does not enable strictness. Known-hidden inputs
+retain native filtering behavior, while arbitrary unknown inputs follow the
+selected source policy. Ordinary REST defaults remain unchanged.
+
 The hook uses `github.com/viant/bindly` and `github.com/viant/xdatly/contract`.
 Schema discovery runs the hook and any explicitly bound dependencies, such as an
 auth component; it does not run the target business handler.
@@ -637,7 +703,15 @@ Use the configured compatible codec path for those features. See
 Complete custom JSON/Text methods own their representation. Internal edits of those
 owners are unsupported; hide the enclosing field or adjust an ordinary wrapper.
 Unchanged recursive types work; recursive edits are unsupported by the shared walker.
-Dynamic output is JSON-only. See [feature boundaries](dynamic-contract-boundaries.md).
+Native CSV and XLS/XLSX output honor Contract field visibility and enum output
+metadata through a compiled typed presentation. The presentation reuses Tagly's
+enum scalar codecs, including output-only aliases, without changing the original
+business values. Their existing encoders retain ownership of column names and
+nested relation layout. Hidden fields are removed before enum values are encoded.
+Removing managed enum tags in the selected REST Contract preserves storage values
+in REST exports too. XML and tabular dynamic output remain unsupported;
+opaque/custom JSON owners remain JSON-only. See
+[feature boundaries](dynamic-contract-boundaries.md).
 
 ## Enum wire forms
 
@@ -666,8 +740,34 @@ plans can be reused; authorization state and caller data are not retained in the
 Named variants let codecs reuse separate plans for each effective schema. A variant
 must never share another variant's hidden fields, names or enum conversions.
 Reusing a named policy reuses its immutable representation; current authorization
-still runs for each invocation. Rebuilding equivalent unnamed representations does
+is resolved for each operation. Rebuilding equivalent unnamed representations does
 not guarantee the same codec-cache identity.
+
+## Dependency binding within one operation
+
+When a Contract hook binds a declared component dependency, native execution can
+reuse that resolved pointer through Bindly's resolved-input binding. This handoff
+belongs to the current operation and Runtime generation. It is separate from
+named policy/codec metadata: completion releases its values, and later requests
+resolve their dependencies again.
+
+Reuse requires an unscoped, cacheable component binding with a provable declared
+transport-input graph. The runtime prepares that graph once and compares detached
+native source evidence through Bindly's raw-source capture API. It uses only the
+protocol providers for that evidence; component defaults cannot manufacture a
+missing request value. Changed provider inputs invalidate the handoff and cause
+Contract resolution to run again. Inputs that change during Contract binding
+produce a conflict before business execution.
+
+Explicit binding options, noncacheable/scoped/transformed bindings, resolution
+groups, and dependencies with their own dynamic contracts retain their ordinary
+native binding path. No extra output field, DQL switch, permission policy, or
+cross-request authorization cache is introduced. Cancellation and typed dependency
+errors retain their causes; MCP presents dependency failures through its normal
+tool-error path, preserving explicit public error bodies.
+
+See the native HTTP/MCP isolation and call-count tests in
+[`runtime/contract_dependency_reuse_test.go`](https://github.com/viant/datly/blob/v1/runtime/contract_dependency_reuse_test.go).
 
 ## Policy cache key examples
 

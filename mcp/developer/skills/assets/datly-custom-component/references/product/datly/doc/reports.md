@@ -8,9 +8,13 @@ A Go component field can opt into report derivation and bounded composition:
 ```
 
 Configured standalone/custom builds discover the selected linked packages and
-register the source reader, its POST `/cube` endpoint and opt-in `/cube/compose`
-endpoint together. Enable `report=true` on a GET reader with a groupable output
-view; enable `reportCompose=true` for composition. Link the source input/output
+register the source reader, its internal POST `/cube` route and opt-in
+`/cube/compose` route together. These are HTTP endpoints only when an HTTP
+gateway is mounted. Enable `report=true` on a read-only reader with a groupable
+output view; enable `reportCompose=true` for composition. Source route methods
+(including POST) do not determine cube eligibility. A declared mutation is not
+a cube source. MCP calls reuse the source contract without requiring REST
+exposure; the derived route retains POST internally. Link the source input/output
 and referenced types in the executable; derived report inputs are compiled during
 publication and do not need an application-owned binder or report engine.
 

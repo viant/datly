@@ -13,17 +13,33 @@ import (
 // provided by bootstrap's native parameter/codec owner; values and providers are
 // supplied by each invocation. This does not replace scoped handler admission.
 type StatePlans struct {
-	compile func(reflect.Type) (*bindly.Plan, error)
-	plans   sync.Map
+	compile         func(reflect.Type) (*bindly.Plan, error)
+	compileBindings func(reflect.Type) (*bindly.Plan, []bindly.BindingSpec, error)
+	plans           sync.Map
 }
 type stateEntry struct {
-	once sync.Once
-	plan *bindly.Plan
-	err  error
+	once     sync.Once
+	plan     *bindly.Plan
+	bindings []bindly.BindingSpec
+	sources  *bindly.ReplayPlan
+	err      error
 }
 
 func NewStatePlans(compile func(reflect.Type) (*bindly.Plan, error)) *StatePlans {
 	return &StatePlans{compile: compile}
+}
+
+// NewStatePlansWithBindings retains the native compiled binding metadata beside
+// its plan. A runtime-owned handoff can select resolved dependencies without
+// reparsing tags or compiling a second plan for each request.
+func NewStatePlansWithBindings(compile func(reflect.Type) (*bindly.Plan, []bindly.BindingSpec, error)) *StatePlans {
+	return &StatePlans{compileBindings: compile}
+}
+
+// preparedStateBinder is implemented by the invocation owner, never by a hook.
+// The supplied plan and binding metadata belong to this immutable generation.
+type preparedStateBinder interface {
+	BindContractState(context.Context, any, *bindly.Plan, []bindly.BindingSpec, *bindly.ReplayPlan, ...bindly.BindOption) error
 }
 
 // Binder adapts a native provider scope to compiled contract-state binding.
@@ -45,15 +61,28 @@ func (b *stateBinder) Bind(ctx context.Context, target any, options ...bindly.Bi
 	if !value.IsValid() || value.Kind() != reflect.Pointer || value.IsNil() || value.Elem().Kind() != reflect.Struct {
 		return fmt.Errorf("contract state must be a nonnil pointer to a struct")
 	}
-	if b.scope == nil || b.plans == nil || b.plans.compile == nil {
+	if b.scope == nil || b.plans == nil || b.plans.compile == nil && b.plans.compileBindings == nil {
 		return fmt.Errorf("contract state binding is unavailable")
 	}
 	typ := value.Elem().Type()
 	actual, _ := b.plans.plans.LoadOrStore(typ, &stateEntry{})
 	entry := actual.(*stateEntry)
-	entry.once.Do(func() { entry.plan, entry.err = b.plans.compile(typ) })
+	entry.once.Do(func() {
+		if b.plans.compileBindings != nil {
+			entry.plan, entry.bindings, entry.err = b.plans.compileBindings(typ)
+			entry.bindings = append([]bindly.BindingSpec(nil), entry.bindings...)
+			if entry.err == nil {
+				entry.sources = stateSources(entry.plan, entry.bindings)
+			}
+		} else {
+			entry.plan, entry.err = b.plans.compile(typ)
+		}
+	})
 	if entry.err != nil {
 		return entry.err
+	}
+	if owner, ok := b.scope.(preparedStateBinder); ok && b.plans.compileBindings != nil {
+		return owner.BindContractState(ctx, target, entry.plan, entry.bindings, entry.sources, options...)
 	}
 	// The native compiled plan is authoritative; no caller option can replace
 	// Datly codec compilation with the raw tag-only plan.
@@ -61,4 +90,28 @@ func (b *stateBinder) Bind(ctx context.Context, target any, options ...bindly.Bi
 	opts = append(opts, options...)
 	opts = append(opts, bindly.WithPlan(entry.plan))
 	return b.scope.Bind(ctx, target, opts...)
+}
+
+// stateSources selects only declared protocol inputs from the compiled plan.
+// A nil selection means the state cannot prove presentation reuse; ordinary
+// binding remains authoritative. Component evidence is owned by the runtime.
+func stateSources(plan *bindly.Plan, bindings []bindly.BindingSpec) *bindly.ReplayPlan {
+	var paths []string
+	for _, binding := range bindings {
+		if binding.Scope != "" || binding.When != "" || binding.With != "" || binding.ResolutionGroup != nil {
+			return nil
+		}
+		switch binding.Location.Kind {
+		case "header", "cookie", "query", "path", "body", "form":
+			paths = append(paths, binding.Path)
+		case "const", "literal", "component":
+		default:
+			return nil
+		}
+	}
+	replay, err := plan.Replay(paths...)
+	if err != nil {
+		return nil
+	}
+	return replay
 }

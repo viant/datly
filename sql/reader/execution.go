@@ -10,10 +10,13 @@ import (
 
 	"github.com/viant/datly/data"
 	dexec "github.com/viant/datly/exec"
+	"github.com/viant/datly/internal/cache/managed"
 	"github.com/viant/datly/spec"
 	dsql "github.com/viant/datly/sql"
 	"github.com/viant/sqlx"
 	"github.com/viant/sqlx/io/read/cache"
+	"github.com/viant/sqlx/io/read/cache/aerospike"
+	"github.com/viant/sqlx/io/read/cache/afs"
 	xhandler "github.com/viant/xdatly/handler"
 )
 
@@ -159,7 +162,18 @@ func (e *Execution) WarmupTargets() []dexec.ReaderWarmupTarget {
 			warmups, err := plan.View.Cache.EffectiveWarmups()
 			if err == nil {
 				for _, settings := range warmups {
-					result = append(result, dexec.ReaderWarmupTarget{View: viewName, Settings: settings})
+					identity := e.warmupCacheIdentity(plan.View)
+					target := dexec.ReaderWarmupTarget{View: viewName, Settings: settings, CacheName: identity.Name, Backend: identity.Backend}
+					if work, err := warmupWorkItems(plan, settings); err == nil {
+						for _, item := range work {
+							identity := e.warmupCacheIdentity(item.plan.View)
+							target.Work = append(target.Work, dexec.ReaderWarmupWork{
+								View: warmupTargetViewName(item.plan.View), Settings: item.settings.Clone(),
+								CacheName: identity.Name, Backend: identity.Backend,
+							})
+						}
+					}
+					result = append(result, target)
 				}
 			}
 		}
@@ -171,6 +185,34 @@ func (e *Execution) WarmupTargets() []dexec.ReaderWarmupTarget {
 	}
 	visit(e.config.Plan.Root, true)
 	return result
+}
+
+func (e *Execution) warmupCacheIdentity(view *data.View) managed.Identity {
+	var identity managed.Identity
+	if view.Cache != nil {
+		identity.Name = view.Cache.Name
+	}
+	// Inspect only known native services. Supplied opaque services must not
+	// inherit a backend from configuration they override.
+	switch service := e.config.ReadCaches[view].(type) {
+	case *managed.Cache:
+		if service != nil {
+			resolved := service.Identity()
+			if resolved.Name != "" {
+				identity.Name = resolved.Name
+			}
+			identity.Backend = resolved.Backend
+		}
+	case *afs.Cache:
+		if service != nil {
+			identity.Backend = "afs"
+		}
+	case *aerospike.Cache:
+		if service != nil {
+			identity.Backend = "aerospike"
+		}
+	}
+	return identity
 }
 
 func warmupTargetViewName(view *data.View) string {

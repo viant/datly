@@ -17,6 +17,7 @@ import (
 	bindinput "github.com/viant/bindly/input"
 	bodyprovider "github.com/viant/bindly/provider/body"
 	requestprovider "github.com/viant/bindly/provider/request"
+	structjson "github.com/viant/structology/encoding/json"
 )
 
 // Source resolves one compiled MCP argument from a protocol payload. The
@@ -165,7 +166,11 @@ func (p *Plan) scope(source Source, request *http.Request, requestOptions []requ
 				return nil, fmt.Errorf("encode named MCP body arguments: %w", err)
 			}
 		}
-		body, err := bodyprovider.New(raw, "application/json", nil, bodyprovider.WithExactFieldNames())
+		bodyOptions := []bodyprovider.Option{bodyprovider.WithExactFieldNames()}
+		if p.strictArguments {
+			bodyOptions = append(bodyOptions, bodyprovider.WithUnknownFieldPolicy(structjson.ErrorOnUnknown))
+		}
+		body, err := bodyprovider.New(raw, "application/json", nil, bodyOptions...)
 		if err != nil {
 			return nil, err
 		}
@@ -193,6 +198,19 @@ func (a Arguments) resolve(argument Argument) (resolvedValue, bool, error) {
 	if !found {
 		return resolvedValue{}, false, nil
 	}
+	// The canonical argument has already resolved aliases. Reuse the JSON wire
+	// representation so typed nil and custom JSON null have identical admission.
+	var encoded []byte
+	var err error
+	if argument.Nullable != nil && !*argument.Nullable {
+		encoded, err = json.Marshal(raw)
+		if err != nil {
+			return resolvedValue{}, false, fmt.Errorf("encode MCP argument %q: %w", argument.PublicName, err)
+		}
+		if bytes.Equal(bytes.TrimSpace(encoded), []byte("null")) {
+			return resolvedValue{}, false, fmt.Errorf("MCP argument %q cannot be null: %w", argument.PublicName, &bindinput.Error{Cause: fmt.Errorf("authored nullable=false")})
+		}
+	}
 	// URL-encoded query/form inputs have no JSON null representation. Treat
 	// null as absent so native defaults and required checks own the decision.
 	// Preserve body null and explicit false/zero values.
@@ -217,14 +235,23 @@ func (a Arguments) resolve(argument Argument) (resolvedValue, bool, error) {
 			return resolvedValue{wire: strings.Split(text, ",")}, true, nil
 		}
 	}
-	encoded, err := json.Marshal(raw)
-	if err != nil {
-		return resolvedValue{}, false, fmt.Errorf("encode MCP argument %q: %w", argument.PublicName, err)
+	if encoded == nil {
+		encoded, err = json.Marshal(raw)
+		if err != nil {
+			return resolvedValue{}, false, fmt.Errorf("encode MCP argument %q: %w", argument.PublicName, err)
+		}
 	}
 	if argument.Source.Kind == requestprovider.BodyKind {
 		return resolvedValue{body: encoded}, true, nil
 	}
-	value, err := decodeSourceValue(encoded, argument.SourceType)
+	if argument.AcceptText {
+		wire, err := textQueryValues(encoded, argument)
+		if err != nil {
+			return resolvedValue{}, false, fmt.Errorf("decode MCP argument %q: %w", argument.PublicName, &bindinput.Error{Cause: err})
+		}
+		return resolvedValue{wire: wire}, true, nil
+	}
+	value, err := decodeSourceValue(encoded, argument.SourceType, argument.AcceptScalar)
 	if err != nil {
 		return resolvedValue{}, false, fmt.Errorf("decode MCP argument %q: %w", argument.PublicName, &bindinput.Error{Cause: err})
 	}
@@ -239,8 +266,55 @@ func (a Arguments) resolve(argument Argument) (resolvedValue, bool, error) {
 		// Preserve native arrays as one lossless path-provider value. URI paths
 		// continue through URI.resolve and retain their original wire text.
 		wire = []string{string(encoded)}
+		if argument.AcceptScalar && encoded[0] != '[' {
+			// Typed decoding above already validated the signed integer. Retain
+			// that value in the singleton-array form the native path provider owns.
+			wire[0] = "[" + wire[0] + "]"
+		}
 	}
 	return resolvedValue{wire: wire}, true, nil
+}
+
+// textQueryValues admits the public JSON union and preserves text exactly for
+// Bindly's existing query provider conversion. It owns no integer-string grammar.
+func textQueryValues(raw []byte, argument Argument) ([]string, error) {
+	if bytes.Equal(raw, []byte("null")) {
+		return nil, nil
+	}
+	var items []json.RawMessage
+	if len(raw) > 0 && raw[0] == '[' {
+		if err := json.Unmarshal(raw, &items); err != nil {
+			return nil, err
+		}
+	} else if argument.AcceptScalar {
+		items = []json.RawMessage{raw}
+	} else {
+		return nil, &json.UnmarshalTypeError{Value: "non-array", Type: argument.SourceType}
+	}
+	result := make([]string, 0, len(items))
+	for _, item := range items {
+		if len(item) > 0 && item[0] == '"' {
+			var text string
+			if err := json.Unmarshal(item, &text); err != nil {
+				return nil, err
+			}
+			result = append(result, text)
+			continue
+		}
+		if bytes.Equal(item, []byte("null")) {
+			return nil, &json.UnmarshalTypeError{Value: "null", Type: argument.SourceType.Elem()}
+		}
+		value, err := decodeSourceValue(item, argument.SourceType.Elem(), false)
+		if err != nil {
+			return nil, err
+		}
+		wire, err := wireValues(value)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, wire...)
+	}
+	return result, nil
 }
 
 func (a Arguments) validate(arguments []Argument) error {
@@ -298,7 +372,18 @@ func (u URI) validate(arguments []Argument) error {
 	return nil
 }
 
-func decodeSourceValue(raw []byte, targetType reflect.Type) (interface{}, error) {
+func decodeSourceValue(raw []byte, targetType reflect.Type, acceptScalar bool) (interface{}, error) {
+	if acceptScalar && len(raw) > 0 && raw[0] != '[' && !bytes.Equal(raw, []byte("null")) {
+		// Decode into the exact element type so strings, booleans, fractional
+		// numbers and overflows retain encoding/json's typed rejection.
+		target := reflect.New(targetType.Elem())
+		if err := json.Unmarshal(raw, target.Interface()); err != nil {
+			return nil, err
+		}
+		converted := reflect.MakeSlice(targetType, 1, 1)
+		converted.Index(0).Set(target.Elem())
+		return converted.Interface(), nil
+	}
 	if targetType.Kind() == reflect.Slice && targetType.Elem().Kind() == reflect.String && len(raw) > 0 && raw[0] == '"' {
 		var text string
 		if err := json.Unmarshal(raw, &text); err != nil {

@@ -60,6 +60,7 @@ type Session struct {
 	outputAccessors      *outputAccessors
 	staticSelection      *dsql.StaticProjectionSelection
 	staticFields         []string
+	responseFields       map[*data.View]*dsql.ResponseFieldSelection
 	selectorFailure      error
 	selectorOwned        bool
 	Output

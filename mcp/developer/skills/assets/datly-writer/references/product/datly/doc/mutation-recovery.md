@@ -108,3 +108,25 @@ failures and unexecuted siblings, detached reporting, admission boundaries,
 bounded attempts, fresh dependencies, original request facts, typed presence,
 finalizer disposition and terminal observer behavior. Application parity and
 cross-connection concurrency remain required for each component that opts in.
+
+## SQLite writer admission
+
+Native connector-managed SQLite databases coordinate locally owned writer
+transactions before `BeginTx`. Connector aliases reuse the same database handle;
+separate pools for the same canonical file share admission. Waiting does not
+reserve a SQL connection, and the invocation context can cancel a queued writer.
+Different database files and ordinary readers remain independent.
+
+The root transaction owner retains admission until completion. Nested frames
+reuse an existing root transaction. Confirmed commit releases admission before
+post-commit observers run, so an observer can start a new invocation. Failure
+cleanup releases admission without replaying the failed operation or changing
+its transaction outcome. Connector shutdown retires its registration; queued and
+active owners retain their registration until they finish.
+
+This coordination is process-local. Caller-supplied transactions, database
+handles opened outside native connector management, and writers in other
+processes remain subject to SQLite's driver-level locking and busy timeout.
+Their contention must still surface with its original cause; admission is not a
+promise to suppress all `SQLITE_BUSY` errors. An uncertain commit is never a
+reason to replay a mutation.

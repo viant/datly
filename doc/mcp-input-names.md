@@ -52,6 +52,38 @@ Tool compilation rejects ambiguous public spellings. Supplying multiple spelling
 for one member also remains an invocation error. Formatting does not infer field
 presence, add runtime required checks, or change authorization.
 
+## Scalar admission for integer query and path lists
+
+Use `mcp:"scalar=true"` to admit a signed integer as one element of a native
+integer query or path slice. Declare it with existing input metadata in DQL:
+
+```sql
+#define($_ = $AdvertiserId<[]int>(query/advertiserId).Optional().Tag('mcp:"aliases=advertiser_id,scalar=true"'))
+```
+
+Discovery advertises the integer alternative first, the native array second,
+and null for optional bindings. Both public spellings use the same compiled
+input plan. Supplying multiple spellings remains an error. Zero becomes `[0]`;
+omission and query null retain native defaults and presence semantics. Arrays,
+including empty arrays, retain the existing contract. Fractional numbers,
+nonempty strings, booleans, objects and integer overflows remain invalid. The
+inherited empty query string behavior is preserved: `""`, like query null,
+means omission at binding time. Discovery advertises the typed input contract
+and does not advertise this legacy empty-string omission. Required bindings
+still reject omission, including null and the empty string, through their native
+required-input checks.
+
+Path scalars bind as the same singleton array as a one-element array. Path null
+remains invalid; consolidated route selection also rejects an empty identity
+instead of falling back to the collection route. URI and REST binding retain
+their existing behavior.
+
+The opt-in is limited to signed integer query or path slices without an explicit wire
+representation or custom JSON/text decoder on the slice or its element (value
+or pointer receiver); unsupported contracts fail tool compilation.
+`scalar=false` retains ordinary admission. REST query binding, application Go
+types, selectors, SQL predicates and authorization retain their existing owners.
+
 ## Required discovery for native array bodies
 
 For an optional whole-body native slice, an explicitly authored `required:"true"`
@@ -84,3 +116,16 @@ must be validated before adopting the policy in an application.
 OpenAPI input discovery represents the same native integer policy with its
 existing `anyOf` schema: nullable integer or boolean. Response schemas and
 untagged fields retain their existing representation.
+
+### Native query text admission
+
+`mcp:"text=true"` opts a signed-integer query slice into integer-or-string MCP
+array items. Canonical Go source/destination types remain unchanged. Text passes
+unchanged to the existing native query parser, including its declared list codec;
+the MCP adapter does not parse numeric text or introduce another normalizer.
+Optional query null follows the existing omission behavior. `scalar=true` can
+add singleton integer/string input alongside the array.
+
+Without this tag, ordinary integer-array admission is unchanged. Unsupported
+source kinds, element types, custom decoders and conflicting wire contracts
+fail compilation. Strict unknown-argument handling remains independently opt-in.

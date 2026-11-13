@@ -7,8 +7,10 @@ import (
 	"github.com/viant/bindly"
 	bindinput "github.com/viant/bindly/input"
 	"github.com/viant/bindly/locator"
+	"github.com/viant/bindly/xform"
 	"github.com/viant/bindly/xform/conv"
 	handlerprovider "github.com/viant/datly/runtime/handler/provider"
+	"github.com/viant/tagly/choice"
 	xexec "github.com/viant/xdatly/exec"
 	"reflect"
 	"strconv"
@@ -18,13 +20,28 @@ import (
 // queryListTransformer expands primitive query lists by default. HTTP wire
 // occurrences remain ordered; already typed protocol arrays keep their type.
 type queryListTransformer struct {
-	target     reflect.Type
-	allowEmpty bool
-	strict     bool // HTTP paths retain CSV tokenization and reject empty items.
+	target      reflect.Type
+	allowEmpty  bool
+	strict      bool // HTTP paths retain CSV tokenization and reject empty items.
+	enumeration *choice.Enum
 }
 
 func (t *queryListTransformer) WireSourceType() reflect.Type { return t.target }
-func (t *queryListTransformer) Transform(ctx context.Context, _ locator.Resolver, raw any) (any, error) {
+
+// WithEnum participates in the existing binding codec protocol without
+// replacing native list parsing or mutating the prepared transformer.
+func (t *queryListTransformer) WithEnum(plan *choice.Enum) (xform.Transformer, error) {
+	copy := *t
+	copy.enumeration = plan
+	return &copy, nil
+}
+
+func (t *queryListTransformer) Transform(ctx context.Context, _ locator.Resolver, raw any) (output any, resultErr error) {
+	defer func() {
+		if resultErr == nil && t.enumeration != nil {
+			output, resultErr = t.enumeration.Encode(output)
+		}
+	}()
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}

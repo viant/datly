@@ -23,7 +23,11 @@ func ApplySelectorProjection(sqlText string, selected []string, view *data.View)
 
 // Prepare narrows authored outputs before binding while deferring wrappers
 // that hide the source namespace until source predicates have been assembled.
-func (p SelectorProjection) Prepare(selected []string) (result *Projection, failure error) {
+func (p SelectorProjection) Prepare(selected []string, responseFields ...*ResponseFieldSelection) (result *Projection, failure error) {
+	var response *ResponseFieldSelection
+	if len(responseFields) > 0 {
+		response = responseFields[0]
+	}
 	requested := append([]string(nil), selected...)
 	defer func() {
 		var unknown *UnknownProjectionColumnError
@@ -41,10 +45,13 @@ func (p SelectorProjection) Prepare(selected []string) (result *Projection, fail
 	sqlText, view := p.SQL, p.View
 	selected = normalizeProjectionSelection(selected)
 	if len(selected) > 0 {
-		return p.prepare(selected)
+		return p.prepare(selected, response)
 	}
 	outputs, _, err := (SelectorProjection{SQL: sqlText, View: view}).columns()
 	if err != nil {
+		if response != nil {
+			return nil, err
+		}
 		var unprepared *databaseProjectionSchema
 		if errors.As(err, &unprepared) {
 			// A default opaque wildcard needs no projection rewrite. Its first
@@ -56,6 +63,9 @@ func (p SelectorProjection) Prepare(selected []string) (result *Projection, fail
 		if view != nil || errors.As(err, &duplicate) {
 			return nil, err
 		}
+	}
+	if err := response.validateColumns(outputs, false); err != nil {
+		return nil, err
 	}
 	if view != nil && view.IsGroupable() {
 		if projected, handled, err := renderStarProjection(sqlText, nil, view, p.Dialect, outputs); handled || err != nil {
@@ -69,12 +79,15 @@ func (p SelectorProjection) Prepare(selected []string) (result *Projection, fail
 	return &Projection{Source: source}, err
 }
 
-func (p SelectorProjection) prepare(selected []string) (*Projection, error) {
+func (p SelectorProjection) prepare(selected []string, response *ResponseFieldSelection) (*Projection, error) {
 	if p.View != nil && p.View.IsGroupable() {
 		p.SQL, selected = unwrapGroupedProjectionWrapper(p.SQL, selected)
 	}
 	columns, pureStar, err := p.columns()
 	if err != nil {
+		return nil, err
+	}
+	if err := response.validateColumns(columns, pureStar); err != nil {
 		return nil, err
 	}
 	chosen, err := p.selectColumns(columns, selected, pureStar)

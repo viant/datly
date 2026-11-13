@@ -22,6 +22,7 @@ import (
 
 // Argument is an immutable public projection of one canonical input field.
 type Argument struct {
+	nullable         *bool
 	enumeration      *choice.Enum
 	schemaField      *xshape.JSONField
 	representation   *xshape.Representation
@@ -33,6 +34,8 @@ type Argument struct {
 	sourceName       string
 	sourceType       reflect.Type
 	querySelectorCSV bool
+	acceptScalar     bool
+	acceptText       bool
 	destinationType  reflect.Type
 	wireSchema       *spec.WireSchema
 	wireSchemas      map[string]*spec.WireSchema
@@ -279,11 +282,26 @@ func cloneSchemaValue(value interface{}) interface{} {
 // Requiredness metadata does not replace the reflected wire representation.
 func hasWireRepresentation(schemas map[string]*spec.WireSchema) bool {
 	for _, schema := range schemas {
-		if schema != nil && (schema.Type != "" || len(schema.AnyOf) > 0) {
+		if wireSchemaReplacesShape(schema) {
 			return true
 		}
 	}
 	return false
+}
+
+func wireSchemaReplacesShape(schema *spec.WireSchema) bool {
+	if schema == nil {
+		return false
+	}
+	if schema.Type != "" {
+		return true
+	}
+	for _, child := range schema.AnyOf {
+		if wireSchemaReplacesShape(child) {
+			return true
+		}
+	}
+	return wireSchemaReplacesShape(schema.Items)
 }
 
 // OutputPlan is the immutable exposure-local native output authority.

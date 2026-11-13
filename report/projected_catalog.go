@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/viant/datly/spec"
-	"github.com/viant/datly/typecatalog"
 )
 
 // ProjectedComponent describes one derived runtime component produced from a
@@ -23,22 +22,14 @@ type ProjectedComponent struct {
 // Datly will derive for a grouped reader, using the same identity rules as the
 // report compiler.
 func ProjectedComponents(component *spec.Component) []ProjectedComponent {
-	if component == nil || component.Settings == nil || component.Settings.Report == nil || !component.Settings.Report.Enabled || component.RootView == nil || component.RootView.Groupable == nil || !*component.RootView.Groupable {
-		return nil
-	}
-	var routes []*spec.Route
-	for _, route := range component.Routes {
-		if route != nil && strings.EqualFold(route.Method, http.MethodGet) {
-			routes = append(routes, route)
-		}
-	}
+	routes := (Source{Component: component}).eligibleRoutes()
 	result := make([]ProjectedComponent, 0, len(routes)*2)
 	for _, route := range routes {
-		suffix := ""
-		if len(routes) > 1 {
-			suffix = typecatalog.ExportedFieldName(route.Name)
+		identity, err := (&reportDeriver{}).derivedIdentity(component, route, len(routes))
+		if err != nil {
+			return nil
 		}
-		cubeName := typecatalog.ExportedFieldName(component.Key.Name + suffix + "Cube")
+		cubeName := identity.key.Name
 		cubeMCP := component.Settings.Report.MCPTool == nil || *component.Settings.Report.MCPTool
 		result = append(result, ProjectedComponent{Name: spec.DerivedMCPToolName(route, cubeName, "Cube"), Method: http.MethodPost, Path: strings.TrimRight(route.Path, "/") + "/cube", MCPEnabled: cubeMCP, Description: strings.TrimSpace(component.Description + " cube")})
 		compose := component.Settings.Report.Compose

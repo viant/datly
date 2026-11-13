@@ -26,7 +26,8 @@ type MCPExposure struct {
 	// Empty defaults to lowerCamel independently of HTTP. Explicit field names win.
 	CaseFormat string `json:"caseFormat,omitempty"`
 	// StrictArguments overrides the host policy for this exposure. Nil inherits
-	// the host setting, whose default remains lenient.
+	// the host setting, whose default remains lenient. Strictness includes
+	// unknown members of ordinary JSON argument bodies, not only tool names.
 	StrictArguments *bool `json:"strictArguments,omitempty"`
 }
 

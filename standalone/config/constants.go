@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"reflect"
 
 	"github.com/viant/datly/bootstrap/connector"
 	"github.com/viant/datly/spec"
@@ -16,6 +17,9 @@ func (c *Config) ResolveConstants() (*Config, error) {
 		return nil, fmt.Errorf("standalone configuration is required")
 	}
 	result := *c
+	if err := result.resolveHTTP(); err != nil {
+		return nil, err
+	}
 	result.Logging = c.Logging.Copy()
 	if c.JWTClaims != nil {
 		policy := *c.JWTClaims
@@ -141,4 +145,16 @@ func (c *Config) ResolveConstants() (*Config, error) {
 		return nil, err
 	}
 	return &result, nil
+}
+
+func (c *Config) resolveHTTP() error {
+	if c.HTTP == nil {
+		return nil
+	}
+	if !reflect.ValueOf(c.Config).IsZero() {
+		return fmt.Errorf("HTTP and flat HTTP configuration cannot be combined")
+	}
+	c.Config = *c.HTTP
+	c.HTTP = nil
+	return nil
 }

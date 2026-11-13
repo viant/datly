@@ -4,11 +4,14 @@ package server
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"sort"
 	"time"
 
+	internallog "github.com/viant/datly/internal/logging"
+	"github.com/viant/datly/mcp/internal/access"
 	"github.com/viant/datly/observability"
 	"github.com/viant/jsonrpc"
 	"github.com/viant/jsonrpc/transport"
@@ -144,7 +147,24 @@ func (h *Handler) ListTools(ctx context.Context, request *jsonrpc.TypedRequest[*
 		result.TtlMs = h.toolsListTtlMs
 		visible := result.Tools[:0]
 		for _, entry := range result.Tools {
-			if authorizeCatalogTool(ctx, h.service, entry.Name, "discover") == nil && authorizeCatalogTool(ctx, h.service, entry.Name, "describe") == nil {
+			permitted := true
+			for _, action := range []string{"discover", "describe"} {
+				started := time.Now()
+				accessErr := authorizeCatalogTool(ctx, h.service, entry.Name, action)
+				if cancellation := ctx.Err(); cancellation != nil {
+					accessErr = errors.Join(accessErr, cancellation)
+				}
+				if accessErr == nil {
+					continue
+				}
+				if access.Denied(accessErr) {
+					permitted = false
+					break
+				}
+				log.Printf("MCP catalog authorization failed operation=%q stage=%q elapsed=%s request_id=%d tool=%q error=%q", schema.MethodToolsList, action, time.Since(started), request.Id, entry.Name, internallog.FailureReason(accessErr.Error()))
+				return nil, jsonrpc.NewInternalError("MCP tool catalog is unavailable", nil).WithCause(accessErr)
+			}
+			if permitted {
 				if describer, ok := h.service.(interface {
 					DescribeTool(context.Context, schema.Tool) (schema.Tool, bool, error)
 				}); ok {

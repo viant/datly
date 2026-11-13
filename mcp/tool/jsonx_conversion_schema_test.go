@@ -46,7 +46,7 @@ func TestJSONXConversionSchemaDomains(t *testing.T) {
 func TestJSONXConversionOwnerRefinements(t *testing.T) {
 	projected, err := (&schemaProjector{nativeBody: true, schemas: map[string]*spec.WireSchema{
 		"Body.enabled": {Type: "boolean", Required: true},
-		"Body.names":   {Type: "array", MinItems: 1},
+		"Body.names":   {Type: "array", MinItems: 1, MaxItems: 2},
 	}}).argument(reflect.TypeFor[jsonxConversionSchemaRow](), "Body", "Body", nil)
 	require.NoError(t, err)
 	validator, err := gojsonschema.NewSchema(gojsonschema.NewGoLoader(projected))
@@ -57,6 +57,7 @@ func TestJSONXConversionOwnerRefinements(t *testing.T) {
 	}{
 		{`{}`, false}, {`{"enabled":null}`, false}, {`{"enabled":1}`, true}, {`{"active":1}`, true}, {`{"active":null}`, false},
 		{`{"enabled":true,"names":[]}`, false}, {`{"enabled":true,"names":["a"]}`, true}, {`{"enabled":true,"names":"a,b"}`, true},
+		{`{"enabled":true,"names":["a","b","c"]}`, false},
 	} {
 		t.Run(tc.payload, func(t *testing.T) {
 			result, err := validator.Validate(gojsonschema.NewStringLoader(tc.payload))

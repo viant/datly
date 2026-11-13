@@ -72,3 +72,22 @@ func TestCompilerHidesMCPOutputWithoutPreparedPlan(t *testing.T) {
 	require.Contains(t, plan.Metadata().OutputSchema.Properties, "visible")
 	require.NotContains(t, plan.Metadata().OutputSchema.Properties, "secret")
 }
+
+type explicitOutputSchema struct {
+	Content []string `json:"content"`
+}
+
+func (*explicitOutputSchema) MCPToolResult() {}
+func TestExplicitToolResultDoesNotAdvertiseEnvelopeAsStructuredContent(t *testing.T) {
+	for _, shape := range []reflect.Type{reflect.TypeFor[explicitOutputSchema](), reflect.TypeFor[*explicitOutputSchema]()} {
+		result, err := outputContractSchema(shape, nil)
+		require.NoError(t, err)
+		require.Nil(t, result)
+	}
+	ordinary := reflect.TypeFor[struct {
+		Content []string `json:"content"`
+	}]()
+	result, err := outputContractSchema(ordinary, nil)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+}

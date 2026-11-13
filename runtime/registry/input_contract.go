@@ -446,11 +446,6 @@ func bindingWireSchema(binding bindly.BindingSpec) (*spec.WireSchema, map[string
 		nested = cloneWireSchemas(param.WireSchemas)
 	}
 	for key, schema := range nested {
-		// Presence-only metadata augments a reflected nested shape without
-		// replacing its type. Root wire representations still require a type.
-		if schema != nil && schema.Type == "" && schema.Required && schema.Format == "" {
-			continue
-		}
 		if err := validateWireSchema(schema); err != nil {
 			return nil, nil, fmt.Errorf("nested wire schema %s: %w", key, err)
 		}
@@ -473,21 +468,32 @@ func validateWireSchema(schema *spec.WireSchema) error {
 	if schema == nil {
 		return nil
 	}
-	if len(schema.AnyOf) > 0 {
-		for _, child := range schema.AnyOf {
-			if err := validateWireSchema(child); err != nil {
-				return err
-			}
+	if schema.MinItems < 0 || schema.MaxItems < 0 || schema.MaxItems > 0 && schema.MinItems > schema.MaxItems {
+		return fmt.Errorf("invalid wire schema item bounds")
+	}
+	for _, child := range schema.AnyOf {
+		if child == nil {
+			return fmt.Errorf("nil wire schema alternative")
 		}
-		return nil
+		if err := validateWireSchema(child); err != nil {
+			return err
+		}
+	}
+	if err := validateWireSchema(schema.Items); err != nil {
+		return err
+	}
+	for _, name := range schema.RequiredFields {
+		if strings.TrimSpace(name) == "" {
+			return fmt.Errorf("empty wire schema required field")
+		}
 	}
 	switch schema.Type {
-	case "string":
-	case "boolean", "integer", "number":
+	case "", "object", "array", "boolean", "integer", "number":
 		if schema.Format != "" {
 			return fmt.Errorf("%s wire schema does not support format %q", schema.Type, schema.Format)
 		}
 		return nil
+	case "string":
 	default:
 		return fmt.Errorf("unsupported wire schema type %q", schema.Type)
 	}

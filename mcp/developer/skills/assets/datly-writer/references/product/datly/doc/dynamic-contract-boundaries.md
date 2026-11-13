@@ -58,3 +58,24 @@ metadata while retaining canonical types, field indexes, offsets and embedding.
 The native traversal owns this representation; schema and codec consumers must use
 it without flattening storage or stripping linked methods. Datly input/output, MCP and OpenAPI consumers now use the optional metadata path.
 The old restriction test records only the limitation of reflected replacement types.
+
+## CSV and spreadsheet exports
+
+Native CSV and XLS/XLSX encoders consume a typed presentation compiled once for
+an effective output plan. Contract-hidden fields are physically absent from that
+presentation, including nested fields. A request's selected fields compose with
+Contract visibility using canonical indexes before projection. Original business
+values and registered plans remain unchanged.
+
+The existing CSV and spreadsheet codecs own their field names, column tags and
+relation layout. The presentation compiles enum output metadata with the same
+Tagly scalar codecs as JSON, including literal/ordinal conversion and output-only
+aliases. Integer wire values remain numeric spreadsheet cells. Nulls keep each
+format's existing representation. Hidden fields are removed before scalar
+encoding, and a visible strict-unknown enum preserves its typed encoding error.
+Removing enum metadata in the selected Contract restores storage representations
+without modifying source values or another caller's plan. `enumAccept` remains
+input-only. XML and tabular retain their existing scalar behavior.
+A hidden declared row holder fails closed; another collection is never substituted.
+Opaque/custom JSON owners and unsupported effective shapes remain fail-closed.
+XML and tabular dynamic exports are not admitted.

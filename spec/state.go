@@ -68,8 +68,14 @@ type WireSchema struct {
 	Nullable  bool          `json:"nullable,omitempty"`
 	// Required advertises presence of this nested member. An empty Type retains
 	// the reflected shape (including array items) while adding this constraint.
+	// On Items, Required excludes null elements when Nullable is false.
 	Required bool `json:"required,omitempty"`
 	MinItems int  `json:"minItems,omitempty"`
+	MaxItems int  `json:"maxItems,omitempty"`
+	// Object and item constraints augment the reflected public shape when Type is empty.
+	AdditionalProperties *bool       `json:"additionalProperties,omitempty"`
+	RequiredFields       []string    `json:"requiredFields,omitempty"`
+	Items                *WireSchema `json:"items,omitempty"`
 }
 
 func (s *WireSchema) Clone() *WireSchema {
@@ -78,6 +84,12 @@ func (s *WireSchema) Clone() *WireSchema {
 	}
 	result := *s
 	result.Enum = append([]any(nil), s.Enum...)
+	result.RequiredFields = append([]string(nil), s.RequiredFields...)
+	result.Items = s.Items.Clone()
+	if s.AdditionalProperties != nil {
+		value := *s.AdditionalProperties
+		result.AdditionalProperties = &value
+	}
 	if s.Minimum != nil {
 		value := *s.Minimum
 		result.Minimum = &value

@@ -111,13 +111,12 @@ func prepare(SQL string, validate InputValidator) (string, *query.Select, error)
 				// AppendBinding always emits a bound value, never SQL identity.
 				// Inspect its call shape without evaluating the operand. The
 				// existing AST value-position checks still constrain placement.
-				method, ok := selector.X.(*veltyexpr.Select)
-				if !ok || method.ID != "AppendBinding" {
-					return "", nil, fmt.Errorf("unsupported SQL criteria call at byte %d", pos)
+				bound, err := appendBindingCall(selector)
+				if err != nil {
+					return "", nil, fmt.Errorf("%w at byte %d", err, pos)
 				}
-				call, ok := method.X.(*veltyexpr.Call)
-				if !ok || len(call.Args) != 1 || call.X != nil {
-					return "", nil, fmt.Errorf("AppendBinding requires one argument and no chained access at byte %d", pos)
+				if !bound {
+					return "", nil, fmt.Errorf("unsupported SQL criteria call at byte %d", pos)
 				}
 				path = "criteria.AppendBinding"
 			} else {
@@ -437,4 +436,21 @@ func validateAnalysisSource(value node.Node) error {
 		return fmt.Errorf("unsupported dynamic SQL structure: source has no static table identity")
 	}
 	return nil
+}
+
+// appendBindingCall recognizes the native bound-value operation without
+// evaluating its argument. SQL AST validation still owns legal placement.
+func appendBindingCall(selector *veltyexpr.Select) (bool, error) {
+	if selector == nil || selector.ID != "criteria" {
+		return false, nil
+	}
+	method, ok := selector.X.(*veltyexpr.Select)
+	if !ok || method.ID != "AppendBinding" {
+		return false, nil
+	}
+	call, ok := method.X.(*veltyexpr.Call)
+	if !ok || len(call.Args) != 1 || call.X != nil {
+		return false, fmt.Errorf("AppendBinding requires one argument and no chained access")
+	}
+	return true, nil
 }

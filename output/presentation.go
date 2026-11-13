@@ -1,18 +1,25 @@
 package output
 
 import (
+	"encoding"
+	"encoding/json"
 	"fmt"
+	"github.com/viant/tagly/choice"
 	xshape "github.com/viant/x/shape"
 	"reflect"
+	"strconv"
 	"strings"
 )
 
-// presentation compiles only branches affected by an exclusion. Codecs receive
+// presentation compiles branches affected by visibility or scalar metadata. Codecs receive
 // a typed serialization view; application output and database rows stay intact.
 type presentation struct {
 	source, target reflect.Type
 	elem           *presentation
 	fields         []presentationField
+	// byIndex retains canonical field positions for request selection reuse.
+	byIndex     []*presentation
+	enumeration *choice.Enum
 }
 type presentationField struct {
 	source     []int
@@ -25,22 +32,56 @@ type indexExcluder interface {
 	AffectsIndexes([]int) bool
 }
 type presentationCompiler struct {
-	excluded exclusions
-	selected indexExcluder
+	excluded       exclusions
+	selected       indexExcluder
+	representation *xshape.Representation
+	hideJSON       bool
+	active         map[reflect.Type]bool
+	compileEnums   bool
+	authority      *presentation
 }
 
 func (e exclusions) presentation(typeOf reflect.Type, path string) (*presentation, error) {
 	return (presentationCompiler{excluded: e}).compile(typeOf, path, nil)
 }
 func (c presentationCompiler) compile(typeOf reflect.Type, path string, indexes []int) (*presentation, error) {
+	return c.compileShape(typeOf, path, indexes, c.representation, c.authority)
+}
+func (c presentationCompiler) compileShape(typeOf reflect.Type, path string, indexes []int, metadata *xshape.Representation, authority *presentation) (*presentation, error) {
+	if authority != nil && authority.enumeration != nil {
+		return authority, nil
+	}
+	if authority != nil && (c.selected == nil || !c.selected.AffectsIndexes(indexes)) {
+		// The immutable authority already owns metadata and fixed exclusions.
+		// Selection recompiles only branches affected by this request.
+		return authority, nil
+	}
+	if (c.hideJSON || c.compileEnums) && typeOf != nil && typeOf.Kind() == reflect.Struct {
+		if c.active == nil {
+			c.active = map[reflect.Type]bool{}
+		}
+		if c.active[typeOf] {
+			return nil, fmt.Errorf("recursive effective output requires metadata")
+		}
+		c.active[typeOf] = true
+		defer delete(c.active, typeOf)
+	}
 	e := c.excluded
-	if typeOf == nil || (c.selected == nil || !c.selected.AffectsIndexes(indexes)) && !e.affects(path) {
+	if typeOf == nil || (c.selected == nil || !c.selected.AffectsIndexes(indexes)) && !e.affects(path) && !c.hideJSON && !metadata.Changed() && !c.compileEnums && authority == nil {
 		return nil, nil
 	}
 	p := &presentation{source: typeOf}
 	switch typeOf.Kind() {
 	case reflect.Pointer, reflect.Slice, reflect.Array:
-		child, err := c.compile(typeOf.Elem(), path, indexes)
+		var element *xshape.Representation
+		if metadata != nil {
+			element = metadata.Elem()
+		}
+		var childAuthority *presentation
+		if authority != nil {
+			childAuthority = authority.elem
+		}
+		child, err := c.compileShape(typeOf.Elem(), path, indexes, element, childAuthority)
 		if err != nil || child == nil {
 			return nil, err
 		}
@@ -54,19 +95,31 @@ func (c presentationCompiler) compile(typeOf reflect.Type, path string, indexes 
 			p.target = reflect.ArrayOf(typeOf.Len(), child.target)
 		}
 	case reflect.Struct:
+		// Preserve opaque scalar/column owners and their method sets. Enum.Parse
+		// independently rejects an active enum on a custom JSON/Text scalar.
+		if presentationOpaque(typeOf) && !metadata.Changed() && !e.affects(path) && (c.selected == nil || !c.selected.AffectsIndexes(indexes)) {
+			return nil, nil
+		}
 		fields, err := xshape.Linked(typeOf).Fields()
 		if err != nil {
 			return nil, err
 		}
 		var targetFields []xshape.RuntimeField
+		p.byIndex = make([]*presentation, typeOf.NumField())
 		changed := false
 		for _, field := range fields {
 			if !field.Exported || len(field.Index) != 1 {
 				continue
 			}
-			alias, _, _ := strings.Cut(field.Tag.Get("json"), ",")
+			effective := typeOf.Field(field.Index[0])
+			var childMetadata *xshape.Representation
+			if metadata != nil && metadata.NumField() > field.Index[0] {
+				effective = metadata.Field(field.Index[0])
+				childMetadata = metadata.FieldShape(field.Index[0])
+			}
+			alias, _, _ := strings.Cut(effective.Tag.Get("json"), ",")
 			index := append(append([]int(nil), indexes...), field.Index...)
-			if c.selected != nil && c.selected.ExcludeIndexes(index) || e.Exclude(path, field.Name) || alias != "" && e.Exclude(path, alias) {
+			if (metadata != nil || c.hideJSON) && alias == "-" || c.selected != nil && c.selected.ExcludeIndexes(index) || e.Exclude(path, field.Name) || alias != "" && e.Exclude(path, alias) {
 				changed = true
 				continue
 			}
@@ -74,7 +127,20 @@ func (c presentationCompiler) compile(typeOf reflect.Type, path string, indexes 
 			if path != "" {
 				childPath = path + "." + childPath
 			}
-			child, err := c.compile(field.ReflectedType, childPath, index)
+			var childAuthority *presentation
+			if authority != nil && len(authority.byIndex) > field.Index[0] {
+				childAuthority = authority.byIndex[field.Index[0]]
+			}
+			var child *presentation
+			if c.compileEnums {
+				child, err = compileEnumPresentation(effective)
+				if err != nil {
+					return nil, fmt.Errorf("output field %s: %w", childPath, err)
+				}
+			}
+			if child == nil {
+				child, err = c.compileShape(field.ReflectedType, childPath, index, childMetadata, childAuthority)
+			}
 			if err != nil {
 				return nil, err
 			}
@@ -87,8 +153,12 @@ func (c presentationCompiler) compile(typeOf reflect.Type, path string, indexes 
 					anonymous = false
 				}
 			}
+			if effective.Name != field.Name || effective.Tag != field.Tag {
+				changed = true
+			}
 			p.fields = append(p.fields, presentationField{source: field.Index, target: len(targetFields), projection: child})
-			targetFields = append(targetFields, xshape.RuntimeField{Name: field.Name, Type: targetType, Tag: field.Tag, Anonymous: anonymous})
+			p.byIndex[field.Index[0]] = child
+			targetFields = append(targetFields, xshape.RuntimeField{Name: effective.Name, Type: targetType, Tag: effective.Tag, Anonymous: anonymous})
 		}
 		if !changed {
 			return nil, nil
@@ -98,6 +168,9 @@ func (c presentationCompiler) compile(typeOf reflect.Type, path string, indexes 
 			return nil, err
 		}
 	default:
+		if metadata.Changed() || c.hideJSON && (typeOf.Kind() == reflect.Map || typeOf.Kind() == reflect.Interface) {
+			return nil, fmt.Errorf("unsupported effective export shape %v", typeOf)
+		}
 		return nil, nil
 	}
 	return p, nil
@@ -120,6 +193,39 @@ func (p *presentation) value(source reflect.Value) (reflect.Value, error) {
 	}
 	if !source.IsValid() || source.Type() != p.source {
 		return reflect.Value{}, fmt.Errorf("output projection requires %v", p.source)
+	}
+	if p.enumeration != nil {
+		wire, err := p.enumeration.Encode(source.Interface())
+		if err != nil {
+			return reflect.Value{}, err
+		}
+		if wire == nil {
+			return reflect.Zero(p.target), nil
+		}
+		target := reflect.New(p.target).Elem()
+		value := target
+		for value.Kind() == reflect.Pointer {
+			value.Set(reflect.New(value.Type().Elem()))
+			value = value.Elem()
+		}
+		if number, ok := wire.(json.Number); ok {
+			if value.Kind() >= reflect.Int && value.Kind() <= reflect.Int64 {
+				integer, err := strconv.ParseInt(string(number), 10, value.Type().Bits())
+				if err != nil {
+					return reflect.Value{}, err
+				}
+				value.SetInt(integer)
+			} else {
+				integer, err := strconv.ParseUint(string(number), 10, value.Type().Bits())
+				if err != nil {
+					return reflect.Value{}, err
+				}
+				value.SetUint(integer)
+			}
+		} else {
+			value.Set(reflect.ValueOf(wire).Convert(value.Type()))
+		}
+		return target, nil
 	}
 	if (source.Kind() == reflect.Pointer || source.Kind() == reflect.Slice) && source.IsNil() {
 		return reflect.Zero(p.target), nil
@@ -160,4 +266,66 @@ func (p *presentation) value(source reflect.Value) (reflect.Value, error) {
 		return target, nil
 	}
 	return source, nil
+}
+
+func presentationOpaque(typ reflect.Type) bool {
+	for _, owner := range []reflect.Type{reflect.TypeFor[json.Marshaler](), reflect.TypeFor[encoding.TextMarshaler]()} {
+		if typ.Implements(owner) || reflect.PointerTo(typ).Implements(owner) {
+			return true
+		}
+	}
+	return false
+}
+
+// compileEnumPresentation delegates declaration parsing, exact alias matching,
+// and unknown-value policy to Tagly. Only the typed wire carrier belongs here.
+func compileEnumPresentation(field reflect.StructField) (*presentation, error) {
+	base := field.Type
+	for base.Kind() == reflect.Pointer {
+		base = base.Elem()
+	}
+	switch base.Kind() {
+	case reflect.String, reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64, reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+	default:
+		// Collection and union codecs retain their existing owners.
+		return nil, nil
+	}
+	enumeration, err := choice.ParseEnum(field.Tag, field.Type)
+	if err != nil || enumeration == nil {
+		return nil, err
+	}
+	var target reflect.Type
+	switch enumeration.WireType(false) {
+	case "boolean":
+		target = reflect.TypeFor[bool]()
+	case "string":
+		target = reflect.TypeFor[string]()
+	case "integer":
+		// Keep signedness and full integer precision for native numeric cells.
+		target = enumeration.Type
+		if target.Kind() == reflect.String {
+			target = reflect.TypeFor[int64]()
+			unsigned, negative := false, false
+			for _, entry := range enumeration.Entries {
+				if strings.HasPrefix(string(entry.Ordinal), "-") {
+					negative = true
+				}
+				if _, err := strconv.ParseInt(string(entry.Ordinal), 10, 64); err != nil {
+					unsigned = true
+				}
+			}
+			if unsigned && negative {
+				return nil, fmt.Errorf("enum ordinals exceed a single integer wire type")
+			}
+			if unsigned {
+				target = reflect.TypeFor[uint64]()
+			}
+		}
+	default:
+		return nil, fmt.Errorf("enum output requires a single scalar wire type")
+	}
+	for source := field.Type; source.Kind() == reflect.Pointer; source = source.Elem() {
+		target = reflect.PointerTo(target)
+	}
+	return &presentation{source: field.Type, target: target, enumeration: enumeration}, nil
 }

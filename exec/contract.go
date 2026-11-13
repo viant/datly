@@ -16,12 +16,36 @@ type EffectiveContract struct {
 	// Representations are immutable opt-in metadata over the linked types.
 	InputRepresentation  *shape.Representation
 	OutputRepresentation *shape.Representation
+	// OutputAlternatives contains complete caller-effective output branches for
+	// discovery only. Invocation always uses OutputRepresentation alone.
+	OutputAlternatives []*shape.Representation
+	// OutputAlternativeSchemas are native immutable schema artifacts grouped by
+	// MCP case format, prepared once in each registration's bounded variant entry.
+	// Consumers must clone before mutation. This is host metadata, never input.
+	OutputAlternativeSchemas []*OutputDiscoverySchemas
+	// BindingState is an invocation-owned, opaque native binding handoff. It is
+	// never wire metadata and must not be retained in a generation-level cache.
+	BindingState any `json:"-" mcp:"-"`
+}
+
+// OutputDiscoverySchemas holds immutable native artifacts for one complete
+// output variant. A presentation failure belongs only to its declared format.
+// Consumers clone schemas before mutation; errors retain their native cause.
+type OutputDiscoverySchemas struct {
+	Schemas map[string]map[string]any
+	Errors  map[string]error `json:"-" mcp:"-"`
 }
 
 // ContractResolver resolves metadata in the caller's native provider scope.
 // Implementations must not execute the target component's business handler.
 type ContractResolver interface {
 	ResolveContract(context.Context, ComponentTarget, ProviderScope) (*EffectiveContract, error)
+}
+
+// DiscoveryContractResolver optionally describes finite output alternatives.
+// Implementations use the same native scope and authorization as ResolveContract.
+type DiscoveryContractResolver interface {
+	ResolveDiscoveryContract(context.Context, ComponentTarget, ProviderScope) (*EffectiveContract, error)
 }
 
 type contractCaptureKey struct{}
@@ -31,7 +55,8 @@ type contractCapture struct {
 }
 
 // CaptureContracts installs transport-owned contract evidence for one request.
-// It contains only types, not caller data or policy callbacks.
+// It retains effective metadata and its operation-local binding handoff. Runtime
+// completion releases resolved values; policy callbacks are never retained.
 func CaptureContracts(ctx context.Context) context.Context {
 	return context.WithValue(ctx, contractCaptureKey{}, &contractCapture{values: map[ComponentTarget]EffectiveContract{}})
 }

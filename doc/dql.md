@@ -469,6 +469,8 @@ Write the canonical option names shown here. Do not infer input, field, column o
 | FormatSelector() | 0 | bind one string query field or `header/Accept` to response-format selection |
 | WithPredicate(...), Predicate(...) | 1+ | optional leading group number, name, args; repeatable |
 | ApplyWhenAbsentPredicate(...) | 1+ | predicate active when absent |
+| WithAuthPredicate(...) | 1+ | same arguments as WithPredicate; marks this occurrence auth=true |
+| ApplyWhenAbsentAuthPredicate(...) | 1+ | marked authorization occurrence active when absent |
 | When(condition) | 1 | activation condition |
 | Scope(scope) | 1 | scope |
 | Of(group) | 1 | owning group |
@@ -635,6 +637,7 @@ the entire projection.
 | mutation lifecycle | lifecycle_type(view,'package.OrderLifecycle') |
 | invariant group | invariant(view.column,'GroupName') |
 | selector permissions | selector_fields(view,bool), selector_order_by(view,bool), selector_criteria(view,bool), selector_limit(view,bool), selector_offset(view,bool), selector_page(view,bool) |
+| selector field selection | selector_field_selection(view,'query'|'outputOnly') |
 | selector defaults | selector_default_order(view,'expression'), selector_default_limit(view,integer), selector_no_limit(view,bool) |
 | selector scope | selector_namespace(view,'name'), selector_filterable(view,'field,path,...') |
 | selector criteria methods | selector_sql_methods(view,'[{"name":"lower","args":["string"]}]') |
@@ -1410,3 +1413,23 @@ only their automatic imperative empty-table flush. The setting does not execute
 a flush by itself: unmatched and unselected queued records remain owned by root
 completion. A successful explicit flush retains root transaction ownership;
 caller-local SQL cancellation does not shorten that transaction lifetime.
+
+### Fluent authorization predicates
+
+Use `.WithAuthPredicate(group, name, args...)` instead of adding an `auth=true`
+tag by hand. It uses the same argument contract as `WithPredicate`, including
+parameterized handler name/value arguments, and sets the existing per-occurrence
+authorization metadata. For example:
+
+```sql
+#define($_ = $Auth<*security.Output>(component/GET:/internal/security/scope)
+    .Required().WithAuthPredicate(0, 'handler', 'security.Scope', 'Column', 'tenant_id', 'Alias', 'f'))
+```
+
+The example assumes the host advertises that handler and its arguments.
+`ApplyWhenAbsentAuthPredicate(...)` is the corresponding explicitly always-active
+form. Requiredness remains separate; ordinary `WithPredicate(...)` occurrences on
+the same input are not marked. Existing explicit `predicate:"...,auth=true"` tags
+remain supported. This marker identifies authorization; it does not grant access
+or verify an arbitrary handler. Keep ordinary filters combined with authorization
+through `predicate.Builder` using the intended AND grouping.

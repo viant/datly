@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"strings"
 	"sync/atomic"
 
 	"github.com/viant/bindly"
@@ -998,7 +999,17 @@ func boundSupplementalPlan(injector *bindly.Injector, input *registry.RouteInput
 		}
 		// Canonical seeds retain explicit markers, or markerless nonzero values.
 		// Current, derived parameters and scoped/noncacheable values always bind.
-		if (binding.Location.Kind == "component" || binding.Location.Kind == "generator") && binding.Scope == "" && (binding.Cacheable == nil || *binding.Cacheable) {
+		// A trusted, already-bound scalar Method is not a request-body override.
+		// Preserve its suppliedness without changing the original HTTP provider.
+		methodSeed := binding.Location.Kind == "http_request" && strings.EqualFold(binding.Location.In, "method")
+		if methodSeed {
+			typ := field.DestinationType()
+			if typ.Kind() == reflect.Pointer {
+				typ = typ.Elem()
+			}
+			methodSeed = typ.Kind() == reflect.String
+		}
+		if (binding.Location.Kind == "component" || binding.Location.Kind == "generator" || methodSeed) && binding.Scope == "" && (binding.Cacheable == nil || *binding.Cacheable) {
 			present, marker, err := input.Plan().ExplicitPresence(supplied, field.Path())
 			if err != nil {
 				return nil, err

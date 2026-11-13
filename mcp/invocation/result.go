@@ -3,6 +3,7 @@ package invocation
 import (
 	"compress/gzip"
 	"compress/zlib"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -10,10 +11,20 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/viant/bindly"
 	"github.com/viant/datly/exec"
 	"github.com/viant/mcp-protocol/schema"
+	"github.com/viant/tagly/choice"
 	"github.com/viant/xdatly/response"
 )
+
+// TypedToolResult explicitly declares a protocol-shaped component output.
+// The marker grants no access to raw output: ToolResult decodes only the
+// canonical payload after compiled output and caller Contract projection.
+// Ordinary objects with content-like properties retain ordinary JSON behavior.
+type TypedToolResult interface {
+	MCPToolResult()
+}
 
 func (e *Execution) ToolResult() *schema.CallToolResult {
 	status := e.StatusCode()
@@ -72,6 +83,20 @@ func (e *Execution) ToolResult() *schema.CallToolResult {
 			message = value
 		}
 		return errorResult(status, errors.New(message))
+	}
+	if _, explicit := e.Value().(TypedToolResult); explicit {
+		result := &schema.CallToolResult{}
+		if err := json.Unmarshal(payload, result); err != nil {
+			return errorResult(http.StatusInternalServerError, fmt.Errorf("decode typed MCP result: %w", err))
+		}
+		if len(result.Content) == 0 && result.StructuredContent != nil {
+			projected, err := json.Marshal(result.StructuredContent)
+			if err != nil {
+				return errorResult(http.StatusInternalServerError, fmt.Errorf("encode projected structured content: %w", err))
+			}
+			result.Content = textToolResult(projected, result.IsError).Content
+		}
+		return result
 	}
 	result := &schema.CallToolResult{
 		Content: []schema.CallToolResultContentElem{schema.TextContent{Type: "text", Text: string(payload)}},
@@ -154,6 +179,14 @@ func errorResult(status int, err error) *schema.CallToolResult {
 		status = http.StatusInternalServerError
 	}
 	message := exec.ErrorMessage(err, status)
+	// Explicit bodies and declared projectors have already retained precedence.
+	// The fallback may publish this constant validation reason, never wrapper text.
+	var binding *bindly.BindingError
+	authored := errors.As(err, &binding) && binding.Message != ""
+	if !authored && status == http.StatusBadRequest && errors.Is(err, choice.ErrNullInput) &&
+		!errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
+		message = choice.ErrNullInput.Error()
+	}
 	payload := map[string]interface{}{"status": status, "error": true, "message": message}
 	encoded, _ := json.Marshal(payload)
 	isError := true

@@ -61,6 +61,11 @@ func ParsePredicates(structTag reflect.StructTag) ([]*spec.Predicate, error) {
 		if item == nil || item.Name != PredicateName {
 			continue
 		}
+		// A standalone dash declares no predicate for this tag occurrence.
+		// Other occurrences (including authorization predicates) remain intact.
+		if strings.TrimSpace(string(item.Values)) == "-" {
+			continue
+		}
 		name, values := item.Values.Name()
 		name, err := decodeScalarValue(strings.TrimSpace(name))
 		if err != nil {

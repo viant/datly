@@ -11,19 +11,20 @@ require (
 	github.com/stretchr/testify v1.12.1
 	github.com/viant/aerospike v0.4.5-0.20261008043351-154a50202766
 	github.com/viant/assertly v0.9.1-0.20220620174148-bab013f93a60
+	github.com/viant/authz v0.1.2-0.20261112184253-02e92dcfc66b
 	github.com/viant/gmetric v0.3.2
 	github.com/viant/govalidator v0.3.4-0.20260913213120-027a9dd54d73
 	github.com/viant/mcp v0.24.2-0.20261102163024-7166d81ea725
-	github.com/viant/mcp-protocol v0.19.2-0.20261111213322-0ed554477bee
+	github.com/viant/mcp-protocol v0.19.2-0.20261113180806-de65252f3921
 	github.com/viant/parsly v0.3.3
 	github.com/viant/sqlparser v0.13.1-0.20261021204353-1c20a82bbb29
-	github.com/viant/sqlx v0.26.2-0.20261106174837-52540c3f870c
-	github.com/viant/structology v0.10.2-0.20261111231637-f368452ca3b3
+	github.com/viant/sqlx v0.26.2-0.20261113032806-87f5818ff1ed
+	github.com/viant/structology v0.10.2-0.20261113180916-935b893ed193
 	github.com/viant/structql v0.5.5-0.20261012183420-6a47e96ff5b5
-	github.com/viant/tagly v0.4.2-0.20261111223836-05766879fae0
+	github.com/viant/tagly v0.4.2-0.20261113182338-188615d27a98
 	github.com/viant/velty v0.4.1-0.20260915052314-fca47c0595f8
 	github.com/viant/x v0.6.1-0.20261106041415-0487ec66884b
-	github.com/viant/xdatly v1.0.1-0.20261106191133-04634a407286
+	github.com/viant/xdatly v1.0.1-0.20261113190124-9ad673c8f3b5
 	github.com/viant/xreflect v0.7.5-0.20260314170600-13f09f37d46e
 	github.com/viant/xunsafe v0.11.1
 	github.com/xeipuuv/gojsonschema v1.2.0
@@ -123,12 +124,12 @@ require (
 	github.com/go-viper/mapstructure/v2 v2.2.1 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/viant/afs v1.30.1-0.20260914155934-90e95d483861
-	github.com/viant/bindly v0.5.1-0.20261111225140-63f7e859cfe9
+	github.com/viant/bindly v0.5.1-0.20261113195222-531abbb2409d
 	github.com/viant/godiff v0.4.3-0.20260914060527-9f2005ca82e8
 	github.com/viant/jsonrpc v0.25.1
 	github.com/viant/scy v0.35.1-0.20260914041206-699e6c909726
 	github.com/viant/toolbox v0.39.0
-	github.com/viant/xlsy v0.3.1
+	github.com/viant/xlsy v0.3.2-0.20261113010534-151b55bf6abc
 	github.com/viant/xmlify v0.1.2-0.20260914155716-e525a8788fd0
 	golang.org/x/crypto v0.55.0 // indirect
 	golang.org/x/oauth2 v0.36.0

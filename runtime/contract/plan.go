@@ -12,22 +12,27 @@ import (
 	"sync"
 
 	"github.com/viant/bindly"
+	"github.com/viant/datly/exec"
 	"github.com/viant/x/shape"
 	xcontract "github.com/viant/xdatly/contract"
 )
 
 // Plan belongs to one immutable component registration and one direction. Do not
 // share it across routes/configurations with different policy authority. Only
-// effective types are retained; request binders, receivers and closures are not.
+// immutable metadata and prepared artifacts are retained; request binders,
+// receivers and policy closures are not.
 type Plan struct {
-	original    reflect.Type
-	providers   []contractOwner
-	markerPaths []string
-	walk        *shape.RewritePlan
-	capacity    int
-	mu          sync.Mutex
-	variants    map[string]*list.Element
-	order       list.List
+	inputExecution  func(*shape.Representation) (any, error)
+	outputSchema    func(*shape.Representation) (*exec.OutputDiscoverySchemas, error)
+	originalSchemas schemaPreparation
+	original        reflect.Type
+	providers       []contractOwner
+	markerPaths     []string
+	walk            *shape.RewritePlan
+	capacity        int
+	mu              sync.Mutex
+	variants        map[string]*list.Element
+	order           list.List
 }
 
 type contractOwner struct {
@@ -35,8 +40,16 @@ type contractOwner struct {
 	typ  reflect.Type
 }
 
+type resolvedOwner struct {
+	skipped []string
+	owner   contractOwner
+	policy  *xcontract.Policy
+}
+
 type fieldKey struct{ path, name string }
 type variant struct {
+	input          inputPreparation
+	schemas        schemaPreparation
 	edits          map[fieldKey]*shape.FieldMetadata
 	markers        map[fieldKey]string
 	name           string
@@ -83,6 +96,98 @@ func New(original reflect.Type, capacity int) (*Plan, error) {
 		p.walk = nil
 	}
 	return p, err
+}
+
+// NewOutput attaches registration-owned immutable schema preparation to the
+// existing bounded variants. The callback must not capture operation state.
+func NewOutput(original reflect.Type, capacity int, prepare func(*shape.Representation) (*exec.OutputDiscoverySchemas, error)) (*Plan, error) {
+	p, err := New(original, capacity)
+	if err != nil {
+		return nil, err
+	}
+	p.outputSchema = prepare
+	return p, nil
+}
+
+// NewInput attaches registration-owned execution preparation to the existing
+// bounded variants. The artifact and callback must contain only immutable
+// registration metadata, never a binder, policy callback or operation state.
+// The host owns the concrete artifact, avoiding a dependency on its registry.
+func NewInput(original reflect.Type, capacity int, prepare func(*shape.Representation) (any, error)) (*Plan, error) {
+	p, err := New(original, capacity)
+	if err != nil {
+		return nil, err
+	}
+	p.inputExecution = prepare
+	return p, nil
+}
+
+type inputPreparation struct {
+	mu    sync.Mutex
+	ready bool
+	value any
+}
+
+// ResolvePreparedInput evaluates fresh caller policy and returns the immutable
+// execution artifact belonging to that same variant. Unnamed/NoCache policies
+// keep the artifact only for this resolution; failed preparation remains retryable.
+func (p *Plan) ResolvePreparedInput(ctx context.Context, binder bindly.Binder) (*shape.Representation, any, error) {
+	selected, err := p.resolve(ctx, binder)
+	if err != nil || selected == nil || selected.representation == nil {
+		return nil, nil, err
+	}
+	if p.inputExecution == nil {
+		return selected.representation, nil, nil
+	}
+	prepared := &selected.input
+	prepared.mu.Lock()
+	defer prepared.mu.Unlock()
+	if err = ctx.Err(); err != nil {
+		return nil, nil, err
+	}
+	if !prepared.ready {
+		value, err := p.inputExecution(selected.representation)
+		if err != nil {
+			return nil, nil, err
+		}
+		if err = ctx.Err(); err != nil {
+			return nil, nil, err
+		}
+		prepared.value, prepared.ready = value, true
+	}
+	return selected.representation, prepared.value, nil
+}
+
+// schemaPreparation belongs to the existing variant entry. Only successful
+// immutable artifacts (including deterministic per-format failures) are retained.
+// Common cancellation/dependency failures never poison a future preparation.
+type schemaPreparation struct {
+	mu    sync.Mutex
+	ready bool
+	value *exec.OutputDiscoverySchemas
+}
+
+func (s *schemaPreparation) prepare(factory func(*shape.Representation) (*exec.OutputDiscoverySchemas, error), metadata *shape.Representation) (*exec.OutputDiscoverySchemas, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.ready {
+		return s.value, nil
+	}
+	value, err := factory(metadata)
+	if err != nil {
+		return nil, err
+	}
+	s.value, s.ready = value, true
+	return value, nil
+}
+func (p *Plan) prepareSchema(v *variant) (*exec.OutputDiscoverySchemas, error) {
+	if p.outputSchema == nil {
+		return nil, nil
+	}
+	if v == nil || v.representation == nil {
+		return p.originalSchemas.prepare(p.outputSchema, nil)
+	}
+	return v.schemas.prepare(p.outputSchema, v.representation)
 }
 
 func (p *Plan) Original() reflect.Type { return p.original }
@@ -143,6 +248,14 @@ func (p *Plan) ResolveRepresentation(ctx context.Context, binder bindly.Binder) 
 }
 
 func (p *Plan) resolve(ctx context.Context, binder bindly.Binder) (*variant, error) {
+	owners, err := p.resolveOwners(ctx, binder)
+	if err != nil {
+		return nil, err
+	}
+	return p.resolvePolicies(ctx, owners)
+}
+
+func (p *Plan) resolveOwners(ctx context.Context, binder bindly.Binder) ([]resolvedOwner, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -152,18 +265,7 @@ func (p *Plan) resolve(ctx context.Context, binder bindly.Binder) (*variant, err
 	if binder == nil {
 		return nil, fmt.Errorf("dynamic contract binder is required")
 	}
-	type resolvedOwner struct {
-		skipped []string
-		owner   contractOwner
-		policy  *xcontract.Policy
-	}
-	var policies []resolvedOwner
-	type keyPart struct {
-		Path, Name string
-		Active     bool
-	}
-	parts := make([]keyPart, 0, len(p.providers))
-	cacheable := true
+	policies := make([]resolvedOwner, 0, len(p.providers))
 	for _, owner := range p.providers {
 		policy, err := reflect.New(owner.typ).Interface().(xcontract.Provider).Contract(ctx, binder)
 		if err != nil {
@@ -172,12 +274,30 @@ func (p *Plan) resolve(ctx context.Context, binder bindly.Binder) (*variant, err
 		if err = ctx.Err(); err != nil {
 			return nil, err
 		}
-		part := keyPart{Path: owner.path}
+		policies = append(policies, resolvedOwner{owner: owner, policy: policy})
+	}
+	return policies, nil
+}
+
+// selectPolicies keeps retained identity and active field policies together so
+// discovery admission uses the same cacheability rules as ordinary resolution.
+func selectPolicies(owners []resolvedOwner) ([]resolvedOwner, string, error) {
+	type keyPart struct {
+		Path, Name string
+		Active     bool
+	}
+	parts := make([]keyPart, 0, len(owners))
+	policies := make([]resolvedOwner, 0, len(owners))
+	cacheable := true
+	for _, owner := range owners {
+		policy := owner.policy
+		part := keyPart{Path: owner.owner.path}
 		if policy != nil && policy.NoCache {
 			cacheable = false
 		}
 		if policy != nil && policy.Field != nil {
-			policies = append(policies, resolvedOwner{owner: owner, policy: policy})
+			owner.skipped = nil
+			policies = append(policies, owner)
 			part.Name, part.Active = policy.Name, true
 			if policy.Name == "" {
 				cacheable = false
@@ -186,17 +306,24 @@ func (p *Plan) resolve(ctx context.Context, binder bindly.Binder) (*variant, err
 		parts = append(parts, part)
 	}
 	if len(policies) == 0 {
-		return nil, nil
+		return nil, "", nil
 	}
 	name := ""
 	if cacheable {
 		encoded, err := json.Marshal(parts)
 		if err != nil {
-			return nil, err
+			return nil, "", err
 		}
 		name = string(encoded)
 	}
-	var err error
+	return policies, name, nil
+}
+
+func (p *Plan) resolvePolicies(ctx context.Context, owners []resolvedOwner) (*variant, error) {
+	policies, name, err := selectPolicies(owners)
+	if err != nil || len(policies) == 0 {
+		return nil, err
+	}
 	// Serialize named misses; successful callers share only the immutable type.
 	// Unnamed policies never acquire/cache a cross-request entry.
 	if name != "" && p.capacity > 0 {

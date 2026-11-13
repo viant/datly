@@ -3,15 +3,19 @@ package invocation
 
 import (
 	"context"
+	"errors"
+	"log"
 	"strings"
+	"time"
 
 	requestprovider "github.com/viant/bindly/provider/request"
 	"github.com/viant/datly/exec"
+	internallog "github.com/viant/datly/internal/logging"
+	"github.com/viant/datly/mcp/internal/access"
 	"github.com/viant/jsonrpc"
 	"github.com/viant/mcp-protocol/authorization"
 	xexec "github.com/viant/xdatly/exec"
 	xmcp "github.com/viant/xdatly/handler/mcp"
-	"github.com/viant/xdatly/response"
 )
 
 // OutputEncoder applies a compiled presentation contract without exposing its
@@ -71,8 +75,17 @@ func (i *Invoker) Execute(ctx context.Context, request Request) (*Execution, *js
 		ctx = context.Background()
 	}
 	if i.authorize != nil {
-		if err := i.authorize(ctx, request.Target); err != nil {
-			return nil, jsonrpc.NewInvalidRequest("MCP tool authorization denied", nil)
+		started := time.Now()
+		err := i.authorize(ctx, request.Target)
+		if cancellation := ctx.Err(); cancellation != nil {
+			err = errors.Join(err, cancellation)
+		}
+		if err != nil {
+			if access.Denied(err) {
+				return nil, jsonrpc.NewInvalidRequest("MCP tool authorization denied", nil).WithCause(err)
+			}
+			log.Printf("MCP tool authorization failed operation=%q stage=authorize elapsed=%s target=%q error=%q", request.Method, time.Since(started), request.Target.String(), internallog.FailureReason(err.Error()))
+			return nil, jsonrpc.NewInternalError("MCP tool authorization is unavailable", nil).WithCause(err)
 		}
 	}
 	ctx = exec.CaptureOutputSelection(ctx)
@@ -89,14 +102,18 @@ func (i *Invoker) Execute(ctx context.Context, request Request) (*Execution, *js
 			effective, err = resolver.ResolveContract(ctx, request.Target, authScope)
 			authScope.Close()
 			if err != nil {
-				if _, declared := response.ErrorBody(err); declared {
-					var encodeError OutputEncoder
-					if i.errorOutput != nil {
-						encodeError = i.errorOutput(request.Target)
-					}
-					return &Execution{err: err, context: execContext, encodingContext: ctx, encodeErrorOutput: encodeError}, nil
+				// Contract dependencies use the same typed execution error path
+				// as business invocation. Preserve private causes and status;
+				// ToolResult owns public sanitization and explicit BodyError.
+				var encodeError OutputEncoder
+				if i.errorOutput != nil {
+					encodeError = i.errorOutput(request.Target)
 				}
-				return nil, jsonrpc.NewInvalidRequest("MCP contract authorization or preparation failed", nil)
+				var projectError ErrorProjector
+				if i.declaredError != nil {
+					projectError = i.declaredError(request.Target)
+				}
+				return &Execution{err: err, context: execContext, encodingContext: ctx, encodeErrorOutput: encodeError, projectError: projectError}, nil
 			}
 			exec.PublishContract(ctx, request.Target, effective)
 		}

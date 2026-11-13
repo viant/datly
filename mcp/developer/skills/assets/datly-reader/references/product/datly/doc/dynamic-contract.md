@@ -637,7 +637,15 @@ Use the configured compatible codec path for those features. See
 Complete custom JSON/Text methods own their representation. Internal edits of those
 owners are unsupported; hide the enclosing field or adjust an ordinary wrapper.
 Unchanged recursive types work; recursive edits are unsupported by the shared walker.
-Dynamic output is JSON-only. See [feature boundaries](dynamic-contract-boundaries.md).
+Native CSV and XLS/XLSX output honor Contract field visibility and enum output
+metadata through a compiled typed presentation. The presentation reuses Tagly's
+enum scalar codecs, including output-only aliases, without changing the original
+business values. Their existing encoders retain ownership of column names and
+nested relation layout. Hidden fields are removed before enum values are encoded.
+Removing managed enum tags in the selected REST Contract preserves storage values
+in REST exports too. XML and tabular dynamic output remain unsupported;
+opaque/custom JSON owners remain JSON-only. See
+[feature boundaries](dynamic-contract-boundaries.md).
 
 ## Enum wire forms
 
@@ -666,8 +674,34 @@ plans can be reused; authorization state and caller data are not retained in the
 Named variants let codecs reuse separate plans for each effective schema. A variant
 must never share another variant's hidden fields, names or enum conversions.
 Reusing a named policy reuses its immutable representation; current authorization
-still runs for each invocation. Rebuilding equivalent unnamed representations does
+is resolved for each operation. Rebuilding equivalent unnamed representations does
 not guarantee the same codec-cache identity.
+
+## Dependency binding within one operation
+
+When a Contract hook binds a declared component dependency, native execution can
+reuse that resolved pointer through Bindly's resolved-input binding. This handoff
+belongs to the current operation and Runtime generation. It is separate from
+named policy/codec metadata: completion releases its values, and later requests
+resolve their dependencies again.
+
+Reuse requires an unscoped, cacheable component binding with a provable declared
+transport-input graph. The runtime prepares that graph once and compares detached
+native source evidence through Bindly's raw-source capture API. It uses only the
+protocol providers for that evidence; component defaults cannot manufacture a
+missing request value. Changed provider inputs invalidate the handoff and cause
+Contract resolution to run again. Inputs that change during Contract binding
+produce a conflict before business execution.
+
+Explicit binding options, noncacheable/scoped/transformed bindings, resolution
+groups, and dependencies with their own dynamic contracts retain their ordinary
+native binding path. No extra output field, DQL switch, permission policy, or
+cross-request authorization cache is introduced. Cancellation and typed dependency
+errors retain their causes; MCP presents dependency failures through its normal
+tool-error path, preserving explicit public error bodies.
+
+See the native HTTP/MCP isolation and call-count tests in
+[`runtime/contract_dependency_reuse_test.go`](https://github.com/viant/datly/blob/v1/runtime/contract_dependency_reuse_test.go).
 
 ## Policy cache key examples
 

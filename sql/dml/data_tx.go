@@ -7,6 +7,7 @@ import (
 	"fmt"
 	dexec "github.com/viant/datly/exec"
 	"github.com/viant/datly/internal/drainowner"
+	"github.com/viant/datly/internal/sqliteadmission"
 	"github.com/viant/sqlx/io/update"
 	xhandler "github.com/viant/xdatly/handler"
 )
@@ -57,10 +58,22 @@ func (d *Data) transaction(ctx context.Context) (result *sql.Tx, retErr error) {
 	if owner.invocation {
 		lifetime = drainowner.TransactionLifetime(ctx)
 	}
+	release, err := sqliteadmission.Acquire(ctx, db)
+	if err != nil {
+		return nil, err
+	}
+	admitted := false
+	defer func() {
+		if !admitted {
+			release()
+		}
+	}()
 	tx, err := db.BeginTx(lifetime, options)
 	if err != nil {
 		return nil, err
 	}
+	owner.writerAdmissionRelease = release
+	admitted = true
 	established = tx
 	owner.tx = tx
 	owner.txIsolation = isolation
@@ -268,6 +281,9 @@ func (d *Data) executePendingLocked(ctx context.Context, matched []*dataOperatio
 	owner.mu.Lock()
 	managedTx := !owner.externalTx && !owner.invocation
 	owner.mu.Unlock()
+	if managedTx {
+		defer owner.releaseWriterAdmission()
+	}
 	rollback := true
 	defer func() {
 		if rollback && managedTx {
@@ -364,6 +380,7 @@ func (d *Data) executePendingLocked(ctx context.Context, matched []*dataOperatio
 			owner.tx = nil
 		}
 		owner.mu.Unlock()
+		owner.releaseWriterAdmission()
 		if owner.onCommit != nil {
 			owner.onCommit(ctx)
 		}
@@ -399,6 +416,7 @@ func (d *Data) completeNative(ctx context.Context, cause error, permit *drainown
 		return errors.Join(cause, ErrInvocationCompleted)
 	}
 	owner.completed = true
+	defer owner.releaseWriterAdmission()
 	drainowner.Retire(owner)
 	failed := owner.failed
 	owner.mu.Unlock()
@@ -455,6 +473,7 @@ func (d *Data) completeNative(ctx context.Context, cause error, permit *drainown
 			return err
 		}
 		state = xhandler.TransactionCommitted
+		owner.releaseWriterAdmission()
 		if owner.onCommit != nil {
 			if err := completeOperation("DML post-commit observer", func() error { owner.onCommit(ctx); return nil }); err != nil {
 				localErr = errors.Join(localErr, err)
@@ -474,4 +493,16 @@ func completeOperation(operation string, run func() error) (err error) {
 		}
 	}()
 	return run()
+}
+
+// releaseWriterAdmission runs after the owned transaction completion path.
+// Repeated completion cannot release another owner's admission.
+func (d *Data) releaseWriterAdmission() {
+	d.mu.Lock()
+	release := d.writerAdmissionRelease
+	d.writerAdmissionRelease = nil
+	d.mu.Unlock()
+	if release != nil {
+		release()
+	}
 }

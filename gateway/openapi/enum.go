@@ -82,6 +82,18 @@ func (b *schemaBuilder) fieldEnum(schema *openapi3.Schema, field reflect.StructF
 	if err != nil {
 		return nil, err
 	}
+	if enumeration != nil && enumeration.CollectionItems() != nil {
+		if quoted || schema.Items == nil {
+			return nil, fmt.Errorf("field %s collection choices require an ordinary array schema", field.Name)
+		}
+		copy := *schema
+		var applied bool
+		copy.Items, applied = b.enumSchema(schema.Items, nil, enumeration.CollectionItems().WireValues(), 0)
+		if !applied {
+			return nil, fmt.Errorf("field %s collection choices could not be applied to array items", field.Name)
+		}
+		return &copy, nil
+	}
 	if enumeration != nil {
 		if quoted {
 			return nil, fmt.Errorf("enum representation conflicts with quoted JSON")

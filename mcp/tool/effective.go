@@ -8,7 +8,16 @@ import (
 // EffectiveMetadata recompiles only publication metadata. Invocation continues
 // to own its canonical typed binding contract until it selects an effective plan.
 func (p *Plan) EffectiveMetadata(effective *exec.EffectiveContract) (schema.Tool, error) {
-	compiled, err := p.EffectivePlan(effective)
+	selection := effective
+	if effective != nil && len(effective.OutputAlternatives) > 0 {
+		// Discovery branches already own output compilation. Reuse the original
+		// tool when its input contract has not changed.
+		copy := *effective
+		copy.Output = p.compilerInput.OutputType
+		copy.OutputRepresentation = nil
+		selection = &copy
+	}
+	compiled, err := p.EffectivePlan(selection)
 	if err != nil {
 		return schema.Tool{}, err
 	}
@@ -16,6 +25,12 @@ func (p *Plan) EffectiveMetadata(effective *exec.EffectiveContract) (schema.Tool
 	updated := cloneTool(compiled.metadata)
 	result.InputSchema = updated.InputSchema
 	result.OutputSchema = updated.OutputSchema
+	if effective != nil && len(effective.OutputAlternatives) > 0 {
+		result.OutputSchema, err = p.discoveryOutputSchema(effective)
+		if err != nil {
+			return schema.Tool{}, err
+		}
+	}
 	return result, nil
 }
 

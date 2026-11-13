@@ -154,6 +154,7 @@ func (r *relationRead) readBatch(placeholders []interface{}, composite [][]inter
 		rsql.WithBuilderCriteriaCompiler(r.plan.Criteria),
 		rsql.WithBuilderSelector(r.selector.forView(view)),
 		rsql.WithBuilderProjection(relationProjection(view, r.selector.forView(view), r.child.Relation())),
+		rsql.WithBuilderResponseFields(r.session.responseFields[view]),
 		rsql.WithBuilderInput(r.input.Elem()),
 		rsql.WithBuilderParameterResolver(r.session.Parameters),
 		rsql.WithBuilderRelation(r.child.Relation()),

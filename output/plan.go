@@ -13,6 +13,7 @@ import (
 	"github.com/viant/datly/spec"
 	structjson "github.com/viant/structology/encoding/json"
 	jsonmarshal "github.com/viant/structology/encoding/json/marshal"
+	"github.com/viant/tagly/choice"
 	"github.com/viant/tagly/format"
 	"github.com/viant/tagly/format/text"
 	ftime "github.com/viant/tagly/format/time"
@@ -40,6 +41,9 @@ type Plan struct {
 	declaredTime        bool
 	representation      *xshape.Representation
 	effectiveSource     reflect.Type
+	formatPlan          *Plan
+	formatPresentation  *presentation
+	formatError         error
 	projections         sync.Map
 	compileInput        CompileInput
 	compiler            Compiler
@@ -73,6 +77,10 @@ type Result struct {
 }
 
 func (c Compiler) Compile(input CompileInput) (*Plan, error) {
+	return c.compile(input, true)
+}
+
+func (c Compiler) compile(input CompileInput, prepareFormats bool) (*Plan, error) {
 	p := &Plan{typeOf: input.Type, format: "json", selectableRows: input.SelectableRows, compileInput: input, compiler: c}
 	if input.Component != nil {
 		p.compileInput.Component = input.Component.Clone()
@@ -218,6 +226,9 @@ func (c Compiler) Compile(input CompileInput) (*Plan, error) {
 			return nil, err
 		}
 	}
+	if prepareFormats && choice.HasEnum(p.typeOf) {
+		p.prepareFormats()
+	}
 	return p, nil
 }
 
@@ -270,6 +281,21 @@ func (p *Plan) JSONOnly() bool {
 		p.typeOf.Implements(wire) || reflect.PointerTo(p.typeOf).Implements(wire)
 }
 
+// SupportsFormat keeps opaque owners fail-closed while admitting compiled Contract exports.
+func (p *Plan) SupportsFormat(format string) bool {
+	format = strings.ToLower(strings.TrimSpace(format))
+	if format == "" || format == "json" {
+		return true
+	}
+	if p != nil && p.formatError != nil && (format == "csv" || format == "xls" || format == "xlsx") {
+		return false
+	}
+	if !p.JSONOnly() {
+		return true
+	}
+	return p != nil && p.custom == nil && p.formatPlan != nil && p.formatError == nil && (format == "csv" || format == "xls" || format == "xlsx")
+}
+
 func ContentType(format string) (string, error) {
 	switch strings.ToLower(strings.TrimSpace(format)) {
 	case "", "json", "tabular":
@@ -293,7 +319,10 @@ func (p *Plan) Encode(ctx context.Context, format string, value any) (Result, er
 		format = p.DefaultFormat()
 	}
 	format = strings.ToLower(strings.TrimSpace(format))
-	if format != "json" && p.JSONOnly() {
+	if !p.SupportsFormat(format) {
+		if p.formatError != nil {
+			return Result{}, fmt.Errorf("effective output cannot use %s: %w", format, p.formatError)
+		}
 		return Result{}, fmt.Errorf("custom JSON output does not declare a safe %s representation", format)
 	}
 	contentType, err := ContentType(format)
@@ -302,6 +331,28 @@ func (p *Plan) Encode(ctx context.Context, format string, value any) (Result, er
 	}
 	if value == nil {
 		return Result{ContentType: contentType}, nil
+	}
+	selection := dexec.SelectedOutputFields(ctx, value)
+	if (format == "csv" || format == "xls" || format == "xlsx") && p.formatPlan != nil {
+		value, err = p.effectiveValue(value)
+		if err != nil {
+			return Result{}, err
+		}
+		if selection == nil {
+			source := reflect.ValueOf(value)
+			for source.Kind() == reflect.Pointer && source.Type() != p.typeOf {
+				if source.IsNil() {
+					source = reflect.Zero(p.typeOf)
+					break
+				}
+				source = source.Elem()
+			}
+			projected, projectionErr := p.formatPresentation.value(source)
+			if projectionErr != nil {
+				return Result{}, projectionErr
+			}
+			value, p = projected.Interface(), p.formatPlan
+		}
 	}
 	actual := reflect.ValueOf(value)
 	singletonRows := p.rows != nil && p.rows.name == "" && p.rows.sourceType.Kind() == reflect.Struct && (format == "csv" || format == "tabular")
@@ -312,8 +363,12 @@ func (p *Plan) Encode(ctx context.Context, format string, value any) (Result, er
 		}
 		return Result{Data: data, ContentType: contentType}, nil
 	}
-	if selection := dexec.SelectedOutputFields(ctx, value); format != "json" && selection != nil {
-		selected, projected, err := p.selectedPresentation(value, selection)
+	if format != "json" && selection != nil {
+		var scalarAuthority *presentation
+		if format == "csv" || format == "xls" || format == "xlsx" {
+			scalarAuthority = p.formatPresentation
+		}
+		selected, projected, err := p.selectedPresentation(value, selection, scalarAuthority)
 		if err != nil {
 			return Result{}, err
 		}

@@ -129,6 +129,12 @@ func (v View) Value() (string, error) {
 		}
 	}
 	if v.Selector != nil {
+		if err := v.Selector.FieldSelection.Validate(); err != nil {
+			return "", err
+		}
+		if err := appendPair("selectorFieldSelection", string(v.Selector.FieldSelection)); err != nil {
+			return "", err
+		}
 		if err := appendPair("selectorNamespace", v.Selector.Namespace); err != nil {
 			return "", err
 		}

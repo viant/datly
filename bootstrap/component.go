@@ -446,6 +446,13 @@ func (r *packageComponentResolver) resolveField(contract *packageContract, field
 				param.WireSchema = schema
 			}
 		}
+		if len(param.WireSchemas) == 0 {
+			if raw := field.Tag.Get("wireSchemas"); raw != "" {
+				if err := json.Unmarshal([]byte(raw), &param.WireSchemas); err != nil {
+					return nil, fmt.Errorf("input %s nested wire schemas: %w", field.Name, err)
+				}
+			}
+		}
 		if param.WireTypeExpr == "" {
 			param.WireTypeExpr = metadata.WireType
 		}

@@ -156,3 +156,11 @@ func TestCompileSelectorBindings_AllowsUnreferencedDuplicateAliases(t *testing.T
 		t.Fatalf("expected referenced duplicate alias to fail, got %v", err)
 	}
 }
+
+func TestRejectInvalidFieldSelectionMode(t *testing.T) {
+	component := &spec.Component{RootView: &spec.View{Name: "rows", Selector: &spec.Selector{FieldSelection: "unknown"}, Source: &spec.ViewSource{SQL: "SELECT 1 AS id"}}}
+	_, err := Compile(Input{Component: component, InputType: reflect.TypeFor[struct{}](), OutputType: reflect.TypeFor[[]struct{ ID int }](), DirectViewType: reflect.TypeFor[[]struct{ ID int }]()})
+	if err == nil || !strings.Contains(err.Error(), "unsupported selector field selection mode") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}

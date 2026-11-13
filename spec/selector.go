@@ -1,5 +1,7 @@
 package spec
 
+import "fmt"
+
 // FieldPath is a metadata path used by selector policy. It remains a string
 // because paths are authored and serialized, while runtime field access is
 // compiled separately.
@@ -8,6 +10,9 @@ type FieldPath string
 // Selector is immutable per-view query-selector policy. Request-time selector
 // values live in xdatly/state.Selector and must not be stored here.
 type Selector struct {
+	// FieldSelection controls whether request Fields project SQL or only output.
+	// Columns remain trusted read controls in either mode.
+	FieldSelection FieldSelectionMode `json:"fieldSelection,omitempty"`
 	// Specified distinguishes authored permissions (including false) from
 	// defaults inferred from query-selector bindings. Use SetPermission to author.
 	Specified     []SelectorProperty   `json:"specified,omitempty"`
@@ -36,4 +41,22 @@ type Selector struct {
 type SQLMethod struct {
 	Name string   `json:"name"`
 	Args []string `json:"args,omitempty"`
+}
+
+// FieldSelectionMode keeps external response selection independent of data needed
+// by row and relation lifecycle hooks. The zero value preserves query projection.
+type FieldSelectionMode string
+
+const (
+	FieldSelectionQuery      FieldSelectionMode = "query"
+	FieldSelectionOutputOnly FieldSelectionMode = "outputOnly"
+)
+
+func (m FieldSelectionMode) Validate() error {
+	switch m {
+	case "", FieldSelectionQuery, FieldSelectionOutputOnly:
+		return nil
+	default:
+		return fmt.Errorf("unsupported selector field selection mode %q", m)
+	}
 }

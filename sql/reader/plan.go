@@ -22,14 +22,15 @@ import (
 // Runtime services consume this node directly instead of joining parallel maps
 // of view-scoped behavior on every read.
 type ViewPlan struct {
-	View        *data.View
-	Template    sqltemplate.Evaluator
-	Criteria    *criteria.Compiler
-	Connector   string
-	Partitioner xreader.Partitioner
-	Collector   *collector.View
-	Codec       *rowcodec.Plan
-	Relations   []*RelationPlan
+	responseMembership *dsql.ProjectionMembership
+	View               *data.View
+	Template           sqltemplate.Evaluator
+	Criteria           *criteria.Compiler
+	Connector          string
+	Partitioner        xreader.Partitioner
+	Collector          *collector.View
+	Codec              *rowcodec.Plan
+	Relations          []*RelationPlan
 }
 
 // RelationPlan is one graph edge from a parent view plan to its target plan.
@@ -170,6 +171,11 @@ func assembleViewPlan(view *data.View, config PlanConfig, planned map[*data.View
 		result.Collector = config.Collection.View(view)
 	}
 	planned[view] = result
+	if view.Spec.Selector != nil && view.Spec.Selector.FieldSelection == spec.FieldSelectionOutputOnly && view.Spec.Source != nil {
+		// Checked membership is an optimization, never an admission rule for
+		// dynamic SQL. Ineligible sources remain the evaluated builder's owner.
+		result.responseMembership, _ = (dsql.SelectorProjection{SQL: view.Spec.Source.SQL, View: view}).PrepareMembership()
+	}
 	for _, relation := range view.Relations {
 		if relation == nil || relation.Of == nil || relation.Of.View == nil {
 			return nil, fmt.Errorf("view %s has a relation without a target view", viewPlanName(view))

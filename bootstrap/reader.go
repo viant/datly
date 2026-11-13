@@ -155,11 +155,18 @@ func (c *CompiledReader) resolveCaches(config ReaderRuntimeConfig) (map[*data.Vi
 			}
 		}
 		var settings *spec.CacheSettings
+		var cacheName string
 		if view.Cache != nil {
 			settings = config.CacheSettings[view.Cache.Name]
+			if settings != nil {
+				cacheName = view.Cache.Name
+			}
 		}
 		if settings == nil && warmupBinding != "" && view.Cache != nil && view.Cache.Name == "" {
 			settings = config.CacheSettings[warmupBinding]
+			if settings != nil {
+				cacheName = warmupBinding
+			}
 		}
 		if settings == nil && plan == c.plan.Root && c.component.Settings != nil && c.component.Settings.Cache != nil {
 			settings = c.component.Settings.Cache
@@ -186,7 +193,7 @@ func (c *CompiledReader) resolveCaches(config ReaderRuntimeConfig) (map[*data.Vi
 				if err != nil {
 					return err
 				}
-				service, err := (cacheconfig.Config{Settings: settings, Aerospike: config.Aerospike, Identity: c.component.Key.String() + ":" + path + ":" + view.Connector + ":" + config.CacheIdentity + ":" + c.instanceConst.Identity()}).New()
+				service, err := (cacheconfig.Config{Settings: settings, Name: cacheName, Aerospike: config.Aerospike, Identity: c.component.Key.String() + ":" + path + ":" + view.Connector + ":" + config.CacheIdentity + ":" + c.instanceConst.Identity()}).New()
 				if err != nil {
 					return err
 				}

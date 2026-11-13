@@ -311,6 +311,13 @@ func canonicalFieldMetadata(param *spec.Parameter) ([]structTagValue, error) {
 		}
 		result = append(result, structTagValue{name: "wireSchema", value: string(encoded)})
 	}
+	if len(param.WireSchemas) > 0 {
+		encoded, err := json.Marshal(param.WireSchemas)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, structTagValue{name: "wireSchemas", value: string(encoded)})
+	}
 	var constraint *choice.Constraint
 	var sourceType reflect.Type
 	if strings.Contains(param.Tag, "choice:") || param.WireSchema != nil && len(param.WireSchema.Enum) > 0 {

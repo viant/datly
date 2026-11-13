@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"github.com/viant/datly/internal/sqliteadmission"
 	"sort"
 	"strings"
 	"time"
@@ -38,6 +39,7 @@ type Set struct {
 	defaultName string
 	SQL         *dsql.SQLComponent
 	handles     []*sql.DB
+	admissions  []func()
 }
 
 func Open(ctx context.Context, configs []Config, defaultName string) (_ *Set, err error) {
@@ -99,6 +101,11 @@ func Open(ctx context.Context, configs []Config, defaultName string) (_ *Set, er
 			return nil, fmt.Errorf("connector opening failed (driver must be linked in the executable)")
 		}
 		set.handles = append(set.handles, db)
+		cleanup, admissionErr := sqliteadmission.Register(db, config.Driver, dsn)
+		if admissionErr != nil {
+			return nil, admissionErr
+		}
+		set.admissions = append(set.admissions, cleanup)
 		if config.MaxIdleConns != 0 {
 			db.SetMaxIdleConns(config.MaxIdleConns)
 		}
@@ -225,6 +232,9 @@ func (s *Set) Close() error {
 	var result error
 	for _, db := range s.handles {
 		result = errors.Join(result, db.Close())
+	}
+	for _, cleanup := range s.admissions {
+		cleanup()
 	}
 	return result
 }

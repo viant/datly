@@ -75,7 +75,7 @@ func parseViewDirective(item *query.Item) (viewDirective, bool, error) {
 		spec.ViewControlSelectorFields, spec.ViewControlSelectorOrderBy, spec.ViewControlSelectorCriteria,
 		spec.ViewControlSelectorLimit, spec.ViewControlSelectorOffset, spec.ViewControlSelectorPage,
 		spec.ViewControlSelectorDefaultOrder, spec.ViewControlSelectorDefaultLimit, spec.ViewControlSelectorNoLimit, spec.ViewControlSelectorRequireLimitForOffset,
-		spec.ViewControlSelectorFilterable, spec.ViewControlSelectorNamespace, spec.ViewControlSelectorSQLMethods:
+		spec.ViewControlSelectorFilterable, spec.ViewControlSelectorNamespace, spec.ViewControlSelectorSQLMethods, spec.ViewControlSelectorFieldSelection:
 	default:
 		return viewDirective{}, false, nil
 	}
@@ -132,6 +132,11 @@ func parseViewDirective(item *query.Item) (viewDirective, bool, error) {
 	if name == spec.ViewControlMySQLConditionFanoutFilter && directive.value != "false" {
 		return viewDirective{}, true, &Error{Code: CodeViewDirective, Cause: fmt.Errorf("mysql_condition_fanout_filter currently supports only false")}
 	}
+	if name == spec.ViewControlSelectorFieldSelection {
+		if err := spec.FieldSelectionMode(directive.value).Validate(); err != nil {
+			return viewDirective{}, true, &Error{Code: CodeViewDirective, Cause: err}
+		}
+	}
 	if name == spec.ViewControlSelectorSQLMethods {
 		if _, err := tag.ParseSQLMethods(directive.value); err != nil {
 			return viewDirective{}, true, &Error{Code: CodeViewDirective, Cause: err}
@@ -184,7 +189,7 @@ func containsViewDirective(source node.Node) bool {
 			spec.ViewControlSelectorFields, spec.ViewControlSelectorOrderBy, spec.ViewControlSelectorCriteria,
 			spec.ViewControlSelectorLimit, spec.ViewControlSelectorOffset, spec.ViewControlSelectorPage,
 			spec.ViewControlSelectorDefaultOrder, spec.ViewControlSelectorDefaultLimit, spec.ViewControlSelectorNoLimit, spec.ViewControlSelectorRequireLimitForOffset,
-			spec.ViewControlSelectorFilterable, spec.ViewControlSelectorNamespace, spec.ViewControlSelectorSQLMethods:
+			spec.ViewControlSelectorFilterable, spec.ViewControlSelectorNamespace, spec.ViewControlSelectorSQLMethods, spec.ViewControlSelectorFieldSelection:
 			return true
 		}
 		return false
@@ -530,11 +535,13 @@ func applyViewDirectives(root *spec.View, directives []viewDirective) error {
 				}
 			}
 		case spec.ViewControlSelectorDefaultOrder, spec.ViewControlSelectorFilterable,
-			spec.ViewControlSelectorNamespace, spec.ViewControlSelectorSQLMethods, spec.ViewControlSelectorDefaultLimit:
+			spec.ViewControlSelectorNamespace, spec.ViewControlSelectorSQLMethods, spec.ViewControlSelectorDefaultLimit, spec.ViewControlSelectorFieldSelection:
 			if target.Selector == nil {
 				target.Selector = &spec.Selector{}
 			}
 			switch directive.name {
+			case spec.ViewControlSelectorFieldSelection:
+				target.Selector.FieldSelection = spec.FieldSelectionMode(directive.value)
 			case spec.ViewControlSelectorDefaultOrder:
 				target.Selector.DefaultOrder = directive.value
 			case spec.ViewControlSelectorFilterable:

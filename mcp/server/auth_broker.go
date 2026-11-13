@@ -64,7 +64,7 @@ func staticBFFOptions(config Config, policy *authorization.Policy) []upstream.Op
 					http.Error(w, "MCP authorization unavailable", http.StatusServiceUnavailable)
 					return
 				}
-				service.Middleware(forwardCatalogBearer(config.Service, next)).ServeHTTP(w, r)
+				service.Middleware(forwardPresentedBearer(next)).ServeHTTP(w, r)
 			})
 		}),
 		upstream.WithProtectedResourcesHandler(func(w http.ResponseWriter, r *http.Request) {

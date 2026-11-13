@@ -149,6 +149,10 @@ func (l *viewLocator) ValueInScope(ctx context.Context, scope locator.Scope, tar
 	if err != nil {
 		return nil, false, err
 	}
+	ctx, err = exec.EnterSelectorPresentation(ctx, exec.ComponentTarget{}, nil)
+	if err != nil {
+		return nil, false, err
+	}
 	if requested, ok := scope.(locator.MetadataScope); ok && requested.MetadataRequested() {
 		var result *sqlreader.ReadResult
 		result, err = view.execution.ReadResult(ctx, l.input, scopeBinder{scope: scope}, resolver)

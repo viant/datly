@@ -46,12 +46,16 @@ func TestGeneratedWithURIPublicReloadSQLite(t *testing.T) {
 				} else if err := os.CopyFS(stage, os.DirFS(stages[0])); err != nil {
 					t.Fatal(err)
 				}
+				fieldTags := `json:"id"`
+				if tc.name == "private-alternative" {
+					fieldTags += ` pathMcpEnabled:"false"`
+				}
 				source := fmt.Sprintf(`#setting($_ = $route('/records','GET'))
 #setting($_ = $mcp('Records'))
-#define($_ = $Id<*int>(path/id).WithURI('%s').WithTag('json:"id"').Required()%s)
+#define($_ = $Id<*int>(path/id).WithURI('%s').WithTag('%s').Required()%s)
 SELECT id, CAST(records.id AS int) FROM records
 WHERE id <= %d AND ($Id IS NULL OR id = $Id)
-ORDER BY id`, tc.uri, tc.visibility, revision+2)
+ORDER BY id`, tc.uri, fieldTags, tc.visibility, revision+2)
 				if err := os.WriteFile(filepath.Join(authored, "records", "Records.sql"), []byte(source), 0644); err != nil {
 					t.Fatal(err)
 				}
@@ -86,6 +90,9 @@ ORDER BY id`, tc.uri, tc.visibility, revision+2)
 						t.Fatal(err)
 					}
 					got[name] = string(data)
+					if name == plan.Input.Destination && tc.name == "private-alternative" && strings.Count(string(data), `pathMcpEnabled:"`) != 1 {
+						t.Fatalf("generation %d duplicated or lost private-path metadata: %s", revision, data)
+					}
 				}
 				if revision == 1 {
 					contracts = got

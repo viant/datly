@@ -8,9 +8,12 @@ import (
 
 	"github.com/viant/datly/internal/inputvisibility"
 	"github.com/viant/datly/runtime/registry"
+	"github.com/viant/datly/spec"
 	"github.com/viant/mcp-protocol/schema"
 	"github.com/viant/mcp-protocol/schema/fieldname"
 	"github.com/viant/mcp-protocol/schema/jsonschema"
+	"github.com/viant/tagly/choice"
+	tagformat "github.com/viant/tagly/format"
 	xshape "github.com/viant/x/shape"
 )
 
@@ -70,6 +73,7 @@ func (c *Compiler) compileAnonymousBody(inputField registry.InputField, caseForm
 	for _, name := range requiredNames {
 		required[name] = true
 	}
+	nestedSchemas := inputField.WireSchemas()
 	result := make([]Argument, 0, len(fields))
 	for _, projected := range fields {
 		if !projected.Field.Exported || inputvisibility.InternalRepresentation(sourceType, projected.Field.Index, metadata) {
@@ -102,14 +106,42 @@ func (c *Compiler) compileAnonymousBody(inputField registry.InputField, caseForm
 			childMetadata = metadata.FieldShapeByIndex(projected.Field.Index)
 		}
 		selectedField := projected
+		collection, err := choice.ParseCollectionEnum(field.Tag, field.Type)
+		if err != nil {
+			return nil, err
+		}
+		// Each flattened argument becomes its own schema root. Retain only its
+		// authored subtree, remapping the original body path to that root.
+		wireSchemas := map[string]*spec.WireSchema{}
+		prefix := canonicalSchemaPath(sourceType, inputField.Path()+"."+field.Name, representationVisibility(metadata, caseFormat))
+		for path, policy := range nestedSchemas {
+			path = canonicalSchemaPath(sourceType, path, representationVisibility(metadata, caseFormat))
+			if path == prefix || strings.HasPrefix(path, prefix+".") {
+				wireSchemas[field.Name+strings.TrimPrefix(path, prefix)] = policy
+			}
+		}
+		schemaRequired := required[requiredName]
+		if policy := wireSchemas[field.Name]; policy != nil && policy.Required {
+			schemaRequired = true
+		}
+		policy, err := tagformat.Parse(field.Tag)
+		if err != nil {
+			return nil, err
+		}
+		var nullable *bool
+		if !customJSONBody && !hasWireRepresentation(wireSchemas) && collection == nil {
+			nullable = policy.Nullable
+		}
 		result = append(result, Argument{
+			nullable:       nullable,
+			enumeration:    collection,
 			schemaField:    &selectedField,
 			representation: childMetadata,
 			documentation:  inputField.Documentation(), publicName: publicName, aliases: aliases, path: inputField.Path() + "." + field.Name,
 			sourceKind: "body", sourceName: projected.Name,
 			sourceType: field.Type, destinationType: field.Type,
 			parentBodyType: inputField.SourceType(), parentBodySource: binding.Location.In, customJSONBody: customJSONBody,
-			schemaRequired: required[requiredName], anonymousGoName: goName,
+			schemaRequired: schemaRequired, anonymousGoName: goName, wireSchemas: wireSchemas,
 		})
 	}
 	if len(result) == 0 {

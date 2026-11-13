@@ -11,3 +11,16 @@ Use the [complete predicate guide](product/datly/doc/reader-predicates.md) for s
 - Every expansion appends arguments. Repeated parameter declarations across groups each bind their emitted values; do not cache a SQL-only group string for multiple uses or evaluate a group only to discard it.
 
 The guide includes complete DQL and Go contracts plus realistic SQLite evidence for both built-in grouping and custom/built-in grouping under verified identity.
+
+## Configurable local date ranges
+
+For BigQuery DATE/DATETIME filtering with optional UTC partition pruning, the
+linked `github.com/viant/datly/runtime/predicate.DateRange` accepts typed
+`DateRangeInput{From, To}` plus authored `DateColumn`, `TimeColumn`, optional
+`Alias` and optional `PartitionColumn` name/value arguments. It assumes no
+business field names and is an ordinary filter, not authorization. Calendar
+bounds are inclusive; offset-free timestamp bounds are half-open. Offset-bearing
+values are rejected. Optional UTC partitions use a conservative one-day margin
+only when event-local and UTC time differ by at most 24 hours. Follow the full
+[date-range contract](product/datly/doc/reader-predicates.md#local-time-range-with-utc-date-partitions)
+and check that the connected host links both handler and input types.

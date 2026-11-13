@@ -11,6 +11,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/viant/bindly/locator"
 	"github.com/viant/datly/exec"
+	gateway "github.com/viant/datly/gateway/http"
 	"github.com/viant/datly/standalone"
 	"github.com/viant/datly/standalone/config"
 	"github.com/viant/mcp-protocol/authorization"
@@ -23,6 +24,7 @@ import (
 )
 
 type Service struct {
+	AuthorizationProviders map[string]gateway.AuthorizationProvider
 	// HTTPMiddleware and LinkedArtifact are trusted process-owned bindings.
 	HTTPMiddleware func(http.Handler) http.Handler
 	// MCPAuthorization and MCPBackendForFrontend are process-owned OAuth
@@ -88,7 +90,7 @@ func (s Service) Run(ctx context.Context, args []string, stdout, stderr io.Write
 		}
 		cfg.MCP.Authorization = s.MCPAuthorization
 	}
-	server, err := standalone.New(ctx, standalone.Options{HTTPMiddleware: s.HTTPMiddleware, MCPBackendForFrontend: s.MCPBackendForFrontend, LinkedArtifact: s.LinkedArtifact, RequireComponentBinding: s.RequireComponentBinding, Config: cfg, Registry: s.Registry, Workspace: s.Workspace, Holders: s.Holders, Providers: s.Providers, InvocationLogger: s.InvocationLogger, InvocationDiffer: s.InvocationDiffer, DefaultAuthenticator: s.DefaultAuthenticator, RequireLinked: true, Diagnostics: stderr})
+	server, err := standalone.New(ctx, standalone.Options{AuthorizationProviders: s.AuthorizationProviders, HTTPMiddleware: s.HTTPMiddleware, MCPBackendForFrontend: s.MCPBackendForFrontend, LinkedArtifact: s.LinkedArtifact, RequireComponentBinding: s.RequireComponentBinding, Config: cfg, Registry: s.Registry, Workspace: s.Workspace, Holders: s.Holders, Providers: s.Providers, InvocationLogger: s.InvocationLogger, InvocationDiffer: s.InvocationDiffer, DefaultAuthenticator: s.DefaultAuthenticator, RequireLinked: true, Diagnostics: stderr})
 	if err != nil {
 		fmt.Fprintln(stderr, err)
 		return 1

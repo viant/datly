@@ -11,6 +11,12 @@ import (
 
 func (v *View) applySelectorOption(key, value string) (bool, error) {
 	switch key {
+	case "selectorfieldselection":
+		mode := spec.FieldSelectionMode(value)
+		if err := mode.Validate(); err != nil {
+			return true, err
+		}
+		v.ensureSelector().FieldSelection = mode
 	case "selectornamespace":
 		v.ensureSelector().Namespace = value
 	case "selectorprojection", "selectororderby", "selectorcriteria", "selectorlimit", "selectoroffset", "selectorpage":

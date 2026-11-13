@@ -191,6 +191,30 @@ func (p SelectorProjection) Columns(selected []string) ([]ProjectionColumn, erro
 }
 
 func (p SelectorProjection) selectColumns(columns []ProjectionColumn, selected []string, wildcard bool) ([]ProjectionColumn, error) {
+	if len(normalizeProjectionSelection(selected)) == 0 {
+		return columns, nil
+	}
+	return selectProjectionColumns(columns, selected, wildcard, projectionColumnIndex(columns))
+}
+
+func projectionColumnIndex(columns []ProjectionColumn) map[string]int {
+	result := make(map[string]int)
+	for i, column := range columns {
+		for _, names := range []ProjectionNames{column.names, column.sourceOnly} {
+			for _, name := range names {
+				key := canonicalProjectionName(name)
+				if prior, exists := result[key]; exists && prior != i {
+					result[key] = -1
+				} else if !exists {
+					result[key] = i
+				}
+			}
+		}
+	}
+	return result
+}
+
+func selectProjectionColumns(columns []ProjectionColumn, selected []string, wildcard bool, membership map[string]int) ([]ProjectionColumn, error) {
 	selected = normalizeProjectionSelection(selected)
 	if len(selected) == 0 {
 		return columns, nil
@@ -198,18 +222,12 @@ func (p SelectorProjection) selectColumns(columns []ProjectionColumn, selected [
 	indexes := make(map[int]bool)
 	var result []ProjectionColumn
 	for _, name := range selected {
-		match := -1
-		for i, col := range columns {
-			if !col.Matches(name) && !col.sourceOnly.Matches(name) {
-				continue
-			}
-			if match != -1 {
-				return nil, fmt.Errorf("ambiguous source projection field %q", name)
-			}
-			match = i
-		}
-		if match == -1 {
+		match, exists := membership[canonicalProjectionName(name)]
+		if !exists {
 			return nil, &UnknownProjectionColumnError{Column: name}
+		}
+		if match < 0 {
+			return nil, fmt.Errorf("ambiguous source projection field %q", name)
 		}
 		if !indexes[match] && wildcard {
 			column := columns[match]

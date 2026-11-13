@@ -1,6 +1,8 @@
 package transcribe
 
 import (
+	"context"
+	"github.com/viant/datly/spec"
 	"os"
 	"path/filepath"
 	"strings"
@@ -78,6 +80,22 @@ type Body struct { Rows []*owner.Record; cache any }
 SELECT type(b,'Body'),dest(b,'body.go'),r.*,type(r,'own.Record','Rows') FROM Body b CROSS JOIN records r`
 	graph := &Source{Name: "Graph", Scope: module + "/dql", Path: filepath.Join(root, "dql/Graph.dql"), Text: graphText, Connector: "main", Types: typecatalog.NewCatalog(), ColumnRefiner: owner.ColumnRefiner}
 	writeSourceFile(t, root, "dql/Graph.dql", graphText)
+	t.Run("prepared owner proof is rejected before owner loading", func(t *testing.T) {
+		ownerPath := filepath.Join(root, "dql/owner/Owner.dql")
+		original, err := os.ReadFile(ownerPath)
+		require.NoError(t, err)
+		require.NoError(t, os.WriteFile(ownerPath, []byte("invalid owner source must not be loaded"), 0644))
+		defer func() { require.NoError(t, os.WriteFile(ownerPath, original, 0644)) }()
+		calls := 0
+		prepared := &Source{Name: graph.Name, Scope: graph.Scope, Path: graph.Path, Text: graph.Text, Connector: graph.Connector, Types: typecatalog.NewCatalog(), PreparedColumns: func(context.Context, column.PreparedColumnRequest) (*column.PreparedColumnResult, error) {
+			calls++
+			return &column.PreparedColumnResult{Columns: []*spec.Column{{Name: "id", Type: spec.TypeRef{Name: "int"}}}}, nil
+		}}
+		_, err = (&Discovery{BaseDir: root, PreparedColumns: prepared.PreparedColumns}).CompileSource(t.Context(), prepared)
+		require.ErrorContains(t, err, "prepared columns do not provide borrowed-source or factory composition proof")
+		require.Zero(t, calls)
+	})
+
 	var stable map[string]string
 	for round := 0; round < 3; round++ {
 		if round == 2 {

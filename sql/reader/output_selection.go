@@ -6,7 +6,9 @@ import (
 
 	"github.com/viant/datly/data"
 	dexec "github.com/viant/datly/exec"
+	"github.com/viant/datly/spec"
 	dsql "github.com/viant/datly/sql"
+	"github.com/viant/datly/sql/reader/collector"
 	"github.com/viant/sqlparser"
 	sqlxio "github.com/viant/sqlx/io"
 	structjson "github.com/viant/structology/encoding/json"
@@ -15,15 +17,38 @@ import (
 // outputSelection traverses graph edges, not row values. Shared target views
 // therefore get a mask at each holder path without collecting per-row evidence.
 type outputSelection struct {
-	selectors invocationSelectors
-	scopes    []structjson.FieldSelection
+	selectors      invocationSelectors
+	responseFields map[*data.View]*dsql.ResponseFieldSelection
+	emptyViews     map[*data.View]bool
+	scopes         []structjson.FieldSelection
 }
 
 func (s *Session) selectedOutput(selectors invocationSelectors) (dexec.OutputFieldFilter, error) {
 	if len(selectors) == 0 {
 		return nil, nil
 	}
-	selection := outputSelection{selectors: selectors}
+	selection := outputSelection{selectors: selectors, responseFields: s.responseFields}
+	missingProof := false
+	for _, proof := range s.responseFields {
+		missingProof = missingProof || !proof.Evaluated()
+	}
+	if missingProof && s.rootRead != nil {
+		selection.emptyViews = map[*data.View]bool{}
+		var visit func(*collector.Collector)
+		visit = func(current *collector.Collector) {
+			if current == nil {
+				return
+			}
+			view := current.View()
+			if empty, exists := selection.emptyViews[view]; !exists || empty {
+				selection.emptyViews[view] = current.Len() == 0
+			}
+			for _, child := range current.Children() {
+				visit(child)
+			}
+		}
+		visit(s.rootRead.collector)
+	}
 	var path []string
 	if !s.Artifact.DirectOutput {
 		path = []string{s.Artifact.OutputViewField}
@@ -41,6 +66,14 @@ func (s *outputSelection) view(plan *ViewPlan, path []string) error {
 		return fmt.Errorf("output selection requires a view plan")
 	}
 	requested := projectionSelection(s.selectors.forView(plan.View))
+	if proof := s.responseFields[plan.View]; proof != nil && !proof.Evaluated() {
+		if !s.emptyViews[plan.View] {
+			return &dsql.UnresolvedProjectionError{Cause: fmt.Errorf("response membership for populated view %s requires an evaluated source", plan.View.Spec.Name)}
+		}
+		// Native collectors prove no records need this scope. Continue graph
+		// traversal: independent output edges retain their own masks/proofs.
+		requested = nil
+	}
 	include := map[string]bool{}
 	if len(requested) > 0 {
 		scope := structjson.FieldSelection{Path: append([]string(nil), path...)}
@@ -55,7 +88,19 @@ func (s *outputSelection) view(plan *ViewPlan, path []string) error {
 				}
 			}
 			if !relation {
-				if source := plan.View.Spec.Source; source != nil {
+				if plan.responseMembership != nil {
+					if plan.responseMembership.SourceOnlySelection(name) {
+						continue
+					}
+				} else if proof := s.responseFields[plan.View]; proof != nil {
+					sourceOnly, err := proof.SourceOnlySelection(name)
+					if err != nil {
+						return err
+					}
+					if sourceOnly {
+						continue
+					}
+				} else if source := plan.View.Spec.Source; source != nil && (plan.View.Spec.Selector == nil || plan.View.Spec.Selector.FieldSelection != spec.FieldSelectionOutputOnly) {
 					sourceOnly, err := (dsql.SelectorProjection{SQL: source.SQL, View: plan.View}).SourceOnlySelection(name)
 					if err != nil {
 						return err

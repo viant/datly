@@ -93,7 +93,7 @@ func (h *Handler) outputFormatWithDefault(request *stdhttp.Request, contract *ou
 	if _, err := output.ContentType(format); err != nil {
 		return "", &xresponse.Error{Code: stdhttp.StatusBadRequest, Cause: err}
 	}
-	if contract.JSONOnly() && format != "json" {
+	if !contract.SupportsFormat(format) {
 		return "", &xresponse.Error{Code: stdhttp.StatusNotAcceptable, Cause: fmt.Errorf("custom JSON output has no safe %s representation", format)}
 	}
 	return format, nil

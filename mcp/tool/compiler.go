@@ -12,12 +12,14 @@ import (
 	bindstate "github.com/viant/bindly/state"
 	"github.com/viant/datly/exec"
 	mcpinput "github.com/viant/datly/mcp/input"
+	"github.com/viant/datly/mcp/invocation"
 	"github.com/viant/datly/runtime/output"
 	"github.com/viant/datly/runtime/registry"
 	"github.com/viant/datly/spec"
 	"github.com/viant/mcp-protocol/schema"
 	"github.com/viant/mcp-protocol/schema/fieldname"
 	"github.com/viant/tagly/choice"
+	tagformat "github.com/viant/tagly/format"
 	xshape "github.com/viant/x/shape"
 )
 
@@ -111,6 +113,21 @@ func (c *Compiler) Compile(input Input) (*Plan, error) {
 		if internal {
 			continue
 		}
+		// Text admission belongs exclusively to native query projection, including
+		// when a body would otherwise be flattened before external compilation.
+		structField, err := inputField.StructField()
+		if err != nil {
+			return nil, fmt.Errorf("compile MCP tool %q: %w", name, err)
+		}
+		if inputField.Anonymous() || strings.ToLower(strings.TrimSpace(binding.Location.Kind)) != "query" {
+			acceptText, err := textAdmission(structField)
+			if err != nil {
+				return nil, fmt.Errorf("compile MCP tool %q: %w", name, err)
+			}
+			if acceptText {
+				return nil, fmt.Errorf("compile MCP tool %q: field %s text admission requires a signed integer query slice", name, structField.Name)
+			}
+		}
 		if inputField.Anonymous() {
 			if binding.BodyNullPolicy != "" {
 				return nil, fmt.Errorf("compile MCP tool %q: BodyNullPolicy does not support anonymous body projection", name)
@@ -126,10 +143,6 @@ func (c *Compiler) Compile(input Input) (*Plan, error) {
 				arguments = append(arguments, argument)
 			}
 			continue
-		}
-		structField, err := inputField.StructField()
-		if err != nil {
-			return nil, fmt.Errorf("compile MCP tool %q: %w", name, err)
 		}
 		argument, include, err := compileField(inputField, structField)
 		if err != nil {
@@ -188,16 +201,47 @@ func (c *Compiler) Compile(input Input) (*Plan, error) {
 			}
 		}
 		sourceType := argument.sourceType
-		if argument.required && argument.bodyNullPolicy == "" {
+		if argument.required && argument.bodyNullPolicy == "" && (argument.enumeration == nil || argument.enumeration.CollectionItems() == nil) {
 			sourceType = (xshape.Runtime{}).Indirect(sourceType)
 		}
 		format := input.CaseFormat
 		if argument.customJSONBody {
 			format = ""
 		}
-		property, err := (&schemaProjector{rootInputTag: argument.bodyInputTag, field: argument.schemaField, representation: argument.representation, docs: owner, schemas: argument.wireSchemas, wireType: argument.wireType, caseFormat: format, nativeBody: argument.sourceKind == "body" && !argument.customJSONBody}).argument(sourceType, argument.path, argument.publicName, argument.wireSchema)
+		schemaField := argument.schemaField
+		if schemaField != nil && schemaField.Field.ReflectedType != sourceType {
+			selected := *schemaField
+			selected.Field.ReflectedType = sourceType
+			schemaField = &selected
+		}
+		property, err := (&schemaProjector{rootInputTag: argument.bodyInputTag, field: schemaField, representation: argument.representation, docs: owner, schemas: argument.wireSchemas, wireType: argument.wireType, caseFormat: format, nativeBody: argument.sourceKind == "body" && !argument.customJSONBody}).argument(sourceType, argument.path, argument.publicName, argument.wireSchema)
 		if err != nil {
 			return nil, fmt.Errorf("compile MCP tool %q argument %q: %w", name, argument.publicName, err)
+		}
+		if argument.acceptText {
+			// Query null follows the compiled admission policy below, independently
+			// from the canonical slice's reflected nullable type spelling.
+			removeSchemaNull(property)
+			items, ok := property["items"].(map[string]interface{})
+			if property["type"] != "array" || !ok {
+				return nil, fmt.Errorf("MCP argument %q text admission requires an ordinary array schema", argument.publicName)
+			}
+			property["items"] = map[string]interface{}{"anyOf": []interface{}{items, map[string]interface{}{"type": "string"}}}
+		}
+		if argument.acceptScalar {
+			items, ok := property["items"].(map[string]interface{})
+			if property["type"] != "array" || !ok {
+				return nil, fmt.Errorf("MCP argument %q scalar admission requires an ordinary array schema", argument.publicName)
+			}
+			alternatives := []interface{}{items, property}
+			if !argument.required && (argument.nullable == nil || *argument.nullable) {
+				// Query null means omission; optional native bindings admit it.
+				alternatives = append(alternatives, map[string]interface{}{"type": "null"})
+			}
+			property = map[string]interface{}{"anyOf": alternatives}
+		}
+		if argument.acceptText && !argument.acceptScalar && !argument.required && (argument.nullable == nil || *argument.nullable) {
+			property = map[string]interface{}{"anyOf": []interface{}{property, map[string]interface{}{"type": "null"}}}
 		}
 		if argument.required && argument.bodyNullPolicy == "" {
 			removeSchemaNull(property)
@@ -224,11 +268,14 @@ func (c *Compiler) Compile(input Input) (*Plan, error) {
 			inputSchema.Required = append(inputSchema.Required, argument.publicName)
 		}
 		bindingArguments[index] = mcpinput.Argument{
+			Nullable:       argument.nullable,
 			PublicName:     argument.publicName,
 			Aliases:        argument.aliases,
 			Source:         bindstate.Location{Kind: argument.sourceKind, In: argument.sourceName},
 			SourceType:     argument.sourceType,
 			SplitCSVString: argument.querySelectorCSV,
+			AcceptScalar:   argument.acceptScalar,
+			AcceptText:     argument.acceptText,
 		}
 	}
 	projectBinarySchema(arguments, &inputSchema, input.CaseFormat)
@@ -286,6 +333,16 @@ func (c *Compiler) Compile(input Input) (*Plan, error) {
 }
 
 func outputContractSchema(source reflect.Type, plan *output.Plan) (*schema.ToolOutputSchema, error) {
+	if source != nil {
+		explicit := reflect.TypeFor[invocation.TypedToolResult]()
+		if source.Implements(explicit) || (source.Kind() != reflect.Pointer && reflect.PointerTo(source).Implements(explicit)) {
+			// The envelope is protocol content, not the structuredContent schema.
+			// Explicit result components may return text/resources or typed structured
+			// content per operation; an envelope schema would misdescribe both.
+			return nil, nil
+		}
+	}
+
 	if source == nil && plan == nil {
 		return nil, nil
 	}
@@ -344,6 +401,32 @@ func (c *Compiler) compileExternal(inputField registry.InputField, field reflect
 		sourceType: inputField.SourceType(), destinationType: inputField.DestinationType(),
 		wireSchema: inputField.WireSchema(), wireSchemas: inputField.WireSchemas(), wireType: inputField.WireType(), required: required, bodyNullPolicy: binding.BodyNullPolicy,
 	}
+	policy, err := tagformat.Parse(field.Tag)
+	if err != nil {
+		return Argument{}, false, err
+	}
+	if argument.bodyNullPolicy == "" && argument.wireType == nil && !wireSchemaReplacesShape(argument.wireSchema) && !hasWireRepresentation(argument.wireSchemas) {
+		argument.nullable = policy.Nullable
+		if policy.Nullable != nil {
+			projected := xshape.JSONField{Field: xshape.Field{Name: field.Name, ReflectedType: argument.sourceType, Tag: field.Tag, Index: field.Index, Exported: field.IsExported()}, Name: publicName}
+			argument.schemaField = &projected
+		}
+	}
+	argument.acceptScalar, err = scalarAdmission(field)
+	if err != nil {
+		return Argument{}, false, err
+	}
+	argument.acceptText, err = textAdmission(field)
+	if err != nil {
+		return Argument{}, false, err
+	}
+	if (argument.acceptScalar || argument.acceptText) && (argument.wireSchema != nil || len(argument.wireSchemas) != 0 || argument.wireType != nil) {
+		admission := "scalar"
+		if argument.acceptText {
+			admission = "text"
+		}
+		return Argument{}, false, fmt.Errorf("MCP argument %q %s admission conflicts with explicit wire representation", publicName, admission)
+	}
 	if argument.sourceKind == "body" && binding.Location.In == "" {
 		argument.bodyInputTag = binding.BodyInputTag
 	}
@@ -361,9 +444,22 @@ func (c *Compiler) compileExternal(inputField registry.InputField, field reflect
 	if err != nil {
 		return Argument{}, false, err
 	}
+	if enumeration == nil {
+		enumeration, err = choice.ParseCollectionEnum(field.Tag, field.Type)
+		if err != nil {
+			return Argument{}, false, err
+		}
+	}
 	if enumeration != nil {
+		// Enum admission retains its native null domain and decoder ownership.
+		argument.nullable = nil
 		argument.enumeration = enumeration
-		argument.wireSchema = registry.EnumInputSchema(enumeration, field.Type.Kind() == reflect.Pointer)
+		if enumeration.CollectionItems() == nil {
+			argument.wireSchema = registry.EnumInputSchema(enumeration, field.Type.Kind() == reflect.Pointer)
+		} else {
+			projected := xshape.JSONField{Field: xshape.Field{Name: field.Name, ReflectedType: field.Type, Tag: field.Tag, Index: field.Index, Exported: field.IsExported()}, Name: publicName}
+			argument.schemaField = &projected
+		}
 	}
 	argument.schemaRequired = required || argument.sourceKind == "path" || fieldname.Required(field)
 	if memberRequired, associated := wholeBodyMemberSchemaRequired(argument); associated && !required {

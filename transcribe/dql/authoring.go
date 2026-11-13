@@ -86,16 +86,17 @@ func DeclarationOccurrences(source string) ([]DeclarationOccurrence, error) {
 			key := strings.ToLower(strings.TrimSpace(name))
 			optionSpan := SourceSpan{Start: block.bodyStart + tailOffset + cursor.start, End: block.bodyStart + tailOffset + cursor.cursor}
 			occurrence.Options = append(occurrence.Options, DeclarationOptionOccurrence{Name: name, Args: append([]string(nil), args...), Span: optionSpan})
-			if key != "withpredicate" && key != "predicate" && key != "applywhenabsentpredicate" {
+			if key != "withpredicate" && key != "predicate" && key != "applywhenabsentpredicate" && key != "withauthpredicate" && key != "applywhenabsentauthpredicate" {
 				continue
 			}
-			predicate, err := (&declarationOptionParser{}).predicate(args, key == "applywhenabsentpredicate")
+			predicate, err := (&declarationOptionParser{}).predicate(args, key == "applywhenabsentpredicate" || key == "applywhenabsentauthpredicate")
 			if err != nil {
 				return nil, err
 			}
 			if predicate == nil || strings.TrimSpace(predicate.Name) == "" {
 				return nil, fmt.Errorf("invalid predicate option for %s", holder)
 			}
+			predicate.Auth = predicate.Auth || key == "withauthpredicate" || key == "applywhenabsentauthpredicate"
 			occurrence.Predicates = append(occurrence.Predicates, PredicateOptionOccurrence{
 				Ordinal:   ordinal,
 				Predicate: predicate,
@@ -148,6 +149,12 @@ func RenderPredicateOption(predicate *spec.Predicate) (string, error) {
 	name := "WithPredicate"
 	if predicate.ApplyWhenAbsent {
 		name = "ApplyWhenAbsentPredicate"
+	}
+	if predicate.Auth {
+		name = "WithAuthPredicate"
+		if predicate.ApplyWhenAbsent {
+			name = "ApplyWhenAbsentAuthPredicate"
+		}
 	}
 	args := []string{strconv.Itoa(predicate.Group), strconv.Quote(strings.TrimSpace(predicate.Name))}
 	for _, arg := range predicate.Args {

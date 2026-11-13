@@ -20,11 +20,11 @@ func (d *reportDeriver) derivedIdentity(component *spec.Component, route *spec.R
 	suffix := ""
 	if routeCount > 1 {
 		if strings.TrimSpace(route.Name) == "" {
-			return reportIdentity{}, fmt.Errorf("report component %s has multiple GET routes; each route requires a name", component.Key.String())
+			return reportIdentity{}, fmt.Errorf("report component %s has multiple source routes; each route requires a name", component.Key.String())
 		}
 		suffix = typecatalog.ExportedFieldName(route.Name)
 		for _, peer := range component.Routes {
-			if peer == nil || peer == route || !strings.EqualFold(peer.Method, http.MethodGet) || typecatalog.ExportedFieldName(peer.Name) != suffix {
+			if peer == nil || peer == route || typecatalog.ExportedFieldName(peer.Name) != suffix {
 				continue
 			}
 			// DQL aliases share the component's default route name. Keep their
@@ -85,12 +85,12 @@ func (s Source) groupable() bool {
 }
 
 func (s Source) eligibleRoutes() []*spec.Route {
-	if !s.reportEnabled() || !s.groupable() {
+	if !s.reportEnabled() || !s.groupable() || strings.TrimSpace(s.Component.Settings.Mutation) != "" {
 		return nil
 	}
 	result := make([]*spec.Route, 0, len(s.Component.Routes))
 	for _, route := range s.Component.Routes {
-		if route != nil && strings.EqualFold(route.Method, http.MethodGet) {
+		if route != nil {
 			result = append(result, route)
 		}
 	}

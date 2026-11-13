@@ -19,6 +19,8 @@ import (
 // Config is the application HTTP policy. A nil CORS policy selects
 // safe noncredentialed defaults; an explicit empty CORS policy remains empty.
 type Config struct {
+	Authorization          *AuthorizationConfig             `json:"Authorization,omitempty" yaml:"Authorization,omitempty"`
+	AuthorizationProviders map[string]AuthorizationProvider `json:"-" yaml:"-"`
 	// PathSemantics selects HTTP route segmentation. Empty or "escaped" preserves
 	// native escaped segments; "decoded" uses the once-decoded URL.Path boundaries.
 	// Original request URLs remain intact for security checks and observation.
@@ -195,6 +197,10 @@ func (c Config) Build(ctx context.Context, input HandlerInput) (*Handler, error)
 	h.methodMismatchPolicy = c.MethodMismatchPolicy
 	h.serviceTimeHeader = c.ServiceTimeHeader
 	h.authorize = c.Authorize
+	h.authorization, err = c.authorizationGate()
+	if err != nil {
+		return nil, err
+	}
 	h.allowedSubnet = c.Meta.AllowedSubnet
 	if c.Metrics != nil {
 		policy := *c.Metrics
