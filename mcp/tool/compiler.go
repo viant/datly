@@ -380,7 +380,7 @@ func (c *Compiler) compileExternal(inputField registry.InputField, field reflect
 	if err != nil {
 		return Argument{}, false, err
 	}
-	if argument.bodyNullPolicy == "" && argument.wireType == nil && argument.wireSchema == nil && len(argument.wireSchemas) == 0 {
+	if argument.bodyNullPolicy == "" && argument.wireType == nil && !wireSchemaReplacesShape(argument.wireSchema) && !hasWireRepresentation(argument.wireSchemas) {
 		argument.nullable = policy.Nullable
 		if policy.Nullable != nil {
 			projected := xshape.JSONField{Field: xshape.Field{Name: field.Name, ReflectedType: argument.sourceType, Tag: field.Tag, Index: field.Index, Exported: field.IsExported()}, Name: publicName}

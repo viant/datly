@@ -129,7 +129,7 @@ func (c *Compiler) compileAnonymousBody(inputField registry.InputField, caseForm
 			return nil, err
 		}
 		var nullable *bool
-		if !customJSONBody && wireSchemas[field.Name] == nil && collection == nil {
+		if !customJSONBody && !hasWireRepresentation(wireSchemas) && collection == nil {
 			nullable = policy.Nullable
 		}
 		result = append(result, Argument{
