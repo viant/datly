@@ -12,6 +12,7 @@ import (
 	bindstate "github.com/viant/bindly/state"
 	"github.com/viant/datly/exec"
 	mcpinput "github.com/viant/datly/mcp/input"
+	"github.com/viant/datly/mcp/invocation"
 	"github.com/viant/datly/runtime/output"
 	"github.com/viant/datly/runtime/registry"
 	"github.com/viant/datly/spec"
@@ -188,7 +189,7 @@ func (c *Compiler) Compile(input Input) (*Plan, error) {
 			}
 		}
 		sourceType := argument.sourceType
-		if argument.required && argument.bodyNullPolicy == "" {
+		if argument.required && argument.bodyNullPolicy == "" && (argument.enumeration == nil || argument.enumeration.CollectionItems() == nil) {
 			sourceType = (xshape.Runtime{}).Indirect(sourceType)
 		}
 		format := input.CaseFormat
@@ -299,6 +300,16 @@ func (c *Compiler) Compile(input Input) (*Plan, error) {
 }
 
 func outputContractSchema(source reflect.Type, plan *output.Plan) (*schema.ToolOutputSchema, error) {
+	if source != nil {
+		explicit := reflect.TypeFor[invocation.TypedToolResult]()
+		if source.Implements(explicit) || (source.Kind() != reflect.Pointer && reflect.PointerTo(source).Implements(explicit)) {
+			// The envelope is protocol content, not the structuredContent schema.
+			// Explicit result components may return text/resources or typed structured
+			// content per operation; an envelope schema would misdescribe both.
+			return nil, nil
+		}
+	}
+
 	if source == nil && plan == nil {
 		return nil, nil
 	}
@@ -381,9 +392,20 @@ func (c *Compiler) compileExternal(inputField registry.InputField, field reflect
 	if err != nil {
 		return Argument{}, false, err
 	}
+	if enumeration == nil {
+		enumeration, err = choice.ParseCollectionEnum(field.Tag, field.Type)
+		if err != nil {
+			return Argument{}, false, err
+		}
+	}
 	if enumeration != nil {
 		argument.enumeration = enumeration
-		argument.wireSchema = registry.EnumInputSchema(enumeration, field.Type.Kind() == reflect.Pointer)
+		if enumeration.CollectionItems() == nil {
+			argument.wireSchema = registry.EnumInputSchema(enumeration, field.Type.Kind() == reflect.Pointer)
+		} else {
+			projected := xshape.JSONField{Field: xshape.Field{Name: field.Name, ReflectedType: field.Type, Tag: field.Tag, Index: field.Index, Exported: field.IsExported()}, Name: publicName}
+			argument.schemaField = &projected
+		}
 	}
 	argument.schemaRequired = required || argument.sourceKind == "path" || fieldname.Required(field)
 	if memberRequired, associated := wholeBodyMemberSchemaRequired(argument); associated && !required {

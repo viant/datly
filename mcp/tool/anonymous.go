@@ -11,6 +11,7 @@ import (
 	"github.com/viant/mcp-protocol/schema"
 	"github.com/viant/mcp-protocol/schema/fieldname"
 	"github.com/viant/mcp-protocol/schema/jsonschema"
+	"github.com/viant/tagly/choice"
 	xshape "github.com/viant/x/shape"
 )
 
@@ -102,7 +103,12 @@ func (c *Compiler) compileAnonymousBody(inputField registry.InputField, caseForm
 			childMetadata = metadata.FieldShapeByIndex(projected.Field.Index)
 		}
 		selectedField := projected
+		collection, err := choice.ParseCollectionEnum(field.Tag, field.Type)
+		if err != nil {
+			return nil, err
+		}
 		result = append(result, Argument{
+			enumeration:    collection,
 			schemaField:    &selectedField,
 			representation: childMetadata,
 			documentation:  inputField.Documentation(), publicName: publicName, aliases: aliases, path: inputField.Path() + "." + field.Name,

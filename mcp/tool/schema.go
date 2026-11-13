@@ -1,6 +1,7 @@
 package tool
 
 import (
+	"fmt"
 	docs "github.com/viant/datly/documentation"
 	"github.com/viant/datly/runtime/registry"
 	"github.com/viant/datly/spec"
@@ -74,7 +75,13 @@ func (p *schemaProjector) argument(t reflect.Type, path, property string, schema
 			return requiredPaths[canonicalSchemaPath(t, path, visibility)]
 		}
 	}
+	argumentPath := path
 	result, err := (jsonschema.Reflector{InputAliases: nativeAliases, RequireField: requireField, FallbackName: visibility.FallbackName, WireTypes: authority, ExcludeInternal: visibility.ExcludeInternal, ExcludeField: visibility.ExcludeField, Annotate: func(path string, field reflect.StructField) (string, any) {
+		if collection, err := choice.ParseCollectionEnum(field.Tag, field.Type); err != nil {
+			timePolicyErr = err
+		} else if collection != nil && (p.field == nil || path != argumentPath) {
+			timePolicyErr = fmt.Errorf("MCP collection enum %s requires a direct named or flattened body argument", path)
+		}
 		if nativeAliases {
 			policy, err := format.Parse(field.Tag)
 			if err != nil {
