@@ -153,7 +153,12 @@ func (c withURIAcceptance) check(t *testing.T, maximum int) {
 				if !errors.As(err, &rpcErr) || rpcErr.Code != jsonrpc.MethodNotFound || rpcErr.Message != fmt.Sprintf("tool %s not found", tc.tool) || result != nil {
 					t.Fatalf("hidden tool %s: result=%+v error=%v", tc.tool, result, err)
 				}
-				continue
+				if tc.tool != "RecordsById" || c.visibility != "private-alternative" {
+					continue
+				}
+				// A private identity route remains callable through the one
+				// public collection tool with optional ID selection.
+				result, err = c.native.CallTool(c.ctx, &schema.CallToolRequestParams{Name: "Records", Arguments: tc.args})
 			}
 			if err != nil || result == nil || result.IsError != nil && *result.IsError {
 				t.Fatalf("MCP %s: %+v %v", tc.tool, result, err)
@@ -203,6 +208,9 @@ func (c withURIAcceptance) schemas(t *testing.T) {
 			// Authored requiredness applies to this path argument.
 			want.Properties = map[string]map[string]any{"id": {"type": "integer"}}
 			want.Required = []string{"id"}
+		}
+		if tool.Name == "Records" && c.visibility == "private-alternative" {
+			want.Properties = map[string]map[string]any{"id": {"type": "integer"}}
 		}
 		actual := tool.InputSchema
 		// Native decoding retains absent extension keys as an empty map.
