@@ -298,8 +298,28 @@ func mergeDeclarationTags(existing, raw, target string) (string, error) {
 			}
 		}
 	}
+	aliasValues := func(group tags.Tags) []string {
+		var values []string
+		for _, item := range group {
+			if item.Name == "enumAlias" {
+				values = append(values, string(item.Values))
+			}
+		}
+		return values
+	}
+	if values := aliasValues(additions); len(values) > 0 {
+		previous := aliasValues(merged)
+		if len(previous) > 0 && !reflect.DeepEqual(previous, values) {
+			return "", fmt.Errorf("tag %s has conflicting ordered enumAlias values", target)
+		}
+		if len(previous) == 0 {
+			for _, value := range values {
+				merged = append(merged, &tags.Tag{Name: "enumAlias", Values: tags.Values(value)})
+			}
+		}
+	}
 	for _, addition := range additions {
-		if addition.Name == "choice" {
+		if addition.Name == "choice" || addition.Name == "enumAlias" {
 			continue
 		}
 		if addition.Name == "" {
