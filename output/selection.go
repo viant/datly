@@ -16,7 +16,7 @@ func (p *Plan) selectedPresentation(value any, filter dexec.OutputFieldFilter) (
 	if !ok {
 		return nil, nil, fmt.Errorf("output selection requires canonical field indexes")
 	}
-	projection, err := (presentationCompiler{excluded: p.exclude, selected: indexed, representation: p.representation, hideJSON: p.effectiveSource != nil}).compile(p.typeOf, "", nil)
+	projection, err := (presentationCompiler{excluded: p.exclude, selected: indexed, representation: p.representation, hideJSON: p.effectiveSource != nil, authority: p.formatPresentation}).compile(p.typeOf, "", nil)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -44,7 +44,7 @@ func (p *Plan) presentationPlan(typ reflect.Type) (*Plan, error) {
 	if p.rows != nil {
 		holder = p.rows.name
 	}
-	plan, err := (Compiler{}).Compile(CompileInput{Type: typ, DataField: holder})
+	plan, err := (Compiler{}).compile(CompileInput{Type: typ, DataField: holder}, false)
 	if err != nil {
 		return nil, err
 	}

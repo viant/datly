@@ -27,7 +27,7 @@ func (p *Plan) WithType(typ reflect.Type) (*Plan, error) {
 	}
 	input := p.compileInput
 	input.Type = typ
-	result, err := p.compiler.Compile(input)
+	result, err := p.compiler.compile(input, false)
 	if err != nil {
 		return nil, err
 	}
@@ -72,7 +72,7 @@ func (p *Plan) effectiveValue(value any) (any, error) {
 // consume it directly. A configured legacy codec can retain its existing type
 // projection when representable; otherwise it must opt into JSONEncoder.
 func (p *Plan) WithRepresentation(metadata *xshape.Representation) (*Plan, error) {
-	if metadata == nil || !metadata.Changed() {
+	if metadata == nil || !metadata.Changed() && (p == nil || p.formatPlan == nil) {
 		return p, nil
 	}
 	if p == nil || metadata.Original() != p.typeOf {
@@ -90,7 +90,7 @@ func (p *Plan) WithRepresentation(metadata *xshape.Representation) (*Plan, error
 			return p.WithType(typ)
 		}
 	}
-	result, err := p.compiler.Compile(p.compileInput)
+	result, err := p.compiler.compile(p.compileInput, false)
 	if err != nil {
 		return nil, err
 	}
@@ -181,7 +181,7 @@ func (p *Plan) prepareFormats() {
 	if original != nil && (original.Implements(reflect.TypeFor[json.Marshaler]()) || reflect.PointerTo(original).Implements(reflect.TypeFor[json.Marshaler]()) || original.Implements(reflect.TypeFor[JSONWireType]()) || reflect.PointerTo(original).Implements(reflect.TypeFor[JSONWireType]())) {
 		return
 	}
-	p.formatPresentation, p.formatError = (presentationCompiler{excluded: p.exclude, representation: p.representation, hideJSON: p.effectiveSource != nil}).compile(p.typeOf, "", nil)
+	p.formatPresentation, p.formatError = (presentationCompiler{excluded: p.exclude, representation: p.representation, hideJSON: p.effectiveSource != nil, compileEnums: true}).compile(p.typeOf, "", nil)
 	if p.formatError != nil {
 		return
 	}

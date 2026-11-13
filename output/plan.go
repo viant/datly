@@ -13,6 +13,7 @@ import (
 	"github.com/viant/datly/spec"
 	structjson "github.com/viant/structology/encoding/json"
 	jsonmarshal "github.com/viant/structology/encoding/json/marshal"
+	"github.com/viant/tagly/choice"
 	"github.com/viant/tagly/format"
 	"github.com/viant/tagly/format/text"
 	ftime "github.com/viant/tagly/format/time"
@@ -76,6 +77,10 @@ type Result struct {
 }
 
 func (c Compiler) Compile(input CompileInput) (*Plan, error) {
+	return c.compile(input, true)
+}
+
+func (c Compiler) compile(input CompileInput, prepareFormats bool) (*Plan, error) {
 	p := &Plan{typeOf: input.Type, format: "json", selectableRows: input.SelectableRows, compileInput: input, compiler: c}
 	if input.Component != nil {
 		p.compileInput.Component = input.Component.Clone()
@@ -221,6 +226,9 @@ func (c Compiler) Compile(input CompileInput) (*Plan, error) {
 			return nil, err
 		}
 	}
+	if prepareFormats && choice.HasEnum(p.typeOf) {
+		p.prepareFormats()
+	}
 	return p, nil
 }
 
@@ -279,6 +287,9 @@ func (p *Plan) SupportsFormat(format string) bool {
 	if format == "" || format == "json" {
 		return true
 	}
+	if p != nil && p.formatError != nil && (format == "csv" || format == "xls" || format == "xlsx") {
+		return false
+	}
 	if !p.JSONOnly() {
 		return true
 	}
@@ -322,7 +333,7 @@ func (p *Plan) Encode(ctx context.Context, format string, value any) (Result, er
 		return Result{ContentType: contentType}, nil
 	}
 	selection := dexec.SelectedOutputFields(ctx, value)
-	if format != "json" && (p.effectiveSource != nil || p.representation != nil) {
+	if (format == "csv" || format == "xls" || format == "xlsx") && p.formatPlan != nil {
 		value, err = p.effectiveValue(value)
 		if err != nil {
 			return Result{}, err
