@@ -114,6 +114,15 @@ Configure format selection through the actual HTTP output policy. Do not derive
 new format spellings or aliases. Test each exposed media type with the active
 build, including empty data and relation-only projection.
 
+CSV and XLS/XLSX use the effective output Contract's enum scalar codecs, including
+output-only aliases, before passing typed values to their existing encoders.
+Column names and relation expansion stay with those encoders. Field selection
+composes with Contract visibility before encoding, so a hidden value cannot
+trigger a strict-unknown enum error. Contract policies that remove managed enum
+tags preserve storage values for REST exports. Source models remain unchanged.
+XML and tabular retain their existing scalar representations; JSON-specific
+custom owners do not acquire spreadsheet support.
+
 ## Singleton authority
 
 A named `output/view` or `output/body` holder can identify a struct/pointer
