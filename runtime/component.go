@@ -430,9 +430,9 @@ func (r *Runtime) invokeComponent(ctx context.Context, request dexec.ComponentRe
 			}
 			if !valid {
 				selectedOK = false
-				bindings.close()
-				bindings = nil
-				ownsBindings = false
+				// Presentation evidence and dependency values have independent
+				// proofs. Re-resolve the contract while resolved() checks each
+				// same-operation dependency against the actual protocol scope.
 			}
 		} else {
 			bindings = nil

@@ -21,6 +21,7 @@ type stateEntry struct {
 	once     sync.Once
 	plan     *bindly.Plan
 	bindings []bindly.BindingSpec
+	sources  *bindly.ReplayPlan
 	err      error
 }
 
@@ -38,7 +39,7 @@ func NewStatePlansWithBindings(compile func(reflect.Type) (*bindly.Plan, []bindl
 // preparedStateBinder is implemented by the invocation owner, never by a hook.
 // The supplied plan and binding metadata belong to this immutable generation.
 type preparedStateBinder interface {
-	BindContractState(context.Context, any, *bindly.Plan, []bindly.BindingSpec, ...bindly.BindOption) error
+	BindContractState(context.Context, any, *bindly.Plan, []bindly.BindingSpec, *bindly.ReplayPlan, ...bindly.BindOption) error
 }
 
 // Binder adapts a native provider scope to compiled contract-state binding.
@@ -70,6 +71,9 @@ func (b *stateBinder) Bind(ctx context.Context, target any, options ...bindly.Bi
 		if b.plans.compileBindings != nil {
 			entry.plan, entry.bindings, entry.err = b.plans.compileBindings(typ)
 			entry.bindings = append([]bindly.BindingSpec(nil), entry.bindings...)
+			if entry.err == nil {
+				entry.sources = stateSources(entry.plan, entry.bindings)
+			}
 		} else {
 			entry.plan, entry.err = b.plans.compile(typ)
 		}
@@ -78,7 +82,7 @@ func (b *stateBinder) Bind(ctx context.Context, target any, options ...bindly.Bi
 		return entry.err
 	}
 	if owner, ok := b.scope.(preparedStateBinder); ok && b.plans.compileBindings != nil {
-		return owner.BindContractState(ctx, target, entry.plan, entry.bindings, options...)
+		return owner.BindContractState(ctx, target, entry.plan, entry.bindings, entry.sources, options...)
 	}
 	// The native compiled plan is authoritative; no caller option can replace
 	// Datly codec compilation with the raw tag-only plan.
@@ -86,4 +90,28 @@ func (b *stateBinder) Bind(ctx context.Context, target any, options ...bindly.Bi
 	opts = append(opts, options...)
 	opts = append(opts, bindly.WithPlan(entry.plan))
 	return b.scope.Bind(ctx, target, opts...)
+}
+
+// stateSources selects only declared protocol inputs from the compiled plan.
+// A nil selection means the state cannot prove presentation reuse; ordinary
+// binding remains authoritative. Component evidence is owned by the runtime.
+func stateSources(plan *bindly.Plan, bindings []bindly.BindingSpec) *bindly.ReplayPlan {
+	var paths []string
+	for _, binding := range bindings {
+		if binding.Scope != "" || binding.When != "" || binding.With != "" || binding.ResolutionGroup != nil {
+			return nil
+		}
+		switch binding.Location.Kind {
+		case "header", "cookie", "query", "path", "body", "form":
+			paths = append(paths, binding.Path)
+		case "const", "literal", "component":
+		default:
+			return nil
+		}
+	}
+	replay, err := plan.Replay(paths...)
+	if err != nil {
+		return nil
+	}
+	return replay
 }

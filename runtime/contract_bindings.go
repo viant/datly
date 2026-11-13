@@ -34,6 +34,8 @@ type contractBindings struct {
 	mu              sync.Mutex
 	claimed, closed bool
 	values          map[contractBindingKey]contractBindingValue
+	selections      map[*bindly.ReplayPlan]*bindly.Replay
+	unprovable      bool
 }
 
 // contractSourceScope reuses only the protocol provider scope. Component or
@@ -59,7 +61,7 @@ func (s *contractSourceScope) input() (*bindly.Injector, error) {
 type contractBindingsKey struct{}
 
 func newContractBindings(owner *Runtime) *contractBindings {
-	return &contractBindings{owner: owner, values: map[contractBindingKey]contractBindingValue{}}
+	return &contractBindings{owner: owner, values: map[contractBindingKey]contractBindingValue{}, selections: map[*bindly.ReplayPlan]*bindly.Replay{}}
 }
 func (b *contractBindings) hasValues() bool {
 	b.mu.Lock()
@@ -75,7 +77,17 @@ func (b *contractBindings) claim() bool {
 	b.claimed = true
 	return true
 }
-func (b *contractBindings) close() { b.mu.Lock(); defer b.mu.Unlock(); b.closed = true; b.values = nil }
+func (b *contractBindings) close() {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.closed = true
+	b.values, b.selections = nil, nil
+}
+func (b *contractBindings) disableSelectionReuse() {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.unprovable = true
+}
 func reusableContractBinding(binding bindly.BindingSpec) bool {
 	return binding.Location.Kind == "component" && binding.Scope == "" && binding.When == "" && binding.With == "" && binding.Transformer == nil && binding.ResolutionGroup == nil && (binding.Cacheable == nil || *binding.Cacheable)
 }
@@ -259,15 +271,34 @@ func (r *Runtime) contractBindingProof(ctx context.Context, ref spec.RouteRef) (
 	plans.proof, plans.proofReady = proof, true
 	return proof, nil
 }
-func (b *contractStateBinder) BindContractState(ctx context.Context, target any, plan *bindly.Plan, bindings []bindly.BindingSpec, options ...bindly.BindOption) error {
+func (b *contractStateBinder) BindContractState(ctx context.Context, target any, plan *bindly.Plan, bindings []bindly.BindingSpec, selection *bindly.ReplayPlan, options ...bindly.BindOption) error {
 	if len(options) != 0 {
+		b.values.disableSelectionReuse()
 		return b.Binder.Bind(ctx, target, append(options, bindly.WithPlan(plan))...)
 	}
 	// Group ownership remains with the native group binder; a metadata handoff
 	// must not import values across one of its reservation boundaries.
 	for _, binding := range bindings {
 		if binding.ResolutionGroup != nil {
+			b.values.disableSelectionReuse()
 			return b.Binder.Bind(ctx, target, bindly.WithPlan(plan))
+		}
+	}
+	var before *bindly.Replay
+	if selection == nil {
+		b.values.disableSelectionReuse()
+	} else {
+		injector, err := b.scope.input()
+		if err != nil {
+			return err
+		}
+		before, err = selection.CaptureSourcesIn(ctx, injector)
+		if err != nil {
+			return err
+		}
+		if !before.SourcesEqual(before) {
+			b.values.disableSelectionReuse()
+			before = nil
 		}
 	}
 	type pending struct {
@@ -278,6 +309,9 @@ func (b *contractStateBinder) BindContractState(ctx context.Context, target any,
 	var capture []pending
 	for _, binding := range bindings {
 		if !reusableContractBinding(binding) {
+			if binding.Location.Kind == "component" {
+				b.values.disableSelectionReuse()
+			}
 			continue
 		}
 		ref, err := spec.ParseRouteRef(binding.Location.In)
@@ -294,6 +328,8 @@ func (b *contractStateBinder) BindContractState(ctx context.Context, target any,
 		}
 		if complete {
 			capture = append(capture, pending{binding, proof, sources})
+		} else {
+			b.values.disableSelectionReuse()
 		}
 	}
 	seed, paths, err := b.values.resolved(ctx, plan, bindings, b.scope)
@@ -306,6 +342,24 @@ func (b *contractStateBinder) BindContractState(ctx context.Context, target any,
 	}
 	if err = b.Binder.Bind(ctx, target, opts...); err != nil {
 		return err
+	}
+	if before != nil {
+		injector, err := b.scope.input()
+		if err != nil {
+			return err
+		}
+		after, err := selection.CaptureSourcesIn(ctx, injector)
+		if err != nil {
+			return err
+		}
+		if !after.SourcesEqual(before) {
+			return &bindly.BindingError{Code: 409, Cause: fmt.Errorf("input sources changed during contract binding")}
+		}
+		b.values.mu.Lock()
+		if !b.values.closed {
+			b.values.selections[selection] = after
+		}
+		b.values.mu.Unlock()
 	}
 	for _, item := range capture {
 		sources, complete, err := item.proof.snapshot(ctx, b.scope)
@@ -340,12 +394,38 @@ func (b *contractStateBinder) BindContractState(ctx context.Context, target any,
 	return nil
 }
 func (b *contractBindings) matches(ctx context.Context, scope *contractSourceScope) (bool, error) {
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
 	b.mu.Lock()
+	if b.closed || b.unprovable {
+		b.mu.Unlock()
+		return false, nil
+	}
+	selections := make(map[*bindly.ReplayPlan]*bindly.Replay, len(b.selections))
+	for plan, selection := range b.selections {
+		selections[plan] = selection
+	}
 	values := make([]contractBindingValue, 0, len(b.values))
 	for _, value := range b.values {
 		values = append(values, value)
 	}
 	b.mu.Unlock()
+	for plan, selected := range selections {
+		injector, err := scope.input()
+		if err != nil {
+			return false, err
+		}
+		// Preserve absent inputs: mode/fields omission is presentation evidence.
+		// Replay owns source comparison, including opaque-value rejection.
+		sources, err := plan.CaptureSourcesIn(ctx, injector)
+		if err != nil {
+			return false, err
+		}
+		if !sources.SourcesEqual(selected) {
+			return false, nil
+		}
+	}
 	for _, value := range values {
 		sources, complete, err := value.proof.snapshot(ctx, scope)
 		if err != nil {
