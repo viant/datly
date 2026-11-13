@@ -637,7 +637,15 @@ Use the configured compatible codec path for those features. See
 Complete custom JSON/Text methods own their representation. Internal edits of those
 owners are unsupported; hide the enclosing field or adjust an ordinary wrapper.
 Unchanged recursive types work; recursive edits are unsupported by the shared walker.
-Native CSV and XLS/XLSX output also honor Contract field visibility through a compiled typed presentation. Their existing encoders retain ownership of column names, values and nested relations; JSON enum conversions do not become spreadsheet conversions. XML and tabular dynamic output remain unsupported. Opaque/custom JSON owners remain JSON-only. See [feature boundaries](dynamic-contract-boundaries.md).
+Native CSV and XLS/XLSX output honor Contract field visibility and enum output
+metadata through a compiled typed presentation. The presentation reuses Tagly's
+enum scalar codecs, including output-only aliases, without changing the original
+business values. Their existing encoders retain ownership of column names and
+nested relation layout. Hidden fields are removed before enum values are encoded.
+Removing managed enum tags in the selected REST Contract preserves storage values
+in REST exports too. XML and tabular dynamic output remain unsupported;
+opaque/custom JSON owners remain JSON-only. See
+[feature boundaries](dynamic-contract-boundaries.md).
 
 ## Enum wire forms
 

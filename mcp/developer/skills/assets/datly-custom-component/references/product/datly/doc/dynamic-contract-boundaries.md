@@ -67,8 +67,15 @@ presentation, including nested fields. A request's selected fields compose with
 Contract visibility using canonical indexes before projection. Original business
 values and registered plans remain unchanged.
 
-The existing CSV and spreadsheet codecs own their field names, tags, values and
-relation layout. JSON-specific enum formatting is not applied to these formats.
+The existing CSV and spreadsheet codecs own their field names, column tags and
+relation layout. The presentation compiles enum output metadata with the same
+Tagly scalar codecs as JSON, including literal/ordinal conversion and output-only
+aliases. Integer wire values remain numeric spreadsheet cells. Nulls keep each
+format's existing representation. Hidden fields are removed before scalar
+encoding, and a visible strict-unknown enum preserves its typed encoding error.
+Removing enum metadata in the selected Contract restores storage representations
+without modifying source values or another caller's plan. `enumAccept` remains
+input-only. XML and tabular retain their existing scalar behavior.
 A hidden declared row holder fails closed; another collection is never substituted.
 Opaque/custom JSON owners and unsupported effective shapes remain fail-closed.
 XML and tabular dynamic exports are not admitted.

@@ -37,6 +37,7 @@ type Data struct {
 	db                      *sql.DB
 	tx                      *sql.Tx
 	txIsolation             sql.IsolationLevel
+	writerAdmissionRelease  func()
 	externalTx              bool
 	onCommit                func(context.Context)
 	queue                   []*dataOperation

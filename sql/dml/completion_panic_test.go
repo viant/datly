@@ -6,8 +6,11 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"errors"
+	"github.com/viant/datly/internal/sqliteadmission"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	dexec "github.com/viant/datly/exec"
 	"github.com/viant/datly/internal/testharness/sqlite"
@@ -110,6 +113,11 @@ func TestDataCompletionPanicBoundaries(t *testing.T) {
 				}
 			}
 			db := sql.OpenDB(drv)
+			cleanup, admissionErr := sqliteadmission.Register(db, "sqlite", filepath.Join(t.TempDir(), "panic.sqlite"))
+			if admissionErr != nil {
+				t.Fatal(admissionErr)
+			}
+			defer cleanup()
 			t.Cleanup(func() { _ = db.Close() })
 			data := NewData(db)
 			if tc.external {
@@ -143,6 +151,13 @@ func TestDataCompletionPanicBoundaries(t *testing.T) {
 				cause = errors.New("operation failure")
 			}
 			err := data.Complete(ctx, cause)
+			checkCtx, cancel := context.WithTimeout(ctx, time.Second)
+			release, admissionErr := sqliteadmission.Acquire(checkCtx, db)
+			cancel()
+			if admissionErr != nil {
+				t.Fatalf("completion leaked writer admission: %v", admissionErr)
+			}
+			release()
 			if tc.begin || tc.flush || tc.commit || tc.rollback || tc.post {
 				assertCompletionPanicPrivate(t, err, private)
 			} else if err == nil {
