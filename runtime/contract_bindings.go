@@ -35,6 +35,7 @@ type contractBindings struct {
 	claimed, closed bool
 	values          map[contractBindingKey]contractBindingValue
 	selections      map[*bindly.ReplayPlan]*bindly.Replay
+	preparedInputs  map[*registry.RouteInputContract]*preparedInputExecutionPlan
 	unprovable      bool
 }
 
@@ -82,6 +83,7 @@ func (b *contractBindings) close() {
 	defer b.mu.Unlock()
 	b.closed = true
 	b.values, b.selections = nil, nil
+	b.preparedInputs = nil
 }
 func (b *contractBindings) disableSelectionReuse() {
 	b.mu.Lock()

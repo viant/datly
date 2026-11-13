@@ -116,3 +116,16 @@ must be validated before adopting the policy in an application.
 OpenAPI input discovery represents the same native integer policy with its
 existing `anyOf` schema: nullable integer or boolean. Response schemas and
 untagged fields retain their existing representation.
+
+### Native query text admission
+
+`mcp:"text=true"` opts a signed-integer query slice into integer-or-string MCP
+array items. Canonical Go source/destination types remain unchanged. Text passes
+unchanged to the existing native query parser, including its declared list codec;
+the MCP adapter does not parse numeric text or introduce another normalizer.
+Optional query null follows the existing omission behavior. `scalar=true` can
+add singleton integer/string input alongside the array.
+
+Without this tag, ordinary integer-array admission is unchanged. Unsupported
+source kinds, element types, custom decoders and conflicting wire contracts
+fail compilation. Strict unknown-argument handling remains independently opt-in.

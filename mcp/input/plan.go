@@ -30,6 +30,8 @@ type Argument struct {
 	// AcceptScalar admits one signed integer as a singleton query or path slice. The
 	// canonical source type and Bindly destination remain unchanged.
 	AcceptScalar bool
+	// AcceptText admits string elements unchanged to the native signed integer query parser.
+	AcceptText bool
 }
 
 // Plan is an immutable argument-to-provider projection.
@@ -104,19 +106,26 @@ func (c *Compiler) Compile(arguments []Argument) (*Plan, error) {
 		if argument.SourceType == nil {
 			return nil, fmt.Errorf("MCP argument %q source type is required", argument.PublicName)
 		}
-		if argument.AcceptScalar {
+		if argument.AcceptText && (argument.Source.Kind != requestprovider.QueryKind || argument.SourceType.Kind() != reflect.Slice || argument.SplitCSVString) {
+			return nil, fmt.Errorf("MCP argument %q text admission requires a signed integer query slice", argument.PublicName)
+		}
+		if argument.AcceptScalar || argument.AcceptText {
+			admission, shape := "scalar", "a signed integer query or path slice"
+			if argument.AcceptText {
+				admission, shape = "text", "a signed integer query slice"
+			}
 			if (argument.Source.Kind != requestprovider.QueryKind && argument.Source.Kind != requestprovider.PathKind) || argument.SourceType.Kind() != reflect.Slice || argument.SplitCSVString {
-				return nil, fmt.Errorf("MCP argument %q scalar admission requires a signed integer query or path slice", argument.PublicName)
+				return nil, fmt.Errorf("MCP argument %q %s admission requires %s", argument.PublicName, admission, shape)
 			}
 			switch argument.SourceType.Elem().Kind() {
 			case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 			default:
-				return nil, fmt.Errorf("MCP argument %q scalar admission requires a signed integer query or path slice", argument.PublicName)
+				return nil, fmt.Errorf("MCP argument %q %s admission requires %s", argument.PublicName, admission, shape)
 			}
 			for _, decoder := range []reflect.Type{reflect.TypeFor[json.Unmarshaler](), reflect.TypeFor[encoding.TextUnmarshaler]()} {
 				for _, typ := range []reflect.Type{argument.SourceType, argument.SourceType.Elem()} {
 					if typ.Implements(decoder) || reflect.PointerTo(typ).Implements(decoder) {
-						return nil, fmt.Errorf("MCP argument %q scalar admission conflicts with custom JSON or text decoding", argument.PublicName)
+						return nil, fmt.Errorf("MCP argument %q %s admission conflicts with custom JSON or text decoding", argument.PublicName, admission)
 					}
 				}
 			}

@@ -8,6 +8,7 @@ import (
 	dexec "github.com/viant/datly/exec"
 	rcontract "github.com/viant/datly/runtime/contract"
 	"github.com/viant/datly/runtime/handler/engine"
+	"github.com/viant/datly/spec"
 )
 
 type contractPlanKey struct {
@@ -27,10 +28,20 @@ type contractPlanEntry struct {
 // dependency scope. It does not invoke the target component's business handler.
 // Metadata visibility authorization remains with the calling publication owner.
 func (r *Runtime) ResolveContract(ctx context.Context, target dexec.ComponentTarget, scope dexec.ProviderScope) (*dexec.EffectiveContract, error) {
-	return r.resolveContract(ctx, target, scope, true)
+	return r.resolveContractMode(ctx, target, scope, true, false)
+}
+
+// ResolveDiscoveryContract uses the same dependency scope and provider evaluation
+// as invocation, adding only finite output metadata for publication.
+func (r *Runtime) ResolveDiscoveryContract(ctx context.Context, target dexec.ComponentTarget, scope dexec.ProviderScope) (*dexec.EffectiveContract, error) {
+	return r.resolveContractMode(ctx, target, scope, true, true)
 }
 
 func (r *Runtime) resolveContract(ctx context.Context, target dexec.ComponentTarget, scope dexec.ProviderScope, enter bool) (*dexec.EffectiveContract, error) {
+	return r.resolveContractMode(ctx, target, scope, enter, false)
+}
+
+func (r *Runtime) resolveContractMode(ctx context.Context, target dexec.ComponentTarget, scope dexec.ProviderScope, enter, discovery bool) (*dexec.EffectiveContract, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf("contract context is required")
 	}
@@ -85,12 +96,20 @@ func (r *Runtime) resolveContract(ctx context.Context, target dexec.ComponentTar
 	}
 	result.BindingState = bindings
 	binder := entry.ContractState.Binder(&contractStateBinder{Binder: providers, runtime: r, scope: &contractSourceScope{protocol: scope}, values: bindings})
-	result.InputRepresentation, err = plans.input.ResolveRepresentation(ctx, binder)
+	var inputExecution any
+	result.InputRepresentation, inputExecution, err = plans.input.ResolvePreparedInput(ctx, binder)
 	if err != nil {
 		return nil, err
 	}
+	if prepared, ok := inputExecution.(*preparedInputExecutionPlan); ok {
+		bindings.retainPreparedInput(prepared)
+	}
 	if plans.output != nil {
-		result.OutputRepresentation, err = plans.output.ResolveRepresentation(ctx, binder)
+		if discovery {
+			result.OutputRepresentation, result.OutputAlternatives, result.OutputAlternativeSchemas, err = plans.output.ResolveDiscoveryRepresentations(ctx, binder)
+		} else {
+			result.OutputRepresentation, err = plans.output.ResolveRepresentation(ctx, binder)
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -103,9 +122,19 @@ func (r *Runtime) contractPlansFor(entry *RegisteredComponent, route string) (*c
 	stored, _ := r.contractPlans.LoadOrStore(key, &contractPlanEntry{})
 	plans := stored.(*contractPlanEntry)
 	plans.once.Do(func() {
-		plans.input, plans.err = rcontract.New(entry.Input.Type(), 64)
+		ref, err := spec.ParseRouteRef(route)
+		if err != nil {
+			plans.err = err
+			return
+		}
+		input, ok := entry.Input.ForRoute(ref)
+		if !ok {
+			plans.err = fmt.Errorf("contract route is not registered: %s", route)
+			return
+		}
+		plans.input, plans.err = rcontract.NewInput(entry.Input.Type(), 64, prepareInputExecution(input))
 		if plans.err == nil && entry.OutputType != nil {
-			plans.output, plans.err = rcontract.New(entry.OutputType, 64)
+			plans.output, plans.err = rcontract.NewOutput(entry.OutputType, 64, prepareOutputDiscovery(entry))
 		}
 	})
 	if plans.err != nil {

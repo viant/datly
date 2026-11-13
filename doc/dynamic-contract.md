@@ -70,6 +70,72 @@ the same Go fields and types. Unchanged parts retain their original linked types
 Named policies can reuse the selected metadata and codec plans, while authorization
 is still resolved for each invocation.
 
+## Discover finite output alternatives
+
+When one tool selects among typed response modes from its arguments, discovery
+has no future arguments to select a mode. An output policy may declare
+`DiscoveryAlternatives []*contract.Policy`: complete alternative policies over
+the same linked storage. The selected policy's `Field` continues to own calls
+and HTTP; only MCP discovery enumerates the alternatives.
+
+```go
+selected := modePolicy(request.Mode, request.Fields)
+selected.DiscoveryAlternatives = []*contract.Policy{
+    modePolicy("summary", nil),
+    modePolicy("entries", nil),
+    modePolicy("export", nil),
+}
+return selected, nil
+```
+
+Here `modePolicy` returns an ordinary named field policy: keep its selected typed
+row holder, give that holder the public name `data`, and hide the other holders.
+It must retain the canonical field types and storage. These are policies, not
+application-supplied JSON schemas. If a mode supports a field projection, its
+discovery policy describes all permitted members with projection-compatible
+requiredness; it does not predict a future requested subset.
+
+Each alternative replaces only its declaring owner's selected policy. All other
+nested and enclosing owners compose in the usual order, with enclosing policies
+retaining final authority. Each alternative is a complete policy, including any
+permissions owned by that same declaring owner. Build all alternatives from the
+same current authorization decision. Datly invokes each provider once per
+discovery operation, rather than rebinding authorization per branch.
+
+Discovery publishes `anyOf` over complete object envelopes, preserving the
+homogeneous array shape in each branch. It does not publish an `items:anyOf`
+union. `anyOf` allows overlapping projections, null and empty arrays; `oneOf`
+would reject valid overlapping modes. Existing native schema openness remains
+unchanged. Ordinary output schemas and HTTP behavior remain unchanged when no
+alternatives are declared.
+
+Named variants prepare native schemas once in the existing bounded registration
+cache, separately for declared MCP case formats. A format failure retains its cause
+without suppressing valid sibling formats. Common preparation failures are retried;
+cancellation and dependency failures do not poison retained variants. Current authorization and policy
+hooks still run on every request. `NoCache` and unnamed policies bypass retained
+variant artifacts. Multiple declaring owners form complete combinations bounded
+by that registration's variant capacity (currently 64 in Runtime). A distinct
+retained selected policy also consumes a slot; selection that overlaps a branch
+still permits the full capacity of alternatives. Overflow,
+zero-capacity discovery, nil branches, recursive alternatives, unsupported codecs
+and branch errors fail explicitly. Cancellation and dependency causes propagate;
+the runtime never substitutes a default schema after failure. Calls do not
+prepare discovery branches.
+
+Input execution plans use the same bounded registration-owned variant cache.
+Named policies retain only immutable route/binding metadata; authorization and
+policy hooks still run for every operation. Equivalent warm input variants do
+not recompile their binding plan. `NoCache`, unnamed policies, eviction and a
+new registration generation retain their ordinary preparation behavior.
+
+Native body representation binding preserves the request source's unknown-field
+policy, aliases, declared transformations, decoder ownership and presence.
+Strict MCP admission remains opt-in through `strictArguments: true`; lenient is
+the default. A dynamic Contract does not enable strictness. Known-hidden inputs
+retain native filtering behavior, while arbitrary unknown inputs follow the
+selected source policy. Ordinary REST defaults remain unchanged.
+
 The hook uses `github.com/viant/bindly` and `github.com/viant/xdatly/contract`.
 Schema discovery runs the hook and any explicitly bound dependencies, such as an
 auth component; it does not run the target business handler.

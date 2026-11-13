@@ -12,14 +12,22 @@ import (
 // Scalar admission is MCP transport metadata, independent of field naming and
 // the canonical HTTP binding. Parse it once while compiling the tool plan.
 func scalarAdmission(field reflect.StructField) (bool, error) {
+	return booleanAdmission(field, "scalar")
+}
+
+func textAdmission(field reflect.StructField) (bool, error) {
+	return booleanAdmission(field, "text")
+}
+
+func booleanAdmission(field reflect.StructField, option string) (bool, error) {
 	_, options := tags.Values(field.Tag.Get("mcp")).Name()
 	seen, enabled := false, false
 	err := options.MatchPairs(func(key, value string) error {
-		if strings.TrimSpace(key) != "scalar" {
+		if strings.TrimSpace(key) != option {
 			return nil
 		}
 		if seen {
-			return fmt.Errorf("duplicate mcp scalar option on field %s", field.Name)
+			return fmt.Errorf("duplicate mcp %s option on field %s", option, field.Name)
 		}
 		seen = true
 		switch strings.TrimSpace(value) {
@@ -27,7 +35,7 @@ func scalarAdmission(field reflect.StructField) (bool, error) {
 			enabled = true
 		case "false":
 		default:
-			return fmt.Errorf("mcp scalar option on field %s must be true or false", field.Name)
+			return fmt.Errorf("mcp %s option on field %s must be true or false", option, field.Name)
 		}
 		return nil
 	})

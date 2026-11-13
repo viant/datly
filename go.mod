@@ -21,10 +21,10 @@ require (
 	github.com/viant/sqlx v0.26.2-0.20261113032806-87f5818ff1ed
 	github.com/viant/structology v0.10.2-0.20261113180916-935b893ed193
 	github.com/viant/structql v0.5.5-0.20261012183420-6a47e96ff5b5
-	github.com/viant/tagly v0.4.2-0.20261113180037-b181c092b052
+	github.com/viant/tagly v0.4.2-0.20261113182338-188615d27a98
 	github.com/viant/velty v0.4.1-0.20260915052314-fca47c0595f8
 	github.com/viant/x v0.6.1-0.20261106041415-0487ec66884b
-	github.com/viant/xdatly v1.0.1-0.20261106191133-04634a407286
+	github.com/viant/xdatly v1.0.1-0.20261113190124-9ad673c8f3b5
 	github.com/viant/xreflect v0.7.5-0.20260314170600-13f09f37d46e
 	github.com/viant/xunsafe v0.11.1
 	github.com/xeipuuv/gojsonschema v1.2.0
@@ -124,7 +124,7 @@ require (
 	github.com/go-viper/mapstructure/v2 v2.2.1 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/viant/afs v1.30.1-0.20260914155934-90e95d483861
-	github.com/viant/bindly v0.5.1-0.20261112180526-e480ab9385d1
+	github.com/viant/bindly v0.5.1-0.20261113195222-531abbb2409d
 	github.com/viant/godiff v0.4.3-0.20260914060527-9f2005ca82e8
 	github.com/viant/jsonrpc v0.25.1
 	github.com/viant/scy v0.35.1-0.20260914041206-699e6c909726

@@ -80,8 +80,7 @@ func (c *RouteInputContract) withEffectiveInput(effective reflect.Type, represen
 			} else if binding.Transformer != nil || original.SourceType() != original.destinationType || binding.Location.Kind != "body" {
 				return nil, fmt.Errorf("effective input %s requires its decoder's representation support", original.path)
 			} else {
-				binding.SourceType = reflect.TypeFor[json.RawMessage]()
-				binding.Transformer = &inputRepresentation{target: original.destinationType, raw: true, metadata: updated.representation}
+				binding.BodyRepresentation = updated.representation
 			}
 		} else if transport && original.destinationType != updated.destinationType {
 			var decoder xform.Transformer
@@ -145,7 +144,6 @@ func (c *RouteInputContract) withEffectiveInput(effective reflect.Type, represen
 }
 
 type inputRepresentation struct {
-	metadata   *xshape.Representation
 	decoder    xform.Transformer
 	projection *xshape.ValueProjection
 	target     reflect.Type
@@ -169,10 +167,10 @@ func (p *inputRepresentation) Transform(ctx context.Context, resolver locator.Re
 		if !ok {
 			return nil, fmt.Errorf("effective JSON body requires native raw source, got %T", value)
 		}
-		if err := bodyprovider.ValidateRequired(raw, p.target, p.metadata); err != nil {
+		if err := bodyprovider.ValidateRequired(raw, p.target); err != nil {
 			return nil, err
 		}
-		source, err := bodyprovider.New(raw, "application/json", nil, bodyprovider.WithRepresentation(p.metadata))
+		source, err := bodyprovider.New(raw, "application/json", nil)
 		if err != nil {
 			return nil, err
 		}

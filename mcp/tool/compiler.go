@@ -113,6 +113,21 @@ func (c *Compiler) Compile(input Input) (*Plan, error) {
 		if internal {
 			continue
 		}
+		// Text admission belongs exclusively to native query projection, including
+		// when a body would otherwise be flattened before external compilation.
+		structField, err := inputField.StructField()
+		if err != nil {
+			return nil, fmt.Errorf("compile MCP tool %q: %w", name, err)
+		}
+		if inputField.Anonymous() || strings.ToLower(strings.TrimSpace(binding.Location.Kind)) != "query" {
+			acceptText, err := textAdmission(structField)
+			if err != nil {
+				return nil, fmt.Errorf("compile MCP tool %q: %w", name, err)
+			}
+			if acceptText {
+				return nil, fmt.Errorf("compile MCP tool %q: field %s text admission requires a signed integer query slice", name, structField.Name)
+			}
+		}
 		if inputField.Anonymous() {
 			if binding.BodyNullPolicy != "" {
 				return nil, fmt.Errorf("compile MCP tool %q: BodyNullPolicy does not support anonymous body projection", name)
@@ -128,10 +143,6 @@ func (c *Compiler) Compile(input Input) (*Plan, error) {
 				arguments = append(arguments, argument)
 			}
 			continue
-		}
-		structField, err := inputField.StructField()
-		if err != nil {
-			return nil, fmt.Errorf("compile MCP tool %q: %w", name, err)
 		}
 		argument, include, err := compileField(inputField, structField)
 		if err != nil {
@@ -207,6 +218,16 @@ func (c *Compiler) Compile(input Input) (*Plan, error) {
 		if err != nil {
 			return nil, fmt.Errorf("compile MCP tool %q argument %q: %w", name, argument.publicName, err)
 		}
+		if argument.acceptText {
+			// Query null follows the compiled admission policy below, independently
+			// from the canonical slice's reflected nullable type spelling.
+			removeSchemaNull(property)
+			items, ok := property["items"].(map[string]interface{})
+			if property["type"] != "array" || !ok {
+				return nil, fmt.Errorf("MCP argument %q text admission requires an ordinary array schema", argument.publicName)
+			}
+			property["items"] = map[string]interface{}{"anyOf": []interface{}{items, map[string]interface{}{"type": "string"}}}
+		}
 		if argument.acceptScalar {
 			items, ok := property["items"].(map[string]interface{})
 			if property["type"] != "array" || !ok {
@@ -218,6 +239,9 @@ func (c *Compiler) Compile(input Input) (*Plan, error) {
 				alternatives = append(alternatives, map[string]interface{}{"type": "null"})
 			}
 			property = map[string]interface{}{"anyOf": alternatives}
+		}
+		if argument.acceptText && !argument.acceptScalar && !argument.required && (argument.nullable == nil || *argument.nullable) {
+			property = map[string]interface{}{"anyOf": []interface{}{property, map[string]interface{}{"type": "null"}}}
 		}
 		if argument.required && argument.bodyNullPolicy == "" {
 			removeSchemaNull(property)
@@ -251,6 +275,7 @@ func (c *Compiler) Compile(input Input) (*Plan, error) {
 			SourceType:     argument.sourceType,
 			SplitCSVString: argument.querySelectorCSV,
 			AcceptScalar:   argument.acceptScalar,
+			AcceptText:     argument.acceptText,
 		}
 	}
 	projectBinarySchema(arguments, &inputSchema, input.CaseFormat)
@@ -391,8 +416,16 @@ func (c *Compiler) compileExternal(inputField registry.InputField, field reflect
 	if err != nil {
 		return Argument{}, false, err
 	}
-	if argument.acceptScalar && (argument.wireSchema != nil || len(argument.wireSchemas) != 0 || argument.wireType != nil) {
-		return Argument{}, false, fmt.Errorf("MCP argument %q scalar admission conflicts with explicit wire representation", publicName)
+	argument.acceptText, err = textAdmission(field)
+	if err != nil {
+		return Argument{}, false, err
+	}
+	if (argument.acceptScalar || argument.acceptText) && (argument.wireSchema != nil || len(argument.wireSchemas) != 0 || argument.wireType != nil) {
+		admission := "scalar"
+		if argument.acceptText {
+			admission = "text"
+		}
+		return Argument{}, false, fmt.Errorf("MCP argument %q %s admission conflicts with explicit wire representation", publicName, admission)
 	}
 	if argument.sourceKind == "body" && binding.Location.In == "" {
 		argument.bodyInputTag = binding.BodyInputTag

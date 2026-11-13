@@ -465,7 +465,9 @@ func (r *Runtime) invokeComponent(ctx context.Context, request dexec.ComponentRe
 		defer bindings.close()
 	}
 	if effectiveContract.Input != inputRoute.Type() || effectiveContract.InputRepresentation != nil {
-		if effectiveContract.InputRepresentation != nil {
+		if prepared := bindings.preparedInput(inputRoute, effectiveContract.InputRepresentation); prepared != nil {
+			inputRoute = prepared
+		} else if effectiveContract.InputRepresentation != nil {
 			inputRoute, err = inputRoute.WithInputRepresentation(effectiveContract.InputRepresentation)
 		} else {
 			inputRoute, err = inputRoute.WithEffectiveInput(effectiveContract.Input)
