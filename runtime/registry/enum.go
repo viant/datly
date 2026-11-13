@@ -68,6 +68,9 @@ func (e *enumInput) WireSourceType() reflect.Type {
 	if e.plan.Accept == choice.Literal {
 		return reflect.TypeFor[string]()
 	}
+	if e.plan.Accept == choice.Boolean {
+		return reflect.TypeFor[bool]()
+	}
 	return reflect.TypeFor[int64]()
 }
 func (e *enumInput) WithEnum(plan *choice.Enum) (xform.Transformer, error) {
@@ -103,6 +106,9 @@ func (e *enumInput) sourceType() reflect.Type {
 	}
 	if e.plan.Accept == choice.Literal || e.plan.Accept == choice.Scalar {
 		return reflect.TypeFor[string]()
+	}
+	if e.plan.Accept == choice.Boolean {
+		return reflect.TypeFor[bool]()
 	}
 	return reflect.TypeFor[json.Number]()
 }

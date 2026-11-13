@@ -15,13 +15,13 @@ require (
 	github.com/viant/gmetric v0.3.2
 	github.com/viant/govalidator v0.3.4-0.20260913213120-027a9dd54d73
 	github.com/viant/mcp v0.24.2-0.20261102163024-7166d81ea725
-	github.com/viant/mcp-protocol v0.19.2-0.20261113172249-90a431f4e114
+	github.com/viant/mcp-protocol v0.19.2-0.20261113180806-de65252f3921
 	github.com/viant/parsly v0.3.3
 	github.com/viant/sqlparser v0.13.1-0.20261021204353-1c20a82bbb29
 	github.com/viant/sqlx v0.26.2-0.20261113032806-87f5818ff1ed
-	github.com/viant/structology v0.10.2-0.20261113173642-a0aa1b96b64b
+	github.com/viant/structology v0.10.2-0.20261113180916-935b893ed193
 	github.com/viant/structql v0.5.5-0.20261012183420-6a47e96ff5b5
-	github.com/viant/tagly v0.4.2-0.20261113170847-8ebc26802769
+	github.com/viant/tagly v0.4.2-0.20261113180037-b181c092b052
 	github.com/viant/velty v0.4.1-0.20260915052314-fca47c0595f8
 	github.com/viant/x v0.6.1-0.20261106041415-0487ec66884b
 	github.com/viant/xdatly v1.0.1-0.20261106191133-04634a407286
@@ -129,7 +129,7 @@ require (
 	github.com/viant/jsonrpc v0.25.1
 	github.com/viant/scy v0.35.1-0.20260914041206-699e6c909726
 	github.com/viant/toolbox v0.39.0
-	github.com/viant/xlsy v0.3.1
+	github.com/viant/xlsy v0.3.2-0.20261113010534-151b55bf6abc
 	github.com/viant/xmlify v0.1.2-0.20260914155716-e525a8788fd0
 	golang.org/x/crypto v0.55.0 // indirect
 	golang.org/x/oauth2 v0.36.0

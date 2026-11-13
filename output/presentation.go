@@ -296,6 +296,8 @@ func compileEnumPresentation(field reflect.StructField) (*presentation, error) {
 	}
 	var target reflect.Type
 	switch enumeration.WireType(false) {
+	case "boolean":
+		target = reflect.TypeFor[bool]()
 	case "string":
 		target = reflect.TypeFor[string]()
 	case "integer":
