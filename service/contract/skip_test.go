@@ -21,7 +21,7 @@ func (*skipNested) Contract(context.Context, bindly.Binder) (*xcontract.Policy, 
 	nestedSkipHooks.Add(1)
 	return &xcontract.Policy{Name: "nested", Field: func(_ string, _ reflect.Type, f *xcontract.Field) (*xcontract.Field, error) {
 		if f.Name == "Secret" {
-			return f.Clone().Hide(), nil
+			return f.Hide(), nil
 		}
 		return nil, nil
 	}}, nil
@@ -38,14 +38,14 @@ func (*skipRoot) Contract(context.Context, bindly.Binder) (*xcontract.Policy, er
 		if parent == reflect.TypeFor[skipRoot]() {
 			switch f.Name {
 			case "Plain", "Child":
-				return f.Clone().SkipChildren(), nil
+				return f.SkipChildren(), nil
 			}
 		}
 		if strings.HasPrefix(path, "Plain") || strings.HasPrefix(path, "Child") {
 			skippedParentVisits.Add(1)
 		}
 		if f.Name == "Secret" {
-			return f.Clone().Hide(), nil
+			return f.Hide(), nil
 		}
 		return nil, nil
 	}}, nil
@@ -84,7 +84,7 @@ type skipOnly struct{ Rows []*skipPlain }
 func (*skipOnly) Contract(context.Context, bindly.Binder) (*xcontract.Policy, error) {
 	return &xcontract.Policy{Name: "skip-only", Field: func(_ string, parent reflect.Type, f *xcontract.Field) (*xcontract.Field, error) {
 		if parent == reflect.TypeFor[skipOnly]() {
-			return f.Clone().SkipChildren(), nil
+			return f.SkipChildren(), nil
 		}
 		panic("skipped descendant callback")
 	}}, nil
@@ -107,7 +107,7 @@ type skipMiddle struct{ Leaf *skipPlain }
 func (*skipMiddle) Contract(context.Context, bindly.Binder) (*xcontract.Policy, error) {
 	return &xcontract.Policy{Name: "middle", Field: func(_ string, parent reflect.Type, f *xcontract.Field) (*xcontract.Field, error) {
 		if parent == reflect.TypeFor[skipMiddle]() {
-			return f.Clone().SkipChildren(), nil
+			return f.SkipChildren(), nil
 		}
 		panic("middle policy entered skipped child")
 	}}, nil
@@ -121,7 +121,7 @@ func (*skipOuter) Contract(context.Context, bindly.Binder) (*xcontract.Policy, e
 			panic("nested policy traversal flag leaked to parent")
 		}
 		if f.Name == "Secret" {
-			return f.Clone().Hide(), nil
+			return f.Hide(), nil
 		}
 		return f.Clone(), nil
 	}}, nil

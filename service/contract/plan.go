@@ -173,6 +173,9 @@ func (p *Plan) resolve(ctx context.Context, binder bindly.Binder) (*variant, err
 			return nil, err
 		}
 		part := keyPart{Path: owner.path}
+		if policy != nil && policy.NoCache {
+			cacheable = false
+		}
 		if policy != nil && policy.Field != nil {
 			policies = append(policies, resolvedOwner{owner: owner, policy: policy})
 			part.Name, part.Active = policy.Name, true
@@ -237,7 +240,7 @@ func (p *Plan) resolve(ctx context.Context, binder bindly.Binder) (*variant, err
 			if !withinContractPath(path, ownerPath) || skippedContractPath(path, selected.skipped) {
 				continue
 			}
-			candidate, err := selected.policy.Field(path, parent, current.Clone())
+			candidate, err := selected.policy.Field(path, parent, &xcontract.Field{Name: current.Name, Tag: current.Tag})
 			if err != nil {
 				return nil, err
 			}

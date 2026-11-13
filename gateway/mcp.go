@@ -1763,17 +1763,17 @@ func buildMCPFieldTagWithRequired(parameter *state.Parameter, defaultOptional, f
 		return `json:",omitempty"`
 	}
 	field := &xcontract.Field{Name: parameter.Name, Tag: reflect.StructTag(parameter.Tag)}
-	field.SetTag("json", ",omitempty")
+	field = field.SetTag("json", ",omitempty")
 	if forceRequired || parameter.IsRequired() {
-		field.Required()
+		field = field.Required()
 	} else {
-		field.Optional()
+		field = field.Optional()
 	}
 	if description := strings.TrimSpace(parameter.Description); description != "" {
-		field.SetDescription(description)
+		field = field.SetDescription(description)
 	}
 	if example := strings.TrimSpace(parameter.Example); example != "" {
-		field.SetExample(example)
+		field = field.SetExample(example)
 	}
 	return field.Tag
 }
