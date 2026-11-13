@@ -181,12 +181,18 @@ func (c *conditionalContext) block(block *stmt.Block, states []conditionalVarian
 				if !ok || target.X != nil || fmt.Sprint(value.Op) != "=" {
 					return nil, fmt.Errorf("unsupported conditional SQL assignment")
 				}
-				source, err := c.selector(value.Y, state.bindings)
-				if err != nil {
-					return nil, err
-				}
 				bindings := cloneBindings(state.bindings)
-				bindings[target.ID] = source
+				if _, literal := value.Y.(*expr.Literal); literal {
+					// A literal local has no input-selector identity. Clear a
+					// prior alias; only an opaque bound call may consume it.
+					delete(bindings, target.ID)
+				} else {
+					source, err := c.selector(value.Y, state.bindings)
+					if err != nil {
+						return nil, err
+					}
+					bindings[target.ID] = source
+				}
 				alternatives = []conditionalVariant{{bindings: bindings}}
 			case *stmt.If:
 				unconditional := false
@@ -325,6 +331,20 @@ func (c *conditionalContext) append(text string, bindings map[string]string) (st
 		cursor.Pos = pos + 1
 		selector, err := veltyparser.MatchSelector(cursor)
 		if err != nil {
+			continue
+		}
+		bound, err := appendBindingCall(selector)
+		if err != nil {
+			return "", err
+		}
+		if bound {
+			if c.locals[selector.ID] {
+				return "", fmt.Errorf("bound SQL helper %s is shadowed by a template local", selector.ID)
+			}
+			// Consume the complete parser-owned call. Its operand never
+			// contributes SQL identity, even when it refers to a local value.
+			out.WriteString(text[previous:cursor.Pos])
+			previous = cursor.Pos
 			continue
 		}
 		if _, found := bindings[selector.ID]; !found {

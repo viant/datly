@@ -83,13 +83,10 @@ func RefinePrepared(ctx context.Context, component *spec.Component, resources fs
 					}
 					candidate, _ = sqlmacro.ExpandNonWindowSQL(candidate, parentSQL, parentAliases...)
 				}
-				// Reuse ordinary discovery's parser-validated treatment of runtime
-				// tuple predicates on the private analysis copy only.
-				candidate, err := sqlanalysis.DiscoveryPredicates(candidate)
-				if err != nil {
-					return fmt.Errorf("prepared projection %s: %w", view.Namespace, err)
-				}
-				SQL, err := projectionAnalysisSQL(candidate, inputs)
+				// Reuse native template alternatives and bound-value analysis.
+				// Metadata is resolved once only after every alternative proves
+				// the same SQL statement; authored SQL is never rewritten.
+				SQL, err := sqlanalysis.PreparedSQL(candidate, inputs.validate)
 				if err != nil {
 					return fmt.Errorf("prepared projection %s: %w", view.Namespace, err)
 				}
