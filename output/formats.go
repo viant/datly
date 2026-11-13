@@ -65,8 +65,18 @@ func (p *Plan) marshalXML(value any) ([]byte, error) {
 }
 
 func (p *Plan) marshalXLS(value any) ([]byte, error) {
-	var err error
-	value, err = p.present(value)
+	if p.rows != nil && p.rows.name == "" && p.rows.sourceType.Kind() == reflect.Array {
+		rows, err := p.rows.value(value)
+		if err != nil {
+			return nil, err
+		}
+		rows, err = p.rowPresentation.value(rows)
+		if err != nil {
+			return nil, err
+		}
+		return xlsy.NewMarshaller().Marshal(rows.Interface())
+	}
+	value, err := p.present(value)
 	if err != nil {
 		return nil, err
 	}

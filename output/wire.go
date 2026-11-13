@@ -48,7 +48,10 @@ func (p *Plan) Wire(format string) (WireContract, error) {
 		format = p.DefaultFormat()
 	}
 	format = strings.ToLower(strings.TrimSpace(format))
-	if format != "json" && p.JSONOnly() {
+	if !p.SupportsFormat(format) {
+		if p.formatError != nil {
+			return WireContract{}, fmt.Errorf("effective output cannot use %s: %w", format, p.formatError)
+		}
 		return WireContract{}, fmt.Errorf("custom JSON output does not declare a safe %s representation", format)
 	}
 	contentType, err := ContentType(format)

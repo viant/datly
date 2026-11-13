@@ -25,22 +25,42 @@ type indexExcluder interface {
 	AffectsIndexes([]int) bool
 }
 type presentationCompiler struct {
-	excluded exclusions
-	selected indexExcluder
+	excluded       exclusions
+	selected       indexExcluder
+	representation *xshape.Representation
+	hideJSON       bool
+	active         map[reflect.Type]bool
 }
 
 func (e exclusions) presentation(typeOf reflect.Type, path string) (*presentation, error) {
 	return (presentationCompiler{excluded: e}).compile(typeOf, path, nil)
 }
 func (c presentationCompiler) compile(typeOf reflect.Type, path string, indexes []int) (*presentation, error) {
+	return c.compileShape(typeOf, path, indexes, c.representation)
+}
+func (c presentationCompiler) compileShape(typeOf reflect.Type, path string, indexes []int, metadata *xshape.Representation) (*presentation, error) {
+	if c.hideJSON && typeOf != nil && typeOf.Kind() == reflect.Struct {
+		if c.active == nil {
+			c.active = map[reflect.Type]bool{}
+		}
+		if c.active[typeOf] {
+			return nil, fmt.Errorf("recursive effective output requires metadata")
+		}
+		c.active[typeOf] = true
+		defer delete(c.active, typeOf)
+	}
 	e := c.excluded
-	if typeOf == nil || (c.selected == nil || !c.selected.AffectsIndexes(indexes)) && !e.affects(path) {
+	if typeOf == nil || (c.selected == nil || !c.selected.AffectsIndexes(indexes)) && !e.affects(path) && !c.hideJSON && !metadata.Changed() {
 		return nil, nil
 	}
 	p := &presentation{source: typeOf}
 	switch typeOf.Kind() {
 	case reflect.Pointer, reflect.Slice, reflect.Array:
-		child, err := c.compile(typeOf.Elem(), path, indexes)
+		var element *xshape.Representation
+		if metadata != nil {
+			element = metadata.Elem()
+		}
+		child, err := c.compileShape(typeOf.Elem(), path, indexes, element)
 		if err != nil || child == nil {
 			return nil, err
 		}
@@ -64,9 +84,15 @@ func (c presentationCompiler) compile(typeOf reflect.Type, path string, indexes 
 			if !field.Exported || len(field.Index) != 1 {
 				continue
 			}
-			alias, _, _ := strings.Cut(field.Tag.Get("json"), ",")
+			effective := typeOf.Field(field.Index[0])
+			var childMetadata *xshape.Representation
+			if metadata != nil && metadata.NumField() > field.Index[0] {
+				effective = metadata.Field(field.Index[0])
+				childMetadata = metadata.FieldShape(field.Index[0])
+			}
+			alias, _, _ := strings.Cut(effective.Tag.Get("json"), ",")
 			index := append(append([]int(nil), indexes...), field.Index...)
-			if c.selected != nil && c.selected.ExcludeIndexes(index) || e.Exclude(path, field.Name) || alias != "" && e.Exclude(path, alias) {
+			if (metadata != nil || c.hideJSON) && alias == "-" || c.selected != nil && c.selected.ExcludeIndexes(index) || e.Exclude(path, field.Name) || alias != "" && e.Exclude(path, alias) {
 				changed = true
 				continue
 			}
@@ -74,7 +100,7 @@ func (c presentationCompiler) compile(typeOf reflect.Type, path string, indexes 
 			if path != "" {
 				childPath = path + "." + childPath
 			}
-			child, err := c.compile(field.ReflectedType, childPath, index)
+			child, err := c.compileShape(field.ReflectedType, childPath, index, childMetadata)
 			if err != nil {
 				return nil, err
 			}
@@ -87,8 +113,11 @@ func (c presentationCompiler) compile(typeOf reflect.Type, path string, indexes 
 					anonymous = false
 				}
 			}
+			if effective.Name != field.Name || effective.Tag != field.Tag {
+				changed = true
+			}
 			p.fields = append(p.fields, presentationField{source: field.Index, target: len(targetFields), projection: child})
-			targetFields = append(targetFields, xshape.RuntimeField{Name: field.Name, Type: targetType, Tag: field.Tag, Anonymous: anonymous})
+			targetFields = append(targetFields, xshape.RuntimeField{Name: effective.Name, Type: targetType, Tag: effective.Tag, Anonymous: anonymous})
 		}
 		if !changed {
 			return nil, nil
@@ -98,6 +127,9 @@ func (c presentationCompiler) compile(typeOf reflect.Type, path string, indexes 
 			return nil, err
 		}
 	default:
+		if metadata.Changed() || c.hideJSON && (typeOf.Kind() == reflect.Map || typeOf.Kind() == reflect.Interface) {
+			return nil, fmt.Errorf("unsupported effective export shape %v", typeOf)
+		}
 		return nil, nil
 	}
 	return p, nil

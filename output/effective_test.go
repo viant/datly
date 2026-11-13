@@ -119,7 +119,7 @@ func TestEffectiveOutputUsesProjectedValuesWithNativeJSON(t *testing.T) {
 		if value.Secret != "private root" || value.Nested[0].Secret != "private nested" {
 			t.Fatal("canonical output mutated")
 		}
-		if _, err = plan.Encode(context.Background(), "csv", value); err == nil {
+		if _, err = plan.Encode(context.Background(), "xml", value); err == nil {
 			t.Fatal("unsupported format bypassed policy")
 		}
 		if noChange, err := base.WithType(original); err != nil || noChange != base {

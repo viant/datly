@@ -637,7 +637,7 @@ Use the configured compatible codec path for those features. See
 Complete custom JSON/Text methods own their representation. Internal edits of those
 owners are unsupported; hide the enclosing field or adjust an ordinary wrapper.
 Unchanged recursive types work; recursive edits are unsupported by the shared walker.
-Dynamic output is JSON-only. See [feature boundaries](dynamic-contract-boundaries.md).
+Native CSV and XLS/XLSX output also honor Contract field visibility through a compiled typed presentation. Their existing encoders retain ownership of column names, values and nested relations; JSON enum conversions do not become spreadsheet conversions. XML and tabular dynamic output remain unsupported. Opaque/custom JSON owners remain JSON-only. See [feature boundaries](dynamic-contract-boundaries.md).
 
 ## Enum wire forms
 

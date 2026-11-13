@@ -16,28 +16,48 @@ func (p *Plan) selectedPresentation(value any, filter dexec.OutputFieldFilter) (
 	if !ok {
 		return nil, nil, fmt.Errorf("output selection requires canonical field indexes")
 	}
-	projection, err := (presentationCompiler{excluded: p.exclude, selected: indexed}).compile(reflect.TypeOf(value), "", nil)
+	projection, err := (presentationCompiler{excluded: p.exclude, selected: indexed, representation: p.representation, hideJSON: p.effectiveSource != nil}).compile(p.typeOf, "", nil)
 	if err != nil {
 		return nil, nil, err
 	}
-	projected, err := projection.value(reflect.ValueOf(value))
+	source := reflect.ValueOf(value)
+	for source.Kind() == reflect.Pointer && source.Type() != p.typeOf {
+		if source.IsNil() {
+			source = reflect.Zero(p.typeOf)
+			break
+		}
+		source = source.Elem()
+	}
+	projected, err := projection.value(source)
 	if err != nil {
 		return nil, nil, err
 	}
+	plan, err := p.presentationPlan(projected.Type())
+	if err != nil {
+		return nil, nil, err
+	}
+	return plan, projected.Interface(), nil
+}
+
+func (p *Plan) presentationPlan(typ reflect.Type) (*Plan, error) {
 	holder := ""
 	if p.rows != nil {
 		holder = p.rows.name
 	}
-	plan, err := (Compiler{}).Compile(CompileInput{Type: projected.Type(), DataField: holder})
+	plan, err := (Compiler{}).Compile(CompileInput{Type: typ, DataField: holder})
 	if err != nil {
-		return nil, nil, err
+		return nil, err
+	}
+	if holder != "" && (plan.rows == nil || plan.rows.name != holder) {
+		return nil, fmt.Errorf("output presentation hides declared rows")
 	}
 	if p.rows != nil && p.rows.name == "" && p.rows.sourceType.Kind() == reflect.Struct {
 		// Projection changes the type, not the registered direct-row authority.
-		plan.rows = newRowsPlan((xshape.Runtime{}).Indirect(projected.Type()))
+		plan.rows = newRowsPlan((xshape.Runtime{}).Indirect(typ))
 	}
 	plan.caseFormat, plan.timeLayout, plan.omitEmpty = p.caseFormat, p.timeLayout, p.omitEmpty
 	plan.title = p.title
 	plan.nilSlicePolicy = p.nilSlicePolicy
-	return plan, projected.Interface(), nil
+
+	return plan, nil
 }

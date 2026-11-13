@@ -1,6 +1,7 @@
 package output
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/viant/datly/spec"
 	structjson "github.com/viant/structology/encoding/json"
@@ -34,6 +35,7 @@ func (p *Plan) WithType(typ reflect.Type) (*Plan, error) {
 	if p.effectiveSource != nil {
 		result.effectiveSource = p.effectiveSource
 	}
+	result.prepareFormats()
 	return result, nil
 }
 
@@ -104,6 +106,7 @@ func (p *Plan) WithRepresentation(metadata *xshape.Representation) (*Plan, error
 	if result.standardJSON != nil {
 		result.standardJSON = result.standardJSON.WithRepresentation(metadata)
 	}
+	result.prepareFormats()
 	return result, nil
 }
 
@@ -160,5 +163,32 @@ func (p *Plan) WithCaseFormat(format string) (*Plan, error) {
 		}
 	}
 	result.effectiveSource = p.effectiveSource
+	if result.effectiveSource != nil {
+		result.prepareFormats()
+	}
 	return result, nil
+}
+
+// prepareFormats compiles reusable typed codec authority once per immutable variant.
+func (p *Plan) prepareFormats() {
+	if p.custom != nil {
+		return
+	}
+	original := p.typeOf
+	if p.effectiveSource != nil {
+		original = p.effectiveSource
+	}
+	if original != nil && (original.Implements(reflect.TypeFor[json.Marshaler]()) || reflect.PointerTo(original).Implements(reflect.TypeFor[json.Marshaler]()) || original.Implements(reflect.TypeFor[JSONWireType]()) || reflect.PointerTo(original).Implements(reflect.TypeFor[JSONWireType]())) {
+		return
+	}
+	p.formatPresentation, p.formatError = (presentationCompiler{excluded: p.exclude, representation: p.representation, hideJSON: p.effectiveSource != nil}).compile(p.typeOf, "", nil)
+	if p.formatError != nil {
+		return
+	}
+	typ := p.typeOf
+	if p.formatPresentation != nil {
+		typ = p.formatPresentation.target
+	}
+	p.formatPlan, p.formatError = p.presentationPlan(typ)
+
 }
