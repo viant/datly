@@ -21,6 +21,8 @@ import (
 type Config struct {
 	Settings *spec.CacheSettings
 	Identity string
+	// Name is the selected host configuration key, when distinct from Settings.Name.
+	Name string
 	// Aerospike is owned by the caller and closed after all readers and warmups drain.
 	Aerospike *aerospike.Pool
 }
@@ -91,6 +93,10 @@ func (c Config) New() (cache.Cache, error) {
 		return nil, err
 	}
 	location, provider, ttl := validated.Location, validated.Provider, validated.TTL
+	name := c.Name
+	if name == "" {
+		name = c.Settings.Name
+	}
 	if strings.HasPrefix(provider, "aerospike:") {
 		service, err := c.Aerospike.NewCache(aerospike.Config{
 			Provider: provider, Location: location, Identity: c.Identity, TTL: ttl,
@@ -112,7 +118,7 @@ func (c Config) New() (cache.Cache, error) {
 		if err != nil {
 			return nil, err
 		}
-		return managed.New(service, store, owner), nil
+		return managed.New(service, store, owner, managed.Identity{Name: name, Backend: "aerospike"}), nil
 	}
 	switch strings.ToLower(provider) {
 	case "", "afs":
@@ -122,7 +128,7 @@ func (c Config) New() (cache.Cache, error) {
 		if err != nil {
 			return nil, err
 		}
-		return managed.New(native, managed.NewFileStore(root+"/.datly-generations"), namespace), nil
+		return managed.New(native, managed.NewFileStore(root+"/.datly-generations"), namespace, managed.Identity{Name: name, Backend: "afs"}), nil
 	default:
 		return nil, fmt.Errorf("cache provider %q is not supported; supply a native cache service", c.Settings.Provider)
 	}

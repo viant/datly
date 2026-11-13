@@ -127,6 +127,19 @@ native cache service. Limits and counts describe completed warmup work, not a
 promise that every later query shape can reuse it. Partial failure can leave
 already-populated entries; warmup is not a cross-query cache transaction.
 
+After native reader initialization, `exec.ReaderWarmupTargeter.WarmupTargets()`
+exposes each scheduled policy with `CacheName`, `Backend`, and a `Work` list.
+`Backend` is `afs` or `aerospike`; it is empty for a supplied service whose
+backend cannot be reliably identified. `CacheName` is the selected logical
+configuration name or explicit view binding and may be empty for unnamed caches.
+Provider URLs, credentials and storage locations are not included in these fields.
+
+`Work` describes the actual view/policy selections for that target, including
+output views added by `IndexMeta`, using execution's native work expansion.
+The containing target identifies the originating scheduled policy. These work
+entries are descriptive: do not schedule them separately. Returned settings and
+work lists are detached snapshots; changing them does not change the reader.
+
 ## Choose the warmup identity to match the SQL
 
 For a query that always filters one ID, warm the concrete parameter case without
