@@ -688,6 +688,39 @@ own handler and the same bound parameter value; each emitted fragment contribute
 its own placeholders. The same expansion-order rule and warning against caching
 or discarding rendered groups apply to custom predicates.
 
+### Local-time range with UTC date partitions
+
+`github.com/viant/datly/runtime/predicate.DateRange` is an ordinary,
+parameterized filter for BigQuery DATE/DATETIME expressions. It is not an
+authorization predicate. It accepts `DateRangeInput{From, To}` and authored
+name/value options `DateColumn`, `TimeColumn`, optional `Alias`, and optional
+`PartitionColumn`. No business column names are assumed.
+
+Use it when a local calendar/wall-clock reporting range must also bound a UTC
+DATE partition. Both bounds are required and must use the same precision.
+Calendar dates include both endpoints; offset-free timestamps include the start
+and exclude the end. Offset-bearing timestamps are rejected rather than silently
+reinterpreted as local wall time. If PartitionColumn is supplied, a one-day
+margin is added on both sides; this requires that local event time and UTC event
+time differ by at most 24 hours. Do not use that margin for delayed-ingestion
+partitions. Omit PartitionColumn for a range on a single date/time column.
+
+Authored fragment (the host must link the predicate and input type):
+
+```sql
+#import('ranges','github.com/viant/datly/runtime/predicate')
+#define($_ = $Window<*ranges.DateRangeInput>(body/window).Required()
+    .WithPredicate(0,'handler','ranges.DateRange',
+        'Alias','f','DateColumn','local_day','TimeColumn','local_time',
+        'PartitionColumn','utc_day'))
+```
+
+Example input: `{"window":{"from":"2026-11-01","to":"2026-11-07"}}`.
+For a one-hour local range, use `2026-11-01T09:00` and `2026-11-01T10:00`.
+Combine the occurrence with other filters using `predicate.Builder`; keep
+trusted authorization as its own explicit occurrence. Values remain bound SQL
+parameters; aliases and columns are trusted authored identifiers quoted by SQLX.
+
 ## Verification
 
 `TestReaderPredicateGroupsDQLSQLite` loads the complete DQL above through the
