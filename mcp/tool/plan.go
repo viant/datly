@@ -33,6 +33,7 @@ type Argument struct {
 	sourceName       string
 	sourceType       reflect.Type
 	querySelectorCSV bool
+	acceptScalar     bool
 	destinationType  reflect.Type
 	wireSchema       *spec.WireSchema
 	wireSchemas      map[string]*spec.WireSchema

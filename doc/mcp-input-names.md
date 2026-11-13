@@ -52,6 +52,33 @@ Tool compilation rejects ambiguous public spellings. Supplying multiple spelling
 for one member also remains an invocation error. Formatting does not infer field
 presence, add runtime required checks, or change authorization.
 
+## Scalar admission for integer query lists
+
+Use `mcp:"scalar=true"` to admit a signed integer as one element of a native
+integer query slice. Declare it with existing input metadata in DQL:
+
+```sql
+#define($_ = $AdvertiserId<[]int>(query/advertiserId).Optional().Tag('mcp:"aliases=advertiser_id,scalar=true"'))
+```
+
+Discovery advertises the integer alternative first, the native array second,
+and null for optional bindings. Both public spellings use the same compiled
+input plan. Supplying multiple spellings remains an error. Zero becomes `[0]`;
+omission and query null retain native defaults and presence semantics. Arrays,
+including empty arrays, retain the existing contract. Fractional numbers,
+nonempty strings, booleans, objects and integer overflows remain invalid. The
+inherited empty query string behavior is preserved: `""`, like query null,
+means omission at binding time. Discovery advertises the typed input contract
+and does not advertise this legacy empty-string omission. Required bindings
+still reject omission, including null and the empty string, through their native
+required-input checks.
+
+The opt-in is limited to signed integer query slices without an explicit wire
+representation or custom JSON/text decoder on the slice or its element (value
+or pointer receiver); unsupported contracts fail tool compilation.
+`scalar=false` retains ordinary admission. REST query binding, application Go
+types, selectors, SQL predicates and authorization retain their existing owners.
+
 ## Required discovery for native array bodies
 
 For an optional whole-body native slice, an explicitly authored `required:"true"`

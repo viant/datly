@@ -1,11 +1,38 @@
 package tool
 
 import (
+	"fmt"
 	"github.com/viant/mcp-protocol/schema/fieldname"
 	"github.com/viant/tagly/format/text"
+	"github.com/viant/tagly/tags"
 	"reflect"
 	"strings"
 )
+
+// Scalar admission is MCP transport metadata, independent of field naming and
+// the canonical HTTP binding. Parse it once while compiling the tool plan.
+func scalarAdmission(field reflect.StructField) (bool, error) {
+	_, options := tags.Values(field.Tag.Get("mcp")).Name()
+	seen, enabled := false, false
+	err := options.MatchPairs(func(key, value string) error {
+		if strings.TrimSpace(key) != "scalar" {
+			return nil
+		}
+		if seen {
+			return fmt.Errorf("duplicate mcp scalar option on field %s", field.Name)
+		}
+		seen = true
+		switch strings.TrimSpace(value) {
+		case "true":
+			enabled = true
+		case "false":
+		default:
+			return fmt.Errorf("mcp scalar option on field %s must be true or false", field.Name)
+		}
+		return nil
+	})
+	return enabled, err
+}
 
 type mcpField struct {
 	name    string

@@ -224,7 +224,7 @@ func (a Arguments) resolve(argument Argument) (resolvedValue, bool, error) {
 	if argument.Source.Kind == requestprovider.BodyKind {
 		return resolvedValue{body: encoded}, true, nil
 	}
-	value, err := decodeSourceValue(encoded, argument.SourceType)
+	value, err := decodeSourceValue(encoded, argument.SourceType, argument.AcceptScalar)
 	if err != nil {
 		return resolvedValue{}, false, fmt.Errorf("decode MCP argument %q: %w", argument.PublicName, &bindinput.Error{Cause: err})
 	}
@@ -298,7 +298,18 @@ func (u URI) validate(arguments []Argument) error {
 	return nil
 }
 
-func decodeSourceValue(raw []byte, targetType reflect.Type) (interface{}, error) {
+func decodeSourceValue(raw []byte, targetType reflect.Type, acceptScalar bool) (interface{}, error) {
+	if acceptScalar && len(raw) > 0 && raw[0] != '[' && !bytes.Equal(raw, []byte("null")) {
+		// Decode into the exact element type so strings, booleans, fractional
+		// numbers and overflows retain encoding/json's typed rejection.
+		target := reflect.New(targetType.Elem())
+		if err := json.Unmarshal(raw, target.Interface()); err != nil {
+			return nil, err
+		}
+		converted := reflect.MakeSlice(targetType, 1, 1)
+		converted.Index(0).Set(target.Elem())
+		return converted.Interface(), nil
+	}
 	if targetType.Kind() == reflect.Slice && targetType.Elem().Kind() == reflect.String && len(raw) > 0 && raw[0] == '"' {
 		var text string
 		if err := json.Unmarshal(raw, &text); err != nil {

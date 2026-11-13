@@ -199,6 +199,18 @@ func (c *Compiler) Compile(input Input) (*Plan, error) {
 		if err != nil {
 			return nil, fmt.Errorf("compile MCP tool %q argument %q: %w", name, argument.publicName, err)
 		}
+		if argument.acceptScalar {
+			items, ok := property["items"].(map[string]interface{})
+			if property["type"] != "array" || !ok {
+				return nil, fmt.Errorf("MCP argument %q scalar admission requires an ordinary array schema", argument.publicName)
+			}
+			alternatives := []interface{}{items, property}
+			if !argument.required {
+				// Query null means omission; optional native bindings admit it.
+				alternatives = append(alternatives, map[string]interface{}{"type": "null"})
+			}
+			property = map[string]interface{}{"anyOf": alternatives}
+		}
 		if argument.required && argument.bodyNullPolicy == "" {
 			removeSchemaNull(property)
 			if argument.bodyInputTag != "" {
@@ -229,6 +241,7 @@ func (c *Compiler) Compile(input Input) (*Plan, error) {
 			Source:         bindstate.Location{Kind: argument.sourceKind, In: argument.sourceName},
 			SourceType:     argument.sourceType,
 			SplitCSVString: argument.querySelectorCSV,
+			AcceptScalar:   argument.acceptScalar,
 		}
 	}
 	projectBinarySchema(arguments, &inputSchema, input.CaseFormat)
@@ -343,6 +356,13 @@ func (c *Compiler) compileExternal(inputField registry.InputField, field reflect
 		sourceKind: strings.ToLower(strings.TrimSpace(binding.Location.Kind)), sourceName: binding.Location.In,
 		sourceType: inputField.SourceType(), destinationType: inputField.DestinationType(),
 		wireSchema: inputField.WireSchema(), wireSchemas: inputField.WireSchemas(), wireType: inputField.WireType(), required: required, bodyNullPolicy: binding.BodyNullPolicy,
+	}
+	argument.acceptScalar, err = scalarAdmission(field)
+	if err != nil {
+		return Argument{}, false, err
+	}
+	if argument.acceptScalar && (argument.wireSchema != nil || len(argument.wireSchemas) != 0 || argument.wireType != nil) {
+		return Argument{}, false, fmt.Errorf("MCP argument %q scalar admission conflicts with explicit wire representation", publicName)
 	}
 	if argument.sourceKind == "body" && binding.Location.In == "" {
 		argument.bodyInputTag = binding.BodyInputTag
