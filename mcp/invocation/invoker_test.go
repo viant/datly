@@ -6,12 +6,16 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"github.com/viant/datly/internal/testharness"
 	"io"
+	"log"
 	"net/http"
 	"reflect"
+	"strings"
 	"testing"
 
+	"github.com/viant/authz"
 	"github.com/viant/datly/exec"
 	mcpinput "github.com/viant/datly/mcp/input"
 	"github.com/viant/datly/spec"
@@ -197,6 +201,68 @@ func TestInvokerAuthorizesExactComponentTargetBeforeInvocation(t *testing.T) {
 	}
 	if !called {
 		t.Fatal("MCP target authorizer was not called")
+	}
+}
+
+// Callback failures must retain their local identity without publishing details.
+func TestInvokerAuthorizationErrorsRemainDistinct(t *testing.T) {
+	target := exec.ComponentTarget{Component: spec.Key{Kind: spec.KindComponent, Name: "Protected"}, Route: spec.RouteRef{Method: "GET", Path: "/protected"}}
+	for _, tc := range []struct {
+		name    string
+		failure error
+		code    int
+	}{
+		{"denied", authz.ErrDenied, jsonrpc.InvalidRequest},
+		{"identity denied", authz.ErrIdentityDenied, jsonrpc.InvalidRequest},
+		{"joined denials", errors.Join(authz.ErrDenied, fmt.Errorf("verified identity: %w", authz.ErrIdentityDenied)), jsonrpc.InvalidRequest},
+		{"canceled", context.Canceled, jsonrpc.InternalError},
+		{"deadline", context.DeadlineExceeded, jsonrpc.InternalError},
+		{"unavailable", authz.ErrUnavailable, jsonrpc.InternalError},
+		{"unknown", errors.New("PRIVATE dependency diagnostic"), jsonrpc.InternalError},
+		{"canceled denial", errors.Join(authz.ErrDenied, context.Canceled), jsonrpc.InternalError},
+		{"unavailable denial", errors.Join(authz.ErrDenied, authz.ErrUnavailable), jsonrpc.InternalError},
+		{"unexpected dependency with denial", errors.Join(authz.ErrDenied, errors.New("PRIVATE unexpected dependency")), jsonrpc.InternalError},
+		{"nested mixed causes", errors.Join(fmt.Errorf("owner: %w", errors.Join(authz.ErrDenied, errors.New("PRIVATE nested dependency"))), authz.ErrIdentityDenied), jsonrpc.InternalError},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			captured := &captureInvoker{}
+			invoker := New(Config{Invoker: captured, Authorize: func(context.Context, exec.ComponentTarget) error {
+				return fmt.Errorf("authorization owner: %w", tc.failure)
+			}})
+			result, rpcErr := invoker.Execute(context.Background(), Request{Target: target, Method: "tools/call", URI: "protected"})
+			if result != nil || rpcErr == nil || rpcErr.Code != tc.code || !errors.Is(rpcErr, tc.failure) {
+				t.Fatalf("result=%+v error=%v", result, rpcErr)
+			}
+			if len(rpcErr.Data) != 0 || strings.Contains(rpcErr.Message, "PRIVATE") {
+				t.Fatalf("unsafe error: %+v", rpcErr)
+			}
+			if captured.request.Target != (exec.ComponentTarget{}) {
+				t.Fatal("unauthorized component executed")
+			}
+		})
+	}
+}
+
+func TestInvocationCallbackDiagnosticsUseSafeLogging(t *testing.T) {
+	var output bytes.Buffer
+	previous := log.Writer()
+	log.SetOutput(&output)
+	t.Cleanup(func() { log.SetOutput(previous) })
+	target := exec.ComponentTarget{Component: spec.Key{Kind: spec.KindComponent, Name: "Protected"}, Route: spec.RouteRef{Method: "GET", Path: "/protected"}}
+	failure := fmt.Errorf("scope lookup failed Authorization: Bearer bearer-secret password='password-secret'\r\nforged-record body={\"private\":\"body-secret\"} args=[arg-secret]")
+	invoker := New(Config{Invoker: &captureInvoker{}, Authorize: func(context.Context, exec.ComponentTarget) error { return failure }})
+	_, rpcErr := invoker.Execute(context.Background(), Request{Target: target, Method: "tools/call", URI: "protected"})
+	if !errors.Is(rpcErr, failure) {
+		t.Fatalf("lost original cause: %v", rpcErr)
+	}
+	got := output.String()
+	for _, secret := range []string{"bearer-secret", "password-secret", "body-secret", "arg-secret"} {
+		if strings.Contains(got, secret) {
+			t.Fatalf("callback diagnostics exposed %s: %s", secret, got)
+		}
+	}
+	if !strings.Contains(got, "scope lookup failed") || !strings.Contains(got, `operation="tools/call"`) || !strings.Contains(got, "elapsed=") || strings.Count(got, "\n") != 1 || strings.Contains(got, "\r") {
+		t.Fatalf("unsafe callback diagnostics: %q", got)
 	}
 }
 

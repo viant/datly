@@ -3,10 +3,15 @@ package invocation
 
 import (
 	"context"
+	"errors"
+	"log"
 	"strings"
+	"time"
 
 	requestprovider "github.com/viant/bindly/provider/request"
 	"github.com/viant/datly/exec"
+	internallog "github.com/viant/datly/internal/logging"
+	"github.com/viant/datly/mcp/internal/access"
 	"github.com/viant/jsonrpc"
 	"github.com/viant/mcp-protocol/authorization"
 	xexec "github.com/viant/xdatly/exec"
@@ -70,8 +75,17 @@ func (i *Invoker) Execute(ctx context.Context, request Request) (*Execution, *js
 		ctx = context.Background()
 	}
 	if i.authorize != nil {
-		if err := i.authorize(ctx, request.Target); err != nil {
-			return nil, jsonrpc.NewInvalidRequest("MCP tool authorization denied", nil)
+		started := time.Now()
+		err := i.authorize(ctx, request.Target)
+		if cancellation := ctx.Err(); cancellation != nil {
+			err = errors.Join(err, cancellation)
+		}
+		if err != nil {
+			if access.Denied(err) {
+				return nil, jsonrpc.NewInvalidRequest("MCP tool authorization denied", nil).WithCause(err)
+			}
+			log.Printf("MCP tool authorization failed operation=%q stage=authorize elapsed=%s target=%q error=%q", request.Method, time.Since(started), request.Target.String(), internallog.FailureReason(err.Error()))
+			return nil, jsonrpc.NewInternalError("MCP tool authorization is unavailable", nil).WithCause(err)
 		}
 	}
 	ctx = exec.CaptureOutputSelection(ctx)

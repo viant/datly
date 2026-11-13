@@ -3,6 +3,12 @@
 `Config.AuthorizeCatalogTool` receives the server-owned component target and an
 action (`discover` or `describe`). `tools/list` includes a tool only when both
 actions permit its metadata. Tool invocation continues to use `AuthorizeTool`.
+Return an error wrapping `authz.ErrDenied` for a metadata denial. Discovery omits
+only this explicit denial; cancellation, deadline, unavailable dependencies and
+other callback failures produce a safe protocol error with the local cause
+preserved. All wrapped and joined causes must be denials for omission; any other
+cause takes precedence over a joined denial. Callback diagnostics use the existing
+safe logging redaction, while the original error remains available locally.
 
 `Config.AuthorizeCatalogResource` receives the resource URI and action. Resource
 and skill lists filter metadata before skill pagination. Skill manifests also
