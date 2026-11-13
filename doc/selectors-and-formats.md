@@ -69,10 +69,28 @@ input. A declared Criteria field uses the compiled view's columns when no
 narrower `selector_filterable` allowlist is authored.
 
 Allowed source columns must actually belong to the selected query/view and the
-authored public policy. A column's existence does not grant access. Omitted
-relations should not execute just to populate hidden payloads. Keep complete
+authored public policy. A column's existence does not grant access. In the default query mode, omitted
+relations do not execute solely to populate hidden payloads. Keep complete
 join keys internally for relation assembly, even when no parent scalar is
 selected. Request-specific presentation must not mutate shared registered shapes.
+
+## Preserve lifecycle inputs during response selection
+
+`Fields` projects SQL scalars and prunes relations by default. For a view whose
+`OnFetch` or `OnRelation` hooks compute public values from other scalars or
+relations, author `selector_field_selection(view,'outputOnly')` in the outer
+DQL SELECT. The generated view tag is `selectorFieldSelection=outputOnly`;
+canonical metadata uses `Selector.FieldSelection = spec.FieldSelectionOutputOnly`.
+`query` explicitly selects the compatibility default. Unknown modes fail loading.
+
+In `outputOnly` mode, request `Fields` still uses native name validation and the
+same output filter for JSON and tabular formats. The view reads its complete
+internal scalar and relation graph so hooks receive the same inputs as an
+unselected read. Dynamic Contract still controls field visibility. This choice
+retains the complete read workload even for a small response. Explicit trusted
+`Columns` and relation restrictions continue to narrow reads. Each child view
+keeps its independently authored mode and selectors; the mode does not mutate
+request values or shared view policy.
 
 ## Formats and their bounded representations
 

@@ -117,6 +117,23 @@ func resolveInvocationSelectors(ctx context.Context, session *Session, input ref
 					return nil, failure
 				}
 
+				// Output-only Fields no longer reach SQL projection. Retain the
+				// native projection owner's validation for names absent from the
+				// compiled public shape (including source-only aliases).
+				if resolved == nil && view.Spec.Selector != nil && view.Spec.Selector.FieldSelection == spec.FieldSelectionOutputOnly {
+					source := ""
+					if view.Spec.Source != nil {
+						source = view.Spec.Source.SQL
+					}
+					_, projectionErr := (dsql.SelectorProjection{SQL: source, View: view}).Columns([]string{name})
+					if projectionErr != nil {
+						if owned := session.selectorError(view, projectionErr, session.selectorOwned); owned != nil {
+							return nil, owned
+						}
+						return nil, invalidSelectorFieldCause(name, "unknown field in the declared source projection", projectionErr)
+					}
+				}
+
 				if resolved != nil && resolved.OutputOnly && view.IsGroupable() {
 					return nil, invalidSelectorField(name, "output-only selection is not supported for grouped views")
 				}

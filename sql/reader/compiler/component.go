@@ -97,6 +97,13 @@ func buildDataViewsWithType(component *spec.Component, outputType reflect.Type, 
 		return nil, err
 	}
 	view.Relations = append(view.Relations, outputRelations...)
+	for compiled := range result.rowTypes {
+		if compiled.Spec.Selector != nil {
+			if err := compiled.Spec.Selector.FieldSelection.Validate(); err != nil {
+				return nil, fmt.Errorf("view %s: %w", compiled.Spec.Name, err)
+			}
+		}
+	}
 	if err := inheritViewConnectors(view); err != nil {
 		return nil, err
 	}

@@ -15,6 +15,7 @@ import (
 	dexec "github.com/viant/datly/exec"
 	"github.com/viant/datly/internal/selectorerror"
 	"github.com/viant/datly/observability"
+	"github.com/viant/datly/spec"
 	dsql "github.com/viant/datly/sql"
 	rsql "github.com/viant/datly/sql/builder"
 	rcollector "github.com/viant/datly/sql/reader/collector"
@@ -332,7 +333,7 @@ func (s *Service) relationWork(session *Session, input reflect.Value, binder xha
 	if collector == nil {
 		return nil
 	}
-	children := session.relationCollectors(collector, selectorStatelet(selectors.forView(collector.View())))
+	children := session.relationCollectors(collector, selectorStatelet(collector.View(), selectors.forView(collector.View())))
 	work := make([]relationWork, 0, len(children))
 	for _, child := range children {
 		child := child
@@ -464,22 +465,26 @@ func (u unmappedColumn) ScanType() reflect.Type {
 
 func (u unmappedColumn) Nullable() (bool, bool) { return u.column.Nullable() }
 
-func selectorStatelet(selector *xstate.Selector) *rcollector.Statelet {
-	if selector == nil {
+func selectorStatelet(view *data.View, selector *xstate.Selector) *rcollector.Statelet {
+	selection := readProjectionSelection(view, selector)
+	if len(selection) == 0 {
 		return nil
 	}
-	columns := projectionSelection(selector)
-	if len(columns) == 0 {
-		return nil
+	return &rcollector.Statelet{Columns: selection}
+}
+
+func readProjectionSelection(view *data.View, selector *xstate.Selector) []string {
+	if selector != nil && view != nil && view.Spec.Selector != nil && view.Spec.Selector.FieldSelection == spec.FieldSelectionOutputOnly {
+		return projectionSelection(&xstate.Selector{Columns: selector.Columns})
 	}
-	return &rcollector.Statelet{Columns: columns}
+	return projectionSelection(selector)
 }
 
 func viewProjection(view *data.View, selector *xstate.Selector) []string {
 	if view == nil {
 		return nil
 	}
-	selection := projectionSelection(selector)
+	selection := readProjectionSelection(view, selector)
 	if len(selection) == 0 {
 		return nil
 	}

@@ -32,6 +32,7 @@ const (
 	ViewControlPublish                    = "publish_parent"
 	ViewControlConcurrency                = "relational_concurrency"
 	ViewControlEntityHooks                = "lifecycle_type"
+	ViewControlSelectorFieldSelection     = "selector_field_selection"
 	ViewControlSelectorFields             = "selector_fields"
 	ViewControlSelectorOrderBy            = "selector_order_by"
 	ViewControlSelectorCriteria           = "selector_criteria"

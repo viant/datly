@@ -637,6 +637,7 @@ the entire projection.
 | mutation lifecycle | lifecycle_type(view,'package.OrderLifecycle') |
 | invariant group | invariant(view.column,'GroupName') |
 | selector permissions | selector_fields(view,bool), selector_order_by(view,bool), selector_criteria(view,bool), selector_limit(view,bool), selector_offset(view,bool), selector_page(view,bool) |
+| selector field selection | selector_field_selection(view,'query'|'outputOnly') |
 | selector defaults | selector_default_order(view,'expression'), selector_default_limit(view,integer), selector_no_limit(view,bool) |
 | selector scope | selector_namespace(view,'name'), selector_filterable(view,'field,path,...') |
 | selector criteria methods | selector_sql_methods(view,'[{"name":"lower","args":["string"]}]') |
