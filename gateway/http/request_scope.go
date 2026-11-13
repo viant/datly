@@ -26,9 +26,7 @@ func newHTTPRequestScope(req *stdhttp.Request, path map[string]string, onDemand 
 	// Register only for XLSX: a decoder registry also selects a different JSON
 	// decoding path in Bindly. Preserve ordinary JSON binding and presence.
 	if mediaType == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" {
-		options = append(options, requestprovider.WithDecoder(mediaType, requestprovider.DecoderFunc(func(raw []byte, target any) error {
-			return unmarshalXLSBody(req.Context(), raw, target)
-		})))
+		options = append(options, requestprovider.WithDecoder(mediaType, xlsbody.Decoder{Context: req.Context()}))
 	}
 	var scope *requestprovider.Scope
 	var err error
