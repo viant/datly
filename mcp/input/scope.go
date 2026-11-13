@@ -243,6 +243,11 @@ func (a Arguments) resolve(argument Argument) (resolvedValue, bool, error) {
 		// Preserve native arrays as one lossless path-provider value. URI paths
 		// continue through URI.resolve and retain their original wire text.
 		wire = []string{string(encoded)}
+		if argument.AcceptScalar && encoded[0] != '[' {
+			// Typed decoding above already validated the signed integer. Retain
+			// that value in the singleton-array form the native path provider owns.
+			wire[0] = "[" + wire[0] + "]"
+		}
 	}
 	return resolvedValue{wire: wire}, true, nil
 }

@@ -52,10 +52,10 @@ Tool compilation rejects ambiguous public spellings. Supplying multiple spelling
 for one member also remains an invocation error. Formatting does not infer field
 presence, add runtime required checks, or change authorization.
 
-## Scalar admission for integer query lists
+## Scalar admission for integer query and path lists
 
 Use `mcp:"scalar=true"` to admit a signed integer as one element of a native
-integer query slice. Declare it with existing input metadata in DQL:
+integer query or path slice. Declare it with existing input metadata in DQL:
 
 ```sql
 #define($_ = $AdvertiserId<[]int>(query/advertiserId).Optional().Tag('mcp:"aliases=advertiser_id,scalar=true"'))
@@ -73,7 +73,12 @@ and does not advertise this legacy empty-string omission. Required bindings
 still reject omission, including null and the empty string, through their native
 required-input checks.
 
-The opt-in is limited to signed integer query slices without an explicit wire
+Path scalars bind as the same singleton array as a one-element array. Path null
+remains invalid; consolidated route selection also rejects an empty identity
+instead of falling back to the collection route. URI and REST binding retain
+their existing behavior.
+
+The opt-in is limited to signed integer query or path slices without an explicit wire
 representation or custom JSON/text decoder on the slice or its element (value
 or pointer receiver); unsupported contracts fail tool compilation.
 `scalar=false` retains ordinary admission. REST query binding, application Go

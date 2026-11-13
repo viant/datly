@@ -51,6 +51,37 @@ func TestScalarQuerySliceDiscoveryAndAdmission(t *testing.T) {
 	require.ErrorContains(t, err, "conflicting")
 }
 
+func TestScalarPathSliceDiscoveryAndAdmission(t *testing.T) {
+	type input struct {
+		IDs []int `mcp:"name=ids,aliases=legacy_ids,scalar=true"`
+	}
+	required := true
+	contract := testRouteContract(t, reflect.TypeFor[input](), []bindly.BindingSpec{{Path: "IDs", Name: "IDs", Location: bindstate.Location{Kind: "path", In: "ids"}, Required: &required}})
+	plan, err := NewCompiler(WithStrictArguments(true)).Compile(Input{Exposure: &spec.MCPExposure{Kind: spec.MCPExposureTool, Name: "ids"}, Contract: contract})
+	require.NoError(t, err)
+	for _, tc := range []struct {
+		args  map[string]any
+		valid bool
+	}{
+		{map[string]any{"ids": 7}, true}, {map[string]any{"ids": 0}, true},
+		{map[string]any{"ids": []int{7, 9}}, true},
+		{map[string]any{}, false}, {map[string]any{"ids": nil}, false},
+		{map[string]any{"ids": "7"}, false}, {map[string]any{"ids": true}, false},
+		{map[string]any{"ids": 1.5}, false}, {map[string]any{"ids": []any{7, "9"}}, false},
+	} {
+		result, err := gojsonschema.Validate(gojsonschema.NewGoLoader(plan.Metadata().InputSchema), gojsonschema.NewGoLoader(tc.args))
+		require.NoError(t, err)
+		require.Equal(t, tc.valid, result.Valid(), "%+v: %v", tc.args, result.Errors())
+		scope, err := plan.Scope(tc.args)
+		if tc.valid {
+			require.NoError(t, err)
+			scope.Close()
+		} else {
+			require.Error(t, err)
+		}
+	}
+}
+
 func TestScalarQuerySliceMetadataValidation(t *testing.T) {
 	for _, tag := range []reflect.StructTag{`mcp:"scalar=yes"`, `mcp:"scalar"`, `mcp:"scalar=true,scalar=false"`} {
 		_, err := scalarAdmission(reflect.StructField{Name: "IDs", Tag: tag})
