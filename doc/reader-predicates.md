@@ -772,11 +772,11 @@ errors retain their normal propagation; denied authorization must return an erro
 
 ### Identity reads: forbidden versus missing
 
-Mark each authorization predicate occurrence with the existing tag syntax:
+Mark each authorization predicate occurrence with the fluent option:
 
 ```sql
 #define($_ = $Auth<*auth.Output>(component/GET:/v1/api/auth)
-    .Tag('predicate:"handler,example.com/security.Scope,auth=true"'))
+    .WithAuthPredicate(0, 'handler', 'example.com/security.Scope'))
 ```
 
 `auth=true` is predicate metadata, not a handler argument. Other occurrences on

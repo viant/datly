@@ -248,17 +248,18 @@ func (p *declarationOptionParser) parse() (declarationOptions, error) {
 				cacheable := false
 				p.result.cacheable = &cacheable
 			}
-		case "withpredicate", "predicate", "applywhenabsentpredicate":
+		case "withpredicate", "predicate", "applywhenabsentpredicate", "withauthpredicate", "applywhenabsentauthpredicate":
 			if err := p.expect(cursor, args, 1, -1); err != nil {
 				return declarationOptions{}, err
 			}
-			predicate, err := p.predicate(args, key == "applywhenabsentpredicate")
+			predicate, err := p.predicate(args, key == "applywhenabsentpredicate" || key == "applywhenabsentauthpredicate")
 			if err != nil {
 				return declarationOptions{}, p.fail(cursor, "%v", err)
 			}
 			if predicate == nil || strings.TrimSpace(predicate.Name) == "" {
 				return declarationOptions{}, p.fail(cursor, "%s requires a predicate name", name)
 			}
+			predicate.Auth = predicate.Auth || key == "withauthpredicate" || key == "applywhenabsentauthpredicate"
 			p.result.predicates = append(p.result.predicates, predicate)
 		case "withquerylistcsv":
 			if err := p.single(cursor, key, args, 0, 0); err != nil {
