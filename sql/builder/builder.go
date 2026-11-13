@@ -254,7 +254,7 @@ func (b *Builder) Build(ctx context.Context, opts ...BuilderOption) (_ *cache.Pa
 	if options.staticProjection != nil {
 		projection, err = options.staticProjection.Prepare(options.source.SQL, options.view, sourceSQL, options.dialect)
 	} else {
-		projection, err = (dsql.SelectorProjection{SQL: sourceSQL, View: options.view, Dialect: options.dialect}).Prepare(options.projection)
+		projection, err = (dsql.SelectorProjection{SQL: sourceSQL, View: options.view, Dialect: options.dialect}).Prepare(options.projection, options.responseFields)
 	}
 	if err != nil {
 		if unknown, ok := err.(*dsql.UnknownProjectionColumnError); ok && unknown != nil {
@@ -452,6 +452,7 @@ type builderOptions struct {
 	matcherBy              string
 	matcherIn              []any
 	projection             []string
+	responseFields         *dsql.ResponseFieldSelection
 	skipRelationFilter     bool
 	selectorPolicy         *spec.Selector
 	reportOrderFields      []string
@@ -649,6 +650,12 @@ func WithBuilderProjection(columns []string) BuilderOption {
 	return func(o *builderOptions) {
 		o.projection = append([]string(nil), columns...)
 	}
+}
+
+// WithBuilderResponseFields supplies framework-owned unresolved response names.
+// Validation uses the evaluated source and does not narrow the read projection.
+func WithBuilderResponseFields(fields *dsql.ResponseFieldSelection) BuilderOption {
+	return func(o *builderOptions) { o.responseFields = fields }
 }
 
 func WithBuilderSkipRelationFilter(skip bool) BuilderOption {

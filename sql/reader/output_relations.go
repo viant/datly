@@ -187,6 +187,7 @@ func (e *outputRelationExecution) query(ctx context.Context, partition *xreader.
 			rsql.WithBuilderCriteriaCompiler(planned.Target.Criteria),
 			rsql.WithBuilderSelector(e.selectors.forView(view)),
 			rsql.WithBuilderProjection(viewProjection(view, e.selectors.forView(view))),
+			rsql.WithBuilderResponseFields(e.session.responseFields[view]),
 			rsql.WithBuilderInput(e.input.Elem()),
 			rsql.WithBuilderParameterResolver(e.session.Parameters),
 			rsql.WithBuilderTemplate(program),
@@ -220,6 +221,7 @@ func (e *outputRelationExecution) query(ctx context.Context, partition *xreader.
 		rsql.WithBuilderCriteriaCompiler(planned.Target.Criteria),
 		rsql.WithBuilderSelector(selector),
 		rsql.WithBuilderProjection(viewProjection(view, selector)),
+		rsql.WithBuilderResponseFields(e.session.responseFields[view]),
 		rsql.WithBuilderInput(e.input.Elem()),
 		rsql.WithBuilderParameterResolver(e.session.Parameters),
 	}

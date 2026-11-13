@@ -104,7 +104,8 @@ func resolveInvocationSelectors(ctx context.Context, session *Session, input ref
 		}
 		selector.Fields = append([]string(nil), selector.Fields...)
 		selector.Columns = append([]string(nil), selector.Columns...)
-		for _, names := range [][]string{selector.Fields, selector.Columns} {
+		var responseFields []string
+		for kind, names := range [][]string{selector.Fields, selector.Columns} {
 			for i, name := range names {
 				name = session.presentedSelectorName(view, name)
 				names[i] = name
@@ -120,18 +121,8 @@ func resolveInvocationSelectors(ctx context.Context, session *Session, input ref
 				// Output-only Fields no longer reach SQL projection. Retain the
 				// native projection owner's validation for names absent from the
 				// compiled public shape (including source-only aliases).
-				if resolved == nil && view.Spec.Selector != nil && view.Spec.Selector.FieldSelection == spec.FieldSelectionOutputOnly {
-					source := ""
-					if view.Spec.Source != nil {
-						source = view.Spec.Source.SQL
-					}
-					_, projectionErr := (dsql.SelectorProjection{SQL: source, View: view}).Columns([]string{name})
-					if projectionErr != nil {
-						if owned := session.selectorError(view, projectionErr, session.selectorOwned); owned != nil {
-							return nil, owned
-						}
-						return nil, invalidSelectorFieldCause(name, "unknown field in the declared source projection", projectionErr)
-					}
+				if kind == 0 && resolved == nil && view.Spec.Selector != nil && view.Spec.Selector.FieldSelection == spec.FieldSelectionOutputOnly {
+					responseFields = append(responseFields, name)
 				}
 
 				if resolved != nil && resolved.OutputOnly && view.IsGroupable() {
@@ -144,6 +135,21 @@ func resolveInvocationSelectors(ctx context.Context, session *Session, input ref
 					// alongside an internal NAME column).
 					names[i] = resolved.GoName
 				}
+			}
+		}
+		if len(responseFields) > 0 {
+			if planned := session.Artifact.ViewPlanFor(view); planned != nil && planned.responseMembership != nil {
+				if _, projectionErr := planned.responseMembership.Columns(responseFields); projectionErr != nil {
+					if owned := session.selectorError(view, projectionErr, session.selectorOwned); owned != nil {
+						return nil, owned
+					}
+					return nil, invalidSelectorFieldCause(strings.Join(responseFields, ","), "unknown field in the declared source projection", projectionErr)
+				}
+			} else {
+				if session.responseFields == nil {
+					session.responseFields = map[*data.View]*dsql.ResponseFieldSelection{}
+				}
+				session.responseFields[view] = dsql.NewResponseFieldSelection(responseFields)
 			}
 		}
 		if (len(selector.Fields) > 0 || len(selector.Columns) > 0) && view.Spec.Selector != nil && !view.Spec.Selector.AllowFields {

@@ -62,6 +62,7 @@ func (s *Service) Read(ctx context.Context, session *Session, input any, binder 
 		session.selectorOwned = false
 		session.staticSelection = nil
 		session.staticFields = nil
+		session.responseFields = nil
 	}
 	if err := session.Init(); err != nil {
 		return nil, err
@@ -152,6 +153,7 @@ func (s *Service) readBound(ctx context.Context, session *Session, input reflect
 		rsql.WithBuilderCriteriaCompiler(root.Criteria),
 		rsql.WithBuilderSelector(rootSelector),
 		rsql.WithBuilderProjection(viewProjection(root.View, rootSelector)),
+		rsql.WithBuilderResponseFields(session.responseFields[root.View]),
 		rsql.WithBuilderInput(input.Elem()),
 		rsql.WithBuilderParameterResolver(session.Parameters),
 		rsql.WithBuilderTemplate(root.Template),

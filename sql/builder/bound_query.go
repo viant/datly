@@ -36,7 +36,7 @@ func (b *Builder) ShapeBound(query *cache.ParmetrizedQuery, opts ...BuilderOptio
 		}
 		positionalArgs = nil
 	}
-	projection, err := (dsql.SelectorProjection{SQL: sourceSQL, View: options.view, Dialect: options.dialect}).Prepare(options.projection)
+	projection, err := (dsql.SelectorProjection{SQL: sourceSQL, View: options.view, Dialect: options.dialect}).Prepare(options.projection, options.responseFields)
 	if err != nil {
 		return nil, err
 	}
