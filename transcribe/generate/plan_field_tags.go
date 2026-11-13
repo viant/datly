@@ -99,7 +99,7 @@ func fieldTag(param *spec.Parameter, tagName string, metadata []structTagValue) 
 	}
 	for _, item := range metadata {
 		switch item.name {
-		case "wireSchema", "mcpEnabled", "pathMcpEnabled":
+		case "wireSchema", "wireSchemas", "mcpEnabled", "pathMcpEnabled":
 			base = withoutStructTags(base, item.name)
 		}
 		base = appendStructTag(base, item.name, item.value)

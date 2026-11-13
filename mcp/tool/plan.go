@@ -280,11 +280,26 @@ func cloneSchemaValue(value interface{}) interface{} {
 // Requiredness metadata does not replace the reflected wire representation.
 func hasWireRepresentation(schemas map[string]*spec.WireSchema) bool {
 	for _, schema := range schemas {
-		if schema != nil && (schema.Type != "" || len(schema.AnyOf) > 0) {
+		if wireSchemaReplacesShape(schema) {
 			return true
 		}
 	}
 	return false
+}
+
+func wireSchemaReplacesShape(schema *spec.WireSchema) bool {
+	if schema == nil {
+		return false
+	}
+	if schema.Type != "" {
+		return true
+	}
+	for _, child := range schema.AnyOf {
+		if wireSchemaReplacesShape(child) {
+			return true
+		}
+	}
+	return wireSchemaReplacesShape(schema.Items)
 }
 
 // OutputPlan is the immutable exposure-local native output authority.

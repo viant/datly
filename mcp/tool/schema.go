@@ -30,7 +30,7 @@ func schemaForType(t reflect.Type, _ map[reflect.Type]bool) (map[string]interfac
 	return (&schemaProjector{}).argument(t, "", "", nil)
 }
 func (p *schemaProjector) argument(t reflect.Type, path, property string, schema *spec.WireSchema) (map[string]interface{}, error) {
-	if schema != nil && schema.Type != "array" {
+	if schema != nil && wireSchemaReplacesRoot(schema) && schema.Type != "array" {
 		return wireSchemaMap(schema), nil
 	}
 	var authority map[reflect.Type]reflect.Type
@@ -196,19 +196,29 @@ func (p *schemaProjector) argument(t reflect.Type, path, property string, schema
 		}
 	}
 	if schema != nil {
-		if !schema.Nullable {
-			removeSchemaNull(result)
-		} else {
-			result["type"] = []string{"array", "null"}
-		}
-		if schema.MinItems > 0 {
-			result["minItems"] = schema.MinItems
-		}
-		if schema.MaxItems > 0 {
-			result["maxItems"] = schema.MaxItems
-		}
+		mergeWireSchema(result, schema)
+	}
+	if err := validateProjectedRequirements(result, nil); err != nil {
+		return nil, err
 	}
 	return result, nil
+}
+
+// Root representation alternatives can replace reflection. A typed Items node
+// only refines the item shape and must retain the reflected outer collection.
+func wireSchemaReplacesRoot(schema *spec.WireSchema) bool {
+	if schema == nil {
+		return false
+	}
+	if schema.Type != "" {
+		return true
+	}
+	for _, branch := range schema.AnyOf {
+		if wireSchemaReplacesRoot(branch) {
+			return true
+		}
+	}
+	return false
 }
 
 func wireSchemaMap(schema *spec.WireSchema) map[string]interface{} {
@@ -221,6 +231,15 @@ func wireSchemaMap(schema *spec.WireSchema) map[string]interface{} {
 	}
 	if schema.MaxItems > 0 {
 		result["maxItems"] = schema.MaxItems
+	}
+	if schema.AdditionalProperties != nil {
+		result["additionalProperties"] = *schema.AdditionalProperties
+	}
+	if len(schema.RequiredFields) > 0 {
+		result["required"] = append([]string(nil), schema.RequiredFields...)
+	}
+	if schema.Items != nil {
+		result["items"] = wireSchemaMap(schema.Items)
 	}
 	if len(schema.AnyOf) > 0 {
 		alternatives := make([]any, 0, len(schema.AnyOf)+1)
@@ -255,10 +274,12 @@ func wireSchemaMap(schema *spec.WireSchema) map[string]interface{} {
 		}
 		result["enum"] = values
 	}
-	if schema.Nullable {
-		result["type"] = []string{schema.Type, "null"}
-	} else {
-		result["type"] = schema.Type
+	if schema.Type != "" {
+		if schema.Nullable {
+			result["type"] = []string{schema.Type, "null"}
+		} else {
+			result["type"] = schema.Type
+		}
 	}
 	if schema.Format != "" {
 		result["format"] = schema.Format
@@ -276,28 +297,9 @@ func applyWireSchema(root map[string]interface{}, path string, schema *spec.Wire
 		parts = parts[1:]
 	}
 	if len(parts) == 0 {
-		if schema.Type == "array" {
-			if !schema.Nullable {
-				removeSchemaNull(root)
-			} else {
-				root["type"] = []string{"array", "null"}
-			}
-			if schema.MinItems > 0 {
-				root["minItems"] = schema.MinItems
-			}
-			if schema.MaxItems > 0 {
-				root["maxItems"] = schema.MaxItems
-			}
-			return
-		}
-		if schema.Type == "" && len(schema.AnyOf) == 0 {
-			return
-		}
-		for key := range root {
-			delete(root, key)
-		}
-		for key, value := range wireSchemaMap(schema) {
-			root[key] = value
+		mergeWireSchema(root, schema)
+		if schema.Required && !schema.Nullable {
+			removeSchemaNull(root)
 		}
 		return
 	}
@@ -309,16 +311,7 @@ func applyWireSchemaParts(node map[string]interface{}, parts []string, schema *s
 	if child == nil {
 		return false
 	}
-	if (schema.Type != "" && schema.Type != "array") || len(schema.AnyOf) > 0 {
-		mergeWireSchema(child, schema)
-	}
-	if schema.Type == "array" {
-		if !schema.Nullable {
-			removeSchemaNull(child)
-		} else {
-			child["type"] = []string{"array", "null"}
-		}
-	}
+	mergeWireSchema(child, schema)
 	if schema.Required {
 		if len(requiredProjected) == 0 || !requiredProjected[0] {
 			addRequiredProperty(node, propertyName)
@@ -420,13 +413,90 @@ func removeSchemaNull(node map[string]interface{}) {
 	}
 }
 
+// Empty-Type metadata constrains the reflected schema rather than replacing it.
 func mergeWireSchema(target map[string]interface{}, schema *spec.WireSchema) {
-	for _, key := range []string{"$ref", "anyOf", "oneOf", "allOf", "items", "properties", "additionalProperties", "format", "type", "enum", "pattern", "minLength", "maxLength"} {
-		delete(target, key)
+	if schema.Required && !schema.Nullable {
+		removeSchemaNull(target)
+	}
+	if schema.Type != "" && schema.Type != "array" {
+		for _, key := range []string{"$ref", "anyOf", "oneOf", "allOf", "items", "properties", "additionalProperties", "format", "type", "enum", "pattern", "minLength", "maxLength"} {
+			delete(target, key)
+		}
 	}
 	for key, value := range wireSchemaMap(schema) {
+		if key == "items" && (schema.Type == "" || schema.Type == "array") {
+			if items, ok := target["items"].(map[string]any); ok {
+				mergeWireSchema(items, schema.Items)
+				continue
+			}
+		}
+		if key == "required" {
+			for _, name := range schema.RequiredFields {
+				addRequiredProperty(target, name)
+			}
+			continue
+		}
 		target[key] = value
 	}
+}
+
+// Requirements are projected against the effective public properties. A branch
+// needing a hidden member cannot be made usable by dropping that requirement.
+func validateProjectedRequirements(node map[string]any, inherited map[string]any) error {
+	properties, _ := node["properties"].(map[string]any)
+	effectiveProperties := properties
+	if effectiveProperties == nil {
+		effectiveProperties = inherited
+	}
+	for _, name := range schemaRequiredNames(node["required"]) {
+		if effectiveProperties != nil && effectiveProperties[name] == nil {
+			return fmt.Errorf("wire schema requires unavailable public member %q", name)
+		}
+	}
+	if branches, ok := node["anyOf"].([]any); ok {
+		available := make([]any, 0, len(branches))
+		for _, branch := range branches {
+			child, ok := branch.(map[string]any)
+			if !ok {
+				continue
+			}
+			if err := validateProjectedRequirements(child, effectiveProperties); err == nil {
+				available = append(available, branch)
+			}
+		}
+		if len(available) == 0 {
+			return fmt.Errorf("wire schema has no available required-field alternative")
+		}
+		node["anyOf"] = available
+	}
+	if items, ok := node["items"].(map[string]any); ok {
+		if err := validateProjectedRequirements(items, nil); err != nil {
+			return err
+		}
+	}
+	for _, value := range properties {
+		if child, ok := value.(map[string]any); ok {
+			if err := validateProjectedRequirements(child, nil); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func schemaRequiredNames(value any) []string {
+	if names, ok := value.([]string); ok {
+		return names
+	}
+	var result []string
+	if names, ok := value.([]any); ok {
+		for _, name := range names {
+			if text, ok := name.(string); ok {
+				result = append(result, text)
+			}
+		}
+	}
+	return result
 }
 
 func schemaPropertyName(properties map[string]interface{}, name string) string {
