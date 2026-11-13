@@ -29,8 +29,9 @@ type PreparedColumnRequest struct {
 }
 
 // PreparedColumnResult is the complete ordered result projection. Columns use
-// vendor result names and canonical types/constraints. Table is optional for
-// readers; when supplied, the SQL must prove that same direct physical source.
+// vendor result names and canonical types/constraints. Source may retain a
+// physical column only when Table and native SQL lineage prove that mapping.
+// Conflicting physical facts are rejected. Table is optional for readers; when supplied, the SQL must prove that same direct physical source.
 // This metadata does not attest that any deployed database has these columns.
 type PreparedColumnResult struct {
 	Columns []*spec.Column
@@ -162,7 +163,20 @@ func RefinePrepared(ctx context.Context, component *spec.Component, resources fs
 				if err = identities.validateResults(resultView.Columns, names); err != nil {
 					return err
 				}
+				var constraints map[string]tableConstraint
+				var lineage *projectionLineage
+				if metadata.Table != "" {
+					lineage, err = directProjectionLineage(source)
+					if err != nil {
+						return err
+					}
+					constraints, err = preparedTableConstraints(columns, lineage)
+					if err != nil {
+						return err
+					}
+				}
 				view.Columns = mergeColumnsWithSources(view.Columns, columns, identities)
+				applyTableConstraints(view.Columns, constraints, lineage, metadata.Table)
 				// Constraint flags are merged above. SQLX reference tags need the
 				// same authored-precedence merge used by live table discovery.
 				for _, merged := range view.Columns {
