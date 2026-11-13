@@ -510,18 +510,12 @@ func refineComponentColumnsWithOwnerProof(ctx context.Context, component *spec.C
 }
 
 func refineComponentColumnsWithFactoryProof(ctx context.Context, component *spec.Component, source *Source, declarations gen.Declarations, viewBindings gen.ViewBindings, typeResolver *typecatalog.Resolver, ownerProof func(*spec.Component) error, composition *authoring.FactoryComposition, factoryInputs ...gen.Input) error {
+	if err := validatePreparedColumnSource(component, source, composition, ownerProof != nil); err != nil {
+		return err
+	}
 	if source.PreparedColumns != nil {
-		if source.ColumnRefiner != nil {
-			return fmt.Errorf("prepared columns and database column discovery are mutually exclusive")
-		}
-		if len(authoredBorrowedSQLRows(component)) != 0 || composition != nil {
-			return fmt.Errorf("prepared columns do not provide borrowed-source or factory composition proof")
-		}
 		if err := column.RefinePrepared(ctx, component, source.Const.Resources(source.Resources), source.PreparedColumns, typeResolver); err != nil {
 			return err
-		}
-		if ownerProof != nil {
-			return ownerProof(component)
 		}
 		return nil
 	}
@@ -581,6 +575,21 @@ func refineComponentColumnsWithFactoryProof(ctx context.Context, component *spec
 		}
 	} else if err := column.New(nil).ValidateSourceProjections(component, source.Resources, typeResolver); err != nil {
 		return err
+	}
+	return nil
+}
+
+// validatePreparedColumnSource preserves the existing discovery boundary before
+// factory owner preparation can recursively compile a physical owner.
+func validatePreparedColumnSource(component *spec.Component, source *Source, composition *authoring.FactoryComposition, needsOwnerProof bool) error {
+	if source.PreparedColumns == nil {
+		return nil
+	}
+	if source.ColumnRefiner != nil {
+		return fmt.Errorf("prepared columns and database column discovery are mutually exclusive")
+	}
+	if needsOwnerProof || len(authoredBorrowedSQLRows(component)) != 0 || composition != nil {
+		return fmt.Errorf("prepared columns do not provide borrowed-source or factory composition proof")
 	}
 	return nil
 }

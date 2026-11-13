@@ -230,8 +230,11 @@ func (c *Compiler) compileFactoryInputShape(ctx context.Context, source *Source,
 			}
 		}
 	}
-	if source.ColumnRefiner == nil {
+	if source.ColumnRefiner == nil && source.PreparedColumns == nil {
 		return nil, fmt.Errorf("factory input shape requires native column discovery")
+	}
+	if err := validatePreparedColumnSource(shapeComponent, source, composition, c.factoryOwner != nil || len(c.factoryReferences) != 0); err != nil {
+		return nil, err
 	}
 	for _, view := range shapeComponent.Views {
 		if view.TypeName == "" {
