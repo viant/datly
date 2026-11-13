@@ -18,6 +18,8 @@ import (
 
 // Argument is one public MCP argument mapped to its canonical provider source.
 type Argument struct {
+	// Nullable retains the authored field format policy. Nil preserves legacy admission.
+	Nullable   *bool
 	PublicName string
 	Aliases    []string
 	Source     bindstate.Location
@@ -199,6 +201,10 @@ func (p *Plan) NormalizeArguments(arguments map[string]interface{}) (map[string]
 }
 
 func cloneArgument(argument Argument) Argument {
+	if argument.Nullable != nil {
+		nullable := *argument.Nullable
+		argument.Nullable = &nullable
+	}
 	argument.Aliases = append([]string(nil), argument.Aliases...)
 	return argument
 }

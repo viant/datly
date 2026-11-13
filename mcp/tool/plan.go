@@ -22,6 +22,7 @@ import (
 
 // Argument is an immutable public projection of one canonical input field.
 type Argument struct {
+	nullable         *bool
 	enumeration      *choice.Enum
 	schemaField      *xshape.JSONField
 	representation   *xshape.Representation

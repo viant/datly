@@ -19,6 +19,7 @@ import (
 	"github.com/viant/mcp-protocol/schema"
 	"github.com/viant/mcp-protocol/schema/fieldname"
 	"github.com/viant/tagly/choice"
+	tagformat "github.com/viant/tagly/format"
 	xshape "github.com/viant/x/shape"
 )
 
@@ -196,7 +197,13 @@ func (c *Compiler) Compile(input Input) (*Plan, error) {
 		if argument.customJSONBody {
 			format = ""
 		}
-		property, err := (&schemaProjector{rootInputTag: argument.bodyInputTag, field: argument.schemaField, representation: argument.representation, docs: owner, schemas: argument.wireSchemas, wireType: argument.wireType, caseFormat: format, nativeBody: argument.sourceKind == "body" && !argument.customJSONBody}).argument(sourceType, argument.path, argument.publicName, argument.wireSchema)
+		schemaField := argument.schemaField
+		if schemaField != nil && schemaField.Field.ReflectedType != sourceType {
+			selected := *schemaField
+			selected.Field.ReflectedType = sourceType
+			schemaField = &selected
+		}
+		property, err := (&schemaProjector{rootInputTag: argument.bodyInputTag, field: schemaField, representation: argument.representation, docs: owner, schemas: argument.wireSchemas, wireType: argument.wireType, caseFormat: format, nativeBody: argument.sourceKind == "body" && !argument.customJSONBody}).argument(sourceType, argument.path, argument.publicName, argument.wireSchema)
 		if err != nil {
 			return nil, fmt.Errorf("compile MCP tool %q argument %q: %w", name, argument.publicName, err)
 		}
@@ -206,7 +213,7 @@ func (c *Compiler) Compile(input Input) (*Plan, error) {
 				return nil, fmt.Errorf("MCP argument %q scalar admission requires an ordinary array schema", argument.publicName)
 			}
 			alternatives := []interface{}{items, property}
-			if !argument.required {
+			if !argument.required && (argument.nullable == nil || *argument.nullable) {
 				// Query null means omission; optional native bindings admit it.
 				alternatives = append(alternatives, map[string]interface{}{"type": "null"})
 			}
@@ -237,6 +244,7 @@ func (c *Compiler) Compile(input Input) (*Plan, error) {
 			inputSchema.Required = append(inputSchema.Required, argument.publicName)
 		}
 		bindingArguments[index] = mcpinput.Argument{
+			Nullable:       argument.nullable,
 			PublicName:     argument.publicName,
 			Aliases:        argument.aliases,
 			Source:         bindstate.Location{Kind: argument.sourceKind, In: argument.sourceName},
@@ -368,6 +376,17 @@ func (c *Compiler) compileExternal(inputField registry.InputField, field reflect
 		sourceType: inputField.SourceType(), destinationType: inputField.DestinationType(),
 		wireSchema: inputField.WireSchema(), wireSchemas: inputField.WireSchemas(), wireType: inputField.WireType(), required: required, bodyNullPolicy: binding.BodyNullPolicy,
 	}
+	policy, err := tagformat.Parse(field.Tag)
+	if err != nil {
+		return Argument{}, false, err
+	}
+	if argument.bodyNullPolicy == "" && argument.wireType == nil && argument.wireSchema == nil && len(argument.wireSchemas) == 0 {
+		argument.nullable = policy.Nullable
+		if policy.Nullable != nil {
+			projected := xshape.JSONField{Field: xshape.Field{Name: field.Name, ReflectedType: argument.sourceType, Tag: field.Tag, Index: field.Index, Exported: field.IsExported()}, Name: publicName}
+			argument.schemaField = &projected
+		}
+	}
 	argument.acceptScalar, err = scalarAdmission(field)
 	if err != nil {
 		return Argument{}, false, err
@@ -399,6 +418,8 @@ func (c *Compiler) compileExternal(inputField registry.InputField, field reflect
 		}
 	}
 	if enumeration != nil {
+		// Enum admission retains its native null domain and decoder ownership.
+		argument.nullable = nil
 		argument.enumeration = enumeration
 		if enumeration.CollectionItems() == nil {
 			argument.wireSchema = registry.EnumInputSchema(enumeration, field.Type.Kind() == reflect.Pointer)

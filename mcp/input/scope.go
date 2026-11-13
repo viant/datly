@@ -197,6 +197,19 @@ func (a Arguments) resolve(argument Argument) (resolvedValue, bool, error) {
 	if !found {
 		return resolvedValue{}, false, nil
 	}
+	// The canonical argument has already resolved aliases. Reuse the JSON wire
+	// representation so typed nil and custom JSON null have identical admission.
+	var encoded []byte
+	var err error
+	if argument.Nullable != nil && !*argument.Nullable {
+		encoded, err = json.Marshal(raw)
+		if err != nil {
+			return resolvedValue{}, false, fmt.Errorf("encode MCP argument %q: %w", argument.PublicName, err)
+		}
+		if bytes.Equal(bytes.TrimSpace(encoded), []byte("null")) {
+			return resolvedValue{}, false, fmt.Errorf("MCP argument %q cannot be null: %w", argument.PublicName, &bindinput.Error{Cause: fmt.Errorf("authored nullable=false")})
+		}
+	}
 	// URL-encoded query/form inputs have no JSON null representation. Treat
 	// null as absent so native defaults and required checks own the decision.
 	// Preserve body null and explicit false/zero values.
@@ -221,9 +234,11 @@ func (a Arguments) resolve(argument Argument) (resolvedValue, bool, error) {
 			return resolvedValue{wire: strings.Split(text, ",")}, true, nil
 		}
 	}
-	encoded, err := json.Marshal(raw)
-	if err != nil {
-		return resolvedValue{}, false, fmt.Errorf("encode MCP argument %q: %w", argument.PublicName, err)
+	if encoded == nil {
+		encoded, err = json.Marshal(raw)
+		if err != nil {
+			return resolvedValue{}, false, fmt.Errorf("encode MCP argument %q: %w", argument.PublicName, err)
+		}
 	}
 	if argument.Source.Kind == requestprovider.BodyKind {
 		return resolvedValue{body: encoded}, true, nil

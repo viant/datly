@@ -13,6 +13,7 @@ import (
 	"github.com/viant/mcp-protocol/schema/fieldname"
 	"github.com/viant/mcp-protocol/schema/jsonschema"
 	"github.com/viant/tagly/choice"
+	tagformat "github.com/viant/tagly/format"
 	xshape "github.com/viant/x/shape"
 )
 
@@ -123,7 +124,16 @@ func (c *Compiler) compileAnonymousBody(inputField registry.InputField, caseForm
 		if policy := wireSchemas[field.Name]; policy != nil && policy.Required {
 			schemaRequired = true
 		}
+		policy, err := tagformat.Parse(field.Tag)
+		if err != nil {
+			return nil, err
+		}
+		var nullable *bool
+		if !customJSONBody && wireSchemas[field.Name] == nil && collection == nil {
+			nullable = policy.Nullable
+		}
 		result = append(result, Argument{
+			nullable:       nullable,
 			enumeration:    collection,
 			schemaField:    &selectedField,
 			representation: childMetadata,
