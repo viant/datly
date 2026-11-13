@@ -44,3 +44,30 @@ func TestReaderEnumAliasInvalidDuplicatesRetainNativeOwner(t *testing.T) {
 	_, err := mergeDeclarationTags(`enumAlias:"0:old"`, `enumAlias:"0:new"`, "r.state")
 	require.ErrorContains(t, err, "conflicting")
 }
+
+func TestReaderRepeatedOutputEnumAliasNativeDQL(t *testing.T) {
+	const metadata = `choice:"0:First" choice:"1:Second" enumAccept:"literal" enumStyle:"literal" enumOutputAlias:"0:stored-first" enumOutputAlias:"1:stored-second"`
+	const SQL = `SELECT r.*, CAST(r.state AS 'string'), tag(r.state,'` + metadata + `') FROM (SELECT state FROM records) r`
+	input := &spec.View{Name: "Records", Source: &spec.ViewSource{SQL: SQL}}
+	before := input.Clone()
+	compiled, err := NewReader().Compile(ReadInput{View: input, SQL: SQL})
+	require.NoError(t, err)
+	require.Equal(t, before, input)
+	require.Len(t, compiled.Columns, 1)
+	enum, err := choice.ParseEnum(reflect.StructTag(compiled.Columns[0].Tag), reflect.TypeFor[string]())
+	require.NoError(t, err)
+	for stored, want := range map[string]string{"stored-first": "First", "stored-second": "Second", "future": "future"} {
+		actual, err := enum.Encode(stored)
+		require.NoError(t, err)
+		require.Equal(t, want, actual)
+		decoded, err := enum.DecodeJSON([]byte(`"` + stored + `"`))
+		require.NoError(t, err)
+		require.Equal(t, `"`+stored+`"`, string(decoded), "output aliases must not normalize input")
+	}
+	require.Nil(t, enum.WireValues(false), "passthrough output requires an open schema")
+	merged, err := mergeDeclarationTags(compiled.Columns[0].Tag, metadata, "r.state")
+	require.NoError(t, err)
+	require.Equal(t, compiled.Columns[0].Tag, merged)
+	_, err = mergeDeclarationTags(compiled.Columns[0].Tag, `enumOutputAlias:"0:changed"`, "r.state")
+	require.ErrorContains(t, err, "conflicting ordered enumOutputAlias")
+}

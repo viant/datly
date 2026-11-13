@@ -33,3 +33,28 @@ func TestGeneratedColumnPreservesRepeatedEnumAliasesAndChoiceOrder(t *testing.T)
 	require.Equal(t, "1", string(value))
 	require.Equal(t, raw, column.Tag, "generation must not mutate source metadata")
 }
+
+func TestGeneratedColumnPreservesRepeatedOutputAliasesOnReload(t *testing.T) {
+	const raw = `choice:"1:Second" choice:"0:First" enumAccept:"literal" enumStyle:"literal" enumOutputAlias:"0:stored-first" enumOutputAlias:"1:stored-second"`
+	column := &spec.Column{Name: "State", Source: "state", Tag: raw}
+	generated := generatedStructTag(scalarColumnFieldTag(column, "state", false))
+	parsed, err := tags.Parse(generated)
+	require.NoError(t, err)
+	var aliases []string
+	for _, tag := range parsed {
+		if tag.Name == "enumOutputAlias" {
+			aliases = append(aliases, string(tag.Values))
+		}
+	}
+	require.Equal(t, []string{"0:stored-first", "1:stored-second"}, aliases)
+	choices, err := choice.Tags(reflect.StructTag(generated))
+	require.NoError(t, err)
+	require.Equal(t, []string{"1:Second", "0:First"}, choices)
+	enum, err := choice.ParseEnum(reflect.StructTag(generated), reflect.TypeFor[string]())
+	require.NoError(t, err)
+	value, err := enum.Encode("stored-second")
+	require.NoError(t, err)
+	require.Equal(t, "Second", value)
+	require.Nil(t, enum.WireValues(false))
+	require.Equal(t, raw, column.Tag)
+}
