@@ -56,11 +56,11 @@ require (
 	github.com/viant/structology v0.10.2-0.20261106143941-ed3b2d84154c
 	github.com/viant/tagly v0.4.2-0.20261106060238-fe360d6f7ac4
 	github.com/viant/x v0.6.1-0.20261106041415-0487ec66884b
-	github.com/viant/xdatly v0.5.4-0.20261106191133-de5f4f9a90c1
-	github.com/viant/xdatly/extension v0.0.0-20231013204918-ecf3c2edf259
-	github.com/viant/xdatly/handler v0.0.0-20260922183211-34eaa9f4902b
-	github.com/viant/xdatly/types/core v0.0.0-20250307183722-8c84fc717b52
-	github.com/viant/xdatly/types/custom v0.0.0-20240801144911-4c2bfca4c23a
+	github.com/viant/xdatly v0.5.4-0.20261113075720-88fc13248650
+	github.com/viant/xdatly/extension v0.0.0-20261113075720-88fc13248650
+	github.com/viant/xdatly/handler v0.0.0-20261113075720-88fc13248650
+	github.com/viant/xdatly/types/core v0.0.0-20261113075720-88fc13248650
+	github.com/viant/xdatly/types/custom v0.0.0-20261113075720-88fc13248650
 	github.com/viant/xlsy v0.3.1
 	github.com/viant/xmlify v0.1.1
 	github.com/xuri/excelize/v2 v2.8.0
