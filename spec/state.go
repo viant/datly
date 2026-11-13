@@ -70,6 +70,7 @@ type WireSchema struct {
 	// the reflected shape (including array items) while adding this constraint.
 	Required bool `json:"required,omitempty"`
 	MinItems int  `json:"minItems,omitempty"`
+	MaxItems int  `json:"maxItems,omitempty"`
 }
 
 func (s *WireSchema) Clone() *WireSchema {

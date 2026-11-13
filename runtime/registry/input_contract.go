@@ -483,7 +483,7 @@ func validateWireSchema(schema *spec.WireSchema) error {
 	}
 	switch schema.Type {
 	case "string":
-	case "boolean", "integer", "number":
+	case "boolean", "integer", "number", "array":
 		if schema.Format != "" {
 			return fmt.Errorf("%s wire schema does not support format %q", schema.Type, schema.Format)
 		}

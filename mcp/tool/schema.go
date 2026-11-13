@@ -30,7 +30,7 @@ func schemaForType(t reflect.Type, _ map[reflect.Type]bool) (map[string]interfac
 	return (&schemaProjector{}).argument(t, "", "", nil)
 }
 func (p *schemaProjector) argument(t reflect.Type, path, property string, schema *spec.WireSchema) (map[string]interface{}, error) {
-	if schema != nil {
+	if schema != nil && schema.Type != "array" {
 		return wireSchemaMap(schema), nil
 	}
 	var authority map[reflect.Type]reflect.Type
@@ -150,6 +150,7 @@ func (p *schemaProjector) argument(t reflect.Type, path, property string, schema
 		}
 		items := child["items"]
 		minItems := child["minItems"]
+		maxItems := child["maxItems"]
 		alternatives := wireSchemaMap(policy)
 		if len(policy.AnyOf) == 0 {
 			ordinary := map[string]any{}
@@ -176,6 +177,9 @@ func (p *schemaProjector) argument(t reflect.Type, path, property string, schema
 					if minItems != nil {
 						branch["minItems"] = minItems
 					}
+					if maxItems != nil {
+						branch["maxItems"] = maxItems
+					}
 				}
 			}
 		}
@@ -191,6 +195,19 @@ func (p *schemaProjector) argument(t reflect.Type, path, property string, schema
 			}
 		}
 	}
+	if schema != nil {
+		if !schema.Nullable {
+			removeSchemaNull(result)
+		} else {
+			result["type"] = []string{"array", "null"}
+		}
+		if schema.MinItems > 0 {
+			result["minItems"] = schema.MinItems
+		}
+		if schema.MaxItems > 0 {
+			result["maxItems"] = schema.MaxItems
+		}
+	}
 	return result, nil
 }
 
@@ -199,6 +216,12 @@ func wireSchemaMap(schema *spec.WireSchema) map[string]interface{} {
 		return nil
 	}
 	result := map[string]interface{}{}
+	if schema.MinItems > 0 {
+		result["minItems"] = schema.MinItems
+	}
+	if schema.MaxItems > 0 {
+		result["maxItems"] = schema.MaxItems
+	}
 	if len(schema.AnyOf) > 0 {
 		alternatives := make([]any, 0, len(schema.AnyOf)+1)
 		for _, child := range schema.AnyOf {
@@ -253,6 +276,20 @@ func applyWireSchema(root map[string]interface{}, path string, schema *spec.Wire
 		parts = parts[1:]
 	}
 	if len(parts) == 0 {
+		if schema.Type == "array" {
+			if !schema.Nullable {
+				removeSchemaNull(root)
+			} else {
+				root["type"] = []string{"array", "null"}
+			}
+			if schema.MinItems > 0 {
+				root["minItems"] = schema.MinItems
+			}
+			if schema.MaxItems > 0 {
+				root["maxItems"] = schema.MaxItems
+			}
+			return
+		}
 		if schema.Type == "" && len(schema.AnyOf) == 0 {
 			return
 		}
@@ -272,8 +309,15 @@ func applyWireSchemaParts(node map[string]interface{}, parts []string, schema *s
 	if child == nil {
 		return false
 	}
-	if schema.Type != "" || len(schema.AnyOf) > 0 {
+	if (schema.Type != "" && schema.Type != "array") || len(schema.AnyOf) > 0 {
 		mergeWireSchema(child, schema)
+	}
+	if schema.Type == "array" {
+		if !schema.Nullable {
+			removeSchemaNull(child)
+		} else {
+			child["type"] = []string{"array", "null"}
+		}
 	}
 	if schema.Required {
 		if len(requiredProjected) == 0 || !requiredProjected[0] {
@@ -285,6 +329,9 @@ func applyWireSchemaParts(node map[string]interface{}, parts []string, schema *s
 	}
 	if schema.MinItems > 0 {
 		child["minItems"] = schema.MinItems
+	}
+	if schema.MaxItems > 0 {
+		child["maxItems"] = schema.MaxItems
 	}
 	return true
 }
