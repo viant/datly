@@ -36,6 +36,33 @@ type scalarExportRow struct {
 
 const aliasExportTag = `choice:"0:Pending" choice:"10:Active" enumStyle:"literal" enumOutputAlias:"0:" enumOutputAlias:"10:ACTIVE_TOKEN"`
 
+func TestScalarSelectionPreservesOtherFormatValues(t *testing.T) {
+	type row struct {
+		State string `json:"state" xml:"State" choice:"10:Active" enumStyle:"literal" enumOutputAlias:"10:ACTIVE_TOKEN"`
+	}
+	value := []row{{State: "ACTIVE_TOKEN"}}
+	plan, err := (Compiler{}).Compile(CompileInput{Type: reflect.TypeOf(value)})
+	require.NoError(t, err)
+	filter, err := structjson.NewFieldFilter(reflect.TypeOf(value), []structjson.FieldSelection{{Fields: []string{"State"}}})
+	require.NoError(t, err)
+	ctx := dexec.CaptureOutputSelection(t.Context())
+	scoped, finish := dexec.ScopeOutputSelection(ctx)
+	dexec.BeginOutputSelection(scoped)
+	dexec.PublishOutputSelection(scoped, value, filter)
+	finish(value, nil)
+	for _, format := range []string{"xml", "tabular"} {
+		for _, selected := range []bool{false, true} {
+			call := context.Context(t.Context())
+			if selected {
+				call = ctx
+			}
+			result, err := plan.Encode(call, format, value)
+			require.NoError(t, err)
+			require.Contains(t, string(result.Data), "ACTIVE_TOKEN", format)
+		}
+	}
+}
+
 func scalarExportPlan(t testing.TB, reject bool) (*Plan, *Plan) {
 	t.Helper()
 	typ := reflect.TypeFor[[]scalarExportRow]()
@@ -314,7 +341,7 @@ func TestScalarContractEmbeddedSelectionKeepsCanonicalIndexes(t *testing.T) {
 	value := []row{{ScalarExportEmbedded: &ScalarExportEmbedded{State: "ACTIVE_TOKEN", Other: "unselected"}, Sibling: ScalarExportEmbedded{State: "ACTIVE_TOKEN", Other: "sibling"}, Hidden: "PRIVATE"}}
 	filter, err := structjson.NewFieldFilter(typ, []structjson.FieldSelection{{Fields: []string{"State", "Sibling"}, Indexes: [][]int{{0, 0}}}})
 	require.NoError(t, err)
-	selected, projected, err := plan.selectedPresentation(value, filter)
+	selected, projected, err := plan.selectedPresentation(value, filter, plan.formatPresentation)
 	require.NoError(t, err)
 	for _, format := range []string{"csv", "xls", "xlsx"} {
 		result, err := selected.Encode(t.Context(), format, projected)

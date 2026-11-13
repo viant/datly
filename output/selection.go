@@ -11,12 +11,12 @@ import (
 // selectedPresentation reuses the compiled typed presentation owner for every
 // non-JSON codec. A new request plan owns encoder caches for the projected type;
 // registered plans and application values are never modified.
-func (p *Plan) selectedPresentation(value any, filter dexec.OutputFieldFilter) (*Plan, any, error) {
+func (p *Plan) selectedPresentation(value any, filter dexec.OutputFieldFilter, scalarAuthority *presentation) (*Plan, any, error) {
 	indexed, ok := filter.(indexExcluder)
 	if !ok {
 		return nil, nil, fmt.Errorf("output selection requires canonical field indexes")
 	}
-	projection, err := (presentationCompiler{excluded: p.exclude, selected: indexed, representation: p.representation, hideJSON: p.effectiveSource != nil, authority: p.formatPresentation}).compile(p.typeOf, "", nil)
+	projection, err := (presentationCompiler{excluded: p.exclude, selected: indexed, representation: p.representation, hideJSON: p.effectiveSource != nil, authority: scalarAuthority}).compile(p.typeOf, "", nil)
 	if err != nil {
 		return nil, nil, err
 	}

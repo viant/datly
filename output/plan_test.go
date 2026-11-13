@@ -360,7 +360,7 @@ func TestOutputSelectionCompilationStopsAtFullyIncludedRecursiveBranch(t *testin
 	require.NoError(t, err)
 	plan, err := (Compiler{}).Compile(CompileInput{Type: reflect.TypeOf(value), DataField: "Rows"})
 	require.NoError(t, err)
-	selected, projected, err := plan.selectedPresentation(value, filter)
+	selected, projected, err := plan.selectedPresentation(value, filter, nil)
 	require.NoError(t, err)
 	rows, err := selected.rows.value(projected)
 	require.NoError(t, err)

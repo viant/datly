@@ -364,7 +364,11 @@ func (p *Plan) Encode(ctx context.Context, format string, value any) (Result, er
 		return Result{Data: data, ContentType: contentType}, nil
 	}
 	if format != "json" && selection != nil {
-		selected, projected, err := p.selectedPresentation(value, selection)
+		var scalarAuthority *presentation
+		if format == "csv" || format == "xls" || format == "xlsx" {
+			scalarAuthority = p.formatPresentation
+		}
+		selected, projected, err := p.selectedPresentation(value, selection, scalarAuthority)
 		if err != nil {
 			return Result{}, err
 		}
