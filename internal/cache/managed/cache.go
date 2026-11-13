@@ -33,16 +33,25 @@ type Store interface {
 
 type Cache struct {
 	cache.Cache
-	store          Store
-	owner          string
-	created        func(string, int)
-	pending        sync.Map
-	nativeCreation bool
+	backendIdentity Identity
+	store           Store
+	owner           string
+	created         func(string, int)
+	pending         sync.Map
+	nativeCreation  bool
 }
 
+// Identity contains only the logical name and backend selected at materialization.
+type Identity struct {
+	Name    string
+	Backend string
+}
+
+func (c *Cache) Identity() Identity { return c.backendIdentity }
+
 // New optionally observes successful lazy entry publication (not cache misses).
-func New(native cache.Cache, store Store, owner string, observers ...func(string, int)) *Cache {
-	result := &Cache{Cache: native, store: store, owner: owner}
+func New(native cache.Cache, store Store, owner string, identity Identity, observers ...func(string, int)) *Cache {
+	result := &Cache{Cache: native, store: store, owner: owner, backendIdentity: identity}
 	if len(observers) > 0 {
 		result.created = observers[0]
 		if source, ok := native.(interface{ SetCreationObserver(func(string, int)) }); ok {

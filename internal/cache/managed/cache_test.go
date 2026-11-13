@@ -33,7 +33,7 @@ func service(t *testing.T, root, owner string) *Cache {
 	t.Helper()
 	native, err := afs.NewCache(root, time.Minute, owner, nil)
 	require.NoError(t, err)
-	return New(native, NewFileStore(root+"/generations/"+owner), owner)
+	return New(native, NewFileStore(root+"/generations/"+owner), owner, Identity{})
 }
 func query(t *testing.T, db *sql.DB, service cache.Cache, matcher *cache.ParmetrizedQuery, refresh bool, emit func()) (string, *cache.Stats) {
 	t.Helper()

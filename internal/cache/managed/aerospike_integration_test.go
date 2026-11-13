@@ -50,7 +50,7 @@ func TestManagedAerospikeIntegration(t *testing.T) {
 					lazyCreated.Add(int64(entries))
 				}
 			}
-			first := New(native, store, owner, observer)
+			first := New(native, store, owner, Identity{}, observer)
 			if os.Getenv("DATLY_REQUIRE_NATIVE_CREATION_METRICS") == "1" {
 				require.True(t, first.nativeCreation, "native SQLX creation observer must be active")
 			}
@@ -58,7 +58,7 @@ func TestManagedAerospikeIntegration(t *testing.T) {
 			require.NoError(t, err)
 			secondStore, err := NewAerospikeStore(client, namespace, set, owner)
 			require.NoError(t, err)
-			second := New(secondNative, secondStore, owner, observer)
+			second := New(secondNative, secondStore, owner, Identity{}, observer)
 			db := database(t)
 			column := ""
 			if grouped {

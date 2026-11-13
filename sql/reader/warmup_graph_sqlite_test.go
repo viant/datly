@@ -85,6 +85,16 @@ func TestGraphWarmupSQLite(t *testing.T) {
 			if tc.summary {
 				wantCount++
 			}
+			// Describing expanded IndexMeta work must not create another scheduled
+			// target or change how many native populations Warmup performs.
+			targets := execution.WarmupTargets()
+			wantWork := 1
+			if tc.summary {
+				wantWork++
+			}
+			if len(targets) != 1 || len(targets[0].Work) != wantWork {
+				t.Fatalf("warmup targets=%+v, want one target with %d work items", targets, wantWork)
+			}
 			if count, err := execution.Warmup(ctx, dexec.ReaderWarmupInvocation{Input: &input{}}); err != nil || count != wantCount {
 				t.Fatalf("Warmup=%d,%v", count, err)
 			}
