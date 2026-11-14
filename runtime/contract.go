@@ -12,7 +12,9 @@ import (
 )
 
 type contractPlanKey struct {
-	component *RegisteredComponent
+	// Lazy lookup prepares a fresh registration copy. The component key is
+	// stable within the Runtime's pinned generation and across those copies.
+	component spec.Key
 	route     string
 }
 type contractPlanEntry struct {
@@ -118,7 +120,7 @@ func (r *Runtime) resolveContractMode(ctx context.Context, target dexec.Componen
 }
 
 func (r *Runtime) contractPlansFor(entry *RegisteredComponent, route string) (*contractPlanEntry, error) {
-	key := contractPlanKey{component: entry, route: route}
+	key := contractPlanKey{component: entry.Component.Key, route: route}
 	stored, _ := r.contractPlans.LoadOrStore(key, &contractPlanEntry{})
 	plans := stored.(*contractPlanEntry)
 	plans.once.Do(func() {

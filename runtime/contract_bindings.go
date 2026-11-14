@@ -259,7 +259,7 @@ func (r *Runtime) contractBindingProof(ctx context.Context, ref spec.RouteRef) (
 	if err != nil {
 		return nil, err
 	}
-	stored, _ := r.contractPlans.LoadOrStore(contractPlanKey{component: entry, route: ref.String()}, &contractPlanEntry{})
+	stored, _ := r.contractPlans.LoadOrStore(contractPlanKey{component: entry.Component.Key, route: ref.String()}, &contractPlanEntry{})
 	plans := stored.(*contractPlanEntry)
 	plans.proofMu.Lock()
 	defer plans.proofMu.Unlock()
