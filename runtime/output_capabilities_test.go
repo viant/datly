@@ -9,6 +9,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/stretchr/testify/require"
 	"github.com/viant/bindly"
 	"github.com/viant/datly/internal/testharness"
 	rhandler "github.com/viant/datly/runtime/handler"
@@ -120,3 +121,46 @@ func TestRuntimeOutputCapabilityAndEarlyFinalizerRoundTrip(t *testing.T) {
 }
 
 var _ = spec.KindComponent
+
+func TestLazyOutputCapabilityPlanRetainsOneEntry(t *testing.T) {
+	for _, outputType := range []reflect.Type{reflect.TypeFor[outputCapabilityOutput](), reflect.TypeFor[struct{ Value string }]()} {
+		t.Run(outputType.String(), func(t *testing.T) {
+			artifact := componentArtifact(t, componentSpec("Values", http.MethodGet, "/values", nil), reflect.TypeFor[outputCapabilityInput](), outputType)
+			registration := &registry.RegisteredComponent{Component: artifact.Component, Input: artifact.Input, Output: artifact.Output, OutputType: outputType, Reader: &outputCapabilityReader{}}
+			newRuntime := func() *Runtime {
+				rt, err := NewIndexedRuntime([]*spec.Component{artifact.Component}, nil, constantComponentLoader{registration: registration})
+				require.NoError(t, err)
+				t.Cleanup(func() { _ = rt.Shutdown(context.Background()) })
+				return rt
+			}
+			rt := newRuntime()
+			var first *bindly.Plan
+			for i := 0; i < 32; i++ {
+				entry, err := rt.registeredComponent(t.Context(), artifact.Component.Key)
+				require.NoError(t, err)
+				plan, err := rt.outputCapabilityPlan(entry)
+				require.NoError(t, err)
+				if outputType == reflect.TypeFor[outputCapabilityOutput]() {
+					require.NotNil(t, plan)
+					if first != nil {
+						require.Same(t, first, plan)
+					}
+					first = plan
+				} else {
+					require.Nil(t, plan)
+				}
+			}
+			count := 0
+			rt.outputCapabilityPlans.Range(func(_, _ any) bool { count++; return true })
+			require.Equal(t, 1, count, "lazy requests must not retain registration copies, including empty capability plans")
+			if first != nil {
+				next := newRuntime()
+				entry, err := next.registeredComponent(t.Context(), artifact.Component.Key)
+				require.NoError(t, err)
+				plan, err := next.outputCapabilityPlan(entry)
+				require.NoError(t, err)
+				require.NotSame(t, first, plan, "new generations retain independent plans")
+			}
+		})
+	}
+}
