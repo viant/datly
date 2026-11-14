@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"github.com/viant/bindly"
 	"github.com/viant/datly/bootstrap"
 	gateway "github.com/viant/datly/gateway/http"
 	"github.com/viant/datly/internal/testharness/mcpclient"
@@ -16,24 +17,42 @@ import (
 	"github.com/viant/datly/runtime/registry"
 	"github.com/viant/datly/spec"
 	"github.com/viant/mcp-protocol/schema"
+	xcontract "github.com/viant/xdatly/contract"
+	xmcp "github.com/viant/xdatly/handler/mcp"
 )
 
 type queryCollectionEnumInput struct {
-	Codes    []int    `parameter:",kind=query,in=codes" mcpEnum:"true" choice:"7:ALPHA" choice:"3:BETA" enumAccept:"literal"`
+	Codes    []int    `parameter:",kind=query,in=codes" mcpEnum:"true" choice:"7:ALPHA" choice:"3:BETA" enumAccept:"literal" enumStyle:"literal"`
 	Ordinary []int    `parameter:",kind=query,in=ordinary"`
 	Labels   []string `parameter:",kind=query,in=labels" mcpEnum:"true" choice:"ALPHA" choice:"BETA"`
 }
 
+type queryCollectionEnumOutput struct {
+	OK bool `json:"ok"`
+}
+
+func (*queryCollectionEnumInput) Contract(ctx context.Context, _ bindly.Binder) (*xcontract.Policy, error) {
+	if _, ok := xmcp.LookupContext(ctx); ok {
+		return nil, nil
+	}
+	return &xcontract.Policy{Name: "query-collection-rest-storage:v1", Field: func(_ string, _ reflect.Type, field *xcontract.Field) (*xcontract.Field, error) {
+		if field.Tag.Get("mcpEnum") != "true" {
+			return nil, nil
+		}
+		return field.RemoveTag("choice").RemoveTag("enumAccept").RemoveTag("enumStyle"), nil
+	}}, nil
+}
+
 func TestMCPQueryCollectionEnumNativeTransportAndREST(t *testing.T) {
 	component := &spec.Component{Key: spec.Key{Kind: spec.KindComponent, Name: "query_collection_enum"}, Routes: []*spec.Route{{Method: "GET", Path: "/query-collection-enum", MCP: []*spec.MCPExposure{{Kind: spec.MCPExposureTool, Name: "query_collection_enum"}}}}}
-	artifact, err := bootstrap.BuildArtifact(bootstrap.ArtifactInput{Component: component, InputType: reflect.TypeFor[queryCollectionEnumInput](), OutputType: reflect.TypeFor[queryCollectionEnumInput]()})
+	artifact, err := bootstrap.BuildArtifact(bootstrap.ArtifactInput{Component: component, InputType: reflect.TypeFor[queryCollectionEnumInput](), OutputType: reflect.TypeFor[queryCollectionEnumOutput]()})
 	require.NoError(t, err)
 	var captured *queryCollectionEnumInput
 	calls := 0
-	entry, err := artifact.Registration(registry.RegisteredComponent{Handler: custom.NewFunc(func(_ context.Context, in *queryCollectionEnumInput) (*queryCollectionEnumInput, error) {
+	entry, err := artifact.Registration(registry.RegisteredComponent{Handler: custom.NewFunc(func(_ context.Context, in *queryCollectionEnumInput) (*queryCollectionEnumOutput, error) {
 		calls++
 		captured = in
-		return in, nil
+		return &queryCollectionEnumOutput{OK: true}, nil
 	})})
 	require.NoError(t, err)
 	runtime, err := druntime.NewRuntime([]*registry.RegisteredComponent{entry})
@@ -53,7 +72,7 @@ func TestMCPQueryCollectionEnumNativeTransportAndREST(t *testing.T) {
 		valid bool
 		codes []int
 	}{
-		{"mapped", map[string]any{"codes": []any{"BETA", "ALPHA"}, "ordinary": []any{19, 23}, "labels": []any{"BETA"}}, true, []int{3, 7}},
+		{"mapped", map[string]any{"codes": []any{"BETA", "ALPHA", "BETA"}, "ordinary": []any{19, 23}, "labels": []any{"BETA"}}, true, []int{3, 7, 3}},
 		{"empty", map[string]any{"codes": []any{}}, true, []int{}},
 		{"null", map[string]any{"codes": nil}, true, nil},
 		{"omitted", map[string]any{}, true, nil},
@@ -74,7 +93,7 @@ func TestMCPQueryCollectionEnumNativeTransportAndREST(t *testing.T) {
 			}
 			require.NoError(t, err)
 			require.NotNil(t, result)
-			require.False(t, result.IsError != nil && *result.IsError)
+			require.False(t, result.IsError != nil && *result.IsError, "%+v", result)
 			require.Equal(t, before+1, calls)
 			require.Equal(t, tc.codes, captured.Codes)
 			if tc.name == "mapped" {

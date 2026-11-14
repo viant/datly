@@ -39,3 +39,24 @@ func TestQueryListOwnsCollectionEnumAfterNativeParsing(t *testing.T) {
 	_, err = selected.Transform(ctx, nil, "UNKNOWN")
 	require.ErrorIs(t, err, context.Canceled)
 }
+
+func TestQueryListNumericEnumRetainsStorageType(t *testing.T) {
+	target := reflect.TypeFor[[]int]()
+	enumeration, err := choice.ParseEnum(`mcpEnum:"true" enumAccept:"literal" enumStyle:"literal" choice:"7:ALPHA" choice:"3:BETA"`, target)
+	require.NoError(t, err)
+	base := &queryListTransformer{target: target, allowEmpty: true}
+	configured, err := base.WithEnum(enumeration)
+	require.NoError(t, err)
+	for _, raw := range []any{"3,7,3", []string{"3", "7", "3"}, provider.TypedQueryValue{Value: []int{3, 7, 3}}} {
+		actual, err := configured.Transform(t.Context(), nil, raw)
+		require.NoError(t, err)
+		require.Equal(t, []int{3, 7, 3}, actual)
+	}
+	actual, err := configured.Transform(t.Context(), nil, "")
+	require.NoError(t, err)
+	require.Equal(t, []int{}, actual)
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	_, err = configured.Transform(ctx, nil, provider.TypedQueryValue{Value: []int{3}})
+	require.ErrorIs(t, err, context.Canceled)
+}

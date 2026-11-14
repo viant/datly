@@ -38,8 +38,11 @@ func (t *queryListTransformer) WithEnum(plan *choice.Enum) (xform.Transformer, e
 
 func (t *queryListTransformer) Transform(ctx context.Context, _ locator.Resolver, raw any) (output any, resultErr error) {
 	defer func() {
-		if resultErr == nil && t.enumeration != nil {
-			output, resultErr = t.enumeration.Encode(output)
+		if resultErr == nil && t.enumeration != nil && t.enumeration.CollectionElement() == nil {
+			// Legacy string collections retain membership checks. Numeric enum
+			// collections are admitted by the prepared MCP codec before parsing;
+			// output presentation must never replace their typed storage values.
+			_, resultErr = t.enumeration.Encode(output)
 		}
 	}()
 	if err := ctx.Err(); err != nil {
