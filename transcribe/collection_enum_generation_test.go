@@ -26,12 +26,21 @@ func TestCollectionEnumNativeGeneration(t *testing.T) {
 #setting($_ = $route('/records','GET'))
 #setting($_ = $mcp('records.query'))
 #define($_ = $State<[]string>(query/state).Optional().WithPredicate(0,'in','r','channels').WithTag('mcpEnum:"true" enumAccept:"literal" choice:"in_use" choice:"shared" choice:"not_shared"'))
+#define($_ = $Kinds<[]int>(query/kinds).Optional().WithPredicate(0,'in','r','id').WithTag('mcpEnum:"true" enumAccept:"literal" enumStyle:"literal" enumNull:"reject" choice:"1:ALPHA" choice:"2:BETA"'))
 #define($_ = $Data<[]*Row>(output/view))
 SELECT r.*,type(r,'Row'),CAST(r.channels AS '[]string'),tag(r.channels,'mcpEnum:"true" enumAccept:"literal" choice:"DISPLAY" choice:"VIDEO" sqlx:"channels,enc=JSON"') FROM records r`}
 	generated, err := (Generator{Operation: "get"}).Generate(ctx, GenerationRequest{Source: source, Destination: root})
 	require.NoError(t, err)
 	queryFound := false
+	numericFound := false
 	for _, field := range generated.Result.Plan.Input.Fields {
+		if field.Name == "Kinds" {
+			numericFound = true
+			enum, err := choice.ParseCollectionEnum(reflect.StructTag(field.Tag), reflect.TypeFor[[]int]())
+			require.NoError(t, err)
+			require.NotNil(t, enum)
+			require.Equal(t, []any{"ALPHA", "BETA"}, enum.CollectionItems().WireValues())
+		}
 		if field.Name == "State" {
 			queryFound = true
 			values, err := choice.Tags(reflect.StructTag(field.Tag))
@@ -40,6 +49,7 @@ SELECT r.*,type(r,'Row'),CAST(r.channels AS '[]string'),tag(r.channels,'mcpEnum:
 		}
 	}
 	require.True(t, queryFound)
+	require.True(t, numericFound)
 	found := false
 	for _, view := range generated.Result.Plan.Views {
 		for _, field := range view.Fields {
@@ -60,6 +70,13 @@ func TestReloadCollectionEnum(t *testing.T) {
  component,e:=(bootstrap.ContractResolver{Component:&spec.Component{Key:spec.Key{Kind:spec.KindComponent,Name:"records"},Routes:[]*spec.Route{{Method:"GET",Path:"/records",MCP:[]*spec.MCPExposure{{Kind:spec.MCPExposureTool,Name:"records.query"}}}}},InputType:x.NewType(input)}).Resolve();if e!=nil{t.Fatal(e)}
  if len(component.Parameters)==0{t.Fatal("missing reloaded parameters")};predicateFound:=false;for _,parameter:=range component.Parameters{if parameter.Name=="State"{predicateFound=len(parameter.Predicates)==1}};if !predicateFound{t.Fatal("query predicate lost on reload")}
  artifact,e:=bootstrap.BuildArtifact(bootstrap.ArtifactInput{Component:component,InputType:input});if e!=nil{t.Fatal(e)};contract,ok:=artifact.Input.ForRoute(spec.RouteRef{Method:"GET",Path:"/records"});if !ok{t.Fatal("missing route contract")};plan,e:=mtool.NewCompiler().Compile(mtool.Input{Component:component.Key,Exposure:component.Routes[0].MCP[0],Contract:contract});if e!=nil{t.Fatal(e)};stateSchema:=plan.Metadata().InputSchema.Properties["state"];if stateSchema==nil{t.Fatal("missing state schema")};want:=[]any{"in_use","shared","not_shared"};if !reflect.DeepEqual(stateSchema["items"].(map[string]any)["enum"],want){t.Fatalf("actual MCP input schema %%#v",stateSchema)}
+ kinds,ok:=input.FieldByName("Kinds");if !ok||kinds.Type!=reflect.TypeFor[[]int](){t.Fatalf("integer query storage: %%v",kinds)}
+ numeric,e:=choice.ParseCollectionEnum(kinds.Tag,kinds.Type);if e!=nil||numeric==nil{t.Fatalf("integer collection codec: %%v",e)}
+ kindsSchema:=plan.Metadata().InputSchema.Properties["kinds"];if kindsSchema==nil||!reflect.DeepEqual(kindsSchema["items"].(map[string]any)["enum"],[]any{"ALPHA","BETA"}){t.Fatalf("actual numeric MCP schema %%#v",kindsSchema)}
+ numericPredicate:=false;for _,p:=range component.Parameters{if p.Name=="Kinds"{numericPredicate=len(p.Predicates)==1}};if !numericPredicate{t.Fatal("integer predicate lost on reload")}
+ decoded,e:=numeric.DecodeJSON([]byte("[\"ALPHA\",\"BETA\"]"));if e!=nil{t.Fatal(e)};var stored []int;if e=json.Unmarshal(decoded,&stored);e!=nil||!reflect.DeepEqual(stored,[]int{1,2}){t.Fatalf("integer storage %%v: %%v",stored,e)}
+ empty,e:=numeric.DecodeJSON([]byte("[]"));if e!=nil{t.Fatal(e)};if e=json.Unmarshal(empty,&stored);e!=nil||stored==nil||len(stored)!=0{t.Fatalf("empty integer storage %%v: %%v",stored,e)}
+ for _,raw:=range []string{"null","[null]","[1]","[\"UNKNOWN\"]","[9223372036854775808]","\"ALPHA\""}{if _,e=numeric.DecodeJSON([]byte(raw));e==nil{t.Fatalf("accepted invalid integer collection %%s",raw)}}
  typ:=reflect.TypeFor[%s]();data,ok:=typ.FieldByName("Data");if !ok{t.Fatal("missing Data")};row:=data.Type;for row.Kind()==reflect.Pointer||row.Kind()==reflect.Slice{row=row.Elem()};field,ok:=row.FieldByName("Channels");if !ok{t.Fatal("missing Channels")}
  enum,e:=choice.ParseCollectionEnum(field.Tag,field.Type);if e!=nil||enum==nil{t.Fatalf("linked collection: %%v",e)}
  for _,raw:=range []string{"null","[]", "[\"DISPLAY\",\"VIDEO\"]"}{if _,e:=enum.DecodeJSON([]byte(raw));e!=nil{t.Fatalf("%%s: %%v",raw,e)}}

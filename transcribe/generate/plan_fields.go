@@ -319,6 +319,7 @@ func canonicalFieldMetadata(param *spec.Parameter) ([]structTagValue, error) {
 		result = append(result, structTagValue{name: "wireSchemas", value: string(encoded)})
 	}
 	var constraint *choice.Constraint
+	var collectionChoices []string
 	var sourceType reflect.Type
 	if strings.Contains(param.Tag, "choice:") || param.WireSchema != nil && len(param.WireSchema.Enum) > 0 {
 		expression := param.WireTypeExpr
@@ -353,6 +354,14 @@ func canonicalFieldMetadata(param *spec.Parameter) ([]structTagValue, error) {
 			// Collection membership belongs to its codec. Preserve its ordered
 			// item metadata when replacing canonical choice tags below.
 			constraint = collection.CollectionItems()
+			if collection.CollectionElement() != nil {
+				// Numeric collection choices also map literals to storage values;
+				// rebuilding from the wire domain would renumber explicit ordinals.
+				collectionChoices, err = choice.Tags(fieldTag)
+				if err != nil {
+					return nil, err
+				}
+			}
 		} else {
 			constraint, err = choice.Parse(fieldTag, sourceType)
 			if err != nil {
@@ -370,7 +379,11 @@ func canonicalFieldMetadata(param *spec.Parameter) ([]structTagValue, error) {
 		}
 		constraint = compatibility
 	}
-	if constraint != nil {
+	if collectionChoices != nil {
+		for _, value := range collectionChoices {
+			result = append(result, structTagValue{name: "choice", value: value})
+		}
+	} else if constraint != nil {
 		for _, value := range constraint.WireValues() {
 			text := fmt.Sprint(value)
 			if reflect.ValueOf(value).Kind() == reflect.String {

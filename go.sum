@@ -1159,6 +1159,8 @@ github.com/viant/mcp-protocol v0.19.2-0.20261113172249-90a431f4e114 h1:L3e314hO3
 github.com/viant/mcp-protocol v0.19.2-0.20261113172249-90a431f4e114/go.mod h1:oiqL75rP6jcFxR9/rGpRT18JRqgGBfYfR4f0bxe6/ag=
 github.com/viant/mcp-protocol v0.19.2-0.20261113180806-de65252f3921 h1:OrlOqR12ye/SkSlRL7MAkRcgM2qjoPYm9KpZGQrq8qo=
 github.com/viant/mcp-protocol v0.19.2-0.20261113180806-de65252f3921/go.mod h1:x2jdXKhYed8shL9loDWPdNWAjHKwTHxDFgO7OlnXlXg=
+github.com/viant/mcp-protocol v0.19.2-0.20261114220942-9489f5fccb2b h1:5JJHhiDvxQUa0HHyTYygNeh4HL9wGP/ypfO5JFAR41g=
+github.com/viant/mcp-protocol v0.19.2-0.20261114220942-9489f5fccb2b/go.mod h1:Kkedyx7NfyPfyeJ4Ga71KtlwJaKmKW6659H4z0WWn+E=
 github.com/viant/parsly v0.3.3 h1:7ytgfLOG4Ils+wviGacWxRD0gAUvVEH/iGsSE+UI8YM=
 github.com/viant/parsly v0.3.3/go.mod h1:85fneXJbErKMGhSQto3A5ElTQCwl3t74U9cSV0waBHw=
 github.com/viant/scy v0.35.1-0.20260914041206-699e6c909726 h1:vXZewpcbOqVvj1yNxwT5mLZzVZXcJViKzv22a0v2uK0=
@@ -1249,6 +1251,8 @@ github.com/viant/tagly v0.4.2-0.20261113180037-b181c092b052 h1:7mJn7u1iket9lmtGH
 github.com/viant/tagly v0.4.2-0.20261113180037-b181c092b052/go.mod h1:PauQQkHmAvL5lFGr4gIgi+PE0aUPggBIBYN34sX2Oes=
 github.com/viant/tagly v0.4.2-0.20261113182338-188615d27a98 h1:vGpVOvcFg8O6pdUV8nfzS5H/DcSeosZXAs/rOp6+feM=
 github.com/viant/tagly v0.4.2-0.20261113182338-188615d27a98/go.mod h1:PauQQkHmAvL5lFGr4gIgi+PE0aUPggBIBYN34sX2Oes=
+github.com/viant/tagly v0.4.2-0.20261114220424-b7354b0404e2 h1:ya5A9AeSr3GW8zAnGJZANgeq3qkthsBlCtuT1VZz6FY=
+github.com/viant/tagly v0.4.2-0.20261114220424-b7354b0404e2/go.mod h1:PauQQkHmAvL5lFGr4gIgi+PE0aUPggBIBYN34sX2Oes=
 github.com/viant/toolbox v0.24.0/go.mod h1:OxMCG57V0PXuIP2HNQrtJf2CjqdmbrOx5EkMILuUhzM=
 github.com/viant/toolbox v0.34.5/go.mod h1:OxMCG57V0PXuIP2HNQrtJf2CjqdmbrOx5EkMILuUhzM=
 github.com/viant/toolbox v0.39.0 h1:za80N68bwfMNbdt9MbzegGY/4j6GWaMR2Pk/edl7jmI=
