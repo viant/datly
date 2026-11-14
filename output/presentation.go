@@ -199,33 +199,7 @@ func (p *presentation) value(source reflect.Value) (reflect.Value, error) {
 		if err != nil {
 			return reflect.Value{}, err
 		}
-		if wire == nil {
-			return reflect.Zero(p.target), nil
-		}
-		target := reflect.New(p.target).Elem()
-		value := target
-		for value.Kind() == reflect.Pointer {
-			value.Set(reflect.New(value.Type().Elem()))
-			value = value.Elem()
-		}
-		if number, ok := wire.(json.Number); ok {
-			if value.Kind() >= reflect.Int && value.Kind() <= reflect.Int64 {
-				integer, err := strconv.ParseInt(string(number), 10, value.Type().Bits())
-				if err != nil {
-					return reflect.Value{}, err
-				}
-				value.SetInt(integer)
-			} else {
-				integer, err := strconv.ParseUint(string(number), 10, value.Type().Bits())
-				if err != nil {
-					return reflect.Value{}, err
-				}
-				value.SetUint(integer)
-			}
-		} else {
-			value.Set(reflect.ValueOf(wire).Convert(value.Type()))
-		}
-		return target, nil
+		return enumPresentationValue(p.target, wire)
 	}
 	if (source.Kind() == reflect.Pointer || source.Kind() == reflect.Slice) && source.IsNil() {
 		return reflect.Zero(p.target), nil
@@ -268,6 +242,51 @@ func (p *presentation) value(source reflect.Value) (reflect.Value, error) {
 	return source, nil
 }
 
+func enumPresentationValue(targetType reflect.Type, wire any) (reflect.Value, error) {
+	if wire == nil {
+		return reflect.Zero(targetType), nil
+	}
+	target := reflect.New(targetType).Elem()
+	value := target
+	for value.Kind() == reflect.Pointer {
+		value.Set(reflect.New(value.Type().Elem()))
+		value = value.Elem()
+	}
+	if value.Kind() == reflect.Slice {
+		items := reflect.ValueOf(wire)
+		if items.Kind() == reflect.Slice && items.IsNil() {
+			return target, nil
+		}
+		value.Set(reflect.MakeSlice(value.Type(), items.Len(), items.Len()))
+		for i := 0; i < items.Len(); i++ {
+			item, err := enumPresentationValue(value.Type().Elem(), items.Index(i).Interface())
+			if err != nil {
+				return reflect.Value{}, err
+			}
+			value.Index(i).Set(item)
+		}
+		return target, nil
+	}
+	if number, ok := wire.(json.Number); ok {
+		if value.Kind() >= reflect.Int && value.Kind() <= reflect.Int64 {
+			integer, err := strconv.ParseInt(string(number), 10, value.Type().Bits())
+			if err != nil {
+				return reflect.Value{}, err
+			}
+			value.SetInt(integer)
+		} else {
+			integer, err := strconv.ParseUint(string(number), 10, value.Type().Bits())
+			if err != nil {
+				return reflect.Value{}, err
+			}
+			value.SetUint(integer)
+		}
+	} else {
+		value.Set(reflect.ValueOf(wire).Convert(value.Type()))
+	}
+	return target, nil
+}
+
 func presentationOpaque(typ reflect.Type) bool {
 	for _, owner := range []reflect.Type{reflect.TypeFor[json.Marshaler](), reflect.TypeFor[encoding.TextMarshaler]()} {
 		if typ.Implements(owner) || reflect.PointerTo(typ).Implements(owner) {
@@ -285,14 +304,38 @@ func compileEnumPresentation(field reflect.StructField) (*presentation, error) {
 		base = base.Elem()
 	}
 	switch base.Kind() {
-	case reflect.String, reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64, reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+	case reflect.Slice, reflect.String, reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64, reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 	default:
-		// Collection and union codecs retain their existing owners.
+		// Union codecs retain their existing owners.
 		return nil, nil
 	}
 	enumeration, err := choice.ParseEnum(field.Tag, field.Type)
 	if err != nil || enumeration == nil {
 		return nil, err
+	}
+	target, err := enumPresentationType(enumeration)
+	if err != nil {
+		return nil, err
+	}
+	for source := field.Type; source.Kind() == reflect.Pointer; source = source.Elem() {
+		target = reflect.PointerTo(target)
+	}
+	return &presentation{source: field.Type, target: target, enumeration: enumeration}, nil
+}
+
+// enumPresentationType uses the descriptor's prepared item owner; collection
+// declarations are never parsed again to discover the presentation element.
+func enumPresentationType(enumeration *choice.Enum) (reflect.Type, error) {
+	if enumeration.CollectionItems() != nil {
+		item := reflect.TypeFor[string]()
+		if element := enumeration.CollectionElement(); element != nil {
+			var err error
+			item, err = enumPresentationType(element)
+			if err != nil {
+				return nil, err
+			}
+		}
+		return reflect.SliceOf(item), nil
 	}
 	var target reflect.Type
 	switch enumeration.WireType(false) {
@@ -324,8 +367,5 @@ func compileEnumPresentation(field reflect.StructField) (*presentation, error) {
 	default:
 		return nil, fmt.Errorf("enum output requires a single scalar wire type")
 	}
-	for source := field.Type; source.Kind() == reflect.Pointer; source = source.Elem() {
-		target = reflect.PointerTo(target)
-	}
-	return &presentation{source: field.Type, target: target, enumeration: enumeration}, nil
+	return target, nil
 }
