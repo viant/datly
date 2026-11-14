@@ -180,6 +180,14 @@ func compatibleTransportCoverage(authority, child InputField) error {
 	if authorizationJWT {
 		delete(leftTags, "internal")
 		delete(rightTags, "internal")
+		// An explicit JSON exclusion and an absent JSON tag both keep this
+		// verified credential hidden. Named JSON fields must still agree.
+		if leftTags["json"] == "-" {
+			delete(leftTags, "json")
+		}
+		if rightTags["json"] == "-" {
+			delete(rightTags, "json")
+		}
 	}
 	if !reflect.DeepEqual(leftTags, rightTags) {
 		return fmt.Errorf("different public field tags")
