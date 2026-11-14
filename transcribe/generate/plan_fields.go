@@ -344,9 +344,20 @@ func canonicalFieldMetadata(param *spec.Parameter) ([]structTagValue, error) {
 		if sourceType == nil {
 			return nil, fmt.Errorf("parameter %s choice requires scalar source type", param.Name)
 		}
-		constraint, err = choice.Parse(reflect.StructTag(dtag.CanonicalFieldTag(param.Tag)), sourceType)
+		fieldTag := reflect.StructTag(dtag.CanonicalFieldTag(param.Tag))
+		collection, err := choice.ParseCollectionEnum(fieldTag, sourceType)
 		if err != nil {
 			return nil, err
+		}
+		if collection != nil {
+			// Collection membership belongs to its codec. Preserve its ordered
+			// item metadata when replacing canonical choice tags below.
+			constraint = collection.CollectionItems()
+		} else {
+			constraint, err = choice.Parse(fieldTag, sourceType)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 	if param.WireSchema != nil && len(param.WireSchema.Enum) > 0 {
