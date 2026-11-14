@@ -70,7 +70,7 @@ func TestGeneratedRowAuthorityPreservesLinkedHookKeys(t *testing.T) {
 FROM parents p JOIN children c ON p.DERIVED_IDS=c.PARENT_ID`
 			component := &spec.Component{RootView: &spec.View{Name: "parents"}, TypeContext: &spec.TypeContext{PackagePath: pkg}}
 			prepared := &dql.PreparedSource{SQL: sql, Original: sql, Statements: statement.Parse(sql)}
-			authority, err := collectGeneratedRowAuthority(component, prepared, nil, resolver, "hooks.dql", &SourceMap{original: sql})
+			authority, err := collectGeneratedRowAuthority(component, prepared, nil, resolver, "hooks.dql", &SourceMap{original: sql}, nil)
 			if dependency == "Missing" {
 				require.ErrorContains(t, err, "Missing")
 				require.Nil(t, authority)

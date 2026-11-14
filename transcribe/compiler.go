@@ -305,14 +305,14 @@ func (c *componentCompilation) compileViews(ctx context.Context) error {
 	if proofErr != nil {
 		return proofErr
 	}
-	generatedRows, err := collectGeneratedRowAuthority(component, prepared, metadataDeclarations, typeResolver, source.Path, sourceMap)
+	generatedRows, err := collectGeneratedRowAuthority(component, prepared, metadataDeclarations, typeResolver, source.Path, sourceMap, source.Resources)
 	if err != nil {
 		return err
 	}
 	readPlan := generatedRows.root
 	if generatedRows.plan == nil {
 		// Without package declarations, retain ordinary catalog validation.
-		readPlan, err = (&readPlanCompiler{sourceMap: sourceMap, path: source.Path, types: typeResolver}).compile(component, prepared)
+		readPlan, err = (&readPlanCompiler{resources: source.Resources, sourceMap: sourceMap, path: source.Path, types: typeResolver}).compile(component, prepared)
 		if err != nil {
 			return err
 		}

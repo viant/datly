@@ -101,7 +101,11 @@ func (c *declarationCompiler) compile() (*declarationProducts, error) {
 				Cardinality: spec.CardinalityOne,
 				Source:      &spec.ViewSource{SQL: analysis.SQL, URI: strings.TrimSpace(param.ResourceRef), Embeds: dql.EmbeddedSQLRefs(analysis.SQL)},
 			}
-			compiled, err := c.reader.Compile(tcompile.ReadInput{View: view, SQL: readSQL, TypeContext: c.component.TypeContext})
+			input := tcompile.ReadInput{View: view, SQL: readSQL, TypeContext: c.component.TypeContext}
+			if c.resources != nil {
+				input.Resources = c.resources
+			}
+			compiled, err := c.reader.Compile(input)
 			if err != nil {
 				return nil, &declarationError{param: param.Name, identity: param.Identity(), err: err}
 			}
@@ -141,7 +145,11 @@ func (c *declarationCompiler) compile() (*declarationProducts, error) {
 		view.Source.SQL = analysis.SQL
 		view.Source.URI = strings.TrimSpace(param.ResourceRef)
 		view.Source.Embeds = dql.EmbeddedSQLRefs(analysis.SQL)
-		compiled, err := c.reader.Compile(tcompile.ReadInput{View: view, SQL: readSQL, TypeContext: c.component.TypeContext})
+		input := tcompile.ReadInput{View: view, SQL: readSQL, TypeContext: c.component.TypeContext}
+		if c.resources != nil {
+			input.Resources = c.resources
+		}
+		compiled, err := c.reader.Compile(input)
 		if err != nil {
 			return nil, &declarationError{param: name, identity: param.Identity(), err: err}
 		}

@@ -2,15 +2,19 @@ package compile
 
 import (
 	"fmt"
+	"io/fs"
 	"reflect"
 	"strings"
 
 	"github.com/viant/datly/spec"
+	dsql "github.com/viant/datly/sql"
 	"github.com/viant/datly/sql/fragment"
 	"github.com/viant/datly/transcribe/dql"
 	"github.com/viant/parsly"
+	"github.com/viant/sqlparser"
 	"github.com/viant/sqlparser/expr"
 	"github.com/viant/sqlparser/query"
+	sqlsource "github.com/viant/sqlparser/source"
 	"github.com/viant/velty/ast"
 	velexpr "github.com/viant/velty/ast/expr"
 	"github.com/viant/velty/ast/stmt"
@@ -91,20 +95,39 @@ func executableReadStatement(source string) bool {
 	}
 	return false
 }
-func (s *readTemplateSource) restore(root *spec.View, parsed *query.Select, frame TemplateFrame) error {
+func (s *readTemplateSource) restore(root *spec.View, parsed *query.Select, frame TemplateFrame, resources fs.FS, directAuxiliary bool) error {
 	if len(s.fragments) == 0 {
 		return nil
 	}
 	// Direct physical-table readers lower only their outer projection metadata.
 	// Preserve the authored FROM/WHERE/window program rather than serializing
 	// its analysis skeleton, whose control flow is not represented by SQL AST.
+	preservedSuffix := ""
 	if len(root.Relations) == 0 && root.Source != nil && parsed != nil {
 		switch parsed.From.X.(type) {
 		case *expr.Ident, *expr.Selector:
 			originalFrom := topLevelReadFrom(s.original)
 			loweredFrom := topLevelReadFrom(root.Source.SQL)
 			if originalFrom >= 0 && loweredFrom >= 0 && root.Source.SQL != s.original {
-				root.Source.SQL = root.Source.SQL[:loweredFrom] + s.original[originalFrom:]
+				preservedSuffix = s.original[originalFrom:]
+				if directAuxiliary {
+					// Preserve control flow verbatim while retaining the native table
+					// lowering. The parser has already classified this FROM enclosure;
+					// the native lexer supplies its exact range, including nested groups.
+					scanner := sqlsource.NewCodeScanner(preservedSuffix, len("FROM"))
+					for pos, ok := scanner.Next(); ok; pos, ok = scanner.Next() {
+						if sqlsource.IsWhitespace(preservedSuffix[pos]) {
+							continue
+						}
+						_, end, grouped := sqlsource.ReadGroupString(preservedSuffix, pos, '(', ')')
+						if !grouped {
+							return &Error{Code: CodeSQLParse, Offset: originalFrom + pos, Cause: fmt.Errorf("auxiliary source enclosure is missing")}
+						}
+						preservedSuffix = preservedSuffix[:pos] + sqlparser.Stringify(parsed.From.X) + preservedSuffix[end:]
+						break
+					}
+				}
+				root.Source.SQL = root.Source.SQL[:loweredFrom] + preservedSuffix
 				if frame.Suffix != "" {
 					root.Source.SQL += "\n" + frame.Suffix
 				}
@@ -112,15 +135,28 @@ func (s *readTemplateSource) restore(root *spec.View, parsed *query.Select, fram
 		}
 	}
 	found := make(map[string]bool, len(s.fragments))
+	var resolveError error
 	var visit func(*spec.View)
 	visit = func(view *spec.View) {
 		if view == nil {
 			return
 		}
 		if view.Source != nil {
-			fullOriginal := strings.Contains(view.Source.SQL, s.original)
+			ownedSQL := view.Source.SQL
+			if resources != nil && len(view.Source.Embeds) != 0 {
+				resolved := view.Source.Clone()
+				if err := dsql.ResolveSource(view.Name, resolved, resources); err != nil {
+					resolveError = err
+					return
+				}
+				ownedSQL = resolved.SQL
+			}
+			fullOriginal := strings.Contains(ownedSQL, s.original)
 			from := topLevelReadFrom(s.original)
-			directSuffix := view == root && from >= 0 && strings.Contains(view.Source.SQL, s.original[from:])
+			directSuffix := view == root && from >= 0 && strings.Contains(ownedSQL, s.original[from:])
+			if view == root && preservedSuffix != "" && strings.Contains(ownedSQL, preservedSuffix) {
+				directSuffix = true
+			}
 			for _, fragment := range s.fragments {
 				if fullOriginal || (directSuffix && fragment.begin >= from) {
 					found[fragment.marker] = true
@@ -159,6 +195,9 @@ func (s *readTemplateSource) restore(root *spec.View, parsed *query.Select, fram
 		}
 	}
 	visit(root)
+	if resolveError != nil {
+		return resolveError
+	}
 	for _, fragment := range s.fragments {
 		if found[fragment.marker] {
 			continue

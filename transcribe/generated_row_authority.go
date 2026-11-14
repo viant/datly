@@ -6,6 +6,7 @@ import (
 	"go/token"
 	"strings"
 
+	"github.com/viant/bindly/resource"
 	"github.com/viant/datly/spec"
 	authoring "github.com/viant/datly/transcribe/compile"
 	"github.com/viant/datly/transcribe/dql"
@@ -33,7 +34,7 @@ type generatedColumnDependencies struct {
 	err  error
 }
 
-func collectGeneratedRowAuthority(component *spec.Component, prepared *dql.PreparedSource, declarations *declarationProducts, resolver *typecatalog.Resolver, path string, sourceMap *SourceMap, compositions ...*authoring.FactoryComposition) (*generatedRowAuthority, error) {
+func collectGeneratedRowAuthority(component *spec.Component, prepared *dql.PreparedSource, declarations *declarationProducts, resolver *typecatalog.Resolver, path string, sourceMap *SourceMap, resources *resource.Store, compositions ...*authoring.FactoryComposition) (*generatedRowAuthority, error) {
 	a := &generatedRowAuthority{owners: map[string][]*spec.View{}, resolver: resolver}
 	if component.TypeContext == nil || component.TypeContext.PackagePath == "" {
 		return a, nil
@@ -47,7 +48,7 @@ func collectGeneratedRowAuthority(component *spec.Component, prepared *dql.Prepa
 	if len(compositions) != 0 {
 		composition = compositions[0]
 	}
-	root, err := (&readPlanCompiler{composition: composition, path: path, sourceMap: sourceMap, types: resolver,
+	root, err := (&readPlanCompiler{resources: resources, composition: composition, path: path, sourceMap: sourceMap, types: resolver,
 		generatedType: func(string) (bool, error) { return true, nil },
 	}).compile(component, prepared)
 	if err != nil {

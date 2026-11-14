@@ -1,12 +1,50 @@
 package compile
 
 import (
+	"io/fs"
+	"strings"
+
+	"github.com/viant/datly/spec"
+	dsql "github.com/viant/datly/sql"
+	"github.com/viant/datly/transcribe/dql"
 	"github.com/viant/sqlparser"
 	"github.com/viant/sqlparser/expr"
 	"github.com/viant/sqlparser/node"
 	"github.com/viant/sqlparser/query"
-	"strings"
 )
+
+// prepareAuxiliaryResources exposes resource-backed authoring intent before
+// table/auxiliary discovery. Probe with the native lowering pass on a separate
+// AST, then return the unlowered source so discovery still owns that intent.
+// References without markers retain their ordinary deferred resource ownership.
+func prepareAuxiliaryResources(viewName, SQL string, resources fs.FS) (string, error) {
+	refs := dql.EmbeddedSQLRefs(SQL)
+	if resources == nil || len(refs) == 0 {
+		return SQL, nil
+	}
+	source := &spec.ViewSource{SQL: SQL, Embeds: refs}
+	if err := dsql.ResolveSource(viewName, source, resources); err != nil {
+		return "", err
+	}
+	analysis, err := newReadTemplateSource(source.SQL)
+	if err != nil {
+		return "", err
+	}
+	probe, err := parseReadSQL(analysis.AnalysisSQL)
+	if err != nil {
+		// Dynamic SQL not representable by this SELECT parser belongs to the
+		// existing deferred analysis/validation path, as in lowerAuxiliarySource.
+		return SQL, nil
+	}
+	lowered, err := lowerAuxiliarySources(probe)
+	if err != nil {
+		return "", err
+	}
+	if lowered {
+		return source.SQL, nil
+	}
+	return SQL, nil
+}
 
 // lowerAuxiliarySources runs after relation metadata has captured read-only
 // intent. Only complete source-position table enclosures are lowered; derived
