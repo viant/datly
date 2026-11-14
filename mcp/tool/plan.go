@@ -141,8 +141,15 @@ func (p *Plan) scope(ctx context.Context, arguments map[string]interface{}) (*re
 				if err != nil {
 					return nil, err
 				}
-				if _, err = argument.enumeration.DecodeJSON(raw); err != nil {
+				converted, err := argument.enumeration.DecodeJSON(raw)
+				if err != nil {
 					return nil, fmt.Errorf("MCP argument %s: %w", argument.publicName, err)
+				}
+				// Non-body collections use ordinary typed request providers. Admit
+				// their compiled enum representation before those providers decode
+				// storage values; body codecs retain their original JSON ownership.
+				if argument.sourceKind != "body" && value != nil && argument.enumeration.CollectionItems() != nil {
+					normalized[argument.publicName] = json.RawMessage(converted)
 				}
 			}
 		}
