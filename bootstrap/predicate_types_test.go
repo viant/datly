@@ -77,3 +77,18 @@ func TestLinkedPredicateCatalogIsolationConcurrent(t *testing.T) {
 		})
 	}
 }
+
+func TestLinkedPredicateRetainsCompleteCatalogSnapshot(t *testing.T) {
+	const name = "github.com/viant/datly/transcribe/testdata/linkedpredicate.Threshold"
+	catalog := typecatalog.NewCatalog()
+	require.NoError(t, catalog.Register(typecatalog.TypeOriginPackage, x.NewType(reflect.TypeFor[linkedpredicate.Threshold]())))
+	component := &spec.Component{Parameters: []*spec.Parameter{{Name: "Minimum", Predicates: []*spec.Predicate{{Name: "handler", Args: []string{name}}}}}}
+	linked, err := linkPredicateTypes(catalog, component, nil)
+	require.NoError(t, err)
+	require.NotSame(t, catalog, linked, "later changes to supplied authority must not alter the predicate snapshot")
+	other := x.NewType(reflect.TypeFor[aliasOrderScope]())
+	require.NoError(t, catalog.Register(typecatalog.TypeOriginPackage, other))
+	_, found, err := linked.ResolveRuntimeType(typecatalog.PackageAuthority, other.Key())
+	require.NoError(t, err)
+	require.False(t, found)
+}

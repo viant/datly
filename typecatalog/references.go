@@ -26,6 +26,7 @@ func (c *Catalog) ImportReferences(source *Catalog, keys []string) error {
 	updates := map[string][]registration{}
 	for key, entries := range selected {
 		current := append([]registration(nil), c.items[key]...)
+		changed := false
 		for _, entry := range entries {
 			found := false
 			for _, prior := range current {
@@ -39,9 +40,15 @@ func (c *Catalog) ImportReferences(source *Catalog, keys []string) error {
 			}
 			if !found {
 				current = append(current, entry)
+				changed = true
 			}
 		}
-		updates[key] = current
+		if changed {
+			updates[key] = current
+		}
+	}
+	if len(updates) > 0 {
+		c.detachIndexLocked()
 	}
 	for key, entries := range updates {
 		c.items[key] = entries
