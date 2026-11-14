@@ -248,7 +248,13 @@ func TestPreparedInputExecutionNativeLifetime(t *testing.T) {
 	copy := *f.entry
 	reloaded, err := f.rt.contractPlansFor(&copy, f.targets[0].Route.String())
 	require.NoError(t, err)
-	require.NotSame(t, plans.input, reloaded.input, "registration/config generation never reuses an old plan")
+	require.Same(t, plans.input, reloaded.input, "lazy preparation copies retain their generation's plan")
+	// A new Runtime owns the new generation's cache, even when linked types,
+	// component keys, and route names are unchanged.
+	next := newPreparedExecutionFixture(t, true, 2)
+	nextPlans, err := next.rt.contractPlansFor(next.entry, next.targets[0].Route.String())
+	require.NoError(t, err)
+	require.NotSame(t, plans.input, nextPlans.input, "registration/config generation never reuses an old plan")
 	_, err = f.invoke(t.Context(), 0, "nil")
 	require.NoError(t, err)
 	require.EqualValues(t, 9, f.stats.preparation.Load(), "original linked route needs no effective compilation")

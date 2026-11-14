@@ -99,6 +99,9 @@ func (c *Catalog) RegisterPackage(origin TypeOrigin, pkg *smodel.Package) error 
 		// above. Publish it without copying that private graph a second time.
 		updates[key] = append(filtered, registration{Origin: origin, Type: typ})
 	}
+	if len(updates) > 0 {
+		c.detachIndexLocked()
+	}
 	for key, registrations := range updates {
 		if len(registrations) == 0 {
 			delete(c.items, key)

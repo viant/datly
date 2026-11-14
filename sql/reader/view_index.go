@@ -12,8 +12,9 @@ import (
 // Aliases may be duplicated; ambiguity is reported only when that alias is
 // selected, so unrelated repeated child names remain valid.
 type ViewIndex struct {
-	root    *data.View
-	aliases map[string][]*data.View
+	root                *data.View
+	aliases             map[string][]*data.View
+	explicitOffsetLimit []*data.View
 }
 
 func NewViewIndex(component *spec.Component, root *data.View) *ViewIndex {
@@ -27,6 +28,9 @@ func NewViewIndex(component *spec.Component, root *data.View) *ViewIndex {
 		visited[view] = true
 		index.add(view.Spec.Name, view)
 		index.add(view.Spec.Key.Name, view)
+		if policy := view.Spec.Selector; policy != nil && policy.RequireLimitForOffset {
+			index.explicitOffsetLimit = append(index.explicitOffsetLimit, view)
+		}
 		for _, relation := range view.Relations {
 			if relation != nil && relation.Of != nil {
 				visit(relation.Of.View)

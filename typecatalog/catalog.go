@@ -38,6 +38,9 @@ type registration struct {
 type Catalog struct {
 	mu    sync.RWMutex
 	items map[string][]registration
+	// Once shared, the index and its registration slices are immutable. Each
+	// catalog detaches its index before publishing a change.
+	shared bool
 }
 
 func NewCatalog() *Catalog {
@@ -54,6 +57,14 @@ func standardTypes() []*x.Type {
 		x.NewType(reflect.TypeFor[xresponse.Metrics]()),
 	}
 }
+
+var standardTypeKeys = func() []string {
+	var keys []string
+	for _, typ := range standardTypes() {
+		keys = append(keys, typ.Key())
+	}
+	return keys
+}()
 
 func (c *Catalog) Register(origin TypeOrigin, typ *x.Type) error {
 	return c.RegisterAll(origin, typ)
@@ -95,6 +106,7 @@ func (c *Catalog) LinkRuntimeAll(origin TypeOrigin, types ...*x.Type) error {
 	for key, compiled := range linked {
 		registrations := append([]registration(nil), c.items[key]...)
 		matched := false
+		changed := false
 		for index, existing := range registrations {
 			if existing.Origin != origin {
 				continue
@@ -106,6 +118,9 @@ func (c *Catalog) LinkRuntimeAll(origin TypeOrigin, types ...*x.Type) error {
 			if existing.Type.Type != nil && existing.Type.Type != compiled.Type {
 				return fmt.Errorf("type %q is already linked to a different compiled identity", key)
 			}
+			if existing.Type.Type == compiled.Type && (existing.Type.SynteticType == nil || existing.Type.SynteticType.ReflectType == compiled.Type) {
+				continue
+			}
 			descriptor, err := (x.Cloner{}).Type(existing.Type)
 			if err != nil {
 				return err
@@ -115,11 +130,18 @@ func (c *Catalog) LinkRuntimeAll(origin TypeOrigin, types ...*x.Type) error {
 				descriptor.SynteticType.ReflectType = compiled.Type
 			}
 			registrations[index].Type = descriptor
+			changed = true
 		}
 		if !matched {
 			registrations = append(registrations, registration{Origin: origin, Type: compiled})
+			changed = true
 		}
-		updates[key] = registrations
+		if changed {
+			updates[key] = registrations
+		}
+	}
+	if len(updates) > 0 {
+		c.detachIndexLocked()
 	}
 	for key, registrations := range updates {
 		c.items[key] = registrations
@@ -175,7 +197,9 @@ func (c *Catalog) RegisterAll(origin TypeOrigin, types ...*x.Type) error {
 			}
 		}
 		if !alreadyRegistered {
-			c.items[key] = append(c.items[key], registration{Origin: origin, Type: typ})
+			c.detachIndexLocked()
+			registrations := append([]registration(nil), c.items[key]...)
+			c.items[key] = append(registrations, registration{Origin: origin, Type: typ})
 		}
 	}
 	return nil
@@ -217,6 +241,7 @@ func (c *Catalog) LinkRuntimeTypes(origin TypeOrigin, types ...*x.Type) error {
 	for key, runtimeType := range linked {
 		registrations := append([]registration(nil), c.items[key]...)
 		found := false
+		changed := false
 		for index := range registrations {
 			existing := registrations[index]
 			if existing.Origin != origin {
@@ -235,6 +260,9 @@ func (c *Catalog) LinkRuntimeTypes(origin TypeOrigin, types ...*x.Type) error {
 			if existing.Type.Type != nil && existing.Type.Type != runtimeType.Type {
 				return fmt.Errorf("type %q is already linked to a different runtime identity from origin %q", key, origin)
 			}
+			if existing.Type.Type == runtimeType.Type && (existing.Type.SynteticType == nil || existing.Type.SynteticType.ReflectType == runtimeType.Type) {
+				break
+			}
 			enriched, err := (x.Cloner{}).Type(existing.Type)
 			if err != nil {
 				return err
@@ -244,12 +272,19 @@ func (c *Catalog) LinkRuntimeTypes(origin TypeOrigin, types ...*x.Type) error {
 				enriched.SynteticType.ReflectType = runtimeType.Type
 			}
 			registrations[index].Type = enriched
+			changed = true
 			break
 		}
 		if !found {
 			registrations = append(registrations, registration{Origin: origin, Type: runtimeType})
+			changed = true
 		}
-		updates[key] = registrations
+		if changed {
+			updates[key] = registrations
+		}
+	}
+	if len(updates) > 0 {
+		c.detachIndexLocked()
 	}
 	for key, registrations := range updates {
 		c.items[key] = registrations
@@ -263,16 +298,41 @@ func (c *Catalog) Clone() (*Catalog, error) {
 	if c == nil {
 		return nil, fmt.Errorf("type catalog is required")
 	}
-	result := NewCatalog()
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	// Registrations own detached descriptors and never mutate them. Public
-	// lookups clone descriptors; package updates replace registrations. Copy
-	// the mutable index while sharing these private immutable values.
-	for key, registrations := range c.items {
-		result.items[key] = append([]registration(nil), registrations...)
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.items == nil {
+		return NewCatalog(), nil
 	}
-	return result, nil
+	for _, key := range standardTypeKeys {
+		if _, found := c.items[key]; !found {
+			// Preserve Clone's existing default-type restoration after an
+			// explicit package replacement removes a standard registration.
+			result := NewCatalog()
+			for key, registrations := range c.items {
+				result.items[key] = registrations
+			}
+			return result, nil
+		}
+	}
+	// Preserve the snapshot without retaining another full index per compiled
+	// component. Both owners must detach before any subsequent update.
+	c.shared = true
+	return &Catalog{items: c.items, shared: true}, nil
+}
+
+// detachIndexLocked is called only after validation, immediately before a
+// mutation. Registration slices and descriptors remain immutable even when
+// the index itself is private, because older snapshots may still retain them.
+func (c *Catalog) detachIndexLocked() {
+	if !c.shared {
+		return
+	}
+	items := make(map[string][]registration, len(c.items))
+	for key, registrations := range c.items {
+		items[key] = registrations
+	}
+	c.items = items
+	c.shared = false
 }
 
 func (c *Catalog) Resolve(authority Authority, key string) (*x.Type, bool, error) {

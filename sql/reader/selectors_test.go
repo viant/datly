@@ -43,6 +43,42 @@ func (b selectorBinder) Lookup(_ context.Context, key xhandler.ValueKey) (any, b
 	return b.selectors, true, nil
 }
 
+func TestSelectorOffsetLimitUsesFinalNamedOverride(t *testing.T) {
+	type input struct{ Offset int }
+	root := &data.View{Spec: spec.View{Name: "records", Selector: &spec.Selector{RequireLimitForOffset: true, DefaultLimit: 100}}}
+	component := &spec.Component{Name: "RecordSearch"}
+	plan, err := NewPlan(PlanConfig{
+		RootView: root, ViewIndex: NewViewIndex(component, root),
+		SelectorBindings: []SelectorBindingPlan{{View: root, Property: spec.SelectorPropertyOffset, FieldIndex: []int{0}}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name     string
+		override *xstate.Selector
+		wantErr  bool
+	}{
+		{name: "default limit does not count", wantErr: true},
+		{name: "explicit limit", override: &xstate.Selector{Offset: 5, Limit: 10}},
+		{name: "page retains precedence", override: &xstate.Selector{Offset: 5, Page: 2}},
+		{name: "named offset without limit", override: &xstate.Selector{Offset: 5}, wantErr: true},
+		{name: "named selector replaces query offset", override: &xstate.Selector{}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var binder selectorBinder
+			if tc.override != nil {
+				binder.selectors = xstate.Selectors{&xstate.NamedSelector{Name: "RecordSearch", Selector: *tc.override}}
+			}
+			s := &Session{Component: component, Artifact: plan}
+			_, err := resolveInvocationSelectors(t.Context(), s, reflect.ValueOf(&input{Offset: 3}), binder)
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("unexpected selector error: %v", err)
+			}
+		})
+	}
+}
+
 func TestResolveInvocationSelectors_BindsByViewAndAppliesOverrideLast(t *testing.T) {
 	type input struct {
 		Fields []string

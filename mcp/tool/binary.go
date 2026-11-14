@@ -17,6 +17,7 @@ import (
 	requestprovider "github.com/viant/bindly/provider/request"
 	"github.com/viant/datly/internal/xlsbody"
 	"github.com/viant/mcp-protocol/schema"
+	"github.com/viant/x/shape"
 )
 
 const xlsMIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -400,4 +401,8 @@ func (d binaryXLSDecoder) DecodeField(raw []byte, name string, target any) (bool
 		}
 	}
 	return false, nil
+}
+
+func (d binaryXLSDecoder) UnmarshalWithRepresentation(raw []byte, target any, metadata *shape.Representation) error {
+	return (xlsbody.Decoder{Context: d.ctx}).UnmarshalWithRepresentation(raw, target, metadata)
 }

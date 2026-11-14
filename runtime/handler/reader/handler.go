@@ -24,6 +24,18 @@ func NewHandler(reader dexec.Reader, input *registry.RouteInputContract) *Handle
 	return &Handler{reader: reader, input: input}
 }
 
+// ValidateSelectorWindow lets the native reader check opted-in pagination
+// policy after binding and before domain initialization.
+func (h *Handler) ValidateSelectorWindow(ctx context.Context, invocation rhandler.Invocation) error {
+	reader, ok := h.reader.(interface {
+		ValidateSelectorWindow(context.Context, any, xh.Binder) error
+	})
+	if !ok {
+		return nil
+	}
+	return reader.ValidateSelectorWindow(ctx, invocation.Input, invocation.Binder)
+}
+
 func (h *Handler) Execute(ctx context.Context, invocation rhandler.Invocation) (any, error) {
 	if h == nil || h.reader == nil {
 		return nil, fmt.Errorf("reader handler is not initialized")

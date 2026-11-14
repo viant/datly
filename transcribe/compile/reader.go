@@ -3,6 +3,7 @@ package compile
 import (
 	"errors"
 	"fmt"
+	"io/fs"
 	"strings"
 
 	"github.com/viant/datly/spec"
@@ -37,9 +38,11 @@ type ReadInput struct {
 	FactoryComposition *FactoryComposition
 	View               *spec.View
 	SQL                string
-	Template           TemplateFrame
-	Types              *typecatalog.Resolver
-	TypeContext        *spec.TypeContext
+	// Resources supplies the native SQL resource scope when it is already bound.
+	Resources   fs.FS
+	Template    TemplateFrame
+	Types       *typecatalog.Resolver
+	TypeContext *spec.TypeContext
 	// GeneratedType admits only an exact SQL-owned local declaration collected
 	// by the caller before concrete schema discovery. It supplies no descriptor.
 	GeneratedType func(string) (bool, error)
@@ -54,6 +57,10 @@ func (r *Reader) Compile(input ReadInput) (*spec.View, error) {
 	parseSQL := input.SQL
 	if view == nil {
 		return nil, fmt.Errorf("read view is required")
+	}
+	parseSQL, err := prepareAuxiliaryResources(view.Name, parseSQL, input.Resources)
+	if err != nil {
+		return nil, err
 	}
 	parseSQL = strings.TrimSpace(parseSQL)
 	if parseSQL == "" {
@@ -190,7 +197,7 @@ func (r *Reader) Compile(input ReadInput) (*spec.View, error) {
 	if err := validateView(root, map[*spec.View]bool{}, input.FactoryComposition); err != nil {
 		return nil, err
 	}
-	if err := templates.restore(root, parsed, input.Template); err != nil {
+	if err := templates.restore(root, parsed, input.Template, input.Resources, directAuxiliary); err != nil {
 		return nil, err
 	}
 	if err := input.FactoryComposition.validate(root); err != nil {

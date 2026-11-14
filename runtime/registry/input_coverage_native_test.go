@@ -306,6 +306,7 @@ func TestScopedTransportJWTAuthorizationVisibility(t *testing.T) {
 	for _, tc := range []struct {
 		name, kind, in                                                                 string
 		parentInternal, childInternal, ordinary, jsonDifference, unverified, wantError bool
+		jsonVisibility, parentHidden, childHidden                                      bool
 	}{
 		{name: "parent internal", kind: "header", in: "Authorization", parentInternal: true},
 		{name: "child internal", kind: "header", in: "Authorization", childInternal: true},
@@ -315,6 +316,12 @@ func TestScopedTransportJWTAuthorizationVisibility(t *testing.T) {
 		{name: "JWT query", kind: "query", in: "jwt", parentInternal: true, wantError: true},
 		{name: "JWT other JSON tag", kind: "header", in: "Authorization", parentInternal: true, jsonDifference: true, wantError: true},
 		{name: "JWT unverified", kind: "header", in: "Authorization", parentInternal: true, unverified: true, wantError: true},
+		{name: "JWT parent JSON hidden", kind: "header", in: "Authorization", jsonVisibility: true, parentHidden: true},
+		{name: "JWT child JSON hidden", kind: "header", in: "Authorization", jsonVisibility: true, childHidden: true},
+		{name: "ordinary JSON hidden", kind: "header", in: "Authorization", jsonVisibility: true, parentHidden: true, ordinary: true, wantError: true},
+		{name: "custom header JSON hidden", kind: "header", in: "X-JWT", jsonVisibility: true, parentHidden: true, wantError: true},
+		{name: "query JSON hidden", kind: "query", in: "jwt", jsonVisibility: true, parentHidden: true, wantError: true},
+		{name: "unverified JSON hidden", kind: "header", in: "Authorization", jsonVisibility: true, parentHidden: true, unverified: true, wantError: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			factory := coverageFactory(t)
@@ -331,6 +338,7 @@ func TestScopedTransportJWTAuthorizationVisibility(t *testing.T) {
 				fieldType = reflect.TypeFor[string]()
 			}
 			var entries []*registry.RegisteredComponent
+			var originalTags []reflect.StructTag
 			for _, parent := range []bool{true, false} {
 				internal := tc.childInternal
 				route := childRoute
@@ -345,6 +353,12 @@ func TestScopedTransportJWTAuthorizationVisibility(t *testing.T) {
 					required = true
 				}
 				tag := `json:"credential"`
+				if tc.jsonVisibility {
+					tag = ""
+					if (parent && tc.parentHidden) || (!parent && tc.childHidden) {
+						tag = `json:"-"`
+					}
+				}
 				if internal {
 					tag += ` internal:"true"`
 				}
@@ -352,6 +366,7 @@ func TestScopedTransportJWTAuthorizationVisibility(t *testing.T) {
 					tag = `json:"different"`
 				}
 				fields := []reflect.StructField{{Name: "Jwt", Type: fieldType, Tag: reflect.StructTag(tag)}}
+				originalTags = append(originalTags, reflect.StructTag(tag))
 				parameter := &spec.Parameter{Name: "Jwt", TypeExpr: "string", Source: spec.BindSource{Kind: tc.kind, Name: tc.in}, Required: &required}
 				if !tc.ordinary {
 					parameter.Codec = &spec.Codec{Body: "JwtClaim"}
@@ -409,7 +424,7 @@ func TestScopedTransportJWTAuthorizationVisibility(t *testing.T) {
 			}
 			pf, _ := beforeParent.StructField()
 			cf, _ := beforeChild.StructField()
-			if pf.Tag.Get("json") != "credential" || (tc.jsonDifference && cf.Tag.Get("json") != "different") {
+			if pf.Tag != originalTags[0] || cf.Tag != originalTags[1] {
 				t.Fatal("coverage mutated retained JSON tags")
 			}
 		})

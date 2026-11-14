@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/viant/bindly/resource"
 	"github.com/viant/datly/spec"
 	tcompile "github.com/viant/datly/transcribe/compile"
 	"github.com/viant/datly/transcribe/dql"
@@ -13,6 +14,7 @@ import (
 )
 
 type readPlanCompiler struct {
+	resources     *resource.Store
 	composition   *tcompile.FactoryComposition
 	sourceMap     *SourceMap
 	path          string
@@ -88,9 +90,13 @@ func (c *readPlanCompiler) compile(component *spec.Component, prepared *dql.Prep
 		copyView.Source = &copySource
 		view = &copyView
 	}
-	result, err := tcompile.NewReader().Compile(tcompile.ReadInput{FactoryComposition: c.composition,
+	input := tcompile.ReadInput{FactoryComposition: c.composition,
 		View: view, SQL: prepared.SQL[item.SQLStart:item.SQLEnd], Template: frame, Types: c.types, TypeContext: component.TypeContext, GeneratedType: c.generatedType,
-	})
+	}
+	if c.resources != nil {
+		input.Resources = c.resources
+	}
+	result, err := tcompile.NewReader().Compile(input)
 	if err == nil {
 		if component.Settings != nil {
 			if err = validateConstantViewTables(result, component.Settings.Const); err != nil {

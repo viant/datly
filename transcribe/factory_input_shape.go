@@ -78,13 +78,13 @@ func (c *Compiler) compileFactoryInputShape(ctx context.Context, source *Source,
 		return nil, err
 	}
 	shapeSourceMap := newSourceMap(len(sqlSource.SQL), nil, resolved.TrimPrefix, sqlSource.SQL)
-	generatedRows, err := collectGeneratedRowAuthority(shapeComponent, resolved, &declarationProducts{views: shapeComponent.Views}, resolver, source.Path, shapeSourceMap, composition)
+	generatedRows, err := collectGeneratedRowAuthority(shapeComponent, resolved, &declarationProducts{views: shapeComponent.Views}, resolver, source.Path, shapeSourceMap, source.Resources, composition)
 	if err != nil {
 		return nil, err
 	}
 	root := generatedRows.root
 	if generatedRows.plan == nil {
-		root, err = (&readPlanCompiler{composition: composition, sourceMap: shapeSourceMap, path: source.Path, types: resolver}).compile(shapeComponent, resolved)
+		root, err = (&readPlanCompiler{resources: source.Resources, composition: composition, sourceMap: shapeSourceMap, path: source.Path, types: resolver}).compile(shapeComponent, resolved)
 		if err != nil {
 			return nil, err
 		}
