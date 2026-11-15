@@ -82,12 +82,18 @@ func (p *schemaProjector) argument(t reflect.Type, path, property string, schema
 		} else if collection != nil && (p.field == nil || path != argumentPath) && field.Tag.Get("enumAccept") != "literal" {
 			timePolicyErr = fmt.Errorf("MCP nested collection enum %s requires enumAccept:\"literal\"", path)
 		}
+		nullable := field.Type.Kind() == reflect.Pointer
 		if nativeAliases {
 			policy, err := format.Parse(field.Tag)
 			if err != nil {
 				timePolicyErr = err
-			} else if policy.InputNamesPriority == "alias" || policy.InputGroup != "" || policy.InputUnless != "" {
-				runtimeSelectionPaths[canonicalSchemaPath(t, path, visibility)] = true
+			} else {
+				if policy.Nullable != nil {
+					nullable = *policy.Nullable
+				}
+				if policy.InputNamesPriority == "alias" || policy.InputGroup != "" || policy.InputUnless != "" {
+					runtimeSelectionPaths[canonicalSchemaPath(t, path, visibility)] = true
+				}
 			}
 		}
 		if nativeAliases && !runtimeSelectionPaths[canonicalSchemaPath(t, path, visibility)] {
@@ -98,7 +104,7 @@ func (p *schemaProjector) argument(t reflect.Type, path, property string, schema
 			}
 			if enumeration, enumErr := choice.ParseEnum(field.Tag, field.Type); enumErr == nil && enumeration != nil {
 				if domain := enumeration.InputDomain(); domain != nil {
-					scalarAlternatives[path] = wireSchemaMap(registry.EnumInputSchema(enumeration, field.Type.Kind() == reflect.Pointer))
+					scalarAlternatives[path] = wireSchemaMap(registry.EnumInputSchema(enumeration, nullable))
 				}
 			}
 			if policy, err := registry.JSONXInputSchema(field); err != nil {
