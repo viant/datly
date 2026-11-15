@@ -14,6 +14,7 @@ import (
 // prepareSelectorPresentation resolves exposure names against this compiled
 // reader's exact row graph. It never changes shared view metadata.
 func (s *Session) prepareSelectorPresentation(ctx context.Context) error {
+	s.fieldSelection = exec.PresentedSelectorFieldSelection(ctx, s.Component.Key)
 	s.selectorPresentation = make(map[*data.View][]data.SelectorField)
 	visited := map[*data.View]bool{}
 	var visit func(*ViewPlan, string) error

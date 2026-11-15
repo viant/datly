@@ -70,6 +70,31 @@ the same Go fields and types. Unchanged parts retain their original linked types
 Named policies can reuse the selected metadata and codec plans, while authorization
 is still resolved for each invocation.
 
+## Select MCP output without losing internal data
+
+For ordinary readers, MCP `fields` selects the encoded response. Datly retains
+the complete internal read graph so lifecycle computations can still use fields
+that are hidden or unselected. For example, selecting only `id` and a computed
+`cpm` does not discard the values needed to calculate `cpm`. The selected response
+still follows the caller's Contract; requesting a role-hidden field does not
+make it visible.
+
+The MCP producer carries this setting in trusted, target-scoped selector
+presentation metadata. Component boundaries clear inherited presentation. The
+original `NewSelectorPresentation` constructor remains unchanged; trusted native
+callers can use its immutable `WithFieldSelection` method. This adds no public
+request switch or backing-column list.
+
+HTTP/REST keeps its authored selector policy. Trusted `Columns` retain their SQL
+projection behavior. Groupable views retain query-oriented `Fields`, since those
+fields can determine grouping and aggregate grain. Existing cache compatibility
+checks require the full internal projection rather than reusing a narrowed
+warmup result. Dynamic SQL remains owned by its normal evaluated builder.
+
+MCP `tools/call` returns JSON. The shared output plan also applies selected,
+permitted fields when its existing CSV/XLS/XLSX codecs are used; this does not add
+an export-format argument to MCP tools.
+
 ## Discover finite output alternatives
 
 When one tool selects among typed response modes from its arguments, discovery

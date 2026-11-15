@@ -153,7 +153,7 @@ func (r *relationRead) readBatch(placeholders []interface{}, composite [][]inter
 		rsql.WithBuilderView(view), rsql.WithBuilderSelectorPresentation(r.session.selectorPresentation[view]),
 		rsql.WithBuilderCriteriaCompiler(r.plan.Criteria),
 		rsql.WithBuilderSelector(r.selector.forView(view)),
-		rsql.WithBuilderProjection(relationProjection(view, r.selector.forView(view), r.child.Relation())),
+		rsql.WithBuilderProjection(relationProjection(view, r.selector.forView(view), r.child.Relation(), r.session.fieldSelection)),
 		rsql.WithBuilderResponseFields(r.session.responseFields[view]),
 		rsql.WithBuilderInput(r.input.Elem()),
 		rsql.WithBuilderParameterResolver(r.session.Parameters),
@@ -235,7 +235,7 @@ func (r *relationRead) applyWarmupMatcher(ctx context.Context, query, matcher *c
 		return nil
 	}
 	requestedSelector := r.selector.forView(view)
-	projection := relationProjection(view, requestedSelector, r.child.Relation())
+	projection := relationProjection(view, requestedSelector, r.child.Relation(), r.session.fieldSelection)
 	selector := canonicalWarmupSelector(requestedSelector, settings.FieldNames)
 	identity, err := rsql.NewBuilder().CacheSQL(ctx,
 		rsql.WithBuilderComponent(r.session.Component), rsql.WithBuilderView(view), rsql.WithBuilderSelectorPresentation(r.session.selectorPresentation[view]), rsql.WithBuilderCriteriaCompiler(r.plan.Criteria),

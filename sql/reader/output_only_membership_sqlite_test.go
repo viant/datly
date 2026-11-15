@@ -76,97 +76,109 @@ func (e *membershipEvaluator) Evaluate(ctx context.Context, invocation sqltempla
 }
 
 func TestOutputOnlyCheckedAndEvaluatedMembershipSQLite(t *testing.T) {
-	for _, dynamic := range []bool{false, true} {
-		t.Run(map[bool]string{false: "predicate", true: "dynamic"}[dynamic], func(t *testing.T) {
-			h := sqlite.New(t)
-			require.NoError(t, h.ExecStatements(t.Context(), "CREATE TABLE membership_records(ID INTEGER,NAME TEXT)", "INSERT INTO membership_records VALUES(1,'hidden')"))
-			var queries atomic.Int32
-			db := h.FaultDB(t, func(_ context.Context, call sqlfault.Call) error {
-				if call.Phase == "query" && strings.Contains(call.SQL, "membership_records") {
-					queries.Add(1)
+	for _, trusted := range []bool{false, true} {
+		for _, dynamic := range []bool{false, true} {
+			t.Run(map[bool]string{false: "predicate", true: "dynamic"}[dynamic], func(t *testing.T) {
+				h := sqlite.New(t)
+				require.NoError(t, h.ExecStatements(t.Context(), "CREATE TABLE membership_records(ID INTEGER,NAME TEXT)", "INSERT INTO membership_records VALUES(1,'hidden')"))
+				var queries atomic.Int32
+				db := h.FaultDB(t, func(_ context.Context, call sqlfault.Call) error {
+					if call.Phase == "query" && strings.Contains(call.SQL, "membership_records") {
+						queries.Add(1)
+					}
+					return nil
+				})
+				source := `SELECT ID,NAME,'visible' AS label,'canonical' AS canonical FROM membership_records ${predicate.Builder().CombineAnd($predicate.FilterGroup(99,"AND")).Build("WHERE")}`
+				if dynamic {
+					source = `SELECT ID,'visible' AS label,'canonical' AS canonical #if($Unsafe.IncludeName),NAME #end FROM membership_records`
 				}
-				return nil
-			})
-			source := `SELECT ID,NAME,'visible' AS label,'canonical' AS canonical FROM membership_records ${predicate.Builder().CombineAnd($predicate.FilterGroup(99,"AND")).Build("WHERE")}`
-			if dynamic {
-				source = `SELECT ID,'visible' AS label,'canonical' AS canonical #if($Unsafe.IncludeName),NAME #end FROM membership_records`
-			}
-			component := &spec.Component{RootView: &spec.View{Name: "records", Selector: &spec.Selector{AllowFields: true, FieldSelection: spec.FieldSelectionOutputOnly}, Source: &spec.ViewSource{SQL: source}}}
-			typ := reflect.TypeFor[[]*membershipRow]()
-			predicate, err := readerpredicate.Compile(readerpredicate.CompileInput{})
-			require.NoError(t, err)
-			plan, err := compiler.Compile(compiler.Input{Component: component, InputType: reflect.TypeFor[membershipInput](), OutputType: typ, DirectViewType: typ, Predicate: predicate})
-			require.NoError(t, err)
-			evaluator := &membershipEvaluator{native: plan.Root.Template}
-			plan.Root.Template = evaluator
-			execution, err := reader.NewExecution(reader.Config{Component: component, InputType: reflect.TypeFor[membershipInput](), OutputType: typ, Plan: plan, SQL: &dsql.SQLComponent{DB: db}})
-			require.NoError(t, err)
-			read := func(input *membershipInput, selector xstate.Selector) (any, []byte, error) {
-				call, complete := dexec.ScopeOutputSelection(dexec.CaptureOutputSelection(t.Context()))
-				dexec.BeginOutputSelection(call)
-				value, err := execution.Read(call, input, membershipBinder{sourceGuardBinder: sourceGuardBinder{xstate.Selectors{&xstate.NamedSelector{Name: "records", Selector: selector}}}, input: input}, nil)
-				if err != nil {
-					return nil, nil, err
+				component := &spec.Component{RootView: &spec.View{Name: "records", Selector: &spec.Selector{AllowFields: true, FieldSelection: spec.FieldSelectionOutputOnly}, Source: &spec.ViewSource{SQL: source}}}
+				if trusted {
+					component.RootView.Selector.FieldSelection = ""
 				}
-				complete(value, nil)
-				filter, available := dexec.CurrentOutputSelection(call, value)
-				require.True(t, available)
-				encoded, err := structjson.MarshalStandard(value, structjson.WithPathFieldExcluder(filter))
-				return value, encoded, err
-			}
-			for iteration := 0; iteration < 2; iteration++ {
-				queries.Store(0)
-				evaluator.calls.Store(0)
-				_, encoded, err := read(&membershipInput{IncludeName: true}, xstate.Selector{Fields: []string{"legacy"}})
-				require.NoError(t, err, "source-only aliases use the same checked/evaluated membership for masking")
-				require.JSONEq(t, `[{}]`, string(encoded))
-				require.EqualValues(t, 1, queries.Load())
-				require.EqualValues(t, 1, evaluator.calls.Load())
-			}
-			_, encoded, err := read(&membershipInput{IncludeName: true}, xstate.Selector{Fields: []string{"canonical"}})
-			require.NoError(t, err, "canonical public metadata never reparses dynamic SQL for a same-name source tag")
-			require.JSONEq(t, `[{"canonical":"canonical"}]`, string(encoded))
-			for iteration := 0; iteration < 3; iteration++ {
-				queries.Store(0)
-				evaluator.calls.Store(0)
-				value, encoded, err := read(&membershipInput{IncludeName: true}, xstate.Selector{Fields: []string{"NAME", "id"}})
+				typ := reflect.TypeFor[[]*membershipRow]()
+				predicate, err := readerpredicate.Compile(readerpredicate.CompileInput{})
 				require.NoError(t, err)
-				require.Equal(t, "hidden", value.([]*membershipRow)[0].Name)
-				require.JSONEq(t, `[{"id":1}]`, string(encoded))
-				require.EqualValues(t, 1, queries.Load())
-				require.EqualValues(t, 1, evaluator.calls.Load(), "one native template evaluation per complete read")
-			}
-			queries.Store(0)
-			evaluator.calls.Store(0)
-			_, _, err = read(&membershipInput{IncludeName: true}, xstate.Selector{Fields: []string{"MiSsInG"}})
-			var response *xresponse.Error
-			var unknown *dsql.UnknownProjectionColumnError
-			require.ErrorAs(t, err, &response)
-			require.Equal(t, 400, response.Code)
-			require.ErrorAs(t, err, &unknown)
-			require.Equal(t, "MiSsInG", unknown.RequestedColumn)
-			require.Zero(t, queries.Load())
-			if dynamic {
-				require.EqualValues(t, 1, evaluator.calls.Load())
-			} else {
-				require.Zero(t, evaluator.calls.Load(), "checked membership rejects before evaluation")
-			}
-			// Trusted Columns still narrows internal reads through the normal builder.
-			value, _, err := read(&membershipInput{IncludeName: true}, xstate.Selector{Fields: []string{"id"}, Columns: []string{"ID"}})
-			require.NoError(t, err)
-			require.Empty(t, value.([]*membershipRow)[0].Name)
-			_, _, err = read(&membershipInput{IncludeName: true}, xstate.Selector{Columns: []string{"missing"}})
-			require.ErrorAs(t, err, &unknown)
-			if dynamic {
-				// The evaluated output contract, not static Go metadata, owns membership.
-				_, _, err = read(&membershipInput{}, xstate.Selector{Fields: []string{"NAME"}})
+				plan, err := compiler.Compile(compiler.Input{Component: component, InputType: reflect.TypeFor[membershipInput](), OutputType: typ, DirectViewType: typ, Predicate: predicate})
+				require.NoError(t, err)
+				evaluator := &membershipEvaluator{native: plan.Root.Template}
+				plan.Root.Template = evaluator
+				execution, err := reader.NewExecution(reader.Config{Component: component, InputType: reflect.TypeFor[membershipInput](), OutputType: typ, Plan: plan, SQL: &dsql.SQLComponent{DB: db}})
+				require.NoError(t, err)
+				read := func(input *membershipInput, selector xstate.Selector) (any, []byte, error) {
+					ctx := t.Context()
+					if trusted {
+						target := dexec.ComponentTarget{Component: component.Key}
+						var err error
+						ctx, err = dexec.EnterSelectorPresentation(ctx, target, dexec.NewSelectorPresentation(target, func(reflect.Type, string) ([]dexec.SelectorFieldName, error) { return nil, nil }).WithFieldSelection(spec.FieldSelectionOutputOnly))
+						require.NoError(t, err)
+					}
+					call, complete := dexec.ScopeOutputSelection(dexec.CaptureOutputSelection(ctx))
+					dexec.BeginOutputSelection(call)
+					value, err := execution.Read(call, input, membershipBinder{sourceGuardBinder: sourceGuardBinder{xstate.Selectors{&xstate.NamedSelector{Name: "records", Selector: selector}}}, input: input}, nil)
+					if err != nil {
+						return nil, nil, err
+					}
+					complete(value, nil)
+					filter, available := dexec.CurrentOutputSelection(call, value)
+					require.True(t, available)
+					encoded, err := structjson.MarshalStandard(value, structjson.WithPathFieldExcluder(filter))
+					return value, encoded, err
+				}
+				for iteration := 0; iteration < 2; iteration++ {
+					queries.Store(0)
+					evaluator.calls.Store(0)
+					_, encoded, err := read(&membershipInput{IncludeName: true}, xstate.Selector{Fields: []string{"legacy"}})
+					require.NoError(t, err, "source-only aliases use the same checked/evaluated membership for masking")
+					require.JSONEq(t, `[{}]`, string(encoded))
+					require.EqualValues(t, 1, queries.Load())
+					require.EqualValues(t, 1, evaluator.calls.Load())
+				}
+				_, encoded, err := read(&membershipInput{IncludeName: true}, xstate.Selector{Fields: []string{"canonical"}})
+				require.NoError(t, err, "canonical public metadata never reparses dynamic SQL for a same-name source tag")
+				require.JSONEq(t, `[{"canonical":"canonical"}]`, string(encoded))
+				for iteration := 0; iteration < 3; iteration++ {
+					queries.Store(0)
+					evaluator.calls.Store(0)
+					value, encoded, err := read(&membershipInput{IncludeName: true}, xstate.Selector{Fields: []string{"NAME", "id"}})
+					require.NoError(t, err)
+					require.Equal(t, "hidden", value.([]*membershipRow)[0].Name)
+					require.JSONEq(t, `[{"id":1}]`, string(encoded))
+					require.EqualValues(t, 1, queries.Load())
+					require.EqualValues(t, 1, evaluator.calls.Load(), "one native template evaluation per complete read")
+				}
+				queries.Store(0)
+				evaluator.calls.Store(0)
+				_, _, err = read(&membershipInput{IncludeName: true}, xstate.Selector{Fields: []string{"MiSsInG"}})
+				var response *xresponse.Error
+				var unknown *dsql.UnknownProjectionColumnError
+				require.ErrorAs(t, err, &response)
+				require.Equal(t, 400, response.Code)
 				require.ErrorAs(t, err, &unknown)
-				evaluator.failure = context.Canceled
-				_, _, err = read(&membershipInput{}, xstate.Selector{Fields: []string{"missing"}})
-				require.True(t, errors.Is(err, context.Canceled))
-				require.False(t, errors.As(err, &response))
-			}
-		})
+				require.Equal(t, "MiSsInG", unknown.RequestedColumn)
+				require.Zero(t, queries.Load())
+				if dynamic {
+					require.EqualValues(t, 1, evaluator.calls.Load())
+				} else {
+					require.Zero(t, evaluator.calls.Load(), "checked membership rejects before evaluation")
+				}
+				// Trusted Columns still narrows internal reads through the normal builder.
+				value, _, err := read(&membershipInput{IncludeName: true}, xstate.Selector{Fields: []string{"id"}, Columns: []string{"ID"}})
+				require.NoError(t, err)
+				require.Empty(t, value.([]*membershipRow)[0].Name)
+				_, _, err = read(&membershipInput{IncludeName: true}, xstate.Selector{Columns: []string{"missing"}})
+				require.ErrorAs(t, err, &unknown)
+				if dynamic {
+					// The evaluated output contract, not static Go metadata, owns membership.
+					_, _, err = read(&membershipInput{}, xstate.Selector{Fields: []string{"NAME"}})
+					require.ErrorAs(t, err, &unknown)
+					evaluator.failure = context.Canceled
+					_, _, err = read(&membershipInput{}, xstate.Selector{Fields: []string{"missing"}})
+					require.True(t, errors.Is(err, context.Canceled))
+					require.False(t, errors.As(err, &response))
+				}
+			})
+		}
 	}
 }
 

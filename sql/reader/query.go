@@ -53,7 +53,7 @@ func (e *Execution) PrepareQuery(ctx context.Context, input any, binder xhandler
 		builder.WithBuilderForUpdate(lockRows),
 		builder.WithBuilderComponent(session.Component), builder.WithBuilderView(root.View), builder.WithBuilderSelectorPresentation(session.selectorPresentation[root.View]),
 		builder.WithBuilderCriteriaCompiler(root.Criteria),
-		builder.WithBuilderSelector(selector), builder.WithBuilderProjection(viewProjection(root.View, selector)),
+		builder.WithBuilderSelector(selector), builder.WithBuilderProjection(viewProjection(root.View, selector, session.fieldSelection)),
 		builder.WithBuilderInput(value.Elem()), builder.WithBuilderParameterResolver(resolver),
 		builder.WithBuilderTemplate(root.Template), builder.WithBuilderBinder(binder),
 		builder.WithBuilderDialect(connection.Dialect), builder.WithBuilderTransactionActive(connection.Tx != nil), builder.WithBuilderExcludePagination(true),

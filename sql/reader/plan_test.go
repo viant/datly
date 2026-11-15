@@ -86,3 +86,28 @@ func TestPlanOwnsExecutionThroughPerViewNodes(t *testing.T) {
 		}
 	}
 }
+
+func TestResponseMembershipPreparationUsesNativeAdmissionAndCheckedSource(t *testing.T) {
+	for _, tc := range []struct {
+		name, sql string
+		policy    *spec.Selector
+		prepared  bool
+	}{
+		{"implicit admission", "SELECT id FROM records", nil, true},
+		{"admitted fields", "SELECT id FROM records", &spec.Selector{AllowFields: true}, true},
+		{"inadmissible fields", "SELECT id FROM records", &spec.Selector{}, false},
+		{"authored output only", "SELECT id FROM records", &spec.Selector{FieldSelection: spec.FieldSelectionOutputOnly}, true},
+		{"dynamic source remains builder owned", "SELECT id #if($Unsafe.IncludeName),name #end FROM records", &spec.Selector{AllowFields: true}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			view := &data.View{Spec: spec.View{Name: "records", Selector: tc.policy, Source: &spec.ViewSource{SQL: tc.sql}}}
+			plan, err := NewPlan(PlanConfig{RootView: view})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := plan.Root.responseMembership != nil; got != tc.prepared {
+				t.Fatalf("prepared=%t want=%t", got, tc.prepared)
+			}
+		})
+	}
+}

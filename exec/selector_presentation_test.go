@@ -41,3 +41,44 @@ func TestSelectorPresentationExactOwnerAndDetachedMetadata(t *testing.T) {
 	require.NoError(t, err)
 	require.Nil(t, absent)
 }
+
+func TestSelectorPresentationFieldSelectionBoundary(t *testing.T) {
+	target := ComponentTarget{Component: spec.Key{Kind: "reader", Name: "root"}, Route: spec.RouteRef{Method: "GET", Path: "/root"}}
+	callback := func(reflect.Type, string) ([]SelectorFieldName, error) { return nil, nil }
+	ctx, err := EnterSelectorPresentation(t.Context(), target, NewSelectorPresentation(target, callback))
+	require.NoError(t, err)
+	require.Empty(t, PresentedSelectorFieldSelection(ctx, target.Component))
+	ctx, err = EnterSelectorPresentation(ctx, target, NewSelectorPresentation(target, callback).WithFieldSelection(spec.FieldSelectionOutputOnly))
+	require.NoError(t, err)
+	require.Equal(t, spec.FieldSelectionOutputOnly, PresentedSelectorFieldSelection(ctx, target.Component))
+	child := target
+	child.Component.Name = "child"
+	require.Empty(t, PresentedSelectorFieldSelection(ctx, child.Component))
+	wrongRoute := target
+	wrongRoute.Route.Path = "/other"
+	_, err = EnterSelectorPresentation(ctx, wrongRoute, NewSelectorPresentation(target, callback).WithFieldSelection(spec.FieldSelectionOutputOnly))
+	require.Error(t, err)
+	for _, boundary := range []ComponentTarget{child, target} {
+		cleared, err := EnterSelectorPresentation(ctx, boundary, nil)
+		require.NoError(t, err)
+		require.Empty(t, PresentedSelectorFieldSelection(cleared, target.Component))
+		require.Equal(t, spec.FieldSelectionOutputOnly, PresentedSelectorFieldSelection(ctx, target.Component))
+	}
+	_, err = EnterSelectorPresentation(ctx, target, NewSelectorPresentation(target, callback).WithFieldSelection("invalid"))
+	require.Error(t, err)
+}
+
+// The original constructor remains assignable to its pre-extension API type.
+var _ func(ComponentTarget, func(reflect.Type, string) ([]SelectorFieldName, error)) *SelectorPresentation = NewSelectorPresentation
+
+func TestSelectorPresentationModeCloneIsImmutable(t *testing.T) {
+	target := ComponentTarget{Component: spec.Key{Name: "root"}}
+	original := NewSelectorPresentation(target, func(reflect.Type, string) ([]SelectorFieldName, error) { return nil, nil })
+	selected := original.WithFieldSelection(spec.FieldSelectionOutputOnly)
+	require.NotSame(t, original, selected)
+	require.Empty(t, original.fieldSelection)
+	require.Equal(t, spec.FieldSelectionOutputOnly, selected.fieldSelection)
+	require.Equal(t, original.target, selected.target)
+	var absent *SelectorPresentation
+	require.Nil(t, absent.WithFieldSelection(spec.FieldSelectionOutputOnly))
+}

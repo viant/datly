@@ -73,7 +73,7 @@ func (m rootCacheMatcher) apply(ctx context.Context, connection dsql.Connection)
 		return err
 	}
 	requestedSelector := m.selectors.forView(view).Clone()
-	projection := viewProjection(view, requestedSelector)
+	projection := viewProjection(view, requestedSelector, m.session.fieldSelection)
 	stored, requested := root.cacheProjection(settings.FieldNames), root.cacheProjection(projection)
 	// The executed query has already validated its ordering and projection.
 	// An explicit warmup missing a requested field cannot answer that query.

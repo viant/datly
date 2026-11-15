@@ -248,7 +248,7 @@ func (c *serviceCompiler) publish(ctx context.Context, catalog *Catalog, policy 
 					result[i] = exec.SelectorFieldName{GoName: field.GoName, PublicName: field.PublicName, Index: append([]int(nil), field.Index...)}
 				}
 				return result, nil
-			}), nil
+			}).WithFieldSelection(spec.FieldSelectionOutputOnly), nil
 		}, Output: func(target exec.ComponentTarget) invocation.OutputEncoder {
 			plan := selectPlan(target)
 			if plan == nil {

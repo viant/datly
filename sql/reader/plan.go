@@ -171,7 +171,7 @@ func assembleViewPlan(view *data.View, config PlanConfig, planned map[*data.View
 		result.Collector = config.Collection.View(view)
 	}
 	planned[view] = result
-	if view.Spec.Selector != nil && view.Spec.Selector.FieldSelection == spec.FieldSelectionOutputOnly && view.Spec.Source != nil {
+	if view.Spec.Source != nil && (view.Spec.Selector == nil || view.Spec.Selector.AllowFields || view.Spec.Selector.FieldSelection == spec.FieldSelectionOutputOnly) {
 		// Checked membership is an optimization, never an admission rule for
 		// dynamic SQL. Ineligible sources remain the evaluated builder's owner.
 		result.responseMembership, _ = (dsql.SelectorProjection{SQL: view.Spec.Source.SQL, View: view}).PrepareMembership()

@@ -123,7 +123,7 @@ func resolveInvocationSelectors(ctx context.Context, session *Session, input ref
 				// Output-only Fields no longer reach SQL projection. Retain the
 				// native projection owner's validation for names absent from the
 				// compiled public shape (including source-only aliases).
-				if kind == 0 && resolved == nil && view.Spec.Selector != nil && view.Spec.Selector.FieldSelection == spec.FieldSelectionOutputOnly {
+				if kind == 0 && resolved == nil && effectiveFieldSelection(view, session.fieldSelection) == spec.FieldSelectionOutputOnly {
 					responseFields = append(responseFields, name)
 				}
 
@@ -197,7 +197,7 @@ func resolveInvocationSelectors(ctx context.Context, session *Session, input ref
 	if plan := session.Artifact.selectorCompanion; plan != nil && (!plan.DeferredPage() || session.Artifact.staticProjection == nil) {
 		if plan.DeferredNumeric() {
 			root := session.Artifact.Root.View
-			fields := viewProjection(root, result[root])
+			fields := viewProjection(root, result[root], session.fieldSelection)
 			if len(fields) > 0 && root.Spec.Source != nil {
 				// Use the normal projection owner only when checked source analysis can
 				// prove membership without evaluating a template. Uncertain membership
@@ -254,7 +254,7 @@ func resolveInvocationSelectors(ctx context.Context, session *Session, input ref
 	}
 	if plan := session.Artifact.selectorCompanion; plan != nil && plan.DeferredPage() {
 		root := session.Artifact.Root.View
-		finalFields := viewProjection(root, result[root])
+		finalFields := viewProjection(root, result[root], session.fieldSelection)
 		if session.Artifact.staticProjection != nil {
 			selection, err := session.Artifact.staticProjection.Select(finalFields)
 			if err != nil {

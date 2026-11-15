@@ -17,6 +17,7 @@ import (
 // outputSelection traverses graph edges, not row values. Shared target views
 // therefore get a mask at each holder path without collecting per-row evidence.
 type outputSelection struct {
+	fieldSelection spec.FieldSelectionMode
 	selectors      invocationSelectors
 	responseFields map[*data.View]*dsql.ResponseFieldSelection
 	emptyViews     map[*data.View]bool
@@ -27,7 +28,7 @@ func (s *Session) selectedOutput(selectors invocationSelectors) (dexec.OutputFie
 	if len(selectors) == 0 {
 		return nil, nil
 	}
-	selection := outputSelection{selectors: selectors, responseFields: s.responseFields}
+	selection := outputSelection{fieldSelection: s.fieldSelection, selectors: selectors, responseFields: s.responseFields}
 	missingProof := false
 	for _, proof := range s.responseFields {
 		missingProof = missingProof || !proof.Evaluated()
@@ -100,7 +101,7 @@ func (s *outputSelection) view(plan *ViewPlan, path []string) error {
 					if sourceOnly {
 						continue
 					}
-				} else if source := plan.View.Spec.Source; source != nil && (plan.View.Spec.Selector == nil || plan.View.Spec.Selector.FieldSelection != spec.FieldSelectionOutputOnly) {
+				} else if source := plan.View.Spec.Source; source != nil && effectiveFieldSelection(plan.View, s.fieldSelection) != spec.FieldSelectionOutputOnly {
 					sourceOnly, err := (dsql.SelectorProjection{SQL: source.SQL, View: plan.View}).SourceOnlySelection(name)
 					if err != nil {
 						return err

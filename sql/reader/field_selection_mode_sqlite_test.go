@@ -44,9 +44,13 @@ func (r *selectionModeRow) OnFetch(context.Context) error {
 func (r *selectionModeRow) OnRelation(context.Context) { r.Assigned = len(r.Children) > 0 }
 
 func TestFieldSelectionModePreservesLifecycleGraphSQLite(t *testing.T) {
-	for _, mode := range []spec.FieldSelectionMode{"", spec.FieldSelectionQuery, spec.FieldSelectionOutputOnly} {
+	for _, mode := range []spec.FieldSelectionMode{"", spec.FieldSelectionQuery, spec.FieldSelectionOutputOnly, "trustedInvocation"} {
 		t.Run(string(mode), func(t *testing.T) {
 			ctx := t.Context()
+			staticMode := mode
+			if mode == "trustedInvocation" {
+				staticMode = ""
+			}
 			h := sqlite.New(t)
 			require.NoError(t, h.ExecStatements(ctx, "CREATE TABLE parents(id INTEGER,name TEXT,kind TEXT,tenant INTEGER)", "CREATE TABLE children(parent_id INTEGER,value INTEGER)", "INSERT INTO parents VALUES(1,'one','banner',1),(2,NULL,'banner',1),(3,'denied','banner',2)", "INSERT INTO children VALUES(1,10),(3,30)"))
 			var queries atomic.Int32
@@ -56,7 +60,13 @@ func TestFieldSelectionModePreservesLifecycleGraphSQLite(t *testing.T) {
 				}
 				return nil
 			})
-			c := &spec.Component{RootView: &spec.View{Name: "parents", Selector: &spec.Selector{AllowFields: true, FieldSelection: mode}, Source: &spec.ViewSource{SQL: "SELECT id,name,kind FROM parents WHERE tenant=1"}, Relations: []*spec.Relation{{Name: "children", Holder: "Children", Cardinality: spec.CardinalityMany, View: &spec.View{Name: "children", Source: &spec.ViewSource{SQL: "SELECT parent_id,value FROM children"}}, On: []*spec.RelationLink{{ParentColumn: "id", ChildColumn: "parent_id"}}}}}}
+			c := &spec.Component{RootView: &spec.View{Name: "parents", Selector: &spec.Selector{AllowFields: true, FieldSelection: staticMode}, Source: &spec.ViewSource{SQL: "SELECT id,name,kind FROM parents WHERE tenant=1"}, Relations: []*spec.Relation{{Name: "children", Holder: "Children", Cardinality: spec.CardinalityMany, View: &spec.View{Name: "children", Source: &spec.ViewSource{SQL: "SELECT parent_id,value FROM children"}}, On: []*spec.RelationLink{{ParentColumn: "id", ChildColumn: "parent_id"}}}}}}
+			if mode == "trustedInvocation" {
+				target := dexec.ComponentTarget{Component: c.Key}
+				var err error
+				ctx, err = dexec.EnterSelectorPresentation(ctx, target, dexec.NewSelectorPresentation(target, func(reflect.Type, string) ([]dexec.SelectorFieldName, error) { return nil, nil }).WithFieldSelection(spec.FieldSelectionOutputOnly))
+				require.NoError(t, err)
+			}
 			typ := reflect.TypeFor[[]*selectionModeRow]()
 			plan, err := compiler.Compile(compiler.Input{Component: c, InputType: reflect.TypeFor[struct{}](), OutputType: typ, DirectViewType: typ})
 			require.NoError(t, err)
@@ -93,7 +103,7 @@ func TestFieldSelectionModePreservesLifecycleGraphSQLite(t *testing.T) {
 				queries.Store(0)
 				rows, encoded, err := read(&xstate.Selector{Fields: []string{"id", "class", "assigned"}})
 				require.NoError(t, err)
-				if mode == spec.FieldSelectionOutputOnly {
+				if mode == spec.FieldSelectionOutputOnly || mode == "trustedInvocation" {
 					require.Equal(t, baseline, rows)
 					require.JSONEq(t, `[{"id":1,"class":"banner","assigned":true},{"id":2,"class":"banner","assigned":false}]`, string(encoded))
 					require.Equal(t, baselineQueries, queries.Load(), "response mask must retain complete graph query count")
@@ -107,7 +117,7 @@ func TestFieldSelectionModePreservesLifecycleGraphSQLite(t *testing.T) {
 			rows, _, err := read(&xstate.Selector{Fields: []string{}})
 			require.NoError(t, err)
 			require.Equal(t, baseline, rows)
-			if mode == spec.FieldSelectionOutputOnly {
+			if mode == spec.FieldSelectionOutputOnly || mode == "trustedInvocation" {
 				// Explicit trusted Columns retain their existing read authority.
 				rows, _, err = read(&xstate.Selector{Fields: []string{"id", "class"}, Columns: []string{"id"}})
 				require.NoError(t, err)
@@ -138,7 +148,7 @@ func TestFieldSelectionModePreservesLifecycleGraphSQLite(t *testing.T) {
 				var response *xresponse.Error
 				require.True(t, errors.As(err, &response))
 				require.Equal(t, 400, response.Code)
-				if mode == spec.FieldSelectionOutputOnly {
+				if mode == spec.FieldSelectionOutputOnly || mode == "trustedInvocation" {
 					require.EqualValues(t, 0, queries.Load(), "unknown field fails before retrieval")
 				}
 			}

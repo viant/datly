@@ -96,7 +96,7 @@ func (s *Service) nonWindowQuery(ctx context.Context, session *Session, input re
 	nonWindowSelector := rsql.NonWindowSelector(rootSelector)
 	if nonWindowSelector != nil {
 		// Ordinals follow root selection while summaries retain all source columns.
-		nonWindowSelector.Columns = viewProjection(rootPlan.View, rootSelector)
+		nonWindowSelector.Columns = viewProjection(rootPlan.View, rootSelector, session.fieldSelection)
 		nonWindowSelector.Fields = nil
 	}
 	builder := rsql.NewBuilder()
@@ -186,7 +186,7 @@ func (e *outputRelationExecution) query(ctx context.Context, partition *xreader.
 			rsql.WithBuilderView(view), rsql.WithBuilderSelectorPresentation(e.session.selectorPresentation[view]),
 			rsql.WithBuilderCriteriaCompiler(planned.Target.Criteria),
 			rsql.WithBuilderSelector(e.selectors.forView(view)),
-			rsql.WithBuilderProjection(viewProjection(view, e.selectors.forView(view))),
+			rsql.WithBuilderProjection(viewProjection(view, e.selectors.forView(view), e.session.fieldSelection)),
 			rsql.WithBuilderResponseFields(e.session.responseFields[view]),
 			rsql.WithBuilderInput(e.input.Elem()),
 			rsql.WithBuilderParameterResolver(e.session.Parameters),
@@ -220,7 +220,7 @@ func (e *outputRelationExecution) query(ctx context.Context, partition *xreader.
 		rsql.WithBuilderView(view), rsql.WithBuilderSelectorPresentation(e.session.selectorPresentation[view]),
 		rsql.WithBuilderCriteriaCompiler(planned.Target.Criteria),
 		rsql.WithBuilderSelector(selector),
-		rsql.WithBuilderProjection(viewProjection(view, selector)),
+		rsql.WithBuilderProjection(viewProjection(view, selector, e.session.fieldSelection)),
 		rsql.WithBuilderResponseFields(e.session.responseFields[view]),
 		rsql.WithBuilderInput(e.input.Elem()),
 		rsql.WithBuilderParameterResolver(e.session.Parameters),

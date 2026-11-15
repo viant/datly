@@ -152,7 +152,7 @@ func (s *Service) readBound(ctx context.Context, session *Session, input reflect
 		rsql.WithBuilderView(root.View), rsql.WithBuilderSelectorPresentation(session.selectorPresentation[root.View]),
 		rsql.WithBuilderCriteriaCompiler(root.Criteria),
 		rsql.WithBuilderSelector(rootSelector),
-		rsql.WithBuilderProjection(viewProjection(root.View, rootSelector)),
+		rsql.WithBuilderProjection(viewProjection(root.View, rootSelector, session.fieldSelection)),
 		rsql.WithBuilderResponseFields(session.responseFields[root.View]),
 		rsql.WithBuilderInput(input.Elem()),
 		rsql.WithBuilderParameterResolver(session.Parameters),
@@ -335,7 +335,7 @@ func (s *Service) relationWork(session *Session, input reflect.Value, binder xha
 	if collector == nil {
 		return nil
 	}
-	children := session.relationCollectors(collector, selectorStatelet(collector.View(), selectors.forView(collector.View())))
+	children := session.relationCollectors(collector, selectorStatelet(collector.View(), selectors.forView(collector.View()), session.fieldSelection))
 	work := make([]relationWork, 0, len(children))
 	for _, child := range children {
 		child := child
@@ -467,26 +467,26 @@ func (u unmappedColumn) ScanType() reflect.Type {
 
 func (u unmappedColumn) Nullable() (bool, bool) { return u.column.Nullable() }
 
-func selectorStatelet(view *data.View, selector *xstate.Selector) *rcollector.Statelet {
-	selection := readProjectionSelection(view, selector)
+func selectorStatelet(view *data.View, selector *xstate.Selector, mode ...spec.FieldSelectionMode) *rcollector.Statelet {
+	selection := readProjectionSelection(view, selector, mode...)
 	if len(selection) == 0 {
 		return nil
 	}
 	return &rcollector.Statelet{Columns: selection}
 }
 
-func readProjectionSelection(view *data.View, selector *xstate.Selector) []string {
-	if selector != nil && view != nil && view.Spec.Selector != nil && view.Spec.Selector.FieldSelection == spec.FieldSelectionOutputOnly {
+func readProjectionSelection(view *data.View, selector *xstate.Selector, mode ...spec.FieldSelectionMode) []string {
+	if selector != nil && effectiveFieldSelection(view, mode...) == spec.FieldSelectionOutputOnly {
 		return projectionSelection(&xstate.Selector{Columns: selector.Columns})
 	}
 	return projectionSelection(selector)
 }
 
-func viewProjection(view *data.View, selector *xstate.Selector) []string {
+func viewProjection(view *data.View, selector *xstate.Selector, mode ...spec.FieldSelectionMode) []string {
 	if view == nil {
 		return nil
 	}
-	selection := readProjectionSelection(view, selector)
+	selection := readProjectionSelection(view, selector, mode...)
 	if len(selection) == 0 {
 		return nil
 	}
@@ -528,8 +528,8 @@ func viewProjection(view *data.View, selector *xstate.Selector) []string {
 	return result
 }
 
-func relationProjection(view *data.View, selector *xstate.Selector, relation *data.Relation) []string {
-	result := viewProjection(view, selector)
+func relationProjection(view *data.View, selector *xstate.Selector, relation *data.Relation, mode ...spec.FieldSelectionMode) []string {
+	result := viewProjection(view, selector, mode...)
 	if len(result) == 0 || relation == nil || relation.Of == nil {
 		return result
 	}
@@ -663,4 +663,16 @@ func convertCollectorItem(item reflect.Value, targetType reflect.Type) (reflect.
 		}
 	}
 	return reflect.Value{}, false
+}
+
+func effectiveFieldSelection(view *data.View, mode ...spec.FieldSelectionMode) spec.FieldSelectionMode {
+	// Groupable Fields own query dimensions and therefore row grain. Preserve
+	// their authored policy; an invocation presentation cannot replace it.
+	if len(mode) > 0 && mode[0] != "" && (view == nil || !view.IsGroupable()) {
+		return mode[0]
+	}
+	if view != nil && view.Spec.Selector != nil {
+		return view.Spec.Selector.FieldSelection
+	}
+	return ""
 }

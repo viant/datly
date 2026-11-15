@@ -32,6 +32,7 @@ type Output struct {
 // handler capabilities, and registration remain runtime concerns.
 type Session struct {
 	emptyLookup          *emptyLookupPlan
+	fieldSelection       spec.FieldSelectionMode
 	selectorPresentation map[*data.View][]data.SelectorField
 	relationSelection    *relationSelection
 	omittedOutput        string
