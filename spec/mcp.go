@@ -160,3 +160,29 @@ func (s *ReportSettings) ValidateMCPExposure() error {
 	}
 	return s.MCP.ValidateCaseFormat()
 }
+
+// ComposeMCPExposure selects optional composition publication independently of the source and cube.
+func ComposeMCPExposure(settings *CubeComposeSettings, route *Route, fallback, description string) *MCPExposure {
+	if settings != nil {
+		if settings.MCPTool != nil && !*settings.MCPTool {
+			return nil
+		}
+		if settings.MCP != nil {
+			return settings.MCP.Clone()
+		}
+	}
+	return &MCPExposure{Kind: MCPExposureTool, CaseFormat: DerivedMCPCaseFormat(route), Name: DerivedMCPToolName(route, fallback, "CubeCompose"), Description: description}
+}
+
+func (s *CubeComposeSettings) ValidateMCPExposure() error {
+	if s == nil || s.MCP == nil || s.MCPTool != nil && !*s.MCPTool {
+		return nil
+	}
+	if s.MCP.Kind != MCPExposureTool {
+		return fmt.Errorf("compose MCP exposure requires kind tool")
+	}
+	if strings.TrimSpace(s.MCP.Name) == "" {
+		return fmt.Errorf("compose MCP exposure requires a nonblank name")
+	}
+	return s.MCP.ValidateCaseFormat()
+}

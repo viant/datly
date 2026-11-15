@@ -9,7 +9,7 @@ import (
 
 func TestReportMCPJSONTagRoundTrip(t *testing.T) {
 	strict := false
-	original := Component{Name: "Records", Path: "/records", Method: "GET", Report: true, ReportMCP: &spec.MCPExposure{Kind: spec.MCPExposureTool, Name: "aggregate_records", Description: "Quoted, \"text\"\nsecond line", DescriptionPath: "docs/cube.md", CaseFormat: "lc", StrictArguments: &strict}, MCP: []*spec.MCPExposure{{Kind: spec.MCPExposureResource, Name: "records", MIMEType: "application/json"}}}
+	original := Component{Name: "Records", Path: "/records", Method: "GET", Report: true, ReportCompose: &spec.CubeComposeSettings{Enabled: true, MCP: &spec.MCPExposure{Kind: spec.MCPExposureTool, Name: "compose_records", Description: "Quoted, \"text\"\nsecond line", DescriptionPath: "docs/compose.md", CaseFormat: "uc", StrictArguments: &strict}}, ReportMCP: &spec.MCPExposure{Kind: spec.MCPExposureTool, Name: "aggregate_records", Description: "Quoted, \"text\"\nsecond line", DescriptionPath: "docs/cube.md", CaseFormat: "lc", StrictArguments: &strict}, MCP: []*spec.MCPExposure{{Kind: spec.MCPExposureResource, Name: "records", MIMEType: "application/json"}}}
 	encoded, err := original.StructTag()
 	if err != nil {
 		t.Fatal(err)

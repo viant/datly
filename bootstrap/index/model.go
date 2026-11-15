@@ -87,6 +87,11 @@ func newSnapshot(selection, fingerprint string, entries []*Entry) (*Snapshot, er
 				return nil, fmt.Errorf("index report %s: %w", entry.Component.Key.String(), err)
 			}
 		}
+		if entry.Component.Settings != nil && entry.Component.Settings.Report != nil {
+			if err := entry.Component.Settings.Report.Compose.ValidateMCPExposure(); err != nil {
+				return nil, fmt.Errorf("index compose %s: %w", entry.Component.Key.String(), err)
+			}
+		}
 		identity := entry.Component.Key.String()
 		if result.byComponent[identity] != nil {
 			return nil, fmt.Errorf("duplicate bootstrap component %s", identity)

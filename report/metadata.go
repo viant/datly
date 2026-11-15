@@ -60,6 +60,11 @@ func compileMetadata(component *spec.Component, contract *registry.RouteInputCon
 	if err := authored.ValidateMCPExposure(); err != nil {
 		return nil, err
 	}
+	if authored != nil {
+		if err := authored.Compose.ValidateMCPExposure(); err != nil {
+			return nil, err
+		}
+	}
 	settings, inputLayout := normalizeSettings(authored)
 	result := &metadata{settings: settings, inputLayout: inputLayout, holders: map[string][]string{}}
 	// Supplied column metadata may include computed output-only fields. Remove

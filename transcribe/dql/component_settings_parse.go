@@ -194,7 +194,7 @@ func parseComponentSettings(blocks []directiveBlock) (ret *componentSettings, er
 			}
 			ret.Report = report
 		case strings.EqualFold(name, "cubeCompose"):
-			if len(args) < 1 || len(args) > 7 || tail != "" {
+			if len(args) < 1 || len(args) > 12 || tail != "" {
 				return nil, fmt.Errorf("cubeCompose requires enabled and optional MCP, max cubes, max limit, timeout, authored values type and projection relations")
 			}
 			enabled, parseErr := strconv.ParseBool(strings.TrimSpace(trimQuote(args[0])))
@@ -227,16 +227,23 @@ func parseComponentSettings(blocks []directiveBlock) (ret *componentSettings, er
 					return nil, fmt.Errorf("cubeCompose values type requires a quoted Go type expression")
 				}
 				compose.ValuesType = trimQuote(raw)
-				if strings.TrimSpace(compose.ValuesType) == "" {
+				if strings.TrimSpace(compose.ValuesType) == "" && len(args) <= 7 {
 					return nil, fmt.Errorf("cubeCompose values type cannot be empty")
 				}
 			}
-			if len(args) == 7 {
+			if len(args) >= 7 {
 				value, err := strconv.ParseBool(strings.TrimSpace(trimQuote(args[6])))
 				if err != nil {
 					return nil, fmt.Errorf("cubeCompose projection relations requires true or false")
 				}
 				compose.ProjectionRelations = value
+			}
+			if len(args) > 7 {
+				var err error
+				compose.MCP, err = parseMCPExposure(args[7:])
+				if err != nil {
+					return nil, fmt.Errorf("invalid cubeCompose MCP exposure: %w", err)
+				}
 			}
 			ret.Report.Compose = compose
 		case strings.EqualFold(name, "cache"):

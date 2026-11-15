@@ -435,8 +435,8 @@ func expandReportEntries(entries []*Entry) []*Entry {
 			}
 			composeName := name + "Compose"
 			composed := &spec.Component{Key: spec.Key{Kind: spec.KindComponent, Scope: component.Key.Scope, Name: composeName}, Name: composeName, Routes: []*spec.Route{{Method: http.MethodPost, Path: strings.TrimRight(route.Path, "/") + "/cube/compose", Internal: route.Internal, APIKeyHeader: route.APIKeyHeader, APIKeyValue: route.APIKeyValue}}}
-			if compose.MCPTool == nil || *compose.MCPTool {
-				composed.Routes[0].MCP = []*spec.MCPExposure{{Kind: spec.MCPExposureTool, CaseFormat: spec.DerivedMCPCaseFormat(route), Name: spec.DerivedMCPToolName(route, composeName, "CubeCompose"), Description: component.Description}}
+			if selected := spec.ComposeMCPExposure(compose, route, composeName, component.Description); selected != nil {
+				composed.Routes[0].MCP = []*spec.MCPExposure{selected}
 			}
 			result = append(result, &Entry{Component: composed, Owner: component.Key, Sources: append([]Source(nil), entry.Sources...), Fingerprint: digestStrings(entry.Fingerprint, composed.Key.String())})
 		}

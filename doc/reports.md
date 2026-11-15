@@ -80,6 +80,25 @@ exposure as a JSON `reportMCP` struct tag, and the generated companion carries
 its selected ordinary `mcp` tag. These publication names do not change the
 component key, report target, route, SQL, grouping or authorization.
 
+## Independent composition MCP metadata
+
+`CubeComposeSettings.MCP` uses the same optional `MCPExposure` contract for
+runtime-derived composition tools. It requires kind `tool` and a nonblank name;
+`MCPTool=false` disables publication. Absence preserves legacy metadata exactly.
+The existing seven `$cubeCompose` arguments are followed by name, description,
+description resource path, case format and strict arguments. An empty values-type
+placeholder is allowed in this extended form:
+
+```sql
+#setting($_ = $cubeCompose(true,true,8,100,30000,'',false,
+  'compose_records','Compose selected record cubes','','lc'))
+```
+
+Generated source holders retain this as JSON `reportComposeMCP`; composition
+remains runtime-derived over the source graph. Changing a source MCP name does
+not change an explicit composition name. Component keys, HTTP routes, query
+validation, authorization and cache ownership retain their existing contracts.
+
 ## Generated cube components
 
 Transcribing a cube-enabled reader emits a named cube input, output alias and

@@ -66,3 +66,27 @@ func BenchmarkReportMCPIndex(b *testing.B) {
 		})
 	}
 }
+
+func TestIndexedComposeMCPSelectionAndCollision(t *testing.T) {
+	grouped := true
+	metadata := &spec.MCPExposure{Kind: spec.MCPExposureTool, Name: "compose_records", Description: "Compose\nrecords", DescriptionPath: "docs/compose.md", CaseFormat: "uc"}
+	component := &spec.Component{Key: spec.Key{Kind: spec.KindComponent, Scope: "test", Name: "Records"}, RootView: &spec.View{Groupable: &grouped}, Settings: &spec.Settings{Report: &spec.ReportSettings{Enabled: true, Compose: &spec.CubeComposeSettings{Enabled: true, MCP: metadata}}}, Routes: []*spec.Route{{Method: "GET", Path: "/records", MCP: []*spec.MCPExposure{{Kind: spec.MCPExposureTool, Name: "get_records"}}}}}
+	entries := expandReportEntries([]*Entry{{Component: component}})
+	if len(entries) != 3 || !reflect.DeepEqual(metadata, entries[2].Component.Routes[0].MCP[0]) {
+		t.Fatalf("entries %+v", entries)
+	}
+	snapshot, err := newSnapshot("selection", "fingerprint", entries)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := snapshot.MCP(MCPIdentity{Kind: spec.MCPExposureTool, Name: metadata.Name}); !ok {
+		t.Fatal("compose missing")
+	}
+	component.Routes[0].MCP[0].Name = metadata.Name
+	if staged, err := newSnapshot("selection", "next", expandReportEntries([]*Entry{{Component: component}})); err == nil || staged != nil {
+		t.Fatal("collision admitted partial snapshot")
+	}
+	if _, ok := snapshot.MCP(MCPIdentity{Kind: spec.MCPExposureTool, Name: metadata.Name}); !ok {
+		t.Fatal("failed staging changed published snapshot")
+	}
+}

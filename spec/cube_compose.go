@@ -5,10 +5,11 @@ type CubeComposeSettings struct {
 	// ProjectionRelations admits explicitly selected native to-one leaf graphs.
 	ProjectionRelations bool `json:"projectionRelations,omitempty"`
 	// ValuesType is a catalog type name or authored Go struct expression for bound wrapper scalars.
-	ValuesType string `json:"valuesType,omitempty"`
-	Enabled    bool   `json:"enabled,omitempty"`
-	MCPTool    *bool  `json:"mcpTool,omitempty"`
-	MaxCubes   int    `json:"maxCubes,omitempty"`
+	ValuesType string       `json:"valuesType,omitempty"`
+	Enabled    bool         `json:"enabled,omitempty"`
+	MCP        *MCPExposure `json:"mcp,omitempty"`
+	MCPTool    *bool        `json:"mcpTool,omitempty"`
+	MaxCubes   int          `json:"maxCubes,omitempty"`
 	// MaxLimit bounds response rows (and UNION LIMIT+OFFSET). Native execution
 	// may read one additional combined-result row solely to determine hasMore.
 	MaxLimit  int `json:"maxLimit,omitempty"`
@@ -20,6 +21,7 @@ func (s *CubeComposeSettings) Clone() *CubeComposeSettings {
 		return nil
 	}
 	result := *s
+	result.MCP = s.MCP.Clone()
 	if s.MCPTool != nil {
 		value := *s.MCPTool
 		result.MCPTool = &value

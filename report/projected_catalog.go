@@ -44,8 +44,16 @@ func ProjectedComponents(component *spec.Component) []ProjectedComponent {
 		if compose == nil || !compose.Enabled {
 			continue
 		}
-		composeMCP := compose.MCPTool == nil || *compose.MCPTool
-		result = append(result, ProjectedComponent{Name: spec.DerivedMCPToolName(route, cubeName+"Compose", "CubeCompose"), Method: http.MethodPost, Path: strings.TrimRight(route.Path, "/") + "/cube/compose", MCPEnabled: composeMCP, Description: strings.TrimSpace(component.Description + " cube composition")})
+		composeDescription := strings.TrimSpace(component.Description + " cube composition")
+		composeExposure := spec.ComposeMCPExposure(compose, route, cubeName+"Compose", composeDescription)
+		composeName := spec.DerivedMCPToolName(route, cubeName+"Compose", "CubeCompose")
+		if composeExposure != nil {
+			composeName = composeExposure.Name
+			if compose.MCP != nil {
+				composeDescription = composeExposure.Description
+			}
+		}
+		result = append(result, ProjectedComponent{Name: composeName, Method: http.MethodPost, Path: strings.TrimRight(route.Path, "/") + "/cube/compose", MCPEnabled: composeExposure != nil, Description: composeDescription, MCP: composeExposure})
 	}
 	return result
 }

@@ -65,3 +65,14 @@ func TestCubeComposeProjectionRelationsOptIn(t *testing.T) {
 		t.Fatal("accepted invalid relation flag")
 	}
 }
+
+func TestCubeComposeMCPExposureDirective(t *testing.T) {
+	prepared := PrepareSource("#setting($_ = $cubeCompose(true,true,8,100,30000,'',false,'compose_records','Compose records','docs/compose.md','uc',false))\nSELECT id FROM events")
+	if err := prepared.Err(); err != nil {
+		t.Fatal(err)
+	}
+	settings := prepared.Directives.Settings.Report.Compose
+	if settings.MCP == nil || settings.MCP.Name != "compose_records" || settings.MCP.DescriptionPath != "docs/compose.md" || settings.MCP.CaseFormat != "uc" || settings.MCP.StrictArguments == nil || *settings.MCP.StrictArguments {
+		t.Fatalf("metadata %+v", settings.MCP)
+	}
+}

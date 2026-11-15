@@ -161,7 +161,7 @@ matched case-insensitively; use the spelling below. Quote textual values.
 | `route_name` | exactly 3 | declared path, method, observability name; does not rename the MCP tool |
 | `mcp_folder`, `mcp_skill_folder` | exactly 3 | namespace, root, URI prefix; no tail; skill variant selects `Skills: ["."]` |
 | `report`, `cube` | 0+ | first eight: linked input type, dimensions, measures, filters, orderBy, limit, offset, MCP-tool boolean; later arguments ignored |
-| `cubeCompose` | 1..7 | enabled boolean; optional MCP-tool boolean, positive max-cubes integer, positive max-limit integer, positive timeout-ms integer, quoted Go scalar-values type, projection-relations boolean, in order |
+| `cubeCompose` | 1..12 | enabled boolean; optional MCP-tool boolean, positive max-cubes integer, positive max-limit integer, positive timeout-ms integer, quoted Go scalar-values type, projection-relations boolean, then optional MCP name, description, description resource path, case format, strict arguments, in order |
 | `cache` | 1+ | enabled boolean or name, optional TTL; later positional arguments ignored; fluent options below |
 | `cache_warmup` | 1+ | index column, then name=value options; repeated same-index calls merge cases with conflict checks; a different index appends an ordered plural warmup |
 | `cache_warmup_cases` | 2+ | shared case set: name, then name=value parameters; referenced by warmup `CaseRefs` |
@@ -1362,3 +1362,18 @@ the same input are not marked. Existing explicit `predicate:"...,auth=true"` tag
 remain supported. This marker identifies authorization; it does not grant access
 or verify an arbitrary handler. Keep ordinary filters combined with authorization
 through `predicate.Builder` using the intended AND grouping.
+
+### Independent composition MCP exposure
+
+`cubeCompose` accepts the ordinary MCP name, description, description path,
+case format and strict arguments after its seven existing arguments. With this
+extended form only, an empty values-type placeholder means no scalar values:
+
+```sql
+#setting($_ = $cubeCompose(true,true,8,100,30000,'',false,
+  'compose_records','Compose selected record cubes','','lc',false))
+```
+
+This sets `CubeComposeSettings.MCP`; absent metadata preserves legacy naming,
+and `MCPTool=false` wins over the override. The optional exposure must be a tool
+with a nonblank name. Source and ordinary cube exposure remain independent.

@@ -145,9 +145,10 @@ func (d *reportDeriver) deriveCompose(source Source, route *spec.Route, identity
 		// Preserve activation of the source's native presentation encoder.
 		component.Settings.CaseFormat = source.Component.Settings.CaseFormat
 	}
-	if config.MCPTool == nil || *config.MCPTool {
-		component.Routes[0].MCP = []*spec.MCPExposure{{Kind: spec.MCPExposureTool, CaseFormat: spec.DerivedMCPCaseFormat(route), Name: spec.DerivedMCPToolName(route, identity.key.Name, "CubeCompose"), Description: component.Description}}
+	if exposure := spec.ComposeMCPExposure(config, route, identity.key.Name, component.Description); exposure != nil {
+		component.Routes[0].MCP = []*spec.MCPExposure{exposure}
 	}
+
 	// A separate source plan keeps composition from mutating ordinary cube input.
 	plan := &Plan{target: sourcePlan.target, inputType: inputType, outputType: reflect.TypeFor[ComposeResponse]()}
 	contract, ok := source.Input.ForRoute(sourcePlan.target.Route)

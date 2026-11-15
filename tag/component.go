@@ -175,6 +175,13 @@ func (c Component) StructTag() (string, error) {
 		}
 		result += " " + MCPTag + ":" + strconv.Quote(string(value))
 	}
+	if c.ReportCompose != nil && c.ReportCompose.MCP != nil {
+		value, err := json.Marshal(c.ReportCompose.MCP)
+		if err != nil {
+			return "", fmt.Errorf("marshal compose MCP tag: %w", err)
+		}
+		result += " reportComposeMCP:" + strconv.Quote(string(value))
+	}
 	if c.ReportMCP != nil {
 		value, err := json.Marshal(c.ReportMCP)
 		if err != nil {
@@ -203,6 +210,14 @@ func ParseComponent(structTag reflect.StructTag) (Component, bool, error) {
 			parsed.ReportCompose = &spec.CubeComposeSettings{}
 		}
 		parsed.ReportCompose.ValuesType = value
+	}
+	if value, exists := structTag.Lookup("reportComposeMCP"); exists {
+		if parsed.ReportCompose == nil {
+			parsed.ReportCompose = &spec.CubeComposeSettings{}
+		}
+		if err := json.Unmarshal([]byte(value), &parsed.ReportCompose.MCP); err != nil {
+			return parsed, true, fmt.Errorf("parse compose MCP tag: %w", err)
+		}
 	}
 	parsed.RouteName = structTag.Get(RouteNameTag)
 	parsed.APIKeyHeader = structTag.Get(APIKeyHeaderTag)
