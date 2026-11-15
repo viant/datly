@@ -7,6 +7,7 @@ import (
 	"github.com/viant/datly/constant"
 	"github.com/viant/datly/internal/drainowner"
 	"github.com/viant/datly/internal/responsebinding"
+	"github.com/viant/datly/internal/selectorcompanion"
 	"github.com/viant/datly/observability/otel"
 	xexec "github.com/viant/xdatly/exec"
 	xhandler "github.com/viant/xdatly/handler"
@@ -522,6 +523,8 @@ func (r *Runtime) invokeComponent(ctx context.Context, request dexec.ComponentRe
 			return nil, err
 		}
 	}
+	companionWarmup := canonicalCompanionWarmup(ctx, registered, request, canonicalInputRoute, inputRoute)
+	var preparationBinding *selectorcompanion.PreparationBinding
 	handler := registered.Handler
 	dataSource := registered.DataSource
 	if request.Replay != nil && request.Replay.Only {
@@ -551,9 +554,21 @@ func (r *Runtime) invokeComponent(ctx context.Context, request dexec.ComponentRe
 		if handler != nil || registered.Reader == nil {
 			return nil, fmt.Errorf("query preparation requires a registered reader component: %s", identity)
 		}
+		// Unsupported legacy non-companion preparation retains its existing path;
+		// it cannot mint the new selector-binding evidence.
+		preparationEligible := !(request.Input != nil || request.ExtraInput != nil || request.Replay != nil || request.BindingOutput != nil || resolvedInput != nil || len(resolvedPaths) != 0 || request.Warmup != nil || len(request.WarmupOmitInput) != 0 || request.DryRun || request.Rows != nil || request.ReaderOptions != nil || request.ReportOrdering != nil || request.Completion != nil || independent || inputRoute != canonicalInputRoute || route.Method != "GET")
+		if !companionWarmup && inputRoute.SelectorPlan() != nil && !preparationEligible {
+			return nil, fmt.Errorf("query preparation requires fresh canonical binding")
+		}
 		handler, err = rreader.NewQueryHandler(registered.Reader, inputRoute)
 		if err != nil {
 			return nil, err
+		}
+		if !companionWarmup && inputRoute.SelectorPlan() != nil && preparationEligible {
+			preparationBinding = selectorcompanion.NewPreparationBinding(handler, registered.Reader, inputRoute)
+			if preparationBinding == nil {
+				return nil, fmt.Errorf("query preparation requires canonical selector plans")
+			}
 		}
 		dataSource = nil
 	} else if handler == nil {
@@ -598,11 +613,12 @@ func (r *Runtime) invokeComponent(ctx context.Context, request dexec.ComponentRe
 	}
 	ctx = constant.WithContext(ctx, values)
 	execution := handlerengine.Request{
+		PreparationBinding:           preparationBinding,
 		IndependentChildTransactions: request.IndependentChildTransactions || (registered.Component.Settings != nil && registered.Component.Settings.IndependentChildTransactions),
 		SequenceStrategy:             sequenceStrategy,
 		BufferedComponentCalls:       buffered,
 		// Keep selector-companion admission while sharing the recovery-read classification.
-		CanonicalReader:      canonicalReader && (inputRoute.SelectorPlan() == nil || len(request.WarmupOmitInput) == 0) || canonicalCompanionWarmup(ctx, registered, request, canonicalInputRoute, inputRoute),
+		CanonicalReader:      canonicalReader && (inputRoute.SelectorPlan() == nil || len(request.WarmupOmitInput) == 0) || companionWarmup,
 		ProtectedFlushTables: protectedFlushTables,
 		Injector:             r.injector,
 		Input:                inputRoute,

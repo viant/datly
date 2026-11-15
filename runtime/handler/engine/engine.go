@@ -15,6 +15,7 @@ import (
 	dexec "github.com/viant/datly/exec"
 	"github.com/viant/datly/internal/drainowner"
 	"github.com/viant/datly/internal/responsebinding"
+	"github.com/viant/datly/internal/selectorcompanion"
 	rhandler "github.com/viant/datly/runtime/handler"
 	"github.com/viant/datly/runtime/handler/custom"
 	handlerprovider "github.com/viant/datly/runtime/handler/provider"
@@ -30,8 +31,9 @@ import (
 )
 
 type Request struct {
-	mutationAttempt   int
-	phaseInvocationID uint64
+	PreparationBinding *selectorcompanion.PreparationBinding
+	mutationAttempt    int
+	phaseInvocationID  uint64
 	// BufferedComponentCalls is dispatcher-owned canonical caller metadata.
 	BufferedComponentCalls bool
 	// CanonicalReader is runtime dispatcher metadata, never application input.
@@ -184,8 +186,12 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 	if scoped || readerScoped {
 		inputPlan, _ = request.Input.ScopePlan("")
 	}
+	preparationCompatible := request.PreparationBinding.Matches(request.Handler, request.Input) && !scoped && !readerHasNamedViewScope(request.Input) && request.BoundInput == nil && request.ResolvedInput == nil && len(request.ResolvedPaths) == 0 && request.Replay == nil && request.BindingOutput == nil && request.Completion == nil && !request.IndependentChildTransactions && request.DataSource == nil
+	if request.PreparationBinding != nil && !preparationCompatible {
+		return nil, fmt.Errorf("query preparation requires exact canonical binding evidence")
+	}
 	selectors := request.Input.SelectorPlan()
-	if selectors != nil && (!selectors.TransportOnly() && !request.CanonicalReader || scoped || request.BoundInput != nil && selectors.TransportOnly() || request.Replay != nil || selectors.PublicPlan() != request.Input.Plan()) {
+	if selectors != nil && (!selectors.TransportOnly() && !request.CanonicalReader && !preparationCompatible || scoped || request.BoundInput != nil && selectors.TransportOnly() || request.Replay != nil || selectors.PublicPlan() != request.Input.Plan()) {
 		return nil, fmt.Errorf("selector companion requires compatible canonical binding without scoped execution or replay")
 	}
 	if selectors != nil && selectors.TransportOnly() {
@@ -761,7 +767,7 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 			}
 		}
 	}
-	if request.CanonicalReader {
+	if request.CanonicalReader || preparationCompatible {
 		if reader, ok := request.Handler.(interface {
 			ValidateSelectorWindow(context.Context, rhandler.Invocation) error
 		}); ok {
