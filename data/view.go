@@ -58,6 +58,24 @@ type Cache struct {
 	Warmups []*spec.CacheWarmupSettings `json:"warmups,omitempty"`
 	// SharedCases holds named reusable case sets referenced by warmup CaseRefs.
 	SharedCases map[string][]*spec.CacheWarmupCase `json:"sharedCases,omitempty"`
+	// WarmupPolicyRef records the logical host configuration actually selected
+	// during native resolution. Empty means policies were supplied on the view.
+	// This is resolved provenance, never an authored reference or storage address.
+	WarmupPolicyRef string `json:"-"`
+}
+
+// WarmupPolicySource describes the effective policy collection. Native
+// resolution replaces the collection as a whole; it does not merge host
+// policies into an existing inline collection. Directly supplied view policies
+// are inline unless the native host-resolution owner recorded their reference.
+func (c *Cache) WarmupPolicySource() (origin, policyRef string) {
+	if !c.HasWarmup() {
+		return "", ""
+	}
+	if c.WarmupPolicyRef != "" {
+		return "host", c.WarmupPolicyRef
+	}
+	return "inline", ""
 }
 
 // EffectiveWarmups returns every normalized warmup: singular first, then plural

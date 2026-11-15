@@ -128,7 +128,21 @@ promise that every later query shape can reuse it. Partial failure can leave
 already-populated entries; warmup is not a cross-query cache transaction.
 
 After native reader initialization, `exec.ReaderWarmupTargeter.WarmupTargets()`
-exposes each scheduled policy with `CacheName`, `Backend`, and a `Work` list.
+exposes each scheduled policy with `Origin`, `PolicyRef`, `CacheName`, `Backend`,
+and a `Work` list. Native `Origin` is `inline` for policies supplied by the
+component/view and `host` for policies loaded from host configuration. `PolicyRef`
+is the selected logical host configuration key, distinct from `Settings.Name`
+(the policy's own name) and `CacheName` (storage configuration). It is empty for
+inline policies. Custom targeters may leave origin unset when it is not known.
+Inline policies using host-configured storage still have `Origin=inline`.
+Reading this metadata does not execute reader SQL or populate caches.
+
+Inline policies retain their existing precedence over a named warmup binding;
+the policy collection is selected as a whole, not merged with host policies.
+A missing selected host reference remains an initialization error. A reference
+shadowed by an inline policy is not resolved or validated, and is not reported
+as `PolicyRef`. Different views may therefore report different policy origins.
+
 `Backend` is `afs` or `aerospike`; it is empty for a supplied service whose
 backend cannot be reliably identified. `CacheName` is the selected logical
 configuration name or explicit view binding and may be empty for unnamed caches.
@@ -136,8 +150,11 @@ Provider URLs, credentials and storage locations are not included in these field
 
 `Work` describes the actual view/policy selections for that target, including
 output views added by `IndexMeta`, using execution's native work expansion.
-The containing target identifies the originating scheduled policy. These work
-entries are descriptive: do not schedule them separately. Returned settings and
+Each work item's `Origin` and `PolicyRef` describe its effective policy: fallback
+work added by `IndexMeta` inherits the parent's policy source, while a summary's
+own policies retain their own source. The containing target identifies the
+originating scheduled policy. These work entries are descriptive: do not schedule
+them separately. Returned settings and
 work lists are detached snapshots; changing them does not change the reader.
 
 ## Choose the warmup identity to match the SQL

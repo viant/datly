@@ -163,12 +163,14 @@ func (e *Execution) WarmupTargets() []dexec.ReaderWarmupTarget {
 			if err == nil {
 				for _, settings := range warmups {
 					identity := e.warmupCacheIdentity(plan.View)
-					target := dexec.ReaderWarmupTarget{View: viewName, Settings: settings, CacheName: identity.Name, Backend: identity.Backend}
+					origin, policyRef := plan.View.Cache.WarmupPolicySource()
+					target := dexec.ReaderWarmupTarget{View: viewName, Settings: settings, Origin: origin, PolicyRef: policyRef, CacheName: identity.Name, Backend: identity.Backend}
 					if work, err := warmupWorkItems(plan, settings); err == nil {
 						for _, item := range work {
 							identity := e.warmupCacheIdentity(item.plan.View)
 							target.Work = append(target.Work, dexec.ReaderWarmupWork{
 								View: warmupTargetViewName(item.plan.View), Settings: item.settings.Clone(),
+								Origin: item.origin, PolicyRef: item.policyRef,
 								CacheName: identity.Name, Backend: identity.Backend,
 							})
 						}

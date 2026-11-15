@@ -146,6 +146,8 @@ func TestWarmupMetadataSuppliedServices(t *testing.T) {
 				require.NoError(t, err)
 				targets := execution.(dexec.ReaderWarmupTargeter).WarmupTargets()
 				require.Len(t, targets, 1)
+				require.Equal(t, "inline", targets[0].Origin)
+				require.Empty(t, targets[0].PolicyRef)
 				require.Equal(t, name, targets[0].CacheName)
 				require.Equal(t, tc.backend, targets[0].Backend)
 				require.Len(t, targets[0].Work, 1)

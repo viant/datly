@@ -18,6 +18,11 @@ type ReaderWarmupRequest struct {
 type ReaderWarmupTarget struct {
 	View     string
 	Settings *spec.CacheWarmupSettings
+	// Origin is inline or host for native targets, or empty when not established.
+	Origin string
+	// PolicyRef is the selected logical host configuration key, not the policy
+	// name or cache identity. It is empty for inline policies.
+	PolicyRef string
 	// CacheName is the resolved logical name or explicit view binding; it may be empty.
 	CacheName string
 	// Backend is afs, aerospike, or empty when the selected service is unknown.
@@ -31,8 +36,13 @@ type ReaderWarmupTarget struct {
 // Its originating scheduled policy is the containing ReaderWarmupTarget.
 // CacheName is a logical name; neither it nor Backend contains storage addresses.
 type ReaderWarmupWork struct {
-	View      string
-	Settings  *spec.CacheWarmupSettings
+	View     string
+	Settings *spec.CacheWarmupSettings
+	// Origin and PolicyRef describe this work item's effective policy. IndexMeta
+	// fallback work inherits the containing target's policy source; a summary's
+	// own policies retain their own source. Work never adds scheduled targets.
+	Origin    string
+	PolicyRef string
 	CacheName string
 	Backend   string
 }
