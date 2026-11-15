@@ -7,6 +7,7 @@ import (
 	"reflect"
 
 	"github.com/viant/bindly"
+	bindinput "github.com/viant/bindly/input"
 	"github.com/viant/bindly/locator"
 	"github.com/viant/bindly/xform"
 	"github.com/viant/tagly/choice"
@@ -88,7 +89,7 @@ func (e *enumInput) Transform(_ context.Context, _ locator.Resolver, value any) 
 	}
 	converted, err := e.plan.DecodeJSON(raw)
 	if err != nil {
-		return nil, err
+		return nil, &bindinput.Error{Cause: err}
 	}
 	target := reflect.New(e.target)
 	if err = json.Unmarshal(converted, target.Interface()); err != nil {
