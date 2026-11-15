@@ -261,6 +261,7 @@ func (p *Plan) componentTag(route RoutePlan) dtag.Component {
 	}
 	if p.Report != nil {
 		result.ReportCompose = p.Report.Compose.Clone()
+		result.ReportMCP = p.Report.MCP.Clone()
 		result.Report = p.Report.Enabled
 		result.ReportLinkedFacade = p.Report.LinkedFacade
 		if p.Report.MCPTool != nil {

@@ -43,6 +43,13 @@ func parseReportSettings(name string, args []string) (*spec.ReportSettings, erro
 		}
 		ret.MCPTool = &enabled
 	}
+	if len(args) > 8 {
+		var err error
+		ret.MCP, err = parseMCPExposure(args[8:])
+		if err != nil {
+			return nil, fmt.Errorf("invalid %s MCP exposure: %w", name, err)
+		}
+	}
 	return ret, nil
 }
 

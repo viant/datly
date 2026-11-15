@@ -16,6 +16,7 @@ type ProjectedComponent struct {
 	Path        string
 	MCPEnabled  bool
 	Description string
+	MCP         *spec.MCPExposure
 }
 
 // ProjectedComponents returns the cube and optional cube-compose components
@@ -30,8 +31,15 @@ func ProjectedComponents(component *spec.Component) []ProjectedComponent {
 			return nil
 		}
 		cubeName := identity.key.Name
-		cubeMCP := component.Settings.Report.MCPTool == nil || *component.Settings.Report.MCPTool
-		result = append(result, ProjectedComponent{Name: spec.DerivedMCPToolName(route, cubeName, "Cube"), Method: http.MethodPost, Path: strings.TrimRight(route.Path, "/") + "/cube", MCPEnabled: cubeMCP, Description: strings.TrimSpace(component.Description + " cube")})
+		exposure := spec.ReportMCPExposure(component.Settings.Report, route, cubeName, component.Description)
+		name, description := spec.DerivedMCPToolName(route, cubeName, "Cube"), strings.TrimSpace(component.Description+" cube")
+		if exposure != nil {
+			name = exposure.Name
+			if component.Settings.Report.MCP != nil {
+				description = exposure.Description
+			}
+		}
+		result = append(result, ProjectedComponent{Name: name, Method: http.MethodPost, Path: strings.TrimRight(route.Path, "/") + "/cube", MCPEnabled: exposure != nil, Description: description, MCP: exposure})
 		compose := component.Settings.Report.Compose
 		if compose == nil || !compose.Enabled {
 			continue

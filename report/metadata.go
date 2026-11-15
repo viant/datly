@@ -57,6 +57,9 @@ func compileMetadata(component *spec.Component, contract *registry.RouteInputCon
 	if component.Settings != nil {
 		authored = component.Settings.Report
 	}
+	if err := authored.ValidateMCPExposure(); err != nil {
+		return nil, err
+	}
 	settings, inputLayout := normalizeSettings(authored)
 	result := &metadata{settings: settings, inputLayout: inputLayout, holders: map[string][]string{}}
 	// Supplied column metadata may include computed output-only fields. Remove
@@ -217,7 +220,7 @@ func normalizeSettings(source *spec.ReportSettings) (spec.ReportSettings, spec.R
 	result := spec.ReportSettings{}
 	layout := spec.ReportInputLayout{}
 	if source != nil {
-		result = *source
+		result = *source.Clone()
 		if source.InputLayout != nil {
 			layout = *source.InputLayout
 			result.InputLayout = &layout

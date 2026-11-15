@@ -54,6 +54,32 @@ country and region, selecting both dimensions includes the lookup; selecting onl
 country leaves it out. A composite lookup must not add an unselected dimension
 and silently split the aggregate into smaller groups.
 
+## Independent cube MCP metadata
+
+The optional `ReportSettings.MCP` exposure describes only the derived cube.
+It requires `kind: "tool"` and a nonblank name. Without it, source-derived
+names, descriptions and casing retain their previous behavior. `MCPTool=false`
+disables the cube tool even when an override is present; composition metadata
+and the source reader remain independent.
+
+DQL `$report` and `$cube` retain their existing eight positional arguments
+(linked input type, dimensions, measures, filters, orderBy, limit, offset,
+MCP enable flag). Optional trailing values use the ordinary `$mcp` contract:
+name, description, description resource path, case format, strict arguments.
+For example:
+
+```sql
+#setting($_ = $mcp('get_records', 'Read records'))
+#setting($_ = $cube('', '', '', '', '', '', '', true,
+  'aggregate_records', 'Aggregate selected record dimensions and measures', '', 'lc'))
+```
+
+Omitting strict arguments inherits the host policy. Description resources use
+the existing resource store. Generated source metadata preserves the optional
+exposure as a JSON `reportMCP` struct tag, and the generated companion carries
+its selected ordinary `mcp` tag. These publication names do not change the
+component key, report target, route, SQL, grouping or authorization.
+
 ## Generated cube components
 
 Transcribing a cube-enabled reader emits a named cube input, output alias and

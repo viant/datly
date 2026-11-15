@@ -55,8 +55,8 @@ func (d *reportDeriver) derivedComponent(source *spec.Component, sourceRoute *sp
 		settings.CaseFormat = source.Settings.CaseFormat
 	}
 	var exposure []*spec.MCPExposure
-	if metadata.settings.MCPTool == nil || *metadata.settings.MCPTool {
-		exposure = []*spec.MCPExposure{{Kind: spec.MCPExposureTool, CaseFormat: spec.DerivedMCPCaseFormat(sourceRoute), Name: spec.DerivedMCPToolName(sourceRoute, identity.key.Name, "Cube"), Description: source.Description}}
+	if selected := spec.ReportMCPExposure(&metadata.settings, sourceRoute, identity.key.Name, source.Description); selected != nil {
+		exposure = []*spec.MCPExposure{selected}
 	}
 	return &spec.Component{
 		Key: identity.key, Name: identity.key.Name, Description: strings.TrimSpace(source.Description + " cube"),

@@ -57,6 +57,7 @@ func (p *Project) Derived() []*Derived {
 
 // Plan is immutable execution metadata for one derived cube route.
 type Plan struct {
+	mcp          *spec.MCPExposure
 	target       exec.ComponentTarget
 	view         string
 	inputType    reflect.Type

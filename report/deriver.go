@@ -112,6 +112,9 @@ func (d *reportDeriver) derive(source Source) ([]*Derived, []*x.Type, error) {
 			return nil, nil, err
 		}
 		definition.Parameters = cloneParams(input.params)
+		if metadata.settings.MCP != nil {
+			definition.MCP = spec.ReportMCPExposure(&metadata.settings, route, identity.key.Name, component.Description)
+		}
 		plan, err = definition.Compile(input.typeOf, source.OutputType)
 		if err != nil {
 			return nil, nil, err

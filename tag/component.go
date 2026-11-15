@@ -20,6 +20,7 @@ const (
 	APIKeyValueTag  = "apiKeyValue"
 	InternalTag     = "internal"
 	MCPTag          = "mcp"
+	ReportMCPTag    = "reportMCP"
 )
 
 // Component is the metadata carried by a component holder field.
@@ -47,6 +48,7 @@ type Component struct {
 	Report                bool
 	ReportLinkedFacade    bool
 	ReportCompose         *spec.CubeComposeSettings
+	ReportMCP             *spec.MCPExposure
 	ReportMCPTool         *bool
 	ReportLinkedInputType string
 	ReportDimensions      string
@@ -173,6 +175,13 @@ func (c Component) StructTag() (string, error) {
 		}
 		result += " " + MCPTag + ":" + strconv.Quote(string(value))
 	}
+	if c.ReportMCP != nil {
+		value, err := json.Marshal(c.ReportMCP)
+		if err != nil {
+			return "", fmt.Errorf("marshal report MCP tag: %w", err)
+		}
+		result += " " + ReportMCPTag + ":" + strconv.Quote(string(value))
+	}
 	settingsTag, err := c.Settings.StructTag()
 	if err != nil {
 		return "", err
@@ -227,6 +236,11 @@ func ParseComponent(structTag reflect.StructTag) (Component, bool, error) {
 	if value, exists := structTag.Lookup(MCPTag); exists {
 		if err := json.Unmarshal([]byte(value), &parsed.MCP); err != nil {
 			return parsed, true, fmt.Errorf("parse MCP route tag: %w", err)
+		}
+	}
+	if value, exists := structTag.Lookup(ReportMCPTag); exists {
+		if err := json.Unmarshal([]byte(value), &parsed.ReportMCP); err != nil {
+			return parsed, true, fmt.Errorf("parse report MCP tag: %w", err)
 		}
 	}
 	settings, settingsErr := ParseSettings(structTag)

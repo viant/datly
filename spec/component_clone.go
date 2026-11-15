@@ -76,6 +76,7 @@ func (s *ReportSettings) Clone() *ReportSettings {
 	result := *s
 	result.InputLayout = s.InputLayout.Clone()
 	result.Compose = s.Compose.Clone()
+	result.MCP = s.MCP.Clone()
 	if s.MCPTool != nil {
 		enabled := *s.MCPTool
 		result.MCPTool = &enabled

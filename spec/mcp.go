@@ -132,3 +132,31 @@ func routeMCPIdentifier(route *Route) string {
 	}
 	return strings.Trim(result.String(), "_")
 }
+
+// ReportMCPExposure selects publication metadata for a derived cube only.
+// The source route and legacy derivation remain independent of an override.
+func ReportMCPExposure(settings *ReportSettings, route *Route, fallback, description string) *MCPExposure {
+	if settings != nil {
+		if settings.MCPTool != nil && !*settings.MCPTool {
+			return nil
+		}
+		if settings.MCP != nil {
+			return settings.MCP.Clone()
+		}
+	}
+	return &MCPExposure{Kind: MCPExposureTool, CaseFormat: DerivedMCPCaseFormat(route), Name: DerivedMCPToolName(route, fallback, "Cube"), Description: description}
+}
+
+// ValidateMCPExposure validates only the optional derived-tool declaration.
+func (s *ReportSettings) ValidateMCPExposure() error {
+	if s == nil || s.MCP == nil || s.MCPTool != nil && !*s.MCPTool {
+		return nil
+	}
+	if s.MCP.Kind != MCPExposureTool {
+		return fmt.Errorf("report MCP exposure requires kind tool")
+	}
+	if strings.TrimSpace(s.MCP.Name) == "" {
+		return fmt.Errorf("report MCP exposure requires a nonblank name")
+	}
+	return s.MCP.ValidateCaseFormat()
+}

@@ -15,6 +15,7 @@ import (
 // provider mappings, never SQL or a second copy of the source reader plan.
 // Generated Go and dynamic DQL compile this same definition against their input.
 type Definition struct {
+	MCP        *spec.MCPExposure     `json:"mcp,omitempty"`
 	Target     exec.ComponentTarget  `json:"target"`
 	View       string                `json:"view"`
 	Dimensions []SelectionDefinition `json:"dimensions"`
@@ -48,7 +49,7 @@ func (p *Plan) Definition() (Definition, error) {
 	if p == nil || p.inputType == nil {
 		return Definition{}, fmt.Errorf("cube plan is required")
 	}
-	result := Definition{Target: p.target, View: p.view}
+	result := Definition{Target: p.target, View: p.view, MCP: p.mcp.Clone()}
 	appendSelections := func(items []selection, target *[]SelectionDefinition) error {
 		for _, item := range items {
 			path, err := definitionPath(p.inputType, item.index)
@@ -108,7 +109,7 @@ func (d Definition) Compile(input, output reflect.Type) (*Plan, error) {
 	if strings.TrimSpace(d.View) == "" {
 		return nil, fmt.Errorf("cube source view is required")
 	}
-	result := &Plan{target: d.Target, view: d.View, inputType: input, outputType: output, holderByName: map[string][]string{}}
+	result := &Plan{mcp: d.MCP.Clone(), target: d.Target, view: d.View, inputType: input, outputType: output, holderByName: map[string][]string{}}
 	names := map[string]bool{}
 	fields := map[string]bool{}
 	wireNames := inputWireNames{}

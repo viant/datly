@@ -235,10 +235,11 @@ func (s *RouteSource) canonicalComponent() (*spec.Component, error) {
 	if err := settings.ValidateComponentCallPolicy(); err != nil {
 		return nil, err
 	}
-	if s.Tag.Report || s.Tag.ReportLinkedFacade || s.Tag.ReportCompose != nil || s.Tag.ReportMCPTool != nil || s.Tag.ReportLinkedInputType != "" || s.Tag.ReportDimensions != "" || s.Tag.ReportMeasures != "" ||
+	if s.Tag.Report || s.Tag.ReportLinkedFacade || s.Tag.ReportCompose != nil || s.Tag.ReportMCPTool != nil || s.Tag.ReportMCP != nil || s.Tag.ReportLinkedInputType != "" || s.Tag.ReportDimensions != "" || s.Tag.ReportMeasures != "" ||
 		s.Tag.ReportFilters != "" || s.Tag.ReportOrderBy != "" || s.Tag.ReportLimit != "" || s.Tag.ReportOffset != "" {
 		settings.Report = &spec.ReportSettings{
 			Compose:         s.Tag.ReportCompose.Clone(),
+			MCP:             s.Tag.ReportMCP.Clone(),
 			Enabled:         s.Tag.Report,
 			LinkedFacade:    s.Tag.ReportLinkedFacade,
 			LinkedInputType: s.Tag.ReportLinkedInputType,

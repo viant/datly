@@ -129,6 +129,7 @@ type ReportSettings struct {
 	Compose         *CubeComposeSettings `json:"compose,omitempty"`
 	Enabled         bool                 `json:"enabled,omitempty"`
 	MCPTool         *bool                `json:"mcpTool,omitempty"`
+	MCP             *MCPExposure         `json:"mcp,omitempty"`
 	LinkedInputType string               `json:"linkedInputType,omitempty"`
 	InputLayout     *ReportInputLayout   `json:"inputLayout,omitempty"`
 }
