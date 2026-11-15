@@ -157,7 +157,7 @@ func validateOperationResult(operation Operation, structure *Structure) error {
 	}
 	if operation.Type == OperationSetSetting && operation.Setting != nil && structure != nil && structure.Component != nil &&
 		(strings.EqualFold(operation.Setting.Name, "cache") || strings.EqualFold(operation.Setting.Name, "cache_warmup")) {
-		if settings := structure.Component.Settings; settings != nil && settings.Cache != nil && settings.Cache.Enabled && !isCacheReference(settings.Cache) {
+		if settings := structure.Component.Settings; settings != nil && settings.Cache != nil && settings.Cache.Enabled && !isCacheReference(settings.Cache, structure.Component.RootView) {
 			if strings.HasPrefix(strings.ToLower(strings.TrimSpace(settings.Cache.Provider)), "aerospike:") {
 				return fmt.Errorf("inline Aerospike cache validation is unavailable; select a predefined service cache")
 			}
@@ -193,8 +193,15 @@ func validateOperationResult(operation Operation, structure *Structure) error {
 
 // A named cache without storage settings is resolved by the native runtime.
 // Warmup policies describe population and do not make a reference inline.
-func isCacheReference(settings *spec.CacheSettings) bool {
-	return settings != nil && strings.TrimSpace(settings.Name) != "" &&
+func isCacheReference(settings *spec.CacheSettings, root *spec.View) bool {
+	if settings == nil {
+		return false
+	}
+	name := settings.Name
+	if root != nil && root.Source != nil && root.Source.Bindings != nil && strings.TrimSpace(root.Source.Bindings.CacheName) != "" {
+		name = root.Source.Bindings.CacheName
+	}
+	return strings.TrimSpace(name) != "" &&
 		settings.Provider == "" && settings.Location == "" && settings.TTL == "" && settings.TimeToLiveMs == 0 &&
 		settings.SleepBetweenRetriesInMs == 0 && settings.MaxRetries == 0 &&
 		settings.TotalTimeoutInMs == 0 && settings.SocketTimeoutInMs == 0 &&
