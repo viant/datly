@@ -308,6 +308,9 @@ func (a *packageAuthority) compile(ctx context.Context) (*Result, error) {
 		result.Views[linked.identity] = &gen.ViewReference{DescriptorKey: linked.descriptor.Key()}
 	}
 	contracts.PrepareGeneratedTypes(result.Component, result.Contracts, result.ContractTypeOverrides.Input, result.ContractTypeOverrides.Output)
+	if err = capturePreparedSelectorSource(result, a.input, a.output); err != nil {
+		return nil, err
+	}
 	return result, nil
 }
 

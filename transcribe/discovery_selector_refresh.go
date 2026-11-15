@@ -5,6 +5,9 @@ import (
 	"github.com/viant/datly/spec"
 	"github.com/viant/datly/transcribe/dql"
 	"github.com/viant/datly/transcribe/internal/link"
+	"github.com/viant/datly/transcribe/internal/sourcecontract"
+	"github.com/viant/datly/typecatalog"
+	"github.com/viant/x"
 	"strings"
 )
 
@@ -64,4 +67,45 @@ func (c *discoveryInputCompiler) selectorDiscoveryContract() (*spec.Component, e
 		}
 	}
 	return validation, nil
+}
+
+// preparedSelectorSource is the final handoff of the same prepared-source
+// admission used for provisional discovery. Metadata alone cannot mint it.
+func preparedSelectorSource(result *Result) (*sourcecontract.Selector, error) {
+	if result == nil || result.Source == nil || result.Component == nil || result.Component.SelectorCompanion == nil {
+		return nil, nil
+	}
+	source := result.Source
+	if source.PackageComponent == nil || strings.TrimSpace(source.Text) == "" {
+		return nil, nil
+	}
+	if source.preparation == nil || !source.preparation.matches(source) || source.PackageComponent.SelectorCompanion != result.Component.SelectorCompanion {
+		return nil, fmt.Errorf("prepared selector source lineage mismatch")
+	}
+	if result.preparedSelector == nil {
+		return nil, fmt.Errorf("prepared selector compilation evidence missing")
+	}
+	if err := result.preparedSelector.Validate(result.Component); err != nil {
+		return nil, err
+	}
+	return result.preparedSelector, nil
+}
+
+// capturePreparedSelectorSource runs only after the package compiler finishes
+// native source normalization. Reuse that product instead of replaying parsing,
+// predicate compilation and linked metadata merging at generation time.
+func capturePreparedSelectorSource(result *Result, input, output *x.Type) error {
+	if result == nil || result.Source == nil || result.Component == nil || result.Component.SelectorCompanion == nil || strings.TrimSpace(result.Source.Text) == "" {
+		return nil
+	}
+	source := result.Source
+	if source.PackageComponent == nil || source.preparation == nil || !source.preparation.matches(source) || source.PackageComponent.SelectorCompanion != result.Component.SelectorCompanion {
+		return fmt.Errorf("prepared selector source lineage mismatch")
+	}
+	types, err := typecatalog.NewResolver(source.Types, typecatalog.PackageAuthority, result.TypeContext)
+	if err != nil {
+		return err
+	}
+	result.preparedSelector, err = sourcecontract.NewSelector(source.PackageComponent, result.Component, input, output, source.Types, types)
+	return err
 }

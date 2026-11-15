@@ -21,7 +21,6 @@ import (
 	dtag "github.com/viant/datly/tag"
 	sqlio "github.com/viant/sqlx/io"
 	"github.com/viant/x"
-	smodel "github.com/viant/x/syntetic/model"
 )
 
 // BorrowedLeafContract is detached comparison evidence, never an execution plan.
@@ -1040,37 +1039,7 @@ func BorrowedNamedDependenciesFromPlan(planned *Plan, packagePath, name string) 
 		return nil, nil
 	}
 	source := viewFileContent(planned.PackageName(), planned, selected, false)
-	file, err := parser.ParseFile(token.NewFileSet(), "fresh_named_dependencies.go", source, 0)
-	if err != nil {
-		return nil, err
-	}
-	imports := map[string]*smodel.ImportRef{}
-	for _, imp := range file.Imports {
-		path, err := strconv.Unquote(imp.Path.Value)
-		if err != nil {
-			return nil, err
-		}
-		alias := filepath.Base(path)
-		if imp.Name != nil {
-			alias = imp.Name.Name
-		}
-		imports[alias] = &smodel.ImportRef{Path: path, Alias: alias}
-	}
-	var result []*x.Type
-	for _, decl := range file.Decls {
-		group, ok := decl.(*ast.GenDecl)
-		if !ok {
-			continue
-		}
-		for _, entry := range group.Specs {
-			typ, ok := entry.(*ast.TypeSpec)
-			if !ok {
-				continue
-			}
-			result = append(result, &x.Type{Name: typ.Name.Name, PkgPath: packagePath, SynteticType: &smodel.Type{Name: typ.Name.Name, PkgPath: packagePath, TypeSpec: typ, Imports: imports}})
-		}
-	}
-	return result, nil
+	return sourceDescriptors(packagePath, source)
 }
 
 func dtagTransient(tag string) bool { return sqlio.ParseTag(reflect.StructTag(tag)).Transient }

@@ -5,6 +5,8 @@ import (
 	"github.com/viant/datly/data"
 	"github.com/viant/datly/spec"
 	readercompiler "github.com/viant/datly/sql/reader/compiler"
+	"github.com/viant/datly/typecatalog"
+	"github.com/viant/x"
 	"reflect"
 	"strings"
 )
@@ -96,8 +98,18 @@ func ResolveReportSource(component *spec.Component, output reflect.Type, resourc
 // ResolveReportSourceWithContracts preserves canonical input and output authority
 // when resolving detached report metadata for a reader with selector companions.
 func ResolveReportSourceWithContracts(component *spec.Component, input, output reflect.Type, resources *resource.Store) (*spec.Component, error) {
+	return resolveReportSourceContracts(component, input, output, resources, ContractResolver{Component: component, InputType: linkedContractType(input), OutputType: linkedContractType(output)})
+}
+
+// ResolveReportSourceFromDeclarations retains prospective canonical identity in
+// authoring. The supplied reflected shapes remain metadata materializations.
+func ResolveReportSourceFromDeclarations(component *spec.Component, input, output reflect.Type, resources *resource.Store, inputContract, outputContract *x.Type, types *typecatalog.Resolver) (*spec.Component, error) {
+	return resolveReportSourceContracts(component, input, output, resources, ContractResolver{Component: component, InputType: inputContract, OutputType: outputContract, Types: types})
+}
+
+func resolveReportSourceContracts(component *spec.Component, input, output reflect.Type, resources *resource.Store, resolver ContractResolver) (*spec.Component, error) {
 	compiler := &artifactCompiler{input: ArtifactInput{Component: component, InputType: input, OutputType: output, Resources: resources}}
-	source, err := (ContractResolver{Component: component, InputType: linkedContractType(input), OutputType: linkedContractType(output)}).Resolve()
+	source, err := resolver.Resolve()
 	if err != nil {
 		return nil, err
 	}

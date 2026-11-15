@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/viant/datly/transcribe/internal/sourcecontract"
 	"strings"
 
 	"github.com/viant/datly/bootstrap"
@@ -27,6 +28,7 @@ var ErrNilSource = errors.New("transcribe: nil source")
 // generation, and persistence stages. Runtime artifacts are intentionally not
 // part of this model.
 type Result struct {
+	preparedSelector        *sourcecontract.Selector
 	Source                  *Source
 	Component               *spec.Component
 	PreparedSQL             string
