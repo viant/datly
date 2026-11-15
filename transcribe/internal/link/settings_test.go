@@ -1,6 +1,7 @@
 package link
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/viant/datly/spec"
@@ -202,5 +203,42 @@ func TestMergeGenerationPreservesSQLDestinations(t *testing.T) {
 	fresh := (&settingsLoader{}).mergeGeneration(nil, authored)
 	if fresh == nil || fresh.SQLFile("records", "") != "queries/records.sql" {
 		t.Fatal("standalone SQL destination discarded")
+	}
+}
+
+func TestSettingsLoaderReportMCPExposureOwnership(t *testing.T) {
+	strict, disabled := true, false
+	inherited := &spec.MCPExposure{Kind: spec.MCPExposureTool, Name: "inherited_cube", Description: "Package metadata", StrictArguments: &strict}
+	override := &spec.MCPExposure{Kind: spec.MCPExposureTool, Name: "aggregate_records", Description: "Quoted, \"text\"\nsecond line", DescriptionPath: "docs/cube.md", CaseFormat: "lc", StrictArguments: &strict}
+	for _, tc := range []struct {
+		name           string
+		base, authored *spec.ReportSettings
+		want           *spec.MCPExposure
+	}{
+		{name: "nil defaults", base: &spec.ReportSettings{Enabled: true}, authored: &spec.ReportSettings{Enabled: true}},
+		{name: "package inherited", base: &spec.ReportSettings{Enabled: true, MCP: inherited}, authored: &spec.ReportSettings{Enabled: true}, want: inherited},
+		{name: "authored replaces", base: &spec.ReportSettings{Enabled: true, MCP: inherited}, authored: &spec.ReportSettings{Enabled: true, MCP: override}, want: override},
+		{name: "new authored", authored: &spec.ReportSettings{Enabled: true, MCP: override}, want: override},
+		{name: "disabled wins", base: &spec.ReportSettings{Enabled: true, MCP: inherited}, authored: &spec.ReportSettings{Enabled: true, MCP: override, MCPTool: &disabled}, want: override},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := (&settingsLoader{base: &spec.Settings{Report: tc.base}, authored: &spec.Settings{Report: tc.authored}}).Load().Report
+			if !reflect.DeepEqual(actual.MCP, tc.want) {
+				t.Fatalf("exposure %+v want %+v", actual.MCP, tc.want)
+			}
+			if tc.want != nil {
+				if actual.MCP == tc.want || actual.MCP.StrictArguments == tc.want.StrictArguments {
+					t.Fatal("merged exposure aliases author")
+				}
+				actual.MCP.Name = "mutated"
+				*actual.MCP.StrictArguments = false
+				if tc.want.Name == "mutated" || !*tc.want.StrictArguments {
+					t.Fatal("merge mutated source")
+				}
+			}
+			if tc.name == "disabled wins" && spec.ReportMCPExposure(actual, nil, "Fallback", "") != nil {
+				t.Fatal("disabled tool exposed")
+			}
+		})
 	}
 }

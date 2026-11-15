@@ -166,6 +166,9 @@ func (l *settingsLoader) mergeReport(base, authored *spec.ReportSettings) *spec.
 	if authored.Compose != nil {
 		base.Compose = authored.Compose.Clone()
 	}
+	if authored.MCP != nil {
+		base.MCP = authored.MCP.Clone()
+	}
 	if authored.MCPTool != nil {
 		enabled := *authored.MCPTool
 		base.MCPTool = &enabled
