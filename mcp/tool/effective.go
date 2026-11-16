@@ -38,7 +38,7 @@ func (p *Plan) EffectiveMetadata(effective *exec.EffectiveContract) (schema.Tool
 // and discovery, while retaining canonical native destination bindings.
 func (p *Plan) EffectivePlan(effective *exec.EffectiveContract) (*Plan, error) {
 	input := p.compilerInput
-	if effective == nil || effective.Input == input.Contract.Type() && effective.Output == input.OutputType && effective.InputRepresentation == nil && effective.OutputRepresentation == nil {
+	if effective == nil || effective.Input == input.Contract.Type() && effective.Output == input.OutputType && effective.InputRepresentation == nil && effective.OutputRepresentation == nil && effective.InputNormalization == nil {
 		return p, nil
 	}
 	var err error
@@ -55,5 +55,17 @@ func (p *Plan) EffectivePlan(effective *exec.EffectiveContract) (*Plan, error) {
 	if err != nil {
 		return nil, err
 	}
-	return NewCompiler(WithStrictArguments(p.strictArguments)).Compile(input)
+	compiled, err := NewCompiler(WithStrictArguments(p.strictArguments)).Compile(input)
+	if err != nil {
+		return nil, err
+	}
+	if effective.InputNormalization != nil {
+		for i := range compiled.args {
+			compiled.args[i].normalization, err = effective.InputNormalization.Lookup(compiled.args[i].path)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+	return compiled, nil
 }

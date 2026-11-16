@@ -186,7 +186,7 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 	if scoped || readerScoped {
 		inputPlan, _ = request.Input.ScopePlan("")
 	}
-	preparationCompatible := request.PreparationBinding.Matches(request.Handler, request.Input) && !scoped && !readerHasNamedViewScope(request.Input) && request.BoundInput == nil && request.ResolvedInput == nil && len(request.ResolvedPaths) == 0 && request.Replay == nil && request.BindingOutput == nil && request.Completion == nil && !request.IndependentChildTransactions && request.DataSource == nil
+	preparationCompatible := request.PreparationBinding.Matches(request.Handler, request.Input) && !scoped && !readerHasNamedViewScope(request.Input) && request.BoundInput == nil && request.PreparationBinding.MatchesRequest(request.Scope, request.ResolvedInput, request.ResolvedPaths) && request.Replay == nil && request.BindingOutput == nil && request.Completion == nil && !request.IndependentChildTransactions && request.DataSource == nil
 	if request.PreparationBinding != nil && !preparationCompatible {
 		return nil, fmt.Errorf("query preparation requires exact canonical binding evidence")
 	}
@@ -625,6 +625,9 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 		}
 	}
 	bindInvocationInput := func(ctx context.Context) error {
+		if err := request.PreparationBinding.Validate(ctx); err != nil {
+			return err
+		}
 		bindPlan := inputPlan
 		if bound {
 			if err := normalizeBoundBodyNulls(request.Input, input); err != nil {
@@ -660,6 +663,9 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 			if err := validateRequiredBoundInputs(request.Input, input, readerScoped); err != nil {
 				return err
 			}
+		}
+		if err := request.PreparationBinding.Validate(ctx); err != nil {
+			return err
 		}
 		return nil
 	}

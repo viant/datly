@@ -97,6 +97,22 @@ func (h *composeHandler) Execute(ctx context.Context, invocation rhandler.Invoca
 	if !ok {
 		return nil, fmt.Errorf("cube compose component invoker is unavailable")
 	}
+	// Resolve and admit every frame before preparing the first source query.
+	// Native dependency replay alone decides which scoped values can be reused.
+	frameProviders := make([][]locator.Provider, len(frames))
+	for i, frame := range frames {
+		frameProviders[i], err = h.providers(frame, plan.Fields[i])
+		if err != nil {
+			return nil, err
+		}
+		admitted := append([]string(nil), plan.Fields[i]...)
+		for _, relation := range relationRequests {
+			admitted = append(admitted, relation.Name)
+		}
+		if err = admitSourceContract(ctx, invoker, h.source.target, frameProviders[i], admitted); err != nil {
+			return nil, err
+		}
+	}
 	prepared := make([]cubecompose.Frame, len(frames))
 	var projection exec.ProjectionReader
 	snapshot := time.Now().UTC()
@@ -109,11 +125,7 @@ func (h *composeHandler) Execute(ctx context.Context, invocation rhandler.Invoca
 			return nil, fmt.Errorf("cube %d align must be elapsed or empty", i+1)
 		}
 		frameCtx := cubecompose.WithFrameContext(ctx, cubecompose.FrameContext{Frame: i + 1, Alignment: alignment, Snapshot: snapshot})
-		providers, err := h.providers(frame, plan.Fields[i])
-		if err != nil {
-			return nil, err
-		}
-		result, err := invoker.InvokeComponent(frameCtx, exec.ComponentRequest{Target: h.source.target, Providers: providers, PrepareQuery: true})
+		result, err := invoker.InvokeComponent(frameCtx, exec.ComponentRequest{Target: h.source.target, Providers: frameProviders[i], PrepareQuery: true})
 		if err != nil {
 			return nil, fmt.Errorf("prepare cube %d: %w", i+1, err)
 		}

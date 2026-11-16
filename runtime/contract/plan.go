@@ -41,14 +41,16 @@ type contractOwner struct {
 }
 
 type resolvedOwner struct {
-	skipped []string
-	owner   contractOwner
-	policy  *xcontract.Policy
+	skipped   []string
+	owner     contractOwner
+	policy    *xcontract.Policy
+	canonical bool // native source projections address original slots, never accumulated names
 }
 
 type fieldKey struct{ path, name string }
 type variant struct {
 	input          inputPreparation
+	projection     inputPreparation
 	schemas        schemaPreparation
 	edits          map[fieldKey]*shape.FieldMetadata
 	markers        map[fieldKey]string
@@ -133,8 +135,16 @@ type inputPreparation struct {
 // keep the artifact only for this resolution; failed preparation remains retryable.
 func (p *Plan) ResolvePreparedInput(ctx context.Context, binder bindly.Binder) (*shape.Representation, any, error) {
 	selected, err := p.resolve(ctx, binder)
-	if err != nil || selected == nil || selected.representation == nil {
+	if err != nil {
 		return nil, nil, err
+	}
+	return p.prepareInput(ctx, selected)
+}
+
+func (p *Plan) prepareInput(ctx context.Context, selected *variant) (*shape.Representation, any, error) {
+	var err error
+	if selected == nil || selected.representation == nil {
+		return nil, nil, nil
 	}
 	if p.inputExecution == nil {
 		return selected.representation, nil, nil
@@ -367,12 +377,19 @@ func (p *Plan) resolvePolicies(ctx context.Context, owners []resolvedOwner) (*va
 			if !withinContractPath(path, ownerPath) || skippedContractPath(path, selected.skipped) {
 				continue
 			}
-			candidate, err := selected.policy.Field(path, parent, &xcontract.Field{Name: current.Name, Tag: current.Tag})
+			probe := &xcontract.Field{Name: current.Name, Tag: current.Tag}
+			if selected.canonical {
+				probe.Name = field.Name
+			}
+			candidate, err := selected.policy.Field(path, parent, probe)
 			if err != nil {
 				return nil, err
 			}
 			if candidate == nil {
 				continue
+			}
+			if selected.canonical {
+				candidate.Name = current.Name
 			}
 			if err = candidate.Err(); err != nil {
 				return nil, err

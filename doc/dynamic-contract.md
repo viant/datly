@@ -817,3 +817,40 @@ Contract variant reuse. A bypass on any parent/nested policy bypasses the compos
 variant. Named policies remain cached by default, preserving existing behavior.
 Authorization is still resolved on each invocation. See the [operation example](contract-operation.md)
 for the full cache behavior table and sparse-PATCH example.
+
+## Native report sources over MCP
+
+Native cube and compose tools resolve the Contract of their exact source reader.
+They use the selected source output metadata to describe permitted dimensions,
+measures and relations. Source input visibility follows the exact declared input
+binding; hiding an output metric does not remove an unrelated trusted filter.
+Application `Contract(ctx, binder)` signatures and authorization owners stay the
+same. REST report behavior is unchanged by this MCP projection.
+
+Hidden source members cannot be selected through report aliases, expressions,
+WHERE, ordering, joins or later UNION branches. Compose checks every frame in its
+actual provider scope before preparing the first source query. Server-owned
+calculations retain their internal fields; this does not rewrite source SQL or
+replace row-authorization predicates.
+
+Registration owns the source holder, structural indexes, relation provenance and
+input binding map. The existing bounded Contract variant owns immutable selected
+visibility and name-recognition metadata. Only protected selector spellings are
+recognized for rejection; they do not return to discovery or gain execution
+authority. Named policy identities include source input and output selections.
+Unnamed and `NoCache` policies keep preparation local to the operation.
+
+The existing request binding handoff can carry a selected native input plan and
+successfully resolved declared dependencies into query preparation. Reuse requires
+the exact completed selection, original prepared artifact, operation/frame,
+provider scope and fresh source evidence. Checks run before binding and after
+public/selector binding. A stale source produces the existing typed binding error;
+cancellation, deadlines and dependency causes keep their original identity.
+Fresh operations resolve authorization again. No new application flag, auth cache
+or permission decision is introduced.
+
+Literal scalar enums and typed numeric/string collection enums use their existing
+native codecs and predicates through the report filter bridge. Scalar-union
+report filters (`enumAccept:"scalar"` on a scalar) remain a separate unsupported
+capability: this bridge must not be assumed to retain number/string identity or
+large-integer precision. Ordinary body enum binding is a different path.
