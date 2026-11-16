@@ -169,20 +169,28 @@ func TestSelectorOutputRootRejectsUnsupportedDeclarations(t *testing.T) {
 }
 
 func TestSelectorOutputRootCatalogAmbiguityFailsClosed(t *testing.T) {
-	typ := reflect.TypeFor[struct {
-		Rows   []*selectorConvertedRows `json:"-"`
-		Public []struct {
-			A int `json:"duplicate"`
-			B int `json:"DUPLICATE"`
-		}
-	}]()
-	base, err := (Compiler{}).Compile(CompileInput{Component: convertedRootComponent(), Type: typ})
-	require.NoError(t, err)
-	public, err := base.WithMCPOutputRoot()
-	require.NoError(t, err)
-	_, ok, err := public.SelectorOutputRoot().Resolve("duplicate")
-	require.Error(t, err)
-	require.False(t, ok)
+	type ambiguous struct {
+		A int `json:"duplicate"`
+		B int `json:"DUPLICATE"`
+	}
+	for _, typ := range []reflect.Type{
+		reflect.TypeFor[struct {
+			Rows   []*selectorConvertedRows `json:"-"`
+			Public []ambiguous
+		}](),
+		reflect.TypeFor[struct {
+			Rows   *selectorConvertedRows `json:"-"`
+			Public *ambiguous
+		}](),
+	} {
+		base, err := (Compiler{}).Compile(CompileInput{Component: convertedRootComponent(), Type: typ})
+		require.NoError(t, err)
+		public, err := base.WithMCPOutputRoot()
+		require.NoError(t, err)
+		_, ok, err := public.SelectorOutputRoot().Resolve("duplicate")
+		require.Error(t, err)
+		require.False(t, ok)
+	}
 }
 
 func TestSelectorOutputRootLeavesOtherExecutionContractsUnchanged(t *testing.T) {
@@ -255,21 +263,103 @@ func TestSelectorOutputRootLeavesSingletonWithoutFieldsUnchanged(t *testing.T) {
 	require.Nil(t, actual.SelectorOutputRoot())
 }
 
-func TestSelectorOutputRootLeavesDeclaredFieldsSingletonCarrierUnchanged(t *testing.T) {
+func TestSelectorOutputRootMasksDeclaredSingleton(t *testing.T) {
+	type singleton struct {
+		Rows   *selectorConvertedRows   `json:"-"`
+		Public *selectorConvertedPublic `json:"data,omitempty"`
+	}
 	c := convertedRootComponent()
 	c.RootView.Cardinality = spec.CardinalityOne
-	c.RootView.Selector = &spec.Selector{AllowFields: true}
-	typ := reflect.TypeFor[struct {
-		Rows   *selectorConvertedRows   `json:"-"`
-		Public *selectorConvertedPublic `json:"data"`
-	}]()
-	base, err := (Compiler{}).Compile(CompileInput{Component: c, Type: typ, DataField: "Rows"})
+	c.Parameters[1].Cardinality, c.Parameters[2].Cardinality = "one", "One"
+	base, err := (Compiler{}).Compile(CompileInput{Component: c, Type: reflect.TypeFor[singleton](), DataField: "Rows"})
 	require.NoError(t, err)
-	require.Equal(t, reflect.Struct, base.rows.sourceType.Kind())
-	actual, err := base.WithMCPOutputRoot()
+	public, err := base.WithMCPOutputRoot()
 	require.NoError(t, err)
-	require.Same(t, base, actual)
-	require.Nil(t, actual.SelectorOutputRoot())
+	public, err = public.WithMCPVisibility()
+	require.NoError(t, err)
+	root := public.SelectorOutputRoot()
+	require.NotNil(t, root)
+	require.Equal(t, reflect.TypeFor[selectorConvertedPublic](), root.RowType)
+	require.Equal(t, []string{"Public"}, root.Path)
+	id, ok, err := root.Resolve("id")
+	require.NoError(t, err)
+	require.True(t, ok)
+	_, ok, err = root.Resolve("secret")
+	require.NoError(t, err)
+	require.False(t, ok)
+	filter, err := structjson.NewFieldFilter(public.Type(), []structjson.FieldSelection{{Path: root.Path, Indexes: [][]int{id.Index}}})
+	require.NoError(t, err)
+	internal := &selectorConvertedRows{Private: "private", ID: 2}
+	for _, tc := range []struct {
+		row  *selectorConvertedPublic
+		want string
+	}{
+		{&selectorConvertedPublic{ID: 2, Computed: "not selected", Secret: "private"}, `{"data":{"id":2}}`},
+		{nil, `{}`},
+	} {
+		value := &singleton{Rows: internal, Public: tc.row}
+		ctx := dexec.CaptureOutputSelection(context.Background())
+		scope, complete := dexec.ScopeOutputSelection(ctx)
+		dexec.BeginOutputSelection(scope)
+		dexec.PublishOutputSelection(scope, value, filter)
+		complete(value, nil)
+		encoded, err := public.Encode(ctx, "json", value)
+		require.NoError(t, err)
+		require.JSONEq(t, tc.want, string(encoded.Data))
+		require.Same(t, internal, value.Rows)
+	}
+	walk, err := xshape.CompileRewrite(base.Type())
+	require.NoError(t, err)
+	restricted, err := walk.RewriteRepresentation(func(_ string, parent reflect.Type, f *xshape.FieldMetadata) (*xshape.FieldMetadata, error) {
+		if parent != root.RowType || f.Name != "ID" {
+			return nil, nil
+		}
+		hidden := *f
+		hidden.Tag = `json:"-"`
+		return &hidden, nil
+	})
+	require.NoError(t, err)
+	variant, err := public.WithRepresentation(restricted)
+	require.NoError(t, err)
+	variant, err = variant.WithMCPVisibility()
+	require.NoError(t, err)
+	_, ok, err = variant.SelectorOutputRoot().Resolve("id")
+	require.NoError(t, err)
+	require.False(t, ok)
+	_, ok, err = root.Resolve("id")
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.Nil(t, base.SelectorOutputRoot())
+}
+
+func TestSelectorOutputRootLeavesUnrelatedSingletonBodiesUnchanged(t *testing.T) {
+	for _, typ := range []reflect.Type{
+		reflect.TypeFor[struct {
+			bufferedRepresentationOutput
+			Rows   *selectorConvertedRows `json:"-"`
+			Public *selectorConvertedPublic
+		}](),
+		reflect.TypeFor[struct {
+			Rows   *selectorConvertedRows `json:"-"`
+			Public string
+		}](),
+		reflect.TypeFor[struct {
+			Rows   *selectorConvertedRows `json:"-"`
+			Public []*selectorConvertedPublic
+		}](),
+		reflect.TypeFor[struct {
+			Rows   *selectorConvertedRows `json:"-"`
+			Public *opaqueConvertedRow
+		}](),
+	} {
+		c := convertedRootComponent()
+		c.RootView.Cardinality = spec.CardinalityOne
+		base, err := (Compiler{}).Compile(CompileInput{Component: c, Type: typ, DataField: "Rows"})
+		require.NoError(t, err)
+		got, err := base.WithMCPOutputRoot()
+		require.NoError(t, err)
+		require.Same(t, base, got)
+	}
 }
 
 func TestSelectorOutputRootDirectHolderSharesVisibilityOwner(t *testing.T) {

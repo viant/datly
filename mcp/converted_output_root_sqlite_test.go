@@ -147,7 +147,8 @@ func TestConvertedOutputRootMCPAndNativeFormatsSQLite(t *testing.T) {
 	var queries atomic.Int64
 	execution, err := sqlreader.NewExecution(sqlreader.Config{Component: artifact.Component, InputType: reflect.TypeFor[convertedRootInput](), OutputType: reflect.TypeFor[convertedRootOutput](), Plan: artifact.Reader, SQL: &dsql.SQLComponent{DB: h.DB}})
 	require.NoError(t, err)
-	guarded := execution.WithQueryGuard(func(context.Context, *sql.DB, *xreader.ParameterizedQuery) error { queries.Add(1); return nil })
+	countQuery := func(context.Context, *sql.DB, *xreader.ParameterizedQuery) error { queries.Add(1); return nil }
+	guarded := execution.WithQueryGuard(countQuery)
 	registered, err := artifact.Registration(druntime.RegisteredComponent{Reader: guarded})
 	require.NoError(t, err)
 	detailComponent := &spec.Component{Key: spec.Key{Kind: spec.KindComponent, Name: "ConvertedDetail"}, Routes: []*spec.Route{{Method: "GET", Path: "/converted/detail", MCP: []*spec.MCPExposure{{Kind: spec.MCPExposureTool, Name: "converted.detail"}}}}, Parameters: []*spec.Parameter{{Name: "Rows", Source: spec.BindSource{Kind: "output", Name: "view"}}, {Name: "Data", Source: spec.BindSource{Kind: "output", Name: "body"}}}, RootView: &spec.View{Name: "detail", Cardinality: spec.CardinalityOne, Selector: &spec.Selector{AllowFields: true}, Source: &spec.ViewSource{SQL: "SELECT id,value,internal FROM records WHERE tenant=1 AND id=2"}}}
@@ -157,9 +158,9 @@ func TestConvertedOutputRootMCPAndNativeFormatsSQLite(t *testing.T) {
 	require.NoError(t, err)
 	detailArtifact, err := bootstrap.BuildArtifact(bootstrap.ArtifactInput{Component: detailComponent, InputType: reflect.TypeFor[convertedRootDetailInput](), OutputType: reflect.TypeFor[convertedRootDetailOutput](), DirectViewField: "Rows"})
 	require.NoError(t, err)
-	detailReader, err := detailArtifact.ReaderCompilation().NewExecution(bootstrap.ReaderRuntimeConfig{SQL: &dsql.SQLComponent{DB: h.DB}})
+	detailReader, err := sqlreader.NewExecution(sqlreader.Config{Component: detailArtifact.Component, InputType: reflect.TypeFor[convertedRootDetailInput](), OutputType: reflect.TypeFor[convertedRootDetailOutput](), Plan: detailArtifact.Reader, SQL: &dsql.SQLComponent{DB: h.DB}})
 	require.NoError(t, err)
-	detail, err := detailArtifact.Registration(druntime.RegisteredComponent{Reader: detailReader})
+	detail, err := detailArtifact.Registration(druntime.RegisteredComponent{Reader: detailReader.WithQueryGuard(countQuery)})
 	require.NoError(t, err)
 	rt, err := druntime.NewRuntime([]*druntime.RegisteredComponent{registered, detail})
 	require.NoError(t, err)
@@ -258,12 +259,20 @@ func TestConvertedOutputRootMCPAndNativeFormatsSQLite(t *testing.T) {
 	detailJSON, err := json.Marshal(detailResult.StructuredContent)
 	require.NoError(t, err)
 	require.JSONEq(t, `{"data":{"display":"two!","label":"two","id":2,"present":false,"zero":0}}`, string(detailJSON))
+	beforeDetail := queries.Load()
 	detailSelected, err := native.CallTool(ctx, &schema.CallToolRequestParams{Name: "converted.detail", Arguments: map[string]any{"fields": []string{"id"}}})
 	require.NoError(t, err)
 	require.True(t, detailSelected.IsError == nil || !*detailSelected.IsError)
 	detailSelectedJSON, err := json.Marshal(detailSelected.StructuredContent)
 	require.NoError(t, err)
-	require.JSONEq(t, string(detailJSON), string(detailSelectedJSON), "singleton's existing Fields conversion gap remains unchanged")
+	require.JSONEq(t, `{"data":{"id":2}}`, string(detailSelectedJSON))
+	require.EqualValues(t, 1, queries.Load()-beforeDetail, "singleton projection reuses the owning read")
+	beforeDetail = queries.Load()
+	hiddenDetail, err := native.CallTool(ctx, &schema.CallToolRequestParams{Name: "converted.detail", Arguments: map[string]any{"fields": []string{"secret"}}})
+	require.NoError(t, err)
+	require.NotNil(t, hiddenDetail.IsError)
+	require.True(t, *hiddenDetail.IsError)
+	require.Equal(t, beforeDetail, queries.Load(), "reject hidden fields before reading")
 
 	// The REST plan remains the original SQL-root plan and compatibility mode.
 	rec := httptest.NewRecorder()

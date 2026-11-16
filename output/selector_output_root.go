@@ -12,7 +12,7 @@ import (
 )
 
 // WithMCPOutputRoot selects only the demonstrated converted reader shape: a
-// hidden declared SQL view and one distinct, declared public body collection.
+// hidden declared SQL view and one distinct, declared public body of matching cardinality.
 // The SQL view remains owned by the reader; only this transport's rows change.
 func (p *Plan) WithMCPOutputRoot() (*Plan, error) {
 	if p == nil || p.compileInput.publicOutputRoot {
@@ -23,9 +23,7 @@ func (p *Plan) WithMCPOutputRoot() (*Plan, error) {
 	if errorReaderView(c) == "" {
 		return p, nil
 	}
-	// This extension owns collection carriers only. Native singleton carriers
-	// retain their existing plan and selector behavior, including converted bodies.
-	if p.rows == nil || (p.rows.sourceType.Kind() != reflect.Slice && p.rows.sourceType.Kind() != reflect.Array) {
+	if p.rows == nil || p.rows.name == "" {
 		return p, nil
 	}
 	// Canonical Parameters include the native companion declarations. View
@@ -62,9 +60,6 @@ func (p *Plan) WithMCPOutputRoot() (*Plan, error) {
 	root := (xshape.Runtime{}).Indirect(p.typeOf)
 	// The existing compiled row-holder authority identifies the root. Independent
 	// output/view declarations cannot become a converted destination by position.
-	if p.rows == nil || p.rows.name == "" {
-		return p, nil
-	}
 	var view reflect.StructField
 	var declaredView *spec.Parameter
 	for _, parameter := range views {
@@ -81,6 +76,10 @@ func (p *Plan) WithMCPOutputRoot() (*Plan, error) {
 	if jsonName, _, _ := strings.Cut(view.Tag.Get("json"), ","); jsonName != "-" && view.Tag.Get("internal") != "true" {
 		return p, nil
 	}
+	singleton := p.rows.sourceType.Kind() == reflect.Struct
+	if singleton && (p.TransportReady() || len(views) != 1 || len(bodies) != 1) {
+		return p, nil // Only a unique, structured singleton body owns this selection.
+	}
 	if len(views) != 1 || len(bodies) != 1 {
 		return nil, fmt.Errorf("MCP converted output requires one declared view and body")
 	}
@@ -91,15 +90,33 @@ func (p *Plan) WithMCPOutputRoot() (*Plan, error) {
 	if view.Name == body.Name {
 		return p, nil
 	}
-	if len(view.Index) != 1 || len(body.Index) != 1 || !body.IsExported() || body.Type.Kind() != reflect.Slice || body.Type.Elem().Kind() == reflect.Uint8 || c.RootView.Cardinality == spec.CardinalityOne {
-		return nil, fmt.Errorf("MCP converted output requires direct root collection holders")
+	if len(view.Index) != 1 || len(body.Index) != 1 || !body.IsExported() {
+		return nil, fmt.Errorf("MCP converted output requires direct root holders")
 	}
-	row := body.Type.Elem()
-	for row.Kind() == reflect.Pointer {
+	cardinality := spec.CardinalityMany
+	row := body.Type
+	if singleton {
+		cardinality = spec.CardinalityOne
+	} else {
+		if row.Kind() != reflect.Slice || row.Elem().Kind() == reflect.Uint8 {
+			return nil, fmt.Errorf("MCP converted output requires a public collection for collection rows")
+		}
 		row = row.Elem()
 	}
+	row = (xshape.Runtime{}).Indirect(row)
 	if row.Kind() != reflect.Struct || selectorOpaqueJSON(row) || p.JSONOnly() {
+		if singleton {
+			// Singletons with a scalar, collection or custom JSON body keep their original plan.
+			return p, nil
+		}
 		return nil, fmt.Errorf("MCP converted output requires transparent public rows")
+	}
+	declaredCardinality, err := spec.NormalizeCardinality(c.RootView.Cardinality)
+	if err != nil {
+		return nil, err
+	}
+	if declaredCardinality != "" && declaredCardinality != cardinality {
+		return nil, fmt.Errorf("MCP converted output view holder does not match declared %s cardinality", c.RootView.Cardinality)
 	}
 	packages := xshape.Packages{Default: root.PkgPath(), Imports: map[string]string{}}
 	if context := c.TypeContext; context != nil {
@@ -114,8 +131,12 @@ func (p *Plan) WithMCPOutputRoot() (*Plan, error) {
 		parameter *spec.Parameter
 		field     reflect.StructField
 	}{{declaredView, view}, {bodies[0], body}} {
-		if declaration.parameter.Cardinality != "" && declaration.parameter.Cardinality != string(spec.CardinalityMany) {
-			return nil, fmt.Errorf("MCP output %s must declare many cardinality", declaration.field.Name)
+		declared, err := spec.NormalizeCardinality(spec.Cardinality(declaration.parameter.Cardinality))
+		if err != nil {
+			return nil, err
+		}
+		if declared != "" && declared != cardinality {
+			return nil, fmt.Errorf("MCP output %s must declare %s cardinality", declaration.field.Name, cardinality)
 		}
 		for _, expression := range []string{declaration.parameter.TypeExpr, declaration.parameter.OutputTypeExpr} {
 			if expression == "" {
@@ -159,10 +180,8 @@ func (p *Plan) prepareSelectorOutputRoot() error {
 	if p.rows == nil || p.rows.name != p.compileInput.DataField {
 		return fmt.Errorf("MCP public output root lost its declared holder")
 	}
-	row := p.rows.sourceType.Elem()
-	for row.Kind() == reflect.Pointer {
-		row = row.Elem()
-	}
+	// compileRows normalizes both a singleton and a collection to the row codec's slice type.
+	row := (xshape.Runtime{}).Indirect(p.rows.typeOf.Elem())
 	root := (xshape.Runtime{}).Indirect(p.typeOf)
 	original := root.FieldByIndex(p.rows.index)
 	field := original
