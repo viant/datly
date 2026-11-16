@@ -1,6 +1,7 @@
 package generate
 
 import (
+	"reflect"
 	"strings"
 
 	"github.com/viant/datly/spec"
@@ -51,6 +52,11 @@ func (r *planResolver) auxiliaryBodyRoot() *spec.View {
 		}
 		kind := strings.ToLower(strings.TrimSpace(param.Source.Kind))
 		if kind != "body" && !(kind == "output" && param.Source.Name == "body" && !hasRequestBody) {
+			continue
+		}
+		// Private request projections retain their native bindings, but do not
+		// claim ownership of the public SQL row or its presence markers.
+		if reflect.StructTag(param.Tag).Get("internal") == "true" {
 			continue
 		}
 		// The decoded field owns the body row; a codec's raw provider type

@@ -189,6 +189,9 @@ func (r *planResolver) addNativeBodyPresenceEdges(planned map[string]*ViewPlan, 
 		if !parameter.IsMutationInput() {
 			continue
 		}
+		if strings.EqualFold(strings.TrimSpace(parameter.Source.Kind), "body") && reflect.StructTag(parameter.Tag).Get("internal") == "true" {
+			continue
+		}
 		if body != nil {
 			return fmt.Errorf("native body presence input is ambiguous")
 		}

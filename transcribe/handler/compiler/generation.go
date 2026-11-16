@@ -2,6 +2,7 @@ package compiler
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 
 	"github.com/viant/datly/spec"
@@ -42,6 +43,9 @@ func (c *Compiler) BuildInput(request Request, rootType string) (Request, error)
 	var body *spec.Parameter
 	for _, p := range spec.EffectiveParameters(request.Component.Parameters) {
 		if mutationInput(p) {
+			if strings.EqualFold(strings.TrimSpace(p.Source.Kind), "body") && reflect.StructTag(p.Tag).Get("internal") == "true" {
+				continue
+			}
 			if body != nil {
 				return Request{}, fmt.Errorf("generation body input is ambiguous")
 			}
