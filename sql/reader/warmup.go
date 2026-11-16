@@ -106,9 +106,11 @@ func (e *Execution) warmupWithSettings(ctx context.Context, session *Session, wa
 }
 
 type warmupWork struct {
-	plan     *ViewPlan
-	derived  *RelationPlan
-	settings *spec.CacheWarmupSettings
+	plan      *ViewPlan
+	derived   *RelationPlan
+	settings  *spec.CacheWarmupSettings
+	origin    string
+	policyRef string
 }
 
 func (w warmupWork) connector() string {
@@ -132,7 +134,8 @@ func warmupWorkItems(plan *ViewPlan, settings *spec.CacheWarmupSettings) ([]warm
 	if err := validateWarmupLimits(settings); err != nil {
 		return nil, err
 	}
-	work := []warmupWork{{plan: plan, settings: settings}}
+	origin, policyRef := plan.View.Cache.WarmupPolicySource()
+	work := []warmupWork{{plan: plan, settings: settings, origin: origin, policyRef: policyRef}}
 	if !settings.IndexMeta {
 		return work, nil
 	}
@@ -144,15 +147,17 @@ func warmupWorkItems(plan *ViewPlan, settings *spec.CacheWarmupSettings) ([]warm
 		if err != nil {
 			return nil, err
 		}
+		childOrigin, childRef := relation.Target.View.Cache.WarmupPolicySource()
 		if len(policies) == 0 {
 			policy := settings.Clone()
 			policy.IndexMeta = false
 			policy.IndexColumn = ""
 			policy.FieldNames = nil
 			policies = []*spec.CacheWarmupSettings{policy}
+			childOrigin, childRef = origin, policyRef
 		}
 		for _, policy := range policies {
-			work = append(work, warmupWork{plan: relation.Target, derived: relation, settings: policy})
+			work = append(work, warmupWork{plan: relation.Target, derived: relation, settings: policy, origin: childOrigin, policyRef: childRef})
 		}
 	}
 	return work, nil

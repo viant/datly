@@ -40,6 +40,10 @@ type emptyLookupPlan struct {
 // compileEmptyLookup retains only immutable route/accessor metadata. In
 // particular neither identities nor existence decisions survive an invocation.
 func compileEmptyLookup(config Config) (*emptyLookupPlan, error) {
+	enabled, err := forbiddenNotFoundCheck(config)
+	if err != nil || !enabled {
+		return nil, err
+	}
 	component := config.Component
 	marked := false
 	for _, p := range component.Parameters {
@@ -52,7 +56,7 @@ func compileEmptyLookup(config Config) (*emptyLookupPlan, error) {
 		}
 	}
 	if !marked {
-		return nil, nil
+		return nil, fmt.Errorf("forbiddenNotFoundCheck requires a marked authorization predicate")
 	}
 	outputType := config.OutputType
 	for outputType != nil && outputType.Kind() == reflect.Pointer {
@@ -109,7 +113,7 @@ func compileEmptyLookup(config Config) (*emptyLookupPlan, error) {
 		}
 	}
 	if len(keyNames) == 0 {
-		return nil, nil
+		return nil, fmt.Errorf("forbiddenNotFoundCheck requires root primary-key metadata")
 	}
 	// A collection route has no path input authority; do not analyze or reject
 	// its SQL merely because a child predicate carries authorization metadata.
@@ -131,7 +135,7 @@ func compileEmptyLookup(config Config) (*emptyLookupPlan, error) {
 		}
 	}
 	if !pathBound || config.Plan.Root.View.Spec.Source.SQL == "" {
-		return nil, nil
+		return nil, fmt.Errorf("forbiddenNotFoundCheck requires a path-bound GET identity and root SQL")
 	}
 
 	analysisSource := config.Plan.Root.View.Spec.Source.SQL
@@ -140,7 +144,7 @@ func compileEmptyLookup(config Config) (*emptyLookupPlan, error) {
 		UsesPredicates() bool
 	}); ok {
 		if !native.UsesPredicates() {
-			return nil, nil
+			return nil, fmt.Errorf("forbiddenNotFoundCheck requires root predicate evaluation")
 		}
 		analysisSource = native.AnalysisSQL()
 	}
@@ -209,13 +213,53 @@ func compileEmptyLookup(config Config) (*emptyLookupPlan, error) {
 		}
 	}
 	if len(result.routes) == 0 {
-		return nil, nil
+		return nil, fmt.Errorf("forbiddenNotFoundCheck requires a GET route with a complete proven root identity")
 	}
 	if config.Plan.Root.Partitioner != nil {
 		return nil, fmt.Errorf("authorization empty lookup does not support partitioned roots; use output tag onEmpty:empty")
 	}
 
 	return result, nil
+}
+
+// forbiddenNotFoundCheck is independent of predicate authorization metadata.
+// Read the same root output metadata for authored and generated components.
+func forbiddenNotFoundCheck(config Config) (bool, error) {
+	var enabled *bool
+	read := func(metadata reflect.StructTag) error {
+		value, present := metadata.Lookup("forbiddenNotFoundCheck")
+		if !present {
+			return nil
+		}
+		if value != "true" && value != "false" {
+			return fmt.Errorf("forbiddenNotFoundCheck must be true or false")
+		}
+		flag := value == "true"
+		if enabled != nil && *enabled != flag {
+			return fmt.Errorf("conflicting root forbiddenNotFoundCheck metadata")
+		}
+		enabled = &flag
+		return nil
+	}
+	output := config.OutputType
+	for output != nil && output.Kind() == reflect.Pointer {
+		output = output.Elem()
+	}
+	if output != nil && output.Kind() == reflect.Struct && config.Plan.OutputViewField != "" {
+		if field, ok := output.FieldByName(config.Plan.OutputViewField); ok {
+			if err := read(field.Tag); err != nil {
+				return false, err
+			}
+		}
+	}
+	for _, parameter := range config.Component.Parameters {
+		if parameter != nil && parameter.Source.Kind == "output" && parameter.Source.Name == "view" {
+			if err := read(reflect.StructTag(parameter.Tag)); err != nil {
+				return false, err
+			}
+		}
+	}
+	return enabled != nil && *enabled, nil
 }
 
 func (p *emptyLookupPlan) eligible(ctx context.Context, input reflect.Value, selector *xstate.Selector, root *ViewPlan) bool {

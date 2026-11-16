@@ -813,13 +813,17 @@ Mark each authorization predicate occurrence with the fluent option:
 ```
 
 `auth=true` is predicate metadata, not a handler argument. Other occurrences on
-that same input remain ordinary predicates. Existing unmarked readers retain
-their empty-result behavior. No additional output field or lifecycle hook is
-required. To preserve an empty response on a marked reader, tag its root output:
+that same input remain ordinary predicates. Marking does not enable additional
+queries. Enable classification explicitly on the root output holder:
 
 ```sql
-#define($_ = $Data<[]*Record>(output/view).Tag('onEmpty:"empty"'))
+#define($_ = $Data<[]*Record>(output/view).WithForbiddenNotFoundCheck())
 ```
+
+The equivalent Go field tag is `forbiddenNotFoundCheck:"true"`. Absent or false
+means no existence check. Existing `onEmpty:"empty"` retains its opt-out behavior.
+The option reveals resource existence to otherwise unauthorized callers; mark
+only predicates that may be removed for that check, preserving mandatory scope.
 
 An eligible GET identity read first executes its normal authorized root query.
 If the complete root result is empty, one existence query omits only the marked
@@ -831,9 +835,10 @@ result, including a partially authorized batch of IDs, triggers no probe.
 Eligibility uses the native compiled route placeholders and activation metadata,
 complete root primary-key metadata, and parser-proven column lineage. Every key
 must have an active path-bound `equal` or `in` predicate in this root evaluation.
-Column/member names alone do not establish identity. Missing key evidence,
-parent-only filters, ordinary collections, and later selector pages retain normal
-empty responses. Source-authored offsets and zero limits also retain normal empty responses.
+Column/member names alone do not establish identity. Explicitly enabled readers
+without key metadata or any complete proven GET identity route fail registration.
+Shared collection routes and later selector pages retain normal empty responses.
+Source-authored offsets and zero limits also retain normal empty responses.
 Unsupported dynamic source structures fail during reader registration through the
 existing checked SQL analysis. Partitioned identity roots require the empty-output
 opt-out. SQLX `primaryKey` tags and canonical schema primary keys supply key facts.

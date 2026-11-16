@@ -44,3 +44,18 @@ SELECT 1 AS id`
 		})
 	}
 }
+
+func TestForbiddenNotFoundCheckRejectsInvalidDeclaration(t *testing.T) {
+	for _, declaration := range []string{
+		`$Data<[]int>(output/view).WithForbiddenNotFoundCheck(true)`,
+		`$Data<[]int>(output/view).WithForbiddenNotFoundCheck().WithForbiddenNotFoundCheck()`,
+		`$Data<[]int>(output/view).Tag('forbiddenNotFoundCheck:"false"').WithForbiddenNotFoundCheck()`,
+		`$Data<[]int>(output/view).WithForbiddenNotFoundCheck().Tag('forbiddenNotFoundCheck:"false"')`,
+		`$Key<int>(query/key).WithForbiddenNotFoundCheck()`,
+	} {
+		t.Run(declaration, func(t *testing.T) {
+			_, err := parseComponentSource("example.com/test", "Records", "#define($_ = "+declaration+")\nSELECT 1 AS id")
+			require.Error(t, err)
+		})
+	}
+}

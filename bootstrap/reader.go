@@ -149,6 +149,7 @@ func (c *CompiledReader) resolveCaches(config ReaderRuntimeConfig) (map[*data.Vi
 				for _, item := range warmupSettings.Warmups {
 					view.Cache.Warmups = append(view.Cache.Warmups, item.Clone())
 				}
+				view.Cache.WarmupPolicyRef = warmupBinding
 				if view.Cache.SharedCases == nil {
 					view.Cache.SharedCases = spec.CloneSharedCases(warmupSettings.SharedCases)
 				}
