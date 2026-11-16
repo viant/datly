@@ -1,6 +1,7 @@
 package output
 
 import (
+	"context"
 	"fmt"
 	"reflect"
 
@@ -12,6 +13,9 @@ import (
 // non-JSON codec. A new request plan owns encoder caches for the projected type;
 // registered plans and application values are never modified.
 func (p *Plan) selectedPresentation(value any, filter dexec.OutputFieldFilter, scalarAuthority *presentation) (*Plan, any, error) {
+	return p.selectedPresentationContext(context.Background(), value, filter, scalarAuthority)
+}
+func (p *Plan) selectedPresentationContext(ctx context.Context, value any, filter dexec.OutputFieldFilter, scalarAuthority *presentation) (*Plan, any, error) {
 	indexed, ok := filter.(indexExcluder)
 	if !ok {
 		return nil, nil, fmt.Errorf("output selection requires canonical field indexes")
@@ -28,7 +32,7 @@ func (p *Plan) selectedPresentation(value any, filter dexec.OutputFieldFilter, s
 		}
 		source = source.Elem()
 	}
-	projected, err := projection.value(source)
+	projected, err := projection.valueContext(ctx, source)
 	if err != nil {
 		return nil, nil, err
 	}
