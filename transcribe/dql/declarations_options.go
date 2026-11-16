@@ -3,6 +3,7 @@ package dql
 import (
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"strconv"
 	"strings"
 
@@ -11,6 +12,7 @@ import (
 )
 
 type declarationOptions struct {
+	forbiddenNotFoundCheck                                 bool
 	enum                                                   []any
 	resolutionGroup                                        *spec.ResolutionGroupSpec
 	bodyNullPolicy                                         string
@@ -58,6 +60,11 @@ func (p *declarationOptionParser) parse() (declarationOptions, error) {
 		name, args := cursor.option()
 		key := strings.ToLower(strings.TrimSpace(name))
 		switch key {
+		case "withforbiddennotfoundcheck":
+			if err := p.single(cursor, key, args, 0, 0); err != nil {
+				return declarationOptions{}, err
+			}
+			p.result.forbiddenNotFoundCheck = true
 		case "withresolutiongroup", "withreadonlygroup":
 			minimum := 2
 			if key == "withreadonlygroup" {
@@ -421,6 +428,15 @@ func (p *declarationOptionParser) parse() (declarationOptions, error) {
 	}
 	if err := p.parseDeclarationSQL(cursor); err != nil {
 		return declarationOptions{}, err
+	}
+	if p.result.forbiddenNotFoundCheck {
+		if value, present := reflect.StructTag(p.result.tag).Lookup("forbiddenNotFoundCheck"); present {
+			if value != "true" {
+				return declarationOptions{}, p.fail(cursor, "WithForbiddenNotFoundCheck conflicts with forbiddenNotFoundCheck tag")
+			}
+		} else {
+			p.result.tag = strings.TrimSpace(p.result.tag + ` forbiddenNotFoundCheck:"true"`)
+		}
 	}
 	return p.result, nil
 }

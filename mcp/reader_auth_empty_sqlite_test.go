@@ -48,7 +48,7 @@ func TestReaderAuthEmptyHTTPAndMCP(t *testing.T) {
 		Claim  claim
 		Offset int    `parameter:"Offset,kind=query,in=offset" querySelector:"view=Records,property=offset" json:"offset"`
 		Limit  int    `parameter:"Limit,kind=query,in=limit,value=10" querySelector:"view=Records,property=limit" json:"limit"`
-		Key    []int  `parameter:"Key,kind=path,in=key" predicate:"in,r,id" json:"key"`
+		Key    []int  `parameter:"Key,kind=path,in=key,uri=/records/{key}" predicate:"in,r,id" json:"key"`
 		Tenant int    `parameter:"Tenant,kind=query,in=tenant,value=7" predicate:"handler,example.com/auth.Scope,auth=true" json:"tenant"`
 		Name   string `parameter:"Name,kind=query,in=name" predicate:"equal,r,name" json:"name"`
 	}
@@ -56,7 +56,7 @@ func TestReaderAuthEmptyHTTPAndMCP(t *testing.T) {
 		ID int `sqlx:"id,primaryKey=true" json:"id"`
 	}
 	type output struct {
-		Rows []row `json:"rows"`
+		Rows []row `json:"rows" forbiddenNotFoundCheck:"true"`
 	}
 	db := sqlite.New(t)
 	require.NoError(t, db.ExecStatements(context.Background(), "CREATE TABLE records(id INTEGER, tenant INTEGER, name TEXT, archived INTEGER)", "INSERT INTO records VALUES(1,7,'one',0),(2,8,'two',0),(3,8,'archived',1)", "CREATE TABLE accounts(id INTEGER,name TEXT)", "INSERT INTO accounts VALUES(1,'account')", "CREATE TABLE watches(record_id INTEGER,contact_id INTEGER)", "INSERT INTO watches VALUES(1,0)", "CREATE TABLE model_status(record_id INTEGER,status INTEGER)", "INSERT INTO model_status VALUES(1,2)"))
@@ -150,6 +150,23 @@ func TestReaderAuthEmptyHTTPAndMCP(t *testing.T) {
 	require.Equal(t, 200, recorder.Code)
 	require.Len(t, queries, 1)
 	require.False(t, strings.Contains(recorder.Body.String(), "Forbidden"))
+	// Trusted optional reads select the collection route with a fully bound
+	// identity. The identity still filters SQL, but empty results are not errors.
+	for _, id := range []int{1, 2, 999} {
+		queries = nil
+		value, err := app.InvokeComponent(context.Background(), exec.ComponentRequest{
+			Target: exec.ComponentTarget{Component: artifact.Component.Key, Route: spec.RouteRef{Method: "GET", Path: "/records"}},
+			Input:  &input{Key: []int{id}, Tenant: 7, Limit: 10},
+		})
+		require.NoError(t, err)
+		rows := value.(*output).Rows
+		if id == 1 {
+			require.Equal(t, []row{{ID: 1}}, rows)
+		} else {
+			require.Empty(t, rows, "bound identity must not broaden to all authorized rows")
+		}
+		require.Len(t, queries, 1)
+	}
 	queries = nil
 	recorder = httptest.NewRecorder()
 	gateway.NewHandler(app, nil, "").ServeHTTP(recorder, httptest.NewRequest("GET", "/records/1?offset=10", nil))
@@ -181,9 +198,9 @@ func TestReaderAuthEmptyHTTPAndMCP(t *testing.T) {
 	require.Len(t, queries, 2)
 	cancelProbe = nil
 
-	// The existing output tag opts out without introducing an output datapoint.
+	// Auth marking alone does not enable a probe.
 	type emptyOutput struct {
-		Rows []row `json:"rows" onEmpty:"empty"`
+		Rows []row `json:"rows"`
 	}
 	offArtifact, err := bootstrap.BuildArtifact(bootstrap.ArtifactInput{Component: component, InputType: reflect.TypeFor[input](), OutputType: reflect.TypeFor[emptyOutput](), DirectViewField: "Rows", Types: types})
 	require.NoError(t, err)

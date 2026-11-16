@@ -100,6 +100,9 @@ func parseDeclarations(blocks []directiveBlock) (result []*spec.Parameter, spans
 		if options.bodyNullPolicy != "" && (!strings.EqualFold(kind, "body") || location != "" || options.codec != nil || options.emitOutput) {
 			return nil, nil, nil, fmt.Errorf("parameter %s BodyNullPolicy requires a whole body input without a codec", holder)
 		}
+		if options.forbiddenNotFoundCheck && (kind != "output" || location != "view") {
+			return nil, nil, nil, fmt.Errorf("parameter %s WithForbiddenNotFoundCheck requires output/view", holder)
+		}
 		required := options.required
 		if required == nil {
 			switch strings.ToLower(strings.TrimSpace(kind)) {

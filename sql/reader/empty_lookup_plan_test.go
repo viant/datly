@@ -38,6 +38,7 @@ func TestEmptyLookupAdmissionUsesRootKeyLineage(t *testing.T) {
 				{Name: "Tenant", Predicates: []*spec.Predicate{{Name: "equal", Auth: true, Args: []string{"r", "tenant"}}}},
 			}}
 			view := &data.View{Spec: spec.View{Source: &spec.ViewSource{SQL: tc.sql}}, Columns: []*data.Column{{Name: "ID", Column: "id", Tag: `sqlx:"id,primaryKey=true"`}}}
+			component.Parameters = append(component.Parameters, emptyLookupOptIn())
 			if tc.composite {
 				view.Columns = append(view.Columns, &data.Column{Name: "Account", Column: "account_id", Tag: `sqlx:"account_id,primaryKey=true"`})
 			}
@@ -45,6 +46,10 @@ func TestEmptyLookupAdmissionUsesRootKeyLineage(t *testing.T) {
 				component.Parameters = append(component.Parameters, &spec.Parameter{Name: "Account", Source: spec.BindSource{Kind: "path", Name: "account"}, Predicates: []*spec.Predicate{{Name: "equal", Args: []string{"r", "account_id"}}}})
 			}
 			plan, err := compileEmptyLookup(Config{Component: component, InputType: reflect.TypeFor[input](), Plan: &Plan{Root: &ViewPlan{View: view}}})
+			if tc.want == 0 && tc.name != "source empty window" && tc.name != "source page" {
+				require.ErrorContains(t, err, "complete proven root identity")
+				return
+			}
 			require.NoError(t, err)
 			count := 0
 			if plan != nil {
@@ -63,13 +68,14 @@ func TestEmptyLookupRejectsUnprovenDynamicSourceAtRegistration(t *testing.T) {
 	component := &spec.Component{Routes: []*spec.Route{{Method: "GET", Path: "/records/{key}"}}, Parameters: []*spec.Parameter{{Name: "Key", Source: spec.BindSource{Kind: "path", Name: "key"}, Predicates: []*spec.Predicate{{Name: "equal", Args: []string{"r", "id"}}, {Name: "equal", Auth: true, Args: []string{"r", "tenant"}}}}}}
 	view := &data.View{Spec: spec.View{Source: &spec.ViewSource{SQL: `SELECT r.id FROM $Unsafe.Table r`}}, Columns: []*data.Column{{Name: "ID", Column: "id", Tag: `sqlx:"id,primaryKey=true"`}}}
 	config := Config{Component: component, InputType: reflect.TypeFor[input](), Plan: &Plan{Root: &ViewPlan{View: view}}}
+	component.Parameters = append(component.Parameters, emptyLookupOptIn())
 	_, err := compileEmptyLookup(config)
 	require.ErrorContains(t, err, "dynamic SQL structure")
 	// A collection cannot become an identity read just because it shares marked
 	// child metadata. Its existing source behavior remains owned by its reader.
 	component.Routes = []*spec.Route{{Method: "GET", Path: "/records"}}
 	plan, err := compileEmptyLookup(config)
-	require.NoError(t, err)
+	require.ErrorContains(t, err, "path-bound GET identity")
 	require.Nil(t, plan)
 }
 
@@ -77,8 +83,33 @@ func TestEmptyLookupGeneratedPrimaryKeyUsesSQLSource(t *testing.T) {
 	type input struct{ Id []int }
 	component := &spec.Component{Routes: []*spec.Route{{Method: "GET", Path: "/records/{id}"}}, Parameters: []*spec.Parameter{{Name: "Id", Source: spec.BindSource{Kind: "path", Name: "id"}, Predicates: []*spec.Predicate{{Name: "in", Args: []string{"a", "ID"}}}}, {Name: "Auth", Predicates: []*spec.Predicate{{Name: "handler", Auth: true}}}}}
 	view := &data.View{Spec: spec.View{Source: &spec.ViewSource{SQL: "SELECT records.* FROM (SELECT a.* FROM records a) records"}, Columns: []*spec.Column{{Name: "Id", Source: "ID", PrimaryKey: true}}}, Columns: []*data.Column{{Name: "Id", Column: "ID", Tag: `sqlx:"ID,primaryKey=true"`}}}
+	component.Parameters = append(component.Parameters, emptyLookupOptIn())
 	plan, err := compileEmptyLookup(Config{Component: component, InputType: reflect.TypeFor[input](), Plan: &Plan{Root: &ViewPlan{View: view}}})
 	require.NoError(t, err)
 	require.NotNil(t, plan)
 	require.Len(t, plan.routes[spec.RouteRef{Method: "GET", Path: "/records/{id}"}], 1)
+}
+
+func emptyLookupOptIn() *spec.Parameter {
+	return &spec.Parameter{Name: "Data", Source: spec.BindSource{Kind: "output", Name: "view"}, Tag: `forbiddenNotFoundCheck:"true"`}
+}
+
+func TestEmptyLookupExplicitOptIn(t *testing.T) {
+	for _, value := range []string{"", `forbiddenNotFoundCheck:"false"`, `forbiddenNotFoundCheck:"invalid"`, `forbiddenNotFoundCheck:"true"`} {
+		t.Run(value, func(t *testing.T) {
+			parameter := emptyLookupOptIn()
+			parameter.Tag = value
+			config := Config{Component: &spec.Component{Parameters: []*spec.Parameter{parameter}}, Plan: &Plan{}}
+			plan, err := compileEmptyLookup(config)
+			require.Nil(t, plan)
+			switch value {
+			case "", `forbiddenNotFoundCheck:"false"`:
+				require.NoError(t, err)
+			case `forbiddenNotFoundCheck:"invalid"`:
+				require.ErrorContains(t, err, "must be true or false")
+			default:
+				require.ErrorContains(t, err, "marked authorization predicate")
+			}
+		})
+	}
 }

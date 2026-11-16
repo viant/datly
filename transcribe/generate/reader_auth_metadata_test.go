@@ -2,6 +2,7 @@ package generate
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -35,4 +36,23 @@ SELECT id FROM records r`
 	}
 	require.True(t, found)
 	require.Equal(t, "empty", reflect.StructTag(plan.Output.Fields[0].Tag).Get("onEmpty"))
+}
+
+func TestReaderForbiddenNotFoundCheckGeneration(t *testing.T) {
+	for _, options := range []string{
+		`.WithForbiddenNotFoundCheck()`,
+		`.WithForbiddenNotFoundCheck().Tag('json:"data"')`,
+		`.Tag('json:"data"').WithForbiddenNotFoundCheck()`,
+		`.Tag('forbiddenNotFoundCheck:"true"')`,
+	} {
+		t.Run(options, func(t *testing.T) {
+			source := `#setting($_ = $route('/records/{key}', 'GET'))
+#define($_ = $Data<[]*Row>(output/view)OPTIONS)
+SELECT id FROM records r`
+			component, err := parseTestComponentSource("example.com/records", "Records", strings.ReplaceAll(source, "OPTIONS", options))
+			require.NoError(t, err)
+			plan := testPlan(t, component)
+			require.Equal(t, "true", reflect.StructTag(plan.Output.Fields[0].Tag).Get("forbiddenNotFoundCheck"))
+		})
+	}
 }
