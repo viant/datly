@@ -2575,6 +2575,11 @@ func CompileWithIdentifierProducts(component *spec.Component, inputType, outputT
 	for i := 0; i < inputType.NumField(); i++ {
 		field := inputType.Field(i)
 		parameter := field.Tag.Get("parameter")
+		// Private body projections retain request values for validation; they do
+		// not supply the writer's SQL entity or lifecycle ownership.
+		if field.Tag.Get("internal") == "true" && strings.EqualFold(tagOption(parameter, "kind"), "body") {
+			continue
+		}
 		if (strings.Contains(parameter, "kind=body") || strings.Contains(parameter, "kind=internal")) && (field.Type.Kind() == reflect.Slice || field.Type.Kind() == reflect.Pointer) {
 			metadata.InputField = i
 			metadata.EntityType = dereference(field.Type)

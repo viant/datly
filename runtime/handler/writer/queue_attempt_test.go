@@ -571,8 +571,11 @@ func TestQueueAttemptEvidenceFailureDoesNotControlWork(t *testing.T) {
 }
 
 func (c *queueCaps) Flush(context.Context, string) error { c.flushes++; return nil }
-func TestQueueAttemptImperativeNoopDoesNotFlush(t *testing.T) {
+func TestQueueAttemptBareImperativeMarkerDoesNotFlush(t *testing.T) {
 	ctx := handlerengine.PrepareComponent(context.Background(), handlerengine.ComponentImperative, "1")
+	if handlerengine.NeedsImperativePrefix(ctx) {
+		t.Fatal("bare imperative marker unexpectedly has a shared engine owner")
+	}
 	for _, physical := range []bool{false, true} {
 		in := queueInput(physical == false)
 		if !physical {
@@ -583,19 +586,21 @@ func TestQueueAttemptImperativeNoopDoesNotFlush(t *testing.T) {
 		}
 		caps := &queueCaps{}
 		_, err := executeQueue(t, ctx, queueHandler(t), in, &queueProbe{}, caps)
-		expected := 0
-		if physical {
-			expected = 1
+		if err != nil {
+			t.Fatalf("execute directly with physical work %t: %v", physical, err)
 		}
-		if err != nil || caps.flushes != expected {
-			t.Fatal("imperative flush boundary changed", physical, caps.flushes, err)
+		if physical && len(caps.writes) == 0 {
+			t.Fatal("physical control did not queue work")
+		}
+		if caps.flushes != 0 {
+			t.Fatalf("direct execution with physical work %t flushed %d times", physical, caps.flushes)
 		}
 	}
-	// Existing non-observed imperative execution keeps its prior flush behavior.
+	// Direct execution without a queue observer also lacks a parent engine scope.
 	handler := queueHandler(t)
 	handler.metadata.Root.HookType = nil
 	caps := &queueCaps{}
-	if _, err := handler.Execute(ctx, rhandler.Invocation{Input: &sqPlainInput{}, Binder: caps}); err != nil || caps.flushes != 1 {
-		t.Fatal("default imperative flush changed", err, caps.flushes)
+	if _, err := handler.Execute(ctx, rhandler.Invocation{Input: &sqPlainInput{}, Binder: caps}); err != nil || caps.flushes != 0 {
+		t.Fatalf("direct execution without observer flushed %d times: %v", caps.flushes, err)
 	}
 }
