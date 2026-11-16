@@ -26,6 +26,7 @@ type Argument struct {
 	enumeration      *choice.Enum
 	schemaField      *xshape.JSONField
 	representation   *xshape.Representation
+	normalization    *xshape.Representation
 	documentation    *docs.Snapshot
 	publicName       string
 	aliases          []string
@@ -164,14 +165,18 @@ func (p *Plan) scope(ctx context.Context, arguments map[string]interface{}) (*re
 		if argument.customJSONBody {
 			format = ""
 		}
-		names, e := fieldname.HasNames(argument.sourceType, representationVisibility(argument.representation, format))
+		recognition := argument.representation
+		if argument.normalization != nil {
+			recognition = argument.normalization
+		}
+		names, e := fieldname.HasNames(argument.sourceType, representationVisibility(recognition, format))
 		if e != nil {
 			return nil, e
 		}
 		if !names {
 			continue
 		}
-		value, e = fieldname.Normalize(argument.sourceType, value, representationVisibility(argument.representation, format))
+		value, e = fieldname.Normalize(argument.sourceType, value, representationVisibility(recognition, format))
 		if e != nil {
 			return nil, fmt.Errorf("normalize MCP argument %q: %w", argument.publicName, e)
 		}

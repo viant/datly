@@ -455,7 +455,11 @@ func (c *Compiler) compileExternal(inputField registry.InputField, field reflect
 		argument.nullable = nil
 		argument.enumeration = enumeration
 		if enumeration.CollectionItems() == nil {
-			argument.wireSchema = registry.EnumInputSchema(enumeration, field.Type.Kind() == reflect.Pointer)
+			nullable := field.Type.Kind() == reflect.Pointer
+			if policy.Nullable != nil {
+				nullable = *policy.Nullable
+			}
+			argument.wireSchema = registry.EnumInputSchema(enumeration, nullable)
 		} else {
 			projected := xshape.JSONField{Field: xshape.Field{Name: field.Name, ReflectedType: field.Type, Tag: field.Tag, Index: field.Index, Exported: field.IsExported()}, Name: publicName}
 			argument.schemaField = &projected

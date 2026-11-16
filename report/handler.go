@@ -56,6 +56,9 @@ func (h *Handler) Execute(ctx context.Context, invocation rhandler.Invocation) (
 	if !ok || invoker == nil {
 		return nil, fmt.Errorf("report component invoker is unavailable")
 	}
+	if err := admitSourceContract(ctx, invoker, h.plan.target, providers, fields); err != nil {
+		return nil, err
+	}
 	childContext := exec.CaptureChildOutputSelection(ctx)
 	result, err := invoker.InvokeComponent(childContext, exec.ComponentRequest{
 		Target: h.plan.target, Providers: providers,

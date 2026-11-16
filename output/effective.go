@@ -1,10 +1,12 @@
 package output
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"github.com/viant/datly/spec"
 	structjson "github.com/viant/structology/encoding/json"
+	jsonmarshal "github.com/viant/structology/encoding/json/marshal"
 	"github.com/viant/tagly/format/text"
 	xshape "github.com/viant/x/shape"
 	xcontract "github.com/viant/xdatly/contract"
@@ -36,6 +38,9 @@ func (p *Plan) WithType(typ reflect.Type) (*Plan, error) {
 		result.effectiveSource = p.effectiveSource
 	}
 	result.prepareFormats()
+	if err := result.prepareSelectorOutputRoot(); err != nil {
+		return nil, err
+	}
 	return result, nil
 }
 
@@ -107,6 +112,9 @@ func (p *Plan) WithRepresentation(metadata *xshape.Representation) (*Plan, error
 		result.standardJSON = result.standardJSON.WithRepresentation(metadata)
 	}
 	result.prepareFormats()
+	if err := result.prepareSelectorOutputRoot(); err != nil {
+		return nil, err
+	}
 	return result, nil
 }
 
@@ -181,8 +189,11 @@ func (p *Plan) prepareFormats() {
 	if original != nil && (original.Implements(reflect.TypeFor[json.Marshaler]()) || reflect.PointerTo(original).Implements(reflect.TypeFor[json.Marshaler]()) || original.Implements(reflect.TypeFor[JSONWireType]()) || reflect.PointerTo(original).Implements(reflect.TypeFor[JSONWireType]())) {
 		return
 	}
-	p.formatPresentation, p.formatError = (presentationCompiler{excluded: p.exclude, representation: p.representation, hideJSON: p.effectiveSource != nil, compileEnums: true}).compile(p.typeOf, "", nil)
+	p.formatPresentation, p.formatError = (presentationCompiler{excluded: p.exclude, representation: p.representation, hideJSON: p.effectiveSource != nil, compileEnums: true, cell: p.recursiveCell, envelope: p.rows != nil && len(p.rows.index) > 0, canonical: p.effectiveSource, fieldVisible: p.formatFieldVisibility()}).compile(p.typeOf, "", nil)
 	if p.formatError != nil {
+		return
+	}
+	if p.formatPresentation == nil && p.representation == nil && p.effectiveSource == nil {
 		return
 	}
 	typ := p.typeOf
@@ -191,4 +202,31 @@ func (p *Plan) prepareFormats() {
 	}
 	p.formatPlan, p.formatError = p.presentationPlan(typ)
 
+}
+
+// recursiveCell prepares the same native JSON owner as the body, once within
+// the immutable format variant. Recursive and opaque metadata edits are rejected upstream.
+func (p *Plan) recursiveCell(typ reflect.Type, metadata *xshape.Representation) (func(context.Context, any) ([]byte, error), error) {
+	if !p.transformedJSON() {
+		encoder := jsonmarshal.NewStandardEncoder(nil, nil).WithRepresentation(metadata)
+		return encoder.MarshalContext, nil
+	}
+	encoder, err := structjson.NewMarshaller(typ, p.jsonOptionsFor(metadata, nil)...)
+	if err != nil {
+		return nil, err
+	}
+	return encoder.MarshalContext, nil
+}
+
+// Native transformed JSON owns internal, presence and format visibility. Reuse
+// that per-field decision before preparing an export carrier; standard JSON
+// retains its own annotation semantics.
+func (p *Plan) formatFieldVisibility() func(reflect.StructField, reflect.StructField, string) bool {
+	if !p.transformedJSON() {
+		return nil
+	}
+	return func(original, effective reflect.StructField, path string) bool {
+		field := p.schemaFieldPresentation(original, effective, path)
+		return field != nil && !field.excluded
+	}
 }

@@ -44,36 +44,11 @@ func (p *Plan) jsonSchemaFields(t reflect.Type, path string, optional bool, acti
 			field = representation.Field(i)
 			fieldShape = representation.FieldShape(i)
 		}
-		if !field.IsExported() || field.Tag.Get("setMarker") == "true" {
+		presentation := p.schemaFieldPresentation(original, field, path)
+		if presentation == nil {
 			continue
 		}
-		name, _, _ := strings.Cut(field.Tag.Get("json"), ",")
-		explicit := name != ""
-		if name == "-" || field.Tag.Get("internal") == "true" {
-			continue
-		}
-		if name == "" {
-			name = field.Name
-		}
-		// Use the same format-tag parser and name precedence as native JSON.
-		f, err := format.Parse(field.Tag)
-		if err != nil || f == nil {
-			f = &format.Tag{}
-		}
-		if f.Ignore {
-			continue
-		}
-		caseExplicit := explicit
-		if !explicit && (f.Name != "" || f.CaseFormat != "") {
-			if f.Name == "" {
-				f.Name = name
-			}
-			name = f.CaseFormatName("")
-			explicit, caseExplicit = true, f.CaseFormat != ""
-		}
-		if !caseExplicit {
-			name = p.schemaCaseName(name)
-		}
+		name, explicit, f := presentation.name, presentation.explicit, presentation.format
 		fieldPath := schemaFieldPath(path, original.Name)
 		inline := field.Anonymous || field.Tag.Get("jsonx") == "inline" || f.Inline
 		if inline && !field.Anonymous {
@@ -81,7 +56,7 @@ func (p *Plan) jsonSchemaFields(t reflect.Type, path string, optional bool, acti
 		} else if !inline && explicit {
 			explicitSibling = true
 		}
-		if p.exclude.Exclude(path, original.Name) {
+		if presentation.excluded {
 			continue
 		}
 		if inline {
@@ -107,6 +82,49 @@ func (p *Plan) jsonSchemaFields(t reflect.Type, path string, optional bool, acti
 		return nil, fmt.Errorf("%w: whole-value inline encoding on %s", ErrSchemaUnavailable, t)
 	}
 	return result, nil
+}
+
+// schemaFieldPresentation is the per-field naming/visibility owner. It does
+// not descend into sibling fields or require an envelope JSON schema.
+type schemaFieldPresentation struct {
+	name     string
+	explicit bool
+	format   *format.Tag
+	excluded bool
+}
+
+func (p *Plan) schemaFieldPresentation(original, field reflect.StructField, path string) *schemaFieldPresentation {
+	if !field.IsExported() || field.Tag.Get("setMarker") == "true" {
+		return nil
+	}
+	name, _, _ := strings.Cut(field.Tag.Get("json"), ",")
+	explicit := name != ""
+	if name == "-" || field.Tag.Get("internal") == "true" {
+		return nil
+	}
+	if name == "" {
+		name = field.Name
+	}
+	// Use the same format-tag parser and name precedence as native JSON.
+	f, err := format.Parse(field.Tag)
+	if err != nil || f == nil {
+		f = &format.Tag{}
+	}
+	if f.Ignore {
+		return nil
+	}
+	caseExplicit := explicit
+	if !explicit && (f.Name != "" || f.CaseFormat != "") {
+		if f.Name == "" {
+			f.Name = name
+		}
+		name = f.CaseFormatName("")
+		explicit, caseExplicit = true, f.CaseFormat != ""
+	}
+	if !caseExplicit {
+		name = p.schemaCaseName(name)
+	}
+	return &schemaFieldPresentation{name: name, explicit: explicit, format: f, excluded: p.exclude.Exclude(path, original.Name)}
 }
 
 func (p *Plan) schemaCaseName(name string) string {

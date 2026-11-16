@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/viant/datly/bootstrap"
+	"github.com/viant/datly/exec"
 	"github.com/viant/datly/internal/testharness"
 	"github.com/viant/datly/mcp"
 	druntime "github.com/viant/datly/runtime"
@@ -14,15 +15,17 @@ import (
 	dsql "github.com/viant/datly/sql"
 	"github.com/viant/datly/typecatalog"
 	"github.com/viant/x"
+	xreader "github.com/viant/xdatly/reader"
 )
 
 type groupedReportHarness struct {
-	compose  *composeHandler
-	runtime  *druntime.Runtime
-	service  *mcp.Service
-	artifact *ComponentArtifact
-	codec    *groupedCSVCodecFactory
-	sql      *dsql.SQLComponent
+	registered []*druntime.RegisteredComponent
+	compose    *composeHandler
+	runtime    *druntime.Runtime
+	service    *mcp.Service
+	artifact   *ComponentArtifact
+	codec      *groupedCSVCodecFactory
+	sql        *dsql.SQLComponent
 }
 
 func newGroupedReportHarness(t *testing.T, linked bool, configure ...func(*spec.ReportSettings)) *groupedReportHarness {
@@ -31,13 +34,14 @@ func newGroupedReportHarness(t *testing.T, linked bool, configure ...func(*spec.
 }
 
 type groupedReportHarnessConfig struct {
-	linked  bool
-	skipMCP bool
-	report  []func(*spec.ReportSettings)
-	route   func(*spec.Route)
-	source  func(*spec.Component, *typecatalog.Catalog)
-	input   reflect.Type
-	output  reflect.Type
+	queryGuard xreader.QueryGuard
+	linked     bool
+	skipMCP    bool
+	report     []func(*spec.ReportSettings)
+	route      func(*spec.Route)
+	source     func(*spec.Component, *typecatalog.Catalog)
+	input      reflect.Type
+	output     reflect.Type
 }
 
 func (c groupedReportHarnessConfig) build(t *testing.T) *groupedReportHarness {
@@ -112,6 +116,15 @@ func (c groupedReportHarnessConfig) build(t *testing.T) *groupedReportHarness {
 			return RuntimeCapabilities{}, fmt.Errorf("source reader compilation is unavailable")
 		}
 		reader, buildErr := compiled.NewExecution(bootstrap.ReaderRuntimeConfig{SQL: sourceSQL})
+		if buildErr == nil && c.queryGuard != nil {
+			guarded, ok := reader.(interface {
+				WithQueryGuard(xreader.QueryGuard) exec.Reader
+			})
+			if !ok {
+				return RuntimeCapabilities{}, fmt.Errorf("native query guard unavailable")
+			}
+			reader = guarded.WithQueryGuard(c.queryGuard)
+		}
 		return RuntimeCapabilities{Reader: reader}, buildErr
 	}))
 	if err != nil {
@@ -141,7 +154,7 @@ func (c groupedReportHarnessConfig) build(t *testing.T) *groupedReportHarness {
 	if reportArtifact == nil {
 		t.Fatal("grouped report artifact was not derived")
 	}
-	return &groupedReportHarness{compose: compose, runtime: runtime, service: service, artifact: reportArtifact, codec: codec, sql: sourceSQL}
+	return &groupedReportHarness{registered: registered, compose: compose, runtime: runtime, service: service, artifact: reportArtifact, codec: codec, sql: sourceSQL}
 }
 
 func groupedReportComponent(settings *spec.ReportSettings) *spec.Component {

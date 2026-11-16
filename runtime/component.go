@@ -7,6 +7,7 @@ import (
 	"github.com/viant/datly/constant"
 	"github.com/viant/datly/internal/drainowner"
 	"github.com/viant/datly/internal/responsebinding"
+	"github.com/viant/datly/internal/selectorcompanion"
 	"github.com/viant/datly/observability/otel"
 	xexec "github.com/viant/xdatly/exec"
 	xhandler "github.com/viant/xdatly/handler"
@@ -88,6 +89,7 @@ type scopedComponentInvoker struct {
 	scope     dexec.ProviderScope
 	authority func(context.Context) context.Context
 	buffered  bool
+	target    dexec.ComponentTarget
 }
 
 // resolvedComponentCallPolicyKey carries dispatcher policy through binding
@@ -159,7 +161,7 @@ func (i *scopedComponentInvoker) Invoke(ctx context.Context, request xhandler.Co
 var _ xhandler.ComponentInvoker = (*scopedComponentInvoker)(nil)
 var _ dexec.ComponentInvoker = (*scopedComponentInvoker)(nil)
 
-func (r *Runtime) componentInvokerProvider(scope dexec.ProviderScope, buffered bool) locator.Provider {
+func (r *Runtime) componentInvokerProvider(scope dexec.ProviderScope, buffered bool, target dexec.ComponentTarget) locator.Provider {
 	scope = componentDependencyScope(scope)
 	return handlerprovider.New(dexec.ComponentInvokerKey, func(ctx context.Context) (any, bool, error) {
 		return dexec.ComponentInvoker(&scopedComponentInvoker{
@@ -167,6 +169,7 @@ func (r *Runtime) componentInvokerProvider(scope dexec.ProviderScope, buffered b
 			scope:     scope,
 			authority: handlerengine.RetainMutationAuthority(ctx),
 			buffered:  buffered,
+			target:    target,
 		}), true, nil
 	})
 }
@@ -419,11 +422,11 @@ func (r *Runtime) invokeComponent(ctx context.Context, request dexec.ComponentRe
 	ownsBindings := false
 	var contractSources *contractSourceScope
 	if len(stack) == 0 {
-		bindings, _ = selected.BindingState.(*contractBindings)
+		bindings = contractBindingsFor(&selected)
 		if bindings != nil && bindings.owner == r && bindings.claim() {
 			ownsBindings = true
 			contractSources = &contractSourceScope{protocol: effectiveScope}
-			valid, proofErr := bindings.matches(ctx, contractSources)
+			valid, proofErr := bindings.frameMatches(ctx, target, &selected, contractSources)
 			if proofErr != nil {
 				bindings.close()
 				return nil, proofErr
@@ -443,7 +446,17 @@ func (r *Runtime) invokeComponent(ctx context.Context, request dexec.ComponentRe
 		// A context reused by a host must not carry a completed operation's values.
 		ctx = context.WithValue(ctx, contractBindingsKey{}, bindings)
 	}
-	if selectedOK && len(stack) == 0 {
+	nestedSelection := false
+	if selectedOK && len(stack) > 0 && bindings != nil && bindings.owner == r && contractBindingsFor(&selected) == bindings {
+		// A report preflight may publish a child selection in this operation.
+		// Reuse only the existing transitive raw-source proof in its actual scope;
+		// equal metadata identities alone never prove authorization equivalence.
+		nestedSelection, err = bindings.frameMatches(ctx, target, &selected, &contractSourceScope{protocol: effectiveScope})
+		if err != nil {
+			return nil, err
+		}
+	}
+	if selectedOK && (len(stack) == 0 || nestedSelection) {
 		effectiveContract = &selected
 	} else {
 		effectiveContract, err = r.resolveContract(ctx, target, effectiveScope, false)
@@ -454,9 +467,9 @@ func (r *Runtime) invokeComponent(ctx context.Context, request dexec.ComponentRe
 			return nil, err
 		}
 	}
-	if prepared, ok := effectiveContract.BindingState.(*contractBindings); ok && prepared.owner == r {
+	if prepared := contractBindingsFor(effectiveContract); prepared != nil && prepared.owner == r {
 		bindings = prepared
-		if len(stack) == 0 && !ownsBindings {
+		if !ownsBindings {
 			ownsBindings = bindings.claim()
 		}
 		ctx = context.WithValue(ctx, contractBindingsKey{}, bindings)
@@ -464,9 +477,12 @@ func (r *Runtime) invokeComponent(ctx context.Context, request dexec.ComponentRe
 	if ownsBindings {
 		defer bindings.close()
 	}
+	nativeSelection := contractSelectionFor(effectiveContract)
+	var selectedInputPlan *preparedInputExecutionPlan
 	if effectiveContract.Input != inputRoute.Type() || effectiveContract.InputRepresentation != nil {
-		if prepared := bindings.preparedInput(inputRoute, effectiveContract.InputRepresentation); prepared != nil {
-			inputRoute = prepared
+		if prepared := nativeSelection.preparedInputPlan(inputRoute, effectiveContract.InputRepresentation); prepared != nil {
+			selectedInputPlan = prepared
+			inputRoute = prepared.route
 		} else if effectiveContract.InputRepresentation != nil {
 			inputRoute, err = inputRoute.WithInputRepresentation(effectiveContract.InputRepresentation)
 		} else {
@@ -476,6 +492,7 @@ func (r *Runtime) invokeComponent(ctx context.Context, request dexec.ComponentRe
 			return nil, err
 		}
 	}
+	var resolvedReceipt *resolvedBindingReceipt
 	if bindings != nil && bindings.hasValues() && resolvedInput == nil && request.Input == nil && request.Replay == nil {
 		var specs []bindly.BindingSpec
 		grouped := false
@@ -488,12 +505,13 @@ func (r *Runtime) invokeComponent(ctx context.Context, request dexec.ComponentRe
 			if contractSources == nil {
 				contractSources = &contractSourceScope{protocol: effectiveScope}
 			}
-			resolvedInput, resolvedPaths, err = bindings.resolved(ctx, inputRoute.Plan(), specs, contractSources)
+			resolvedInput, resolvedPaths, resolvedReceipt, err = bindings.resolved(ctx, inputRoute.Plan(), specs, contractSources, request.PrepareQuery, nativeSelection)
 			if err != nil {
 				return nil, err
 			}
 			if len(resolvedPaths) == 0 {
 				resolvedInput = nil
+				resolvedReceipt = nil
 			}
 		}
 	}
@@ -522,6 +540,8 @@ func (r *Runtime) invokeComponent(ctx context.Context, request dexec.ComponentRe
 			return nil, err
 		}
 	}
+	companionWarmup := canonicalCompanionWarmup(ctx, registered, request, canonicalInputRoute, inputRoute)
+	var preparationBinding *selectorcompanion.PreparationBinding
 	handler := registered.Handler
 	dataSource := registered.DataSource
 	if request.Replay != nil && request.Replay.Only {
@@ -551,9 +571,42 @@ func (r *Runtime) invokeComponent(ctx context.Context, request dexec.ComponentRe
 		if handler != nil || registered.Reader == nil {
 			return nil, fmt.Errorf("query preparation requires a registered reader component: %s", identity)
 		}
+		// Unsupported legacy non-companion preparation retains its existing path;
+		// it cannot mint the new selector-binding evidence.
+		preparationEligible := !(request.Input != nil || request.ExtraInput != nil || request.Replay != nil || request.BindingOutput != nil || request.Warmup != nil || len(request.WarmupOmitInput) != 0 || request.DryRun || request.Rows != nil || request.ReaderOptions != nil || request.ReportOrdering != nil || request.Completion != nil || independent || route.Method != "GET")
+		var handoffs []selectorcompanion.PreparationHandoff
+		if inputRoute != canonicalInputRoute || resolvedInput != nil || len(resolvedPaths) != 0 {
+			valid := bindings != nil && bindings.owner == r && contractBindingsFor(effectiveContract) == bindings
+			var evidence []frameSelectionEvidence
+			if valid {
+				evidence, valid = bindings.frameEvidence(target, effectiveContract)
+			}
+			if inputRoute != canonicalInputRoute {
+				valid = valid && selectedInputPlan != nil && selectedInputPlan.original == canonicalInputRoute && selectedInputPlan.route == inputRoute && selectedInputPlan.representation == effectiveContract.InputRepresentation
+			}
+			if resolvedInput != nil || len(resolvedPaths) != 0 {
+				valid = valid && resolvedReceipt != nil && resolvedReceipt.seed == resolvedInput && resolvedReceipt.plan == inputRoute.Plan()
+			}
+			if valid {
+				frame := &preparationFrame{target: target}
+				ctx = context.WithValue(ctx, preparationFrameKey{}, frame)
+				handoffs = append(handoffs, &preparationHandoff{selected: nativeSelection, frame: frame, bindings: bindings, owner: r, scope: &contractSourceScope{protocol: effectiveScope}, canonical: canonicalInputRoute, route: inputRoute, prepared: selectedInputPlan, representation: effectiveContract.InputRepresentation, receipt: resolvedReceipt, selection: evidence})
+			} else {
+				preparationEligible = false
+			}
+		}
+		if !companionWarmup && inputRoute.SelectorPlan() != nil && !preparationEligible {
+			return nil, fmt.Errorf("query preparation requires fresh canonical binding")
+		}
 		handler, err = rreader.NewQueryHandler(registered.Reader, inputRoute)
 		if err != nil {
 			return nil, err
+		}
+		if !companionWarmup && inputRoute.SelectorPlan() != nil && preparationEligible {
+			preparationBinding = selectorcompanion.NewPreparationBinding(handler, registered.Reader, inputRoute, handoffs...)
+			if preparationBinding == nil {
+				return nil, fmt.Errorf("query preparation requires canonical selector plans")
+			}
 		}
 		dataSource = nil
 	} else if handler == nil {
@@ -598,11 +651,12 @@ func (r *Runtime) invokeComponent(ctx context.Context, request dexec.ComponentRe
 	}
 	ctx = constant.WithContext(ctx, values)
 	execution := handlerengine.Request{
+		PreparationBinding:           preparationBinding,
 		IndependentChildTransactions: request.IndependentChildTransactions || (registered.Component.Settings != nil && registered.Component.Settings.IndependentChildTransactions),
 		SequenceStrategy:             sequenceStrategy,
 		BufferedComponentCalls:       buffered,
 		// Keep selector-companion admission while sharing the recovery-read classification.
-		CanonicalReader:      canonicalReader && (inputRoute.SelectorPlan() == nil || len(request.WarmupOmitInput) == 0) || canonicalCompanionWarmup(ctx, registered, request, canonicalInputRoute, inputRoute),
+		CanonicalReader:      canonicalReader && (inputRoute.SelectorPlan() == nil || len(request.WarmupOmitInput) == 0) || companionWarmup,
 		ProtectedFlushTables: protectedFlushTables,
 		Injector:             r.injector,
 		Input:                inputRoute,
@@ -619,7 +673,7 @@ func (r *Runtime) invokeComponent(ctx context.Context, request dexec.ComponentRe
 		Providers:            registered.Providers,
 		Constants:            constants,
 		Components:           r.componentProvider(effectiveScope, registered.Component, registered),
-		ComponentInvoker:     r.componentInvokerProvider(effectiveScope, buffered),
+		ComponentInvoker:     r.componentInvokerProvider(effectiveScope, buffered, target),
 		DataSource:           dataSource,
 		Handler:              handler,
 		Completion:           request.Completion,
@@ -813,3 +867,41 @@ func (i *scopedComponentInvoker) BindResponse(ctx context.Context, request xhand
 }
 
 var _ xhandler.ComponentResponseBinder = (*scopedComponentInvoker)(nil)
+
+// ResolveContract evaluates metadata in the same inherited native scope as a
+// child invocation. Explicit frame providers use ComposeScope's existing
+// per-name authority and transitive BindingState replay proofs.
+func (i *scopedComponentInvoker) ResolveContract(ctx context.Context, target dexec.ComponentTarget, scope dexec.ProviderScope) (*dexec.EffectiveContract, error) {
+	if i == nil || i.runtime == nil {
+		return nil, fmt.Errorf("component invoker is not configured")
+	}
+	var providers []locator.Provider
+	if scope != nil {
+		providers = scope.Providers()
+	}
+	effective, err := handlerengine.ComposeScope(i.scope, providers...)
+	if err != nil {
+		return nil, err
+	}
+	plans, err := i.runtime.registeredComponent(ctx, i.target.Component)
+	if err != nil {
+		return nil, err
+	}
+	if plans != nil {
+		if derived, ok := plans.Handler.(dexec.DerivedContract); ok && derived.SourceContractTarget() == target {
+			selected, err := i.runtime.resolveContract(ctx, i.target, effective, false)
+			if err != nil {
+				return nil, err
+			}
+			if selected.SourceContract != nil {
+				dexec.PublishContract(ctx, target, selected.SourceContract)
+				return selected.SourceContract, nil
+			}
+		}
+	}
+	selected, err := i.runtime.ResolveContract(ctx, target, effective)
+	if err == nil {
+		dexec.PublishContract(ctx, target, selected)
+	}
+	return selected, err
+}

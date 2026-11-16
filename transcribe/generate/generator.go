@@ -2,6 +2,7 @@ package generate
 
 import (
 	"fmt"
+	"github.com/viant/datly/transcribe/internal/sourcecontract"
 
 	"github.com/viant/bindly/resource"
 	"github.com/viant/datly/spec"
@@ -29,6 +30,7 @@ type DeclarationProjection struct {
 type Declarations map[string]Declaration
 
 type Input struct {
+	PreparedSelector *sourcecontract.Selector
 	// ReaderMetadataSource retains the admitted source baseline independently from an explicit DQL result.
 	ReaderMetadataSource *spec.Component
 	ReaderMetadataURI    string

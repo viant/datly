@@ -3,6 +3,7 @@ package registry
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"reflect"
 	"testing"
 
@@ -41,6 +42,6 @@ func TestExplicitCollectionEnumNativeBindingAndSchema(t *testing.T) {
 			source = []string{"UNKNOWN"}
 		}
 		_, err = transform.Transform(context.Background(), nil, source)
-		require.ErrorContains(t, err, "enum collection")
+		require.ErrorContains(t, errors.Unwrap(err), "enum collection")
 	}
 }

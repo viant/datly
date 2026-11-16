@@ -13,7 +13,6 @@ import (
 	"github.com/viant/datly/spec"
 	structjson "github.com/viant/structology/encoding/json"
 	jsonmarshal "github.com/viant/structology/encoding/json/marshal"
-	"github.com/viant/tagly/choice"
 	"github.com/viant/tagly/format"
 	"github.com/viant/tagly/format/text"
 	ftime "github.com/viant/tagly/format/time"
@@ -24,9 +23,10 @@ import (
 type Marshaller interface{ Marshal(any) ([]byte, error) }
 
 type CompileInput struct {
-	Component *spec.Component
-	Type      reflect.Type
-	DataField string
+	Component        *spec.Component
+	Type             reflect.Type
+	DataField        string
+	publicOutputRoot bool
 	// SelectableRows describes handlers that return a requested subset of row fields.
 	SelectableRows bool
 }
@@ -37,6 +37,7 @@ type Compiler struct {
 
 // Plan contains registered output authority, never invocation input or rows.
 type Plan struct {
+	selectorOutputRoot  *dexec.SelectorOutputRoot
 	headers             map[string]string
 	declaredTime        bool
 	representation      *xshape.Representation
@@ -226,8 +227,13 @@ func (c Compiler) compile(input CompileInput, prepareFormats bool) (*Plan, error
 			return nil, err
 		}
 	}
-	if prepareFormats && choice.HasEnum(p.typeOf) {
+	if prepareFormats {
 		p.prepareFormats()
+	}
+	if prepareFormats {
+		if err := p.prepareSelectorOutputRoot(); err != nil {
+			return nil, err
+		}
 	}
 	return p, nil
 }
@@ -347,7 +353,11 @@ func (p *Plan) Encode(ctx context.Context, format string, value any) (Result, er
 				}
 				source = source.Elem()
 			}
-			projected, projectionErr := p.formatPresentation.value(source)
+			var scope []int
+			if format == "csv" && p.rows != nil {
+				scope = p.rows.index
+			}
+			projected, projectionErr := p.formatPresentation.valueContextScope(ctx, source, scope)
 			if projectionErr != nil {
 				return Result{}, projectionErr
 			}
@@ -368,7 +378,7 @@ func (p *Plan) Encode(ctx context.Context, format string, value any) (Result, er
 		if format == "csv" || format == "xls" || format == "xlsx" {
 			scalarAuthority = p.formatPresentation
 		}
-		selected, projected, err := p.selectedPresentation(value, selection, scalarAuthority)
+		selected, projected, err := p.selectedPresentationContextScope(ctx, value, selection, scalarAuthority, format == "csv")
 		if err != nil {
 			return Result{}, err
 		}
@@ -444,7 +454,7 @@ func (p *Plan) marshalJSON(ctx context.Context, value any, custom bool) ([]byte,
 		return structjson.MarshalStandard(value, options...)
 	}
 	if selection == nil && p.jsonEncoder != nil {
-		return p.jsonEncoder.Marshal(value)
+		return p.jsonEncoder.MarshalContext(ctx, value)
 	}
 	options := p.jsonOptions()
 	if selection != nil {
@@ -461,15 +471,18 @@ func (p *Plan) marshalJSON(ctx context.Context, value any, custom bool) ([]byte,
 }
 
 func (p *Plan) jsonOptions() []structjson.Option {
+	return p.jsonOptionsFor(p.representation, p.exclude)
+}
+func (p *Plan) jsonOptionsFor(metadata *xshape.Representation, excluded exclusions) []structjson.Option {
 	var options []structjson.Option
-	if p.representation != nil {
-		options = append(options, structjson.WithRepresentation(p.representation))
+	if metadata != nil {
+		options = append(options, structjson.WithRepresentation(metadata))
 	}
 	if p.nilSlicePolicy == "empty_array" {
 		options = append(options, structjson.WithNilSlicePolicy(structjson.NilSliceAsEmptyArray))
 	}
-	if len(p.exclude) > 0 {
-		options = append(options, structjson.WithExcludedFields(p.exclude...))
+	if len(excluded) > 0 {
+		options = append(options, structjson.WithExcludedFields(excluded...))
 	}
 	if p.omitEmpty {
 		options = append(options, structjson.WithOmitEmpty(true))

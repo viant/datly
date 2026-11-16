@@ -28,6 +28,12 @@ func (s *Session) selectedOutput(selectors invocationSelectors) (dexec.OutputFie
 	if len(selectors) == 0 {
 		return nil, nil
 	}
+	if root := s.selectorOutputRoot; root != nil {
+		if len(s.publicOutputIndexes) == 0 {
+			return nil, nil
+		}
+		return structjson.NewFieldFilter(s.OutputType, []structjson.FieldSelection{{Path: append([]string(nil), root.Path...), Indexes: s.publicOutputIndexes}})
+	}
 	selection := outputSelection{fieldSelection: s.fieldSelection, selectors: selectors, responseFields: s.responseFields}
 	missingProof := false
 	for _, proof := range s.responseFields {

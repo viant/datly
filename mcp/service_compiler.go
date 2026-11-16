@@ -107,6 +107,28 @@ func (c *serviceCompiler) components() ([]*registry.RegisteredComponent, error) 
 			copy.Output = plan
 			result[i] = &copy
 		}
+		if registered.Reader != nil && registered.Handler == nil {
+			exposed := false
+			for _, route := range registered.Component.Routes {
+				if route == nil {
+					continue
+				}
+				for _, exposure := range route.MCP {
+					if exposure != nil && exposure.Kind == spec.MCPExposureTool {
+						exposed = true
+					}
+				}
+			}
+			if exposed {
+				plan, err := result[i].Output.WithMCPOutputRoot()
+				if err != nil {
+					return nil, fmt.Errorf("compile MCP public output for %s: %w", registered.Component.Key.String(), err)
+				}
+				copy := *result[i]
+				copy.Output = plan
+				result[i] = &copy
+			}
+		}
 	}
 	sort.SliceStable(result, func(i, j int) bool {
 		return result[i].Component.Key.String() < result[j].Component.Key.String()
@@ -248,7 +270,7 @@ func (c *serviceCompiler) publish(ctx context.Context, catalog *Catalog, policy 
 					result[i] = exec.SelectorFieldName{GoName: field.GoName, PublicName: field.PublicName, Index: append([]int(nil), field.Index...)}
 				}
 				return result, nil
-			}).WithFieldSelection(spec.FieldSelectionOutputOnly), nil
+			}).WithFieldSelection(spec.FieldSelectionOutputOnly).WithOutputRoot(plan.SelectorOutputRoot()), nil
 		}, Output: func(target exec.ComponentTarget) invocation.OutputEncoder {
 			plan := selectPlan(target)
 			if plan == nil {

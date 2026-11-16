@@ -26,6 +26,11 @@ type EffectiveContract struct {
 	// BindingState is an invocation-owned, opaque native binding handoff. It is
 	// never wire metadata and must not be retained in a generation-level cache.
 	BindingState any `json:"-" mcp:"-"`
+	// SourceContract/Projection are native report handoffs. SourceContract is
+	// operation-local; Projection contains only immutable compiled metadata.
+	SourceContract     *EffectiveContract    `json:"-" mcp:"-"`
+	Projection         any                   `json:"-" mcp:"-"`
+	InputNormalization *shape.Representation `json:"-" mcp:"-"`
 }
 
 // OutputDiscoverySchemas holds immutable native artifacts for one complete

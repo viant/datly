@@ -8,6 +8,7 @@ import (
 
 	"github.com/viant/datly/bootstrap"
 	"github.com/viant/datly/report"
+	"github.com/viant/datly/runtime/registry"
 	"github.com/viant/datly/spec"
 	"github.com/viant/datly/tag"
 	authoring "github.com/viant/datly/transcribe/compile"
@@ -38,28 +39,53 @@ func (r *planResolver) resolveCubes() error {
 	// an authored namespace is never a shared global cube package.
 	component.Key = spec.Key{Kind: spec.KindComponent, Scope: p.Package, Name: p.ComponentName}
 	component.Settings.Report.LinkedFacade = false
+	sourceContracts, err := r.cubeSourceContracts(component)
+	if err != nil {
+		return err
+	}
 	materializer := newRuntimeInputMaterializer(p, r.types)
-	input, err := materializer.inputType()
-	if err != nil {
-		return fmt.Errorf("cube source input: %w", err)
-	}
-	output, err := materializer.outputType()
-	if err != nil {
-		return fmt.Errorf("cube source output: %w", err)
-	}
-	if p.Input.Ownership == ContractLinked {
-		input, err = materializer.descriptorType(p.Input.Type)
+	var input, output reflect.Type
+	if sourceContracts == nil {
+		input, err = materializer.inputType()
+		if err != nil {
+			return fmt.Errorf("cube source input: %w", err)
+		}
+		output, err = materializer.outputType()
+		if err != nil {
+			return fmt.Errorf("cube source output: %w", err)
+		}
+		if p.Input.Ownership == ContractLinked {
+			input, err = materializer.descriptorType(p.Input.Type)
+			if err != nil {
+				return err
+			}
+		}
+		if p.Output.Ownership == ContractLinked {
+			output, err = materializer.descriptorType(p.Output.Type)
+			if err != nil {
+				return err
+			}
+		}
+	} else {
+		materializer = newRuntimeInputMaterializer(p, sourceContracts.types)
+		materializer.discoveryOnly = true
+		sourceMaterializer := newRuntimeInputMaterializer(nil, sourceContracts.types)
+		sourceMaterializer.discoveryOnly = true
+		input, err = sourceMaterializer.descriptorType(sourceContracts.input.Key())
+		if err != nil {
+			return err
+		}
+		output, err = sourceMaterializer.descriptorType(sourceContracts.output.Key())
 		if err != nil {
 			return err
 		}
 	}
-	if p.Output.Ownership == ContractLinked {
-		output, err = materializer.descriptorType(p.Output.Type)
-		if err != nil {
-			return err
-		}
+	contractResolver := bootstrap.ContractResolver{Component: component, InputType: xshape.Linked(input).Descriptor(), OutputType: xshape.Linked(output).Descriptor()}
+	if sourceContracts != nil {
+		contractResolver.InputType, contractResolver.OutputType, contractResolver.Types = sourceContracts.input, sourceContracts.output, sourceContracts.types
 	}
-	component, err = (bootstrap.ContractResolver{Component: component, InputType: xshape.Linked(input).Descriptor(), OutputType: xshape.Linked(output).Descriptor()}).Resolve()
+
+	component, err = contractResolver.Resolve()
 	if err != nil {
 		return err
 	}
@@ -78,7 +104,11 @@ func (r *planResolver) resolveCubes() error {
 			r.input.Component.RootView.Columns[i] = column.Clone()
 		}
 	}
-	component, err = bootstrap.ResolveReportSourceWithContracts(component, input, output, r.input.Resources)
+	if sourceContracts != nil {
+		component, err = bootstrap.ResolveReportSourceFromDeclarations(component, input, output, r.input.Resources, sourceContracts.input, sourceContracts.output, sourceContracts.types)
+	} else {
+		component, err = bootstrap.ResolveReportSourceWithContracts(component, input, output, r.input.Resources)
+	}
 	if err != nil {
 		return err
 	}
@@ -123,7 +153,12 @@ func (r *planResolver) resolveCubes() error {
 			description.Parameters = append(description.Parameters, parameter)
 		}
 	}
-	described, err := bootstrap.DescribeInputContract(description, input, materializer.identifierType)
+	var described *registry.InputContract
+	if sourceContracts != nil {
+		described, err = bootstrap.DescribeInputContractSource(description, input, sourceContracts.input, sourceContracts.output, sourceContracts.types, materializer.identifierType)
+	} else {
+		described, err = bootstrap.DescribeInputContract(description, input, materializer.identifierType)
+	}
 	if err != nil {
 		return fmt.Errorf("describe cube source input: %w", err)
 	}

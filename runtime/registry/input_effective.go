@@ -9,6 +9,7 @@ import (
 	"github.com/viant/bindly"
 	"github.com/viant/datly/spec"
 	"github.com/viant/tagly/choice"
+	"github.com/viant/tagly/format"
 	xshape "github.com/viant/x/shape"
 )
 
@@ -146,7 +147,15 @@ func (c *RouteInputContract) metadataFields(effective reflect.Type, metadata *xs
 			return nil, err
 		}
 		if enumeration != nil {
-			f.wireSchema = EnumInputSchema(enumeration, projected.Type.Kind() == reflect.Pointer)
+			policy, err := format.Parse(projected.Tag)
+			if err != nil {
+				return nil, err
+			}
+			nullable := projected.Type.Kind() == reflect.Pointer
+			if policy.Nullable != nil {
+				nullable = *policy.Nullable
+			}
+			f.wireSchema = EnumInputSchema(enumeration, nullable)
 			continue
 		}
 		if !strings.Contains(string(original.Tag), "choice:") && !strings.Contains(string(projected.Tag), "choice:") {

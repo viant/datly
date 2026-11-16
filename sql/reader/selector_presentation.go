@@ -8,6 +8,7 @@ import (
 
 	"github.com/viant/datly/data"
 	"github.com/viant/datly/exec"
+	"github.com/viant/datly/spec"
 	dsql "github.com/viant/datly/sql"
 )
 
@@ -16,6 +17,15 @@ import (
 func (s *Session) prepareSelectorPresentation(ctx context.Context) error {
 	s.fieldSelection = exec.PresentedSelectorFieldSelection(ctx, s.Component.Key)
 	s.selectorPresentation = make(map[*data.View][]data.SelectorField)
+	s.selectorOutputRoot = exec.PresentedSelectorOutputRoot(ctx, s.Component.Key)
+	s.publicOutputIndexes = nil
+	if root := s.selectorOutputRoot; root != nil {
+		if s.OutputType != root.OutputType || s.fieldSelection != spec.FieldSelectionOutputOnly || s.Artifact.Root == nil || s.Artifact.Root.View.Spec.Name != root.View || s.Artifact.DirectOutput || s.Artifact.OutputViewField == root.Path[0] {
+			return fmt.Errorf("public output selection does not match reader root")
+		}
+		return nil
+	}
+
 	visited := map[*data.View]bool{}
 	var visit func(*ViewPlan, string) error
 	visit = func(plan *ViewPlan, path string) error {

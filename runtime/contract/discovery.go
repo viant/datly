@@ -13,13 +13,22 @@ import (
 // operation and composes complete output branches through the ordinary owner
 // traversal and bounded variant cache. It never retains policies or binders.
 func (p *Plan) ResolveDiscoveryRepresentations(ctx context.Context, binder bindly.Binder) (*shape.Representation, []*shape.Representation, []*exec.OutputDiscoverySchemas, error) {
+	selected, alternatives, schemas, _, err := p.ResolveDiscoverySelection(ctx, binder)
+	return selected, alternatives, schemas, err
+}
+
+func (p *Plan) ResolveDiscoverySelection(ctx context.Context, binder bindly.Binder) (*shape.Representation, []*shape.Representation, []*exec.OutputDiscoverySchemas, MetadataIdentity, error) {
 	owners, err := p.resolveOwners(ctx, binder)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, MetadataIdentity{}, err
+	}
+	identity, err := identityFor(owners)
+	if err != nil {
+		return nil, nil, nil, identity, err
 	}
 	selected, err := p.resolvePolicies(ctx, owners)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, MetadataIdentity{}, err
 	}
 	var representation *shape.Representation
 	if selected != nil {
@@ -35,15 +44,15 @@ func (p *Plan) ResolveDiscoveryRepresentations(ctx context.Context, binder bindl
 		// The registration's existing variant budget also bounds a discovery
 		// expansion. No-cache registrations cannot admit a combinatorial catalog.
 		if p.capacity == 0 || len(owner.policy.DiscoveryAlternatives) > p.capacity/len(combinations) {
-			return nil, nil, nil, fmt.Errorf("output discovery alternatives exceed contract variant capacity %d at %s", p.capacity, owner.owner.path)
+			return nil, nil, nil, MetadataIdentity{}, fmt.Errorf("output discovery alternatives exceed contract variant capacity %d at %s", p.capacity, owner.owner.path)
 		}
 		next := make([][]resolvedOwner, 0, len(combinations)*len(owner.policy.DiscoveryAlternatives))
 		for _, alternative := range owner.policy.DiscoveryAlternatives {
 			if err := ctx.Err(); err != nil {
-				return nil, nil, nil, err
+				return nil, nil, nil, MetadataIdentity{}, err
 			}
 			if alternative == nil || len(alternative.DiscoveryAlternatives) != 0 {
-				return nil, nil, nil, fmt.Errorf("output discovery alternative at %s must be a non-nil leaf policy", owner.owner.path)
+				return nil, nil, nil, MetadataIdentity{}, fmt.Errorf("output discovery alternative at %s must be a non-nil leaf policy", owner.owner.path)
 			}
 			for _, combination := range combinations {
 				branch := append([]resolvedOwner(nil), combination...)
@@ -56,7 +65,7 @@ func (p *Plan) ResolveDiscoveryRepresentations(ctx context.Context, binder bindl
 		combinations = next
 	}
 	if !alternatives {
-		return representation, nil, nil, nil
+		return representation, nil, nil, identity, nil
 	}
 	// A distinct selected variant occupies a retained slot too. At the expansion
 	// boundary, count native retained identities before preparing any schemas;
@@ -65,29 +74,29 @@ func (p *Plan) ResolveDiscoveryRepresentations(ctx context.Context, binder bindl
 		names := map[string]bool{selected.name: true}
 		for _, combination := range combinations {
 			if err := ctx.Err(); err != nil {
-				return nil, nil, nil, err
+				return nil, nil, nil, MetadataIdentity{}, err
 			}
 			_, name, err := selectPolicies(combination)
 			if err != nil {
-				return nil, nil, nil, err
+				return nil, nil, nil, MetadataIdentity{}, err
 			}
 			if name != "" {
 				names[name] = true
 			}
 		}
 		if len(names) > p.capacity {
-			return nil, nil, nil, fmt.Errorf("output discovery alternatives and selected policy exceed contract variant capacity %d", p.capacity)
+			return nil, nil, nil, MetadataIdentity{}, fmt.Errorf("output discovery alternatives and selected policy exceed contract variant capacity %d", p.capacity)
 		}
 	}
 	result := make([]*shape.Representation, 0, len(combinations))
 	schemas := make([]*exec.OutputDiscoverySchemas, 0, len(combinations))
 	for _, combination := range combinations {
 		if err := ctx.Err(); err != nil {
-			return nil, nil, nil, err
+			return nil, nil, nil, MetadataIdentity{}, err
 		}
 		branch, err := p.resolvePolicies(ctx, combination)
 		if err != nil {
-			return nil, nil, nil, err
+			return nil, nil, nil, MetadataIdentity{}, err
 		}
 		var metadata *shape.Representation
 		if branch != nil {
@@ -95,13 +104,13 @@ func (p *Plan) ResolveDiscoveryRepresentations(ctx context.Context, binder bindl
 		}
 		document, err := p.prepareSchema(branch)
 		if err != nil {
-			return nil, nil, nil, err
+			return nil, nil, nil, MetadataIdentity{}, err
 		}
 		if err := ctx.Err(); err != nil {
-			return nil, nil, nil, err
+			return nil, nil, nil, MetadataIdentity{}, err
 		}
 		result = append(result, metadata)
 		schemas = append(schemas, document)
 	}
-	return representation, result, schemas, nil
+	return representation, result, schemas, identity, nil
 }
