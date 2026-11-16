@@ -16,11 +16,22 @@ func (p *Plan) selectedPresentation(value any, filter dexec.OutputFieldFilter, s
 	return p.selectedPresentationContext(context.Background(), value, filter, scalarAuthority)
 }
 func (p *Plan) selectedPresentationContext(ctx context.Context, value any, filter dexec.OutputFieldFilter, scalarAuthority *presentation) (*Plan, any, error) {
+	return p.selectedPresentationContextScope(ctx, value, filter, scalarAuthority, false)
+}
+func (p *Plan) selectedPresentationContextScope(ctx context.Context, value any, filter dexec.OutputFieldFilter, scalarAuthority *presentation, csv bool) (*Plan, any, error) {
+	var scope []int
+	if csv && p.rows != nil {
+		scope = p.rows.index
+	}
 	indexed, ok := filter.(indexExcluder)
 	if !ok {
 		return nil, nil, fmt.Errorf("output selection requires canonical field indexes")
 	}
-	projection, err := (presentationCompiler{excluded: p.exclude, selected: indexed, representation: p.representation, hideJSON: p.effectiveSource != nil, authority: scalarAuthority}).compile(p.typeOf, "", nil)
+	var fieldVisible func(reflect.StructField, reflect.StructField, string) bool
+	if scalarAuthority != nil {
+		fieldVisible = p.formatFieldVisibility()
+	}
+	projection, err := (presentationCompiler{excluded: p.exclude, selected: indexed, representation: p.representation, hideJSON: p.effectiveSource != nil, authority: scalarAuthority, bodyScope: scope, canonical: p.effectiveSource, fieldVisible: fieldVisible}).compile(p.typeOf, "", nil)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -32,7 +43,7 @@ func (p *Plan) selectedPresentationContext(ctx context.Context, value any, filte
 		}
 		source = source.Elem()
 	}
-	projected, err := projection.valueContext(ctx, source)
+	projected, err := projection.valueContextScope(ctx, source, scope)
 	if err != nil {
 		return nil, nil, err
 	}

@@ -44,6 +44,10 @@ type presentationCompiler struct {
 	cell           func(reflect.Type, *xshape.Representation) (func(context.Context, any) ([]byte, error), error)
 	compileEnums   bool
 	authority      *presentation
+	bodyScope      []int
+	envelope       bool
+	canonical      reflect.Type
+	fieldVisible   func(reflect.StructField, reflect.StructField, string) bool
 }
 
 func (e exclusions) presentation(typeOf reflect.Type, path string) (*presentation, error) {
@@ -64,7 +68,11 @@ func (*recursivePresentation) Error() string {
 func (c presentationCompiler) compileShape(typeOf reflect.Type, path string, indexes []int, metadata *xshape.Representation, authority *presentation) (*presentation, error) {
 	if authority != nil && authority.jsonCell != nil {
 		if c.selected != nil && c.selected.AffectsIndexes(indexes) {
-			return nil, fmt.Errorf("partial recursive output selection at %s is unsupported", path)
+			kind := "recursive"
+			if opaqueCellContainer(authority.source) {
+				kind = "opaque"
+			}
+			return nil, fmt.Errorf("partial %s output selection at %s is unsupported", kind, path)
 		}
 		return authority, nil
 	}
@@ -131,6 +139,10 @@ func (c presentationCompiler) compileShape(typeOf reflect.Type, path string, ind
 			if !field.Exported || len(field.Index) != 1 {
 				continue
 			}
+			if len(c.bodyScope) > 0 && len(indexes) == 0 && field.Index[0] != c.bodyScope[0] {
+				changed = true
+				continue
+			}
 			effective := typeOf.Field(field.Index[0])
 			var childMetadata *xshape.Representation
 			if metadata != nil && metadata.NumField() > field.Index[0] {
@@ -139,7 +151,7 @@ func (c presentationCompiler) compileShape(typeOf reflect.Type, path string, ind
 			}
 			alias, _, _ := strings.Cut(effective.Tag.Get("json"), ",")
 			index := append(append([]int(nil), indexes...), field.Index...)
-			if (metadata != nil || c.hideJSON) && alias == "-" || c.selected != nil && c.selected.ExcludeIndexes(index) || e.Exclude(path, field.Name) || alias != "" && e.Exclude(path, alias) {
+			if (metadata != nil || c.hideJSON || c.cell != nil || c.authority != nil) && alias == "-" || c.fieldVisible != nil && !c.fieldVisible(typeOf.Field(field.Index[0]), effective, path) || c.selected != nil && c.selected.ExcludeIndexes(index) || e.Exclude(path, field.Name) || alias != "" && e.Exclude(path, alias) {
 				changed = true
 				continue
 			}
@@ -156,6 +168,23 @@ func (c presentationCompiler) compileShape(typeOf reflect.Type, path string, ind
 				child, err = compileEnumPresentation(effective)
 				if err != nil {
 					return nil, fmt.Errorf("output field %s: %w", childPath, err)
+				}
+			}
+			if child == nil && c.cell != nil && opaqueCellContainer(field.ReflectedType) {
+				if childMetadata.Changed() || e.affects(childPath) || c.selected != nil && c.selected.AffectsIndexes(index) || c.canonical != nil && canonicalFieldType(c.canonical, index) != field.ReflectedType {
+					return nil, fmt.Errorf("opaque output field %s requires complete unchanged selection", childPath)
+				}
+				encode, cellErr := c.cell(field.ReflectedType, childMetadata)
+				if cellErr != nil {
+					return nil, fmt.Errorf("prepare opaque output field %s: %w", childPath, cellErr)
+				}
+				child = &presentation{source: field.ReflectedType, target: reflect.TypeFor[string](), jsonCell: encode, path: childPath}
+				if c.envelope && len(indexes) == 0 {
+					carrier, carrierErr := (xshape.Runtime{}).Struct([]xshape.RuntimeField{{Name: effective.Name, Type: reflect.TypeFor[string](), Tag: effective.Tag}})
+					if carrierErr != nil {
+						return nil, carrierErr
+					}
+					child.target = carrier
 				}
 			}
 			if child == nil {
@@ -222,6 +251,9 @@ func (p *presentation) value(source reflect.Value) (reflect.Value, error) {
 	return p.valueContext(context.Background(), source)
 }
 func (p *presentation) valueContext(ctx context.Context, source reflect.Value) (reflect.Value, error) {
+	return p.valueContextScope(ctx, source, nil)
+}
+func (p *presentation) valueContextScope(ctx context.Context, source reflect.Value, scope []int) (reflect.Value, error) {
 	if p == nil {
 		return source, nil
 	}
@@ -231,9 +263,15 @@ func (p *presentation) valueContext(ctx context.Context, source reflect.Value) (
 	if p.jsonCell != nil {
 		data, err := p.jsonCell(ctx, source.Interface())
 		if err != nil {
-			return reflect.Value{}, fmt.Errorf("encode recursive output field %s: %w", p.path, err)
+			return reflect.Value{}, fmt.Errorf("encode JSON output field %s: %w", p.path, err)
 		}
-		return reflect.ValueOf(string(data)), nil
+		value := reflect.ValueOf(string(data))
+		if p.target.Kind() == reflect.Struct {
+			carrier := reflect.New(p.target).Elem()
+			carrier.Field(0).Set(value)
+			return carrier, nil
+		}
+		return value, nil
 	}
 	if p.enumeration != nil {
 		wire, err := p.enumeration.Encode(source.Interface())
@@ -247,7 +285,7 @@ func (p *presentation) valueContext(ctx context.Context, source reflect.Value) (
 	}
 	switch source.Kind() {
 	case reflect.Pointer:
-		value, err := p.elem.valueContext(ctx, source.Elem())
+		value, err := p.elem.valueContextScope(ctx, source.Elem(), scope)
 		if err != nil {
 			return reflect.Value{}, err
 		}
@@ -272,6 +310,9 @@ func (p *presentation) valueContext(ctx context.Context, source reflect.Value) (
 	case reflect.Struct:
 		target := reflect.New(p.target).Elem()
 		for _, field := range p.fields {
+			if len(scope) > 0 && field.source[0] != scope[0] {
+				continue
+			}
 			value, err := field.projection.valueContext(ctx, source.FieldByIndex(field.source))
 			if err != nil {
 				return reflect.Value{}, err
@@ -409,4 +450,38 @@ func enumPresentationType(enumeration *choice.Enum) (reflect.Type, error) {
 		return nil, fmt.Errorf("enum output requires a single scalar wire type")
 	}
 	return target, nil
+}
+
+// opaqueCellContainer recognizes only containers without a static row contract.
+// Scalar JSON/Text owners, including time and custom structs, retain their owner.
+func opaqueCellContainer(typ reflect.Type) bool {
+	seen := map[reflect.Type]bool{}
+	for typ != nil {
+		if seen[typ] {
+			return false
+		}
+		seen[typ] = true
+		switch typ.Kind() {
+		case reflect.Pointer, reflect.Slice, reflect.Array:
+			typ = typ.Elem()
+		case reflect.Map, reflect.Interface:
+			return true
+		default:
+			return false
+		}
+	}
+	return false
+}
+
+func canonicalFieldType(typ reflect.Type, indexes []int) reflect.Type {
+	for _, index := range indexes {
+		for typ != nil && (typ.Kind() == reflect.Pointer || typ.Kind() == reflect.Slice || typ.Kind() == reflect.Array) {
+			typ = typ.Elem()
+		}
+		if typ == nil || typ.Kind() != reflect.Struct || index >= typ.NumField() {
+			return nil
+		}
+		typ = typ.Field(index).Type
+	}
+	return typ
 }

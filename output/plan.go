@@ -353,7 +353,11 @@ func (p *Plan) Encode(ctx context.Context, format string, value any) (Result, er
 				}
 				source = source.Elem()
 			}
-			projected, projectionErr := p.formatPresentation.valueContext(ctx, source)
+			var scope []int
+			if format == "csv" && p.rows != nil {
+				scope = p.rows.index
+			}
+			projected, projectionErr := p.formatPresentation.valueContextScope(ctx, source, scope)
 			if projectionErr != nil {
 				return Result{}, projectionErr
 			}
@@ -374,7 +378,7 @@ func (p *Plan) Encode(ctx context.Context, format string, value any) (Result, er
 		if format == "csv" || format == "xls" || format == "xlsx" {
 			scalarAuthority = p.formatPresentation
 		}
-		selected, projected, err := p.selectedPresentationContext(ctx, value, selection, scalarAuthority)
+		selected, projected, err := p.selectedPresentationContextScope(ctx, value, selection, scalarAuthority, format == "csv")
 		if err != nil {
 			return Result{}, err
 		}

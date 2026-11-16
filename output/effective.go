@@ -189,7 +189,7 @@ func (p *Plan) prepareFormats() {
 	if original != nil && (original.Implements(reflect.TypeFor[json.Marshaler]()) || reflect.PointerTo(original).Implements(reflect.TypeFor[json.Marshaler]()) || original.Implements(reflect.TypeFor[JSONWireType]()) || reflect.PointerTo(original).Implements(reflect.TypeFor[JSONWireType]())) {
 		return
 	}
-	p.formatPresentation, p.formatError = (presentationCompiler{excluded: p.exclude, representation: p.representation, hideJSON: p.effectiveSource != nil, compileEnums: true, cell: p.recursiveCell}).compile(p.typeOf, "", nil)
+	p.formatPresentation, p.formatError = (presentationCompiler{excluded: p.exclude, representation: p.representation, hideJSON: p.effectiveSource != nil, compileEnums: true, cell: p.recursiveCell, envelope: p.rows != nil && len(p.rows.index) > 0, canonical: p.effectiveSource, fieldVisible: p.formatFieldVisibility()}).compile(p.typeOf, "", nil)
 	if p.formatError != nil {
 		return
 	}
@@ -205,7 +205,7 @@ func (p *Plan) prepareFormats() {
 }
 
 // recursiveCell prepares the same native JSON owner as the body, once within
-// the immutable format variant. Recursive metadata edits are rejected upstream.
+// the immutable format variant. Recursive and opaque metadata edits are rejected upstream.
 func (p *Plan) recursiveCell(typ reflect.Type, metadata *xshape.Representation) (func(context.Context, any) ([]byte, error), error) {
 	if !p.transformedJSON() {
 		encoder := jsonmarshal.NewStandardEncoder(nil, nil).WithRepresentation(metadata)
@@ -216,4 +216,17 @@ func (p *Plan) recursiveCell(typ reflect.Type, metadata *xshape.Representation) 
 		return nil, err
 	}
 	return encoder.MarshalContext, nil
+}
+
+// Native transformed JSON owns internal, presence and format visibility. Reuse
+// that per-field decision before preparing an export carrier; standard JSON
+// retains its own annotation semantics.
+func (p *Plan) formatFieldVisibility() func(reflect.StructField, reflect.StructField, string) bool {
+	if !p.transformedJSON() {
+		return nil
+	}
+	return func(original, effective reflect.StructField, path string) bool {
+		field := p.schemaFieldPresentation(original, effective, path)
+		return field != nil && !field.excluded
+	}
 }
