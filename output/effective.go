@@ -36,6 +36,9 @@ func (p *Plan) WithType(typ reflect.Type) (*Plan, error) {
 		result.effectiveSource = p.effectiveSource
 	}
 	result.prepareFormats()
+	if err := result.prepareSelectorOutputRoot(); err != nil {
+		return nil, err
+	}
 	return result, nil
 }
 
@@ -107,6 +110,9 @@ func (p *Plan) WithRepresentation(metadata *xshape.Representation) (*Plan, error
 		result.standardJSON = result.standardJSON.WithRepresentation(metadata)
 	}
 	result.prepareFormats()
+	if err := result.prepareSelectorOutputRoot(); err != nil {
+		return nil, err
+	}
 	return result, nil
 }
 

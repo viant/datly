@@ -108,6 +108,29 @@ func resolveInvocationSelectors(ctx context.Context, session *Session, input ref
 		selector.Columns = append([]string(nil), selector.Columns...)
 		var responseFields []string
 		for kind, names := range [][]string{selector.Fields, selector.Columns} {
+			if root := session.selectorOutputRoot; root != nil && kind == 0 {
+				if view != session.Artifact.Root.View && len(names) > 0 {
+					return nil, invalidSelectorField(strings.Join(names, ","), "converted output supports root Fields only")
+				}
+				for _, name := range names {
+					field, exists, err := root.Resolve(name)
+					if err != nil {
+						if owned := session.selectorError(view, err, session.selectorOwned); owned != nil {
+							return nil, owned
+						}
+						return nil, invalidSelectorFieldCause(name, "ambiguous public field", err)
+					}
+					if !exists {
+						cause := &dsql.UnknownProjectionColumnError{Column: name, RequestedColumn: name}
+						if owned := session.selectorError(view, cause, session.selectorOwned); owned != nil {
+							return nil, owned
+						}
+						return nil, invalidSelectorFieldCause(name, "unknown public output field", cause)
+					}
+					session.publicOutputIndexes = append(session.publicOutputIndexes, field.Index)
+				}
+				continue
+			}
 			for i, name := range names {
 				name = session.presentedSelectorName(view, name)
 				names[i] = name

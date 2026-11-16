@@ -34,6 +34,8 @@ type Session struct {
 	emptyLookup          *emptyLookupPlan
 	fieldSelection       spec.FieldSelectionMode
 	selectorPresentation map[*data.View][]data.SelectorField
+	selectorOutputRoot   *dexec.SelectorOutputRoot
+	publicOutputIndexes  [][]int
 	relationSelection    *relationSelection
 	omittedOutput        string
 	consumer             *xh.RowConsumer

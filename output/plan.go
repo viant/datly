@@ -24,9 +24,10 @@ import (
 type Marshaller interface{ Marshal(any) ([]byte, error) }
 
 type CompileInput struct {
-	Component *spec.Component
-	Type      reflect.Type
-	DataField string
+	Component        *spec.Component
+	Type             reflect.Type
+	DataField        string
+	publicOutputRoot bool
 	// SelectableRows describes handlers that return a requested subset of row fields.
 	SelectableRows bool
 }
@@ -37,6 +38,7 @@ type Compiler struct {
 
 // Plan contains registered output authority, never invocation input or rows.
 type Plan struct {
+	selectorOutputRoot  *dexec.SelectorOutputRoot
 	headers             map[string]string
 	declaredTime        bool
 	representation      *xshape.Representation
@@ -228,6 +230,11 @@ func (c Compiler) compile(input CompileInput, prepareFormats bool) (*Plan, error
 	}
 	if prepareFormats && choice.HasEnum(p.typeOf) {
 		p.prepareFormats()
+	}
+	if prepareFormats {
+		if err := p.prepareSelectorOutputRoot(); err != nil {
+			return nil, err
+		}
 	}
 	return p, nil
 }
