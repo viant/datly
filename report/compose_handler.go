@@ -63,10 +63,7 @@ func (h *composeHandler) Execute(ctx context.Context, invocation rhandler.Invoca
 	}
 	plan, err := h.compileComposition(input.FieldByName("SQL").String(), cubes.Len(), resultLimit)
 	if err != nil {
-		if h.values != nil {
-			return nil, &bindinput.Error{Cause: err}
-		}
-		return nil, err
+		return nil, &bindinput.Error{Cause: err}
 	}
 	if h.values != nil {
 		plan, err = plan.BindValues(ctx, input.FieldByName("Values").Interface().(json.RawMessage))
