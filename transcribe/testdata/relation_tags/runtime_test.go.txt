@@ -114,7 +114,14 @@ func TestHiddenRelationHTTPMCP(t *testing.T) {
 					args := map[string]any{"id": tc.id}
 					query := url.Values{"id": {jsonNumber(tc.id)}}
 					if tc.fields != nil {
-						args["fields"] = tc.fields
+						// MCP selects public output only; hidden backing holders are not arguments.
+						publicFields := []string{}
+						for _, field := range tc.fields {
+							if field == "id" || field == "computed" {
+								publicFields = append(publicFields, field)
+							}
+						}
+						args["fields"] = publicFields
 						query["fields"] = tc.fields
 					}
 					childReads.Store(0)
@@ -127,10 +134,14 @@ func TestHiddenRelationHTTPMCP(t *testing.T) {
 					result, rpcErr := tool.Handler(ctx, &schema.CallToolRequest{Method: schema.MethodToolsCall, Params: schema.CallToolRequestParams{Name: "Parents", Arguments: args}})
 					require.Nil(t, rpcErr)
 					require.True(t, result.IsError == nil || !*result.IsError)
-					require.EqualValues(t, tc.reads, childReads.Load())
+					require.EqualValues(t, 2, childReads.Load(), "MCP output selection preserves internal enrichment reads")
 					encoded, err := json.Marshal(result.StructuredContent)
 					require.NoError(t, err)
 					assertHiddenRow(t, encoded, tc.computed, tc.name == "unselected relations")
+					if tc.name == "projected enrichment" {
+						denied, deniedErr := tool.Handler(ctx, &schema.CallToolRequest{Method: schema.MethodToolsCall, Params: schema.CallToolRequestParams{Name: "Parents", Arguments: map[string]any{"id": tc.id, "fields": tc.fields}}})
+						require.True(t, deniedErr != nil || denied != nil && denied.IsError != nil && *denied.IsError, "hidden holders cannot be selected through public MCP fields")
+					}
 				})
 			}
 		})

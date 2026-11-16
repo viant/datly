@@ -43,10 +43,10 @@ func TestExplicitBoolQueryWireRuntime(t *testing.T) {
 			require.True(t, ok)
 			plan, err := tool.NewCompiler().Compile(tool.Input{Contract: route, Exposure: &spec.MCPExposure{Kind: spec.MCPExposureTool, Name: "flag"}})
 			require.NoError(t, err)
-			require.Equal(t, []string{"boolean", "null"}, plan.Metadata().InputSchema.Properties["Flag"]["type"])
+			require.Equal(t, []string{"boolean", "null"}, plan.Metadata().InputSchema.Properties["flag"]["type"])
 			originalPlan, err := tool.NewCompiler().Compile(tool.Input{Contract: controlRoute, Exposure: &spec.MCPExposure{Kind: spec.MCPExposureTool, Name: "flag"}})
 			require.NoError(t, err)
-			require.Equal(t, "boolean", originalPlan.Metadata().InputSchema.Properties["Flag"]["type"])
+			require.Equal(t, "boolean", originalPlan.Metadata().InputSchema.Properties["flag"]["type"])
 			require.Len(t, route.Fields(), 1)
 			field := route.Fields()[0]
 			require.Equal(t, reflect.TypeFor[bool](), field.SourceType())

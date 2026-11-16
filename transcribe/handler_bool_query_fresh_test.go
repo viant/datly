@@ -42,7 +42,7 @@ func main(){
  route,_:=compiled.Input.ForRoute(spec.RouteRef{Method:"POST",Path:"/records"})
  for _,f:=range route.Fields(){if f.Binding().Path=="Flag" && (f.SourceType()!=reflect.TypeFor[bool]() || f.DestinationType()!=reflect.TypeFor[bool]()){panic("binding changed")}}
  discovery,err:=tool.NewCompiler().Compile(tool.Input{Contract:route,Exposure:&spec.MCPExposure{Kind:spec.MCPExposureTool,Name:"records"}});if err!=nil{panic(err)}
- if !reflect.DeepEqual(discovery.Metadata().InputSchema.Properties["Flag"]["type"],[]string{"boolean","null"}){panic(fmt.Sprintf("schema lost: %+v",discovery.Metadata().InputSchema))}
+ if !reflect.DeepEqual(discovery.Metadata().InputSchema.Properties["flag"]["type"],[]string{"boolean","null"}){panic(fmt.Sprintf("schema lost: %+v",discovery.Metadata().InputSchema))}
  fmt.Print("retained")
 }`
 	writeSourceHandlerFile(t, root, "main.go", main)

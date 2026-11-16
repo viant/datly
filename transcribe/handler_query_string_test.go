@@ -47,7 +47,7 @@ func TestExplicitQueryWireRuntime(t *testing.T) {
 	}
 	plan, err := tool.NewCompiler().Compile(tool.Input{Contract: route, Exposure: &spec.MCPExposure{Kind: spec.MCPExposureTool, Name: "source"}})
 	require.NoError(t, err)
-	require.Equal(t, []string{"string", "null"}, plan.Metadata().InputSchema.Properties["Source"]["type"])
+	require.Equal(t, []string{"string", "null"}, plan.Metadata().InputSchema.Properties["source"]["type"])
 	for _, tc := range []struct {
 		name string
 		args mi.Arguments
@@ -113,7 +113,7 @@ func main(){
  for _,field:=range route.Fields(){if field.Binding().Path!="Source"{continue};found=true;if field.SourceType()!=reflect.TypeFor[string]() || field.DestinationType()!=reflect.TypeFor[string](){panic("runtime source changed")}}
  if !found{panic("Source lost")}
  plan,err:=tool.NewCompiler().Compile(tool.Input{Contract:route,Exposure:component.Routes[0].MCP[0]});if err!=nil{panic(err)}
- if !reflect.DeepEqual(plan.Metadata().InputSchema.Properties["Source"]["type"],[]string{"string","null"}){panic(fmt.Sprintf("wire metadata lost: %%#v",plan.Metadata().InputSchema))}
+ if !reflect.DeepEqual(plan.Metadata().InputSchema.Properties["source"]["type"],[]string{"string","null"}){panic(fmt.Sprintf("wire metadata lost: %%#v",plan.Metadata().InputSchema))}
  fmt.Print("retained")
 }`, handlerFixtureModule+"/registration", handlerFixtureModule+"/registration", handlerFixtureModule+"/business")
 	writeSourceHandlerFile(t, root, "main.go", main)
@@ -180,7 +180,7 @@ func main(){
  route,_:=compiled.Input.ForRoute(spec.RouteRef{Method:"POST",Path:"/records"})
  for _,f:=range route.Fields(){if f.Binding().Path=="Source" && (f.SourceType()!=reflect.TypeFor[string]() || f.DestinationType()!=reflect.TypeFor[string]()){panic("binding changed")}}
  discovery,err:=tool.NewCompiler().Compile(tool.Input{Contract:route,Exposure:&spec.MCPExposure{Kind:spec.MCPExposureTool,Name:"records"}});if err!=nil{panic(err)}
- if !reflect.DeepEqual(discovery.Metadata().InputSchema.Properties["Source"]["type"],[]string{"string","null"}){panic(fmt.Sprintf("schema lost: %+v",discovery.Metadata().InputSchema))}
+ if !reflect.DeepEqual(discovery.Metadata().InputSchema.Properties["source"]["type"],[]string{"string","null"}){panic(fmt.Sprintf("schema lost: %+v",discovery.Metadata().InputSchema))}
  fmt.Print("retained")
 }`
 	writeSourceHandlerFile(t, root, "main.go", main)
@@ -212,7 +212,7 @@ func TestExplicitQueryWireNoDefault(t *testing.T) {
 	require.True(t, ok)
 	discovery, err := tool.NewCompiler().Compile(tool.Input{Contract: route, Exposure: &spec.MCPExposure{Kind: spec.MCPExposureTool, Name: "source"}})
 	require.NoError(t, err)
-	require.Equal(t, []string{"string", "null"}, discovery.Metadata().InputSchema.Properties["Source"]["type"])
+	require.Equal(t, []string{"string", "null"}, discovery.Metadata().InputSchema.Properties["source"]["type"])
 	for _, tc := range []struct {
 		args mi.Arguments
 		want string

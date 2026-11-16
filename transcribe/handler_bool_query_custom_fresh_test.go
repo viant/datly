@@ -39,7 +39,7 @@ func main(){
  for _,field:=range route.Fields(){if field.Binding().Path!="Flag"{continue};found=true;if field.SourceType()!=reflect.TypeFor[bool]() || field.DestinationType()!=reflect.TypeFor[bool](){panic("runtime source changed")}}
  if !found{panic("Source lost")}
  plan,err:=tool.NewCompiler().Compile(tool.Input{Contract:route,Exposure:component.Routes[0].MCP[0]});if err!=nil{panic(err)}
- if !reflect.DeepEqual(plan.Metadata().InputSchema.Properties["Flag"]["type"],[]string{"boolean","null"}){panic(fmt.Sprintf("wire metadata lost: %%#v",plan.Metadata().InputSchema))}
+ if !reflect.DeepEqual(plan.Metadata().InputSchema.Properties["flag"]["type"],[]string{"boolean","null"}){panic(fmt.Sprintf("wire metadata lost: %%#v",plan.Metadata().InputSchema))}
  fmt.Print("retained")
 }`, handlerFixtureModule+"/registration", handlerFixtureModule+"/registration", handlerFixtureModule+"/business")
 	writeSourceHandlerFile(t, root, "main.go", main)

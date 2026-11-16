@@ -58,7 +58,7 @@ func TestGeneratedHandlerCaseFormat(t *testing.T) {
 			require.NoError(t, err)
 			defer client.Close()
 			for _, tool := range []string{"Convert", "Reference"} {
-				result, err := client.CallTool(ctx, &schema.CallToolRequestParams{Name: tool, Arguments: map[string]any{"Inclusion": "one", "Exclusion": "two"}}, mcpclient.WithAuthToken("allowed"))
+				result, err := client.CallTool(ctx, &schema.CallToolRequestParams{Name: tool, Arguments: map[string]any{"inclusion": "one", "exclusion": "two"}}, mcpclient.WithAuthToken("allowed"))
 				require.NoError(t, err)
 				require.False(t, result.IsError != nil && *result.IsError, "%+v", result)
 				data, err := json.Marshal(result.StructuredContent)

@@ -54,9 +54,9 @@ func TestExplicitFormStringWireRuntime(t *testing.T) {
 			plan, err := tool.NewCompiler().Compile(tool.Input{Contract: route, Exposure: &spec.MCPExposure{Kind: spec.MCPExposureTool, Name: "upload"}})
 			require.NoError(t, err)
 			for _, name := range []string{"Action", "UploadId"} {
-				require.Equal(t, []string{"string", "null"}, plan.Metadata().InputSchema.Properties[name]["type"])
+				require.Equal(t, []string{"string", "null"}, plan.Metadata().InputSchema.Properties[map[string]string{"Action": "action", "UploadId": "uploadId"}[name]]["type"])
 			}
-			require.Equal(t, "string", plan.Metadata().InputSchema.Properties["Plain"]["type"])
+			require.Equal(t, "string", plan.Metadata().InputSchema.Properties["plain"]["type"])
 			for _, field := range route.Fields() {
 				require.Equal(t, reflect.TypeFor[string](), field.SourceType())
 				require.Equal(t, reflect.TypeFor[string](), field.DestinationType())
@@ -174,7 +174,7 @@ func main(){
  plan,err:=tool.NewCompiler().Compile(tool.Input{Contract:route,Exposure:component.Routes[0].MCP[0]});if err!=nil{panic(err)}
  for _,name:=range []string{"Action","UploadId"}{
  found:=false;for _,p:=range component.Parameters{if p.Name==name{found=true;if p.TypeExpr!="*string" || p.OutputTypeExpr!="string"{panic("persisted split lost")}}};if !found{panic("parameter lost")}
- if !reflect.DeepEqual(plan.Metadata().InputSchema.Properties[name]["type"],[]string{"string","null"}){panic("wire schema lost")}
+ if !reflect.DeepEqual(plan.Metadata().InputSchema.Properties[map[string]string{"Action": "action", "UploadId": "uploadId"}[name]]["type"],[]string{"string","null"}){panic("wire schema lost")}
  found=false;for _,f:=range route.Fields(){if f.Binding().Path==name{found=true;if f.SourceType()!=reflect.TypeFor[string]() || f.DestinationType()!=reflect.TypeFor[string](){panic("business type changed")}}};if !found{panic("binding lost")}
  }
  fmt.Print("retained")
@@ -200,7 +200,7 @@ func TestExplicitEmbeddedFormStringWire(t *testing.T) {
 	require.True(t, ok)
 	plan, err := tool.NewCompiler().Compile(tool.Input{Contract: route, Exposure: &spec.MCPExposure{Kind: spec.MCPExposureTool, Name: "upload"}})
 	require.NoError(t, err)
-	require.Equal(t, []string{"string", "null"}, plan.Metadata().InputSchema.Properties["Action"]["type"])
+	require.Equal(t, []string{"string", "null"}, plan.Metadata().InputSchema.Properties["action"]["type"])
 	require.Len(t, route.Fields(), 1)
 	require.Equal(t, reflect.TypeFor[string](), route.Fields()[0].SourceType())
 	require.Equal(t, reflect.TypeFor[string](), route.Fields()[0].DestinationType())

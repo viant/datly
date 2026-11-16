@@ -78,8 +78,13 @@ func (c exposurePublic) check(t *testing.T, selection exposureSelection, id int)
 			if err := json.Unmarshal(body, &actual); err != nil {
 				t.Fatal(err)
 			}
+			// HTTP retains Go names; implicit MCP members use lowerCamel.
+			format := `{"Status":"ok","Data":[{"Id":%d}]}`
+			if c.native != nil || c.registry {
+				format = `{"status":"ok","data":[{"id":%d}]}`
+			}
 			var want any
-			if err := json.Unmarshal([]byte(fmt.Sprintf(`{"Status":"ok","Data":[{"Id":%d}]}`, id+10*(tenant-7))), &want); err != nil {
+			if err := json.Unmarshal([]byte(fmt.Sprintf(format, id+10*(tenant-7))), &want); err != nil {
 				t.Fatal(err)
 			}
 			if !reflect.DeepEqual(actual, want) {
