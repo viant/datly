@@ -1255,6 +1255,8 @@ github.com/viant/tagly v0.4.2-0.20261113182338-188615d27a98 h1:vGpVOvcFg8O6pdUV8
 github.com/viant/tagly v0.4.2-0.20261113182338-188615d27a98/go.mod h1:PauQQkHmAvL5lFGr4gIgi+PE0aUPggBIBYN34sX2Oes=
 github.com/viant/tagly v0.4.2-0.20261114220424-b7354b0404e2 h1:ya5A9AeSr3GW8zAnGJZANgeq3qkthsBlCtuT1VZz6FY=
 github.com/viant/tagly v0.4.2-0.20261114220424-b7354b0404e2/go.mod h1:PauQQkHmAvL5lFGr4gIgi+PE0aUPggBIBYN34sX2Oes=
+github.com/viant/tagly v0.4.2-0.20261116201554-3f045edeac17 h1:HVFmIysXdQlfd56JysUUn1IbhiH9Zp9kIM3wErFGtTc=
+github.com/viant/tagly v0.4.2-0.20261116201554-3f045edeac17/go.mod h1:PauQQkHmAvL5lFGr4gIgi+PE0aUPggBIBYN34sX2Oes=
 github.com/viant/toolbox v0.24.0/go.mod h1:OxMCG57V0PXuIP2HNQrtJf2CjqdmbrOx5EkMILuUhzM=
 github.com/viant/toolbox v0.34.5/go.mod h1:OxMCG57V0PXuIP2HNQrtJf2CjqdmbrOx5EkMILuUhzM=
 github.com/viant/toolbox v0.39.0 h1:za80N68bwfMNbdt9MbzegGY/4j6GWaMR2Pk/edl7jmI=
@@ -1273,6 +1275,8 @@ github.com/viant/xlsy v0.3.1 h1:KwA7PxOTVg+ns4CCPOdfNy5aEA9OUlIByUbuNC9ju0s=
 github.com/viant/xlsy v0.3.1/go.mod h1:RajfF9HkL/PfIxRCvZSubpNlpdMUNDKYZp8C1o3vF4Q=
 github.com/viant/xlsy v0.3.2-0.20261113010534-151b55bf6abc h1:fzl4gipi5VffeYfhTYIHqvCCRzyhflFXpe84KTaPDdo=
 github.com/viant/xlsy v0.3.2-0.20261113010534-151b55bf6abc/go.mod h1:cptsSzUEN4JqhiMcObdiKm67Q6lTiPDJpVjD+/SeekQ=
+github.com/viant/xlsy v0.3.2-0.20261116092351-baa9ff16d7d4 h1:ibq5RGGxtNUbKackm6a/UGfpPEbx97BBAzGKJkURLac=
+github.com/viant/xlsy v0.3.2-0.20261116092351-baa9ff16d7d4/go.mod h1:cptsSzUEN4JqhiMcObdiKm67Q6lTiPDJpVjD+/SeekQ=
 github.com/viant/xmlify v0.1.2-0.20260914155716-e525a8788fd0 h1:KOvP8KJgM8+SmrsnPOOnZ6EPhAvivMj7dS/QCfBk++U=
 github.com/viant/xmlify v0.1.2-0.20260914155716-e525a8788fd0/go.mod h1:w25+umH6nthlQ8ACT3K2/YJOLlbTXKLQXkdqFs6ky9s=
 github.com/viant/xreflect v0.7.5-0.20260314170600-13f09f37d46e h1:z4uCWPkSCnGwqbIc3ENoYJnYwtR2j/9eI79vO4vK9rQ=

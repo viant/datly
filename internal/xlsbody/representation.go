@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"reflect"
 
+	"github.com/viant/tagly/choice"
 	"github.com/viant/tagly/tags"
 	"github.com/viant/x/shape"
 )
@@ -55,7 +56,7 @@ func validateRepresentation(metadata *shape.Representation, visited map[*shape.R
 			expected := tags.Tags{}
 			removed := false
 			for _, tag := range parsed {
-				if storageEnumTag(tag.Name) {
+				if choice.IsEnumTag(tag.Name) {
 					removed = true
 					continue
 				}
@@ -74,12 +75,4 @@ func validateRepresentation(metadata *shape.Representation, visited map[*shape.R
 		}
 	}
 	return nil
-}
-
-func storageEnumTag(name string) bool {
-	switch name {
-	case "choice", "enumAccept", "enumStyle", "enumCase", "enumTrim", "enumEmpty", "enumZero", "enumNull", "enumInteger", "enumUnknownInteger", "enumUnknownString", "enumAlias", "enumOutputAlias", "enumOutputUnknown":
-		return true
-	}
-	return false
 }

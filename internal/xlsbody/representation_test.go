@@ -2,6 +2,7 @@ package xlsbody
 
 import (
 	"context"
+	"github.com/viant/tagly/choice"
 	"reflect"
 	"testing"
 
@@ -36,7 +37,7 @@ func TestDecoderRepresentation(t *testing.T) {
 				parsed, _ := tags.Parse(string(f.Tag))
 				kept := tags.Tags{}
 				for _, tag := range parsed {
-					if !storageEnumTag(tag.Name) {
+					if !choice.IsEnumTag(tag.Name) {
 						kept = append(kept, tag)
 					}
 				}

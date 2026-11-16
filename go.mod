@@ -21,7 +21,7 @@ require (
 	github.com/viant/sqlx v0.26.2-0.20261113032806-87f5818ff1ed
 	github.com/viant/structology v0.10.2-0.20261116121336-d1368d5fc29c
 	github.com/viant/structql v0.5.5-0.20261012183420-6a47e96ff5b5
-	github.com/viant/tagly v0.4.2-0.20261114220424-b7354b0404e2
+	github.com/viant/tagly v0.4.2-0.20261116201554-3f045edeac17
 	github.com/viant/velty v0.4.1-0.20260915052314-fca47c0595f8
 	github.com/viant/x v0.6.1-0.20261106041415-0487ec66884b
 	github.com/viant/xdatly v1.0.1-0.20261113190124-9ad673c8f3b5
@@ -129,7 +129,7 @@ require (
 	github.com/viant/jsonrpc v0.25.1
 	github.com/viant/scy v0.35.1-0.20260914041206-699e6c909726
 	github.com/viant/toolbox v0.39.0
-	github.com/viant/xlsy v0.3.2-0.20261113010534-151b55bf6abc
+	github.com/viant/xlsy v0.3.2-0.20261116092351-baa9ff16d7d4
 	github.com/viant/xmlify v0.1.2-0.20260914155716-e525a8788fd0
 	golang.org/x/crypto v0.55.0 // indirect
 	golang.org/x/oauth2 v0.36.0
