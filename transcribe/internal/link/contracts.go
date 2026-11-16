@@ -133,12 +133,43 @@ func (l *Contracts) equalViews() bool {
 			return false
 		}
 	}
+	normalizeInferredSourceTables(packageView, compiledView, map[[2]*spec.View]bool{})
 	packageJSON, err := json.Marshal(packageView)
 	if err != nil {
 		return false
 	}
 	compiledJSON, err := json.Marshal(compiledView)
 	return err == nil && bytes.Equal(packageJSON, compiledJSON)
+}
+
+// Compare inferred table metadata only against its matching authored SQL. An
+// explicit table remains authoritative, including when the other side inferred
+// the same table from SQL.
+func normalizeInferredSourceTables(left, right *spec.View, visited map[[2]*spec.View]bool) {
+	if left == nil || right == nil {
+		return
+	}
+	pair := [2]*spec.View{left, right}
+	if visited[pair] {
+		return
+	}
+	visited[pair] = true
+	l, r := left.Source, right.Source
+	if l != nil && r != nil && strings.TrimSpace(l.SQL) != "" && l.SQL == r.SQL {
+		if l.TableInferred && r.Table == "" {
+			l.Table = ""
+		}
+		if r.TableInferred && l.Table == "" {
+			r.Table = ""
+		}
+	}
+	if len(left.Relations) == len(right.Relations) {
+		for i, relation := range left.Relations {
+			if relation != nil && right.Relations[i] != nil {
+				normalizeInferredSourceTables(relation.View, right.Relations[i].View, visited)
+			}
+		}
+	}
 }
 
 func (l *Contracts) normalizedView(component *spec.Component) (*spec.View, error) {

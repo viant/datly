@@ -36,3 +36,48 @@ func TestMutationInputLinkTracksRootLifecycle(t *testing.T) {
 		})
 	}
 }
+
+func TestContractLinkerDistinguishesInferredAndAuthoredSourceTable(t *testing.T) {
+	authored := &spec.Component{RootView: &spec.View{Name: "users", Source: &spec.ViewSource{SQL: "SELECT ID FROM users"}}}
+	compiled := authored.Clone()
+	compiled.RootView.Source.Table = "users"
+	compiled.RootView.Source.TableInferred = true
+	linker := &Contracts{PackageComponent: authored, CompiledComponent: compiled}
+	require.True(t, linker.equalViews(), "derived physical table does not change the authored SQL contract")
+	require.Equal(t, "users", compiled.RootView.Source.Table, "comparison must preserve compiled metadata")
+	authored.RootView.Source.Table = "users"
+	require.True(t, linker.equalViews(), "matching explicit and inferred tables retain linked ownership")
+	authored.RootView.Source.Table = "different_users"
+	require.False(t, linker.equalViews(), "inference must not erase conflicting explicit table authority")
+	authored.RootView.Source.Table = ""
+	compiled.RootView.Source.SQL = "SELECT ID FROM other_users"
+	require.False(t, linker.equalViews(), "changed executable SQL must not link")
+	compiled.RootView.Source.SQL = "SELECT ID FROM users"
+	compiled.RootView.Source.TableInferred = false
+	require.False(t, linker.equalViews(), "an explicit table declaration remains contract authority")
+	authored.RootView.Source.Table = "users"
+	require.True(t, linker.equalViews())
+	compiled.RootView.Source.Table = "other_users"
+	require.False(t, linker.equalViews(), "conflicting explicit source tables must not link")
+	authored.RootView.Source.SQL = ""
+	compiled.RootView.Source.SQL = ""
+	compiled.RootView.Source.TableInferred = true
+	require.False(t, linker.equalViews(), "table-only sources retain their physical table")
+	require.Equal(t, "users", authored.RootView.Source.Table)
+	require.Equal(t, "other_users", compiled.RootView.Source.Table)
+}
+
+func TestContractLinkerNormalizesNestedInferredTableWithoutMutation(t *testing.T) {
+	authored := &spec.Component{RootView: &spec.View{Name: "parents", Relations: []*spec.Relation{{Name: "children", View: &spec.View{Name: "children", Source: &spec.ViewSource{SQL: "SELECT ID FROM children"}}}}}}
+	compiled := authored.Clone()
+	source := compiled.RootView.Relations[0].View.Source
+	source.Table, source.TableInferred = "children", true
+	for _, pair := range [][2]*spec.Component{{authored, compiled}, {compiled, authored}} {
+		linker := &Contracts{PackageComponent: pair[0], CompiledComponent: pair[1]}
+		require.True(t, linker.equalViews())
+		require.Equal(t, "children", source.Table)
+		require.Empty(t, authored.RootView.Relations[0].View.Source.Table)
+	}
+	source.SQL = "SELECT ID FROM other_children"
+	require.False(t, (&Contracts{PackageComponent: authored, CompiledComponent: compiled}).equalViews())
+}
