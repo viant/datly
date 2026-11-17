@@ -56,7 +56,14 @@ func TestAuditRoleRejectsControlMetadata(t *testing.T) {
 			t.Fatalf("conflicting audit metadata accepted: %+v", column)
 		}
 	}
-	for _, tag := range []reflect.StructTag{`sqlx:"-" writer:"audit"`, `sqlx:"ID,primaryKey=true" writer:"audit"`, `sqlx:"UPDATED" writer:"audit" invariant:"Window"`} {
+	for _, tag := range []reflect.StructTag{
+		`sqlx:"-" writer:"audit"`,
+		`sqlx:"UPDATED,transient=true" writer:"audit"`,
+		`sqlx:"UPDATED,presence=true" writer:"audit"`,
+		`sqlx:"UPDATED" on:"ID=ID" writer:"audit"`,
+		`sqlx:"ID,primaryKey=true" writer:"audit"`,
+		`sqlx:"UPDATED" writer:"audit" invariant:"Window"`,
+	} {
 		if err := validateAuditField(reflect.StructField{Name: "Value", Tag: tag}, nil); err == nil {
 			t.Fatalf("conflicting audit tag accepted: %s", tag)
 		}

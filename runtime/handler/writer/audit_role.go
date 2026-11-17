@@ -7,13 +7,14 @@ import (
 
 	"github.com/viant/datly/spec"
 	"github.com/viant/datly/typecatalog"
+	sqlxio "github.com/viant/sqlx/io"
 )
 
 // Audit is a persistence role, independent of logging/diff visibility. The
 // field accompanies a business change and cannot be an identity or control.
 func validateAuditField(field reflect.StructField, column *spec.Column) error {
 	name := strings.TrimSpace(strings.Split(field.Tag.Get("sqlx"), ",")[0])
-	if name == "-" || name == "" && column == nil {
+	if sqlxio.ParseTag(field.Tag).Transient || name == "" && column == nil {
 		return fmt.Errorf("writer audit field %s must be persisted", field.Name)
 	}
 	if typecatalog.SQLXPrimaryKey(field.Tag, column != nil && column.PrimaryKey) ||

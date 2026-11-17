@@ -24,6 +24,7 @@ import (
 	"github.com/viant/datly/spec"
 	"github.com/viant/datly/typecatalog"
 	"github.com/viant/sqlx"
+	sqlxio "github.com/viant/sqlx/io"
 	"github.com/viant/structology"
 	xhandler "github.com/viant/xdatly/handler"
 	xresponse "github.com/viant/xdatly/response"
@@ -61,7 +62,10 @@ type Field struct {
 	Has           []int
 	AutoIncrement bool
 	// Audit fields accompany a business update but do not independently cause it.
-	Audit     bool
+	Audit bool
+	// Retain transient fields for validation, relations and control markers,
+	// while matching SQLX's exclusion from physical INSERT/UPDATE columns.
+	transient bool
 	RefDB     string
 	RefTable  string
 	RefColumn string
@@ -99,6 +103,7 @@ func entityMarker(entityType reflect.Type) *structology.Marker {
 
 // Record is one writable role in a component graph.
 type Record struct {
+	previousPresence         *previousPresence
 	componentLifecycle       bool
 	reconciliation           *reconciliationMetadata
 	writeEligibility         bool
@@ -1345,10 +1350,11 @@ func (p *Program) prepare(ctx context.Context, binder xhandler.Binder) (err erro
 		return err
 	}
 	for _, frame := range p.frames.Rows {
-		if err = p.applyInvariants(frame); err != nil {
+		if err = p.checkConcurrency(frame); err != nil {
 			return err
 		}
-		if err = p.checkConcurrency(frame); err != nil {
+		p.synchronizePreviousPresence(frame)
+		if err = p.applyInvariants(frame); err != nil {
 			return err
 		}
 	}
@@ -1377,10 +1383,13 @@ func (p *Program) prepare(ctx context.Context, binder xhandler.Binder) (err erro
 			return err
 		}
 		for _, frame := range p.frames.Rows {
-			if err = p.applyInvariants(frame); err != nil {
+			if err = p.checkConcurrency(frame); err != nil {
 				return err
 			}
-			if err = p.checkConcurrency(frame); err != nil {
+			if !initialized[identityOfFrame(frame)] {
+				p.synchronizePreviousPresence(frame)
+			}
+			if err = p.applyInvariants(frame); err != nil {
 				return err
 			}
 			if !initialized[identityOfFrame(frame)] {
@@ -1399,6 +1408,7 @@ func (p *Program) prepare(ctx context.Context, binder xhandler.Binder) (err erro
 	}
 	if err = phases.Run(ctx, xhandler.PhaseValidation, func() error {
 		for _, frame := range p.frames.Rows {
+			p.synchronizePreviousPresence(frame)
 			if err := p.restoreNoopAudit(frame); err != nil {
 				return err
 			}
@@ -1750,7 +1760,7 @@ func hasMutableFields(frame *Frame) bool {
 		}
 	}
 	for pos, field := range frame.Record.Fields {
-		if !criteria[field.Name] && !field.Audit && frame.Fields.hasWritePos(pos) {
+		if !criteria[field.Name] && !field.Audit && !field.transient && frame.Fields.hasWritePos(pos) {
 			return true
 		}
 	}
@@ -1762,7 +1772,7 @@ func hasMutableFields(frame *Frame) bool {
 // comparison: existing presence synchronization owns that decision.
 func (p *Program) restoreNoopAudit(frame *Frame) error {
 	if frame == nil || frame.Record == nil || frame.Action != xhandler.WriteUpdate ||
-		frame.Record.Auxiliary || frame.Record.WriterActionPolicy == updateActionPolicy || !frame.Previous.IsValid() || hasMutableFields(frame) {
+		frame.Record.Auxiliary || frame.Record.WriterActionPolicy == updateActionPolicy || !frame.Previous.IsValid() || !frame.Entity.IsValid() || frame.Entity.IsNil() || hasMutableFields(frame) {
 		return nil
 	}
 	for _, field := range frame.Record.Fields {
@@ -2153,7 +2163,7 @@ func (p *Program) indexCurrent(record *Record, rows reflect.Value) error {
 	type fieldCopy struct{ source, destination []int }
 	copies := make([]fieldCopy, 0, len(record.Fields))
 	var loaded fieldSet
-	if p.queueObserver() != nil || (p.metadata != nil && p.metadata.Root != nil && (p.metadata.Root.writeEligibility || hasReconciliation(p.metadata.Root))) {
+	if record.previousPresence != nil || p.queueObserver() != nil || (p.metadata != nil && p.metadata.Root != nil && (p.metadata.Root.writeEligibility || hasReconciliation(p.metadata.Root))) {
 		loaded = fieldSet{}
 		delete(p.previousFields, record)
 	}
@@ -2527,7 +2537,7 @@ func scalarFamily(kind reflect.Kind) uint8 {
 
 func (p *Program) applyInvariants(frame *Frame) error {
 	clear(frame.Fields.invariant)
-	if !frame.Previous.IsValid() || isPolicyInsert(frame) {
+	if !frame.Previous.IsValid() || !frame.Entity.IsValid() || frame.Entity.IsNil() || isPolicyInsert(frame) {
 		return nil
 	}
 	current, previous := frame.Entity.Elem(), frame.Previous.Elem()
@@ -2734,7 +2744,7 @@ func CompileWithIdentifierProducts(component *spec.Component, inputType, outputT
 		if column == nil && columnName == "" && writerRole == "" {
 			continue
 		}
-		compiled := Field{Name: field.Name, Column: columnName, Index: field.Index, Audit: writerRole == "audit", RefDB: tagOption(sqlx, "refDb"), RefTable: tagOption(sqlx, "refTable"), RefColumn: tagOption(sqlx, "refColumn")}
+		compiled := Field{Name: field.Name, Column: columnName, Index: field.Index, Audit: writerRole == "audit", transient: sqlxio.ParseTag(field.Tag).Transient, RefDB: tagOption(sqlx, "refDb"), RefTable: tagOption(sqlx, "refTable"), RefColumn: tagOption(sqlx, "refColumn")}
 		if compiled.Audit {
 			if err := validateAuditField(field, column); err != nil {
 				return nil, err
@@ -2800,6 +2810,9 @@ func CompileWithIdentifierProducts(component *spec.Component, inputType, outputT
 		root.Selector = metadata.Sequence.Name
 	}
 	if err := compileRelations(component, inputType, root, component.RootView, operation, renderer, componentLifecycle); err != nil {
+		return nil, err
+	}
+	if err := compilePreviousPresence(root); err != nil {
 		return nil, err
 	}
 	if len(metadata.Keys) == 0 && len(root.Relations) != 0 && !componentLifecycle {
@@ -3105,7 +3118,7 @@ func compileRecordMode(component *spec.Component, inputType reflect.Type, name, 
 			continue
 		}
 		column := columns[strings.ToLower(columnName)]
-		compiled := Field{Name: field.Name, Column: columnName, Index: field.Index, Audit: writerRole == "audit", RefDB: tagOption(sqlx, "refDb"), RefTable: tagOption(sqlx, "refTable"), RefColumn: tagOption(sqlx, "refColumn")}
+		compiled := Field{Name: field.Name, Column: columnName, Index: field.Index, Audit: writerRole == "audit", transient: sqlxio.ParseTag(field.Tag).Transient, RefDB: tagOption(sqlx, "refDb"), RefTable: tagOption(sqlx, "refTable"), RefColumn: tagOption(sqlx, "refColumn")}
 		if compiled.Audit {
 			if err := validateAuditField(field, column); err != nil {
 				return nil, err
@@ -3171,6 +3184,9 @@ func compileRecordMode(component *spec.Component, inputType reflect.Type, name, 
 		record.Selector += record.Sequence.Name
 	}
 	if err := compileRelations(component, inputType, record, view, operation, renderer, componentLifecycle); err != nil {
+		return nil, err
+	}
+	if err := compilePreviousPresence(record); err != nil {
 		return nil, err
 	}
 	return record, nil

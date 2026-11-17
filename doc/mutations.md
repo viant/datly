@@ -942,9 +942,25 @@ UPDATE. Invariant coverage is recomputed after initialization; backfilled group
 members remain validation-only. Audit fields cannot be identity, deletion or
 concurrency controls, transient fields, or members of business invariants.
 
-This does not perform a second value comparison or clear equal business values
-automatically: the entity's existing presence synchronization and normalization
-must clear their unchanged write markers. It does not change explicit
+Native mutation generation emits the existing typed
+`SynchronizePresentMarker(previous)` comparison for owned marked shapes. For
+ordinary matched updates, the universal writer invokes that method before
+invariant activation and after initialization. Only currently supplied persisted
+scalar fields represented in the Current projection are compared. Unknown
+Previous fields retain their markers; a missing projected field is never treated
+as a loaded zero or null. Current readers must actually load their declared
+projection. Regenerate externally owned shapes in their owning package; without
+the method, existing lifecycle-owned synchronization remains necessary.
+
+Original request presence, identity markers, deletion/concurrency controls and
+relation markers are preserved. Each child is compared against its own Previous.
+The writer isolates marker holders, including when incoming rows share a Has
+pointer, and uses the generated comparator rather than a second runtime equality
+implementation. This database comparison is separate from original-request
+`SyncPresence` described above. SQLX transient fields remain available to hooks
+but do not qualify a physical UPDATE.
+
+This does not change explicit
 `writer_action_policy(row, 'update')` commands, which have no Previous and retain
 their ordered command semantics. Their caller owns change detection.
 

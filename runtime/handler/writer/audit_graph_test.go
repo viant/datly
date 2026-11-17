@@ -34,7 +34,7 @@ type auditGraphOutput struct {
 }
 
 func TestAuditEligibilityDoesNotSuppressChildWork(t *testing.T) {
-	for _, change := range []string{"parent", "child", "delete"} {
+	for _, change := range []string{"parent", "child", "delete", "false deletion", "equal marked child"} {
 		t.Run(change, func(t *testing.T) {
 			ctx := context.Background()
 			db := sqlite.New(t)
@@ -48,8 +48,13 @@ func TestAuditEligibilityDoesNotSuppressChildWork(t *testing.T) {
 				"CREATE TRIGGER child_deleted AFTER DELETE ON children BEGIN INSERT INTO writes VALUES('delete'); END"); err != nil {
 				t.Fatal(err)
 			}
-			child := &auditGraphChild{ID: ptr(2), Name: ptr("changed"), UpdatedBy: ptr(4), Remove: change == "delete", Has: &auditGraphChildHas{ID: true, Name: change == "child", UpdatedBy: true, Remove: change == "delete"}}
+			child := &auditGraphChild{ID: ptr(2), Name: ptr("changed"), UpdatedBy: ptr(4), Remove: change == "delete", Has: &auditGraphChildHas{ID: true, Name: change == "child", UpdatedBy: true, Remove: change == "delete" || change == "false deletion"}}
 			row := &auditGraphRow{ID: ptr(1), Name: ptr("changed"), UpdatedBy: ptr(4), Children: []*auditGraphChild{child}, Has: &auditGraphHas{ID: true, Name: change == "parent", UpdatedBy: true, Children: true}}
+			if change == "equal marked child" {
+				child.Name, child.ParentID = ptr("child"), ptr(1)
+				child.Has.Name, child.Has.ParentID = true, true
+				row.Name, row.Has.Name = ptr("parent"), true
+			}
 			input := &auditGraphInput{Rows: []*auditGraphRow{row}, CurrentRows: []*auditGraphRow{{ID: ptr(1), Name: ptr("parent"), UpdatedBy: ptr(3)}}, CurrentChildren: []*auditGraphChild{{ID: ptr(2), ParentID: ptr(1), Name: ptr("child"), UpdatedBy: ptr(3)}}}
 			_, err := runSQLiteWriter(t, ctx, db, unitComponent(), input, &auditGraphOutput{}, "patch")
 			if err != nil {
@@ -57,16 +62,20 @@ func TestAuditEligibilityDoesNotSuppressChildWork(t *testing.T) {
 			}
 			var count int
 			var kind string
-			if err = db.DB.QueryRow("SELECT COUNT(*),MIN(kind) FROM writes").Scan(&count, &kind); err != nil {
+			if err = db.DB.QueryRow("SELECT COUNT(*),COALESCE(MIN(kind),'') FROM writes").Scan(&count, &kind); err != nil {
 				t.Fatal(err)
 			}
-			if count != 1 || kind != change {
+			wantCount, wantKind := 1, change
+			if change == "false deletion" || change == "equal marked child" {
+				wantCount, wantKind = 0, ""
+			}
+			if count != wantCount || kind != wantKind {
 				t.Fatalf("expected only %s work; writes=%d kind=%s", change, count, kind)
 			}
 			if change != "parent" && (*row.UpdatedBy != 3 || row.Has.UpdatedBy) {
 				t.Fatal("unchanged parent audit changed")
 			}
-			if change == "parent" && (*child.UpdatedBy != 3 || child.Has.UpdatedBy) {
+			if (change == "parent" || change == "false deletion" || change == "equal marked child") && (*child.UpdatedBy != 3 || child.Has.UpdatedBy) {
 				t.Fatal("unchanged child audit changed")
 			}
 		})
