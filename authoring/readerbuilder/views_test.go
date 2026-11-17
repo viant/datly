@@ -126,3 +126,13 @@ JOIN (SELECT id,record_id FROM items) items ON items.record_id=records.id`
 		t.Fatalf("response=%+v", response)
 	}
 }
+
+func TestUpdateSummaryPreservesDeclarationBindingAndOptions(t *testing.T) {
+	source := `#setting($_ = $route('/records','GET'))
+#define($_ = $Meta<?>(output/summary).Tag('json:"meta"') /* SELECT COUNT(*) AS total FROM ($View.NonWindowSQL) records */)
+SELECT records.* FROM (SELECT id FROM records) records`
+	result := New(Config{Name: "Records"}).Apply(context.Background(), Request{DQL: source, Operation: Operation{Type: OperationUpdateView, View: &ViewMutation{Name: "Meta", SQL: "SELECT COUNT(*) AS total, $View.Limit AS page_size FROM ($View.NonWindowSQL) records"}}})
+	if !result.Applied || !strings.Contains(result.DQL, `$Meta<?>(output/summary).Tag('json:"meta"')`) || strings.Contains(result.DQL, "output/derived") || !strings.Contains(result.DQL, "page_size") {
+		t.Fatalf("summary update changed binding/options: %+v", result)
+	}
+}

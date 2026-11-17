@@ -321,27 +321,40 @@ func addDerivedView(source string, views []ViewOccurrence, mutation *ViewMutatio
 }
 
 func updateDerivedView(source string, occurrence dql.DeclarationOccurrence, mutation *ViewMutation) (string, error) {
-	typeExpr := ""
+	fallbackType := ""
 	if occurrence.Parameter != nil {
-		typeExpr = occurrence.Parameter.TypeExpr
+		fallbackType = occurrence.Parameter.TypeExpr
 	}
-	line, err := renderDerivedView(mutation, typeExpr)
+	typeExpr, sql, err := derivedViewParts(mutation, fallbackType)
 	if err != nil {
 		return "", err
 	}
-	return dql.ApplyPatch(source, occurrence.Span, line)
+	patches := []sourcePatch{{span: dql.SourceSpan{Start: occurrence.OptionInsert, End: occurrence.Span.End}, text: " /* " + sql + " */)"}}
+	if strings.TrimSpace(mutation.TypeExpr) != "" {
+		parameter := occurrence.Parameter
+		patches = append(patches, sourcePatch{span: occurrence.HeadSpan, text: fmt.Sprintf("$%s<%s>(%s/%s)", parameter.Name, typeExpr, parameter.Source.Kind, parameter.Source.Name)})
+	}
+	return applySourcePatches(source, patches)
 }
 
 func renderDerivedView(mutation *ViewMutation, fallbackType string) (string, error) {
+	typeExpr, sql, err := derivedViewParts(mutation, fallbackType)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("#define($_ = $%s<%s>(output/derived) /* %s */)", mutation.Name, typeExpr, sql), nil
+}
+
+func derivedViewParts(mutation *ViewMutation, fallbackType string) (string, string, error) {
 	sql := strings.TrimSpace(mutation.SQL)
 	if sql == "" {
-		return "", fmt.Errorf("derived view %q SQL is required", mutation.Name)
+		return "", "", fmt.Errorf("derived view %q SQL is required", mutation.Name)
 	}
 	if strings.Contains(sql, "*/") {
-		return "", fmt.Errorf("derived view %q SQL cannot contain a block-comment terminator", mutation.Name)
+		return "", "", fmt.Errorf("derived view %q SQL cannot contain a block-comment terminator", mutation.Name)
 	}
 	if strings.TrimSpace(mutation.Join) != "" || strings.TrimSpace(mutation.On) != "" {
-		return "", fmt.Errorf("derived view %q cannot declare join or relation keys", mutation.Name)
+		return "", "", fmt.Errorf("derived view %q cannot declare join or relation keys", mutation.Name)
 	}
 	typeExpr := strings.TrimSpace(mutation.TypeExpr)
 	if typeExpr == "" {
@@ -351,9 +364,9 @@ func renderDerivedView(mutation *ViewMutation, fallbackType string) (string, err
 		typeExpr = text.DetectCaseFormat(mutation.Name).Format(mutation.Name, text.CaseFormatUpperCamel)
 	}
 	if strings.ContainsAny(typeExpr, "\r\n<>()") {
-		return "", fmt.Errorf("derived view %q typeExpr is invalid", mutation.Name)
+		return "", "", fmt.Errorf("derived view %q typeExpr is invalid", mutation.Name)
 	}
-	return fmt.Sprintf("#define($_ = $%s<%s>(output/derived) /* %s */)", mutation.Name, typeExpr, sql), nil
+	return typeExpr, sql, nil
 }
 
 func derivedViewOccurrences(source string) ([]dql.DeclarationOccurrence, error) {
