@@ -348,6 +348,14 @@ func generateTypes(packageName string, types map[string]*sourceType, entries []s
 			if field.name == "Has" || !markerFields[field.name] {
 				continue
 			}
+			// Logical input projections are explicitly excluded from persistence
+			// and diffing. Their marked transport children are not database rows.
+			// Declared graph relations still need recursive comparison, as do
+			// legacy transient holders without an explicit diff exclusion.
+			if transient(field.tag) && structTag(field.tag, "diff") == "-" &&
+				structTag(field.tag, "on") == "" && structTag(field.tag, "view") == "" {
+				continue
+			}
 			childName, collection, elementPtr, pointer := relationType(field.typeAST)
 			if childType := types[childName]; childType != nil && !options.RowOnly {
 				child, buildErr := build(childType)
