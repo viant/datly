@@ -916,6 +916,54 @@ changes are not partially applied when synchronization fails. Hooks running afte
 this phase should use the generated marker-aware setters for business changes;
 do not expect a later hidden SyncPresence pass to repair arbitrary direct writes.
 
+### Audit fields and update eligibility
+
+Declare server-maintained audit columns with the existing writer-role tag:
+
+```go
+UpdatedAt *time.Time `sqlx:"UPDATED_AT" writer:"audit"`
+UpdatedBy *int       `sqlx:"UPDATED_BY" writer:"audit"`
+```
+
+In DQL, the ordinary `tag` declaration can carry the same role, for example
+`tag(r.updated_at, 'writer:"audit"')`. This role is independent of JSON visibility,
+authorization and `diff:"-"`; it does not make a column read-only or assign its
+value. Business initialization continues to supply audit values and markers.
+
+For an ordinary matched UPDATE, audit markers alone do not justify a write.
+When no business write markers remain, the writer restores marked audit values
+from loaded Previous and clears their write markers, preserving the no-op
+response as well as storage. A real business change retains its audit writes.
+Inserts retain their complete validation and persistence behavior. Children
+continue to be processed independently when their parent has no update.
+
+Identity markers and invariant-only validation coverage do not justify an
+UPDATE. Invariant coverage is recomputed after initialization; backfilled group
+members remain validation-only. Audit fields cannot be identity, deletion or
+concurrency controls, transient fields, or members of business invariants.
+
+Native mutation generation emits the existing typed
+`SynchronizePresentMarker(previous)` comparison for owned marked shapes. For
+ordinary matched updates, the universal writer invokes that method before
+invariant activation and after initialization. Only currently supplied persisted
+scalar fields represented in the Current projection are compared. Unknown
+Previous fields retain their markers; a missing projected field is never treated
+as a loaded zero or null. Current readers must actually load their declared
+projection. Regenerate externally owned shapes in their owning package; without
+the method, existing lifecycle-owned synchronization remains necessary.
+
+Original request presence, identity markers, deletion/concurrency controls and
+relation markers are preserved. Each child is compared against its own Previous.
+The writer isolates marker holders, including when incoming rows share a Has
+pointer, and uses the generated comparator rather than a second runtime equality
+implementation. This database comparison is separate from original-request
+`SyncPresence` described above. SQLX transient fields remain available to hooks
+but do not qualify a physical UPDATE.
+
+This does not change explicit
+`writer_action_policy(row, 'update')` commands, which have no Previous and retain
+their ordered command semantics. Their caller owns change detection.
+
 ### Prepare association writes without replacing the request graph
 
 When an API accepts a desired membership list, initialization may need to derive

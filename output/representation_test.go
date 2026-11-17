@@ -8,6 +8,7 @@ import (
 	"github.com/viant/datly/spec"
 	structjson "github.com/viant/structology/encoding/json"
 	"github.com/viant/x/shape"
+	xresponse "github.com/viant/xdatly/response"
 )
 
 type RepresentationEmbedded struct {
@@ -107,5 +108,61 @@ func TestOutputRepresentationPreservesLinkedEmbeddingAndMetadata(t *testing.T) {
 				t.Fatal("base encoder contaminated")
 			}
 		})
+	}
+}
+
+type bufferedRepresentationOutput struct {
+	*xresponse.Buffered
+	Private string
+}
+
+func TestTransportReadyOutputRetainsOpaqueBytesUnderUnchangedRepresentation(t *testing.T) {
+	original := reflect.TypeFor[bufferedRepresentationOutput]()
+	rewriter, err := shape.CompileRewrite(original)
+	if err != nil {
+		t.Fatal(err)
+	}
+	unchanged, err := rewriter.RewriteRepresentation(func(_ string, _ reflect.Type, _ *shape.FieldMetadata) (*shape.FieldMetadata, error) {
+		return nil, nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if unchanged.Changed() {
+		t.Fatal("identity metadata unexpectedly changed")
+	}
+	plan, err := (Compiler{}).Compile(CompileInput{Type: original, Component: &spec.Component{
+		Settings: &spec.Settings{Output: &spec.OutputSettings{Exclude: []string{"Private"}}},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !plan.TransportReady() {
+		t.Fatal("fixture must own its transport")
+	}
+	same, err := plan.WithContract(original, unchanged)
+	if err != nil || same != plan {
+		t.Fatalf("unchanged contract should keep opaque response plan, got %v", err)
+	}
+	if plan.formatPlan != nil || plan.formatPresentation != nil {
+		t.Fatal("opaque response must not compile structural format presentation")
+	}
+	changed, err := rewriter.RewriteRepresentation(func(_ string, _ reflect.Type, field *shape.FieldMetadata) (*shape.FieldMetadata, error) {
+		if field.Name == "Private" {
+			return &shape.FieldMetadata{Name: field.Name, Tag: `json:"renamed"`}, nil
+		}
+		return nil, nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !changed.Changed() {
+		t.Fatal("changed metadata fixture did not change")
+	}
+	if _, err := plan.WithContract(original, changed); err == nil || err.Error() != "dynamic output requires a contract-aware response encoder" {
+		t.Fatalf("changed metadata must still be rejected, got %v", err)
+	}
+	if _, err := plan.Wire("xlsx"); err == nil {
+		t.Fatal("opaque response should not synthesize a typed XLSX wire contract")
 	}
 }

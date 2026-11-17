@@ -24,6 +24,7 @@ import (
 	"github.com/viant/datly/spec"
 	"github.com/viant/datly/typecatalog"
 	"github.com/viant/sqlx"
+	sqlxio "github.com/viant/sqlx/io"
 	"github.com/viant/structology"
 	xhandler "github.com/viant/xdatly/handler"
 	xresponse "github.com/viant/xdatly/response"
@@ -60,9 +61,14 @@ type Field struct {
 	Index         []int
 	Has           []int
 	AutoIncrement bool
-	RefDB         string
-	RefTable      string
-	RefColumn     string
+	// Audit fields accompany a business update but do not independently cause it.
+	Audit bool
+	// Retain transient fields for validation, relations and control markers,
+	// while matching SQLX's exclusion from physical INSERT/UPDATE columns.
+	transient bool
+	RefDB     string
+	RefTable  string
+	RefColumn string
 	// marker/markerIndex address this field's presence bit through the
 	// entity's structology set-marker (xunsafe backed). Has stays as the
 	// reflect fallback for holders without a setMarker tag.
@@ -97,6 +103,7 @@ func entityMarker(entityType reflect.Type) *structology.Marker {
 
 // Record is one writable role in a component graph.
 type Record struct {
+	previousPresence         *previousPresence
 	componentLifecycle       bool
 	reconciliation           *reconciliationMetadata
 	writeEligibility         bool
@@ -159,17 +166,18 @@ func (r *Record) position(name string) int {
 // Has marker is the single authority shared with sqlx, godiffer, govalidator
 // and structology: a live presence reads it on demand (xunsafe offsets), so
 // lifecycle setters are visible without any re-synchronisation pass, even for
-// graphs with thousands of field checks. The writer layers two small bitsets
-// on top: forced bits for coverage it adds itself (reconciled links, invariant
-// backfill, which must not mutate the client's marker) and excluded bits for
-// validation coverage. A snapshot presence freezes the marker bits once and
+// graphs with thousands of field checks. The writer layers small bitsets
+// on top: forced reference coverage, recomputed invariant coverage (neither
+// mutates the client's marker), and excluded validation coverage.
+// A snapshot presence freezes the marker bits once and
 // never reads the working entity.
 type presence struct {
-	record   *Record
-	entity   reflect.Value // addressable struct; invalid for a snapshot
-	snapshot []uint64
-	forced   []uint64
-	excluded []uint64
+	record    *Record
+	entity    reflect.Value // addressable struct; invalid for a snapshot
+	snapshot  []uint64
+	forced    []uint64
+	invariant []uint64
+	excluded  []uint64
 }
 
 func words(count int) int { return (count + 63) / 64 }
@@ -206,8 +214,20 @@ func (p *presence) hasPos(pos int) bool {
 	if bit(p.excluded, pos) {
 		return false
 	}
-	if bit(p.forced, pos) {
+	if bit(p.forced, pos) || bit(p.invariant, pos) {
 		return true
+	}
+	if p.entity.IsValid() {
+		return supplied(p.entity, p.record.Fields[pos])
+	}
+	return bit(p.snapshot, pos)
+}
+
+// hasWritePos reads only the entity's write intent. Forced invariant/reference
+// coverage and validation exclusions must not decide whether SQL has work.
+func (p *presence) hasWritePos(pos int) bool {
+	if p == nil || pos < 0 || pos >= len(p.record.Fields) {
+		return false
 	}
 	if p.entity.IsValid() {
 		return supplied(p.entity, p.record.Fields[pos])
@@ -239,7 +259,7 @@ func (p *presence) excluding(names []string) *presence {
 	if p == nil {
 		return nil
 	}
-	result := &presence{record: p.record, entity: p.entity, snapshot: p.snapshot, forced: p.forced}
+	result := &presence{record: p.record, entity: p.entity, snapshot: p.snapshot, forced: p.forced, invariant: p.invariant}
 	if len(p.excluded) > 0 {
 		result.excluded = append([]uint64(nil), p.excluded...)
 	}
@@ -736,13 +756,21 @@ func assignLinkedValue(destination, source reflect.Value) error {
 }
 
 func markSupplied(entity reflect.Value, field Field) {
+	setSupplied(entity, field, true)
+}
+
+func setSupplied(entity reflect.Value, field Field, value bool) {
 	if len(field.Has) == 0 {
 		return
 	}
 	if field.marker != nil && entity.CanAddr() {
 		structPtr := unsafe.Pointer(entity.UnsafeAddr())
-		field.marker.EnsureHolder(structPtr)
-		if err := field.marker.Set(structPtr, field.markerIndex, true); err == nil {
+		if value {
+			field.marker.EnsureHolder(structPtr)
+		} else if !field.marker.CanUseHolder(structPtr) {
+			return
+		}
+		if err := field.marker.Set(structPtr, field.markerIndex, value); err == nil {
 			return
 		}
 	}
@@ -751,11 +779,14 @@ func markSupplied(entity reflect.Value, field Field) {
 		return
 	}
 	if markerRoot.Kind() == reflect.Pointer && markerRoot.IsNil() {
+		if !value {
+			return
+		}
 		markerRoot.Set(reflect.New(markerRoot.Type().Elem()))
 	}
 	marker := markerByIndex(markerRoot, field.Has[len(field.Has)-1:])
 	if marker.IsValid() && marker.CanSet() && marker.Kind() == reflect.Bool {
-		marker.SetBool(true)
+		marker.SetBool(value)
 	}
 }
 
@@ -1319,10 +1350,11 @@ func (p *Program) prepare(ctx context.Context, binder xhandler.Binder) (err erro
 		return err
 	}
 	for _, frame := range p.frames.Rows {
-		if err = p.applyInvariants(frame); err != nil {
+		if err = p.checkConcurrency(frame); err != nil {
 			return err
 		}
-		if err = p.checkConcurrency(frame); err != nil {
+		p.synchronizePreviousPresence(frame)
+		if err = p.applyInvariants(frame); err != nil {
 			return err
 		}
 	}
@@ -1351,10 +1383,13 @@ func (p *Program) prepare(ctx context.Context, binder xhandler.Binder) (err erro
 			return err
 		}
 		for _, frame := range p.frames.Rows {
-			if err = p.applyInvariants(frame); err != nil {
+			if err = p.checkConcurrency(frame); err != nil {
 				return err
 			}
-			if err = p.checkConcurrency(frame); err != nil {
+			if !initialized[identityOfFrame(frame)] {
+				p.synchronizePreviousPresence(frame)
+			}
+			if err = p.applyInvariants(frame); err != nil {
 				return err
 			}
 			if !initialized[identityOfFrame(frame)] {
@@ -1372,6 +1407,17 @@ func (p *Program) prepare(ctx context.Context, binder xhandler.Binder) (err erro
 		return err
 	}
 	if err = phases.Run(ctx, xhandler.PhaseValidation, func() error {
+		for _, frame := range p.frames.Rows {
+			p.synchronizePreviousPresence(frame)
+			if err := p.restoreNoopAudit(frame); err != nil {
+				return err
+			}
+			// Init may withdraw the last change in a group, including on rows
+			// appended during initialization. Recompute validation coverage only.
+			if err := p.applyInvariants(frame); err != nil {
+				return err
+			}
+		}
 		if p.structuralError != nil {
 			return p.structuralError
 		}
@@ -1714,11 +1760,37 @@ func hasMutableFields(frame *Frame) bool {
 		}
 	}
 	for pos, field := range frame.Record.Fields {
-		if !criteria[field.Name] && frame.Fields.hasPos(pos) {
+		if !criteria[field.Name] && !field.Audit && !field.transient && frame.Fields.hasWritePos(pos) {
 			return true
 		}
 	}
 	return false
+}
+
+// restoreNoopAudit keeps response values and write markers consistent when
+// normalization has removed every business change. This performs no equality
+// comparison: existing presence synchronization owns that decision.
+func (p *Program) restoreNoopAudit(frame *Frame) error {
+	if frame == nil || frame.Record == nil || frame.Action != xhandler.WriteUpdate ||
+		frame.Record.Auxiliary || frame.Record.WriterActionPolicy == updateActionPolicy || !frame.Previous.IsValid() || !frame.Entity.IsValid() || frame.Entity.IsNil() || hasMutableFields(frame) {
+		return nil
+	}
+	for _, field := range frame.Record.Fields {
+		if !field.Audit || !supplied(frame.Entity.Elem(), field) {
+			continue
+		}
+		previous := previousField(frame.Previous.Elem(), frame.Record, &field)
+		if loaded, ok := p.previousFields[frame.Record]; ok && !loaded.Has(field.Name) {
+			return fmt.Errorf("audit field %s requires loaded Previous", field.Name)
+		}
+		current := frame.Entity.Elem().FieldByIndex(field.Index)
+		if !previous.IsValid() || !current.CanSet() || !previous.Type().AssignableTo(current.Type()) {
+			return fmt.Errorf("audit field %s cannot be restored from Previous", field.Name)
+		}
+		current.Set(cloneTokenValue(previous))
+		setSupplied(frame.Entity.Elem(), field, false)
+	}
+	return nil
 }
 
 func (p *Program) unresolvedParentLinks(frame *Frame) bool {
@@ -2091,7 +2163,7 @@ func (p *Program) indexCurrent(record *Record, rows reflect.Value) error {
 	type fieldCopy struct{ source, destination []int }
 	copies := make([]fieldCopy, 0, len(record.Fields))
 	var loaded fieldSet
-	if p.queueObserver() != nil || (p.metadata != nil && p.metadata.Root != nil && (p.metadata.Root.writeEligibility || hasReconciliation(p.metadata.Root))) {
+	if record.previousPresence != nil || p.queueObserver() != nil || (p.metadata != nil && p.metadata.Root != nil && (p.metadata.Root.writeEligibility || hasReconciliation(p.metadata.Root))) {
 		loaded = fieldSet{}
 		delete(p.previousFields, record)
 	}
@@ -2464,7 +2536,8 @@ func scalarFamily(kind reflect.Kind) uint8 {
 }
 
 func (p *Program) applyInvariants(frame *Frame) error {
-	if !frame.Previous.IsValid() || isPolicyInsert(frame) {
+	clear(frame.Fields.invariant)
+	if !frame.Previous.IsValid() || !frame.Entity.IsValid() || frame.Entity.IsNil() || isPolicyInsert(frame) {
 		return nil
 	}
 	current, previous := frame.Entity.Elem(), frame.Previous.Elem()
@@ -2486,7 +2559,9 @@ func (p *Program) applyInvariants(frame *Frame) error {
 				return fmt.Errorf("invariant %s field %s cannot be backfilled", name, field.Name)
 			}
 			destination.Set(source)
-			frame.Fields.force(field.Name)
+			if pos := frame.Record.position(field.Name); pos >= 0 {
+				setBit(&frame.Fields.invariant, len(frame.Record.Fields), pos)
+			}
 		}
 	}
 	return nil
@@ -2669,7 +2744,12 @@ func CompileWithIdentifierProducts(component *spec.Component, inputType, outputT
 		if column == nil && columnName == "" && writerRole == "" {
 			continue
 		}
-		compiled := Field{Name: field.Name, Column: columnName, Index: field.Index, RefDB: tagOption(sqlx, "refDb"), RefTable: tagOption(sqlx, "refTable"), RefColumn: tagOption(sqlx, "refColumn")}
+		compiled := Field{Name: field.Name, Column: columnName, Index: field.Index, Audit: writerRole == "audit", transient: sqlxio.ParseTag(field.Tag).Transient, RefDB: tagOption(sqlx, "refDb"), RefTable: tagOption(sqlx, "refTable"), RefColumn: tagOption(sqlx, "refColumn")}
+		if compiled.Audit {
+			if err := validateAuditField(field, column); err != nil {
+				return nil, err
+			}
+		}
 		if err := resolveFieldReferences(component, &compiled, renderer); err != nil {
 			return nil, err
 		}
@@ -2730,6 +2810,9 @@ func CompileWithIdentifierProducts(component *spec.Component, inputType, outputT
 		root.Selector = metadata.Sequence.Name
 	}
 	if err := compileRelations(component, inputType, root, component.RootView, operation, renderer, componentLifecycle); err != nil {
+		return nil, err
+	}
+	if err := compilePreviousPresence(root); err != nil {
 		return nil, err
 	}
 	if len(metadata.Keys) == 0 && len(root.Relations) != 0 && !componentLifecycle {
@@ -3035,7 +3118,12 @@ func compileRecordMode(component *spec.Component, inputType reflect.Type, name, 
 			continue
 		}
 		column := columns[strings.ToLower(columnName)]
-		compiled := Field{Name: field.Name, Column: columnName, Index: field.Index, RefDB: tagOption(sqlx, "refDb"), RefTable: tagOption(sqlx, "refTable"), RefColumn: tagOption(sqlx, "refColumn")}
+		compiled := Field{Name: field.Name, Column: columnName, Index: field.Index, Audit: writerRole == "audit", transient: sqlxio.ParseTag(field.Tag).Transient, RefDB: tagOption(sqlx, "refDb"), RefTable: tagOption(sqlx, "refTable"), RefColumn: tagOption(sqlx, "refColumn")}
+		if compiled.Audit {
+			if err := validateAuditField(field, column); err != nil {
+				return nil, err
+			}
+		}
 		if err := resolveFieldReferences(component, &compiled, renderer); err != nil {
 			return nil, err
 		}
@@ -3096,6 +3184,9 @@ func compileRecordMode(component *spec.Component, inputType reflect.Type, name, 
 		record.Selector += record.Sequence.Name
 	}
 	if err := compileRelations(component, inputType, record, view, operation, renderer, componentLifecycle); err != nil {
+		return nil, err
+	}
+	if err := compilePreviousPresence(record); err != nil {
 		return nil, err
 	}
 	return record, nil

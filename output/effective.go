@@ -179,7 +179,7 @@ func (p *Plan) WithCaseFormat(format string) (*Plan, error) {
 
 // prepareFormats compiles reusable typed codec authority once per immutable variant.
 func (p *Plan) prepareFormats() {
-	if p.custom != nil {
+	if p.custom != nil || p.TransportReady() {
 		return
 	}
 	original := p.typeOf

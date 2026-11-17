@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	documentation "github.com/viant/datly/documentation"
 	"reflect"
@@ -293,6 +294,11 @@ func (c *serviceCompiler) publish(ctx context.Context, catalog *Catalog, policy 
 				body, applicable, err := plan.ErrorEnvelopeWithCause(exec.ErrorMessage(cause, status), status, cause)
 				if err != nil || !applicable {
 					return nil, applicable, err
+				}
+				// The request has finished with its cancellation error. Encode
+				// the projected public envelope without canceling its presentation.
+				if cancellation := ctx.Err(); cancellation != nil && (errors.Is(cause, cancellation) || errors.Is(cause, context.Cause(ctx))) {
+					ctx = context.WithoutCancel(ctx)
 				}
 				encoded, err := plan.Encode(ctx, "json", body)
 				return encoded.Data, true, err

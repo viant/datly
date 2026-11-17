@@ -75,14 +75,11 @@ func TestUniversalWriterOrdersSiblingInsertBeforeForeignKeyValidation(t *testing
 
 func TestUniversalWriterTreatsIdentityOnlySparseUpdateAsNoOp(t *testing.T) {
 	record := &Record{Keys: []Field{{Name: "ID"}}, Fields: []Field{{Name: "ID"}, {Name: "Name"}}}
-	identityOnly := &presence{record: record}
-	identityOnly.force("ID")
+	identityOnly := &presence{record: record, snapshot: []uint64{1}}
 	if hasMutableFields(&Frame{Record: record, Fields: identityOnly}) {
 		t.Fatal("identity-only sparse update was treated as mutable")
 	}
-	withName := &presence{record: record}
-	withName.force("ID")
-	withName.force("Name")
+	withName := &presence{record: record, snapshot: []uint64{3}}
 	if !hasMutableFields(&Frame{Record: record, Fields: withName}) {
 		t.Fatal("supplied non-key field was not treated as mutable")
 	}
