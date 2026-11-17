@@ -69,8 +69,8 @@ func run() error {
 		tool, path, want string
 		args             map[string]any
 	}{
-		{"CodecProbe", "/codec-probe?value=1,2&value=3", `{"values":[1,2,3]}`, map[string]any{"Values": []string{"1,2", "3"}}},
-		{"CodecRows", "/codec-rows?suffix=!", `{"data":[{"id":1,"child":{"id":1,"label":"CHILD!"}}],"meta":{"label":"SUMMARY"}}`, map[string]any{"Suffix": "!"}},
+		{"CodecProbe", "/codec-probe?value=1,2&value=3", `{"values":[1,2,3]}`, map[string]any{"values": []string{"1,2", "3"}}},
+		{"CodecRows", "/codec-rows?suffix=!", `{"data":[{"id":1,"child":{"id":1,"label":"CHILD!"}}],"meta":{"label":"SUMMARY"}}`, map[string]any{"suffix": "!"}},
 	} {
 		result, err := client.CallTool(ctx, &schema.CallToolRequestParams{Name: tc.tool, Arguments: tc.args})
 		if err != nil {
