@@ -964,6 +964,7 @@ func appendViewTagsWithMatch(fieldTag string, view *spec.View, match string) (st
 			metadata.Connector = source.Bindings.Connector
 			metadata.Cache = source.Bindings.CacheName
 			metadata.CacheWarmup = source.Bindings.CacheWarmup
+			metadata.InlineWarmups = spec.CloneCacheWarmups(source.Bindings.InlineWarmups)
 		}
 		if source.Controls != nil {
 			metadata.OrderBy = source.Controls.OrderBy

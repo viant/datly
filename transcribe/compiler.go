@@ -398,7 +398,7 @@ func (c *componentCompilation) compileViews(ctx context.Context) error {
 	}
 	c.authoredInputs = proof
 	c.rows = generatedRows
-	return nil
+	return component.ValidateInlineWarmups()
 }
 
 func (c *componentCompilation) refine(ctx context.Context) error {

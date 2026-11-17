@@ -316,7 +316,7 @@ func hasViewWarmupBinding(view *spec.View, visited map[*spec.View]bool) bool {
 		return false
 	}
 	visited[view] = true
-	if view.Source != nil && view.Source.Bindings != nil && strings.TrimSpace(view.Source.Bindings.CacheWarmup) != "" {
+	if view.Source != nil && view.Source.Bindings != nil && (strings.TrimSpace(view.Source.Bindings.CacheWarmup) != "" || view.Source.Bindings.HasInlineWarmups()) {
 		return true
 	}
 	for _, relation := range view.Relations {

@@ -137,11 +137,51 @@ inline policies. Custom targeters may leave origin unset when it is not known.
 Inline policies using host-configured storage still have `Origin=inline`.
 Reading this metadata does not execute reader SQL or populate caches.
 
-Inline policies retain their existing precedence over a named warmup binding;
-the policy collection is selected as a whole, not merged with host policies.
-A missing selected host reference remains an initialization error. A reference
-shadowed by an inline policy is not resolved or validated, and is not reported
-as `PolicyRef`. Different views may therefore report different policy origins.
+### Targeted inline root and child plans
+
+Bind storage independently, then declare a plan for the root or any child:
+
+```sql
+#setting($_ = $cache_warmup_cases('recent', 'Period=today,yesterday', 'ExcludeDefault=Period'))
+
+SELECT orders.*, items.*,
+       use_cache(orders, 'shared'),
+       use_cache(items, 'shared'),
+       cache_warmup(orders, '', 'Limit=0'),
+       cache_warmup(items, 'order_id', 'CaseRefs=recent', 'Limit=0')
+FROM orders
+LEFT JOIN items ON items.order_id = orders.id
+```
+
+This is a declaration fragment; declare the `Period` input in the component and
+supply the `shared` cache through host configuration. Three or more arguments
+select an inline plan: view, index column, then the existing component warmup
+options. An empty index column declares a non-indexed plan. `Limit=0` explicitly
+requests no row limit; omitted budgets remain omitted. Repeated declarations
+reuse component rules: compatible index identities merge cases, while distinct
+indexes append ordered policies.
+
+Exactly two arguments retain the host-reference meaning:
+`cache_warmup(items, 'startup')` selects the host policy configuration `startup`.
+It does not declare an inline plan with index column `startup`.
+
+For the root, a nonempty targeted inline collection takes precedence over
+component `$cache_warmup(...)` settings, which take precedence over the host
+binding. Children select targeted inline policies before their host binding;
+ordinary children do not inherit root policies. Nil, empty, and all-nil
+collections retain fallback behavior. Select one policy collection as a whole;
+do not merge policies across these sources.
+
+Inline `CaseRefs` resolve only against the component's `$cache_warmup_cases`
+definitions, with detached cases for each view. Case definitions alone neither
+enable root storage nor schedule root work. Missing case sets and malformed
+authored inline options remain errors, even when another policy source exists.
+
+A missing selected host reference remains an initialization error. A host
+reference shadowed for policy resolution is not reported as `PolicyRef`.
+Storage resolution remains independent: without an explicit storage binding,
+that host configuration may still supply storage and must pass native storage
+validation. Different views may therefore report different policy origins.
 
 `Backend` is `afs` or `aerospike`; it is empty for a supplied service whose
 backend cannot be reliably identified. `CacheName` is the selected logical

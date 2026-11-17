@@ -52,7 +52,9 @@ func parseCacheSettings(args []string, tail string) (*spec.CacheSettings, error)
 	return ret, nil
 }
 
-func parseCacheWarmupSettings(args []string) (*spec.CacheWarmupSettings, error) {
+// ParseCacheWarmupSettings parses the options shared by component settings and
+// targeted inline view controls. Inputs retain the DQL literal representation.
+func ParseCacheWarmupSettings(args []string) (*spec.CacheWarmupSettings, error) {
 	if len(args) == 0 {
 		return nil, fmt.Errorf("invalid cache_warmup directive: missing index column")
 	}
@@ -218,11 +220,11 @@ func parseCacheWarmupCases(args []string) (string, *spec.CacheWarmupCase, error)
 	return name, current, nil
 }
 
-// appendCacheWarmupSettings applies one $cache_warmup declaration additively.
+// AppendCacheWarmupSettings applies one $cache_warmup declaration additively.
 // A declaration matching an existing warmup's index identity merges into that
 // warmup, preserving the singular contract; a different index identity appends
 // a new warmup, keeping declaration order: singular first, then plural.
-func appendCacheWarmupSettings(cache *spec.CacheSettings, incoming *spec.CacheWarmupSettings) error {
+func AppendCacheWarmupSettings(cache *spec.CacheSettings, incoming *spec.CacheWarmupSettings) error {
 	if incoming == nil {
 		return nil
 	}

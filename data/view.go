@@ -137,7 +137,11 @@ func FromView(component *spec.Component, source *spec.View) *View {
 	if source == nil {
 		return nil
 	}
-	ret := fromSpecView(source.Clone(), map[*spec.View]*View{})
+	var sharedCases map[string][]*spec.CacheWarmupCase
+	if component != nil && component.Settings != nil && component.Settings.Cache != nil {
+		sharedCases = component.Settings.Cache.SharedCases
+	}
+	ret := fromSpecView(source.Clone(), map[*spec.View]*View{}, sharedCases)
 	if component == nil {
 		return ret
 	}
@@ -157,7 +161,7 @@ func FromView(component *spec.Component, source *spec.View) *View {
 			}
 			// The plural collection travels with the singular so an empty plural
 			// value never shadows a valid singular warmup and vice versa.
-			if ret.Cache.Warmup == nil && len(ret.Cache.Warmups) == 0 {
+			if !ret.Cache.HasWarmup() {
 				ret.Cache.Warmup = settings.Warmup.Clone()
 				for _, item := range settings.Warmups {
 					ret.Cache.Warmups = append(ret.Cache.Warmups, item.Clone())
@@ -171,7 +175,7 @@ func FromView(component *spec.Component, source *spec.View) *View {
 	return ret
 }
 
-func fromSpecView(source *spec.View, converted map[*spec.View]*View) *View {
+func fromSpecView(source *spec.View, converted map[*spec.View]*View, sharedCases map[string][]*spec.CacheWarmupCase) *View {
 	if source == nil {
 		return nil
 	}
@@ -183,15 +187,18 @@ func fromSpecView(source *spec.View, converted map[*spec.View]*View) *View {
 	converted[source] = ret
 	if source.Source != nil && source.Source.Bindings != nil {
 		ret.Connector = source.Source.Bindings.Connector
-		if source.Source.Bindings.CacheName != "" {
-			ret.Cache = &Cache{Name: source.Source.Bindings.CacheName}
+		if source.Source.Bindings.CacheName != "" || source.Source.Bindings.HasInlineWarmups() {
+			ret.Cache = &Cache{Name: source.Source.Bindings.CacheName, Warmups: spec.CloneCacheWarmups(source.Source.Bindings.InlineWarmups)}
+			if source.Source.Bindings.HasInlineWarmups() {
+				ret.Cache.SharedCases = spec.CloneSharedCases(sharedCases)
+			}
 		}
 	}
 	for _, relation := range source.Relations {
 		if relation == nil {
 			continue
 		}
-		child := fromSpecView(relation.View, converted)
+		child := fromSpecView(relation.View, converted, sharedCases)
 		// Keep shared targets and cycles pointed at the same owned snapshot that
 		// reader compilation enriches, rather than retaining a second spec node.
 		if child != nil {
