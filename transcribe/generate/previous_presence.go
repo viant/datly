@@ -41,7 +41,7 @@ func (r *planResolver) resolvePreviousPresence() error {
 	if len(entries) == 0 {
 		return nil
 	}
-	source, err := presencegen.Generate(r.plan.PackageName(), map[string][]byte{"views.go": []byte(viewFile(r.plan.PackageName(), r.plan))}, entries, presencegen.Options{RowOnly: true})
+	source, err := presencegen.Generate(r.plan.PackageName(), map[string][]byte{"views.go": []byte(viewFile(r.plan.PackageName(), r.plan))}, entries, presencegen.Options{RowOnly: true, TypeResolver: r.input.TypeResolver})
 	if err != nil {
 		return fmt.Errorf("generate Previous presence: %w", err)
 	}

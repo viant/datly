@@ -18,6 +18,7 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/viant/datly/typecatalog"
 	sqlxio "github.com/viant/sqlx/io"
 )
 
@@ -28,16 +29,19 @@ type Config struct {
 }
 
 type sourceType struct {
-	name   string
-	fields []sourceField
+	name       string
+	fields     []sourceField
+	underlying ast.Expr
+	imports    map[string]string
 }
 
 type sourceField struct {
-	name    string
-	typeAST ast.Expr
-	typeGo  string
-	tag     string
-	imports map[string]string
+	name       string
+	typeAST    ast.Expr
+	typeGo     string
+	comparison scalarComparison
+	tag        string
+	imports    map[string]string
 }
 
 type entity struct {
@@ -208,11 +212,12 @@ func parseSource(sourceDir, output string) (*packageSource, error) {
 			}
 			for _, specification := range general.Specs {
 				typeSpec := specification.(*ast.TypeSpec)
+				typeDef := &sourceType{name: typeSpec.Name.Name, underlying: typeSpec.Type, imports: imports}
+				types[typeDef.name] = typeDef
 				structType, ok := typeSpec.Type.(*ast.StructType)
 				if !ok {
 					continue
 				}
-				typeDef := &sourceType{name: typeSpec.Name.Name}
 				for _, field := range structType.Fields.List {
 					for _, name := range field.Names {
 						typeDef.fields = append(typeDef.fields, sourceField{
@@ -242,7 +247,11 @@ func generateExcluding(sourceDir, entryName, output string, omit map[string]bool
 
 // Options selects row-local generation for the universal writer, which owns
 // graph identity, child matching and projection provenance independently.
-type Options struct{ RowOnly bool }
+type Options struct {
+	RowOnly bool
+	// TypeResolver retains the native caller's imported type authority.
+	TypeResolver *typecatalog.Resolver
+}
 
 // Generate renders comparisons from planned Go sources without writing or
 // reparsing application files. Entries must belong to this concrete package.
@@ -274,11 +283,12 @@ func Generate(packageName string, sources map[string][]byte, entries []string, o
 			}
 			for _, specification := range general.Specs {
 				typeSpec := specification.(*ast.TypeSpec)
+				typeDef := &sourceType{name: typeSpec.Name.Name, underlying: typeSpec.Type, imports: imports}
+				types[typeDef.name] = typeDef
 				structType, ok := typeSpec.Type.(*ast.StructType)
 				if !ok {
 					continue
 				}
-				typeDef := &sourceType{name: typeSpec.Name.Name}
 				for _, field := range structType.Fields.List {
 					if len(field.Names) == 0 {
 						continue
@@ -302,6 +312,14 @@ func Generate(packageName string, sources map[string][]byte, entries []string, o
 }
 
 func generateTypes(packageName string, types map[string]*sourceType, entries []string, omit map[string]bool, options Options) ([]byte, error) {
+	resolver := options.TypeResolver
+	if resolver == nil {
+		var err error
+		resolver, err = typecatalog.NewResolver(typecatalog.NewCatalog(), typecatalog.PackageAuthority, nil)
+		if err != nil {
+			return nil, err
+		}
+	}
 	built := map[string]*entity{}
 	result := &model{packageName: packageName, omit: omit}
 	var build func(*sourceType) (*entity, error)
@@ -373,9 +391,11 @@ func generateTypes(packageName string, types map[string]*sourceType, entries []s
 			if transient(field.tag) || identityField(current.identity, field.name) || identityField(current.preserved, field.name) {
 				continue
 			}
-			if !comparableType(field.typeAST) {
-				return nil, fmt.Errorf("%s.%s has unsupported marked type %s", typeDef.name, field.name, field.typeGo)
+			comparison, err := classifyScalar(field, types, resolver)
+			if err != nil {
+				return nil, fmt.Errorf("%s.%s has unsupported marked type %s: %w", typeDef.name, field.name, field.typeGo, err)
 			}
+			field.comparison = comparison
 			current.scalars = append(current.scalars, field)
 		}
 		return current, nil
@@ -416,7 +436,7 @@ func (m *model) render() ([]byte, error) {
 			continue
 		}
 		for _, field := range item.scalars {
-			if sliceType(field.typeAST) {
+			if field.comparison.slice {
 				needsCompare = true
 			}
 		}
@@ -520,10 +540,18 @@ func renderMethod(out *strings.Builder, item *entity) {
 			} else {
 				fmt.Fprintf(out, "\thas.%s = present.%s && !%s.%s.Equal(prev.%s)\n", field.name, field.name, receiver, field.name, field.name)
 			}
-		} else if _, ok := field.typeAST.(*ast.StarExpr); ok {
+		} else if field.comparison.slice {
+			left, right := receiver+"."+field.name, "prev."+field.name
+			equal := func(a, b string) string {
+				return "((" + a + " == nil) == (" + b + " == nil) && presenceSlices.Equal(" + a + ", " + b + "))"
+			}
+			expression := equal(left, right)
+			if field.comparison.pointer {
+				expression = "(" + left + " == " + right + " || (" + left + " != nil && " + right + " != nil && " + equal("*"+left, "*"+right) + "))"
+			}
+			fmt.Fprintf(out, "\thas.%s = present.%s && !%s\n", field.name, field.name, expression)
+		} else if field.comparison.pointer {
 			fmt.Fprintf(out, "\thas.%s = present.%s && !(%s.%s == prev.%s || (%s.%s != nil && prev.%s != nil && *%s.%s == *prev.%s))\n", field.name, field.name, receiver, field.name, field.name, receiver, field.name, field.name, receiver, field.name, field.name)
-		} else if sliceType(field.typeAST) {
-			fmt.Fprintf(out, "\thas.%s = present.%s && !((%s.%s == nil) == (prev.%s == nil) && presenceSlices.Equal(%s.%s, prev.%s))\n", field.name, field.name, receiver, field.name, field.name, receiver, field.name, field.name)
 		} else {
 			fmt.Fprintf(out, "\thas.%s = present.%s && %s.%s != prev.%s\n", field.name, field.name, receiver, field.name, field.name)
 		}
@@ -720,11 +748,6 @@ func identityField(identity []sourceField, name string) bool {
 	return false
 }
 
-func sliceType(expr ast.Expr) bool {
-	array, ok := expr.(*ast.ArrayType)
-	return ok && array.Len == nil
-}
-
 func relationType(expr ast.Expr) (name string, collection, elementPtr, pointer bool) {
 	switch actual := expr.(type) {
 	case *ast.StarExpr:
@@ -746,17 +769,6 @@ func relationType(expr ast.Expr) (name string, collection, elementPtr, pointer b
 		return actual.Name, false, false, false
 	}
 	return "", false, false, false
-}
-
-func comparableType(expr ast.Expr) bool {
-	switch actual := expr.(type) {
-	case *ast.Ident, *ast.SelectorExpr, *ast.StarExpr, *ast.ChanType:
-		return true
-	case *ast.ArrayType:
-		return actual.Len != nil && comparableType(actual.Elt) || actual.Len == nil && primitiveType(actual.Elt)
-	default:
-		return false
-	}
 }
 
 func primitiveType(expr ast.Expr) bool {
