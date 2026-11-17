@@ -15,6 +15,7 @@ import (
 	"github.com/viant/datly/spec"
 	xshape "github.com/viant/x/shape"
 	xcodec "github.com/viant/xdatly/codec"
+	xhandler "github.com/viant/xdatly/handler"
 )
 
 // RouteInput is compiler output used to construct one immutable route contract.
@@ -67,9 +68,11 @@ type RouteInputContract struct {
 // InputContract owns the canonical component input type and its route-effective
 // plans. It contains no provider or invocation state.
 type InputContract struct {
-	typeOf     reflect.Type
-	projection *bindly.Projection
-	routes     map[string]*RouteInputContract
+	initializerPath    []int
+	invokerInitializer bool
+	typeOf             reflect.Type
+	projection         *bindly.Projection
+	routes             map[string]*RouteInputContract
 }
 
 func NewInputContract(inputType reflect.Type, projection *bindly.Projection, routes ...RouteInput) (*InputContract, error) {
@@ -86,8 +89,18 @@ func NewInputContract(inputType reflect.Type, projection *bindly.Projection, rou
 	if len(routes) == 0 {
 		return nil, fmt.Errorf("component input contract requires at least one route")
 	}
+	initializerPath, err := compileEmbeddedInitializer(inputType)
+	if err != nil {
+		return nil, err
+	}
+	initializerType := inputType
+	if len(initializerPath) != 0 {
+		initializerType = inputType.FieldByIndex(initializerPath).Type
+	}
 	result := &InputContract{
-		typeOf: inputType, projection: projection,
+		initializerPath:    initializerPath,
+		invokerInitializer: reflect.PointerTo(initializerType).Implements(reflect.TypeFor[xhandler.InvokerInitializer]()),
+		typeOf:             inputType, projection: projection,
 		routes: make(map[string]*RouteInputContract, len(routes)),
 	}
 	for _, route := range routes {

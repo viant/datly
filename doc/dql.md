@@ -882,6 +882,28 @@ Internal physical columns remain SQL/DML-mapped and hidden from clients. The log
 
 ## StructQL declaration queries
 
+### Linked embedded input values
+
+An input declaration may opt into Go value embedding with
+`.Tag('embedded:"true"')`. Its declaration name must match the linked struct's
+type name. Pointer embedding is not supported for dynamic inputs because Go's
+runtime struct construction cannot promote those methods alongside other fields.
+This option is independent of `anonymous:"true"`, which controls MCP body
+flattening. Use existing MCP name metadata to choose the public argument name.
+
+For anonymous runtime input contracts, compilation prepares the field path to
+the nearest unambiguous embedded value implementing `Init(context.Context)` or
+`Init(context.Context, handler.ComponentInvoker)`. Existing root initialization
+takes precedence; named compiled inputs retain their Go method-set behavior.
+Equal-depth competing embedded initializers fail compilation. Ordinary named
+fields are not initialized implicitly.
+
+The initializer runs in the existing input-initialization phase after binding.
+Its receiver is the embedded value, not the outer input. Attach predicates
+directly to that input to consume normalized values. Derived scalar bindings
+are binding-time snapshots and are not recomputed after initialization. Keep
+SQL aliases and column mappings in authored predicate arguments.
+
 StructQL derives typed projections/index helpers from an input graph rather than a physical DB source.
 This fragment assumes the `model` import, a linked `model.EventKey` row with
 `Id`, and an input graph exposing `/Events`; declare those in the containing contract.

@@ -51,6 +51,17 @@ func resolveInputFieldsMode(component *spec.Component, declarations Declarations
 			return nil, err
 		}
 		if ok {
+			if reflect.StructTag(param.Tag).Get("embedded") == "true" {
+				if !embeddableFieldType(field.Type) || strings.HasPrefix(field.Type, "*") {
+					return nil, fmt.Errorf("anonymous input %s requires a linked struct value", field.Name)
+				}
+				typeName := field.Type[strings.LastIndex(field.Type, ".")+1:]
+				if field.Name != typeName {
+					return nil, fmt.Errorf("embedded input field %s must match type name %s", field.Name, typeName)
+				}
+				field.Anonymous = true
+				field.Tag = withoutStructTags(field.Tag, "embedded")
+			}
 			privateBody := strings.EqualFold(strings.TrimSpace(param.Source.Kind), "body") && reflect.StructTag(param.Tag).Get("internal") == "true"
 			if component.Settings != nil && component.Settings.Mutation != "" && param.IsMutationInput() && !privateBody {
 				field.Tag, err = appendViewTags(field.Tag, component.RootView)

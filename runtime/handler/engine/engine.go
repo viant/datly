@@ -785,7 +785,7 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 	snapshotReady = true
 	if err := phases.Run(ctx, xhandler.PhaseInputInitialization, func() error {
 		var initErr error
-		switch initializer := input.(type) {
+		switch initializer := request.Input.InitializerTarget(input).(type) {
 		case xhandler.InvokerInitializer:
 			lease := &lifecycleScope{data: data, ctx: ctx, binder: binder, phase: "invoker initializer"}
 			initErr = lease.finish(func(ctx context.Context) error { return initializer.Init(ctx, lease) }, nil)
@@ -1077,7 +1077,7 @@ func boundSupplementalPlan(injector *bindly.Injector, input *registry.RouteInput
 }
 
 func (r Request) hasInvokerInitializer() bool {
-	return r.Input != nil && reflect.PointerTo(r.Input.Type()).Implements(reflect.TypeFor[xhandler.InvokerInitializer]())
+	return r.Input.HasInvokerInitializer()
 }
 
 func (r Request) hasCompositionFinalizer() bool {
