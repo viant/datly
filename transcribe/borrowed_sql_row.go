@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"go/ast"
 	"go/parser"
@@ -723,6 +724,13 @@ func prepareBorrowedOwners(ctx context.Context, source *Source, component *spec.
 	}
 	location, err := workspace.Package(component.TypeContext.PackagePath)
 	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			for _, declaration := range authoredBorrowedSQLRows(component) {
+				if declaration.Package == component.TypeContext.PackagePath {
+					return nil, fmt.Errorf("borrow_sql_row owner descriptor unavailable; generate owner first: %w", err)
+				}
+			}
+		}
 		return nil, err
 	}
 	if location == nil {

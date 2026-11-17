@@ -260,10 +260,29 @@ func TestTranscribeOperationsSQLite(t *testing.T) {
 				}
 				generate()
 				directory := filepath.Join(root, "api", "orders")
+				// Universal writer behavior is registered on the route. These
+				// supported destinations do not require empty phase placeholders.
+				retiredRoles := map[string]bool{
+					"mutation": true, "links": true, "frames": true, "previous": true,
+					"layout": true, "actions": true, "mutation_output": true,
+					"validation": true, "invariants": true,
+				}
 				for role, filename := range filenames {
+					if retiredRoles[role] {
+						if _, err := os.Stat(filepath.Join(directory, filename)); !os.IsNotExist(err) {
+							t.Fatalf("empty %s file %s was emitted: %v", role, filename, err)
+						}
+						continue
+					}
 					content, err := os.ReadFile(filepath.Join(directory, filename))
 					if err != nil || len(content) == 0 {
 						t.Fatalf("%s file %s: %v", role, filename, err)
+					}
+				}
+				if operation != "get" {
+					router, err := os.ReadFile(filepath.Join(directory, filenames["router"]))
+					if err != nil || !strings.Contains(string(router), `mutation:"`+operation+`"`) {
+						t.Fatalf("native %s mutation registration missing: %v", operation, err)
 					}
 				}
 				files, err := os.ReadDir(directory)
