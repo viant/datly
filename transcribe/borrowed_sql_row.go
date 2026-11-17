@@ -232,7 +232,10 @@ func sealBorrowedSourcePackage(base string) ([]gen.BorrowedAuthorityFile, error)
 			return nil
 		}
 		extension := filepath.Ext(path)
-		if extension != ".dql" && extension != ".sql" {
+		// Owner plans package documentation and its referenced schemas through
+		// the same immutable resource store as SQL. Retain the loader's supported
+		// formats so those resources are available and sealed against drift.
+		if extension != ".dql" && extension != ".sql" && extension != ".yaml" && extension != ".yml" && extension != ".json" {
 			return nil
 		}
 		f, err := gen.SealBorrowedAuthorityFile(path)
