@@ -504,7 +504,15 @@ func renderMethod(out *strings.Builder, item *entity) {
 		fmt.Fprintf(out, "\thas.%s = present.%s\n", field.name, field.name)
 	}
 	for _, field := range item.scalars {
-		if _, ok := field.typeAST.(*ast.StarExpr); ok {
+		if timeField(field) {
+			// Persisted timestamps represent instants, not Go location pointers
+			// or monotonic-clock bookkeeping. Resolve the import, not its alias.
+			if _, pointer := field.typeAST.(*ast.StarExpr); pointer {
+				fmt.Fprintf(out, "\thas.%s = present.%s && !(%s.%s == prev.%s || (%s.%s != nil && prev.%s != nil && %s.%s.Equal(*prev.%s)))\n", field.name, field.name, receiver, field.name, field.name, receiver, field.name, field.name, receiver, field.name, field.name)
+			} else {
+				fmt.Fprintf(out, "\thas.%s = present.%s && !%s.%s.Equal(prev.%s)\n", field.name, field.name, receiver, field.name, field.name)
+			}
+		} else if _, ok := field.typeAST.(*ast.StarExpr); ok {
 			fmt.Fprintf(out, "\thas.%s = present.%s && !(%s.%s == prev.%s || (%s.%s != nil && prev.%s != nil && *%s.%s == *prev.%s))\n", field.name, field.name, receiver, field.name, field.name, receiver, field.name, field.name, receiver, field.name, field.name)
 		} else if sliceType(field.typeAST) {
 			fmt.Fprintf(out, "\thas.%s = present.%s && !((%s.%s == nil) == (prev.%s == nil) && presenceSlices.Equal(%s.%s, prev.%s))\n", field.name, field.name, receiver, field.name, field.name, receiver, field.name, field.name)
@@ -528,6 +536,19 @@ func renderMethod(out *strings.Builder, item *entity) {
 		out.WriteString("\t}\n")
 	}
 	fmt.Fprintf(out, "\n\tif *has != (%s{}) {\n\t\t%s.Has = has\n\t}\n}\n\n", item.marker.name, receiver)
+}
+
+func timeField(field sourceField) bool {
+	expr := field.typeAST
+	if pointer, ok := expr.(*ast.StarExpr); ok {
+		expr = pointer.X
+	}
+	selector, ok := expr.(*ast.SelectorExpr)
+	if !ok || selector.Sel.Name != "Time" {
+		return false
+	}
+	qualifier, ok := selector.X.(*ast.Ident)
+	return ok && field.imports[qualifier.Name] == "time"
 }
 
 func renderCollection(out *strings.Builder, parent *entity, rel relation) {

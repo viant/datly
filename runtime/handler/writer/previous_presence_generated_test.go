@@ -16,7 +16,7 @@ func (p *previousPresenceRow) SynchronizePresentMarker(prev *previousPresenceRow
 	has.AccountID = present.AccountID && !(p.AccountID == prev.AccountID || (p.AccountID != nil && prev.AccountID != nil && *p.AccountID == *prev.AccountID))
 	has.Name = present.Name && !(p.Name == prev.Name || (p.Name != nil && prev.Name != nil && *p.Name == *prev.Name))
 	has.Quantity = present.Quantity && !(p.Quantity == prev.Quantity || (p.Quantity != nil && prev.Quantity != nil && *p.Quantity == *prev.Quantity))
-	has.Updated = present.Updated && !(p.Updated == prev.Updated || (p.Updated != nil && prev.Updated != nil && *p.Updated == *prev.Updated))
+	has.Updated = present.Updated && !(p.Updated == prev.Updated || (p.Updated != nil && prev.Updated != nil && p.Updated.Equal(*prev.Updated)))
 	has.UpdatedUser = present.UpdatedUser && !(p.UpdatedUser == prev.UpdatedUser || (p.UpdatedUser != nil && prev.UpdatedUser != nil && *p.UpdatedUser == *prev.UpdatedUser))
 
 	if *has != (previousPresenceHas{}) {
