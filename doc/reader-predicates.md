@@ -853,3 +853,47 @@ scope. Probe failures preserve their causes instead of becoming 403/404. Without
 a shared transaction snapshot, concurrent creation/deletion may change the
 classification between the two reads. SQLite HTTP/MCP tests exercise the full
 path; no deployed database parity is implied by those tests.
+
+### UTC timestamp ranges and duration limits
+
+The `DateRange` handler preserves local calendar/wall-clock behavior when `Mode`
+is omitted. Author `Mode=utc` to require RFC3339 instants (including explicit
+numeric offsets), normalize them to UTC, and bind BigQuery `TIMESTAMP` bounds.
+The lower bound is inclusive and the upper bound exclusive. `TimeColumn` is
+required in this mode. An optional `PartitionColumn` must represent the event's
+UTC date: pruning covers the first through last included UTC dates without the
+local-mode one-day padding. It must not be an ingestion-date partition.
+
+`MaxDuration` is an optional positive Go duration such as `24h` or `744h`.
+Omission retains unrestricted duration. In local calendar-date mode both dates
+are inclusive, so a single date consumes 24 hours. Reversed/equal timestamp
+bounds, malformed durations, and oversized windows fail before SQL execution.
+These options are authored configuration, never request-selected authority.
+
+When both explicit bounds are absent, `DateRangeInput.Period` selects `today`,
+`yesterday`, `week` (seven calendar days including today), `last_complete_7d`,
+`month` (30 calendar days including today), `month_to_date`, `last_month`, or
+`hour`. Alternatively, `Duration` selects a positive rolling Go duration.
+Explicit bounds take precedence; a partial explicit range still fails validation.
+Period and duration cannot both supply an implicit range.
+
+Authored `TimeZone` selects an IANA timezone for these presets, defaulting to
+UTC. Resolution uses the invocation's execution start time when available.
+UTC mode converts calendar boundaries to instants: a DST day can span 23 or 25
+hours and is still subject to the elapsed `MaxDuration`. Local mode retains
+calendar dates or wall-clock fields; rolling durations crossing an offset change
+require UTC mode because a local timestamp cannot distinguish repeated hours.
+Grouping granularity is separate from the range filter. Stored daily buckets
+must not be treated as original event timestamps for timezone conversion.
+
+```sql
+.WithPredicate(1,'handler','ranges.DateRange',
+    'Mode','utc','MaxDuration','24h',
+    'Alias','f','TimeColumn','recorded_at','PartitionColumn','event_day')
+```
+
+The opt-in native BigQuery regression uses `-tags=integration`,
+`DATLY_DATE_RANGE_BQ_ENDPOINT` (loopback emulator only), and
+`DATLY_DATE_RANGE_BQ_PROJECT`. Provision an owned `events` dataset first and
+supply the BigQuery driver using the integration module configuration. The test
+is separate from the default database-independent predicate suite.
