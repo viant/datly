@@ -237,7 +237,10 @@ func (c *artifactCompiler) compile() (*Artifact, error) {
 			return nil, fmt.Errorf("compile handler report metadata for %s: %w", component.Key.String(), err)
 		}
 	}
-	if readerPlan != nil && component.RootView != nil && component.RootView.EntityHooks != "" && input.InputType.Name() == "" {
+	if readerPlan != nil && component.RootView != nil && component.RootView.EntityHooks != "" {
+		if input.InputType.Name() != "" {
+			return nil, fmt.Errorf("separate reader lifecycle requires an anonymous runtime input; named inputs use their existing Init method")
+		}
 		owner, err := c.lookupType(component.RootView.EntityHooks)
 		if err != nil {
 			return nil, fmt.Errorf("resolve reader lifecycle: %w", err)

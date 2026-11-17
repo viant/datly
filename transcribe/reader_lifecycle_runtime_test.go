@@ -24,6 +24,8 @@ import (
 
 type ReaderInputRules struct{}
 
+type namedReaderLifecycleInput struct{ Minimum int }
+
 func (*ReaderInputRules) Init(ctx context.Context, input any) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -71,4 +73,6 @@ FROM (SELECT r.id FROM records r ${predicate.Builder().CombineAnd($predicate.Fil
 	encoded, err := json.Marshal(result)
 	require.NoError(t, err)
 	require.JSONEq(t, `{"Rows":[{"Id":8},{"Id":9}]}`, string(encoded), "native predicate must consume the lifecycle-normalized input")
+	_, err = bootstrap.BuildArtifact(bootstrap.ArtifactInput{Component: contract.Component, InputType: reflect.TypeFor[namedReaderLifecycleInput](), OutputType: contract.OutputType, Types: contract.Types, Resources: contract.Resources})
+	require.ErrorContains(t, err, "separate reader lifecycle requires an anonymous runtime input")
 }
