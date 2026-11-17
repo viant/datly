@@ -41,9 +41,10 @@ type Config struct {
 // audience and principal. It is optional so existing Datly deployments retain
 // their current verifier contract until they opt in.
 type ClaimPolicy struct {
-	Issuer         string `json:"Issuer,omitempty" yaml:"Issuer,omitempty"`
-	Audience       string `json:"Audience,omitempty" yaml:"Audience,omitempty"`
-	RequireSubject bool   `json:"RequireSubject,omitempty" yaml:"RequireSubject,omitempty"`
+	Issuer         string   `json:"Issuer,omitempty" yaml:"Issuer,omitempty"`
+	Audience       string   `json:"Audience,omitempty" yaml:"Audience,omitempty"`
+	Audiences      []string `json:"Audiences,omitempty" yaml:"Audiences,omitempty"`
+	RequireSubject bool     `json:"RequireSubject,omitempty" yaml:"RequireSubject,omitempty"`
 }
 
 // Service is an application-configured codec factory. Pass it through the
@@ -68,7 +69,14 @@ func New(ctx context.Context, config *Config) (*Service, error) {
 	if config.ClaimPolicy != nil {
 		policy = *config.ClaimPolicy
 		policy.Issuer, policy.Audience = strings.TrimSpace(policy.Issuer), strings.TrimSpace(policy.Audience)
-		if policy.Issuer == "" && policy.Audience == "" && !policy.RequireSubject {
+		policy.Audiences = append([]string(nil), policy.Audiences...)
+		for i, audience := range policy.Audiences {
+			policy.Audiences[i] = strings.TrimSpace(audience)
+			if policy.Audiences[i] == "" {
+				return nil, fmt.Errorf("JWT audience must not be blank")
+			}
+		}
+		if policy.Issuer == "" && policy.Audience == "" && len(policy.Audiences) == 0 && !policy.RequireSubject {
 			return nil, fmt.Errorf("JWT claim policy requires issuer, audience or subject binding")
 		}
 	}
@@ -145,6 +153,8 @@ func (s *Service) WarmupCredential(ctx context.Context) (string, error) {
 	}
 	if s.policy.Audience != "" {
 		claims["aud"] = s.policy.Audience
+	} else if len(s.policy.Audiences) > 0 {
+		claims["aud"] = s.policy.Audiences[0]
 	}
 	token, err := jwtv5.NewWithClaims(jwtv5.SigningMethodRS256, claims).SignedString(s.warmupSigner)
 	if err != nil {
@@ -221,8 +231,17 @@ func (c *claimsCodec) Value(ctx context.Context, raw any, _ ...xcodec.Option) (a
 	if c.policy.Issuer != "" && claims.Issuer != c.policy.Issuer {
 		return nil, fmt.Errorf("JWT issuer does not match the configured policy")
 	}
-	if c.policy.Audience != "" && !claims.VerifyAudience(c.policy.Audience, true) {
-		return nil, fmt.Errorf("JWT audience does not match the configured policy")
+	if c.policy.Audience != "" || len(c.policy.Audiences) > 0 {
+		matched := c.policy.Audience != "" && claims.VerifyAudience(c.policy.Audience, true)
+		for _, audience := range c.policy.Audiences {
+			if claims.VerifyAudience(audience, true) {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			return nil, fmt.Errorf("JWT audience does not match the configured policy")
+		}
 	}
 	if c.policy.RequireSubject && strings.TrimSpace(claims.Subject) == "" {
 		return nil, fmt.Errorf("JWT subject is required by the configured policy")

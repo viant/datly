@@ -182,7 +182,7 @@ func TestJwtClaimPolicyRejectsWrongIssuerAudienceAndMissingSubject(t *testing.T)
 	}
 	config := &Config{JWTValidator: &verifier.Config{RSA: []*scy.Resource{{URL: "policy-public-key",
 		Data: pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: encoded})}}},
-		ClaimPolicy: &ClaimPolicy{Issuer: "https://identity.example", Audience: "studio-web", RequireSubject: true}}
+		ClaimPolicy: &ClaimPolicy{Issuer: "https://identity.example", Audience: "studio-web", Audiences: []string{"studio-desktop"}, RequireSubject: true}}
 	service, err := New(context.Background(), config)
 	if err != nil {
 		t.Fatal(err)
@@ -196,6 +196,8 @@ func TestJwtClaimPolicyRejectsWrongIssuerAudienceAndMissingSubject(t *testing.T)
 		allowed                         bool
 	}{
 		{"matching identity", "https://identity.example", "studio-web", "alice", true},
+		{"additional audience", "https://identity.example", "studio-desktop", "alice", true},
+		{"missing audience", "https://identity.example", "", "alice", false},
 		{"wrong issuer", "https://other.example", "studio-web", "alice", false},
 		{"wrong audience", "https://identity.example", "other-client", "alice", false},
 		{"missing subject", "https://identity.example", "studio-web", "", false},
