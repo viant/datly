@@ -115,6 +115,9 @@ func buildBindingSpecs(component *spec.Component, inputType reflect.Type, codecs
 			transformer.optional = optional
 		}
 	}
+	if err := orderDerivedBindings(result); err != nil {
+		return nil, err
+	}
 	return result, nil
 }
 
