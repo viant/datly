@@ -63,7 +63,21 @@ func (c *declarationCompiler) compile() (*declarationProducts, error) {
 		if param == nil || strings.TrimSpace(param.DeclarationSQL) == "" {
 			continue
 		}
-		analysis, err := dql.AnalyzeDeclarationSQL(param.DeclarationSQL)
+		var prepare []func(string) (string, error)
+		var preparedReadSQL string
+		if param.Source.Kind == "view" || param.Source.Kind == "data_view" {
+			prepare = append(prepare, func(text string) (string, error) {
+				source := &spec.ViewSource{SQL: text, Embeds: dql.EmbeddedSQLRefs(text)}
+				if c.resources != nil {
+					if err := dsql.ResolveSource(param.Name, source, c.resources); err != nil {
+						return "", err
+					}
+				}
+				preparedReadSQL = source.SQL
+				return tcompile.DeclarationAnalysisSource(source.SQL)
+			})
+		}
+		analysis, err := dql.AnalyzeDeclarationSQL(param.DeclarationSQL, prepare...)
 		if err != nil {
 			return nil, &declarationError{param: strings.TrimSpace(param.Name), identity: param.Identity(), err: err}
 		}
@@ -71,7 +85,9 @@ func (c *declarationCompiler) compile() (*declarationProducts, error) {
 			continue
 		}
 		readSQL := analysis.SQL
-		if c.resources != nil {
+		if preparedReadSQL != "" {
+			readSQL = preparedReadSQL
+		} else if c.resources != nil {
 			source := &spec.ViewSource{SQL: readSQL, Embeds: dql.EmbeddedSQLRefs(readSQL)}
 			if err := dsql.ResolveSource(param.Name, source, c.resources); err != nil {
 				return nil, &declarationError{param: param.Name, identity: param.Identity(), err: err}

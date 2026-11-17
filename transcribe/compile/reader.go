@@ -3,6 +3,7 @@ package compile
 import (
 	"errors"
 	"fmt"
+	"github.com/viant/datly/internal/sqlanalysis"
 	"io/fs"
 	"strings"
 
@@ -71,6 +72,13 @@ func (r *Reader) Compile(input ReadInput) (*spec.View, error) {
 		return nil, err
 	}
 	parsed, err := parseReadSQL(templates.AnalysisSQL)
+	if err != nil && len(templates.fragments) > 0 {
+		// Conditional statements may carry predicate-builder clauses. Reuse
+		// native predicate analysis; restore() retains executable source.
+		if analysis, analysisErr := sqlanalysis.SQL(templates.AnalysisSQL, nil); analysisErr == nil {
+			parsed, err = parseReadSQL(analysis)
+		}
+	}
 	if err != nil {
 		return nil, err
 	}

@@ -2,6 +2,7 @@ package compile
 
 import (
 	"fmt"
+	"github.com/viant/datly/internal/sqlanalysis"
 	"strings"
 
 	"github.com/viant/datly/tag"
@@ -121,6 +122,15 @@ func prepareSubquery(source string) (*preparedSubquery, error) {
 		prepared.embeds = append(prepared.embeds, placeholder)
 	}
 	parsed, err := parseReadSQL(trimmed)
+	if err != nil {
+		// This AST is inspection-only; retain the executable source owned by
+		// the view while sharing native statement and predicate analysis.
+		template, templateErr := newReadTemplateSource(trimmed)
+		if templateErr != nil {
+			return nil, templateErr
+		}
+		_, parsed, err = sqlanalysis.Checked(template.AnalysisSQL, nil)
+	}
 	if err != nil {
 		return nil, err
 	}

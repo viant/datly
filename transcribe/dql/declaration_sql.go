@@ -42,7 +42,7 @@ type DeclarationScalarProperty struct {
 	Property    string
 }
 
-func AnalyzeDeclarationSQL(raw string) (*DeclarationAnalysis, error) {
+func AnalyzeDeclarationSQL(raw string, analysisSource ...func(string) (string, error)) (*DeclarationAnalysis, error) {
 	hint, sqlText, err := splitHintAndSQL(raw)
 	if err != nil {
 		return nil, err
@@ -51,7 +51,14 @@ func AnalyzeDeclarationSQL(raw string) (*DeclarationAnalysis, error) {
 	if sqlText == "" {
 		return nil, nil
 	}
-	parsed, err := sqlparser.ParseQuery(sqlText, sqlparser.WithStructuralValidation(), withDeclarationExpressions())
+	parseText := sqlText
+	for _, prepare := range analysisSource {
+		parseText, err = prepare(parseText)
+		if err != nil {
+			return nil, err
+		}
+	}
+	parsed, err := sqlparser.ParseQuery(parseText, sqlparser.WithStructuralValidation(), withDeclarationExpressions())
 	if err != nil {
 		return nil, fmt.Errorf("parse declaration sql %q: %w", sqlText, err)
 	}
