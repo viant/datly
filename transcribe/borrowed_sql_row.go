@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"go/ast"
 	"go/parser"
@@ -231,7 +232,10 @@ func sealBorrowedSourcePackage(base string) ([]gen.BorrowedAuthorityFile, error)
 			return nil
 		}
 		extension := filepath.Ext(path)
-		if extension != ".dql" && extension != ".sql" {
+		// Owner plans package documentation and its referenced schemas through
+		// the same immutable resource store as SQL. Retain the loader's supported
+		// formats so those resources are available and sealed against drift.
+		if extension != ".dql" && extension != ".sql" && extension != ".yaml" && extension != ".yml" && extension != ".json" {
 			return nil
 		}
 		f, err := gen.SealBorrowedAuthorityFile(path)
@@ -723,6 +727,13 @@ func prepareBorrowedOwners(ctx context.Context, source *Source, component *spec.
 	}
 	location, err := workspace.Package(component.TypeContext.PackagePath)
 	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			for _, declaration := range authoredBorrowedSQLRows(component) {
+				if declaration.Package == component.TypeContext.PackagePath {
+					return nil, fmt.Errorf("borrow_sql_row owner descriptor unavailable; generate owner first: %w", err)
+				}
+			}
+		}
 		return nil, err
 	}
 	if location == nil {

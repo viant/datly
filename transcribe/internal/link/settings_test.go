@@ -242,3 +242,19 @@ func TestSettingsLoaderReportMCPExposureOwnership(t *testing.T) {
 		})
 	}
 }
+
+func TestSettingsLoaderKeepsComponentCasesWithoutRootStorage(t *testing.T) {
+	base := &spec.Settings{Cache: &spec.CacheSettings{Enabled: true, Name: "old", Location: "old", Warmup: &spec.CacheWarmupSettings{IndexColumn: "old"}}}
+	authored := &spec.Settings{Cache: &spec.CacheSettings{SharedCases: map[string][]*spec.CacheWarmupCase{"recent": {{Set: []*spec.CacheWarmupParam{{Name: "Period", Values: []string{"today"}}}}}}}}
+	actual := (&settingsLoader{base: base, authored: authored}).Load()
+	if actual.Cache.Enabled || actual.Cache.Name != "" || actual.Cache.HasWarmup() {
+		t.Fatalf("case library activated root storage/policy: %+v", actual.Cache)
+	}
+	if actual.Cache.SharedCases["recent"][0].Set[0].Values[0] != "today" {
+		t.Fatal("component cases lost")
+	}
+	actual.Cache.SharedCases["recent"][0].Set[0].Values[0] = "changed"
+	if authored.Cache.SharedCases["recent"][0].Set[0].Values[0] != "today" || base.Cache.Name != "old" {
+		t.Fatal("merged settings alias authored/package metadata")
+	}
+}

@@ -72,7 +72,7 @@ func run() error {
 	// MCP is the first request, exercising lazy preparation rather than merely
 	// reusing the registration materialized by an earlier HTTP read.
 	for _, minimum := range []int{2, 3} {
-		result, err := native.CallTool(ctx, &schema.CallToolRequestParams{Name: "Records", Arguments: map[string]any{"Minimum": minimum}})
+		result, err := native.CallTool(ctx, &schema.CallToolRequestParams{Name: "Records", Arguments: map[string]any{"minimum": minimum}})
 		if err != nil {
 			return err
 		}

@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/viant/datly/internal/sqlanalysis"
 	"github.com/viant/datly/spec"
 	dsql "github.com/viant/datly/sql"
 	"github.com/viant/datly/sql/fragment"
@@ -41,21 +42,28 @@ func newReadTemplateSource(source string) (*readTemplateSource, error) {
 		prefix = "_" + prefix
 	}
 	var analysis strings.Builder
-	for offset := 0; offset < len(source); {
-		end := strings.IndexByte(source[offset:], '\n')
-		if end < 0 {
-			end = len(source)
-		} else {
-			end += offset + 1
+	offset := 0
+	consumed := 0
+	scanner := sqlsource.NewCodeScanner(source, 0)
+	for begin, ok := scanner.Next(); ok; begin, ok = scanner.Next() {
+		if begin < consumed || source[begin] != '#' {
+			continue
 		}
-		line := source[offset:end]
-		trimmed := strings.TrimLeft(line, " \t\r")
-		if executableReadStatement(trimmed) {
-			begin := offset + len(line) - len(trimmed)
+		if executableReadStatement(source[begin:]) {
 			cursor := parsly.NewCursor("reader SQL", []byte(source), 0)
 			cursor.Pos = begin
-			if _, err := veltyparser.MatchStatement(cursor); err != nil {
+			statement, err := veltyparser.MatchStatement(cursor)
+			if err != nil {
 				return nil, &Error{Code: CodeSQLParse, Offset: begin, Cause: err}
+			}
+			consumed = cursor.Pos
+			// Inline loops already belong to SQLParser's template operand path.
+			// Preserve the complete operand rather than flattening one loop body.
+			if _, loop := statement.(*stmt.ForEach); loop {
+				line := source[strings.LastIndexByte(source[:begin], '\n')+1 : begin]
+				if strings.TrimSpace(line) != "" {
+					continue
+				}
 			}
 			marker := fmt.Sprintf("/*%s%d__*/", prefix, len(result.fragments))
 			text := source[begin:cursor.Pos]
@@ -73,11 +81,9 @@ func newReadTemplateSource(source string) (*readTemplateSource, error) {
 			analysis.WriteString(body)
 			analysis.WriteString(closing)
 			offset = cursor.Pos
-		} else {
-			analysis.WriteString(line)
-			offset = end
 		}
 	}
+	analysis.WriteString(source[offset:])
 	result.AnalysisSQL = analysis.String()
 	return result, nil
 }
@@ -255,6 +261,54 @@ func readTemplateAnalysisBody(source string) (string, error) {
 		case ast.StatementContainer:
 			for _, item := range n.Statements() {
 				visit(item)
+			}
+		}
+	}
+	if len(root.Statements()) == 1 {
+		if conditional, ok := root.Statements()[0].(*stmt.If); ok {
+			// Classify branch bodies with the existing metadata visitor and SQL
+			// parser before requesting complete-query alternatives. An inline
+			// predicate is not a query; its foreach input proof belongs to the
+			// later component-aware column analysis, not this fragment pass.
+			queryBranch := false
+			for branch := conditional; branch != nil; branch = branch.Else {
+				for _, item := range branch.Body.Statements() {
+					visit(item)
+				}
+				if analysisError != nil {
+					return "", analysisError
+				}
+				_, parsed, err := sqlanalysis.Parse(result.String(), nil)
+				queryBranch = queryBranch || (err == nil && parsed != nil && len(parsed.List) > 0)
+				result.Reset()
+			}
+			if queryBranch {
+				variants, err := sqlanalysis.ConditionalSQL(source)
+				if err != nil {
+					return "", err
+				}
+				var queries []string
+				complete := true
+				for _, variant := range variants {
+					if strings.TrimSpace(variant) == "" {
+						continue
+					}
+					analysis, parsed, err := sqlanalysis.Parse(variant, nil)
+					if err != nil || parsed == nil || len(parsed.List) == 0 {
+						complete = false
+						break
+					}
+					if err := validateDatabaseSQL(parsed); err != nil {
+						return "", err
+					}
+					queries = append(queries, "("+analysis+")")
+				}
+				if complete && len(queries) > 0 {
+					// Complete query alternatives cannot be concatenated as clauses.
+					// Retain every alternative for metadata analysis; restore replaces
+					// this analysis-only set operation with the original template.
+					return strings.Join(queries, " UNION ALL "), nil
+				}
 			}
 		}
 	}

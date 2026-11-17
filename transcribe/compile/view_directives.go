@@ -8,6 +8,7 @@ import (
 
 	"github.com/viant/datly/spec"
 	"github.com/viant/datly/tag"
+	"github.com/viant/datly/transcribe/dql"
 	"github.com/viant/sqlparser"
 	"github.com/viant/sqlparser/expr"
 	"github.com/viant/sqlparser/node"
@@ -19,6 +20,7 @@ type viewDirective struct {
 	target string
 	value  string
 	values []string
+	warmup *spec.CacheWarmupSettings
 }
 
 func extractViewDirectives(parsed *query.Select) ([]viewDirective, error) {
@@ -84,6 +86,8 @@ func parseViewDirective(item *query.Item) (viewDirective, bool, error) {
 	}
 	minimum, maximum := 2, 2
 	switch name {
+	case spec.ViewControlCacheWarmup:
+		maximum = len(call.Args)
 	case spec.ViewControlAllowNulls, spec.ViewControlGroupable, spec.ViewControlGrouping, spec.ViewControlPublish, spec.ViewControlInMemory:
 		minimum, maximum = 1, 1
 	case spec.ViewControlSelfRef:
@@ -101,7 +105,7 @@ func parseViewDirective(item *query.Item) (viewDirective, bool, error) {
 	directive := viewDirective{name: name, target: target}
 	for index, argument := range call.Args[1:] {
 		value, valid := viewDirectiveValue(name, index+1, argument)
-		if !valid {
+		if !valid && !(name == spec.ViewControlCacheWarmup && len(call.Args) >= 3 && index == 0 && isEmptyWarmupIndex(argument)) {
 			return viewDirective{}, true, &Error{Code: CodeViewDirective, Cause: fmt.Errorf("%s values must be literals", name)}
 		}
 		directive.values = append(directive.values, value)
@@ -109,7 +113,18 @@ func parseViewDirective(item *query.Item) (viewDirective, bool, error) {
 	if len(directive.values) > 0 {
 		directive.value = directive.values[0]
 	}
-	if target == "" || minimum > 1 && directive.value == "" {
+	if name == spec.ViewControlCacheWarmup && len(call.Args) >= 3 {
+		args := make([]string, len(call.Args)-1)
+		for i, arg := range call.Args[1:] {
+			args[i] = sqlparser.Stringify(arg)
+		}
+		policy, err := dql.ParseCacheWarmupSettings(args)
+		if err != nil {
+			return viewDirective{}, true, &Error{Code: CodeViewDirective, Cause: err}
+		}
+		directive.warmup = policy
+	}
+	if target == "" || minimum > 1 && directive.value == "" && directive.warmup == nil {
 		return viewDirective{}, true, &Error{Code: CodeViewDirective, Cause: fmt.Errorf("%s requires non-empty arguments", name)}
 	}
 	if name == spec.ViewControlSetLimit || name == spec.ViewControlMutationPredicate {
@@ -338,7 +353,7 @@ func applyViewDirectives(root *spec.View, directives []viewDirective) error {
 		if target == nil {
 			return &Error{Code: CodeViewDirective, Cause: fmt.Errorf("%s target %q does not match a compiled view", directive.name, directive.target)}
 		}
-		if key := singletonViewDirectiveKey(directive.name); key != "" {
+		if key := singletonViewDirectiveKey(directive.name); key != "" && directive.warmup == nil {
 			if seen[target] == nil {
 				seen[target] = map[string]bool{}
 			}
@@ -445,7 +460,19 @@ func applyViewDirectives(root *spec.View, directives []viewDirective) error {
 			if target.Source.Bindings == nil {
 				target.Source.Bindings = &spec.ViewBindings{}
 			}
-			target.Source.Bindings.CacheWarmup = directive.value
+			if directive.warmup == nil {
+				target.Source.Bindings.CacheWarmup = directive.value
+			} else {
+				settings := &spec.CacheSettings{}
+				policies := target.Source.Bindings.InlineWarmups
+				if len(policies) != 0 {
+					settings.Warmup, settings.Warmups = policies[0], policies[1:]
+				}
+				if err := dql.AppendCacheWarmupSettings(settings, directive.warmup); err != nil {
+					return &Error{Code: CodeViewDirective, Cause: err}
+				}
+				target.Source.Bindings.InlineWarmups = append([]*spec.CacheWarmupSettings{settings.Warmup}, settings.Warmups...)
+			}
 		case spec.ViewControlAllowNulls:
 			value := true
 			target.AllowNulls = &value
@@ -732,4 +759,9 @@ func normalizeViewDirectiveValue(value string) string {
 		}
 	}
 	return strings.Trim(value, "`\"")
+}
+
+func isEmptyWarmupIndex(source node.Node) bool {
+	literal, ok := source.(*expr.Literal)
+	return ok && literal.Kind == "string" && normalizeViewDirectiveValue(literal.Value) == ""
 }

@@ -52,7 +52,9 @@ func parseCacheSettings(args []string, tail string) (*spec.CacheSettings, error)
 	return ret, nil
 }
 
-func parseCacheWarmupSettings(args []string) (*spec.CacheWarmupSettings, error) {
+// ParseCacheWarmupSettings parses the options shared by component settings and
+// targeted inline view controls. Inputs retain the DQL literal representation.
+func ParseCacheWarmupSettings(args []string) (*spec.CacheWarmupSettings, error) {
 	if len(args) == 0 {
 		return nil, fmt.Errorf("invalid cache_warmup directive: missing index column")
 	}
@@ -218,38 +220,80 @@ func parseCacheWarmupCases(args []string) (string, *spec.CacheWarmupCase, error)
 	return name, current, nil
 }
 
-// appendCacheWarmupSettings applies one $cache_warmup declaration additively.
+// AppendCacheWarmupSettings applies one $cache_warmup declaration additively.
 // A declaration matching an existing warmup's index identity merges into that
 // warmup, preserving the singular contract; a different index identity appends
 // a new warmup, keeping declaration order: singular first, then plural.
-func appendCacheWarmupSettings(cache *spec.CacheSettings, incoming *spec.CacheWarmupSettings) error {
+func AppendCacheWarmupSettings(cache *spec.CacheSettings, incoming *spec.CacheWarmupSettings) error {
+	_, err := appendCacheWarmupSettings(cache, incoming)
+	return err
+}
+
+// CacheWarmupDeclarationGroup associates an authored policy with the declarations
+// merged into it. Declarations are zero-based indexes into the supplied arguments.
+// Settings remain authored: shared case references are not expanded.
+type CacheWarmupDeclarationGroup struct {
+	Settings     *spec.CacheWarmupSettings
+	Declarations []int
+}
+
+// GroupCacheWarmupDeclarations uses the same parser and merge operation as
+// compilation. It does not resolve host configuration or expand shared cases.
+func GroupCacheWarmupDeclarations(arguments [][]string) ([]CacheWarmupDeclarationGroup, error) {
+	cache := &spec.CacheSettings{}
+	var groups []CacheWarmupDeclarationGroup
+	for declaration, args := range arguments {
+		incoming, err := ParseCacheWarmupSettings(args)
+		if err != nil {
+			return nil, err
+		}
+		slot, err := appendCacheWarmupSettings(cache, incoming)
+		if err != nil {
+			return nil, err
+		}
+		if slot == len(groups) {
+			groups = append(groups, CacheWarmupDeclarationGroup{})
+		}
+		groups[slot].Declarations = append(groups[slot].Declarations, declaration)
+	}
+	for i := range groups {
+		if i == 0 {
+			groups[i].Settings = cache.Warmup.Clone()
+		} else {
+			groups[i].Settings = cache.Warmups[i-1].Clone()
+		}
+	}
+	return groups, nil
+}
+
+func appendCacheWarmupSettings(cache *spec.CacheSettings, incoming *spec.CacheWarmupSettings) (int, error) {
 	if incoming == nil {
-		return nil
+		return -1, nil
 	}
 	if cache.Warmup == nil && len(cache.Warmups) == 0 {
 		cache.Warmup = incoming
-		return nil
+		return 0, nil
 	}
 	if cache.Warmup != nil && sameCacheWarmupIndexIdentity(cache.Warmup, incoming) {
 		merged, err := mergeCacheWarmupSettings(cache.Warmup, incoming)
 		if err != nil {
-			return err
+			return -1, err
 		}
 		cache.Warmup = merged
-		return nil
+		return 0, nil
 	}
 	for i, existing := range cache.Warmups {
 		if existing != nil && sameCacheWarmupIndexIdentity(existing, incoming) {
 			merged, err := mergeCacheWarmupSettings(existing, incoming)
 			if err != nil {
-				return err
+				return -1, err
 			}
 			cache.Warmups[i] = merged
-			return nil
+			return i + 1, nil
 		}
 	}
 	cache.Warmups = append(cache.Warmups, incoming)
-	return nil
+	return len(cache.Warmups), nil
 }
 
 // sameCacheWarmupIndexIdentity reports whether two declarations target the same

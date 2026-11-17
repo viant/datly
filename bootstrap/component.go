@@ -980,9 +980,10 @@ func (r *packageComponentResolver) view(field xshape.Field, name string, metadat
 		}
 		connector := strings.TrimSpace(metadata.View.Connector)
 		cache := strings.TrimSpace(metadata.View.Cache)
-		if connector != "" || cache != "" || strings.TrimSpace(metadata.View.CacheWarmup) != "" {
+		if connector != "" || cache != "" || strings.TrimSpace(metadata.View.CacheWarmup) != "" || metadata.View.InlineWarmups != nil {
 			view.Source.Bindings = &spec.ViewBindings{Connector: connector, CacheName: cache}
 			view.Source.Bindings.CacheWarmup = strings.TrimSpace(metadata.View.CacheWarmup)
+			view.Source.Bindings.InlineWarmups = spec.CloneCacheWarmups(metadata.View.InlineWarmups)
 		}
 		if metadata.View.Limit != nil || metadata.View.Offset != nil || strings.TrimSpace(metadata.View.OrderBy) != "" {
 			view.Source.Controls = &spec.ViewControls{OrderBy: strings.TrimSpace(metadata.View.OrderBy)}

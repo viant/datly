@@ -218,10 +218,26 @@ type Structure struct {
 	PredicateExpansions   []PredicateExpansion        `json:"predicateExpansions,omitempty"`
 	PredicateCompositions []PredicateComposition      `json:"predicateCompositions,omitempty"`
 	Functions             []FunctionOccurrence        `json:"functions,omitempty"`
+	TargetedWarmups       []TargetedWarmupPlan        `json:"targetedWarmups,omitempty"`
 	ColumnContracts       []ColumnContract            `json:"columnContracts,omitempty"`
 	AvailableConnectors   []string                    `json:"availableConnectors,omitempty"`
 	AvailablePredicates   []string                    `json:"availablePredicates,omitempty"`
 	AvailableCaches       []string                    `json:"availableCaches,omitempty"`
+}
+
+// TargetedWarmupPlan describes one merged outer-projection inline plan. View
+// is the authored SQL namespace. Contributors use the existing per-function-name
+// occurrence numbering and expectedArgs comparison semantics. They are valid
+// only for this inspected source, not stable identities across edits.
+// Settings retain authored options and case references, not runtime expansion.
+type TargetedWarmupPlan struct {
+	View     string                    `json:"view"`
+	Settings *spec.CacheWarmupSettings `json:"settings"`
+	// Editable is true only when all native contributors can be addressed by
+	// the existing guarded function operations. Otherwise Contributors is empty.
+	Editable     bool                 `json:"editable"`
+	Diagnostic   string               `json:"diagnostic,omitempty"`
+	Contributors []FunctionOccurrence `json:"contributors"`
 }
 
 type FunctionOccurrence struct {

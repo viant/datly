@@ -2,6 +2,7 @@ package tag
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -33,6 +34,7 @@ type View struct {
 	Table                    string
 	Cache                    string
 	CacheWarmup              string
+	InlineWarmups            []*spec.CacheWarmupSettings
 	OrderBy                  string
 	Limit                    *int
 	Offset                   *int
@@ -175,6 +177,14 @@ func ParseView(value string) (*View, error) {
 			result.Table = value
 		case "cache":
 			result.Cache = value
+		case "inlinewarmups":
+			raw, err := base64.RawURLEncoding.DecodeString(value)
+			if err != nil {
+				return fmt.Errorf("inlineWarmups encoding: %w", err)
+			}
+			if err = json.Unmarshal(raw, &result.InlineWarmups); err != nil {
+				return fmt.Errorf("inlineWarmups: %w", err)
+			}
 		case "cachewarmup":
 			result.CacheWarmup = value
 		case "orderby":

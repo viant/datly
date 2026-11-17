@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/viant/datly/runtime/handler/engine"
 	h "github.com/viant/xdatly/handler"
@@ -280,6 +281,18 @@ func immutableValues(values []reflect.Value) (string, error) {
 				}
 			}
 		case reflect.Struct:
+			if v.Type() == reflect.TypeFor[time.Time]() {
+				// A timestamp owns its scalar value and location identity, not
+				// time.Location's lazily initialized process-wide cache. Reuse
+				// the existing comparable-value fingerprint to retain strict
+				// wall/monotonic/location mutation checks without traversing it.
+				value, err := immutableMapKey(v)
+				if err != nil {
+					return err
+				}
+				result.WriteString(value)
+				return nil
+			}
 			for i := 0; i < v.NumField(); i++ {
 				// A nested component output can carry its invocation logger.
 				// Its mutable runtime internals are not writer contract data.

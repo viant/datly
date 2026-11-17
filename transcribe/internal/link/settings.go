@@ -204,7 +204,9 @@ func (l *settingsLoader) mergeCache(base, authored *spec.CacheSettings) *spec.Ca
 		return base
 	}
 	if !authored.Enabled {
-		return &spec.CacheSettings{}
+		// Component case libraries remain usable by targeted views even when
+		// this component has no enabled root storage.
+		return &spec.CacheSettings{SharedCases: spec.CloneSharedCases(authored.SharedCases)}
 	}
 	if base == nil {
 		base = &spec.CacheSettings{}
