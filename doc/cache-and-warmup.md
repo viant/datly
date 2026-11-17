@@ -496,3 +496,39 @@ Configure the administrator credential through your deployment's configuration
 handling. Standalone preloads GET component metadata when this control is enabled
 so caches declared on nested Go output types are available before the first read.
 Only components with actual cached views receive invalidation routes.
+
+### Builder contributor metadata
+
+`readerbuilder.Structure.TargetedWarmups` (`targetedWarmups` in JSON) exposes
+the compiled graph's targeted inline warmup collections as authored plans,
+without runtime case expansion. Each item has the SQL namespace `view`,
+authored `settings`, `editable`, and `contributors` containing the existing
+function `name`, `occurrence`, `args`, and `sourceSpan` fields. Editable
+associations use the native warmup parser and merge operation and must match
+the complete compiled collection for that view.
+
+When native declarations cannot be completely represented by the existing
+guarded function operations, plans on that view have `editable=false`, a
+producer-owned `diagnostic`, and an empty `contributors` array. This includes
+backtick-quoted function names and aliased calls, even when an omitted duplicate does
+not change the merged settings. Native settings are still reported in full;
+incomplete provenance neither changes compilation nor rejects other edits.
+Consumers must not offer contributor-based mutations for read-only plans.
+Occurrences are zero-based per function name across the entire outer projection,
+including host-reference calls. They are valid only for the inspected source.
+Component-level settings, host references, and calls inside embedded/resource
+SQL are outside this outer-function editing projection.
+
+Settings preserve authored case groups and `CaseRefs`; they are not expanded
+execution settings. Consumers must retain every contributing definition when
+editing a merged plan. Use existing guarded `updateFunction`/`removeFunction`
+operations and pass the inspected `args` as `expectedArgs`. Remove contributors
+in descending occurrence order; put related edits/removal and additions in one
+batch. Existing argument comparison semantics are unchanged. On any batch
+failure, the response retains the original source with `Applied=false`.
+The embedding application must also enforce its source-revision guard and
+existing source-view permissions. This entire projection contains authored
+source information; filter its settings, arguments and spans under the same
+source-view permission as the DQL. That adapter-level filtering is not performed
+by Reader Builder. Reinspect the saved source before further edits. Shared case
+definitions and cache storage bindings are independent.

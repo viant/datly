@@ -103,6 +103,9 @@ func (s *Service) inspect(ctx context.Context, source string) (*Structure, []*tr
 	})
 	if err == nil {
 		structure.Component = result.Component.Clone()
+		// Provenance availability does not change native compilation or mutation
+		// validation. Incomplete associations are explicitly read-only metadata.
+		structure.TargetedWarmups = inspectTargetedWarmups(source, result.Component, functions)
 	} else {
 		structure.Status = "partial"
 	}
