@@ -916,6 +916,38 @@ changes are not partially applied when synchronization fails. Hooks running afte
 this phase should use the generated marker-aware setters for business changes;
 do not expect a later hidden SyncPresence pass to repair arbitrary direct writes.
 
+### Audit fields and update eligibility
+
+Declare server-maintained audit columns with the existing writer-role tag:
+
+```go
+UpdatedAt *time.Time `sqlx:"UPDATED_AT" writer:"audit"`
+UpdatedBy *int       `sqlx:"UPDATED_BY" writer:"audit"`
+```
+
+In DQL, the ordinary `tag` declaration can carry the same role, for example
+`tag(r.updated_at, 'writer:"audit"')`. This role is independent of JSON visibility,
+authorization and `diff:"-"`; it does not make a column read-only or assign its
+value. Business initialization continues to supply audit values and markers.
+
+For an ordinary matched UPDATE, audit markers alone do not justify a write.
+When no business write markers remain, the writer restores marked audit values
+from loaded Previous and clears their write markers, preserving the no-op
+response as well as storage. A real business change retains its audit writes.
+Inserts retain their complete validation and persistence behavior. Children
+continue to be processed independently when their parent has no update.
+
+Identity markers and invariant-only validation coverage do not justify an
+UPDATE. Invariant coverage is recomputed after initialization; backfilled group
+members remain validation-only. Audit fields cannot be identity, deletion or
+concurrency controls, transient fields, or members of business invariants.
+
+This does not perform a second value comparison or clear equal business values
+automatically: the entity's existing presence synchronization and normalization
+must clear their unchanged write markers. It does not change explicit
+`writer_action_policy(row, 'update')` commands, which have no Previous and retain
+their ordered command semantics. Their caller owns change detection.
+
 ### Prepare association writes without replacing the request graph
 
 When an API accepts a desired membership list, initialization may need to derive
