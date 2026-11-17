@@ -98,6 +98,9 @@ func buildDataViewsWithType(component *spec.Component, outputType reflect.Type, 
 	}
 	view.Relations = append(view.Relations, outputRelations...)
 	for compiled := range result.rowTypes {
+		if compiled.Spec.Source != nil && compiled.Spec.Source.Bindings.HasInlineWarmups() && component != nil && component.Settings != nil && component.Settings.Cache != nil {
+			compiled.Cache.SharedCases = spec.CloneSharedCases(component.Settings.Cache.SharedCases)
+		}
 		if compiled.Spec.Selector != nil {
 			if err := compiled.Spec.Selector.FieldSelection.Validate(); err != nil {
 				return nil, fmt.Errorf("view %s: %w", compiled.Spec.Name, err)

@@ -31,6 +31,18 @@ func (s *CacheWarmupSettings) Clone() *CacheWarmupSettings {
 	return &cloned
 }
 
+// CloneCacheWarmups detaches a policy collection, retaining nil/empty semantics.
+func CloneCacheWarmups(source []*CacheWarmupSettings) []*CacheWarmupSettings {
+	if source == nil {
+		return nil
+	}
+	result := make([]*CacheWarmupSettings, len(source))
+	for i, policy := range source {
+		result[i] = policy.Clone()
+	}
+	return result
+}
+
 func (c *CacheWarmupCase) Clone() *CacheWarmupCase {
 	if c == nil {
 		return nil
@@ -94,12 +106,7 @@ func (c *CacheSettings) Clone() *CacheSettings {
 	}
 	cloned := *c
 	cloned.Warmup = c.Warmup.Clone()
-	if c.Warmups != nil {
-		cloned.Warmups = make([]*CacheWarmupSettings, len(c.Warmups))
-		for i, item := range c.Warmups {
-			cloned.Warmups[i] = item.Clone()
-		}
-	}
+	cloned.Warmups = CloneCacheWarmups(c.Warmups)
 	cloned.SharedCases = CloneSharedCases(c.SharedCases)
 	return &cloned
 }
@@ -228,4 +235,46 @@ func warmupCaseKey(item *CacheWarmupCase) string {
 	builder.WriteString("fields=")
 	builder.WriteString(strings.Join(item.FieldNames, ","))
 	return builder.String()
+}
+
+// ValidateInlineWarmups validates each authored targeted collection in its
+// component case scope, regardless of which policy source will be selected.
+func (c *Component) ValidateInlineWarmups() error {
+	if c == nil {
+		return nil
+	}
+	var cases map[string][]*CacheWarmupCase
+	if c.Settings != nil && c.Settings.Cache != nil {
+		cases = c.Settings.Cache.SharedCases
+	}
+	seen := map[*View]bool{}
+	var visit func(*View) error
+	visit = func(view *View) error {
+		if view == nil || seen[view] {
+			return nil
+		}
+		seen[view] = true
+		if view.Source != nil && view.Source.Bindings.HasInlineWarmups() {
+			if _, err := EffectiveCacheWarmups(nil, view.Source.Bindings.InlineWarmups, cases); err != nil {
+				return fmt.Errorf("view %q inline warmup: %w", view.Name, err)
+			}
+		}
+		for _, relation := range view.Relations {
+			if relation != nil {
+				if err := visit(relation.View); err != nil {
+					return err
+				}
+			}
+		}
+		return nil
+	}
+	if err := visit(c.RootView); err != nil {
+		return err
+	}
+	for _, view := range c.Views {
+		if err := visit(view); err != nil {
+			return err
+		}
+	}
+	return nil
 }

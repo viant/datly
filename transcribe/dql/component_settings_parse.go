@@ -15,6 +15,7 @@ func parseComponentSettings(blocks []directiveBlock) (ret *componentSettings, er
 	ret = &componentSettings{}
 	constantNames := map[string]string{}
 	var internalDeclared bool
+	var cacheDeclared bool
 	for _, block := range blocks {
 		if block.kind != directiveKindSetting && !isCubeSetting(block) {
 			continue
@@ -251,19 +252,26 @@ func parseComponentSettings(blocks []directiveBlock) (ret *componentSettings, er
 			if err != nil {
 				return nil, err
 			}
+			if ret.Cache != nil {
+				cache.Warmup, cache.Warmups, cache.SharedCases = ret.Cache.Warmup, ret.Cache.Warmups, ret.Cache.SharedCases
+			}
 			ret.Cache = cache
+			cacheDeclared = true
 		case strings.EqualFold(name, "cache_warmup"):
-			warmup, err := parseCacheWarmupSettings(args)
+			warmup, err := ParseCacheWarmupSettings(args)
 			if err != nil {
 				return nil, err
 			}
 			if ret.Cache == nil {
-				ret.Cache = &spec.CacheSettings{Enabled: true}
+				ret.Cache = &spec.CacheSettings{}
+			}
+			if !cacheDeclared {
+				ret.Cache.Enabled = true
 			}
 			// Repeated declarations are additive: one declaration keeps the
 			// singular contract, a matching index identity merges cases, and a
 			// different index appends a distinct plural warmup.
-			if err := appendCacheWarmupSettings(ret.Cache, warmup); err != nil {
+			if err := AppendCacheWarmupSettings(ret.Cache, warmup); err != nil {
 				return nil, err
 			}
 		case strings.EqualFold(name, "cache_warmup_cases"):
@@ -272,7 +280,7 @@ func parseComponentSettings(blocks []directiveBlock) (ret *componentSettings, er
 				return nil, err
 			}
 			if ret.Cache == nil {
-				ret.Cache = &spec.CacheSettings{Enabled: true}
+				ret.Cache = &spec.CacheSettings{}
 			}
 			if ret.Cache.SharedCases == nil {
 				ret.Cache.SharedCases = map[string][]*spec.CacheWarmupCase{}

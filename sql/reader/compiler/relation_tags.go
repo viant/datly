@@ -35,7 +35,10 @@ func applyFieldViewTag(view *data.View, options *dtag.View) {
 	view.Spec.Partitioning = options.Partitioning.Clone()
 	view.Spec.Selector = options.Selector.Clone()
 	if options.Cache != "" {
-		view.Cache = &data.Cache{Name: options.Cache}
+		if view.Cache == nil {
+			view.Cache = &data.Cache{}
+		}
+		view.Cache.Name = options.Cache
 	}
 	if options.Table != "" {
 		if view.Spec.Source == nil {
@@ -72,7 +75,7 @@ func applyFieldViewTag(view *data.View, options *dtag.View) {
 		offset := *options.Offset
 		view.Spec.Source.Controls.Offset = &offset
 	}
-	if strings.TrimSpace(options.CacheWarmup) != "" {
+	if strings.TrimSpace(options.CacheWarmup) != "" || options.InlineWarmups != nil {
 		if view.Spec.Source == nil {
 			view.Spec.Source = &spec.ViewSource{}
 		}
@@ -80,6 +83,15 @@ func applyFieldViewTag(view *data.View, options *dtag.View) {
 			view.Spec.Source.Bindings = &spec.ViewBindings{}
 		}
 		view.Spec.Source.Bindings.CacheWarmup = strings.TrimSpace(options.CacheWarmup)
+		view.Spec.Source.Bindings.InlineWarmups = spec.CloneCacheWarmups(options.InlineWarmups)
+		if view.Spec.Source.Bindings.HasInlineWarmups() {
+			if view.Cache == nil {
+				view.Cache = &data.Cache{}
+			}
+			view.Cache.Warmup = nil
+			view.Cache.Warmups = spec.CloneCacheWarmups(options.InlineWarmups)
+			view.Cache.WarmupPolicyRef = ""
+		}
 	}
 }
 

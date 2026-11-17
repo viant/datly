@@ -245,7 +245,7 @@ func typeHasWarmupTag(candidate reflect.Type, visited map[reflect.Type]bool) (bo
 			if err != nil {
 				return false, fmt.Errorf("%s.%s view tag: %w", candidate.Name(), field.Name, err)
 			}
-			if viewTag != nil && strings.TrimSpace(viewTag.CacheWarmup) != "" {
+			if viewTag != nil && (strings.TrimSpace(viewTag.CacheWarmup) != "" || (&spec.ViewBindings{InlineWarmups: viewTag.InlineWarmups}).HasInlineWarmups()) {
 				return true, nil
 			}
 		}
@@ -298,7 +298,7 @@ func shapeHasWarmupTag(shape *xshape.Type, path string, visited map[string]bool)
 			if err != nil {
 				return false, fmt.Errorf("%s view tag: %w", field.Name, err)
 			}
-			if viewTag != nil && strings.TrimSpace(viewTag.CacheWarmup) != "" {
+			if viewTag != nil && (strings.TrimSpace(viewTag.CacheWarmup) != "" || (&spec.ViewBindings{InlineWarmups: viewTag.InlineWarmups}).HasInlineWarmups()) {
 				return true, nil
 			}
 		}
@@ -357,7 +357,7 @@ func hasViewWarmupBinding(view *spec.View, visited map[*spec.View]bool) bool {
 		return false
 	}
 	visited[view] = true
-	if view.Source != nil && view.Source.Bindings != nil && strings.TrimSpace(view.Source.Bindings.CacheWarmup) != "" {
+	if view.Source != nil && view.Source.Bindings != nil && (strings.TrimSpace(view.Source.Bindings.CacheWarmup) != "" || view.Source.Bindings.HasInlineWarmups()) {
 		return true
 	}
 	for _, relation := range view.Relations {

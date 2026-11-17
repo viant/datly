@@ -74,6 +74,13 @@ func (v View) Value() (string, error) {
 			return "", err
 		}
 	}
+	if v.InlineWarmups != nil {
+		raw, err := json.Marshal(v.InlineWarmups)
+		if err != nil {
+			return "", err
+		}
+		values = append(values, "inlineWarmups="+base64.RawURLEncoding.EncodeToString(raw))
+	}
 	if v.Reconciliation != nil {
 		raw, err := json.Marshal(v.Reconciliation)
 		if err != nil {
