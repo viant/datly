@@ -51,6 +51,7 @@ type InputField struct {
 
 // RouteInputContract is the exact binding contract for one component route.
 type RouteInputContract struct {
+	lifecycle   *inputLifecyclePlan
 	selectors   *selectorcompanion.BindingPlan
 	route       spec.RouteRef
 	inputType   reflect.Type

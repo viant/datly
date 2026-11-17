@@ -955,10 +955,29 @@ For a new local scaffold, declare `lifecycle_type(records, 'RecordLifecycle')`
 under the destination `#package`; pure Go transcription creates empty methods
 once. Missing foreign types fail. Omitting the declaration keeps ordinary writes
 hookless, and auxiliary views cannot declare mutation lifecycles.
-`lifecycle_type` requires generated Go mutation dispatch for PATCH/POST/PUT.
-Readers reject it: input initialization and output finalization belong to the
-explicit contract types, with row `OnFetch` a separate hook. It is not a generic
-reader hook registration mechanism. The spelling
+Generated mutation dispatch retains the typed writer lifecycle contract.
+Runtime-compiled readers may declare a linked lifecycle on the root view when
+their input is an anonymous runtime struct. The reader lifecycle implements
+`Init(context.Context, any) error`; its input argument contains the canonical
+input pointer. It runs after binding and before ordinary predicates and reads.
+Nested reader lifecycles and mutation roles are not enabled by this option.
+Named compiled readers retain their existing input `Init` behavior.
+
+An optional `PrepareInput(reflect.Type) error` prepares field access once for the
+exact input contract. Its receiver must retain only immutable metadata, never
+request values, binders, connections or user policy. Each invocation gets a
+shallow copy of this prepared receiver; referenced metadata must not be mutated
+by `Init`. Scalar invocation state remains private to that copy.
+
+The same linked lifecycle may implement the existing
+`Contract(context.Context, bindly.Binder) (*contract.Policy, error)` interface
+for the dynamic input's field policy. The ordinary contract planner, presence
+mapping and bounded variant cache remain authoritative. Policy evaluation gets
+a fresh lifecycle instance and must not depend on `PrepareInput` state.
+Input initialization and policy selection remain separate phases; SQL aliases
+and column names belong in ordinary predicate declarations.
+
+The spelling
 `entity_hooks` is unsupported and produces a diagnostic.
 
 `invariant` places Start and End in one cohesive invariant group; the comparison rule

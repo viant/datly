@@ -200,7 +200,12 @@ func (input *Input) validateLifecycleTarget(mutation, pendingDiscovery bool) err
 			}
 		}
 		if !supported && strings.TrimSpace(view.EntityHooks) != "" {
-			return fmt.Errorf("view %s: lifecycle_type(%s, %q) requires the generated Go mutation lifecycle; readers use input_type OrdersInput.Init and output_type OrdersOutput.Finalize, with row OnFetch separate", view.Name, view.Name, view.EntityHooks)
+			if input.DynamicReader && view == input.Component.RootView && policy == "" && !view.Auxiliary {
+				// Bootstrap validates the linked hook signature against the exact
+				// runtime input. Nested reader lifecycles remain unsupported.
+			} else {
+				return fmt.Errorf("view %s: lifecycle_type(%s, %q) requires the generated Go mutation lifecycle; readers use input_type OrdersInput.Init and output_type OrdersOutput.Finalize, with row OnFetch separate", view.Name, view.Name, view.EntityHooks)
+			}
 		}
 		for _, relation := range view.Relations {
 			if relation != nil {

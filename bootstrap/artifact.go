@@ -237,6 +237,16 @@ func (c *artifactCompiler) compile() (*Artifact, error) {
 			return nil, fmt.Errorf("compile handler report metadata for %s: %w", component.Key.String(), err)
 		}
 	}
+	if readerPlan != nil && component.RootView != nil && component.RootView.EntityHooks != "" && input.InputType.Name() == "" {
+		owner, err := c.lookupType(component.RootView.EntityHooks)
+		if err != nil {
+			return nil, fmt.Errorf("resolve reader lifecycle: %w", err)
+		}
+		compiledInput.Input, err = compiledInput.Input.WithLifecycle(owner)
+		if err != nil {
+			return nil, fmt.Errorf("prepare reader lifecycle: %w", err)
+		}
+	}
 	return &Artifact{instanceConst: input.Const, Documentation: docs,
 		contractState: ContractStatePlans(factory, effective.Resources(input.Resources), c.lookupType),
 		Component:     component, Input: compiledInput.Input.WithDocumentation(docs),

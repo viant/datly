@@ -54,6 +54,9 @@ func compileEmbeddedInitializer(typ reflect.Type) ([]int, error) {
 // InitializerTarget returns the preselected receiver on this invocation's input.
 // It neither scans types nor allocates an embedded object during execution.
 func (c *RouteInputContract) InitializerTarget(input any) any {
+	if c != nil && c.lifecycle != nil {
+		return &inputLifecycleInvocation{plan: c.lifecycle, input: input}
+	}
 	if c == nil || c.contract == nil || len(c.contract.initializerPath) == 0 {
 		return input
 	}

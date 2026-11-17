@@ -135,6 +135,9 @@ func (c *RouteInputContract) withEffectiveInput(effective reflect.Type, represen
 	if !ok {
 		return nil, fmt.Errorf("effective input route missing")
 	}
+	// Representation policies change binding metadata, not canonical storage or
+	// the registration-owned initialization plan.
+	result.lifecycle = c.lifecycle
 	for i := range result.fields {
 		binding := result.fields[i].binding
 		result.fields[i] = retained[i]

@@ -355,6 +355,7 @@ func (c *discoveryInputCompiler) inputType() (reflect.Type, error) {
 		component.RootView = nil
 	}
 	input := gen.Input{
+		DynamicReader:   c.source != nil && c.source.runtimeReader,
 		ExternalHandler: c.factoryShape,
 		Component:       component, Declarations: c.declarations,
 		TypeResolver: c.resolver, TargetPackage: targetPackage, ViewBindings: c.viewBindings,

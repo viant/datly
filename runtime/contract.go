@@ -191,7 +191,7 @@ func (r *Runtime) contractPlansForContext(ctx context.Context, entry *Registered
 			plans.err = fmt.Errorf("contract route is not registered: %s", route)
 			return
 		}
-		plans.input, plans.err = rcontract.NewInput(entry.Input.Type(), 64, prepareInputExecution(input))
+		plans.input, plans.err = rcontract.NewInput(entry.Input.Type(), 64, prepareInputExecution(input), input.LifecycleType())
 		if plans.err == nil && entry.OutputType != nil {
 			plans.output, plans.err = rcontract.NewOutput(entry.OutputType, 64, prepareOutputDiscovery(entry))
 		}

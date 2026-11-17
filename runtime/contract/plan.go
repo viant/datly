@@ -64,7 +64,7 @@ type variant struct {
 // New detects the hook on the original linked type. capacity bounds retained
 // named variants; zero disables retention. Hook discovery includes nested owners.
 // A graph without hooks retains no walker after discovery.
-func New(original reflect.Type, capacity int) (*Plan, error) {
+func New(original reflect.Type, capacity int, lifecycle ...reflect.Type) (*Plan, error) {
 	if original == nil {
 		return nil, fmt.Errorf("contract type is required")
 	}
@@ -78,6 +78,18 @@ func New(original reflect.Type, capacity int) (*Plan, error) {
 		return nil, err
 	}
 	provider := reflect.TypeFor[xcontract.Provider]()
+	if len(lifecycle) > 1 {
+		return nil, fmt.Errorf("one root lifecycle contract provider is supported")
+	}
+	if len(lifecycle) == 1 && lifecycle[0] != nil {
+		owner := lifecycle[0]
+		if owner.Kind() != reflect.Struct || original.Name() != "" {
+			return nil, fmt.Errorf("separate lifecycle contract requires a struct owner and anonymous input")
+		}
+		if reflect.PointerTo(owner).Implements(provider) {
+			p.providers = append(p.providers, contractOwner{typ: owner})
+		}
+	}
 	err = p.walk.VisitStructs(func(path string, typ reflect.Type) error {
 		for i := 0; i < typ.NumField(); i++ {
 			field := typ.Field(i)
@@ -115,8 +127,8 @@ func NewOutput(original reflect.Type, capacity int, prepare func(*shape.Represen
 // bounded variants. The artifact and callback must contain only immutable
 // registration metadata, never a binder, policy callback or operation state.
 // The host owns the concrete artifact, avoiding a dependency on its registry.
-func NewInput(original reflect.Type, capacity int, prepare func(*shape.Representation) (any, error)) (*Plan, error) {
-	p, err := New(original, capacity)
+func NewInput(original reflect.Type, capacity int, prepare func(*shape.Representation) (any, error), lifecycle ...reflect.Type) (*Plan, error) {
+	p, err := New(original, capacity, lifecycle...)
 	if err != nil {
 		return nil, err
 	}

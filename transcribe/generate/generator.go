@@ -30,6 +30,8 @@ type DeclarationProjection struct {
 type Declarations map[string]Declaration
 
 type Input struct {
+	// DynamicReader admits a linked root lifecycle for runtime-only readers.
+	DynamicReader    bool
 	PreparedSelector *sourcecontract.Selector
 	// ReaderMetadataSource retains the admitted source baseline independently from an explicit DQL result.
 	ReaderMetadataSource *spec.Component

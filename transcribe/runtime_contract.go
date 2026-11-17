@@ -38,6 +38,7 @@ func (c *Compiler) RuntimeContracts(ctx context.Context, rootDir string, source 
 		return nil, fmt.Errorf("runtime contract source is required")
 	}
 	copy := *source
+	copy.runtimeReader = true
 	if copy.Types == nil {
 		copy.Types = typecatalog.NewCatalog()
 	}
@@ -64,6 +65,7 @@ func (c *Compiler) RuntimeContractsInModule(ctx context.Context, modulePath stri
 		return nil, fmt.Errorf("runtime module path and source are required")
 	}
 	copy := *source
+	copy.runtimeReader = true
 	if copy.Types == nil {
 		copy.Types = typecatalog.NewCatalog()
 	}
@@ -99,6 +101,7 @@ func (c *Compiler) RuntimeContractsInModule(ctx context.Context, modulePath stri
 }
 
 func runtimeContractFromInput(input gen.Input, compiled *Result) (*RuntimeContract, error) {
+	input.DynamicReader = true
 	generator := gen.New(input)
 	inputType, err := generator.RuntimeInputType()
 	if err != nil {
