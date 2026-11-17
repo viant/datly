@@ -229,36 +229,6 @@ func readTemplateAnalysisBody(source string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if len(root.Statements()) == 1 {
-		if _, conditional := root.Statements()[0].(*stmt.If); conditional {
-			variants, err := sqlanalysis.ConditionalSQL(source)
-			if err != nil {
-				return "", err
-			}
-			var queries []string
-			complete := true
-			for _, variant := range variants {
-				if strings.TrimSpace(variant) == "" {
-					continue
-				}
-				analysis, parsed, err := sqlanalysis.Parse(variant, nil)
-				if err != nil || parsed == nil || len(parsed.List) == 0 {
-					complete = false
-					break
-				}
-				if err := validateDatabaseSQL(parsed); err != nil {
-					return "", err
-				}
-				queries = append(queries, "("+analysis+")")
-			}
-			if complete && len(queries) > 0 {
-				// Complete query alternatives cannot be concatenated as clauses.
-				// Retain every alternative for metadata analysis; restore replaces
-				// this analysis-only set operation with the original template.
-				return strings.Join(queries, " UNION ALL "), nil
-			}
-		}
-	}
 	var result strings.Builder
 	var analysisError error
 	var visit func(ast.Statement)
@@ -291,6 +261,54 @@ func readTemplateAnalysisBody(source string) (string, error) {
 		case ast.StatementContainer:
 			for _, item := range n.Statements() {
 				visit(item)
+			}
+		}
+	}
+	if len(root.Statements()) == 1 {
+		if conditional, ok := root.Statements()[0].(*stmt.If); ok {
+			// Classify branch bodies with the existing metadata visitor and SQL
+			// parser before requesting complete-query alternatives. An inline
+			// predicate is not a query; its foreach input proof belongs to the
+			// later component-aware column analysis, not this fragment pass.
+			queryBranch := false
+			for branch := conditional; branch != nil; branch = branch.Else {
+				for _, item := range branch.Body.Statements() {
+					visit(item)
+				}
+				if analysisError != nil {
+					return "", analysisError
+				}
+				_, parsed, err := sqlanalysis.Parse(result.String(), nil)
+				queryBranch = queryBranch || (err == nil && parsed != nil && len(parsed.List) > 0)
+				result.Reset()
+			}
+			if queryBranch {
+				variants, err := sqlanalysis.ConditionalSQL(source)
+				if err != nil {
+					return "", err
+				}
+				var queries []string
+				complete := true
+				for _, variant := range variants {
+					if strings.TrimSpace(variant) == "" {
+						continue
+					}
+					analysis, parsed, err := sqlanalysis.Parse(variant, nil)
+					if err != nil || parsed == nil || len(parsed.List) == 0 {
+						complete = false
+						break
+					}
+					if err := validateDatabaseSQL(parsed); err != nil {
+						return "", err
+					}
+					queries = append(queries, "("+analysis+")")
+				}
+				if complete && len(queries) > 0 {
+					// Complete query alternatives cannot be concatenated as clauses.
+					// Retain every alternative for metadata analysis; restore replaces
+					// this analysis-only set operation with the original template.
+					return strings.Join(queries, " UNION ALL "), nil
+				}
 			}
 		}
 	}
