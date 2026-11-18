@@ -114,6 +114,9 @@ func TestReaderAuthEmptyHTTPAndMCP(t *testing.T) {
 			recorder := httptest.NewRecorder()
 			gateway.NewHandler(app, nil, "").ServeHTTP(recorder, httptest.NewRequest("GET", "/records/"+tc.path+"?name="+tc.filter, nil))
 			require.Equal(t, tc.status, recorder.Code, recorder.Body.String())
+			if tc.status != 200 {
+				require.JSONEq(t, `{"status":"error","message":"`+map[int]string{403: "Forbidden", 404: "Not Found"}[tc.status]+`"}`, recorder.Body.String())
+			}
 			require.Len(t, queries, tc.queries)
 			require.EqualValues(t, 1, authEmptyCalls.Load())
 			if tc.queries == 2 {
@@ -139,6 +142,9 @@ func TestReaderAuthEmptyHTTPAndMCP(t *testing.T) {
 				require.NotNil(t, result.IsError, string(encoded))
 				require.True(t, *result.IsError, string(encoded))
 				require.Contains(t, string(encoded), map[int]string{403: "Forbidden", 404: "Not Found"}[tc.status])
+				body, err := json.Marshal(result.StructuredContent)
+				require.NoError(t, err)
+				require.JSONEq(t, `{"status":"error","message":"`+map[int]string{403: "Forbidden", 404: "Not Found"}[tc.status]+`"}`, string(body))
 			}
 			require.Len(t, queries, tc.queries, string(encoded))
 			require.EqualValues(t, 1, authEmptyCalls.Load())

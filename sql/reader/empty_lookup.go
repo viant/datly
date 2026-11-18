@@ -3,7 +3,6 @@ package reader
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"reflect"
 	"strconv"
 	"strings"
@@ -23,7 +22,6 @@ import (
 	sqlxio "github.com/viant/sqlx/io"
 	sqlxread "github.com/viant/sqlx/io/read"
 	"github.com/viant/sqlx/io/read/cache"
-	"github.com/viant/xdatly/response"
 	xstate "github.com/viant/xdatly/state"
 )
 
@@ -311,11 +309,7 @@ func (s *Service) classifyEmpty(ctx context.Context, session *Session, connectio
 	if err := scan.query(ctx, rowQuery{db: connection.DB, tx: connection.Tx, query: query, read: session.rootRead, dialect: connection.Dialect, visit: func(any) error { exists = true; return nil }}); err != nil {
 		return fmt.Errorf("reader identity existence probe: %w", err)
 	}
-	code := http.StatusNotFound
-	if exists {
-		code = http.StatusForbidden
-	}
-	return &response.Error{Code: code, Payload: response.Status{Status: "error", Message: http.StatusText(code)}}
+	return readerlookup.EmptyResult(exists)
 }
 
 // Resolve a predicate column through parser-owned lexical source scopes, then

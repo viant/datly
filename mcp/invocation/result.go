@@ -13,6 +13,7 @@ import (
 
 	"github.com/viant/bindly"
 	"github.com/viant/datly/exec"
+	"github.com/viant/datly/internal/readerlookup"
 	"github.com/viant/mcp-protocol/schema"
 	"github.com/viant/tagly/choice"
 	"github.com/viant/xdatly/response"
@@ -63,6 +64,14 @@ func (e *Execution) ToolResult() *schema.CallToolResult {
 				isError := true
 				return withToolErrorStatus(textToolResult(payload, &isError), status)
 			}
+		}
+		if body, owned := readerlookup.Fallback(invokeErr, status); owned {
+			payload, err := e.errorPayload(body)
+			if err != nil {
+				return errorResult(http.StatusInternalServerError, err)
+			}
+			isError := true
+			return withToolErrorStatus(textToolResult(payload, &isError), status)
 		}
 		return errorResult(status, invokeErr)
 	}

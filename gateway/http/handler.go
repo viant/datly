@@ -10,6 +10,7 @@ import (
 
 	dexec "github.com/viant/datly/exec"
 	internallog "github.com/viant/datly/internal/logging"
+	"github.com/viant/datly/internal/readerlookup"
 	"github.com/viant/datly/output"
 	druntime "github.com/viant/datly/runtime"
 	"github.com/viant/datly/spec"
@@ -306,6 +307,8 @@ func (h *Handler) serveHTTP(writer stdhttp.ResponseWriter, req *stdhttp.Request)
 		if applicable {
 			synthesizedLegacyEnvelope = true
 			actual = legacy
+		} else if fallback, owned := readerlookup.Fallback(execErr, statusCode); owned {
+			actual = fallback
 		} else {
 			// Reuse typed binding provenance for responses without a declared envelope.
 			if safe, ok := output.BindingFailureMessage(execErr, statusCode); ok {
