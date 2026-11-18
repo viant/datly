@@ -41,10 +41,11 @@ type Config struct {
 // audience and principal. It is optional so existing Datly deployments retain
 // their current verifier contract until they opt in.
 type ClaimPolicy struct {
-	Issuer         string   `json:"Issuer,omitempty" yaml:"Issuer,omitempty"`
-	Audience       string   `json:"Audience,omitempty" yaml:"Audience,omitempty"`
-	Audiences      []string `json:"Audiences,omitempty" yaml:"Audiences,omitempty"`
-	RequireSubject bool     `json:"RequireSubject,omitempty" yaml:"RequireSubject,omitempty"`
+	Issuer            string   `json:"Issuer,omitempty" yaml:"Issuer,omitempty"`
+	Audience          string   `json:"Audience,omitempty" yaml:"Audience,omitempty"`
+	Audiences         []string `json:"Audiences,omitempty" yaml:"Audiences,omitempty"`
+	SkipAudienceCheck bool     `json:"SkipAudienceCheck,omitempty" yaml:"SkipAudienceCheck,omitempty"`
+	RequireSubject    bool     `json:"RequireSubject,omitempty" yaml:"RequireSubject,omitempty"`
 }
 
 // Service is an application-configured codec factory. Pass it through the
@@ -231,7 +232,7 @@ func (c *claimsCodec) Value(ctx context.Context, raw any, _ ...xcodec.Option) (a
 	if c.policy.Issuer != "" && claims.Issuer != c.policy.Issuer {
 		return nil, fmt.Errorf("JWT issuer does not match the configured policy")
 	}
-	if c.policy.Audience != "" || len(c.policy.Audiences) > 0 {
+	if !c.policy.SkipAudienceCheck && (c.policy.Audience != "" || len(c.policy.Audiences) > 0) {
 		matched := c.policy.Audience != "" && claims.VerifyAudience(c.policy.Audience, true)
 		for _, audience := range c.policy.Audiences {
 			if claims.VerifyAudience(audience, true) {
