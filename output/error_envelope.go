@@ -5,10 +5,12 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/viant/datly/internal/readerlookup"
 	"github.com/viant/datly/internal/readfailure"
 	"github.com/viant/datly/spec"
 	"github.com/viant/x/shape"
 	legacyresponse "github.com/viant/xdatly/handler/response"
+	modernresponse "github.com/viant/xdatly/response"
 )
 
 // errorEnvelope retains only immutable, checked output-member authority.
@@ -23,6 +25,12 @@ type errorEnvelope struct {
 }
 
 func compileErrorEnvelope(input CompileInput) (*errorEnvelope, error) {
+	return compileErrorEnvelopeKind(input, false)
+}
+
+// Modern output authority is used only for native lookup classifications.
+// Ineligible modern outputs retain their existing generic error presentation.
+func compileErrorEnvelopeKind(input CompileInput, modern bool) (*errorEnvelope, error) {
 	if input.Component == nil || input.Type == nil {
 		return nil, nil
 	}
@@ -46,7 +54,11 @@ func compileErrorEnvelope(input CompileInput) (*errorEnvelope, error) {
 		if err != nil {
 			continue
 		}
-		if field.Type == reflect.TypeFor[legacyresponse.Status]() || field.Type == reflect.TypeFor[*legacyresponse.Status]() {
+		statusType := reflect.TypeFor[legacyresponse.Status]()
+		if modern {
+			statusType = reflect.TypeFor[modernresponse.Status]()
+		}
+		if field.Type == statusType || field.Type == reflect.PointerTo(statusType) {
 			legacy = parameter
 		}
 	}
@@ -65,12 +77,18 @@ func compileErrorEnvelope(input CompileInput) (*errorEnvelope, error) {
 	if err != nil {
 		return nil, fmt.Errorf("compile legacy error message %s: %w", name, err)
 	}
-	errors, err := owner.Accessor(name + ".Errors")
-	if err != nil {
-		return nil, fmt.Errorf("compile legacy error details %s: %w", name, err)
+	var errors *shape.Accessor
+	if !modern {
+		errors, err = owner.Accessor(name + ".Errors")
+		if err != nil {
+			return nil, fmt.Errorf("compile legacy error details %s: %w", name, err)
+		}
 	}
 	result := &errorEnvelope{root: input.Type, status: status, message: message, errors: errors, readerView: errorReaderView(input.Component)}
 	result.data, result.dataType = compileErrorData(input, root, owner, result.readerView)
+	if modern && result.data == nil {
+		return nil, nil
+	}
 	// Check writable authority once; this value is discarded, never retained.
 	if _, err = result.fresh("", []*legacyresponse.Error{{}}); err != nil {
 		return nil, fmt.Errorf("compile legacy error output: %w", err)
@@ -214,8 +232,10 @@ func (e *errorEnvelope) fresh(message string, details any) (any, error) {
 	if err := e.message.Set(value.Interface(), message); err != nil {
 		return nil, err
 	}
-	if err := e.errors.Set(value.Interface(), details); err != nil {
-		return nil, err
+	if e.errors != nil {
+		if err := e.errors.Set(value.Interface(), details); err != nil {
+			return nil, err
+		}
 	}
 	if e.root.Kind() == reflect.Pointer {
 		return value.Convert(e.root).Interface(), nil
@@ -237,6 +257,18 @@ func (p *Plan) ErrorEnvelope(message string) (any, bool, error) {
 // declared legacy output. message and statusCode are already selected public
 // values; unsupported cause graphs retain the plain ErrorEnvelope behavior.
 func (p *Plan) ErrorEnvelopeWithCause(message string, statusCode int, cause error) (any, bool, error) {
+	if p != nil {
+		if classified, ok := readerlookup.Fallback(cause, statusCode); ok {
+			plan := p.errorEnvelope
+			if plan == nil {
+				plan = p.lookupErrorEnvelope
+			}
+			if plan != nil {
+				value, err := plan.fresh(classified.Message, nil)
+				return value, true, err
+			}
+		}
+	}
 	if p == nil || p.errorEnvelope == nil {
 		return nil, false, nil
 	}

@@ -68,6 +68,7 @@ type Plan struct {
 	csvEncoder          cachedCSV
 	xmlEncoders         sync.Map
 	errorEnvelope       *errorEnvelope
+	lookupErrorEnvelope *errorEnvelope
 }
 
 type Result struct {
@@ -226,6 +227,7 @@ func (c Compiler) compile(input CompileInput, prepareFormats bool) (*Plan, error
 		if err != nil {
 			return nil, err
 		}
+		p.lookupErrorEnvelope, _ = compileErrorEnvelopeKind(input, true)
 	}
 	if prepareFormats {
 		p.prepareFormats()

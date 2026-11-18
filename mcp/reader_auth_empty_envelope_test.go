@@ -25,11 +25,43 @@ import (
 	"github.com/viant/x"
 	legacy "github.com/viant/xdatly/handler/response"
 	xreader "github.com/viant/xdatly/reader"
+	modern "github.com/viant/xdatly/response"
 )
+
+type modernLookupRow struct {
+	ID int `sqlx:"id,primaryKey=true" json:"id"`
+}
+
+type modernLookupOutput struct {
+	modern.Status `parameter:",kind=output,in=status"`
+	Data          []modernLookupRow `parameter:",kind=output,in=view" view:"Records" json:"data" forbiddenNotFoundCheck:"true"`
+	Errors        []any             `json:"errors,omitempty" parameter:"Errors,kind=output,in=errors"`
+}
+
+func (*modernLookupOutput) Finalize(_ context.Context, cause error) error { return cause }
+
+type legacyLookupFinalizerOutput struct {
+	legacy.Status `parameter:",kind=output,in=status"`
+	Data          []modernLookupRow `parameter:",kind=output,in=view" view:"Records" json:"data" forbiddenNotFoundCheck:"true"`
+}
+
+func (*legacyLookupFinalizerOutput) Finalize(_ context.Context, cause error) error { return cause }
+
+func TestReaderAuthEmptyLegacyFinalizerEnvelope(t *testing.T) {
+	testReaderAuthEmptyDeclaredEnvelope(t, reflect.TypeFor[legacyLookupFinalizerOutput]())
+}
+
+func TestReaderAuthEmptyModernFinalizerEnvelope(t *testing.T) {
+	testReaderAuthEmptyDeclaredEnvelope(t, reflect.TypeFor[modernLookupOutput]())
+}
 
 // Native identity classification must preserve the declared reader envelope,
 // just as other execution failures do, without weakening explicit public bodies.
 func TestReaderAuthEmptyDeclaredEnvelope(t *testing.T) {
+	testReaderAuthEmptyDeclaredEnvelope(t, nil)
+}
+
+func testReaderAuthEmptyDeclaredEnvelope(t *testing.T, outputType reflect.Type) {
 	type input struct {
 		Key    []int `parameter:"Key,kind=path,in=key,uri=/envelope/{key}" predicate:"in,r,id" json:"key"`
 		Tenant int   `parameter:"Tenant,kind=query,in=tenant,value=7" predicate:"handler,example.com/auth.Scope,auth=true" json:"tenant"`
@@ -41,18 +73,21 @@ func TestReaderAuthEmptyDeclaredEnvelope(t *testing.T) {
 		legacy.Status `parameter:",kind=output,in=status"`
 		Data          []row `parameter:",kind=output,in=view" view:"Records" json:"data" forbiddenNotFoundCheck:"true"`
 	}
+	if outputType == nil {
+		outputType = reflect.TypeFor[output]()
+	}
 	db := sqlite.New(t)
 	require.NoError(t, db.ExecStatements(context.Background(), "CREATE TABLE records(id INTEGER, tenant INTEGER)", "INSERT INTO records VALUES(1,7),(2,8)"))
 	types := typecatalog.NewCatalog()
 	require.NoError(t, types.Register(typecatalog.TypeOriginPackage, &x.Type{Type: reflect.TypeFor[authEmptyPredicate](), PkgPath: "example.com/auth", Name: "Scope"}))
 	c := &spec.Component{Key: spec.Key{Kind: spec.KindComponent, Name: "AuthEmptyEnvelope"}, RootView: &spec.View{Name: "Records", Columns: []*spec.Column{{Name: "ID", Source: "id", PrimaryKey: true}}, Source: &spec.ViewSource{SQL: `SELECT r.id FROM records r WHERE 1=1 ${predicate.Builder().CombineAnd($predicate.FilterGroup(0,"AND")).Build("AND")}`}}, Routes: []*spec.Route{{Method: "GET", Path: "/envelope/{key}", MCP: []*spec.MCPExposure{{Kind: spec.MCPExposureTool, Name: "envelope.get"}}}}}
-	a, err := bootstrap.BuildArtifact(bootstrap.ArtifactInput{Component: c, InputType: reflect.TypeFor[input](), OutputType: reflect.TypeFor[output](), DirectViewField: "Data", Types: types})
+	a, err := bootstrap.BuildArtifact(bootstrap.ArtifactInput{Component: c, InputType: reflect.TypeFor[input](), OutputType: outputType, DirectViewField: "Data", Types: types})
 	require.NoError(t, err)
-	r, err := sqlreader.NewExecution(sqlreader.Config{Component: a.Component, InputType: reflect.TypeFor[input](), OutputType: reflect.TypeFor[output](), Plan: a.Reader, SQL: &dsql.SQLComponent{DB: db.DB}})
+	r, err := sqlreader.NewExecution(sqlreader.Config{Component: a.Component, InputType: reflect.TypeFor[input](), OutputType: outputType, Plan: a.Reader, SQL: &dsql.SQLComponent{DB: db.DB}})
 	require.NoError(t, err)
 	queries := 0
 	guarded := r.WithQueryGuard(func(context.Context, *sql.DB, *xreader.ParameterizedQuery) error { queries++; return nil })
-	registered := &registry.RegisteredComponent{Component: a.Component, Input: a.Input, OutputType: reflect.TypeFor[output](), Reader: guarded}
+	registered := &registry.RegisteredComponent{Component: a.Component, Input: a.Input, OutputType: outputType, Reader: guarded}
 	app, err := druntime.NewRuntime([]*registry.RegisteredComponent{registered})
 	require.NoError(t, err)
 	service, err := New(Config{Components: []*registry.RegisteredComponent{registered}, Invoker: app})
