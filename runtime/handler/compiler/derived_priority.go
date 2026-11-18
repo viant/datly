@@ -36,7 +36,9 @@ func orderDerivedBindings(bindings []bindly.BindingSpec) error {
 				priority = locator.PriorityTransform
 			}
 		}
-		if b.Location.Kind == "input" || b.Location.Kind == "param" {
+		// Exact identity bindings read caller-supplied state through the native
+		// struct provider; they do not depend on another binding's execution.
+		if (b.Location.Kind == "input" || b.Location.Kind == "param") && b.Location.In != b.Path {
 			path := b.Location.In
 			for path != "" {
 				if parent, ok := byPath[path]; ok {
