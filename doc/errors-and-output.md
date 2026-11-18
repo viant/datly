@@ -15,6 +15,14 @@ The failure status/message belongs to the declared input. JWT verification,
 required values and codecs run through the canonical input path. Do not substitute
 unverified input claims for authorization or leak private diagnostics to clients.
 
+For a body using `jsonx:"wrapper=ids"`, native wrapper validation preserves
+`ids is required` and `json: unknown field "..."` in HTTP 400 and native MCP
+binding errors. These messages come from Tagly's concrete wrapper error and the
+external body binding, not from arbitrary decoder text. Syntax and conversion
+diagnostics remain private. Authored binding messages retain precedence; a
+different selected status or an unsupported error-owner chain does not acquire
+wrapper-message disclosure.
+
 ## Errors from business hooks
 
 Return an error from Init, Validate, AfterSequence or AfterQueue to fail that

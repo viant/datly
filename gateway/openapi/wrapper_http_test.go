@@ -15,7 +15,56 @@ import (
 	druntime "github.com/viant/datly/runtime"
 	"github.com/viant/datly/runtime/handler"
 	"github.com/viant/datly/runtime/registry"
+	"github.com/viant/datly/spec"
+	legacy "github.com/viant/xdatly/handler/response"
 )
+
+type wrapperErrorEnvelope struct{ legacy.Status }
+
+func TestWrapperWholeBodyHTTPValidationMessages(t *testing.T) {
+	for _, declared := range []bool{false, true} {
+		t.Run(map[bool]string{false: "fallback", true: "declared"}[declared], func(t *testing.T) {
+			component := &spec.Component{Key: spec.Key{Kind: spec.KindComponent, Name: "Records"}, Routes: []*spec.Route{{Method: "POST", Path: "/records"}}}
+			if declared {
+				component.Parameters = []*spec.Parameter{{Name: "Status", Source: spec.BindSource{Kind: "output", Name: "status"}}}
+			}
+			entry := (fixture{component: component, input: reflect.TypeFor[wrapperHTTPInput](), output: reflect.TypeFor[wrapperErrorEnvelope](), execute: func(context.Context, handler.Invocation) (any, error) {
+				t.Error("invalid input reached business handler")
+				return nil, nil
+			}}).registration(t)
+			runtime, err := druntime.NewRuntime([]*registry.RegisteredComponent{entry})
+			require.NoError(t, err)
+			t.Cleanup(func() { require.NoError(t, runtime.Shutdown(context.Background())) })
+			for _, tc := range []struct{ raw, message string }{
+				{`{}`, "ids is required"}, {`{"ids":null}`, "ids is required"},
+				{`{"other":[1]}`, `json: unknown field "other"`},
+				{`{"ids":"private-value"}`, "Bad Request"},
+			} {
+				t.Run(tc.raw, func(t *testing.T) {
+					req := httptest.NewRequest("POST", "/records", strings.NewReader(tc.raw))
+					req.Header.Set("Content-Type", "application/json")
+					rec := httptest.NewRecorder()
+					gatewayhttp.NewHandler(runtime, nil, "wrapper-errors").ServeHTTP(rec, req)
+					require.Equal(t, 400, rec.Code, rec.Body.String())
+					var wire map[string]any
+					require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &wire))
+					require.Equal(t, tc.message, wire["message"], rec.Body.String())
+					require.NotContains(t, rec.Body.String(), "private-value")
+					if declared {
+						details, ok := wire["errors"].([]any)
+						require.True(t, ok, rec.Body.String())
+						require.Len(t, details, 1)
+						detail, ok := details[0].(map[string]any)
+						require.True(t, ok)
+						require.Equal(t, "Body", detail["parameter"])
+						require.Equal(t, float64(400), detail["statusCode"])
+						require.Equal(t, tc.message, detail["message"])
+					}
+				})
+			}
+		})
+	}
+}
 
 type wrapperHTTPInput struct {
 	Body []int `parameter:"Body,kind=body" jsonx:"wrapper=ids"`

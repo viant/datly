@@ -129,6 +129,17 @@ func TestWrapperNativeMCPTransport(t *testing.T) {
 					require.Equal(t, !tc.valid, response.Error != nil || response.Result.IsError, string(wire))
 					if !tc.valid {
 						require.Equal(t, before, calls)
+						if !strict {
+							messages := map[string]string{
+								`{"creativeIds":{}}`:                    "ids is required",
+								`{"creativeIds":{"ids":null}}`:          "ids is required",
+								`{"creativeIds":{"ids":[1],"other":2}}`: `json: unknown field "other"`,
+								`{"creativeIds":{"ids":[1.5]}}`:         "Bad Request",
+							}
+							var failure struct{ Message string }
+							require.NoError(t, json.Unmarshal(response.Result.StructuredContent, &failure), string(wire))
+							require.Equal(t, messages[tc.args], failure.Message, string(wire))
+						}
 						return
 					}
 					require.Equal(t, before+1, calls)

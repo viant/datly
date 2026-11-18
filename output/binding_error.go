@@ -49,7 +49,8 @@ func projectBindingErrors(cause error, status int, readerView string) (result []
 	if branch.hasNominal {
 		return branch.projectNominal(status, readerView)
 	}
-	result, ok = branch.project(status)
+	approvedMessage, _ := branch.failureMessage(status)
+	result, ok = branch.project(status, approvedMessage)
 	return result, "", ok
 }
 
@@ -159,11 +160,20 @@ func BindingFailureMessage(cause error, status int) (message string, ok bool) {
 	}
 	remaining := 128
 	branch, valid := readBindingBranch(cause, &remaining)
-	if !valid || branch.hasNominal {
+	if !valid {
+		return "", false
+	}
+	return branch.failureMessage(status)
+}
+
+// Reuse the already bounded snapshot. Foreign Unwrap methods may be stateful;
+// public admission must not traverse the original error graph a second time.
+func (branch *bindingBranch) failureMessage(status int) (string, bool) {
+	if branch == nil || status < 400 || status >= 500 || branch.hasNominal {
 		return "", false
 	}
 	if branch.hasVerifier {
-		_, _, message, ok = branch.opaqueVerifierOwner(status)
+		_, _, message, ok := branch.opaqueVerifierOwner(status)
 		return message, ok
 	}
 	// Only transparent wrappers may precede a binding chain. Once ownership
@@ -184,6 +194,9 @@ func BindingFailureMessage(cause error, status int) (message string, ok bool) {
 				return "", false
 			}
 			return branch.requiredAbsence, true
+		}
+		if message, ok := dexec.WrapperValidationMessage(owner, status); ok {
+			return message, true
 		}
 		if owner.Kind != "component" || len(branch.children) != 1 {
 			return "", false
@@ -338,19 +351,19 @@ func (n *bindingBranch) code(fallback int) int {
 	return fallback
 }
 
-func (n *bindingBranch) project(status int) ([]*legacy.Error, bool) {
+func (n *bindingBranch) project(status int, approvedMessage string) ([]*legacy.Error, bool) {
 	if n.owner != nil {
 		code := n.code(status)
 		if code < http.StatusBadRequest || code > 599 {
 			return nil, false
 		}
-		message, ok := n.publicText(code)
+		message, ok := n.publicText(code, approvedMessage)
 		if !ok {
 			return nil, false
 		}
 		entry := &legacy.Error{Parameter: n.owner.Name, Code: code, Err: n.owner.Unwrap(), Message: message}
 		if n.owner.Code == 0 && len(n.children) > 0 {
-			details, ok := n.children[0].owners(code)
+			details, ok := n.children[0].owners(code, approvedMessage)
 			if !ok {
 				return nil, false
 			}
@@ -360,19 +373,19 @@ func (n *bindingBranch) project(status int) ([]*legacy.Error, bool) {
 		}
 		return []*legacy.Error{entry}, true
 	}
-	return n.owners(status)
+	return n.owners(status, approvedMessage)
 }
 
 // owners permits diagnostic leaves only below a real owner. At the public root
 // every joined branch needs its own owner; mixed/partial trees are discarded.
-func (n *bindingBranch) owners(status int) ([]*legacy.Error, bool) {
+func (n *bindingBranch) owners(status int, approvedMessage string) ([]*legacy.Error, bool) {
 	if n.owner != nil {
-		return n.project(status)
+		return n.project(status, approvedMessage)
 	}
 	if n.group {
 		var entries []*legacy.Error
 		for _, child := range n.children {
-			next, ok := child.project(status)
+			next, ok := child.project(status, approvedMessage)
 			if !ok || len(next) == 0 {
 				return nil, false
 			}
@@ -381,7 +394,7 @@ func (n *bindingBranch) owners(status int) ([]*legacy.Error, bool) {
 		return entries, len(entries) > 0
 	}
 	if len(n.children) == 1 && n.input == nil {
-		return n.children[0].owners(status)
+		return n.children[0].owners(status, approvedMessage)
 	}
 	if n.input != nil || len(n.children) == 0 {
 		return nil, true
@@ -389,9 +402,15 @@ func (n *bindingBranch) owners(status int) ([]*legacy.Error, bool) {
 	return nil, false
 }
 
-func (n *bindingBranch) publicText(status int) (string, bool) {
+func (n *bindingBranch) publicText(status int, approvedMessage string) (string, bool) {
 	if status >= http.StatusInternalServerError {
 		return http.StatusText(status), true
+	}
+	// Admission belongs to the complete original chain, not an individual child.
+	// Re-rooting a rejected chain could disclose a body diagnostic through an
+	// unrelated owner, private bridge, join or conflicting selected status.
+	if n.owner != nil && n.owner.Message == "" && status == http.StatusBadRequest && approvedMessage != "" {
+		return approvedMessage, true
 	}
 	safe, ok := n.safeNativeError()
 	if !ok {
@@ -527,7 +546,8 @@ func (p *Plan) PreserveReaderBindingSource(cause error) (result error) {
 	if status < 400 || status > 499 {
 		return cause
 	}
-	if _, ok := branch.project(status); !ok {
+	approvedMessage, _ := branch.failureMessage(status)
+	if _, ok := branch.project(status, approvedMessage); !ok {
 		return cause
 	}
 	return &readerBindingSource{cause: cause, view: p.errorEnvelope.readerView}
