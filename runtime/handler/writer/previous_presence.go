@@ -43,7 +43,10 @@ func compilePreviousPresence(record *Record) error {
 	}
 	compiled := &previousPresence{method: method.Func, marker: marker}
 	for _, field := range record.Fields {
-		if !field.transient && !exclude[field.Name] && len(field.Has) != 0 {
+		// Explicit audit values accompany a business update even when equal to
+		// Previous. Omitting them may activate database ON UPDATE defaults.
+		// restoreNoopAudit removes them when no business change remains.
+		if !field.transient && !field.Audit && !exclude[field.Name] && len(field.Has) != 0 {
 			compiled.fields = append(compiled.fields, field)
 		}
 	}
