@@ -246,9 +246,17 @@ func (c *Compiler) Compile(input Input) (*Plan, error) {
 		if argument.required && argument.bodyNullPolicy == "" {
 			removeSchemaNull(property)
 			if argument.bodyInputTag != "" {
+				policy, err := registry.JSONXInputSchema(reflect.StructField{Type: argument.sourceType, Tag: argument.bodyInputTag})
+				if err != nil {
+					return nil, err
+				}
 				branches, _ := property["anyOf"].([]any)
 				for _, alternative := range branches {
 					branch, ok := alternative.(map[string]any)
+					if ok && branch["type"] == "object" && policy != nil && policy.Wrapper != "" {
+						properties, _ := branch["properties"].(map[string]any)
+						branch, ok = properties[policy.Wrapper].(map[string]any)
+					}
 					if ok && branch["type"] == "array" {
 						if minimum, exists := branch["minItems"]; !exists || minimum == 0 {
 							branch["minItems"] = 1

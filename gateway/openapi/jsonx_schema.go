@@ -25,11 +25,22 @@ func (b *schemaBuilder) jsonxInputSchema(field reflect.StructField, original *op
 	result := &openapi3.Schema{Description: original.Description, Example: original.Example}
 	for i, alternative := range wire.AnyOf {
 		branch := &openapi3.Schema{Type: alternative.Type, Enum: alternative.Enum, Min: alternative.Minimum, Max: alternative.Maximum}
-		if alternative.Type == "object" && original.Items != nil {
+		if alternative.Type == "object" && wire.Wrapper != "" {
+			array := *original
+			array.Nullable = false
+			if original.Items != nil {
+				array.Items = b.nullable(original.Items)
+			}
+			closed := false
+			branch.Properties = openapi3.Schemas{wire.Wrapper: &array}
+			branch.Required = []string{wire.Wrapper}
+			branch.AdditionalPropertiesAllowed = &closed
+		} else if alternative.Type == "object" && original.Items != nil {
 			item := *original.Items
 			branch = &item
 		}
 		if alternative.Type == "array" {
+			branch.MinItems, branch.MaxItems = original.MinItems, original.MaxItems
 			if original.Items != nil {
 				branch.Items = b.nullable(original.Items)
 			}
@@ -46,9 +57,9 @@ func (b *schemaBuilder) jsonxInputSchema(field reflect.StructField, original *op
 	return result, nil
 }
 
-// strictInputValue removes only root value nullability. Array items and object
-// properties retain their independent null contracts and shared references.
-func strictInputValue(schema *openapi3.Schema, requireRecord bool) *openapi3.Schema {
+// strictInputValue constrains the root value and its declared wrapper form.
+// Array items and unrelated object properties retain their own null contracts.
+func strictInputValue(schema *openapi3.Schema, requireRecord bool, wrapper string) *openapi3.Schema {
 	if schema == nil {
 		return nil
 	}
@@ -56,6 +67,15 @@ func strictInputValue(schema *openapi3.Schema, requireRecord bool) *openapi3.Sch
 	result.Nullable = false
 	if requireRecord && result.Type == "array" && result.MinItems < 1 {
 		result.MinItems = 1
+	}
+	if requireRecord && wrapper != "" && result.Type == "object" {
+		if member := schema.Properties[wrapper]; member != nil {
+			result.Properties = make(openapi3.Schemas, len(schema.Properties))
+			for name, property := range schema.Properties {
+				result.Properties[name] = property
+			}
+			result.Properties[wrapper] = strictInputValue(member, true, "")
+		}
 	}
 	if len(schema.Enum) > 0 {
 		result.Enum = make([]any, 0, len(schema.Enum))
@@ -88,7 +108,7 @@ func strictInputValue(schema *openapi3.Schema, requireRecord bool) *openapi3.Sch
 			if nullOnly {
 				continue
 			}
-			branches = append(branches, strictInputValue(branch, requireRecord))
+			branches = append(branches, strictInputValue(branch, requireRecord, wrapper))
 		}
 		*pair.target = branches
 	}

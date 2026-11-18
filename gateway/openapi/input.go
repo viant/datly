@@ -109,6 +109,7 @@ func (b *inputBuilder) build(fields []registry.InputField, operation *openapi3.O
 			return fmt.Errorf("input %s: %w", field.Path(), err)
 		}
 		rootRecordCollection := false
+		rootWrapper := ""
 		if kind == "body" && name == "" && binding.BodyInputTag != "" {
 			// The normalized binding owns the transport policy, including explicit
 			// policies without a corresponding tag on the destination field.
@@ -119,6 +120,7 @@ func (b *inputBuilder) build(fields []registry.InputField, operation *openapi3.O
 				return policyErr
 			}
 			if policy != nil {
+				rootWrapper = policy.Wrapper
 				for _, branch := range policy.AnyOf {
 					if branch.Type == "object" {
 						rootRecordCollection = true
@@ -159,7 +161,7 @@ func (b *inputBuilder) build(fields []registry.InputField, operation *openapi3.O
 			}
 		}
 		if strictValue {
-			schema = strictInputValue(schema, required && rootRecordCollection)
+			schema = strictInputValue(schema, required && rootRecordCollection, rootWrapper)
 		}
 		description := ""
 		example := ""

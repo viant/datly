@@ -681,7 +681,8 @@ func normalizeBodyInputTag(binding *bindly.BindingSpec, field reflect.StructFiel
 	if binding.Location.Kind == "body" && binding.Location.In == "" {
 		authored := field.Tag.Get("jsonx")
 		for _, option := range strings.Split(authored, ",") {
-			if strings.TrimSpace(option) != "objectToSlice" {
+			option = strings.TrimSpace(option)
+			if option != "objectToSlice" && option != "wrapper" && !strings.HasPrefix(option, "wrapper=") {
 				continue
 			}
 			if binding.BodyInputTag != "" && binding.BodyInputTag.Get("jsonx") != authored {

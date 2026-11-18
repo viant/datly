@@ -33,6 +33,35 @@ the union, and discovery retains the full record schema for both the object
 alternative and array items. Case formatting and explicit member names apply
 recursively to both forms. Generic `encoding/json` does not interpret this tag.
 
+# Native integer array with an object wrapper
+
+A direct `[]int` whole body can also accept an explicitly named object wrapper:
+
+```go
+type Input struct {
+    IDs []int `parameter:"IDs,kind=body" jsonx:"wrapper=ids"`
+}
+```
+
+The existing DQL tag declaration retains this input policy:
+
+```sql
+#define($_ = $IDs<[]int>(body/).Optional().WithTag('jsonx:"wrapper=ids"'))
+```
+
+Both `[1,2]` and `{"ids":[1,2]}` bind the same slice. Bare null remains
+supplied null; an absent body remains absent. An object must contain a nonnull
+`ids` member and rejects unknown members. Empty arrays stay nonnil and are
+accepted by an optional binding; required bindings reject both empty forms.
+`null=omit` affects bare null only, never an invalid wrapped null.
+
+The declared member uses Go JSON case folding and duplicate-value semantics,
+including errors in earlier occurrences and integer slice reuse. Only direct
+slices of native integers, including method-free named types, are supported;
+record collections and custom JSON/Text owners are excluded. HTTP and MCP
+input schemas describe the array and its closed wrapper object. MCP retains its
+existing named argument envelope. Output schemas and encoding remain arrays.
+
 # Nested authored JSON date formats
 
 Canonical body binding honors an explicitly authored `format:"timeLayout=..."` or `format:"dateFormat=..."` on nested `time.Time` / `*time.Time` fields. DQL column tags remain the contract authority; keep the generated original Go body shape.

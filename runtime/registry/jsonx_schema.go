@@ -14,7 +14,7 @@ func JSONXInputSchema(field reflect.StructField) (*spec.WireSchema, error) {
 		return nil, err
 	}
 	domain := policy.InputDomain()
-	result := &spec.WireSchema{Nullable: domain.Null}
+	result := &spec.WireSchema{Nullable: domain.Null, Wrapper: domain.Wrapper}
 	if domain.Integer || len(domain.IntegerValues) > 0 {
 		branch := &spec.WireSchema{Type: "integer", Minimum: domain.Minimum, Maximum: domain.Maximum}
 		for _, value := range domain.IntegerValues {
@@ -38,9 +38,9 @@ func JSONXInputSchema(field reflect.StructField) (*spec.WireSchema, error) {
 	if domain.Array {
 		result.AnyOf = append(result.AnyOf, &spec.WireSchema{Type: "array"})
 	}
-	if domain.Object {
+	if domain.Object || domain.Wrapper != "" {
 		// Consumers replace this branch with the same typed record used by
-		// the array items, including recursive naming and visibility.
+		// the array items, or wrap the array under the declared Wrapper member.
 		result.AnyOf = append(result.AnyOf, &spec.WireSchema{Type: "object"})
 	}
 	// null=omit alone does not replace the destination's normal representation.

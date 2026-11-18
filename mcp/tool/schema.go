@@ -166,9 +166,17 @@ func (p *schemaProjector) argument(t reflect.Type, path, property string, schema
 			alternatives = map[string]any{"anyOf": []any{ordinary, map[string]any{"type": "null"}}}
 		}
 		if branches, ok := alternatives["anyOf"].([]any); ok {
+			// JSONXInputSchema emits the destination array before its wrapper.
+			// Copy that completed array so both forms retain identical item/bounds
+			// metadata without sharing mutable requiredness refinements.
+			var arrayBranch map[string]any
 			for _, value := range branches {
 				branch := value.(map[string]any)
-				if branch["type"] == "object" {
+				if branch["type"] == "object" && policy.Wrapper != "" {
+					branch["properties"] = map[string]any{policy.Wrapper: cloneSchemaMap(arrayBranch)}
+					branch["required"] = []string{policy.Wrapper}
+					branch["additionalProperties"] = false
+				} else if branch["type"] == "object" {
 					if record, ok := items.(map[string]any); ok {
 						delete(branch, "type")
 						for key, value := range record {
@@ -186,6 +194,7 @@ func (p *schemaProjector) argument(t reflect.Type, path, property string, schema
 					if maxItems != nil {
 						branch["maxItems"] = maxItems
 					}
+					arrayBranch = branch
 				}
 			}
 		}
