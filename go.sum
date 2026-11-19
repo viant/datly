@@ -1275,6 +1275,8 @@ github.com/viant/xdatly v1.0.1-0.20261106191133-04634a407286 h1:fPoJJ0gmMh5u35n9
 github.com/viant/xdatly v1.0.1-0.20261106191133-04634a407286/go.mod h1:BjRu2N3yexqbnzp/NoFqvp1RYtqNIggQ5Q7edpC65j4=
 github.com/viant/xdatly v1.0.1-0.20261113190124-9ad673c8f3b5 h1:DZ7WmOv2FYYdIgt4qjMiSc7RdSO/BtWDGQ0VE1sUR7Y=
 github.com/viant/xdatly v1.0.1-0.20261113190124-9ad673c8f3b5/go.mod h1:BjRu2N3yexqbnzp/NoFqvp1RYtqNIggQ5Q7edpC65j4=
+github.com/viant/xdatly v1.0.1-0.20261119180022-ca086e831377 h1:Xoc4gyNjzg19Zfk4ZvyH2n30V/bbdVTAnBWiomt2/Ew=
+github.com/viant/xdatly v1.0.1-0.20261119180022-ca086e831377/go.mod h1:BjRu2N3yexqbnzp/NoFqvp1RYtqNIggQ5Q7edpC65j4=
 github.com/viant/xdatly v1.1.1-0.20261106191133-04634a407286 h1:G1EhV6ha8OvR7EOZAy1ESQZ5Sa4HhDpq4OQ7fLVKmzI=
 github.com/viant/xdatly v1.1.1-0.20261106191133-04634a407286/go.mod h1:BjRu2N3yexqbnzp/NoFqvp1RYtqNIggQ5Q7edpC65j4=
 github.com/viant/xlsy v0.3.1 h1:KwA7PxOTVg+ns4CCPOdfNy5aEA9OUlIByUbuNC9ju0s=

@@ -230,6 +230,14 @@ Use per-query warmup for that SQL, or author an optional predicate and warm its
 whole-group form. Other inputs, such as tenant authorization and period, remain
 part of the identity and must match.
 
+When an authorization predicate calls `SelectCacheIndex`, native cache selection
+must match a configured warmup index. A selected column without a configured
+index vetoes indexed replay; the reader executes its authorized SQL instead,
+without falling back to request-supplied indexes. Configured selections still
+use their canonical warmup, and reads without an authorization selection retain
+ordinary request-based matching. Ambiguous matching indexes, invalid selections,
+authorization failures and invocation-scope violations remain errors.
+
 ## A separate connector for prewarming
 
 Configure ordinary reads with their normal connector and set `Warmup.Connector`
