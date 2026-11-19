@@ -58,6 +58,20 @@ A forced reader cache refresh retires both generations for the view before
 reading. This is intentionally broader than an exact-query refresh, and prevents
 Aerospike from satisfying the refresh with an older warmup publication.
 
+## Authorization-selected indexes
+
+An authorization predicate can use `view.SelectCacheIndex` to supply its
+resolved index scope and authorized IDs. Indexed cache matching is eligible only
+when that column matches a configured warmup for the view. If it does not match,
+the reader uses `view.DenyCacheIndex` to skip indexed matching and continues with
+the already-built authorized SQL. It does not fall back to a different warmup
+using untrusted request parameters. An unwarmed authorization scope is not a
+configuration error and does not require adding another warmup.
+
+Ordinary exact-query caching remains available under the authorized SQL and
+arguments. A cache miss follows normal database execution; authorization and
+database failures retain their existing error behavior.
+
 ## Storage and concurrency
 
 A cache owner is derived from the resource identity, view name, and connector

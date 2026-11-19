@@ -692,7 +692,11 @@ func selectAuthorizedTopLevelWarmup(ctx context.Context, aView *view.View, state
 			return &warmupCandidate{warmup: warmup, parameter: warmupParameterFor(aView, warmup), values: selection.Values}, nil
 		}
 	}
-	return nil, fmt.Errorf("authorized cache index %q has no configured warmup", selection.Column)
+	// Authorization can legitimately select a scope that this view has not
+	// warmed. Keep its already-built SQL predicate and skip indexed matching;
+	// never fall back to an untrusted request parameter for a different index.
+	view.DenyCacheIndex(ctx)
+	return nil, nil
 }
 
 func (s *Service) warmupMatcher(ctx context.Context, aView *view.View, warmup *view.Warmup, statelet *view.Statelet, parent *expand.ViewContext) (*cache.ParmetrizedQuery, error) {

@@ -19,8 +19,9 @@ func WithCacheIndexSelection(ctx context.Context) context.Context {
 	return context.WithValue(ctx, cacheIndexSelectionKey{}, &CacheIndexSelection{})
 }
 
-// SelectCacheIndex supplies the authorized values for one configured warmup
-// index. An empty selection leaves the regular cache matching behavior intact.
+// SelectCacheIndex supplies the authorization-selected index scope. The reader
+// uses it only when a matching warmup is configured. An empty selection leaves
+// the regular cache matching behavior intact.
 func SelectCacheIndex(ctx context.Context, column string, values []interface{}) {
 	if selection, ok := ctx.Value(cacheIndexSelectionKey{}).(*CacheIndexSelection); ok && selection != nil {
 		selection.Denied = false
@@ -29,8 +30,9 @@ func SelectCacheIndex(ctx context.Context, column string, values []interface{}) 
 	}
 }
 
-// DenyCacheIndex prevents a request with no authorized IDs from using the
-// original untrusted index parameter to read a populated cache entry.
+// DenyCacheIndex disables indexed warmup matching for the request, including an
+// empty or unwarmed authorization scope. It prevents fallback to an untrusted
+// index parameter and does not prevent execution of the authorized SQL.
 func DenyCacheIndex(ctx context.Context) {
 	if selection, ok := ctx.Value(cacheIndexSelectionKey{}).(*CacheIndexSelection); ok && selection != nil {
 		selection.Denied = true
