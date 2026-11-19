@@ -122,11 +122,11 @@ func New(input Input) *Generator {
 		cloneErr = mutationErr
 	}
 	if input.ReadIndexes != nil {
-		cloned, err := input.ReadIndexes.Source.clone()
+		cloned, err := input.ReadIndexes.clone()
 		if err != nil && cloneErr == nil {
 			cloneErr = err
 		} else if err == nil {
-			input.ReadIndexes = &ReadIndexSource{Package: input.ReadIndexes.Package, TypeName: input.ReadIndexes.TypeName, CacheField: input.ReadIndexes.CacheField, Source: cloned}
+			input.ReadIndexes = cloned
 		}
 	}
 	var hookErr error

@@ -392,7 +392,7 @@ func parseComponentSettings(blocks []directiveBlock) (ret *componentSettings, er
 			if ret.Generation.RouterFile == "" {
 				return nil, fmt.Errorf("invalid router_dest directive: empty destination")
 			}
-		case strings.EqualFold(name, "file_prefix"), strings.EqualFold(name, "handler_dest"), strings.EqualFold(name, "lifecycle_dest"), strings.EqualFold(name, "mutation_dest"), strings.EqualFold(name, "resources_dest"), strings.EqualFold(name, "links_dest"), strings.EqualFold(name, "template_dest"), strings.EqualFold(name, "support_dest"), strings.EqualFold(name, "sql_dest"):
+		case strings.EqualFold(name, "indexes_package"), strings.EqualFold(name, "file_prefix"), strings.EqualFold(name, "handler_dest"), strings.EqualFold(name, "lifecycle_dest"), strings.EqualFold(name, "mutation_dest"), strings.EqualFold(name, "resources_dest"), strings.EqualFold(name, "links_dest"), strings.EqualFold(name, "template_dest"), strings.EqualFold(name, "support_dest"), strings.EqualFold(name, "sql_dest"):
 			expected := 1
 			if strings.EqualFold(name, "support_dest") || strings.EqualFold(name, "sql_dest") {
 				expected = 2
@@ -411,6 +411,11 @@ func parseComponentSettings(blocks []directiveBlock) (ret *componentSettings, er
 			generation := &ret.Generation
 			var destination *string
 			switch strings.ToLower(name) {
+			case "indexes_package":
+				if !token.IsIdentifier(values[0]) || values[0] == "_" {
+					return nil, fmt.Errorf("indexes_package requires an import alias")
+				}
+				destination = &generation.IndexesPackage
 			case "file_prefix":
 				destination = &generation.FilePrefix
 			case "handler_dest":

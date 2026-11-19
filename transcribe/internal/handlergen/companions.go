@@ -79,13 +79,12 @@ func PrepareCompanions(compiled *Context, input *gen.Input) error {
 	if input.TypeResolver != nil {
 		config.ReadIndexes.Types = input.TypeResolver.Descriptor
 	}
+	configureIndexDestination(contracts, config.ReadIndexes)
 	indexes, err := handlergo.ReadIndexes(semantic, config)
 	if err != nil {
 		return err
 	}
-	if indexes != nil {
-		input.ReadIndexes = &gen.ReadIndexSource{Package: indexes.PackagePath, TypeName: indexes.TypeName, CacheField: indexes.CacheField, Source: gen.MutationSource{Role: "indexes", Destination: "indexes.go", File: indexes.File}}
-	}
+	input.ReadIndexes = indexSource(indexes)
 	setters, err := handlergo.EntitySupport(semantic, config)
 	if err != nil {
 		return err

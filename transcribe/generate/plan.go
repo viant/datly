@@ -9,6 +9,7 @@ import (
 	"github.com/viant/datly/spec"
 	dtag "github.com/viant/datly/tag"
 	"github.com/viant/datly/transcribe/gobuild"
+	"github.com/viant/datly/typecatalog"
 	xdocs "github.com/viant/xdatly/docs"
 )
 
@@ -65,6 +66,8 @@ type Plan struct {
 	ExistingQuerySelectors bool
 	Input                  ContractPlan
 	Output                 ContractPlan
+
+	IndexesDestination *typecatalog.Destination
 
 	HelperTypes       []HelperType
 	GeneratedTypes    []GeneratedTypePlan

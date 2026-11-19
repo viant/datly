@@ -13,14 +13,16 @@ import (
 
 // ReadIndexConfig selects the input's package authority for application helpers.
 type ReadIndexConfig struct {
-	Types                           xshape.Lookup
-	Package, PackagePath, InputType string
-	Owned                           bool
+	Types                            xshape.Lookup
+	Package, PackagePath, InputType  string
+	Owned                            bool
+	HelperPackage, HelperPackagePath string
 }
 
 // ReadIndexAsset is application lookup syntax, separate from Previous authority.
 type ReadIndexAsset struct {
 	File                    *ast.File
+	Helpers                 *ast.File
 	TypeName, BuildFunction string
 	PackagePath             string
 	CacheField              string
@@ -42,6 +44,7 @@ func (l *lowerer) readIndexes() (*ReadIndexAsset, error) {
 	if len(l.plan.ReadCollections) == 0 {
 		return nil, nil
 	}
+	originalConfig := l.config
 	if l.config.ReadIndexes != nil {
 		config := l.config
 		target := config.ReadIndexes
@@ -61,18 +64,28 @@ func (l *lowerer) readIndexes() (*ReadIndexAsset, error) {
 		}
 		l = isolated
 	}
-	e := &readIndexEmitter{previousEmitter: previousEmitter{l: l}}
-	e.shape = l.availableAlias("xshape")
-	l.pathsByAlias[e.shape] = "github.com/viant/x/shape"
-	e.reflect = l.availableAlias("reflect")
-	l.pathsByAlias[e.reflect] = "reflect"
-	l.pathsByAlias[l.fmtAlias] = "fmt"
+	e := newReadIndexEmitter(l)
+	helpers := e
+	if target := l.config.ReadIndexes; target != nil && target.HelperPackagePath != "" && target.HelperPackagePath != l.config.PackagePath {
+		other := &lowerer{plan: l.plan, config: originalConfig}
+		// Prepare under the component's original import authority, then render
+		// row and key types under the independent helper package's authority.
+		if err := other.prepare(); err != nil {
+			return nil, err
+		}
+		other.config.Package, other.config.PackagePath = target.HelperPackage, target.HelperPackagePath
+		helpers = newReadIndexEmitter(other)
+	}
 	name := strings.TrimPrefix(l.factory, "New") + "ReadIndexes"
 	asset := &ReadIndexAsset{TypeName: name, BuildFunction: "Build" + name, PackagePath: l.config.PackagePath}
 	if target := l.config.ReadIndexes; target != nil && target.Owned {
 		asset.CacheField = "_" + lowerInitial(name)
 	}
 	file := &ast.File{Name: ast.NewIdent(l.config.Package)}
+	helperFile := file
+	if helpers != e {
+		helperFile = &ast.File{Name: ast.NewIdent(helpers.l.config.Package)}
+	}
 	var fields []*ast.Field
 	var build []ast.Stmt
 	id := ast.NewIdent
@@ -83,7 +96,7 @@ func (l *lowerer) readIndexes() (*ReadIndexAsset, error) {
 			return nil, fmt.Errorf("invalid canonical application read %q", read.Name)
 		}
 		prefix := strings.TrimPrefix(l.factory, "New") + read.Name
-		rowExpr, err := l.typeReference(read.Type)
+		rowExpr, err := helpers.l.typeReference(read.Type)
 		if err != nil {
 			return nil, err
 		}
@@ -92,15 +105,15 @@ func (l *lowerer) readIndexes() (*ReadIndexAsset, error) {
 			return nil, err
 		}
 		slice := prefix + "Slice"
-		if err = l.reserveDeclaration(slice); err != nil {
+		if err = helpers.l.reserveDeclaration(slice); err != nil {
 			return nil, err
 		}
-		file.Decls = append(file.Decls, &ast.GenDecl{Tok: token.TYPE, Specs: []ast.Spec{&ast.TypeSpec{Name: id(slice), Type: &ast.ArrayType{Elt: &ast.StarExpr{X: parseExpr(row)}}}}})
+		helperFile.Decls = append(helperFile.Decls, &ast.GenDecl{Tok: token.TYPE, Specs: []ast.Spec{&ast.TypeSpec{Name: id(slice), Type: &ast.ArrayType{Elt: &ast.StarExpr{X: parseExpr(row)}}}}})
 		fields = append(fields, namedField(read.Name, id(slice)))
 		var initialize []ast.Stmt
 		for _, field := range read.Fields {
 			// Only declared comparable SQL scalar projections acquire map helpers.
-			fieldExpr, err := l.typeReference(field.Type)
+			fieldExpr, err := helpers.l.typeReference(field.Type)
 			if err != nil {
 				return nil, err
 			}
@@ -109,11 +122,11 @@ func (l *lowerer) readIndexes() (*ReadIndexAsset, error) {
 				return nil, err
 			}
 			field.Type = spec.TypeRef{Name: rendered}
-			typ, err := l.keyType(field.Type)
+			typ, err := helpers.l.keyType(field.Type)
 			if err != nil {
 				continue
 			}
-			comparable, err := e.comparable(typ)
+			comparable, err := helpers.comparable(typ)
 			if err != nil {
 				return nil, fmt.Errorf("read %s index field %s: %w", read.Name, field.Field, err)
 			}
@@ -122,11 +135,11 @@ func (l *lowerer) readIndexes() (*ReadIndexAsset, error) {
 			}
 
 			part := plan.KeyPart{Field: field.Field, Source: field.Source, Type: field.Type}
-			decls, err := e.indexMethods(slice, prefix, recordShape{base: row, pointer: true, many: true}, []plan.KeyPart{part}, field.Field, typ)
+			decls, err := helpers.indexMethods(slice, prefix, recordShape{base: row, pointer: true, many: true}, []plan.KeyPart{part}, field.Field, typ)
 			if err != nil {
 				return nil, err
 			}
-			file.Decls = append(file.Decls, decls...)
+			helperFile.Decls = append(helperFile.Decls, decls...)
 
 			if len(read.Keys) == 1 && read.Keys[0].Field == field.Field {
 				keyField := read.Name + "By" + field.Field
@@ -137,7 +150,7 @@ func (l *lowerer) readIndexes() (*ReadIndexAsset, error) {
 		}
 		read.Keys = append([]plan.KeyPart(nil), read.Keys...)
 		for i := range read.Keys {
-			expression, err := l.typeReference(read.Keys[i].Type)
+			expression, err := helpers.l.typeReference(read.Keys[i].Type)
 			if err != nil {
 				return nil, err
 			}
@@ -146,11 +159,11 @@ func (l *lowerer) readIndexes() (*ReadIndexAsset, error) {
 				return nil, err
 			}
 			read.Keys[i].Type = spec.TypeRef{Name: rendered}
-			typ, err := l.keyType(read.Keys[i].Type)
+			typ, err := helpers.l.keyType(read.Keys[i].Type)
 			if err != nil {
 				return nil, err
 			}
-			comparable, err := e.comparable(typ)
+			comparable, err := helpers.comparable(typ)
 			if err != nil {
 				return nil, err
 			}
@@ -160,27 +173,37 @@ func (l *lowerer) readIndexes() (*ReadIndexAsset, error) {
 
 		}
 		if len(read.Keys) > 1 {
-			key, err := l.compileKey(read.Keys, prefix+"Key")
+			key, err := helpers.l.compileKey(read.Keys, prefix+"Key")
 			if err != nil {
 				return nil, err
 			}
-			file.Decls = append(file.Decls, key.declaration())
-			decls, err := e.indexMethods(slice, prefix, recordShape{base: row, pointer: true, many: true}, read.Keys, "Key", key.name)
+			helperFile.Decls = append(helperFile.Decls, key.declaration())
+			decls, err := helpers.indexMethods(slice, prefix, recordShape{base: row, pointer: true, many: true}, read.Keys, "Key", key.name)
 			if err != nil {
 				return nil, err
 			}
-			file.Decls = append(file.Decls, decls...)
+			helperFile.Decls = append(helperFile.Decls, decls...)
 			fields = append(fields, namedField(read.Name+"ByKey", id(prefix+"IndexedByKey")))
 			initialize = append(initialize, &ast.AssignStmt{Lhs: []ast.Expr{selectExpr(id("result"), read.Name+"ByKey"), id("err")}, Tok: token.ASSIGN, Rhs: []ast.Expr{callExpr(selectExpr(selectExpr(id("result"), read.Name), "IndexByKey"))}}, e.guardError(nilExpr))
 
 		}
-		groupDecls, groupFields, groupInit, err := e.requiredGroups(read, prefix, slice, row)
+		groupDecls, groupFields, groupInit, err := helpers.requiredGroups(read, prefix, slice, row)
 		if err != nil {
 			return nil, err
 		}
-		file.Decls = append(file.Decls, groupDecls...)
+		helperFile.Decls = append(helperFile.Decls, groupDecls...)
 		fields = append(fields, groupFields...)
 		initialize = append(initialize, groupInit...)
+		if helpers != e {
+			inputRow, err := l.typeReference(read.Type)
+			if err != nil {
+				return nil, err
+			}
+			row, err = renderExpr(inputRow)
+			if err != nil {
+				return nil, err
+			}
+		}
 		block, err := e.captureRead(read, row, slice)
 		if err != nil {
 			return nil, err
@@ -194,6 +217,13 @@ func (l *lowerer) readIndexes() (*ReadIndexAsset, error) {
 			return nil, fmt.Errorf("application read collection field %s collides", name)
 		}
 		names[name] = true
+	}
+	if helpers != e {
+		if err := addIndexTypeAliases(l, file, helperFile, helpers.l.config.PackagePath); err != nil {
+			return nil, err
+		}
+		helperFile.Decls = append([]ast.Decl{(&entityEmitter{l: helpers.l}).importDeclaration(helperFile)}, helperFile.Decls...)
+		asset.Helpers = helperFile
 	}
 	file.Decls = append(file.Decls, e.structure(name, fields...))
 	build = append(build, returnStmt(id("result"), nilExpr))
@@ -212,6 +242,36 @@ func (l *lowerer) readIndexes() (*ReadIndexAsset, error) {
 	file.Decls = append([]ast.Decl{(&entityEmitter{l: l}).importDeclaration(file)}, file.Decls...)
 	asset.File = file
 	return asset, nil
+}
+
+func addIndexTypeAliases(owner *lowerer, file, helpers *ast.File, helperPath string) error {
+	// Keep the input package's exported collection and key type names. The
+	// concrete methods are compiled in the helper package with the rows.
+	for _, decl := range helpers.Decls {
+		group, ok := decl.(*ast.GenDecl)
+		if !ok || group.Tok != token.TYPE {
+			continue
+		}
+		for _, item := range group.Specs {
+			name := item.(*ast.TypeSpec).Name.Name
+			ref, err := owner.typeReference(spec.TypeRef{Package: helperPath, Name: name})
+			if err != nil {
+				return err
+			}
+			file.Decls = append(file.Decls, &ast.GenDecl{Tok: token.TYPE, Specs: []ast.Spec{&ast.TypeSpec{Name: ast.NewIdent(name), Assign: token.Pos(1), Type: ref}}})
+		}
+	}
+	return nil
+}
+
+func newReadIndexEmitter(l *lowerer) *readIndexEmitter {
+	e := &readIndexEmitter{previousEmitter: previousEmitter{l: l}}
+	e.shape = l.availableAlias("xshape")
+	l.pathsByAlias[e.shape] = "github.com/viant/x/shape"
+	e.reflect = l.availableAlias("reflect")
+	l.pathsByAlias[e.reflect] = "reflect"
+	l.pathsByAlias[l.fmtAlias] = "fmt"
+	return e
 }
 
 func (e *readIndexEmitter) indexMethods(slice, prefix string, row recordShape, parts []plan.KeyPart, suffix, keyType string) ([]ast.Decl, error) {

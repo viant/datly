@@ -43,7 +43,7 @@ func TestGeneratedPatchRuntime(t *testing.T){
  source:=&bootstrap.RouteSource{HolderType:"OrdersComponent",FieldName:field.Name,PackageName:"orders",PackagePath:holder.PkgPath(),Tag:tag,InputType:"OrdersInput",OutputType:"OrdersOutput"}
  component,err:=source.Resolve(reflect.TypeOf(OrdersInput{}),reflect.TypeOf(OrdersOutput{}));if err!=nil{t.Fatal(err)}
  resources:=resource.New();if err:=resources.Register(OrdersDatlyResourceNamespace,OrdersDatlyResources);err!=nil{t.Fatal(err)}
- artifact,err:=bootstrap.BuildArtifact(bootstrap.ArtifactInput{Component:component,InputType:reflect.TypeOf(OrdersInput{}),OutputType:reflect.TypeOf(OrdersOutput{}),Resources:resources});if err!=nil{t.Fatal(err)}
+ artifact,err:=bootstrap.BuildArtifact(bootstrap.ArtifactInput{HandlerOwnedOutput:true,Component:component,InputType:reflect.TypeOf(OrdersInput{}),OutputType:reflect.TypeOf(OrdersOutput{}),Resources:resources});if err!=nil{t.Fatal(err)}
  views,err:=viewprovider.New(viewprovider.Config{Dependencies:artifact.ViewDependencies,Input:artifact.Input,SQL:&dsql.SQLComponent{DB:db.DB}});if err!=nil{t.Fatal(err)}
  handler,err:=writerhandler.New(artifact.Component,reflect.TypeOf(OrdersInput{}),reflect.TypeOf(OrdersOutput{}),"patch");if err!=nil{t.Fatal(err)}
  rt,err:=druntime.NewRuntime([]*druntime.RegisteredComponent{{Component:artifact.Component,Input:artifact.Input,Output:artifact.Output,OutputType:reflect.TypeOf(OrdersOutput{}),Handler:handler,Providers:[]locator.Provider{views},DataSource:dml.Source{DB:db.DB}}},druntime.WithResources(resources));if err!=nil{t.Fatal(err)}

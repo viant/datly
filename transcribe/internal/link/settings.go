@@ -112,6 +112,7 @@ func (l *settingsLoader) mergeGeneration(base, authored *spec.GenerationSettings
 	l.setString(&base.InputFile, authored.InputFile)
 	l.setString(&base.OutputFile, authored.OutputFile)
 	l.setString(&base.RouterFile, authored.RouterFile)
+	l.setString(&base.IndexesPackage, authored.IndexesPackage)
 	l.setString(&base.FilePrefix, authored.FilePrefix)
 	l.setString(&base.HandlerFile, authored.HandlerFile)
 	l.setString(&base.LifecycleFile, authored.LifecycleFile)

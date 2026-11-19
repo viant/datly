@@ -45,6 +45,8 @@ SELECT 1`
 
 func TestFilenameSettingsRejectMalformedDirectives(t *testing.T) {
 	for _, directive := range []string{
+		"$indexes_package('')", "$indexes_package(idx)", "$indexes_package('a/b')", "$indexes_package('_')", "$indexes_package('idx','other')",
+		"$indexes_package('idx'))\n#setting($_ = $indexes_package('other')",
 		"$file_prefix('../escape_')", "$file_prefix('/tmp/')", "$file_prefix('a/b_')", "$file_prefix('a\\b_')", "$file_prefix('_hidden_')", "$file_prefix(' a_')",
 		"$handler_dest()", "$lifecycle_dest('')", "$mutation_dest('a.go','b.go')", "$resources_dest(123)", "$links_dest('a.go').Extra()",
 		"$support_dest('unknown','a.go')", "$support_dest('type:bad','a.go')", "$support_dest('frames','')",

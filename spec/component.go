@@ -99,6 +99,7 @@ type GenerationSettings struct {
 	BorrowedSQLRows     []BorrowedSQLRow  `json:"borrowedSQLRows,omitempty"`
 	ClientInputType     string            `json:"clientInputType,omitempty"`
 	WriterOmitEmpty     bool              `json:"writerOmitEmpty,omitempty"`
+	IndexesPackage      string            `json:"indexesPackage,omitempty"`
 	FilePrefix          string            `json:"filePrefix,omitempty"`
 	Template            string            `json:"template,omitempty"`
 	DescriptionResource string            `json:"descriptionResource,omitempty"`
@@ -117,7 +118,7 @@ type GenerationSettings struct {
 }
 
 func (s GenerationSettings) IsZero() bool {
-	return len(s.SourceMembers) == 0 && s.SourceInput == "" && len(s.BorrowedSQLRows) == 0 && s.ClientInputType == "" && !s.WriterOmitEmpty && s.FilePrefix == "" && s.Template == "" && s.DescriptionResource == "" && s.ViewFile == "" &&
+	return len(s.SourceMembers) == 0 && s.SourceInput == "" && len(s.BorrowedSQLRows) == 0 && s.ClientInputType == "" && !s.WriterOmitEmpty && s.IndexesPackage == "" && s.FilePrefix == "" && s.Template == "" && s.DescriptionResource == "" && s.ViewFile == "" &&
 		s.InputFile == "" && s.OutputFile == "" && s.RouterFile == "" &&
 		s.HandlerFile == "" && s.LifecycleFile == "" && s.MutationFile == "" &&
 		s.ResourcesFile == "" && s.LinksFile == "" && s.TemplateFile == "" && len(s.SupportFiles) == 0 && len(s.SQLFiles) == 0

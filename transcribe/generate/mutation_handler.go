@@ -34,11 +34,11 @@ func (a *MutationHandlerAsset) Clone() (*MutationHandlerAsset, error) {
 	}
 	result := &MutationHandlerAsset{Destination: a.Destination, Factory: a.Factory, File: file}
 	if a.ReadIndexes != nil {
-		copy, err := a.ReadIndexes.Source.clone()
+		copy, err := a.ReadIndexes.clone()
 		if err != nil {
 			return nil, err
 		}
-		result.ReadIndexes = &ReadIndexSource{Package: a.ReadIndexes.Package, TypeName: a.ReadIndexes.TypeName, CacheField: a.ReadIndexes.CacheField, Source: copy}
+		result.ReadIndexes = copy
 	}
 	for _, source := range a.Support {
 		cloned, err := source.clone()

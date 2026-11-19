@@ -12,6 +12,7 @@ func (g *Generation) prepareMutation(semantic *plan.Plan, config handlergo.Confi
 	if err := handlergo.ValidateUniversalWriterPlan(semantic, config); err != nil {
 		return err
 	}
+	configureIndexDestination(contracts, config.ReadIndexes)
 	indexes, err := handlergo.ReadIndexes(semantic, config)
 	if err == nil && indexes != nil && config.ReadIndexes != nil && !config.ReadIndexes.Owned && g.Directory != "" {
 		candidateConfig := config
@@ -45,12 +46,7 @@ func (g *Generation) prepareMutation(semantic *plan.Plan, config handlergo.Confi
 	if err != nil {
 		return err
 	}
-	if indexes != nil {
-		g.input.ReadIndexes = &gen.ReadIndexSource{
-			Package: indexes.PackagePath, TypeName: indexes.TypeName, CacheField: indexes.CacheField,
-			Source: gen.MutationSource{Role: "indexes", Destination: "indexes.go", File: indexes.File},
-		}
-	}
+	g.input.ReadIndexes = indexSource(indexes)
 	setters, err := g.entitySetters(semantic, config, contracts)
 	if err != nil {
 		return err
@@ -69,4 +65,22 @@ func (g *Generation) prepareMutation(semantic *plan.Plan, config handlergo.Confi
 	// they never receive component-specific phase/layout/action implementations.
 	g.input.MutationHandler = nil
 	return nil
+}
+
+func configureIndexDestination(contracts *gen.Plan, config *handlergo.ReadIndexConfig) {
+	if dest := contracts.IndexesDestination; dest != nil {
+		config.HelperPackage, config.HelperPackagePath = dest.Name, dest.ImportPath
+	}
+}
+
+func indexSource(asset *handlergo.ReadIndexAsset) *gen.ReadIndexSource {
+	if asset == nil {
+		return nil
+	}
+	result := &gen.ReadIndexSource{Package: asset.PackagePath, TypeName: asset.TypeName, CacheField: asset.CacheField,
+		Source: gen.MutationSource{Role: "indexes", Destination: "indexes.go", File: asset.File}}
+	if asset.Helpers != nil {
+		result.Helpers = &gen.MutationSource{Role: "indexes", Destination: "indexes.go", File: asset.Helpers}
+	}
+	return result
 }

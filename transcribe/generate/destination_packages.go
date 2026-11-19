@@ -14,6 +14,9 @@ func (d *shapeDestinations) partition(p *Plan) error {
 	if d.authority == nil {
 		return nil
 	}
+	if err := d.resolveIndexesPackage(p); err != nil {
+		return err
+	}
 	// Defaults become concrete only in the canonical shape planner.
 	add := func(role, name, file string) shapeDestination {
 		dest, ok := d.byRole[role]
@@ -112,13 +115,27 @@ func (d *shapeDestinations) partition(p *Plan) error {
 			alias(helper.Name, helper.Package)
 		}
 	}
-	if indexes := p.ReadIndexes; indexes != nil && indexes.Package != p.Package {
+	indexes := p.ReadIndexes
+	if indexes != nil && indexes.Package != p.Package {
 		target := groups[indexes.Package]
 		if target == nil {
 			return fmt.Errorf("application indexes require generated input package %s", indexes.Package)
 		}
 		target.ReadIndexes = indexes
 		p.ReadIndexes = nil
+	}
+	if indexes != nil && indexes.Helpers != nil {
+		dest := p.IndexesDestination
+		target := p
+		if dest.ImportPath != p.Package {
+			target = group(dest.ImportPath)
+			target.GoPackage = dest.Name
+		}
+		source, err := indexes.Helpers.resolve(p, dest.ImportPath)
+		if err != nil {
+			return err
+		}
+		target.ReadIndexes = &ReadIndexSource{Package: dest.ImportPath, Source: source}
 	}
 	if err := d.relocateContractHooks(p, groups); err != nil {
 		return err
@@ -201,6 +218,28 @@ func (d *shapeDestinations) partition(p *Plan) error {
 	}
 
 	return nil
+}
+
+// Resolve the authored alias before helpers are lowered, including on the
+// preliminary contract plan where no index declarations exist yet.
+func (d *shapeDestinations) resolveIndexesPackage(p *Plan) error {
+	if p.Generation == nil || p.Generation.IndexesPackage == "" {
+		return nil
+	}
+	alias := p.Generation.IndexesPackage
+	if context := d.input.Component.TypeContext; context != nil {
+		for _, imp := range context.Imports {
+			if imp.Alias == alias {
+				dest, err := d.destinationPackage(imp.Package, "")
+				if err != nil {
+					return fmt.Errorf("indexes_package %q: %w", alias, err)
+				}
+				p.IndexesDestination = &dest
+				return nil
+			}
+		}
+	}
+	return fmt.Errorf("indexes_package references unknown import alias %q", alias)
 }
 
 func (p *Plan) localShape(pkg string) bool { return pkg == "" || pkg == p.Package }

@@ -207,6 +207,7 @@ matched case-insensitively; use the spelling below. Quote textual values.
 | `input_type`, `output_type` | 1+ | last argument is contract type |
 | `dest`, `input_dest`, `output_dest`, `router_dest` | 1+ | last argument is nonempty destination |
 | `file_prefix`, `handler_dest`, `lifecycle_dest`, `mutation_dest`, `resources_dest`, `links_dest` | exactly 1 | nonempty quoted value; no fluent tail; duplicate setting fails |
+| `indexes_package` | exactly 1 | quoted `#import` alias for the generated lookup helpers |
 | `support_dest` | exactly 2 | quoted role and filename; no tail; duplicate role fails |
 | `meta` | 1+ | last argument is nonempty description resource path |
 | `mcp` | 1+ | name (nonempty), optional description, optional description path; arguments after third ignored |
@@ -1053,6 +1054,21 @@ frames, Previous, action or validation files. `$support_dest('type:CubeInput','c
 separately generated named type; otherwise its snake-case type name supplies the
 default filename. Support overrides apply in each package that owns that role,
 including relocated entity methods.
+
+To place typed read-index helpers in another package, declare its destination with
+an import alias. The generator can create the directory on first transcription.
+
+```sql
+#import('orderidx','example.com/shop/orders/index')
+#setting($_ = $indexes_package('orderidx'))
+```
+
+The generated builder and any input cache methods stay with their existing owner.
+The helper package imports the concrete row types. Place those types in a package
+both sides can import. For example, use `type(orders,'model.Order')` for an explicitly
+relocated entity. A row owned by the package that imports the helpers would form
+an import cycle. Omit `indexes_package` to keep lookup helpers with their builder.
+`$support_dest('indexes','lookup.go')` controls the filename in each emitting package.
 
 Multiple components in one Go package must explicitly choose distinct prefixes
 or per-file destinations when files conflict. There is no inferred prefix or
