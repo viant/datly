@@ -57,7 +57,7 @@ func TestEmptyLookupAdmissionUsesRootKeyLineage(t *testing.T) {
 			}
 			require.Equal(t, tc.want, count)
 			if tc.complete {
-				require.Len(t, plan.routes[spec.RouteRef{Method: "GET", Path: "/records/{account}/{key}"}], 2)
+				require.Len(t, plan.routes[spec.RouteRef{Method: "GET", Path: "/records/{account}/{key}"}].identities, 2)
 			}
 		})
 	}
@@ -87,7 +87,7 @@ func TestEmptyLookupGeneratedPrimaryKeyUsesSQLSource(t *testing.T) {
 	plan, err := compileEmptyLookup(Config{Component: component, InputType: reflect.TypeFor[input](), Plan: &Plan{Root: &ViewPlan{View: view}}})
 	require.NoError(t, err)
 	require.NotNil(t, plan)
-	require.Len(t, plan.routes[spec.RouteRef{Method: "GET", Path: "/records/{id}"}], 1)
+	require.Len(t, plan.routes[spec.RouteRef{Method: "GET", Path: "/records/{id}"}].identities, 1)
 }
 
 func emptyLookupOptIn() *spec.Parameter {

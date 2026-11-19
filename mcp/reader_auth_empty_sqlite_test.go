@@ -8,6 +8,7 @@ import (
 	"github.com/viant/datly/exec"
 	"github.com/viant/xdatly/response"
 	"net/http/httptest"
+	"net/url"
 	"reflect"
 	"strings"
 	"sync/atomic"
@@ -45,12 +46,13 @@ func (*authEmptyPredicate) Compute(ctx context.Context, value any) (*xpredicate.
 func TestReaderAuthEmptyHTTPAndMCP(t *testing.T) {
 	type claim struct{ UserID int }
 	type input struct {
-		Claim  claim
-		Offset int    `parameter:"Offset,kind=query,in=offset" querySelector:"view=Records,property=offset" json:"offset"`
-		Limit  int    `parameter:"Limit,kind=query,in=limit,value=10" querySelector:"view=Records,property=limit" json:"limit"`
-		Key    []int  `parameter:"Key,kind=path,in=key,uri=/records/{key}" predicate:"in,r,id" json:"key"`
-		Tenant int    `parameter:"Tenant,kind=query,in=tenant,value=7" predicate:"handler,example.com/auth.Scope,auth=true" json:"tenant"`
-		Name   string `parameter:"Name,kind=query,in=name" predicate:"equal,r,name" json:"name"`
+		Claim    claim
+		Offset   int    `parameter:"Offset,kind=query,in=offset" querySelector:"view=Records,property=offset" json:"offset"`
+		Limit    int    `parameter:"Limit,kind=query,in=limit,value=10" querySelector:"view=Records,property=limit" json:"limit"`
+		Key      []int  `parameter:"Key,kind=path,in=key,uri=/records/{key}" predicate:"in,r,id" json:"key"`
+		Tenant   int    `parameter:"Tenant,kind=query,in=tenant,value=7" predicate:"handler,example.com/auth.Scope,auth=true" json:"tenant"`
+		Name     string `parameter:"Name,kind=query,in=name" predicate:"equal,r,name" json:"name"`
+		Criteria string `parameter:"Criteria,kind=query,in=criteria" querySelector:"view=Records,property=criteria" json:"criteria"`
 	}
 	type row struct {
 		ID int `sqlx:"id,primaryKey=true" json:"id"`
@@ -59,13 +61,13 @@ func TestReaderAuthEmptyHTTPAndMCP(t *testing.T) {
 		Rows []row `json:"rows" forbiddenNotFoundCheck:"true"`
 	}
 	db := sqlite.New(t)
-	require.NoError(t, db.ExecStatements(context.Background(), "CREATE TABLE records(id INTEGER, tenant INTEGER, name TEXT, archived INTEGER)", "INSERT INTO records VALUES(1,7,'one',0),(2,8,'two',0),(3,8,'archived',1)", "CREATE TABLE accounts(id INTEGER,name TEXT)", "INSERT INTO accounts VALUES(1,'account')", "CREATE TABLE watches(record_id INTEGER,contact_id INTEGER)", "INSERT INTO watches VALUES(1,0)", "CREATE TABLE model_status(record_id INTEGER,status INTEGER)", "INSERT INTO model_status VALUES(1,2)"))
+	require.NoError(t, db.ExecStatements(context.Background(), "CREATE TABLE records(id INTEGER, tenant INTEGER, name TEXT, archived INTEGER)", "INSERT INTO records VALUES(1,7,'one',0),(2,8,'two',0),(3,8,'archived',1)", "CREATE TABLE accounts(account_id INTEGER,name TEXT)", "INSERT INTO accounts VALUES(1,'account')", "CREATE TABLE watches(record_id INTEGER,contact_id INTEGER)", "INSERT INTO watches VALUES(1,0)", "CREATE TABLE model_status(record_id INTEGER,status INTEGER)", "INSERT INTO model_status VALUES(1,2)"))
 	types := typecatalog.NewCatalog()
 	require.NoError(t, types.Register(typecatalog.TypeOriginPackage, &x.Type{Type: reflect.TypeFor[authEmptyPredicate](), PkgPath: "example.com/auth", Name: "Scope"}))
-	component := &spec.Component{Key: spec.Key{Kind: spec.KindComponent, Name: "AuthEmpty"}, RootView: &spec.View{Name: "Records", Columns: []*spec.Column{{Name: "ID", Source: "id", PrimaryKey: true}}, Selector: &spec.Selector{AllowOffset: true, AllowLimit: true}, Source: &spec.ViewSource{SQL: `SELECT r.id, acc.name AS account_name,
+	component := &spec.Component{Key: spec.Key{Kind: spec.KindComponent, Name: "AuthEmpty"}, RootView: &spec.View{Name: "Records", Columns: []*spec.Column{{Name: "ID", Source: "id", PrimaryKey: true}}, Selector: &spec.Selector{AllowOffset: true, AllowLimit: true, AllowCriteria: true}, Source: &spec.ViewSource{SQL: `SELECT r.id, acc.name AS account_name,
  EXISTS(SELECT 1 FROM watches w WHERE w.record_id = r.id AND w.contact_id = ${Claim.UserID}) AS watching,
  (SELECT CASE WHEN COUNT(*) = 1 THEN MAX(m.status) ELSE 0 END FROM model_status m WHERE m.record_id = r.id) AS model_status
- FROM records r JOIN accounts acc ON acc.id = 1
+ FROM records r JOIN accounts acc ON acc.account_id = 1
  WHERE archived = 0 ${predicate.Builder().CombineAnd($predicate.FilterGroup(0,"AND")).Build("AND")}`}}, Routes: []*spec.Route{
 		{Method: "GET", Path: "/records/{key}", MCP: []*spec.MCPExposure{{Kind: spec.MCPExposureTool, Name: "records.get"}}},
 		{Method: "GET", Path: "/records", MCP: []*spec.MCPExposure{{Kind: spec.MCPExposureTool, Name: "records.list"}}},
@@ -77,9 +79,10 @@ func TestReaderAuthEmptyHTTPAndMCP(t *testing.T) {
 	var queries []string
 	var failProbe error
 	var cancelProbe context.CancelFunc
+	probeAt := 2
 	guarded := execution.WithQueryGuard(func(_ context.Context, _ *sql.DB, q *xreader.ParameterizedQuery) error {
 		queries = append(queries, q.Query)
-		if len(queries) == 2 {
+		if len(queries) == probeAt {
 			if cancelProbe != nil {
 				cancelProbe()
 			}
@@ -94,42 +97,65 @@ func TestReaderAuthEmptyHTTPAndMCP(t *testing.T) {
 	require.NoError(t, err)
 	native := mcpclient.New(t, service, schema.LatestProtocolVersion)
 	for _, tc := range []struct {
-		name, path      string
-		ids             []int
-		filter          string
-		status, queries int
+		name, path       string
+		ids              []int
+		filter, criteria string
+		status, queries  int
 	}{
-		{"allowed", "1", []int{1}, "", 200, 1},
-		{"denied", "2", []int{2}, "", 403, 2},
-		{"missing", "99", []int{99}, "", 404, 2},
-		{"archived", "3", []int{3}, "", 404, 2},
-		{"ordinary filter", "2", []int{2}, "absent", 404, 2},
-		{"partial batch", "1,2", []int{1, 2}, "", 200, 1},
-		{"denied batch", "2,99", []int{2, 99}, "", 403, 2},
-		{"missing batch", "98,99", []int{98, 99}, "", 404, 2},
+		{"allowed", "1", []int{1}, "", "", 200, 1},
+		{"denied", "2", []int{2}, "", "", 403, 2},
+		{"missing", "99", []int{99}, "", "", 404, 2},
+		{"archived", "3", []int{3}, "", "", 404, 2},
+		{"authorized filter match", "1", []int{1}, "one", "", 200, 1},
+		{"authorized filter miss", "1", []int{1}, "absent", "", 404, 2},
+		{"restricted filter match", "2", []int{2}, "two", "", 403, 3},
+		{"restricted filter miss", "2", []int{2}, "absent", "", 403, 3},
+		{"missing with filter", "99", []int{99}, "absent", "", 404, 3},
+		{"archived with filter", "3", []int{3}, "archived", "", 404, 3},
+		{"authorized selector criteria match", "1", []int{1}, "", "id > 0", 200, 1},
+		{"restricted selector criteria match", "2", []int{2}, "", "id > 1", 403, 3},
+		{"restricted selector criteria miss", "2", []int{2}, "", "id > 99", 403, 3},
+		{"authorized selector criteria miss", "1", []int{1}, "", "id > 99", 404, 2},
+		{"partial batch", "1,2", []int{1, 2}, "", "", 200, 1},
+		{"filtered partial batch miss", "1,2", []int{1, 2}, "two", "", 404, 2},
+		{"denied batch", "2,99", []int{2, 99}, "", "", 403, 2},
+		{"missing batch", "98,99", []int{98, 99}, "", "", 404, 2},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			queries = nil
 			authEmptyCalls.Store(0)
+			query := url.Values{"name": {tc.filter}}
+			if tc.criteria != "" {
+				query.Set("criteria", tc.criteria)
+			}
 			recorder := httptest.NewRecorder()
-			gateway.NewHandler(app, nil, "").ServeHTTP(recorder, httptest.NewRequest("GET", "/records/"+tc.path+"?name="+tc.filter, nil))
+			gateway.NewHandler(app, nil, "").ServeHTTP(recorder, httptest.NewRequest("GET", "/records/"+tc.path+"?"+query.Encode(), nil))
 			require.Equal(t, tc.status, recorder.Code, recorder.Body.String())
 			if tc.status != 200 {
 				require.JSONEq(t, `{"status":"error","message":"`+map[int]string{403: "Forbidden", 404: "Not Found"}[tc.status]+`"}`, recorder.Body.String())
 			}
 			require.Len(t, queries, tc.queries)
 			require.EqualValues(t, 1, authEmptyCalls.Load())
-			if tc.queries == 2 {
-				require.Contains(t, queries[1], "SELECT 1 AS datly_exists")
-				require.Contains(t, queries[1], "LIMIT 1")
-				require.NotContains(t, queries[1], "tenant =")
-				require.Contains(t, queries[1], "archived = 0")
+			for i, probe := range queries[1:] {
+				require.Contains(t, probe, "SELECT 1 AS datly_exists")
+				require.Contains(t, probe, "LIMIT 1")
+				require.Contains(t, probe, "archived = 0")
+				require.NotContains(t, probe, "r.name")
+				require.NotContains(t, probe, "id >")
+				if i == 0 && (tc.filter != "" || tc.criteria != "") {
+					require.Contains(t, probe, "tenant =")
+				} else {
+					require.NotContains(t, probe, "tenant =")
+				}
 			}
 			queries = nil
 			authEmptyCalls.Store(0)
 			args := map[string]any{"key": tc.ids}
 			if tc.filter != "" {
 				args["name"] = tc.filter
+			}
+			if tc.criteria != "" {
+				args["criteria"] = tc.criteria
 			}
 			result, err := native.CallTool(context.Background(), &schema.CallToolRequestParams{Name: "records.get", Arguments: args})
 			require.NoError(t, err)
@@ -202,6 +228,29 @@ func TestReaderAuthEmptyHTTPAndMCP(t *testing.T) {
 	require.NotEqual(t, 403, response.ErrorStatusCode(err, 500))
 	require.NotEqual(t, 404, response.ErrorStatusCode(err, 500))
 	require.Len(t, queries, 2)
+	cancelProbe = nil
+
+	// Failure after the authorized identity probe must still preserve its cause.
+	request.Input = &input{Key: []int{2}, Tenant: 7, Limit: 10, Name: "absent"}
+	queries = nil
+	probeAt = 3
+	failProbe = sentinel
+	_, err = app.InvokeComponent(context.Background(), request)
+	require.ErrorIs(t, err, sentinel)
+	require.NotEqual(t, 403, response.ErrorStatusCode(err, 500))
+	require.NotEqual(t, 404, response.ErrorStatusCode(err, 500))
+	require.Len(t, queries, 3)
+	failProbe = nil
+
+	queries = nil
+	filteredContext, cancelFiltered := context.WithCancel(context.Background())
+	defer cancelFiltered()
+	cancelProbe = cancelFiltered
+	_, err = app.InvokeComponent(filteredContext, request)
+	require.ErrorIs(t, err, context.Canceled)
+	require.NotEqual(t, 403, response.ErrorStatusCode(err, 500))
+	require.NotEqual(t, 404, response.ErrorStatusCode(err, 500))
+	require.Len(t, queries, 3)
 	cancelProbe = nil
 
 	// Auth marking alone does not enable a probe.

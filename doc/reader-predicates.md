@@ -826,11 +826,19 @@ The option reveals resource existence to otherwise unauthorized callers; mark
 only predicates that may be removed for that check, preserving mandatory scope.
 
 An eligible GET identity read first executes its normal authorized root query.
-If the complete root result is empty, one existence query omits only the marked
-root authorization occurrences. It retains the identity and ordinary predicates,
-joins, source SQL, and lifecycle restrictions. Existence yields typed HTTP 403;
-absence yields typed HTTP 404. MCP uses the same native error path. A nonempty
-result, including a partially authorized batch of IDs, triggers no probe.
+After an empty result, diagnostics use the proven identity independently of
+ordinary predicates and selector criteria. When the original query used either
+kind of filter, the reader first checks the identity with its authorization
+predicates. An authorized identity with a filter miss yields typed HTTP 404.
+Otherwise the reader checks identity existence without the marked authorization
+predicates. This last check yields typed HTTP 403 for an existing identity and
+HTTP 404 for an absent one. Joins and source-authored eligibility SQL still apply.
+An unfiltered empty lookup needs only the existence check. MCP uses the same
+native error path. A nonempty result, including a partially authorized batch of
+IDs, triggers no probe.
+
+Declare caller filters as native predicates or selector criteria. The reader
+treats conditions embedded in the source SQL as eligibility in both probes.
 
 Eligibility uses the native compiled route placeholders and activation metadata,
 complete root primary-key metadata, and parser-proven column lineage. Every key
@@ -851,7 +859,7 @@ constant, loads no relations or totals, and does not use a shared existence cach
 It reuses an active transaction and the invocation deadline, query guard, and query
 scope. Probe failures preserve their causes instead of becoming 403/404. Without
 a shared transaction snapshot, concurrent creation/deletion may change the
-classification between the two reads. SQLite HTTP/MCP tests exercise the full
+classification between reads. SQLite HTTP/MCP tests exercise the full
 path; no deployed database parity is implied by those tests.
 
 ### UTC timestamp ranges and duration limits

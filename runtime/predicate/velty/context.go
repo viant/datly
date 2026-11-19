@@ -47,7 +47,7 @@ func (c *Context) expandGroup(group int, operator string) (string, error) {
 	for _, index := range c.program.groups[group] {
 		predicate := c.program.predicates[index]
 		occurrence := &c.program.predicates[index]
-		if fragment, args, replay, err := predicatereplay.Lookup(c.ctx, occurrence, predicate.auth); replay {
+		if fragment, args, replay, err := predicatereplay.Lookup(c.ctx, occurrence, predicate.definition); replay {
 			if err != nil {
 				return "", err
 			}

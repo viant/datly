@@ -208,7 +208,7 @@ func (s *Service) readBound(ctx context.Context, session *Session, input reflect
 			return nil, err
 		}
 		if rows == 0 && emptyReplay.HasAuthorization() && session.emptyLookup.usedIdentity(ctx, emptyReplay) {
-			return nil, s.classifyEmpty(ctx, session, rootConnection, rootBuilderOptions, emptyReplay)
+			return nil, s.classifyEmpty(ctx, session, rootConnection, rootBuilderOptions, rootSelector, emptyReplay)
 		}
 		read.done(rows, nil)
 		return actual, nil
@@ -222,7 +222,7 @@ func (s *Service) readBound(ctx context.Context, session *Session, input reflect
 		rows = rootCollector.Len()
 	}
 	if rows == 0 && rootCollector != nil && emptyReplay.HasAuthorization() && session.emptyLookup.usedIdentity(ctx, emptyReplay) {
-		return nil, s.classifyEmpty(ctx, session, rootConnection, rootBuilderOptions, emptyReplay)
+		return nil, s.classifyEmpty(ctx, session, rootConnection, rootBuilderOptions, rootSelector, emptyReplay)
 	}
 	read.done(rows, nil)
 	relationScheduler := newRelationScheduler(ctx, s.relationConcurrency())

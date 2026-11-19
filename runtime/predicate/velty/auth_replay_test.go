@@ -14,8 +14,10 @@ func TestAuthorizationProbeReplaysOccurrencesAndGroups(t *testing.T) {
 	type input struct{ Value int }
 	auth := &spec.Predicate{Name: "equal", Auth: true, Group: 1, Args: []string{"r", "tenant"}}
 	ordinary := &spec.Predicate{Name: "equal", Group: 1, Args: []string{"r", "ordinary"}}
+	identity := &spec.Predicate{Name: "equal", Group: 1, Args: []string{"r", "id"}}
+	identities := map[*spec.Predicate]bool{identity: true}
 	authOnly := &spec.Predicate{Name: "equal", Auth: true, Group: 2, Args: []string{"r", "scope"}}
-	program, err := Compile(CompileInput{InputType: reflect.TypeFor[input](), Component: &spec.Component{Parameters: []*spec.Parameter{{Name: "Value", Predicates: []*spec.Predicate{auth, ordinary, authOnly}}}}})
+	program, err := Compile(CompileInput{InputType: reflect.TypeFor[input](), Component: &spec.Component{Parameters: []*spec.Parameter{{Name: "Value", Predicates: []*spec.Predicate{auth, ordinary, identity, authOnly}}}}})
 	require.NoError(t, err)
 	ctx, state := predicatereplay.Capture(context.Background())
 	bound := &input{Value: 7}
@@ -26,29 +28,45 @@ func TestAuthorizationProbeReplaysOccurrencesAndGroups(t *testing.T) {
 	require.NoError(t, err)
 	require.Contains(t, normal, "tenant")
 	require.Contains(t, normal, "ordinary")
-	require.Equal(t, []any{7, 7}, args)
+	require.Equal(t, []any{7, 7, 7}, args)
 	_, err = value.(*Context).FilterGroup(2, "OR")
 	require.NoError(t, err)
 	require.True(t, state.HasAuthorization())
 	require.True(t, state.HasPredicate(ordinary))
+	require.True(t, state.HasOrdinaryFilters(identities))
 	// Mutating this test's input proves replay uses the already-bound evaluation,
 	// rather than recomputing ordinary predicates during diagnostic execution.
 	bound.Value = 99
 	args = nil
-	value, err = program.NewContext(state.Probe(context.Background()), predicateBinder{input: bound}, func(values ...any) { args = append(args, values...) })
+	value, err = program.NewContext(state.Probe(context.Background(), identities, false), predicateBinder{input: bound}, func(values ...any) { args = append(args, values...) })
 	require.NoError(t, err)
 	probe, err := value.(*Context).FilterGroup(1, "OR")
 	require.NoError(t, err)
 	require.NotContains(t, probe, "tenant")
-	require.Contains(t, probe, "ordinary")
+	require.Contains(t, probe, "r.id")
+	require.NotContains(t, probe, "ordinary")
 	require.Equal(t, []any{7}, args)
 	empty, err := value.(*Context).FilterGroup(2, "OR")
 	require.NoError(t, err)
 	require.Empty(t, empty)
 	combined := value.(*Context).Builder().CombineAnd(probe, empty).Build("WHERE")
-	require.Contains(t, combined, "ordinary")
+	require.Contains(t, combined, "r.id")
 	require.NotContains(t, combined, "scope")
 	require.NotContains(t, combined, " OR ")
+
+	args = nil
+	value, err = program.NewContext(state.Probe(context.Background(), identities, true), predicateBinder{input: bound}, func(values ...any) { args = append(args, values...) })
+	require.NoError(t, err)
+	probe, err = value.(*Context).FilterGroup(1, "OR")
+	require.NoError(t, err)
+	require.Contains(t, probe, "tenant")
+	require.Contains(t, probe, "r.id")
+	require.NotContains(t, probe, "ordinary")
+	require.Equal(t, []any{7, 7}, args)
+	scope, err := value.(*Context).FilterGroup(2, "OR")
+	require.NoError(t, err)
+	require.Contains(t, scope, "scope")
+	require.Equal(t, []any{7, 7, 7}, args)
 }
 
 func TestUnusedAuthorizationOccurrenceDoesNotActivateRootProbe(t *testing.T) {
@@ -87,7 +105,7 @@ func TestProbeCaptureDoesNotInheritAcrossPrograms(t *testing.T) {
 	require.NoError(t, err)
 	_, err = nestedContext.(*Context).FilterGroup(0, "AND")
 	require.NoError(t, err)
-	probe, err := root.NewContext(state.Probe(context.Background()), binder, nil)
+	probe, err := root.NewContext(state.Probe(context.Background(), map[*spec.Predicate]bool{root.predicates[0].definition: true}, false), binder, nil)
 	require.NoError(t, err)
 	_, err = probe.(*Context).FilterGroup(0, "AND")
 	require.NoError(t, err)

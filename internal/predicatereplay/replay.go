@@ -14,27 +14,39 @@ type entry struct {
 	Args []any
 }
 type State struct {
-	owner     any
-	entries   map[any][]entry
-	positions map[any]int
-	replay    bool
-	active    map[*spec.Predicate]bool
-	auth      bool
+	owner       any
+	entries     map[any][]entry
+	positions   map[any]int
+	replay      bool
+	identities  map[*spec.Predicate]bool
+	includeAuth bool
+	active      map[*spec.Predicate]bool
+	auth        bool
 }
 
 func Capture(ctx context.Context) (context.Context, *State) {
 	s := &State{entries: map[any][]entry{}, active: map[*spec.Predicate]bool{}}
 	return context.WithValue(ctx, key{}, s), s
 }
-func (s *State) Probe(ctx context.Context) context.Context {
-	return context.WithValue(ctx, key{}, &State{owner: s.owner, entries: s.entries, positions: map[any]int{}, replay: true})
+
+// Probe replays only the compiled identity and, optionally, authorization
+// of the original read. Ordinary filters never enter a diagnostic query.
+func (s *State) Probe(ctx context.Context, identities map[*spec.Predicate]bool, includeAuth bool) context.Context {
+	return context.WithValue(ctx, key{}, &State{
+		owner: s.owner, entries: s.entries, positions: map[any]int{}, replay: true,
+		identities: identities, includeAuth: includeAuth,
+	})
 }
-func Lookup(ctx context.Context, occurrence any, auth bool) (string, []any, bool, error) {
+
+func Lookup(ctx context.Context, occurrence any, definition *spec.Predicate) (string, []any, bool, error) {
 	s, _ := ctx.Value(key{}).(*State)
 	if s == nil || !s.replay {
 		return "", nil, false, nil
 	}
-	if auth {
+	if definition == nil {
+		return "", nil, true, fmt.Errorf("predicate probe lacks a compiled definition")
+	}
+	if (definition.Auth && !s.includeAuth) || (!definition.Auth && !s.identities[definition]) {
 		return "", nil, true, nil
 	}
 	index := s.positions[occurrence]
@@ -60,6 +72,17 @@ func Record(ctx context.Context, occurrence any, definition *spec.Predicate, sql
 
 func (s *State) HasAuthorization() bool              { return s != nil && s.auth }
 func (s *State) HasPredicate(p *spec.Predicate) bool { return s != nil && s.active[p] }
+
+// HasOrdinaryFilters reports whether the primary query used predicates other
+// than its compiled identity and authorization.
+func (s *State) HasOrdinaryFilters(identities map[*spec.Predicate]bool) bool {
+	for p := range s.active {
+		if !p.Auth && !identities[p] {
+			return true
+		}
+	}
+	return false
+}
 
 // Without prevents a nested native reader from inheriting its caller's root
 // capture. It allocates no context when no capture is installed.

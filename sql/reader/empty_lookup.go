@@ -30,8 +30,13 @@ type lookupIdentity struct {
 	predicate *spec.Predicate
 }
 
+type emptyLookupRoute struct {
+	identities []lookupIdentity
+	predicates map[*spec.Predicate]bool
+}
+
 type emptyLookupPlan struct {
-	routes     map[spec.RouteRef][]lookupIdentity
+	routes     map[spec.RouteRef]emptyLookupRoute
 	projection *dsql.Projection
 }
 
@@ -81,7 +86,7 @@ func compileEmptyLookup(config Config) (*emptyLookupPlan, error) {
 	if err != nil {
 		return nil, err
 	}
-	result := &emptyLookupPlan{routes: map[spec.RouteRef][]lookupIdentity{}, projection: dsql.ExistenceProjection()}
+	result := &emptyLookupPlan{routes: map[spec.RouteRef]emptyLookupRoute{}, projection: dsql.ExistenceProjection()}
 	keyNames := map[string]bool{}
 	for _, column := range config.Plan.Root.View.Columns {
 		if column == nil {
@@ -206,9 +211,15 @@ func compileEmptyLookup(config Config) (*emptyLookupPlan, error) {
 			continue
 		}
 		ref := spec.RouteRef{Method: endpoint.Method, Path: endpoint.Path}
-		for _, identity := range matched {
-			result.routes[ref] = append(result.routes[ref], identity)
+		lookup := emptyLookupRoute{
+			identities: make([]lookupIdentity, 0, len(matched)),
+			predicates: make(map[*spec.Predicate]bool, len(matched)),
 		}
+		for _, identity := range matched {
+			lookup.identities = append(lookup.identities, identity)
+			lookup.predicates[identity.predicate] = true
+		}
+		result.routes[ref] = lookup
 	}
 	if len(result.routes) == 0 {
 		return nil, fmt.Errorf("forbiddenNotFoundCheck requires a GET route with a complete proven root identity")
@@ -265,7 +276,7 @@ func (p *emptyLookupPlan) eligible(ctx context.Context, input reflect.Value, sel
 		return false
 	}
 
-	identities, ok := p.routes[readerlookup.Route(ctx)]
+	lookup, ok := p.routes[readerlookup.Route(ctx)]
 	if !ok {
 		return false
 	}
@@ -275,7 +286,7 @@ func (p *emptyLookupPlan) eligible(ctx context.Context, input reflect.Value, sel
 	if controls := root.View.Spec.Source.Controls; controls != nil && (controls.Offset != nil && *controls.Offset > 0 || controls.Limit != nil && *controls.Limit == 0) {
 		return false
 	}
-	for _, identity := range identities {
+	for _, identity := range lookup.identities {
 		value, err := input.Elem().FieldByIndexErr(identity.index)
 		if err != nil {
 			return false
@@ -294,10 +305,37 @@ func (p *emptyLookupPlan) eligible(ctx context.Context, input reflect.Value, sel
 	return true
 }
 
-func (s *Service) classifyEmpty(ctx context.Context, session *Session, connection dsql.Connection, options []rsql.BuilderOption, replay *predicatereplay.State) error {
-	query, err := rsql.NewBuilder().Build(replay.Probe(ctx), options...)
+func (s *Service) classifyEmpty(ctx context.Context, session *Session, connection dsql.Connection, options []rsql.BuilderOption, selector *xstate.Selector, replay *predicatereplay.State) error {
+	lookup := session.emptyLookup.routes[readerlookup.Route(ctx)]
+	hasCriteria := selector != nil && strings.TrimSpace(selector.Criteria) != ""
+	if hasCriteria {
+		withoutCriteria := *selector
+		withoutCriteria.Criteria = ""
+		withoutCriteria.Placeholders = nil
+		options = append(options, rsql.WithBuilderSelector(&withoutCriteria))
+	}
+	if hasCriteria || replay.HasOrdinaryFilters(lookup.predicates) {
+		// A filter miss on an authorized identity is a normal not-found result.
+		// Check that identity before testing existence without authorization.
+		authorized, err := s.probeIdentity(ctx, session, connection, options, replay.Probe(ctx, lookup.predicates, true))
+		if err != nil {
+			return err
+		}
+		if authorized {
+			return readerlookup.EmptyResult(false)
+		}
+	}
+	exists, err := s.probeIdentity(ctx, session, connection, options, replay.Probe(ctx, lookup.predicates, false))
 	if err != nil {
-		return fmt.Errorf("reader identity existence probe build: %w", err)
+		return err
+	}
+	return readerlookup.EmptyResult(exists)
+}
+
+func (s *Service) probeIdentity(ctx context.Context, session *Session, connection dsql.Connection, options []rsql.BuilderOption, buildContext context.Context) (bool, error) {
+	query, err := rsql.NewBuilder().Build(buildContext, options...)
+	if err != nil {
+		return false, fmt.Errorf("reader identity existence probe build: %w", err)
 	}
 	limit := 1
 	query = &cache.ParmetrizedQuery{SQL: dsql.PrepareExecutableSQL(session.emptyLookup.projection.Render(query.SQL), &spec.ViewControls{Limit: &limit}), Args: query.Args}
@@ -307,9 +345,9 @@ func (s *Service) classifyEmpty(ctx context.Context, session *Session, connectio
 	}
 	scan := rowRead{view: session.Artifact.Root.View, cacheOnly: session.CacheOnly, options: []sqlxread.Option{sqlxread.WithQueryScope(session.QueryScope), sqlxread.WithCacheOnly(session.CacheOnly)}, newRow: func() any { return &existence{} }}
 	if err := scan.query(ctx, rowQuery{db: connection.DB, tx: connection.Tx, query: query, read: session.rootRead, dialect: connection.Dialect, visit: func(any) error { exists = true; return nil }}); err != nil {
-		return fmt.Errorf("reader identity existence probe: %w", err)
+		return false, fmt.Errorf("reader identity existence probe: %w", err)
 	}
-	return readerlookup.EmptyResult(exists)
+	return exists, nil
 }
 
 // Resolve a predicate column through parser-owned lexical source scopes, then
@@ -337,7 +375,7 @@ func (p *emptyLookupPlan) usedIdentity(ctx context.Context, replay *predicaterep
 	if p == nil {
 		return false
 	}
-	identities := p.routes[readerlookup.Route(ctx)]
+	identities := p.routes[readerlookup.Route(ctx)].identities
 	for _, identity := range identities {
 		if !replay.HasPredicate(identity.predicate) {
 			return false

@@ -55,7 +55,6 @@ func (p *Program) NewContext(ctx context.Context, binder xhandler.Binder, append
 
 type compiledPredicate struct {
 	definition      *spec.Predicate
-	auth            bool
 	group           int
 	fieldName       string
 	fieldIndex      []int
@@ -106,7 +105,6 @@ func Compile(input CompileInput) (*Program, error) {
 			}
 			compiled := compiledPredicate{
 				group:           definition.Group,
-				auth:            definition.Auth,
 				definition:      definition,
 				fieldName:       field.Name,
 				fieldIndex:      append([]int(nil), field.Index...),
