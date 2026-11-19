@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io/fs"
+	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -22,11 +23,12 @@ import (
 // ResourcePlan keeps regenerable package assets separate from append-only Go
 // field metadata. The emitted FS is registered explicitly with Bindly.
 type ResourcePlan struct {
-	Namespace   string
-	Destination string
-	Symbol      string
-	Files       []EmittedFile
-	sourceText  string
+	Namespace       string
+	Destination     string
+	Symbol          string
+	Files           []EmittedFile
+	sourceText      string
+	retiredCodecSQL map[string]bool
 }
 
 // authoredSource identifies a linked filesystem declaration outside generated
@@ -66,9 +68,18 @@ func (r *planResolver) prepareResources() (*ResourcePlan, error) {
 		return nil, err
 	}
 	var retainedFiles []EmittedFile
+	var generatedAssets map[string]bool
 	if retained != nil {
 		retainedFiles = retained.Files
 		result.Files = nil
+		if r.input.nativeMutationTargetSelected && r.plan.Input.Ownership == ContractGenerated &&
+			r.plan.Output.Ownership == ContractGenerated && generatedOwner([]byte(result.sourceText)) == r.plan.ComponentName {
+			generatedAssets = make(map[string]bool, len(retainedFiles))
+			for _, asset := range retainedFiles {
+				generatedAssets[asset.Path] = true
+			}
+			result.retiredCodecSQL = map[string]bool{}
+		}
 		if (r.plan.Input.Ownership == ContractGenerated || r.plan.Output.Ownership == ContractGenerated) && !result.authoredSource() {
 			result.sourceText = ""
 		}
@@ -186,11 +197,7 @@ func (r *planResolver) prepareResources() (*ResourcePlan, error) {
 			if err != nil {
 				return err
 			}
-			if codec == nil || !strings.EqualFold(strings.TrimSpace(codec.Body), "structql") || len(codec.Arguments) != 1 {
-				continue
-			}
-			query := strings.TrimSpace(codec.Arguments[0])
-			if query == "" || strings.HasPrefix(strings.ToLower(query), "uri=") {
+			if codec == nil {
 				continue
 			}
 			name := lowerSnake(field.Name)
@@ -200,6 +207,19 @@ func (r *planResolver) prepareResources() (*ResourcePlan, error) {
 				rootRole = r.plan.ComponentName
 			}
 			path := r.plan.Generation.SQLFileFor(field.Name, rootRole, defaultPath)
+			if !strings.EqualFold(strings.TrimSpace(codec.Body), "structql") {
+				if generatedAssets[path] {
+					result.retiredCodecSQL[path] = true
+				}
+				continue
+			}
+			if len(codec.Arguments) != 1 {
+				continue
+			}
+			query := strings.TrimSpace(codec.Arguments[0])
+			if query == "" || strings.HasPrefix(strings.ToLower(query), "uri=") {
+				continue
+			}
 			if existing, ok := files[path]; ok && existing != query {
 				return fmt.Errorf("StructQL field %s conflicts at SQL destination %s", field.Name, path)
 			}
@@ -334,11 +354,30 @@ func (r *planResolver) prepareResources() (*ResourcePlan, error) {
 	// Linked local rows keep their existing SQL URIs and assets while a changed
 	// input or response envelope is regenerated. Current authored assets win.
 	if retained != nil {
+		if len(result.retiredCodecSQL) != 0 {
+			groups := [][]Field{r.plan.Input.Fields, r.plan.Output.Fields}
+			for _, view := range r.plan.Views {
+				groups = append(groups, view.Fields)
+			}
+			for _, fields := range groups {
+				for _, field := range fields {
+					if err := result.preserveCodecSQL(result.Namespace, reflect.StructField{Name: field.Name, Tag: reflect.StructTag(field.Tag)}); err != nil {
+						return nil, err
+					}
+				}
+			}
+		}
 		for _, file := range retainedFiles {
 			if _, generated := files[file.Path]; !generated {
+				// Replacing a StructQL codec retires its generated query destination.
+				// A live linked relation or another field can still own the query.
+				if result.retiredCodecSQL[file.Path] {
+					continue
+				}
 				files[file.Path] = file.Content
 			}
 		}
+		result.retiredCodecSQL = nil
 		if len(files) != len(retainedFiles) {
 			result.sourceText = ""
 		}
@@ -351,6 +390,40 @@ func (r *planResolver) prepareResources() (*ResourcePlan, error) {
 		return nil, nil
 	}
 	return result, nil
+}
+
+// preserveCodecSQL keeps the prior resource when a current field still needs its URI.
+func (r *ResourcePlan) preserveCodecSQL(inherited string, field reflect.StructField) error {
+	if len(r.retiredCodecSQL) == 0 {
+		return nil
+	}
+	metadata, err := tag.ParseField(field)
+	if err != nil {
+		return fmt.Errorf("resource bindings for %s: %w", field.Name, err)
+	}
+	preserve := func(uri string) {
+		namespace, path, ok := strings.Cut(strings.TrimSpace(uri), ":")
+		if !ok {
+			namespace, path = inherited, namespace
+		}
+		if namespace == r.Namespace {
+			delete(r.retiredCodecSQL, path)
+		}
+	}
+	if metadata.View != nil {
+		preserve(metadata.View.URI)
+	}
+	if metadata.SQL != nil {
+		preserve(metadata.SQL.URI)
+	}
+	if metadata.Codec != nil {
+		for _, arg := range metadata.Codec.Arguments {
+			if key, uri, ok := strings.Cut(arg, "="); ok && strings.EqualFold(strings.TrimSpace(key), "uri") {
+				preserve(uri)
+			}
+		}
+	}
+	return nil
 }
 
 func defaultSQLResourcePath(name string) string {

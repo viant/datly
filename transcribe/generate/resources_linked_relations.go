@@ -221,7 +221,13 @@ func (r *planResolver) linkedDescriptorRelationAssets(resources *ResourcePlan, f
 		return err
 	}
 	for _, field := range fields {
-		if !field.Exported || covered[field.Name] {
+		if !field.Exported {
+			continue
+		}
+		if err := resources.preserveCodecSQL(inherited, field.StructField()); err != nil {
+			return err
+		}
+		if covered[field.Name] {
 			continue
 		}
 		if strings.TrimSpace(field.Tag.Get(tag.RelationName)) == "" {
