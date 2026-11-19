@@ -2,17 +2,22 @@ package transcribe
 
 import (
 	"context"
+	"go/ast"
+	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 
 	"github.com/viant/datly/spec"
 	gen "github.com/viant/datly/transcribe/generate"
 	"github.com/viant/datly/typecatalog"
+	xmodule "github.com/viant/x/module"
 	xshape "github.com/viant/x/shape"
 )
 
 // generatedCurrentAuthority proves selected declaration ownership, independently
-// of a Current name or a generated registration alone. It never changes metadata.
+// of a Current name or registration alone. A reflected destination type is
+// localized to the proven component alias in the compile-local graph.
 func generatedCurrentAuthority(ctx context.Context, source *Source, component, authored *spec.Component, resolver *typecatalog.Resolver) (map[string]bool, map[string]bool, error) {
 	if source.PackageComponent == nil || strings.TrimSpace(source.Text) == "" || component.TypeContext == nil || resolver == nil {
 		return nil, nil, nil
@@ -47,6 +52,7 @@ func generatedCurrentAuthority(ctx context.Context, source *Source, component, a
 		build.Dir = source.BaseDir()
 	}
 	declarations := &factoryDeclarations{ctx: ctx, build: build, pkg: pkg}
+	viewDeclarations, viewFile := currentViewDestination(declarations, authored, source)
 	own, inherited := map[string]bool{}, map[string]bool{}
 	for _, p := range spec.EffectiveParameters(source.PackageComponent.Parameters) {
 		if p == nil || p.Source.Kind != "view" {
@@ -69,14 +75,11 @@ func generatedCurrentAuthority(ctx context.Context, source *Source, component, a
 			continue
 		}
 		name, err := (xshape.Resolver{}).Named(canonical)
-		if err != nil || !strings.HasPrefix(name, pkg+".") || borrowed[name] {
+		if err != nil || borrowed[name] {
 			continue
 		}
-		// A linked authoring binary may give a generated declaration package
-		// provenance. The selected same-owner source and exact AST proof below
-		// remain authoritative; provenance alone neither admits nor rejects it.
-		resolution, err := resolver.ResolveWithProvenance(name)
-		if err != nil || resolution == nil || (resolution.Origin != typecatalog.TypeOriginGenerated && resolution.Origin != typecatalog.TypeOriginPackage) {
+		ref, err := (xshape.Resolver{}).Reference(name)
+		if err != nil || (ref.Qualifier != pkg && (viewDeclarations == nil || ref.Qualifier != viewDeclarations.pkg)) {
 			continue
 		}
 		if err := declarations.load(); err != nil {
@@ -85,13 +88,41 @@ func generatedCurrentAuthority(ctx context.Context, source *Source, component, a
 			}
 			return nil, nil, nil
 		}
-		short := strings.TrimPrefix(name, pkg+".")
-		records := declarations.types[short]
-		if len(records) != 1 || !records[0].generated || !records[0].concreteStruct || !gen.SourceOwnedBy([]byte(records[0].source), component.Name) {
+		records := declarations.types[ref.Name]
+		if len(records) != 1 || !records[0].generated || !gen.SourceOwnedBy([]byte(records[0].source), component.Name) {
 			continue
 		}
-		descriptor, err := resolver.Descriptor(name)
-		if err != nil || !authoredInputDeclaration(records[0], descriptor, pkg, short) {
+		record := records[0]
+		owner := pkg
+		if !record.concreteStruct {
+			if viewDeclarations == nil || !generatedViewAlias(record, ref.Name, viewDeclarations.pkg) || borrowed[viewDeclarations.pkg+"."+ref.Name] || borrowed[pkg+"."+ref.Name] {
+				continue
+			}
+			alias, err := resolver.Descriptor(pkg + "." + ref.Name)
+			if err != nil || !authoredInputDeclarationMatch(record, alias, pkg, ref.Name) {
+				continue
+			}
+			if err := viewDeclarations.load(); err != nil {
+				if ctx.Err() != nil {
+					return nil, nil, ctx.Err()
+				}
+				continue
+			}
+			moved := viewDeclarations.types[ref.Name]
+			if len(moved) != 1 || moved[0].file != viewFile || !moved[0].generated || !gen.SourceOwnedBy([]byte(moved[0].source), component.Name) {
+				continue
+			}
+			record, owner = moved[0], viewDeclarations.pkg
+		} else if ref.Qualifier != pkg {
+			continue
+		}
+		key := owner + "." + ref.Name
+		resolution, err := resolver.ResolveWithProvenance(key)
+		if err != nil || resolution == nil || (resolution.Origin != typecatalog.TypeOriginGenerated && resolution.Origin != typecatalog.TypeOriginPackage) {
+			continue
+		}
+		descriptor, err := resolver.Descriptor(key)
+		if err != nil || !authoredInputDeclaration(record, descriptor, owner, ref.Name) {
 			continue
 		}
 		viewName := strings.TrimSpace(p.Source.Name)
@@ -106,12 +137,71 @@ func generatedCurrentAuthority(ctx context.Context, source *Source, component, a
 		if err != nil {
 			continue
 		}
+		// Package bootstrap follows Go aliases to their concrete package. Plan
+		// inherited reads through the proven public alias before deriving them.
+		if owner != pkg && ref.Qualifier == owner && strings.HasSuffix(canonical, name) {
+			for _, selected := range spec.EffectiveParameters(component.Parameters) {
+				if selected != nil && selected.Identity() == p.Identity() && selected.TypeExpr == p.TypeExpr {
+					selected.TypeExpr = strings.TrimSuffix(canonical, name) + pkg + "." + ref.Name
+				}
+			}
+		}
 		own[identity] = true
 		if explicit == nil {
 			inherited[p.Identity()] = true
 		}
 	}
 	return own, inherited, nil
+}
+
+func currentViewDestination(owner *factoryDeclarations, authored *spec.Component, source *Source) (*factoryDeclarations, string) {
+	if authored.Settings == nil || authored.Settings.Generation == nil {
+		return nil, ""
+	}
+	file := authored.Settings.Generation.ViewFile
+	dir := filepath.Dir(file)
+	if dir == "." {
+		return nil, ""
+	}
+	root := owner.build.Dir
+	if source.GoBuild == nil || source.GoBuild.Dir == "" {
+		module, err := xmodule.LocateLocal(root)
+		if err != nil {
+			return nil, ""
+		}
+		root = module.Dir
+	}
+	authority, err := typecatalog.NewDestinationAuthority(root)
+	if err != nil {
+		return nil, ""
+	}
+	dest, err := authority.Package(filepath.ToSlash(dir), "")
+	if err != nil || dest.ImportPath == owner.pkg {
+		return nil, ""
+	}
+	return &factoryDeclarations{ctx: owner.ctx, build: owner.build, pkg: dest.ImportPath}, filepath.Base(file)
+}
+
+// generatedViewAlias accepts only the same-name forwarding alias emitted for
+// a relocated shape, with the exact selected import path.
+func generatedViewAlias(record factoryDeclaration, name, path string) bool {
+	if record.typeSpec == nil || !record.typeSpec.Assign.IsValid() {
+		return false
+	}
+	selector, ok := record.typeSpec.Type.(*ast.SelectorExpr)
+	if !ok || selector.Sel.Name != name {
+		return false
+	}
+	qualifier, ok := selector.X.(*ast.Ident)
+	if !ok {
+		return false
+	}
+	for _, imp := range record.imports {
+		if imp.Name != nil && imp.Name.Name == qualifier.Name && imp.Path.Value == strconv.Quote(path) {
+			return true
+		}
+	}
+	return false
 }
 
 // generatedHelperAuthority proves selected helper source ownership before
