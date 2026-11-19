@@ -546,6 +546,11 @@ Legacy components without a declaration retain the `_format` query source.
 Custom JSON outputs cannot switch to another encoder without a separate safe
 wire projection.
 
+A reader with one hidden `output/view` and one declared public `output/body`
+can use an explicit `FormatSelector()` to export the public body as CSV, XLS
+or XLSX. The native converted-row checks and the effective output Contract apply
+to the export. The JSON body and the SQL-owned view keep their existing roles.
+
 ### Predicate metadata and group references
 
 Syntax fragment; adapt within the [complete reader contract](dql.md#a-shared-view-structure-for-readers-and-writers).

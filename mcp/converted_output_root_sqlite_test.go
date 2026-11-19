@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -40,9 +41,10 @@ import (
 )
 
 type convertedRootInput struct {
-	Fields []string `parameter:"Fields,kind=query,in=fields" querySelector:"view=records,property=fields"`
-	Limit  int      `parameter:"Limit,kind=query,in=limit" querySelector:"view=records,property=limit"`
-	Page   int      `parameter:"Page,kind=query,in=page" querySelector:"view=records,property=page"`
+	OutputFormat string   `parameter:"OutputFormat,kind=query,in=_format" formatSelector:"true" mcp:"-"`
+	Fields       []string `parameter:"Fields,kind=query,in=fields" querySelector:"view=records,property=fields"`
+	Limit        int      `parameter:"Limit,kind=query,in=limit" querySelector:"view=records,property=limit"`
+	Page         int      `parameter:"Page,kind=query,in=page" querySelector:"view=records,property=page"`
 }
 type convertedRootSQLRow struct {
 	Internal string `sqlx:"internal"`
@@ -280,6 +282,50 @@ func TestConvertedOutputRootMCPAndNativeFormatsSQLite(t *testing.T) {
 	require.Equal(t, 200, rec.Code, rec.Body.String())
 	require.Contains(t, rec.Body.String(), `"secret":"secret"`)
 	require.Contains(t, rec.Body.String(), `"computed":"two!"`)
+
+	for _, format := range []string{"csv", "xls", "xlsx"} {
+		for _, hidden := range []bool{false, true} {
+			t.Run(fmt.Sprintf("HTTP %s hidden=%t", format, hidden), func(t *testing.T) {
+				request := httptest.NewRequest("GET", "/converted?limit=1&page=2&_format="+format, nil)
+				if hidden {
+					request.Header.Set("X-Converted-Policy", "hide")
+				}
+				rec := httptest.NewRecorder()
+				before := queries.Load()
+				gateway.NewHandler(rt, nil, "").ServeHTTP(rec, request)
+				require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+				require.EqualValues(t, 1, queries.Load()-before)
+				var rows [][]string
+				if format == "csv" {
+					require.True(t, strings.HasPrefix(rec.Header().Get("Content-Type"), "text/csv"))
+					rows, err = csv.NewReader(bytes.NewReader(rec.Body.Bytes())).ReadAll()
+					require.NoError(t, err)
+				} else {
+					require.Contains(t, rec.Header().Get("Content-Type"), "spreadsheetml.sheet")
+					book, err := excelize.OpenReader(bytes.NewReader(rec.Body.Bytes()))
+					require.NoError(t, err)
+					defer book.Close()
+					rows, err = book.GetRows("Data")
+					require.NoError(t, err)
+				}
+				require.Len(t, rows, 2)
+				require.Contains(t, rows[0], "Label")
+				require.Contains(t, rows[1], "two")
+				require.NotContains(t, rows[0], "Hidden")
+				require.NotContains(t, rows[1], "backing")
+				if hidden {
+					require.NotContains(t, rows[0], "Computed")
+					require.NotContains(t, rows[1], "two!")
+				} else {
+					require.Contains(t, rows[0], "Computed")
+					require.Contains(t, rows[1], "two!")
+				}
+			})
+		}
+	}
+	optedOut := httptest.NewRecorder()
+	gateway.NewHandler(rt, nil, "").ServeHTTP(optedOut, httptest.NewRequest("GET", "/converted/detail?_format=csv", nil))
+	require.Equal(t, http.StatusNotAcceptable, optedOut.Code, optedOut.Body.String())
 
 	plan, err := registered.Output.WithMCPOutputRoot()
 	require.NoError(t, err)

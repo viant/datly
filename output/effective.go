@@ -37,7 +37,11 @@ func (p *Plan) WithType(typ reflect.Type) (*Plan, error) {
 	if p.effectiveSource != nil {
 		result.effectiveSource = p.effectiveSource
 	}
-	result.prepareFormats()
+	if p.convertedTabular == nil {
+		result.prepareFormats()
+	} else if result.convertedTabular, err = p.convertedTabular.WithType(typ); err != nil {
+		return nil, err
+	}
 	if err := result.prepareSelectorOutputRoot(); err != nil {
 		return nil, err
 	}
@@ -77,7 +81,7 @@ func (p *Plan) effectiveValue(value any) (any, error) {
 // consume it directly. A configured legacy codec can retain its existing type
 // projection when representable; otherwise it must opt into JSONEncoder.
 func (p *Plan) WithRepresentation(metadata *xshape.Representation) (*Plan, error) {
-	if metadata == nil || !metadata.Changed() && (p == nil || p.formatPlan == nil) {
+	if metadata == nil || !metadata.Changed() && (p == nil || p.formatPlan == nil && p.convertedTabular == nil) {
 		return p, nil
 	}
 	if p == nil || metadata.Original() != p.typeOf {
@@ -111,7 +115,11 @@ func (p *Plan) WithRepresentation(metadata *xshape.Representation) (*Plan, error
 	if result.standardJSON != nil {
 		result.standardJSON = result.standardJSON.WithRepresentation(metadata)
 	}
-	result.prepareFormats()
+	if p.convertedTabular == nil {
+		result.prepareFormats()
+	} else if result.convertedTabular, err = p.convertedTabular.WithRepresentation(metadata); err != nil {
+		return nil, err
+	}
 	if err := result.prepareSelectorOutputRoot(); err != nil {
 		return nil, err
 	}
@@ -173,12 +181,19 @@ func (p *Plan) WithCaseFormat(format string) (*Plan, error) {
 	result.effectiveSource = p.effectiveSource
 	if result.effectiveSource != nil {
 		result.prepareFormats()
+		if p.convertedTabular != nil {
+			result.convertedTabular, err = p.convertedTabular.WithCaseFormat(format)
+			if err != nil {
+				return nil, err
+			}
+		}
 	}
 	return result, nil
 }
 
 // prepareFormats compiles reusable typed codec authority once per immutable variant.
 func (p *Plan) prepareFormats() {
+	p.convertedTabular = nil
 	if p.custom != nil || p.TransportReady() {
 		return
 	}
@@ -188,6 +203,20 @@ func (p *Plan) prepareFormats() {
 	}
 	if original != nil && (original.Implements(reflect.TypeFor[json.Marshaler]()) || reflect.PointerTo(original).Implements(reflect.TypeFor[json.Marshaler]()) || original.Implements(reflect.TypeFor[JSONWireType]()) || reflect.PointerTo(original).Implements(reflect.TypeFor[JSONWireType]())) {
 		return
+	}
+	// An explicit format selector opts a converted reader into tabular
+	// encoding of its declared public body. Keep the SQL holder for reads,
+	// JSON and selection, and reuse the native converted output checks.
+	if p.formatSelector != nil && !p.compileInput.publicOutputRoot && p.effectiveSource == nil && p.representation == nil {
+		body, err := p.withConvertedOutputRoot(false)
+		if err != nil {
+			p.formatError = fmt.Errorf("prepare converted tabular output: %w", err)
+			return
+		}
+		if body != p {
+			p.convertedTabular = body
+			return
+		}
 	}
 	p.formatPresentation, p.formatError = (presentationCompiler{excluded: p.exclude, representation: p.representation, hideJSON: p.effectiveSource != nil, compileEnums: true, cell: p.recursiveCell, envelope: p.rows != nil && len(p.rows.index) > 0, canonical: p.effectiveSource, fieldVisible: p.formatFieldVisibility()}).compile(p.typeOf, "", nil)
 	if p.formatError != nil {

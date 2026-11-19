@@ -48,6 +48,9 @@ func (p *Plan) Wire(format string) (WireContract, error) {
 		format = p.DefaultFormat()
 	}
 	format = strings.ToLower(strings.TrimSpace(format))
+	if p.convertedTabular != nil && isTabularFileFormat(format) {
+		return p.convertedTabular.Wire(format)
+	}
 	if !p.SupportsFormat(format) {
 		if p.formatError != nil {
 			return WireContract{}, fmt.Errorf("effective output cannot use %s: %w", format, p.formatError)

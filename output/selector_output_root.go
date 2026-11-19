@@ -15,6 +15,10 @@ import (
 // hidden declared SQL view and one distinct, declared public body of matching cardinality.
 // The SQL view remains owned by the reader; only this transport's rows change.
 func (p *Plan) WithMCPOutputRoot() (*Plan, error) {
+	return p.withConvertedOutputRoot(true)
+}
+
+func (p *Plan) withConvertedOutputRoot(requireRootFields bool) (*Plan, error) {
 	if p == nil || p.compileInput.publicOutputRoot {
 		return p, nil
 	}
@@ -26,21 +30,23 @@ func (p *Plan) WithMCPOutputRoot() (*Plan, error) {
 	if p.rows == nil || p.rows.name == "" {
 		return p, nil
 	}
-	// Canonical Parameters include the native companion declarations. View
-	// projection permission alone does not declare a public Fields input.
-	hasRootFields := false
-	for _, parameter := range spec.EffectiveParameters(c.Parameters) {
-		if parameter == nil || parameter.QuerySelector == nil || parameter.QuerySelector.Property != spec.SelectorPropertyFields {
-			continue
+	if requireRootFields {
+		// Canonical Parameters include the native companion declarations. View
+		// projection permission alone does not declare a public Fields input.
+		hasRootFields := false
+		for _, parameter := range spec.EffectiveParameters(c.Parameters) {
+			if parameter == nil || parameter.QuerySelector == nil || parameter.QuerySelector.Property != spec.SelectorPropertyFields {
+				continue
+			}
+			target := strings.TrimSpace(parameter.QuerySelector.View)
+			if target == "" || strings.EqualFold(target, c.RootView.CanonicalName()) {
+				hasRootFields = true
+				break
+			}
 		}
-		target := strings.TrimSpace(parameter.QuerySelector.View)
-		if target == "" || strings.EqualFold(target, c.RootView.CanonicalName()) {
-			hasRootFields = true
-			break
+		if !hasRootFields {
+			return p, nil
 		}
-	}
-	if !hasRootFields {
-		return p, nil
 	}
 	var views, bodies []*spec.Parameter
 	for _, parameter := range spec.EffectiveParameters(c.Parameters) {
@@ -147,7 +153,7 @@ func (p *Plan) WithMCPOutputRoot() (*Plan, error) {
 			}
 		}
 	}
-	input.DataField, input.publicOutputRoot = body.Name, true
+	input.DataField, input.publicOutputRoot = body.Name, requireRootFields
 	result, err := p.compiler.Compile(input)
 	if err != nil {
 		return nil, err

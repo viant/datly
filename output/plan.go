@@ -43,6 +43,7 @@ type Plan struct {
 	representation      *xshape.Representation
 	effectiveSource     reflect.Type
 	formatPlan          *Plan
+	convertedTabular    *Plan
 	formatPresentation  *presentation
 	formatError         error
 	projections         sync.Map
@@ -295,13 +296,20 @@ func (p *Plan) SupportsFormat(format string) bool {
 	if format == "" || format == "json" {
 		return true
 	}
-	if p != nil && p.formatError != nil && (format == "csv" || format == "xls" || format == "xlsx") {
+	if p != nil && p.convertedTabular != nil && isTabularFileFormat(format) {
+		return p.convertedTabular.SupportsFormat(format)
+	}
+	if p != nil && p.formatError != nil && isTabularFileFormat(format) {
 		return false
 	}
 	if !p.JSONOnly() {
 		return true
 	}
-	return p != nil && p.custom == nil && p.formatPlan != nil && p.formatError == nil && (format == "csv" || format == "xls" || format == "xlsx")
+	return p != nil && p.custom == nil && p.formatPlan != nil && p.formatError == nil && isTabularFileFormat(format)
+}
+
+func isTabularFileFormat(format string) bool {
+	return format == "csv" || format == "xls" || format == "xlsx"
 }
 
 func ContentType(format string) (string, error) {
@@ -327,6 +335,9 @@ func (p *Plan) Encode(ctx context.Context, format string, value any) (Result, er
 		format = p.DefaultFormat()
 	}
 	format = strings.ToLower(strings.TrimSpace(format))
+	if p.convertedTabular != nil && isTabularFileFormat(format) {
+		return p.convertedTabular.Encode(ctx, format, value)
+	}
 	if !p.SupportsFormat(format) {
 		if p.formatError != nil {
 			return Result{}, fmt.Errorf("effective output cannot use %s: %w", format, p.formatError)
@@ -341,7 +352,7 @@ func (p *Plan) Encode(ctx context.Context, format string, value any) (Result, er
 		return Result{ContentType: contentType}, nil
 	}
 	selection := dexec.SelectedOutputFields(ctx, value)
-	if (format == "csv" || format == "xls" || format == "xlsx") && p.formatPlan != nil {
+	if isTabularFileFormat(format) && p.formatPlan != nil {
 		value, err = p.effectiveValue(value)
 		if err != nil {
 			return Result{}, err
@@ -377,7 +388,7 @@ func (p *Plan) Encode(ctx context.Context, format string, value any) (Result, er
 	}
 	if format != "json" && selection != nil {
 		var scalarAuthority *presentation
-		if format == "csv" || format == "xls" || format == "xlsx" {
+		if isTabularFileFormat(format) {
 			scalarAuthority = p.formatPresentation
 		}
 		selected, projected, err := p.selectedPresentationContextScope(ctx, value, selection, scalarAuthority, format == "csv")
