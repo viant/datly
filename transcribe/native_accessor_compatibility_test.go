@@ -137,7 +137,7 @@ func OriginalCall(){r:=&records.Record{};r.SetLabel("")}
 	}
 }
 
-func TestNativeConvenienceAccessorRejectsSplitDestinations(t *testing.T) {
+func TestNativeConvenienceAccessorValidatesSplitDestinations(t *testing.T) {
 	ctx := context.Background()
 	db := sqlite.New(t)
 	if err := db.ExecStatements(ctx, "CREATE TABLE records(id INTEGER PRIMARY KEY,label TEXT)"); err != nil {
@@ -176,9 +176,26 @@ SELECT r.*,type(r,'rows.Record') FROM records r`}
 		}
 		return out
 	}
+	if _, err := NewCompiler().Transcribe(ctx, request); err != nil {
+		t.Fatalf("valid authored setter in a sibling package: %v", err)
+	}
+	// The public caller uses the original scalar argument. A later invalid
+	// setter must fail the build without changing any published files.
+	writeSourceFile(t, root, "consumer/caller.go", `package consumer
+import rows "example.com/generated/entities"
+func Set(r *rows.Record, value string) { r.SetLabel(value) }
+`)
+	cmd := exec.Command("go", "test", "-mod=mod", "./consumer")
+	cmd.Dir = root
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("external caller: %s: %v", out, err)
+	}
+	if err := os.WriteFile(path, []byte("package entities\nfunc(r *Record)SetLabel(value string){r.Label=value}\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
 	before := snapshot()
 	_, err := NewCompiler().Transcribe(ctx, request)
-	if err == nil || !strings.Contains(err.Error(), "single generated destination package") {
+	if err == nil || !strings.Contains(err.Error(), "cannot use") {
 		t.Fatalf("split accessor was not rejected: %v", err)
 	}
 	after := snapshot()

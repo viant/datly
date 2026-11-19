@@ -461,10 +461,11 @@ not require changing an original convenience setter from `SetLabel(string)` to
 retain it instead of emitting a duplicate. Native generation permits convenience
 signatures only with the application Go build context and successful preview and
 final staged compilation; the standard project CLI supplies this context. Direct
-calls without it remain strict. This native validation currently supports one
-generated destination package and rejects split destinations before publication.
-Compile reverse-dependent consumers separately: compiling the generated package
-and its dependencies does not prove those callers still compile. Compare setters
+calls without it remain strict. When a native writer generates several packages,
+Datly builds the component, row and lookup packages together against the same
+proposed files and removals. The final check uses the staged files before
+publication. Keep a handwritten setter with its receiver and compile existing
+external callers separately to verify their public signatures. Compare setters
 and presence fields across the whole package, not just the row declaration file.
 
 The authoring flow is **DQL SQL graph + schema metadata → selected native

@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 )
 
@@ -144,6 +145,17 @@ func (c *Context) GoFiles(pkg string, files map[string][]byte) ([]string, error)
 }
 
 func (c *Context) sourceFiles(pkg string, files map[string][]byte, validate bool) ([]string, error) {
+	selected, err := c.projectedFiles(map[string]map[string][]byte{pkg: files}, validate)
+	return selected[pkg], err
+}
+
+// ValidatePackages compiles the destinations in one overlay. Each package's
+// proposed files must belong to its directory in the selected Go build.
+func (c *Context) ValidatePackages(files map[string]map[string][]byte) (map[string][]string, error) {
+	return c.projectedFiles(files, true)
+}
+
+func (c *Context) projectedFiles(byPackage map[string]map[string][]byte, validate bool) (map[string][]string, error) {
 	dir, err := os.MkdirTemp("", "datly-handler-build-")
 	if err != nil {
 		return nil, err
@@ -153,28 +165,38 @@ func (c *Context) sourceFiles(pkg string, files map[string][]byte, validate bool
 	if err != nil {
 		return nil, err
 	}
+	packages := make([]string, 0, len(byPackage))
+	for pkg := range byPackage {
+		packages = append(packages, pkg)
+	}
+	sort.Strings(packages)
+	if len(packages) == 0 {
+		return nil, fmt.Errorf("no build packages supplied")
+	}
 	i := 0
-	for name, content := range files {
-		logical, err := c.absolutePath(name)
-		if err != nil {
-			return nil, err
+	for _, pkg := range packages {
+		for name, content := range byPackage[pkg] {
+			logical, err := c.absolutePath(name)
+			if err != nil {
+				return nil, err
+			}
+			physical, err := physicalPath(logical)
+			if err != nil {
+				return nil, err
+			}
+			if content == nil {
+				replace[logical], replace[physical] = "", ""
+				continue
+			}
+			backing := filepath.Join(dir, fmt.Sprintf("%d", i))
+			i++
+			if err = os.WriteFile(backing, content, 0600); err != nil {
+				return nil, err
+			}
+			// Explicit go.work paths may retain the logical spelling while the
+			// process working directory uses the physical module path.
+			replace[logical], replace[physical] = backing, backing
 		}
-		physical, err := physicalPath(logical)
-		if err != nil {
-			return nil, err
-		}
-		if content == nil {
-			replace[logical], replace[physical] = "", ""
-			continue
-		}
-		backing := filepath.Join(dir, fmt.Sprintf("%d", i))
-		i++
-		if err = os.WriteFile(backing, content, 0600); err != nil {
-			return nil, err
-		}
-		// Explicit go.work paths may retain the logical spelling while the
-		// process working directory uses the physical module path.
-		replace[logical], replace[physical] = backing, backing
 	}
 	data, err := json.Marshal(struct{ Replace map[string]string }{replace})
 	if err != nil {
@@ -191,47 +213,68 @@ func (c *Context) sourceFiles(pkg string, files map[string][]byte, validate bool
 		return nil, err
 	}
 	listArgs := append([]string{"list", "-json"}, flags...)
-	listed, err := c.run(append(listArgs, "-overlay", overlay, "--", pkg)...)
+	listArgs = append(listArgs, "-overlay", overlay, "--")
+	listed, err := c.run(append(listArgs, packages...)...)
 	if err != nil {
 		return nil, err
 	}
-	var target struct {
-		Dir               string
-		GoFiles, CgoFiles []string
-	}
-	if err = json.Unmarshal(listed, &target); err != nil {
-		return nil, err
-	}
-	if target.Dir == "" {
-		return nil, fmt.Errorf("cannot resolve build destination for %q", pkg)
-	}
-	packageDir, err := physicalPath(target.Dir)
-	if err != nil {
-		return nil, err
-	}
-	for name := range files {
-		logical, err := c.absolutePath(name)
+	selected := make(map[string][]string, len(packages))
+	decoder := json.NewDecoder(bytes.NewReader(listed))
+	for {
+		var target struct {
+			ImportPath, Dir   string
+			GoFiles, CgoFiles []string
+		}
+		if err := decoder.Decode(&target); err != nil {
+			if err == io.EOF {
+				break
+			}
+			return nil, err
+		}
+		key := target.ImportPath
+		if len(packages) == 1 {
+			key = packages[0] // Single-package callers can use a relative package argument.
+		}
+		if _, seen := selected[key]; seen {
+			return nil, fmt.Errorf("build selector %q resolved multiple packages", key)
+		}
+		files, ok := byPackage[key]
+		if !ok || target.Dir == "" {
+			return nil, fmt.Errorf("unexpected build destination %q (%s)", target.ImportPath, target.Dir)
+		}
+		packageDir, err := physicalPath(target.Dir)
 		if err != nil {
 			return nil, err
 		}
-		file, err := physicalPath(logical)
-		if err != nil {
-			return nil, err
+		for name := range files {
+			logical, err := c.absolutePath(name)
+			if err != nil {
+				return nil, err
+			}
+			file, err := physicalPath(logical)
+			if err != nil {
+				return nil, err
+			}
+			rel, err := filepath.Rel(packageDir, file)
+			if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+				return nil, fmt.Errorf("staged handler file %s is outside selected build package %s; use the destination module's Go build context", name, packageDir)
+			}
 		}
-		rel, err := filepath.Rel(packageDir, file)
-		if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-			return nil, fmt.Errorf("staged handler file %s is outside selected build package %s; use the destination module's Go build context", name, packageDir)
-		}
+		selected[key] = append(target.GoFiles, target.CgoFiles...)
+	}
+	if len(selected) != len(packages) {
+		return nil, fmt.Errorf("Go resolved %d of %d build packages", len(selected), len(packages))
 	}
 	if validate {
 		args := append([]string{"build"}, flags...)
-		args = append(args, "-overlay", overlay, "-o", filepath.Join(dir, "package.a"), "--", pkg)
-		_, err = c.run(args...)
-		if err != nil {
-			return nil, err
+		args = append(args, "-overlay", overlay, "-o", filepath.Join(dir, "package.a"), "--")
+		for _, pkg := range packages {
+			if _, err = c.run(append(args, pkg)...); err != nil {
+				return nil, err
+			}
 		}
 	}
-	return append(target.GoFiles, target.CgoFiles...), nil
+	return selected, nil
 }
 
 // Go canonicalizes its module directory. Resolve existing ancestors too when

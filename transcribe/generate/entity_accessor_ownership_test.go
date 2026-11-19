@@ -1,11 +1,14 @@
 package generate
 
 import (
-	"github.com/viant/datly/transcribe/gobuild"
 	"go/parser"
 	"go/token"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/viant/datly/transcribe/gobuild"
 )
 
 func TestAuthoredFieldAccessorOwnership(t *testing.T) {
@@ -53,15 +56,70 @@ func TestAuthoredFieldAccessorOwnership(t *testing.T) {
 	}
 }
 
+// The setter package is a sibling of both lookup packages. The preview must
+// use the proposed declarations and the final gate must read the private stage.
 func TestNativeAccessorSplitValidationBoundaries(t *testing.T) {
-	p := &Plan{accessorBuild: &gobuild.Context{}}
-	s := &packageSet{plans: []*Plan{p, {}}}
-	if err := s.validateAccessorDestinations(p); err != nil {
-		t.Fatal(err)
+	root := t.TempDir()
+	const module = "example.test/billing"
+	write := func(path, source string) {
+		t.Helper()
+		if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(source), 0600); err != nil {
+			t.Fatal(err)
+		}
 	}
-	// The locked stage may observe a fresh convenience method after preview.
-	p.accessorValidationNeeded = true
-	if err := s.validateProjected(); err == nil || !strings.Contains(err.Error(), "single generated destination") {
-		t.Fatalf("new staged claim not rejected: %v", err)
+	write(filepath.Join(root, "go.mod"), "module "+module+"\ngo 1.25\n")
+	build := &gobuild.Context{Dir: root, Env: []string{"GOWORK=off", "GOFLAGS="}}
+	set := &packageSet{}
+	const current = "package model\ntype Row struct{ ID *int }"
+	const invalid = "package model\ntype Row struct{ ID *string }"
+	for _, entry := range []struct{ pkg, source string }{
+		{"component", `package component
+import idx "example.test/billing/index"
+type Fee struct{ Row idx.Row }
+func(f *Fee) SetID(value int){ f.Row.ID=&value }
+`},
+		{"index", `package index
+import "example.test/billing/model"
+type Row = model.Row
+`},
+		{"model", current},
+	} {
+		dir := filepath.Join(root, entry.pkg)
+		stage := filepath.Join(t.TempDir(), entry.pkg)
+		path := filepath.Join(dir, "type.go")
+		write(path, entry.source)
+		write(filepath.Join(stage, "type.go"), entry.source)
+		plan := &Plan{Package: module + "/" + entry.pkg}
+		set.plans = append(set.plans, plan)
+		set.dirs = append(set.dirs, dir)
+		set.readRoots = append(set.readRoots, stage)
+		set.files = append(set.files, []EmittedFile{{Path: path, Content: entry.source}})
+		set.removals = append(set.removals, nil)
+		set.templates = append(set.templates, &scaffoldPersistence{dir: dir, owner: "Fee", plan: plan})
+	}
+	set.plans[0].accessorBuild = build
+	set.plans[0].accessorValidationNeeded = true
+	write(filepath.Join(set.dirs[2], "type.go"), invalid)
+	write(filepath.Join(set.dirs[2], "retired.go"), "package model\ntype Row int")
+	set.removals[2] = map[string]bool{"retired.go": true}
+	stages := set.readRoots
+	set.readRoots = nil
+	if err := set.validateProjections(false); err != nil {
+		t.Fatalf("preview used stale model: %v", err)
+	}
+	set.readRoots = stages
+	if err := set.validateProjected(); err != nil {
+		t.Fatalf("valid stage: %v", err)
+	}
+	write(filepath.Join(stages[2], "type.go"), invalid)
+	if err := set.validateProjected(); err == nil || !strings.Contains(err.Error(), "cannot use") {
+		t.Fatalf("invalid staged model: %v", err)
+	}
+	write(filepath.Join(stages[2], "type.go"), "package model\nimport _ \"example.test/billing/component\"\ntype Row struct{ ID *int }")
+	if err := set.validateProjected(); err == nil || !strings.Contains(err.Error(), "import cycle") {
+		t.Fatalf("staged import cycle: %v", err)
 	}
 }
