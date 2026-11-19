@@ -50,3 +50,26 @@ func (c *CounterAdapter) IncrementValue(value interface{}) int64 {
 func nopOnDone(_ time.Time, _ ...interface{}) int64 {
 	return 0
 }
+
+// IncrementValueBy updates a counter in one operation when supported.
+func IncrementValueBy(c Counter, value interface{}, delta int64) int64 {
+	if c == nil {
+		return 0
+	}
+	if bulk, ok := c.(interface {
+		IncrementValueBy(interface{}, int64) int64
+	}); ok {
+		return bulk.IncrementValueBy(value, delta)
+	}
+	var result int64
+	for ; delta > 0; delta-- {
+		result = c.IncrementValue(value)
+	}
+	for ; delta < 0; delta++ {
+		result = c.DecrementValue(value)
+	}
+	return result
+}
+func (c *CounterAdapter) IncrementValueBy(value interface{}, delta int64) int64 {
+	return IncrementValueBy(c.counter, value, delta)
+}

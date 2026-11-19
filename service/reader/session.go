@@ -2,6 +2,9 @@ package reader
 
 import (
 	"fmt"
+	"reflect"
+	"sync"
+
 	"github.com/viant/datly/service/executor/expand"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
@@ -9,8 +12,6 @@ import (
 	"github.com/viant/sqlx/io/read/cache"
 	"github.com/viant/structology"
 	"github.com/viant/xdatly/handler/response"
-	"reflect"
-	"sync"
 )
 
 // Session groups view required to Read view
@@ -24,6 +25,7 @@ type (
 		View          *view.View
 		State         *view.State
 		Parent        *view.View
+		Query         *cache.ParmetrizedQuery
 		Output
 		MetricPtr *response.Metrics
 	}

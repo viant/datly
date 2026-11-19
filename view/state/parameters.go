@@ -2,6 +2,10 @@ package state
 
 import (
 	"fmt"
+	"net/http"
+	"reflect"
+	"strings"
+
 	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/shared"
 	"github.com/viant/datly/utils/types"
@@ -13,9 +17,6 @@ import (
 	"github.com/viant/velty"
 	"github.com/viant/xreflect"
 	"github.com/viant/xunsafe"
-	"net/http"
-	"reflect"
-	"strings"
 )
 
 const (
@@ -219,9 +220,17 @@ func (p Parameters) Groups() []Parameters {
 }
 
 func (p Parameters) SetLiterals(state *structology.State) (err error) {
+	if state == nil {
+		return nil
+	}
+	stateType := state.Type()
 	for _, parameter := range p.FilterByKind(KindConst) {
-		if parameter._selector == nil {
-			parameter._selector = state.Type().Lookup(parameter.Name)
+		// Selector must be resolved against the provided state type.
+		// Caching it on the parameter is unsafe because the same parameter instance
+		// can be used with multiple dynamically-generated state types (e.g. during translation).
+		selector := stateType.Lookup(parameter.Name)
+		if selector == nil {
+			return fmt.Errorf("failed to lookup selector for const parameter %q", parameter.Name)
 		}
 		if parameter.Value == nil {
 			switch parameter.Schema.rType.Kind() {
@@ -236,7 +245,7 @@ func (p Parameters) SetLiterals(state *structology.State) (err error) {
 
 			}
 		}
-		if err = parameter._selector.SetValue(state.Pointer(), parameter.Value); err != nil {
+		if err = selector.SetValue(state.Pointer(), parameter.Value); err != nil {
 			return err
 		}
 	}
@@ -392,12 +401,18 @@ func (p *Parameter) buildField(pkgPath string, lookupType xreflect.LookupType) (
 		if err != nil {
 			rType, err = types.LookupType(lookupType, schema.DataType, xreflect.WithPackage(pkgPath))
 			if err != nil {
-				return structField, markerField, fmt.Errorf("failed to detect parmater '%v' type for: %v  %w", p.Name, schema.TypeName(), err)
+				// Keep unresolved custom parameter types as dynamic `interface{}` so
+				// scan/planning can continue while preserving declared schema metadata.
+				rType = reflect.TypeOf((*interface{})(nil)).Elem()
 			}
 		}
 		schema.rType = rType
 	}
 	fieldName := p.Name
+	tagFieldName := fieldName
+	if p.In != nil && p.In.Kind == KindRequestBody && p.In.Name != "" {
+		tagFieldName = p.In.Name
+	}
 	p.Schema.Cardinality = schema.Cardinality
 	if p.Schema.Cardinality == Many && (rType.Kind() != reflect.Slice && rType.Kind() != reflect.Map) {
 		rType = reflect.SliceOf(rType)
@@ -406,11 +421,17 @@ func (p *Parameter) buildField(pkgPath string, lookupType xreflect.LookupType) (
 		if index := strings.LastIndex(fieldName, "."); index != -1 {
 			fieldName = fieldName[index+1:]
 		}
+		if p.In != nil && p.In.Kind == KindRequestBody && p.In.Name != "" && fieldName == p.In.Name {
+			fieldName = SanitizeTypeName(fieldName)
+		}
 
 		structField = reflect.StructField{Name: fieldName,
 			Type:    rType,
 			PkgPath: xreflect.PkgPath(fieldName, pkgPath),
-			Tag:     p.buildTag(fieldName),
+			Tag:     p.buildTag(tagFieldName),
+		}
+		if p.In != nil && p.In.Kind == KindRequestBody && p.In.Name != "" && structField.Tag.Get("json") == "" {
+			structField.Tag = appendStructTag(structField.Tag, `json:"`+p.In.Name+`,omitempty"`)
 		}
 
 		if fieldName == rType.Name() && strings.Contains(p.Tag, "anonymous") {
@@ -434,13 +455,20 @@ func buildMarkerFieldTag(structField reflect.StructField) stags.Tags {
 	return updated
 }
 
+func appendStructTag(tag reflect.StructTag, value string) reflect.StructTag {
+	if tag == "" {
+		return reflect.StructTag(value)
+	}
+	return reflect.StructTag(string(tag) + " " + value)
+}
+
 func (p Parameters) BuildBodyType(pkgPath string, lookupType xreflect.LookupType) (reflect.Type, error) {
 	candidates := p.FilterByKind(KindRequestBody)
 	bodyLeafParameters := make(Parameters, 0, len(candidates))
 	for i, candidate := range candidates {
 		if candidate.In.Name != "" {
 			bodyParameter := *candidates[i]
-			bodyParameter.Name = candidate.In.Name
+			bodyParameter.Name = SanitizeTypeName(candidate.In.Name)
 			bodyLeafParameters = append(bodyLeafParameters, &bodyParameter)
 			continue
 		}
@@ -593,7 +621,9 @@ func (p *Parameter) buildTag(fieldName string) reflect.StructTag {
 	}
 	if p.Output != nil && p.Output.Schema != nil {
 		if p.Output.Schema.TypeName() != p.Schema.TypeName() {
-			aTag.Parameter.DataType = p.Schema.TypeName()
+			if p.In == nil || p.In.Kind != KindParam {
+				aTag.Parameter.DataType = p.Schema.TypeName()
+			}
 		}
 	}
 	if p.Handler != nil {

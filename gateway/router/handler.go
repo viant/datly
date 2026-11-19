@@ -13,6 +13,7 @@ import (
 	"github.com/viant/afs/url"
 	"github.com/viant/datly/gateway/router/openapi"
 	"github.com/viant/datly/gateway/router/status"
+	"github.com/viant/datly/internal/requesttrace"
 	"github.com/viant/datly/repository"
 	"github.com/viant/datly/repository/content"
 	"github.com/viant/datly/repository/contract"
@@ -27,7 +28,9 @@ import (
 	"github.com/viant/datly/view"
 	vcontext "github.com/viant/datly/view/context"
 	"github.com/viant/datly/view/state"
+	"github.com/viant/datly/view/state/kind/locator"
 	"github.com/viant/xdatly/handler/exec"
+	"github.com/viant/xdatly/handler/logger"
 	"github.com/viant/xdatly/handler/response"
 	hstate "github.com/viant/xdatly/handler/state"
 	"io"
@@ -54,6 +57,7 @@ type (
 		registry   *repository.Registry
 		auth       *auth.Service
 		logging    logging.Config
+		logger     logger.Logger
 	}
 )
 
@@ -87,7 +91,7 @@ func (r *Handler) AuthorizeRequest(request *http.Request, aPath *path.Path) erro
 	return nil
 }
 
-func New(aPath *path.Path, provider *repository.Provider, registry *repository.Registry, authService *auth.Service, version string, config logging.Config) *Handler {
+func New(aPath *path.Path, provider *repository.Provider, registry *repository.Registry, authService *auth.Service, version string, config logging.Config, logger logger.Logger) *Handler {
 	ret := &Handler{
 		Path:       aPath,
 		Provider:   provider,
@@ -96,6 +100,7 @@ func New(aPath *path.Path, provider *repository.Provider, registry *repository.R
 		auth:       authService,
 		Version:    version,
 		logging:    config,
+		logger:     logger,
 	}
 	return ret
 }
@@ -168,9 +173,14 @@ func (r *Handler) Serve(serverPath string) error {
 }
 
 func (r *Handler) ServeHTTP(writer http.ResponseWriter, req *http.Request) {
-	ctx := context.Background()
+	ctx := req.Context()
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	execContext := exec.NewContext(req.Method, req.RequestURI, req.Header, r.Version)
 	ctx = vcontext.WithValue(ctx, exec.ContextKey, execContext)
+	ctx = requesttrace.Ensure(ctx, execContext.TraceID)
+	req = req.WithContext(ctx)
 	r.HandleRequest(ctx, writer, req)
 	if execContext.StatusCode == 0 {
 		execContext.StatusCode = http.StatusOK
@@ -182,6 +192,10 @@ func (r *Handler) Handle(ctx context.Context, writer http.ResponseWriter, reques
 	aComponent, err := r.Provider.Component(ctx)
 	if err != nil {
 		http.Error(writer, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if aComponent == nil {
+		http.Error(writer, "component not available", http.StatusServiceUnavailable)
 		return
 	}
 	aResponse, err := r.safelyHandleComponent(ctx, request, aComponent)
@@ -201,7 +215,7 @@ func (r *Handler) safelyHandleComponent(ctx context.Context, request *http.Reque
 			err = response.NewError(http.StatusInternalServerError, fmt.Sprintf("failed to handle request %v, %s", r, stackInfo))
 		}
 	}()
-	return r.handleComponent(ctx, request, aComponent)
+	return r.handleComponent(ctx, request, aComponent, &r.Path.Path)
 }
 
 func extractPanicInfo(lines []string) interface{} {
@@ -233,6 +247,20 @@ func (r *Handler) writeErrorResponse(ctx context.Context, w http.ResponseWriter,
 		execCtx.SetError(err)
 	}
 	responseStatus := r.responseStatusError(message, anObjectErr)
+	if aComponent == nil || aComponent.Output.Type.Parameters == nil {
+		errAsBytes, marshalErr := goJson.Marshal(responseStatus)
+		if marshalErr != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("could not parse error message"))
+			return
+		}
+		if execCtx != nil {
+			execCtx.StatusCode = statusCode
+		}
+		w.WriteHeader(statusCode)
+		w.Write(errAsBytes)
+		return
+	}
 	statusParameter := aComponent.Output.Type.Parameters.LookupByLocation(state.KindOutput, "status")
 	if statusParameter == nil {
 		errAsBytes, marshalErr := goJson.Marshal(responseStatus)
@@ -257,11 +285,8 @@ func (r *Handler) writeErrorResponse(ctx context.Context, w http.ResponseWriter,
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		if aComponent.Content.Marshaller.JSON.CanMarshal() {
-			data, err = aComponent.Marshaller.JSON.Codec.Marshal(aResponse.State())
-		} else {
-			data, err = aComponent.Marshaller.JSON.JsonMarshaller.Marshal(aResponse.State())
-		}
+		mf := aComponent.MarshalFunc()
+		data, err = mf(aResponse.State())
 		if err != nil {
 			w.Write(data)
 			if execCtx != nil {
@@ -384,17 +409,25 @@ func (r *Handler) compressIfNeeded(marshalled []byte, options *response.Options)
 	return response.NewBuffered(options.Options()...), nil
 }
 
-func (r *Handler) handleComponent(ctx context.Context, request *http.Request, aComponent *repository.Component) (response.Response, error) {
+func (r *Handler) handleComponent(ctx context.Context, request *http.Request, aComponent *repository.Component, targets ...*contract.Path) (response.Response, error) {
+	target := &aComponent.Path
+	if len(targets) > 0 && targets[0] != nil {
+		target = targets[0]
+	}
 	//TODO merge with Path settings
 
 	anOperator := operator.New()
 	unmarshal := aComponent.UnmarshalFunc(request)
-	locatorOptions := append(aComponent.LocatorOptions(request, hstate.NewForm(), unmarshal))
+	locatorOptions := aComponent.LocatorOptions(request, hstate.NewForm(), func(data []byte, dest interface{}) error { return unmarshal(data, dest) })
+	locatorOptions = append(locatorOptions, locator.WithLogger(r.logger))
 	aSession := session.New(aComponent.View,
 		session.WithAuth(r.auth),
+		session.WithLogger(r.logger),
 		session.WithComponent(aComponent),
+		session.WithCacheDisabled(isCacheDisabled(request)),
 		session.WithLocatorOptions(locatorOptions...),
 		session.WithRegistry(r.registry),
+
 		session.WithOperate(anOperator.Operate))
 	err := aSession.InitKinds(state.KindComponent, state.KindHeader, state.KindRequestBody, state.KindForm, state.KindQuery)
 	if err != nil {
@@ -403,10 +436,25 @@ func (r *Handler) handleComponent(ctx context.Context, request *http.Request, aC
 	if ctx, err = r.dispatcher.EnsureContext(ctx, aSession, aComponent); err != nil {
 		return nil, err
 	}
+	effective, err := aComponent.ResolveContract(ctx, aSession.ContractBinder(target.Method, target.URI), target.Method, target.URI)
+	if err != nil {
+		return nil, err
+	}
+	unmarshal = aComponent.UnmarshalFor(repository.WithUnmarshalRequest(request), repository.WithUnmarshalRepresentation(effective.Body))
+	if err = aComponent.ValidateContractCodec(effective, request); err != nil {
+		return nil, err
+	}
+	aSession.ApplyContract(effective, unmarshal)
 	if err := aSession.Populate(ctx); err != nil {
 		return nil, err
 	}
 	output, operationErr := r.dispatcher.Operate(ctx, aSession, aComponent)
+	if effective.Output != nil && effective.Output.Changed() {
+		switch output.(type) {
+		case response.Response, []byte:
+			return nil, fmt.Errorf("raw handler response cannot apply dynamic contract metadata")
+		}
+	}
 	if operationErr != nil && output == nil {
 		return nil, operationErr
 	}
@@ -455,14 +503,24 @@ func (r *Handler) handleComponent(ctx context.Context, request *http.Request, aC
 				options.Append(response.WithHeader("Content-Disposition", fmt.Sprintf(`attachment; filename="%s.xlsx"`, aComponent.Output.GetTitle())))
 			}
 		}
+		// Use component-level marshaller with request-scoped options
 		filters := aComponent.Exclusion(aSession.State())
-		data, err := aComponent.Content.Marshal(format, aComponent.Output.Field(), output, filters)
+		mf := aComponent.MarshalFunc(repository.WithRequest(request), repository.WithFormat(format), repository.WithFilters(filters), repository.WithRepresentation(effective.Output))
+		data, err := mf(output)
 		if err != nil {
 			return nil, response.NewError(500, fmt.Sprintf("failed to marshal response: %v", err), response.WithError(err))
 		}
 		return r.compressIfNeeded(data, options)
 	}
-	return r.marshalComponentOutput(output, aComponent, options)
+	return r.marshalComponentOutput(output, aComponent, options, repository.WithRepresentation(effective.Output))
+}
+
+func isCacheDisabled(request *http.Request) bool {
+	if request == nil {
+		return false
+	}
+	return request.Header.Get(httputils.DatlyRequestDisableCacheHeader) != "" ||
+		request.Header.Get(strings.ToLower(httputils.DatlyRequestDisableCacheHeader)) != ""
 }
 
 func createRequest(ctx context.Context, redirect *session.Redirect) (*http.Request, error) {
@@ -487,20 +545,16 @@ func createRequest(ctx context.Context, redirect *session.Redirect) (*http.Reque
 	return request, nil
 }
 
-func (r *Handler) marshalComponentOutput(output interface{}, aComponent *repository.Component, options *response.Options) (response.Response, error) {
+func (r *Handler) marshalComponentOutput(output interface{}, aComponent *repository.Component, options *response.Options, marshalOptions ...repository.MarshalOption) (response.Response, error) {
 	switch actual := output.(type) {
 	case response.Response:
 		return actual, nil
 	case []byte:
 		return response.NewBuffered(response.WithBytes(actual)), nil
 	default:
-		var data []byte
-		var err error
-		if aComponent.Content.Marshaller.JSON.CanMarshal() {
-			data, err = aComponent.Content.Marshaller.JSON.Codec.Marshal(output)
-		} else {
-			data, err = aComponent.Content.Marshaller.JSON.JsonMarshaller.Marshal(output)
-		}
+		// Default to JSON marshalling using component-level marshaller
+		mf := aComponent.MarshalFunc(marshalOptions...)
+		data, err := mf(output)
 		if err != nil {
 			return nil, response.NewError(http.StatusInternalServerError, err.Error(), response.WithError(err))
 		}
@@ -516,7 +570,7 @@ func ExtractCacheableViews(ctx context.Context, component *repository.Component)
 }
 
 func appendCacheWarmupViews(aView *view.View, result *[]*view.View) {
-	if aCache := aView.Cache; aCache != nil && aCache.Warmup != nil {
+	if aCache := aView.Cache; aCache != nil && aCache.HasWarmup() {
 		*result = append(*result, aView)
 	}
 

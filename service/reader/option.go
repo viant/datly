@@ -1,8 +1,10 @@
 package reader
 
 import (
-	"github.com/viant/datly/view"
 	"strings"
+
+	"github.com/viant/datly/view"
+	"github.com/viant/sqlx/io/read/cache"
 )
 
 // Option represents a session option
@@ -45,6 +47,19 @@ func WithCriteria(whereClause string, parameters ...interface{}) Option {
 	return func(session *Session) error {
 		aView := session.View
 		session.AddCriteria(aView, whereClause, parameters...)
+		return nil
+	}
+}
+
+// WithQuery supplies an already parameterized query to the regular view
+// reader. The reader still owns connector access, row collection, codecs,
+// metrics, and error handling; only SQL construction is skipped.
+func WithQuery(SQL string, args ...interface{}) Option {
+	return func(session *Session) error {
+		session.Query = &cache.ParmetrizedQuery{
+			SQL:  SQL,
+			Args: append([]interface{}{}, args...),
+		}
 		return nil
 	}
 }

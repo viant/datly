@@ -362,8 +362,16 @@ func (m *TemplateSummary) prepareSQL(ctx context.Context, owner *Template) (stri
 	stateValue := owner.stateType.NewState()
 
 	viewParam := AsViewParam(owner._view, nil, nil)
+	if viewParam.Limit == 0 {
+		viewParam.Limit = 1
+	}
 
-	state, err := Evaluate(ctx, owner.sqlEvaluator, expand.WithParameterState(stateValue), expand.WithViewParam(viewParam))
+	evaluator, err := NewEvaluator(owner.Parameters, owner.stateType, owner.Source, owner._view._resource.LookupType(), nil)
+	if err != nil {
+		return "", nil, err
+	}
+
+	state, err := Evaluate(ctx, evaluator, expand.WithParameterState(stateValue), expand.WithViewParam(viewParam))
 	if err != nil {
 		return "", nil, err
 	}

@@ -2,9 +2,11 @@ package contract
 
 import (
 	"context"
-	hstate "github.com/viant/xdatly/handler/state"
 	"net/http"
 	"net/url"
+
+	"github.com/viant/xdatly/handler/logger"
+	hstate "github.com/viant/xdatly/handler/state"
 )
 
 type (
@@ -16,9 +18,16 @@ type (
 		Header         http.Header
 		Form           *hstate.Form
 		Request        *http.Request
+		Logger         logger.Logger
 	}
 	//Option represents a dispatcher option
 	Option func(o *Options)
+
+	// PreparedQuery is a fully expanded, parameterized Datly reader query.
+	PreparedQuery struct {
+		SQL  string
+		Args []interface{}
+	}
 )
 
 // NewOptions creates a new options
@@ -34,6 +43,12 @@ func NewOptions(opts ...Option) *Options {
 type Dispatcher interface {
 	//Dispatch dispatches request
 	Dispatch(ctx context.Context, path *Path, options ...Option) (interface{}, error)
+}
+
+// QueryPreparer is implemented by dispatchers that can prepare a reader route
+// as a composable relation without executing it.
+type QueryPreparer interface {
+	PrepareQuery(ctx context.Context, path *Path, request *http.Request) (*PreparedQuery, error)
 }
 
 // WithConstants adds constants
@@ -75,5 +90,12 @@ func WithHeader(header http.Header) Option {
 func WithRequest(request *http.Request) Option {
 	return func(o *Options) {
 		o.Request = request
+	}
+}
+
+// WithLogger adds path parameters
+func WithLogger(loger logger.Logger) Option {
+	return func(o *Options) {
+		o.Logger = loger
 	}
 }

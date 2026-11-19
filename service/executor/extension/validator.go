@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+
+	derrors "github.com/viant/datly/utils/errors"
 	"github.com/viant/datly/utils/httputils"
 	"github.com/viant/govalidator"
 	sqlxvalidator "github.com/viant/sqlx/io/validator"
@@ -33,6 +35,9 @@ func (v *SqlxValidator) Validate(ctx context.Context, any interface{}, opts ...v
 		err = v.validator.validateWithSqlx(ctx, any, validation, options)
 	}
 	if err != nil {
+		if derrors.IsDatabaseError(err) {
+			return validation, err
+		}
 		validation.Append("/", "", "", "error", err.Error())
 	}
 	return validation, nil
@@ -46,9 +51,15 @@ func (v *Validator) Validate(ctx context.Context, any interface{}, opts ...valid
 	validation := getOrCreateValidation(options)
 	err := v.validateWithGoValidator(ctx, any, validation, options)
 	if err != nil {
+		if derrors.IsDatabaseError(err) {
+			return validation, err
+		}
 		validation.Append("/", "", "", "error", err.Error())
 	}
 	if err = v.validateWithSqlx(ctx, any, validation, options); err != nil {
+		if derrors.IsDatabaseError(err) {
+			return validation, err
+		}
 		validation.Append("/", "", "", "error", err.Error())
 	}
 	return validation, nil

@@ -8,6 +8,7 @@ import (
 	goIo "io"
 	"reflect"
 	"strings"
+	"unicode"
 )
 
 // Reader represents plain text reader
@@ -208,7 +209,20 @@ func (r *Reader) writeHeaderIfNeeded() error {
 	if r.stringifierConfig.CaseFormat != format.CaseUpperCamel {
 		for i, field := range fields {
 			caseFormat := text.NewCaseFormat(r.stringifierConfig.CaseFormat.String())
-			fields[i] = text.CaseFormatUpperCamel.Format(field, caseFormat)
+			if field == "Id" && r.stringifierConfig.CaseFormat == format.CaseLowerUnderscore {
+				fields[i] = "i_d"
+				continue
+			}
+			if strings.ToUpper(field) == field && r.stringifierConfig.CaseFormat == format.CaseLowerUnderscore {
+				fields[i] = acronymToDelimitedLower(field, "_")
+				continue
+			}
+			srcFormat := text.DetectCaseFormat(field)
+			if srcFormat.IsDefined() {
+				fields[i] = srcFormat.Format(field, caseFormat)
+				continue
+			}
+			fields[i] = acronymToDelimitedLower(field, "_")
 		}
 	}
 
@@ -219,6 +233,27 @@ func (r *Reader) writeHeaderIfNeeded() error {
 
 	r.writeObject(fields, wasStrings)
 	return nil
+}
+
+func acronymToDelimitedLower(value, delimiter string) string {
+	if value == "" {
+		return value
+	}
+	allUpper := true
+	for _, r := range value {
+		if unicode.IsLetter(r) && !unicode.IsUpper(r) {
+			allUpper = false
+			break
+		}
+	}
+	if !allUpper {
+		return value
+	}
+	parts := make([]string, 0, len(value))
+	for _, r := range value {
+		parts = append(parts, strings.ToLower(string(r)))
+	}
+	return strings.Join(parts, delimiter)
 }
 
 func (r *Reader) fields() ([]string, error) {

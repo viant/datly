@@ -7,13 +7,14 @@ import (
 	"github.com/viant/datly/view/state"
 	"github.com/viant/datly/view/state/kind"
 	"github.com/viant/datly/view/state/kind/locator"
+	"reflect"
 	"strings"
 )
 
 type metaLocator struct {
 }
 
-func (l *metaLocator) Value(ctx context.Context, name string) (interface{}, bool, error) {
+func (l *metaLocator) Value(ctx context.Context, _ reflect.Type, name string) (interface{}, bool, error) {
 	value := ctx.Value(view.ContextKey)
 	if value == nil {
 		return nil, false, nil

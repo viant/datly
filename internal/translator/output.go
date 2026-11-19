@@ -3,6 +3,9 @@ package translator
 import (
 	"context"
 	"fmt"
+	"reflect"
+	"strings"
+
 	"github.com/viant/datly/internal/inference"
 	"github.com/viant/datly/internal/setter"
 	"github.com/viant/datly/repository/contract"
@@ -21,8 +24,6 @@ import (
 	"github.com/viant/xdatly/handler/response/tabular/xml"
 	"github.com/viant/xdatly/predicate"
 	"github.com/viant/xreflect"
-	"reflect"
-	"strings"
 )
 
 func (s *Service) updateOutputParameters(resource *Resource, rootViewlet *Viewlet) (err error) {
@@ -54,6 +55,9 @@ func (s *Service) updateOutputParameters(resource *Resource, rootViewlet *Viewle
 	outputParameters := s.ensureOutputParameters(resource, resource.OutputState)
 	dataParameter := outputParameters.LookupByLocation(state.KindOutput, keys.ViewData)
 	if dataParameter != nil {
+		if rootViewlet.View.Schema == nil {
+			return fmt.Errorf("view %s has no detected schema; ensure column discovery succeeded (connector: %s)", rootViewlet.Name, rootViewlet.GetConnector())
+		}
 		s.updateParameterWithComponentOutputType(dataParameter, rootViewlet)
 	}
 
@@ -452,6 +456,12 @@ func (s *Service) ensureOutputParameters(resource *Resource, outputState inferen
 }
 
 func (s *Service) updateParameterWithComponentOutputType(dataParameter *state.Parameter, rootViewlet *Viewlet) {
+	if rootViewlet == nil || rootViewlet.View == nil || rootViewlet.Resource == nil || rootViewlet.Resource.rule == nil {
+		return
+	}
+	if rootViewlet.View.Schema == nil {
+		rootViewlet.View.Schema = &state.Schema{}
+	}
 	typeName := rootViewlet.View.Schema.Name
 	if typeName == "" || typeName == "string" {
 		typeName = view.DefaultTypeName(rootViewlet.Name)

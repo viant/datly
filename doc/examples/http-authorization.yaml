@@ -1,0 +1,74 @@
+# Master gateway configuration; replace RouteURL with your authored routes.
+RouteURL: ./routes
+Meta:
+  StatusURI: /healthz
+Authorization:
+  Provider: userinfo
+  DefaultPolicy: standard-access
+  Policies:
+    standard-access:
+      mode: protected
+      rule:
+        kind: not
+        rules:
+          - kind: any
+            rules:
+              - kind: role
+                value: limited-reviewer
+              - kind: role
+                value: limited-reporter
+    creative-approval:
+      mode: protected
+      rule:
+        kind: any
+        rules:
+          - kind: not
+            rules:
+              - kind: any
+                rules:
+                  - kind: role
+                    value: limited-reviewer
+                  - kind: role
+                    value: limited-reporter
+          - kind: role
+            value: limited-reviewer
+    reporting:
+      mode: protected
+      rule:
+        kind: any
+        rules:
+          - kind: not
+            rules:
+              - kind: any
+                rules:
+                  - kind: role
+                    value: limited-reviewer
+                  - kind: role
+                    value: limited-reporter
+          - kind: role
+            value: limited-reporter
+    authenticated:
+      mode: protected
+      rule:
+        kind: subject
+        value: "*"
+  Overrides:
+    - Match:
+        Method: GET
+        Path: /api/creative-approvals
+      Policy: creative-approval
+    - Match:
+        Method: PATCH
+        Path: /api/creative-approvals/{id}
+      Policy: creative-approval
+    - Match:
+        Method: GET
+        Path: /api/reports
+      Policy: reporting
+    - Match:
+        Method: GET
+        Path: /api/profile
+      Policy: authenticated
+  Exclude:
+    - Method: GET
+      Path: /healthz

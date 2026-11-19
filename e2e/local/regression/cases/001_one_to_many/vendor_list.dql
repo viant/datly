@@ -9,8 +9,9 @@
 
 
 SELECT vendor.*,
+       cast(vendor.xmap AS map[string]interface{}),
        products.* EXCEPT VENDOR_ID
-FROM (SELECT * FROM VENDOR t ) vendor
+FROM (SELECT t.*, '' AS xmap FROM VENDOR t ) vendor
     JOIN (
     SELECT * FROM PRODUCT t WHERE 1 = 1
      ${predicate.Builder().CombineOr($predicate.FilterGroup(0, "AND")).Build("AND")}

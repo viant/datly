@@ -24,10 +24,18 @@ func (c *cache) lookup(parameter *state.Parameter) (interface{}, bool) {
 }
 
 func (s *Session) MarshalJSON() ([]byte, error) {
-	return json.Marshal(s.cache.values)
+	s.cache.RWMutex.RLock()
+	snapshot := make(map[string]interface{}, len(s.cache.values))
+	for key, value := range s.cache.values {
+		snapshot[key] = value
+	}
+	s.cache.RWMutex.RUnlock()
+	return json.Marshal(snapshot)
 }
 
 func (s *Session) Unmarshal(parameters state.Parameters, data []byte) error {
+	s.cache.RWMutex.Lock()
+	defer s.cache.RWMutex.Unlock()
 	err := json.Unmarshal(data, &s.cache.values)
 	if err != nil {
 		return err

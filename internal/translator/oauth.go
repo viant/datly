@@ -88,7 +88,7 @@ func getScyResource(location string) *scy.Resource {
 
 func getScyResources(location string) []*scy.Resource {
 	var result []*scy.Resource
-	for _, location := range strings.Split(location, "-") {
+	for _, location := range strings.Split(location, ";") {
 		if strings.TrimSpace(location) == "" {
 			continue
 		}
