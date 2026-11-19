@@ -6,6 +6,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"github.com/viant/datly/data"
+	"github.com/viant/datly/internal/predicatereplay"
+	"github.com/viant/datly/internal/readerlookup"
 	"github.com/viant/datly/spec"
 )
 
@@ -110,6 +112,48 @@ func TestEmptyLookupExplicitOptIn(t *testing.T) {
 			default:
 				require.ErrorContains(t, err, "marked authorization predicate")
 			}
+		})
+	}
+}
+
+func TestEmptyLookupRepeatedKeyPredicatesAndDistinctPathInputs(t *testing.T) {
+	type input struct{ Left, Right []int }
+	const path = "/records/{left}/{right}"
+	left := &spec.Predicate{Name: "in", Args: []string{"r", "id"}}
+	alternate := &spec.Predicate{Name: "in", Group: 3, Args: []string{"r", "id"}}
+	right := &spec.Predicate{Name: "in", Args: []string{"r", "id"}}
+	component := &spec.Component{Routes: []*spec.Route{{Method: "GET", Path: path}}, Parameters: []*spec.Parameter{
+		{Name: "Left", Source: spec.BindSource{Kind: "path", Name: "left"}, Predicates: []*spec.Predicate{left, alternate}},
+		{Name: "Right", Source: spec.BindSource{Kind: "path", Name: "right"}, Predicates: []*spec.Predicate{right}},
+		{Name: "Auth", Predicates: []*spec.Predicate{{Name: "equal", Auth: true, Args: []string{"r", "tenant"}}}},
+		emptyLookupOptIn(),
+	}}
+	view := &data.View{Spec: spec.View{Source: &spec.ViewSource{SQL: "SELECT r.id FROM records r"}}, Columns: []*data.Column{{Name: "ID", Column: "id", Tag: `sqlx:"id,primaryKey=true"`}}}
+	root := &ViewPlan{View: view}
+	plan, err := compileEmptyLookup(Config{Component: component, InputType: reflect.TypeFor[input](), Plan: &Plan{Root: root}})
+	require.NoError(t, err)
+	ref := spec.RouteRef{Method: "GET", Path: path}
+	ctx := readerlookup.WithRoute(t.Context(), ref)
+	require.Len(t, plan.routes[ref].predicates, 3)
+	require.False(t, plan.eligible(ctx, reflect.ValueOf(&input{Right: []int{5}}), nil, root))
+	require.True(t, plan.eligible(ctx, reflect.ValueOf(&input{Left: []int{4}, Right: []int{5}}), nil, root))
+	for _, tc := range []struct {
+		name   string
+		active []*spec.Predicate
+		proven bool
+	}{
+		{"left missing", []*spec.Predicate{right}, false},
+		{"right missing", []*spec.Predicate{left, alternate}, false},
+		{"only first left occurrence rendered", []*spec.Predicate{left, right}, true},
+		{"only alternate left occurrence rendered", []*spec.Predicate{alternate, right}, true},
+		{"all rendered", []*spec.Predicate{left, alternate, right}, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			capture, state := predicatereplay.Capture(ctx)
+			for _, p := range tc.active {
+				predicatereplay.Record(capture, p, p, "r.id IN (?)", []any{5})
+			}
+			require.Equal(t, tc.proven, plan.usedIdentity(ctx, state))
 		})
 	}
 }

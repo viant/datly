@@ -49,7 +49,7 @@ func TestReaderAuthEmptyHTTPAndMCP(t *testing.T) {
 		Claim    claim
 		Offset   int    `parameter:"Offset,kind=query,in=offset" querySelector:"view=Records,property=offset" json:"offset"`
 		Limit    int    `parameter:"Limit,kind=query,in=limit,value=10" querySelector:"view=Records,property=limit" json:"limit"`
-		Key      []int  `parameter:"Key,kind=path,in=key,uri=/records/{key}" predicate:"in,r,id" json:"key"`
+		Key      []int  `parameter:"Key,kind=path,in=key,uri=/records/{key}" predicate:"in,r,id" predicate:"in,group=3,r,id" json:"key"`
 		Tenant   int    `parameter:"Tenant,kind=query,in=tenant,value=7" predicate:"handler,example.com/auth.Scope,auth=true" json:"tenant"`
 		Name     string `parameter:"Name,kind=query,in=name" predicate:"equal,r,name" json:"name"`
 		Criteria string `parameter:"Criteria,kind=query,in=criteria" querySelector:"view=Records,property=criteria" json:"criteria"`
@@ -64,11 +64,13 @@ func TestReaderAuthEmptyHTTPAndMCP(t *testing.T) {
 	require.NoError(t, db.ExecStatements(context.Background(), "CREATE TABLE records(id INTEGER, tenant INTEGER, name TEXT, archived INTEGER)", "INSERT INTO records VALUES(1,7,'one',0),(2,8,'two',0),(3,8,'archived',1)", "CREATE TABLE accounts(account_id INTEGER,name TEXT)", "INSERT INTO accounts VALUES(1,'account')", "CREATE TABLE watches(record_id INTEGER,contact_id INTEGER)", "INSERT INTO watches VALUES(1,0)", "CREATE TABLE model_status(record_id INTEGER,status INTEGER)", "INSERT INTO model_status VALUES(1,2)"))
 	types := typecatalog.NewCatalog()
 	require.NoError(t, types.Register(typecatalog.TypeOriginPackage, &x.Type{Type: reflect.TypeFor[authEmptyPredicate](), PkgPath: "example.com/auth", Name: "Scope"}))
+	// The same key narrows the root and appears inside an independent OR group.
+	// Dropping the root restriction lets an authorized sibling satisfy the probe.
 	component := &spec.Component{Key: spec.Key{Kind: spec.KindComponent, Name: "AuthEmpty"}, RootView: &spec.View{Name: "Records", Columns: []*spec.Column{{Name: "ID", Source: "id", PrimaryKey: true}}, Selector: &spec.Selector{AllowOffset: true, AllowLimit: true, AllowCriteria: true}, Source: &spec.ViewSource{SQL: `SELECT r.id, acc.name AS account_name,
  EXISTS(SELECT 1 FROM watches w WHERE w.record_id = r.id AND w.contact_id = ${Claim.UserID}) AS watching,
  (SELECT CASE WHEN COUNT(*) = 1 THEN MAX(m.status) ELSE 0 END FROM model_status m WHERE m.record_id = r.id) AS model_status
  FROM records r JOIN accounts acc ON acc.account_id = 1
- WHERE archived = 0 ${predicate.Builder().CombineAnd($predicate.FilterGroup(0,"AND")).Build("AND")}`}}, Routes: []*spec.Route{
+ WHERE archived = 0 AND (acc.account_id IS NOT NULL ${predicate.Builder().CombineOr($predicate.FilterGroup(3,"OR")).Build("OR")}) ${predicate.Builder().CombineAnd($predicate.FilterGroup(0,"AND")).Build("AND")}`}}, Routes: []*spec.Route{
 		{Method: "GET", Path: "/records/{key}", MCP: []*spec.MCPExposure{{Kind: spec.MCPExposureTool, Name: "records.get"}}},
 		{Method: "GET", Path: "/records", MCP: []*spec.MCPExposure{{Kind: spec.MCPExposureTool, Name: "records.list"}}},
 	}}
@@ -138,6 +140,7 @@ func TestReaderAuthEmptyHTTPAndMCP(t *testing.T) {
 			require.EqualValues(t, 1, authEmptyCalls.Load())
 			for i, probe := range queries[1:] {
 				require.Contains(t, probe, "SELECT 1 AS datly_exists")
+				require.Equal(t, 2, strings.Count(probe, "r.id IN ("), probe)
 				require.Contains(t, probe, "LIMIT 1")
 				require.Contains(t, probe, "archived = 0")
 				require.NotContains(t, probe, "r.name")

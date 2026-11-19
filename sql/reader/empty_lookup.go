@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -26,8 +27,8 @@ import (
 )
 
 type lookupIdentity struct {
-	index     []int
-	predicate *spec.Predicate
+	index      []int
+	predicates []*spec.Predicate
 }
 
 type emptyLookupRoute struct {
@@ -184,7 +185,8 @@ func compileEmptyLookup(config Config) (*emptyLookupPlan, error) {
 		for _, name := range path.Parameters() {
 			pathNames[name] = true
 		}
-		matched := map[sqlparser.ColumnOrigin]lookupIdentity{}
+		matched := map[sqlparser.ColumnOrigin]bool{}
+		lookup := emptyLookupRoute{predicates: make(map[*spec.Predicate]bool)}
 		for _, p := range component.Parameters {
 			if p == nil || p.Source.Kind != "path" || !pathNames[p.Source.Name] || !p.Activation.Matches(endpoint.Path) {
 				continue
@@ -196,6 +198,7 @@ func compileEmptyLookup(config Config) (*emptyLookupPlan, error) {
 			if !ok {
 				return nil, fmt.Errorf("identity parameter %s has no input field", p.Name)
 			}
+			byOrigin := map[sqlparser.ColumnOrigin][]*spec.Predicate{}
 			for _, predicate := range p.Predicates {
 				if predicate == nil || predicate.Auth || (strings.ToLower(strings.TrimSpace(predicate.Name)) != "equal" && strings.ToLower(strings.TrimSpace(predicate.Name)) != "in") || len(predicate.Args) != 2 {
 					continue
@@ -204,21 +207,20 @@ func compileEmptyLookup(config Config) (*emptyLookupPlan, error) {
 				if !ok || !keys[origin] {
 					continue
 				}
-				matched[origin] = lookupIdentity{index: append([]int(nil), field.Index...), predicate: predicate}
+				matched[origin] = true
+				byOrigin[origin] = append(byOrigin[origin], predicate)
+				lookup.predicates[predicate] = true
+			}
+			// Each distinct path input bound to a key needs evidence from the
+			// primary query. Its repeated predicates can occur in separate groups.
+			for _, definitions := range byOrigin {
+				lookup.identities = append(lookup.identities, lookupIdentity{index: slices.Clone(field.Index), predicates: definitions})
 			}
 		}
 		if len(matched) != len(keys) {
 			continue
 		}
 		ref := spec.RouteRef{Method: endpoint.Method, Path: endpoint.Path}
-		lookup := emptyLookupRoute{
-			identities: make([]lookupIdentity, 0, len(matched)),
-			predicates: make(map[*spec.Predicate]bool, len(matched)),
-		}
-		for _, identity := range matched {
-			lookup.identities = append(lookup.identities, identity)
-			lookup.predicates[identity.predicate] = true
-		}
 		result.routes[ref] = lookup
 	}
 	if len(result.routes) == 0 {
@@ -377,7 +379,7 @@ func (p *emptyLookupPlan) usedIdentity(ctx context.Context, replay *predicaterep
 	}
 	identities := p.routes[readerlookup.Route(ctx)].identities
 	for _, identity := range identities {
-		if !replay.HasPredicate(identity.predicate) {
+		if !slices.ContainsFunc(identity.predicates, replay.HasPredicate) {
 			return false
 		}
 	}
