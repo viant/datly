@@ -53,6 +53,19 @@ func TestPatchIndexesPackage(t *testing.T) {
 	if before != read("index/lookup.go") || owner != read("api/orders/lookup.go") {
 		t.Fatal("split index regeneration changed output")
 	}
+	writeSourceFile(t, root, "api/orders/index_api_test.go", `package orders_test
+
+import (
+	"testing"
+	orders "github.com/viant/datly/genfixture/api/orders"
+)
+
+func TestIndexKeyFromOriginalPackage(t *testing.T) {
+	if _, ok := orders.OrdersHandlerCurrentKindsIndexByIdKey(nil); ok {
+		t.Fatal("nil row produced a key")
+	}
+}
+`)
 	genpatch.Run(t, root, filepath.Join(root, "api/orders"), genpatch.RuntimeSource)
 	for _, tc := range []struct{ name, text, want string }{
 		{"unknown alias", strings.Replace(request.Source.Text, "indexes_package('orderidx')", "indexes_package('missing')", 1), "unknown import alias"},

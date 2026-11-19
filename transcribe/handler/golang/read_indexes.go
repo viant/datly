@@ -219,7 +219,7 @@ func (l *lowerer) readIndexes() (*ReadIndexAsset, error) {
 		names[name] = true
 	}
 	if helpers != e {
-		if err := addIndexTypeAliases(l, file, helperFile, helpers.l.config.PackagePath); err != nil {
+		if err := e.retainIndexAPI(file, helperFile, helpers.l); err != nil {
 			return nil, err
 		}
 		helperFile.Decls = append([]ast.Decl{(&entityEmitter{l: helpers.l}).importDeclaration(helperFile)}, helperFile.Decls...)
@@ -244,10 +244,30 @@ func (l *lowerer) readIndexes() (*ReadIndexAsset, error) {
 	return asset, nil
 }
 
-func addIndexTypeAliases(owner *lowerer, file, helpers *ast.File, helperPath string) error {
-	// Keep the input package's exported collection and key type names. The
-	// concrete methods are compiled in the helper package with the rows.
+func (e *readIndexEmitter) retainIndexAPI(file, helpers *ast.File, helper *lowerer) error {
+	owner := e.l
+	helperPath := helper.config.PackagePath
 	for _, decl := range helpers.Decls {
+		// Methods remain available through the type aliases. Package-level
+		// key functions need a forwarding declaration of their own.
+		if fn, ok := decl.(*ast.FuncDecl); ok && fn.Recv == nil && fn.Name.IsExported() {
+			target, err := owner.typeReference(spec.TypeRef{Package: helperPath, Name: fn.Name.Name})
+			if err != nil {
+				return err
+			}
+			arg, err := e.indexSignatureType(helper, fn.Type.Params.List[0].Type)
+			if err != nil {
+				return err
+			}
+			key, err := e.indexSignatureType(helper, fn.Type.Results.List[0].Type)
+			if err != nil {
+				return err
+			}
+			file.Decls = append(file.Decls, e.function(fn.Name.Name, []*ast.Field{namedField("value", arg)},
+				[]*ast.Field{{Type: key}, {Type: ast.NewIdent("bool")}},
+				[]ast.Stmt{returnStmt(callExpr(target, ast.NewIdent("value")))}))
+			continue
+		}
 		group, ok := decl.(*ast.GenDecl)
 		if !ok || group.Tok != token.TYPE {
 			continue
@@ -262,6 +282,19 @@ func addIndexTypeAliases(owner *lowerer, file, helpers *ast.File, helperPath str
 		}
 	}
 	return nil
+}
+
+// Render the helper's signature in the input owner's import namespace.
+func (e *readIndexEmitter) indexSignatureType(helper *lowerer, expr ast.Expr) (ast.Expr, error) {
+	source, err := renderExpr(expr)
+	if err != nil {
+		return nil, err
+	}
+	canonical, err := (xshape.Resolver{Package: helper.config.PackagePath, Imports: helper.pathsByAlias}).Canonical(source)
+	if err != nil {
+		return nil, err
+	}
+	return e.l.typeReference(spec.TypeRef{Name: canonical})
 }
 
 func newReadIndexEmitter(l *lowerer) *readIndexEmitter {
