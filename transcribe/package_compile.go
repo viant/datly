@@ -157,6 +157,7 @@ func (a *packageAuthority) canonicalPackageViewTypes(component *spec.Component) 
 	if component.TypeContext != nil {
 		plan.Imports = component.TypeContext.Imports
 	}
+	borrowedInput := a.input != nil && a.input.PkgPath != "" && a.input.PkgPath != a.route.PackagePath
 	views := newPackageViewResolver(component, nil)
 	for _, param := range spec.EffectiveParameters(component.Parameters) {
 		if param == nil || !strings.EqualFold(strings.TrimSpace(param.Source.Kind), "view") {
@@ -174,6 +175,11 @@ func (a *packageAuthority) canonicalPackageViewTypes(component *spec.Component) 
 				for _, linked := range a.inputViews {
 					if linked.identity == identity {
 						row = linked.descriptor
+						// A borrowed input carries its owner's generation tags. The
+						// holder links the existing row before authored DQL is overlaid.
+						if borrowedInput && row != nil && row.PkgPath != "" && row.PkgPath != a.route.PackagePath {
+							view.Dest = ""
+						}
 						break
 					}
 				}
@@ -431,7 +437,7 @@ func (c *descriptorPackageCompilation) compile(ctx context.Context) (*Result, er
 	// Normalize a detached base before descriptor lookup, using the exact
 	// linked rows already discovered above rather than the holder package.
 	component = component.Clone()
-	if err = (&packageAuthority{route: c.packageSource.Routes[0], inputViews: linkedInputs}).canonicalPackageViewTypes(component); err != nil {
+	if err = (&packageAuthority{route: c.packageSource.Routes[0], input: c.packageSource.InputType, inputViews: linkedInputs}).canonicalPackageViewTypes(component); err != nil {
 		return nil, err
 	}
 	resolvedContext := compileTypeContext(c.source, component.TypeContext)

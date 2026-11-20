@@ -2,6 +2,7 @@ package transcribe
 
 import (
 	"context"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -26,6 +27,8 @@ func TestBorrowedInputPublicCompilation(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, reflected.Components, 1)
 	route := reflected.Components[0]
+	route.Dir, err = filepath.Abs("testdata/borrowedinput/registration")
+	require.NoError(t, err)
 	for _, descriptor := range []bool{false, true} {
 		t.Run(map[bool]string{false: "linked", true: "descriptor"}[descriptor], func(t *testing.T) {
 			catalog, cloneErr := reflected.Types.Clone()
@@ -136,7 +139,7 @@ func TestBorrowedInputExternalViewMetadata(t *testing.T) {
 	resolver, err := typecatalog.NewResolver(reflected.Types, typecatalog.PackageAuthority, nil)
 	require.NoError(t, err)
 	detached := original.Clone()
-	authority := &packageAuthority{route: route, inputViews: linked}
+	authority := &packageAuthority{route: route, input: x.NewType(reflect.TypeFor[contracts.Input]()), inputViews: linked}
 	require.NoError(t, authority.canonicalPackageViewTypes(detached))
 	parameterOnly := detached.Clone()
 	for index := range parameterOnly.Views {
@@ -158,6 +161,17 @@ func TestBorrowedInputExternalViewMetadata(t *testing.T) {
 		}
 		require.NotNil(t, row)
 		require.Equal(t, row.Key(), view.TypeName)
+		if row.Name == "ForeignRow" {
+			require.Empty(t, view.Dest)
+			require.Equal(t, "current_rows.go", original.Views[index].Dest)
+			require.Equal(t, "current_rows.go", linked[index].view.Dest)
+			authored := view.Clone()
+			authored.Dest = "replacement.go"
+			merged, err := (&link.Loader{PackageComponent: detached, AuthoredComponent: &spec.Component{Views: []*spec.View{authored}}, DQLAuthored: true}).Load()
+			require.NoError(t, err)
+			_, err = newPackageViewResolver(merged, resolver).externalInputDescriptors(pkg, nil)
+			require.ErrorContains(t, err, "cannot declare a generated destination")
+		}
 		require.Equal(t, row.Name, original.Views[index].TypeName, "caller view stays unqualified")
 		require.Equal(t, row.Name, linked[index].view.TypeName, "retained linked metadata stays unqualified")
 	}
