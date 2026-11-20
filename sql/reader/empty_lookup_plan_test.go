@@ -40,19 +40,29 @@ func TestEmptyLookupAdmissionUsesRootKeyLineage(t *testing.T) {
 				{Name: "Tenant", Predicates: []*spec.Predicate{{Name: "equal", Auth: true, Args: []string{"r", "tenant"}}}},
 			}}
 			view := &data.View{Spec: spec.View{Source: &spec.ViewSource{SQL: tc.sql}}, Columns: []*data.Column{{Name: "ID", Column: "id", Tag: `sqlx:"id,primaryKey=true"`}}}
-			component.Parameters = append(component.Parameters, emptyLookupOptIn())
 			if tc.composite {
 				view.Columns = append(view.Columns, &data.Column{Name: "Account", Column: "account_id", Tag: `sqlx:"account_id,primaryKey=true"`})
 			}
 			if tc.complete {
 				component.Parameters = append(component.Parameters, &spec.Parameter{Name: "Account", Source: spec.BindSource{Kind: "path", Name: "account"}, Predicates: []*spec.Predicate{{Name: "equal", Args: []string{"r", "account_id"}}}})
 			}
-			plan, err := compileEmptyLookup(Config{Component: component, InputType: reflect.TypeFor[input](), Plan: &Plan{Root: &ViewPlan{View: view}}})
+			config := Config{Component: component, InputType: reflect.TypeFor[input](), Plan: &Plan{Root: &ViewPlan{View: view}}}
+			automatic, err := compileEmptyLookup(config)
+			require.NoError(t, err)
+			component.Parameters = append(component.Parameters, emptyLookupOptIn())
+			plan, err := compileEmptyLookup(config)
 			if tc.want == 0 && tc.name != "source empty window" && tc.name != "source page" {
+				require.Nil(t, automatic)
 				require.ErrorContains(t, err, "complete proven root identity")
 				return
 			}
 			require.NoError(t, err)
+			if tc.want == 0 {
+				require.Nil(t, automatic)
+			} else {
+				require.NotNil(t, automatic)
+				require.Equal(t, plan.routes, automatic.routes)
+			}
 			count := 0
 			if plan != nil {
 				count = len(plan.routes)
@@ -70,13 +80,16 @@ func TestEmptyLookupRejectsUnprovenDynamicSourceAtRegistration(t *testing.T) {
 	component := &spec.Component{Routes: []*spec.Route{{Method: "GET", Path: "/records/{key}"}}, Parameters: []*spec.Parameter{{Name: "Key", Source: spec.BindSource{Kind: "path", Name: "key"}, Predicates: []*spec.Predicate{{Name: "equal", Args: []string{"r", "id"}}, {Name: "equal", Auth: true, Args: []string{"r", "tenant"}}}}}}
 	view := &data.View{Spec: spec.View{Source: &spec.ViewSource{SQL: `SELECT r.id FROM $Unsafe.Table r`}}, Columns: []*data.Column{{Name: "ID", Column: "id", Tag: `sqlx:"id,primaryKey=true"`}}}
 	config := Config{Component: component, InputType: reflect.TypeFor[input](), Plan: &Plan{Root: &ViewPlan{View: view}}}
+	plan, err := compileEmptyLookup(config)
+	require.NoError(t, err)
+	require.Nil(t, plan)
 	component.Parameters = append(component.Parameters, emptyLookupOptIn())
-	_, err := compileEmptyLookup(config)
+	_, err = compileEmptyLookup(config)
 	require.ErrorContains(t, err, "dynamic SQL structure")
 	// A collection cannot become an identity read just because it shares marked
 	// child metadata. Its existing source behavior remains owned by its reader.
 	component.Routes = []*spec.Route{{Method: "GET", Path: "/records"}}
-	plan, err := compileEmptyLookup(config)
+	plan, err = compileEmptyLookup(config)
 	require.ErrorContains(t, err, "path-bound GET identity")
 	require.Nil(t, plan)
 }
@@ -85,7 +98,6 @@ func TestEmptyLookupGeneratedPrimaryKeyUsesSQLSource(t *testing.T) {
 	type input struct{ Id []int }
 	component := &spec.Component{Routes: []*spec.Route{{Method: "GET", Path: "/records/{id}"}}, Parameters: []*spec.Parameter{{Name: "Id", Source: spec.BindSource{Kind: "path", Name: "id"}, Predicates: []*spec.Predicate{{Name: "in", Args: []string{"a", "ID"}}}}, {Name: "Auth", Predicates: []*spec.Predicate{{Name: "handler", Auth: true}}}}}
 	view := &data.View{Spec: spec.View{Source: &spec.ViewSource{SQL: "SELECT records.* FROM (SELECT a.* FROM records a) records"}, Columns: []*spec.Column{{Name: "Id", Source: "ID", PrimaryKey: true}}}, Columns: []*data.Column{{Name: "Id", Column: "ID", Tag: `sqlx:"ID,primaryKey=true"`}}}
-	component.Parameters = append(component.Parameters, emptyLookupOptIn())
 	plan, err := compileEmptyLookup(Config{Component: component, InputType: reflect.TypeFor[input](), Plan: &Plan{Root: &ViewPlan{View: view}}})
 	require.NoError(t, err)
 	require.NotNil(t, plan)
@@ -94,6 +106,41 @@ func TestEmptyLookupGeneratedPrimaryKeyUsesSQLSource(t *testing.T) {
 
 func emptyLookupOptIn() *spec.Parameter {
 	return &spec.Parameter{Name: "Data", Source: spec.BindSource{Kind: "output", Name: "view"}, Tag: `forbiddenNotFoundCheck:"true"`}
+}
+
+func TestEmptyLookupDefaultSkipsUnsupportedRoots(t *testing.T) {
+	type input struct{ Key int }
+	for _, tc := range []struct {
+		name string
+		edit func(*Config)
+	}{
+		{"collection", func(c *Config) { c.Component.Routes[0].Path = "/records" }},
+		{"unmarked predicate", func(c *Config) { c.Component.Parameters[1].Predicates[0].Auth = false }},
+		{"missing primary key", func(c *Config) { c.Plan.Root.View.Columns = nil }},
+		{"missing SQL", func(c *Config) { c.Plan.Root.View.Spec.Source = nil }},
+		{"partitioned root", func(c *Config) { c.Plan.Root.Partitioner = &planPartitioner{} }},
+		{"empty output policy", func(c *Config) {
+			p := emptyLookupOptIn()
+			p.Tag = `onEmpty:"empty"`
+			c.Component.Parameters = append(c.Component.Parameters, p)
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			component := &spec.Component{
+				Routes: []*spec.Route{{Method: "GET", Path: "/records/{key}"}},
+				Parameters: []*spec.Parameter{
+					{Name: "Key", Source: spec.BindSource{Kind: "path", Name: "key"}, Predicates: []*spec.Predicate{{Name: "equal", Args: []string{"r", "id"}}}},
+					{Name: "Scope", Predicates: []*spec.Predicate{{Name: "handler", Auth: true}}},
+				},
+			}
+			view := &data.View{Spec: spec.View{Source: &spec.ViewSource{SQL: "SELECT r.id FROM records r"}}, Columns: []*data.Column{{Column: "id", Tag: `sqlx:"id,primaryKey=true"`}}}
+			config := Config{Component: component, InputType: reflect.TypeFor[input](), Plan: &Plan{Root: &ViewPlan{View: view}}}
+			tc.edit(&config)
+			plan, err := compileEmptyLookup(config)
+			require.NoError(t, err)
+			require.Nil(t, plan)
+		})
+	}
 }
 
 func TestEmptyLookupExplicitOptIn(t *testing.T) {

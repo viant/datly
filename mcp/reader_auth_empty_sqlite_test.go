@@ -58,7 +58,7 @@ func TestReaderAuthEmptyHTTPAndMCP(t *testing.T) {
 		ID int `sqlx:"id,primaryKey=true" json:"id"`
 	}
 	type output struct {
-		Rows []row `json:"rows" forbiddenNotFoundCheck:"true"`
+		Rows []row `json:"rows"`
 	}
 	db := sqlite.New(t)
 	require.NoError(t, db.ExecStatements(context.Background(), "CREATE TABLE records(id INTEGER, tenant INTEGER, name TEXT, archived INTEGER)", "INSERT INTO records VALUES(1,7,'one',0),(2,8,'two',0),(3,8,'archived',1)", "CREATE TABLE accounts(account_id INTEGER,name TEXT)", "INSERT INTO accounts VALUES(1,'account')", "CREATE TABLE watches(record_id INTEGER,contact_id INTEGER)", "INSERT INTO watches VALUES(1,0)", "CREATE TABLE model_status(record_id INTEGER,status INTEGER)", "INSERT INTO model_status VALUES(1,2)"))
@@ -256,9 +256,9 @@ func TestReaderAuthEmptyHTTPAndMCP(t *testing.T) {
 	require.Len(t, queries, 3)
 	cancelProbe = nil
 
-	// Auth marking alone does not enable a probe.
+	// An explicit opt-out preserves an empty result with a single query.
 	type emptyOutput struct {
-		Rows []row `json:"rows"`
+		Rows []row `json:"rows" forbiddenNotFoundCheck:"false"`
 	}
 	offArtifact, err := bootstrap.BuildArtifact(bootstrap.ArtifactInput{Component: component, InputType: reflect.TypeFor[input](), OutputType: reflect.TypeFor[emptyOutput](), DirectViewField: "Rows", Types: types})
 	require.NoError(t, err)

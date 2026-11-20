@@ -45,8 +45,16 @@ type emptyLookupPlan struct {
 // particular neither identities nor existence decisions survive an invocation.
 func compileEmptyLookup(config Config) (*emptyLookupPlan, error) {
 	enabled, err := forbiddenNotFoundCheck(config)
-	if err != nil || !enabled {
+	if err != nil || (enabled != nil && !*enabled) {
 		return nil, err
+	}
+	// An explicit true also asks registration to diagnose an unsupported
+	// declaration. Automatic classification needs proof before it can run.
+	unproven := func(format string, args ...any) (*emptyLookupPlan, error) {
+		if enabled != nil {
+			return nil, fmt.Errorf(format, args...)
+		}
+		return nil, nil
 	}
 	component := config.Component
 	marked := false
@@ -60,7 +68,7 @@ func compileEmptyLookup(config Config) (*emptyLookupPlan, error) {
 		}
 	}
 	if !marked {
-		return nil, fmt.Errorf("forbiddenNotFoundCheck requires a marked authorization predicate")
+		return unproven("forbiddenNotFoundCheck requires a marked authorization predicate")
 	}
 	outputType := config.OutputType
 	for outputType != nil && outputType.Kind() == reflect.Pointer {
@@ -83,11 +91,9 @@ func compileEmptyLookup(config Config) (*emptyLookupPlan, error) {
 		}
 	}
 
-	bindings, err := tag.NewBindingIndex(config.InputType)
-	if err != nil {
-		return nil, err
+	if config.Plan.Root == nil || config.Plan.Root.View == nil {
+		return unproven("forbiddenNotFoundCheck requires a root view")
 	}
-	result := &emptyLookupPlan{routes: map[spec.RouteRef]emptyLookupRoute{}, projection: dsql.ExistenceProjection()}
 	keyNames := map[string]bool{}
 	for _, column := range config.Plan.Root.View.Columns {
 		if column == nil {
@@ -117,7 +123,7 @@ func compileEmptyLookup(config Config) (*emptyLookupPlan, error) {
 		}
 	}
 	if len(keyNames) == 0 {
-		return nil, fmt.Errorf("forbiddenNotFoundCheck requires root primary-key metadata")
+		return unproven("forbiddenNotFoundCheck requires root primary-key metadata")
 	}
 	// A collection route has no path input authority; do not analyze or reject
 	// its SQL merely because a child predicate carries authorization metadata.
@@ -138,8 +144,8 @@ func compileEmptyLookup(config Config) (*emptyLookupPlan, error) {
 			}
 		}
 	}
-	if !pathBound || config.Plan.Root.View.Spec.Source.SQL == "" {
-		return nil, fmt.Errorf("forbiddenNotFoundCheck requires a path-bound GET identity and root SQL")
+	if !pathBound || config.Plan.Root.View.Spec.Source == nil || config.Plan.Root.View.Spec.Source.SQL == "" {
+		return unproven("forbiddenNotFoundCheck requires a path-bound GET identity and root SQL")
 	}
 
 	analysisSource := config.Plan.Root.View.Spec.Source.SQL
@@ -148,16 +154,16 @@ func compileEmptyLookup(config Config) (*emptyLookupPlan, error) {
 		UsesPredicates() bool
 	}); ok {
 		if !native.UsesPredicates() {
-			return nil, fmt.Errorf("forbiddenNotFoundCheck requires root predicate evaluation")
+			return unproven("forbiddenNotFoundCheck requires root predicate evaluation")
 		}
 		analysisSource = native.AnalysisSQL()
 	}
 	_, parsed, err := sqlanalysis.Checked(analysisSource, nil)
 	if err != nil {
-		return nil, fmt.Errorf("compile authorization empty lookup source: %w", err)
+		return unproven("compile authorization empty lookup source: %w", err)
 	}
 	if parsed == nil {
-		return nil, fmt.Errorf("authorization empty lookup requires a checked SELECT")
+		return unproven("authorization empty lookup requires a checked SELECT")
 	}
 	// Source-authored windows are ordinary result windows, including windows
 	// nested inside a transparent root wrapper. They never imply denial.
@@ -169,10 +175,16 @@ func compileEmptyLookup(config Config) (*emptyLookupPlan, error) {
 	for name := range keyNames {
 		origin, ok := lineage.Lookup(name)
 		if !ok {
-			return nil, fmt.Errorf("authorization empty lookup primary key %s has no unambiguous source lineage", name)
+			return unproven("authorization empty lookup primary key %s has no unambiguous source lineage", name)
 		}
 		keys[origin] = true
 	}
+	bindings, err := tag.NewBindingIndex(config.InputType)
+	if err != nil {
+		return nil, err
+	}
+	result := &emptyLookupPlan{routes: map[spec.RouteRef]emptyLookupRoute{}, projection: dsql.ExistenceProjection()}
+routes:
 	for _, endpoint := range component.Routes {
 		if endpoint == nil || !strings.EqualFold(endpoint.Method, "GET") {
 			continue
@@ -191,13 +203,6 @@ func compileEmptyLookup(config Config) (*emptyLookupPlan, error) {
 			if p == nil || p.Source.Kind != "path" || !pathNames[p.Source.Name] || !p.Activation.Matches(endpoint.Path) {
 				continue
 			}
-			field, ok, err := bindings.Resolve(p)
-			if err != nil {
-				return nil, err
-			}
-			if !ok {
-				return nil, fmt.Errorf("identity parameter %s has no input field", p.Name)
-			}
 			byOrigin := map[sqlparser.ColumnOrigin][]*spec.Predicate{}
 			for _, predicate := range p.Predicates {
 				if predicate == nil || predicate.Auth || (strings.ToLower(strings.TrimSpace(predicate.Name)) != "equal" && strings.ToLower(strings.TrimSpace(predicate.Name)) != "in") || len(predicate.Args) != 2 {
@@ -210,6 +215,19 @@ func compileEmptyLookup(config Config) (*emptyLookupPlan, error) {
 				matched[origin] = true
 				byOrigin[origin] = append(byOrigin[origin], predicate)
 				lookup.predicates[predicate] = true
+			}
+			if len(byOrigin) == 0 && enabled == nil {
+				continue
+			}
+			field, ok, err := bindings.Resolve(p)
+			if err != nil {
+				return nil, err
+			}
+			if !ok {
+				if enabled == nil {
+					continue routes
+				}
+				return nil, fmt.Errorf("identity parameter %s has no input field", p.Name)
 			}
 			// Each distinct path input bound to a key needs evidence from the
 			// primary query. Its repeated predicates can occur in separate groups.
@@ -224,10 +242,10 @@ func compileEmptyLookup(config Config) (*emptyLookupPlan, error) {
 		result.routes[ref] = lookup
 	}
 	if len(result.routes) == 0 {
-		return nil, fmt.Errorf("forbiddenNotFoundCheck requires a GET route with a complete proven root identity")
+		return unproven("forbiddenNotFoundCheck requires a GET route with a complete proven root identity")
 	}
 	if config.Plan.Root.Partitioner != nil {
-		return nil, fmt.Errorf("authorization empty lookup does not support partitioned roots; use output tag onEmpty:empty")
+		return unproven("authorization empty lookup does not support partitioned roots; use output tag onEmpty:empty")
 	}
 
 	return result, nil
@@ -235,7 +253,7 @@ func compileEmptyLookup(config Config) (*emptyLookupPlan, error) {
 
 // forbiddenNotFoundCheck is independent of predicate authorization metadata.
 // Read the same root output metadata for authored and generated components.
-func forbiddenNotFoundCheck(config Config) (bool, error) {
+func forbiddenNotFoundCheck(config Config) (*bool, error) {
 	var enabled *bool
 	read := func(metadata reflect.StructTag) error {
 		value, present := metadata.Lookup("forbiddenNotFoundCheck")
@@ -259,18 +277,18 @@ func forbiddenNotFoundCheck(config Config) (bool, error) {
 	if output != nil && output.Kind() == reflect.Struct && config.Plan.OutputViewField != "" {
 		if field, ok := output.FieldByName(config.Plan.OutputViewField); ok {
 			if err := read(field.Tag); err != nil {
-				return false, err
+				return nil, err
 			}
 		}
 	}
 	for _, parameter := range config.Component.Parameters {
 		if parameter != nil && parameter.Source.Kind == "output" && parameter.Source.Name == "view" {
 			if err := read(reflect.StructTag(parameter.Tag)); err != nil {
-				return false, err
+				return nil, err
 			}
 		}
 	}
-	return enabled != nil && *enabled, nil
+	return enabled, nil
 }
 
 func (p *emptyLookupPlan) eligible(ctx context.Context, input reflect.Value, selector *xstate.Selector, root *ViewPlan) bool {

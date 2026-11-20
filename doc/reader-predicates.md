@@ -812,18 +812,21 @@ Mark each authorization predicate occurrence with the fluent option:
     .WithAuthPredicate(0, 'handler', 'example.com/security.Scope'))
 ```
 
-`auth=true` is predicate metadata, not a handler argument. Other occurrences on
-that same input remain ordinary predicates. Marking does not enable additional
-queries. Enable classification explicitly on the root output holder:
+`auth=true` marks this predicate occurrence. Other occurrences on the same
+input remain ordinary predicates. In v1, a GET with a proven root identity
+classifies empty results by default when its root query uses a marked
+authorization predicate. The root output needs no additional tag:
 
 ```sql
-#define($_ = $Data<[]*Record>(output/view).WithForbiddenNotFoundCheck())
+#define($_ = $Data<[]*Record>(output/view))
 ```
 
-The equivalent Go field tag is `forbiddenNotFoundCheck:"true"`. Absent or false
-means no existence check. Existing `onEmpty:"empty"` retains its opt-out behavior.
-The option reveals resource existence to otherwise unauthorized callers; mark
-only predicates that may be removed for that check, preserving mandatory scope.
+Use `.WithForbiddenNotFoundCheck()` or the root Go field tag
+`forbiddenNotFoundCheck:"true"` to require the reader to validate its identity
+configuration at registration. To keep ordinary empty results, set
+`forbiddenNotFoundCheck:"false"` on the root output field, or use the existing
+`onEmpty:"empty"`. A 403 discloses that the resource exists. Mark only
+authorization predicates that may be removed to make that distinction.
 
 An eligible GET identity read first executes its normal authorized root query.
 After an empty result, diagnostics use the proven identity independently of
@@ -847,9 +850,10 @@ Column/member names alone do not establish identity. Explicitly enabled readers
 without key metadata or any complete proven GET identity route fail registration.
 Shared collection routes and later selector pages retain normal empty responses.
 Source-authored offsets and zero limits also retain normal empty responses.
-Unsupported dynamic source structures fail during reader registration through the
-existing checked SQL analysis. Partitioned identity roots require the empty-output
-opt-out. SQLX `primaryKey` tags and canonical schema primary keys supply key facts.
+Automatic classification skips unsupported dynamic SQL, unproven identities and
+partitioned roots. Explicitly requiring the check on these shapes produces a
+registration error. SQLX `primaryKey` tags and canonical schema primary keys
+supply key facts.
 
 Probe metadata is prepared with the registered reader revision. Bound predicate
 fragments and arguments are retained only for this root invocation and replayed
