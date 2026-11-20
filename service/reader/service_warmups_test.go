@@ -81,6 +81,32 @@ func TestSelectAuthorizedTopLevelWarmup_DeniedRequestCannotUseUntrustedIndex(t *
 	require.Nil(t, candidate)
 }
 
+func TestSelectAuthorizedTopLevelWarmup_UnwarmedScopeSkipsUntrustedIndex(t *testing.T) {
+	for _, column := range []string{"order_id", "m.order_id"} {
+		t.Run(column, func(t *testing.T) {
+			cache := &view.Cache{Warmup: &view.Warmup{IndexColumn: "campaign_id", IndexParameter: "CampaignIds"}}
+			aView, _, campaignParam := newWarmupsMatcherView(t, cache)
+			statelet := view.NewStatelet()
+			statelet.Init(aView)
+			require.NoError(t, campaignParam.Set(statelet.Template, []int{101}))
+			ctx := view.WithCacheIndexSelection(context.Background())
+			view.SelectCacheIndex(ctx, column, []interface{}{77})
+
+			candidate, err := selectAuthorizedTopLevelWarmup(ctx, aView, statelet)
+			require.NoError(t, err)
+			require.Nil(t, candidate, "an unwarmed authorization scope must not fall back to the request's campaign index")
+			require.True(t, view.IsCacheIndexDenied(ctx))
+			require.Nil(t, view.SelectedCacheIndex(ctx))
+			candidate, err = selectAuthorizedTopLevelWarmup(ctx, aView, statelet)
+			require.NoError(t, err)
+			require.Nil(t, candidate, "subsequent selection must remain denied")
+			selector, err := statelet.Template.Selector("CampaignIds")
+			require.NoError(t, err)
+			require.Equal(t, []int{101}, selector.Value(statelet.Template.Pointer()), "cache eligibility must not alter request input")
+		})
+	}
+}
+
 func TestSelectTopLevelWarmup_LaterDeclarationBreaksTies(t *testing.T) {
 	cache := &view.Cache{
 		Warmups: []*view.Warmup{
