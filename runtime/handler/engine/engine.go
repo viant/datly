@@ -326,11 +326,17 @@ func (e *Engine) Execute(ctx context.Context, request Request) (actual any, fail
 			data.connectors = request.Capabilities.Connector
 		}
 		if data.source != nil || data.parent != nil || data.connectors != nil {
-			var authority *flushAuthority
+			var authority, associationAuthority *flushAuthority
 			if activityActive && len(request.ProtectedFlushTables) != 0 && !drainowner.BindingGroupContext(ctx) {
-				authority = newFlushAuthority(data, activity, request.ProtectedFlushTables)
+				ordinary, identity := splitAssociationTables(request.Handler, request.ProtectedFlushTables)
+				if len(ordinary) > 0 {
+					authority = newFlushAuthority(data, activity, ordinary)
+				}
+				if len(identity) > 0 {
+					associationAuthority = newFlushAuthority(data, activity, identity)
+				}
 			}
-			runtimeProviders = append(runtimeProviders, data.providers(authority)...)
+			runtimeProviders = append(runtimeProviders, data.providers(authority, associationAuthority)...)
 		}
 		ctx = withDataScope(ctx, data)
 		ctx = dexec.WithInvocationTransactionLookup(ctx, data.transactionForDatabase)

@@ -2,6 +2,7 @@ package spec
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/viant/tagly/format/text"
@@ -14,6 +15,14 @@ const (
 	MCPExposureResource         MCPExposureKind = "resource"
 	MCPExposureResourceTemplate MCPExposureKind = "resourceTemplate"
 )
+
+// MCPPrimitivePair names two public primitive ID arrays on a tool body object.
+// Path starts at the public body argument; array elements are traversed implicitly.
+type MCPPrimitivePair struct {
+	Path   string `json:"path"`
+	Add    string `json:"add"`
+	Remove string `json:"remove"`
+}
 
 // MCPExposure describes one explicit protocol exposure of a component route.
 type MCPExposure struct {
@@ -28,7 +37,8 @@ type MCPExposure struct {
 	// StrictArguments overrides the host policy for this exposure. Nil inherits
 	// the host setting, whose default remains lenient. Strictness includes
 	// unknown members of ordinary JSON argument bodies, not only tool names.
-	StrictArguments *bool `json:"strictArguments,omitempty"`
+	StrictArguments *bool              `json:"strictArguments,omitempty"`
+	PrimitivePairs  []MCPPrimitivePair `json:"primitivePairs,omitempty"`
 }
 
 // EffectiveCaseFormat returns the MCP presentation policy without changing authored metadata.
@@ -71,6 +81,7 @@ func (e *MCPExposure) Clone() *MCPExposure {
 		return nil
 	}
 	result := *e
+	result.PrimitivePairs = slices.Clone(e.PrimitivePairs)
 	if e.StrictArguments != nil {
 		value := *e.StrictArguments
 		result.StrictArguments = &value

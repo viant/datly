@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/viant/datly/internal/associationtag"
 	"github.com/viant/datly/spec"
 	"github.com/viant/datly/tag"
 	"github.com/viant/datly/typecatalog"
@@ -911,6 +912,25 @@ func (p *viewPlanner) relationField(relation *spec.Relation) (Field, error) {
 	holderTags, err := tags.Parse(relation.Tag)
 	if err != nil {
 		return Field{}, fmt.Errorf("generated relation %q holder tags: %w", relation.Name, err)
+	}
+	if raw, ok := reflect.StructTag(relation.Tag).Lookup("association"); ok {
+		_, member, err := associationtag.Names(name, raw)
+		if err != nil {
+			return Field{}, err
+		}
+		if relation.Cardinality == spec.CardinalityOne || len(links) == 0 {
+			return Field{}, fmt.Errorf("association %s requires a collection with parent links", name)
+		}
+		found := false
+		for _, column := range relation.View.Columns {
+			if column != nil && typecatalog.FieldName(column.Name) == member {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return Field{}, fmt.Errorf("association %s member %s is absent from the child projection", name, member)
+		}
 	}
 	// Execution metadata is compiled from the relation graph, never overridden
 	// by presentation annotations on its holder.

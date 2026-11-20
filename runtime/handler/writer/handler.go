@@ -34,24 +34,25 @@ import (
 // Metadata is the immutable, component-specific plan interpreted by Handler.
 // It contains no generated executable phase code.
 type Metadata struct {
-	componentLifecycle bool
-	Predicates         *predicate.Program
-	Component          *spec.Component
-	Operation          string
-	InputField         int
-	CurrentField       int
-	OutputField        int
-	EntityType         reflect.Type
-	CurrentType        reflect.Type
-	Table              string
-	Keys               []Field
-	Fields             []Field
-	Sequence           *Field
-	DeleteMarker       *Field
-	ConcurrencyToken   *Field
-	Invariants         map[string][]Field
-	HookType           reflect.Type
-	Root               *Record
+	associationPrefixTables map[string]bool
+	componentLifecycle      bool
+	Predicates              *predicate.Program
+	Component               *spec.Component
+	Operation               string
+	InputField              int
+	CurrentField            int
+	OutputField             int
+	EntityType              reflect.Type
+	CurrentType             reflect.Type
+	Table                   string
+	Keys                    []Field
+	Fields                  []Field
+	Sequence                *Field
+	DeleteMarker            *Field
+	ConcurrencyToken        *Field
+	Invariants              map[string][]Field
+	HookType                reflect.Type
+	Root                    *Record
 }
 
 // Field is one compiled entity field.
@@ -103,6 +104,9 @@ func entityMarker(entityType reflect.Type) *structology.Marker {
 
 // Record is one writable role in a component graph.
 type Record struct {
+	hasAssociation           bool
+	associationIdentityLeaf  bool
+	rowQueueObserver         bool
 	previousPresence         *previousPresence
 	componentLifecycle       bool
 	reconciliation           *reconciliationMetadata
@@ -273,9 +277,10 @@ func (p *presence) excluding(names []string) *presence {
 
 // Relation is one typed parent-to-child mutation edge.
 type Relation struct {
-	Field []int
-	Child *Record
-	Links []Link
+	association *associationMapping
+	Field       []int
+	Child       *Record
+	Links       []Link
 }
 
 // Link projects one parent key into its declared child foreign key.
@@ -352,45 +357,48 @@ func hasWritableRole(record *Record) bool {
 // Program is invocation-owned universal mutation state. The same type is used
 // for every writer component; only Metadata and values differ.
 type Program struct {
-	reconciliation              *reconciliationAttempt
-	reconciliationFrames        []*Frame
-	reconciliationSeal          string
-	queueSlots                  []queueSlotSeal
-	afterValidateInputStarted   bool
-	afterValidateInputViolation error
-	afterQueueInputStarted      bool
-	afterQueueInputSnapshot     string
-	guardMu                     sync.Mutex
-	guardIssued                 bool
-	guardBinder                 xhandler.Binder
-	executionAttempted          bool
-	executionFailure            error
-	executionGuardRegistered    bool
-	executionGuardReady         bool
-	actionPolicyFacts           map[frameIdentity]*actionPolicyFacts
-	scopedService               any
-	metadata                    *Metadata
-	input                       any
-	output                      any
-	original                    *OriginalInput
-	database                    *DatabaseSnapshot
-	frames                      *MutationFrames
-	actions                     *MutationActions
-	validation                  *FrameworkValidation
-	hooks                       *Hooks
-	hook                        reflect.Value
-	hooksByRecord               map[*Record]reflect.Value
-	stage                       Stage
-	failed                      bool
-	finalized                   bool
-	componentHookAttempted      bool
-	structuralError             error
-	parentScopeError            error
-	finishScopeDiagnostics      func() error
-	queueItems                  []*Action
-	queueObserverPanic          bool
-	queueInvocationID           uint64
-	previousFields              map[*Record]fieldSet
+	associationDeletes            map[frameIdentity][]associationCondition
+	associationIdentityCandidates map[frameIdentity]associationCandidate
+	associationIdentityRows       map[frameIdentity]bool
+	reconciliation                *reconciliationAttempt
+	reconciliationFrames          []*Frame
+	reconciliationSeal            string
+	queueSlots                    []queueSlotSeal
+	afterValidateInputStarted     bool
+	afterValidateInputViolation   error
+	afterQueueInputStarted        bool
+	afterQueueInputSnapshot       string
+	guardMu                       sync.Mutex
+	guardIssued                   bool
+	guardBinder                   xhandler.Binder
+	executionAttempted            bool
+	executionFailure              error
+	executionGuardRegistered      bool
+	executionGuardReady           bool
+	actionPolicyFacts             map[frameIdentity]*actionPolicyFacts
+	scopedService                 any
+	metadata                      *Metadata
+	input                         any
+	output                        any
+	original                      *OriginalInput
+	database                      *DatabaseSnapshot
+	frames                        *MutationFrames
+	actions                       *MutationActions
+	validation                    *FrameworkValidation
+	hooks                         *Hooks
+	hook                          reflect.Value
+	hooksByRecord                 map[*Record]reflect.Value
+	stage                         Stage
+	failed                        bool
+	finalized                     bool
+	componentHookAttempted        bool
+	structuralError               error
+	parentScopeError              error
+	finishScopeDiagnostics        func() error
+	queueItems                    []*Action
+	queueObserverPanic            bool
+	queueInvocationID             uint64
+	previousFields                map[*Record]fieldSet
 	// graph caches insert lookups for the current frame topology.
 	graph *graphIndex
 	// typeFields caches the exported field set per Previous type.
@@ -636,11 +644,23 @@ func (p *Program) allocate(ctx context.Context, sequencer xhandler.Sequencer, re
 	// Auxiliary carriers retain SQL identities but never own allocation. Always
 	// recurse below so physical descendants and same-table siblings remain owned.
 	if !record.Auxiliary && record.Sequence != nil {
+		selector := record.Selector
+		if p.hasAssociationIdentityRows(record) {
+			selected := reflect.MakeSlice(reflect.SliceOf(reflect.PointerTo(record.EntityType)), 0, 0)
+			for _, frame := range p.frames.Rows {
+				if frame.Record == record && !p.associationIdentityRows[identityOfFrame(frame)] {
+					selected = reflect.Append(selected, frame.Entity)
+				}
+			}
+			roots, selector = selected, record.Sequence.Name
+		}
 		if err := p.validateActionPolicyFacts(); err != nil {
 			return err
 		}
-		if err := sequencer.Allocate(ctx, record.Table, roots.Interface(), record.Selector); err != nil {
-			return fmt.Errorf("allocate %s: %w", record.Path, err)
+		if selector == record.Selector || roots.Len() > 0 {
+			if err := sequencer.Allocate(ctx, record.Table, roots.Interface(), selector); err != nil {
+				return fmt.Errorf("allocate %s: %w", record.Path, err)
+			}
 		}
 		for _, frame := range p.frames.Rows {
 			if frame.Record == record {
@@ -824,7 +844,7 @@ func (h *Handler) Execute(ctx context.Context, invocation rhandler.Invocation) (
 	// Keep policy capture before execution-begin observation when invoked without
 	// the engine's ordinary CaptureInput snapshot. Policy-free behavior is unchanged.
 	if h != nil && h.metadata != nil && hasRetainedWriterGuards(h.metadata.Root) && invocation.Snapshot == nil {
-		program, captureErr := h.program(invocation.Input)
+		program, captureErr := h.program(ctx, invocation.Input)
 		if captureErr != nil {
 			return nil, captureErr
 		}
@@ -910,7 +930,7 @@ func (h *Handler) execute(ctx context.Context, invocation rhandler.Invocation) (
 	program, _ := invocation.Snapshot.(*Program)
 	var err error
 	if program == nil {
-		program, err = h.program(invocation.Input)
+		program, err = h.program(ctx, invocation.Input)
 		if err != nil {
 			return nil, err
 		}
@@ -934,11 +954,19 @@ func (h *Handler) execute(ctx context.Context, invocation rhandler.Invocation) (
 // Configured writers keep their authored explicit boundaries; declaration
 // alone never drains a table. Root completion owns the remaining journal.
 func (p *Program) explicitProtectedFlush() bool {
-	return p != nil && p.metadata != nil && p.metadata.Component != nil && p.metadata.Component.Settings != nil && len(p.metadata.Component.Settings.ProtectedFlushTables) != 0
+	if p == nil || p.metadata == nil || p.metadata.Component == nil || p.metadata.Component.Settings == nil {
+		return false
+	}
+	for _, table := range p.metadata.Component.Settings.ProtectedFlushTables {
+		if !p.metadata.associationPrefixTables[table] {
+			return true
+		}
+	}
+	return false
 }
 
 func (h *Handler) CaptureInput(ctx context.Context, input any) (any, error) {
-	program, err := h.program(input)
+	program, err := h.program(ctx, input)
 	if err != nil {
 		return nil, err
 	}
@@ -1135,7 +1163,7 @@ func (h *Handler) FinalizeOutcome(ctx context.Context, invocation rhandler.Invoc
 	return methodError("Finalize", results)
 }
 
-func (h *Handler) program(input any) (*Program, error) {
+func (h *Handler) program(ctx context.Context, input any) (*Program, error) {
 	value := reflect.ValueOf(input)
 	if !value.IsValid() || value.Type() != reflect.PointerTo(h.inputType) || value.IsNil() {
 		return nil, fmt.Errorf("writer input must be *%s, got %T", h.inputType, input)
@@ -1150,6 +1178,11 @@ func (h *Handler) program(input any) (*Program, error) {
 		result.prepareHooks(h.metadata.Root)
 		result.hook = result.hooksByRecord[h.metadata.Root]
 		entities := value.Elem().Field(h.metadata.InputField)
+		if lookup, ok := ctx.Value(xhandler.AssociationDeltaLookupKey).(xhandler.AssociationDeltaLookup); h.metadata.Root.hasAssociation && ok && lookup != nil {
+			if err := result.applyAssociationDeltas(ctx, value.Elem(), entities); err != nil {
+				return nil, err
+			}
+		}
 		if err := result.captureOriginal(h.metadata.Root, entities); err != nil {
 			return nil, err
 		}
@@ -1513,6 +1546,9 @@ func (p *Program) prepare(ctx context.Context, binder xhandler.Binder) (err erro
 			if lookupErr != nil {
 				return lookupErr
 			}
+			if err = p.selectAssociationIdentity(ctx, binder, validator); err != nil {
+				return err
+			}
 			if err = p.allocate(ctx, sequencer, p.metadata.Root, entities); err != nil {
 				return err
 			}
@@ -1641,9 +1677,17 @@ func (p *Program) queuePhysical(ctx context.Context, binder xhandler.Binder, dml
 			return fmt.Errorf("mutation predicate %s: %w", frame.Record.Path, err)
 		}
 	}
+	if conditions := p.associationDeletes[identityOfFrame(frame)]; len(conditions) != 0 && action.Kind == xhandler.WriteDelete {
+		criteria, err = associationDeleteCriteria(ctx, binder, conditions, criteria)
+		if err != nil {
+			return err
+		}
+	}
 	switch action.Kind {
 	case xhandler.WriteInsert:
-		if frame.Record.QueueContract != "" {
+		if p.associationIdentityRows[identityOfFrame(frame)] {
+			err = p.insertAssociationIdentity(ctx, dml, frame)
+		} else if frame.Record.QueueContract != "" {
 			err = p.admitSourceRow(dml, action, frame)
 		} else {
 			err = dml.Insert(table, value)
@@ -2070,6 +2114,17 @@ func (p *Program) callEntityHook(ctx context.Context, name string, frame *Frame)
 	}
 	if frame == nil || frame.SkippedDelete || !frame.Hook.IsValid() {
 		return nil
+	}
+	if name == "AfterQueue" && frame.Record != nil && frame.Record.rowQueueObserver {
+		value, err := detachedRow(frame.Entity)
+		if err != nil {
+			return fmt.Errorf("detach %s queue observation: %w", frame.Record.Path, err)
+		}
+		results := frame.Hook.MethodByName("AfterQueueRow").Call([]reflect.Value{reflect.ValueOf(ctx), reflect.ValueOf(value)})
+		if err = methodError("AfterQueueRow", results); err != nil {
+			return err
+		}
+		return p.validateActionPolicyFacts()
 	}
 	method := frame.Hook.MethodByName(name)
 	if !method.IsValid() {
@@ -2864,6 +2919,12 @@ func CompileWithIdentifierProducts(component *spec.Component, inputType, outputT
 		}
 	}
 	metadata.Root = root
+	metadata.associationPrefixTables = associationPrefixTables(root)
+	if len(metadata.associationPrefixTables) > 0 {
+		if err := validateAssociationIdentityGraph(root); err != nil {
+			return nil, err
+		}
+	}
 	if err := validateQueueContracts(root, operation); err != nil {
 		return nil, err
 	}
@@ -2932,6 +2993,9 @@ func compileRelations(component *spec.Component, inputType reflect.Type, parent 
 		viewTag := structField.Tag.Get("view")
 		childType := reflectedRelationType(structField)
 		if childType == nil {
+			if _, tagged := structField.Tag.Lookup("association"); tagged {
+				return fmt.Errorf("association %s.%s requires a writer relation", parent.Path, structField.Name)
+			}
 			continue
 		}
 		name := strings.TrimSpace(strings.Split(viewTag, ",")[0])
@@ -2962,9 +3026,14 @@ func compileRelations(component *spec.Component, inputType reflect.Type, parent 
 			return fmt.Errorf("writer relation %s has no typed links", child.Path)
 		}
 		retainInheritedIdentity(parent, relation)
+		relation.association, err = compileAssociation(structField, inputType, parent, relation, operation)
+		if err != nil {
+			return err
+		}
+		parent.hasAssociation = parent.hasAssociation || relation.association != nil || child.hasAssociation
 		parent.Relations = append(parent.Relations, relation)
 	}
-	return nil
+	return compileAssociationIdentities(parent, component)
 }
 
 func reflectedRelationType(field reflect.StructField) reflect.Type {

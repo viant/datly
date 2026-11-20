@@ -11,6 +11,7 @@ import (
 	rhandler "github.com/viant/datly/runtime/handler"
 	"github.com/viant/sqlx/io/update"
 	"github.com/viant/sqlx/metadata/info"
+	sqlxdialect "github.com/viant/sqlx/metadata/info/dialect"
 	"github.com/viant/sqlx/option"
 	xhandler "github.com/viant/xdatly/handler"
 )
@@ -38,7 +39,7 @@ func (d *Data) executePlanStepWithRunner(ctx context.Context, db *sql.DB, tx *sq
 
 func (d *Data) executeInsertStep(ctx context.Context, db *sql.DB, tx *sql.Tx, step executionStep) error {
 	metric := step.beginMetric(ctx)
-	service, err := d.inserter(ctx, db, step.table, step.operations[0].onDuplicateKeySQL, step.operations[0].insertIgnore)
+	service, err := d.inserter(ctx, db, step.table, step.operations[0])
 	if err != nil {
 		return err
 	}
@@ -72,8 +73,17 @@ func (d *Data) executeInsertStep(ctx context.Context, db *sql.DB, tx *sql.Tx, st
 		if i > 0 {
 			metric.restart()
 		}
-		count, _, err := service.Exec(ctx, operation.data, options...)
-		if d.insertConnectionRetryEligible(ctx, dialect, err) {
+		if operation.generatedKey != nil {
+			options = append(buildExecutionOptions(tx, db, 1), sqlxdialect.PresetIDStrategyIgnore)
+		}
+		count, generated, err := service.Exec(ctx, operation.data, options...)
+		if operation.generatedKey != nil && err == nil {
+			value := reflect.ValueOf(operation.generatedKey).Elem().Int()
+			if count != 1 || generated < 1 || value != generated {
+				err = fmt.Errorf("insert %s returned count %d, generated ID %d, mapped ID %d", step.table, count, generated, value)
+			}
+		}
+		if operation.generatedKey == nil && d.insertConnectionRetryEligible(ctx, dialect, err) {
 			count, _, err = service.Exec(ctx, operation.data, options...)
 		}
 		d.recordMutation(step, mutationRecordCount(operation.data), count, err)

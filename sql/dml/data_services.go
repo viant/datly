@@ -9,6 +9,7 @@ import (
 	"github.com/viant/sqlx/io/insert"
 	"github.com/viant/sqlx/io/update"
 	"github.com/viant/sqlx/metadata/info"
+	"github.com/viant/sqlx/metadata/info/dialect"
 	"github.com/viant/sqlx/option"
 )
 
@@ -55,14 +56,17 @@ func (d *Data) Dialect(ctx context.Context) (*info.Dialect, error) {
 	return d.dialectFor(ctx, d.db)
 }
 
-func (d *Data) inserter(ctx context.Context, db *sql.DB, table string, conflict string, ignore ...bool) (*insert.Service, error) {
+func (d *Data) inserter(ctx context.Context, db *sql.DB, table string, op *dataOperation) (*insert.Service, error) {
 	if d.insertServices == nil {
 		d.insertServices = map[string]*insert.Service{}
 	}
 	// Suffixed operations are deliberately uncached: SQLX constructor options
 	// belong to the service and must never contaminate plain table services.
 	cacheKey := table
-	insertIgnore := len(ignore) > 0 && ignore[0]
+	conflict, insertIgnore := op.onDuplicateKeySQL, op.insertIgnore
+	if op.generatedKey != nil {
+		cacheKey += "\x00insert-generated-key"
+	}
 	if insertIgnore {
 		cacheKey += "\x00insert-ignore"
 	}
@@ -75,7 +79,11 @@ func (d *Data) inserter(ctx context.Context, db *sql.DB, table string, conflict 
 	if err != nil {
 		return nil, err
 	}
-	if strategy := d.owner().sequenceStrategy; strategy != "" {
+	strategy := d.owner().sequenceStrategy
+	if op.generatedKey != nil {
+		strategy = dialect.PresetIDStrategyIgnore
+	}
+	if strategy != "" {
 		options = append(options, strategy)
 	}
 	if conflict != "" {

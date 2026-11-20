@@ -31,6 +31,7 @@ import (
 )
 
 type componentStackKey struct{}
+type associationTransactionKey struct{}
 
 func (r *Runtime) componentProvider(scope dexec.ProviderScope, parent *spec.Component, owners ...*RegisteredComponent) locator.Provider {
 	scope = componentDependencyScope(scope)
@@ -493,7 +494,11 @@ func (r *Runtime) invokeComponent(ctx context.Context, request dexec.ComponentRe
 		}
 	}
 	var resolvedReceipt *resolvedBindingReceipt
-	if bindings != nil && bindings.hasValues() && resolvedInput == nil && request.Input == nil && request.Replay == nil {
+	// Effective MCP discovery may read Auth before membership intent is known.
+	// A delta's execution must evaluate those dependencies in the serializable
+	// writer transaction, even when preflight used identical raw arguments.
+	freshTransactionBindings, _ := ctx.Value(associationTransactionKey{}).(bool)
+	if !freshTransactionBindings && bindings != nil && bindings.hasValues() && resolvedInput == nil && request.Input == nil && request.Replay == nil {
 		var specs []bindly.BindingSpec
 		grouped := false
 		for _, field := range inputRoute.Fields() {
@@ -724,8 +729,37 @@ func enterComponent(ctx context.Context, target dexec.ComponentTarget) (context.
 			return nil, fmt.Errorf("component dependency cycle: %s", strings.Join(identities, " -> "))
 		}
 	}
+	if lookup, ok := ctx.Value(xhandler.AssociationDeltaLookupKey).(xhandler.AssociationDeltaLookup); ok {
+		if len(stack) == 0 {
+			active := xhandler.ComponentTarget{Scope: target.Component.Scope, Name: target.Component.Name, Method: target.Route.Method, Path: target.Route.Path}
+			if edits, ok := lookup.(interface {
+				ActiveAssociationDelta(xhandler.ComponentTarget) bool
+			}); ok && edits.ActiveAssociationDelta(active) {
+				if level, requested := dexec.RequestedTransactionIsolation(ctx); requested && level == dexec.IsolationSerializable {
+					ctx = context.WithValue(ctx, associationTransactionKey{}, true)
+				}
+			}
+			ctx = context.WithValue(ctx, xhandler.AssociationDeltaLookupKey, routeAssociationLookup{active, lookup})
+		} else {
+			// An internal component call owns a different bound input. A repeated
+			// Go row type and field path must never identify its caller's intent.
+			ctx = context.WithValue(ctx, xhandler.AssociationDeltaLookupKey, struct{}{})
+		}
+	}
 	path := append(append([]dexec.ComponentTarget(nil), stack...), target)
 	return context.WithValue(ctx, componentStackKey{}, path), nil
+}
+
+type routeAssociationLookup struct {
+	target xhandler.ComponentTarget
+	source xhandler.AssociationDeltaLookup
+}
+
+func (l routeAssociationLookup) LookupAssociationDelta(target xhandler.ComponentTarget, holder reflect.Type, field, path string) (xhandler.AssociationDelta, bool) {
+	if target != l.target {
+		return nil, false
+	}
+	return l.source.LookupAssociationDelta(target, holder, field, path)
 }
 
 // canonicalCompanionWarmup admits indexed contracts retaining canonical selector authority.

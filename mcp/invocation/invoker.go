@@ -12,6 +12,7 @@ import (
 	"github.com/viant/datly/exec"
 	internallog "github.com/viant/datly/internal/logging"
 	"github.com/viant/datly/mcp/internal/access"
+	"github.com/viant/datly/mcp/internal/association"
 	"github.com/viant/jsonrpc"
 	"github.com/viant/mcp-protocol/authorization"
 	xexec "github.com/viant/xdatly/exec"
@@ -123,6 +124,7 @@ func (i *Invoker) Execute(ctx context.Context, request Request) (*Execution, *js
 			return nil, jsonrpc.NewInvalidParamsError(err.Error(), nil)
 		}
 	}
+	ctx = association.TransactionContext(ctx, request.Target)
 	if header := authorizationHeader(ctx); header != "" {
 		scope = scope.WithHeader("Authorization", header)
 	}

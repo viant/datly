@@ -115,7 +115,7 @@ func TestAfterValidateInputFailedCallbackEvidenceAndRetry(t *testing.T) {
 			}
 			native.metadata.Root.HookType = reflect.TypeFor[preparationFailureHook]()
 			input := &sqPlainInput{Rows: []*sqPlainParent{{ID: ptr(1), Has: &sqPlainParentHas{ID: true}}}, CurrentRows: []*sqPlainParent{{ID: ptr(1), Name: ptr("stored")}}}
-			program, err := native.program(input)
+			program, err := native.program(t.Context(), input)
 			if err != nil {
 				t.Fatal(err)
 			}

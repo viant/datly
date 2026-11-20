@@ -12,6 +12,7 @@ import (
 	requestprovider "github.com/viant/bindly/provider/request"
 	"github.com/viant/datly/exec"
 	mcpinput "github.com/viant/datly/mcp/input"
+	intent "github.com/viant/datly/mcp/internal/association"
 	"github.com/viant/datly/runtime/registry"
 	"github.com/viant/datly/spec"
 	"github.com/viant/mcp-protocol/schema"
@@ -22,25 +23,28 @@ import (
 
 // Argument is an immutable public projection of one canonical input field.
 type Argument struct {
-	nullable         *bool
-	enumeration      *choice.Enum
-	schemaField      *xshape.JSONField
-	representation   *xshape.Representation
-	normalization    *xshape.Representation
-	documentation    *docs.Snapshot
-	publicName       string
-	aliases          []string
-	path             string
-	sourceKind       string
-	sourceName       string
-	sourceType       reflect.Type
-	querySelectorCSV bool
-	acceptScalar     bool
-	acceptText       bool
-	destinationType  reflect.Type
-	wireSchema       *spec.WireSchema
-	wireSchemas      map[string]*spec.WireSchema
-	wireType         reflect.Type
+	nullable          *bool
+	enumeration       *choice.Enum
+	schemaField       *xshape.JSONField
+	representation    *xshape.Representation
+	normalization     *xshape.Representation
+	documentation     *docs.Snapshot
+	associationIndex  []int
+	associationTag    reflect.StructTag
+	defaultPublicName string
+	publicName        string
+	aliases           []string
+	path              string
+	sourceKind        string
+	sourceName        string
+	sourceType        reflect.Type
+	querySelectorCSV  bool
+	acceptScalar      bool
+	acceptText        bool
+	destinationType   reflect.Type
+	wireSchema        *spec.WireSchema
+	wireSchemas       map[string]*spec.WireSchema
+	wireType          reflect.Type
 	// Anonymous JSON fields retain their whole-body owner for XLS decoding.
 	parentBodyType   reflect.Type
 	customJSONBody   bool
@@ -73,15 +77,18 @@ func (a Argument) Example() string     { return a.example }
 
 // Plan is one immutable exact-route MCP tool plan.
 type Plan struct {
-	variants        []PathVariant
-	compilerInput   Input
-	strictArguments bool
-	metadata        schema.Tool
-	target          exec.ComponentTarget
-	input           *registry.RouteInputContract
-	args            []Argument
-	binding         *mcpinput.Plan
-	caseFormat      string
+	primitivePairs           []primitivePair
+	hiddenAssociationMembers []hiddenAssociationMember
+	associations             []associationRule
+	variants                 []PathVariant
+	compilerInput            Input
+	strictArguments          bool
+	metadata                 schema.Tool
+	target                   exec.ComponentTarget
+	input                    *registry.RouteInputContract
+	args                     []Argument
+	binding                  *mcpinput.Plan
+	caseFormat               string
 }
 
 func (p *Plan) Metadata() schema.Tool {
@@ -128,9 +135,45 @@ func (p *Plan) Scope(arguments map[string]interface{}) (*requestprovider.Scope, 
 	return p.scope(context.Background(), arguments)
 }
 func (p *Plan) scope(ctx context.Context, arguments map[string]interface{}) (*requestprovider.Scope, error) {
+	for _, hidden := range p.hiddenAssociationMembers {
+		if _, err := transformAssociationPath(hidden.parents, "", arguments, hidden.reject); err != nil {
+			return nil, err
+		}
+	}
+	var edits intent.Edits
+	if len(p.associations) > 0 {
+		edits = make(intent.Edits)
+	}
+	for _, pair := range p.primitivePairs {
+		updated, err := transformAssociationPath(pair.parents, "", arguments, pair.translate)
+		if err != nil {
+			return nil, err
+		}
+		if updated != nil {
+			arguments = updated.(map[string]any)
+		}
+	}
+	arguments, err := p.translateAssociations(edits, arguments)
+	if err != nil {
+		return nil, err
+	}
+	if len(edits) > 0 && !intent.Available(ctx) {
+		return nil, fmt.Errorf("MCP association edits require an invocation context; use AssociationScope")
+	}
+	scope, err := p.requestScope(ctx, arguments, len(edits) != 0)
+	if err == nil && len(edits) > 0 {
+		intent.Publish(ctx, edits)
+	}
+	return scope, err
+}
+
+func (p *Plan) requestScope(ctx context.Context, arguments map[string]any, haveAssociationEdits bool) (*requestprovider.Scope, error) {
 	normalized, synthetic, err := p.binaryArguments(arguments)
 	if err != nil {
 		return nil, err
+	}
+	if haveAssociationEdits && synthetic["Blob"] != nil {
+		return nil, fmt.Errorf("MCP binary body cannot be combined with association edits")
 	}
 	// Normalize only explicitly named ordinary JSON subtrees before the existing
 	// request/body providers and Bindly decoder. Wire representations stay owned

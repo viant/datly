@@ -59,6 +59,9 @@ func (p *Plan) EffectivePlan(effective *exec.EffectiveContract) (*Plan, error) {
 	if err != nil {
 		return nil, err
 	}
+	// A role can hide a field or an entire association owner. Its native input
+	// names remain private even when the effective contract omits that field.
+	compiled.hiddenAssociationMembers = append(compiled.hiddenAssociationMembers, p.hiddenAssociationMembers...)
 	if effective.InputNormalization != nil {
 		for i := range compiled.args {
 			compiled.args[i].normalization, err = effective.InputNormalization.Lookup(compiled.args[i].path)

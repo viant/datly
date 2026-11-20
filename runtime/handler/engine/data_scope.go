@@ -178,8 +178,9 @@ func (p transactionSQLProvider) Connector(ctx context.Context, name string) (rha
 
 // dmlCapability exposes only buffered writes under the focused DML key.
 type dmlCapability struct {
-	guard   *mutationGuard
-	service xhandler.DML
+	associationAuthority *flushAuthority
+	guard                *mutationGuard
+	service              xhandler.DML
 }
 
 func (c dmlCapability) Merge(table string, rows any, config info.MergeConfig, result *info.MergeResult, options ...moption.Option) error {
@@ -899,7 +900,11 @@ func (s *dataScope) providers(authorities ...*flushAuthority) []locator.Provider
 			if err != nil || data == nil {
 				return nil, false, err
 			}
-			return newQueueAwareDMLCapability(data, s.capabilityGuard()), true, nil
+			var associationAuthority *flushAuthority
+			if len(authorities) > 1 {
+				associationAuthority = authorities[1]
+			}
+			return newQueueAwareDMLCapability(data, s.capabilityGuard(), associationAuthority), true, nil
 		}),
 		handlerprovider.New(xhandler.SequencerKey, func(ctx context.Context) (any, bool, error) {
 			data, err := s.resolve(ctx)

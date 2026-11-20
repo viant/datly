@@ -4,6 +4,7 @@ import (
 	"context"
 	requestprovider "github.com/viant/bindly/provider/request"
 	"github.com/viant/datly/exec"
+	intent "github.com/viant/datly/mcp/internal/association"
 
 	"github.com/viant/datly/mcp/invocation"
 	"github.com/viant/jsonrpc"
@@ -53,6 +54,7 @@ func (h *Handler) Handle(ctx context.Context, request *schema.CallToolRequest) (
 	if selectErr != nil {
 		return nil, jsonrpc.NewInvalidParamsError(selectErr.Error(), nil)
 	}
+	ctx = intent.New(ctx, selected.Target())
 	var scope *requestprovider.Scope
 	defer func() {
 		if scope != nil {

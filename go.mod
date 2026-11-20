@@ -24,7 +24,7 @@ require (
 	github.com/viant/tagly v0.4.2-0.20261120031257-b562b1198c35
 	github.com/viant/velty v0.4.1-0.20260915052314-fca47c0595f8
 	github.com/viant/x v0.6.1-0.20261106041415-0487ec66884b
-	github.com/viant/xdatly v1.0.1-0.20261119180022-ca086e831377
+	github.com/viant/xdatly v1.0.1-0.20261120212912-e82b9d2b3724
 	github.com/viant/xreflect v0.7.5-0.20260314170600-13f09f37d46e
 	github.com/viant/xunsafe v0.11.1
 	github.com/xeipuuv/gojsonschema v1.2.0

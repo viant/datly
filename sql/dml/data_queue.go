@@ -35,6 +35,7 @@ type dataOperation struct {
 	data                 any
 	dml                  string
 	args                 []any
+	generatedKey         any
 	lastInsertID         any
 	optionalLastInsertID bool
 	batchSize            int

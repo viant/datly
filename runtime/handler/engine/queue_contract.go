@@ -18,8 +18,11 @@ type queueContractDMLCapability struct {
 	queue queueValidatedDML
 }
 
-func newQueueAwareDMLCapability(service xhandler.DML, guard *mutationGuard) xhandler.DML {
+func newQueueAwareDMLCapability(service xhandler.DML, guard *mutationGuard, association ...*flushAuthority) xhandler.DML {
 	base := dmlCapability{service: service, guard: guard}
+	if len(association) > 0 {
+		base.associationAuthority = association[0]
+	}
 	if queue, ok := service.(queueValidatedDML); ok {
 		return queueContractDMLCapability{dmlCapability: base, queue: queue}
 	}

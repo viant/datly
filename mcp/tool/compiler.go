@@ -137,6 +137,15 @@ func (c *Compiler) Compile(input Input) (*Plan, error) {
 				return nil, fmt.Errorf("compile MCP tool %q: %w", name, err)
 			}
 			for _, argument := range flattened {
+				argument.associationIndex = append(append([]int(nil), structField.Index...), argument.schemaField.Field.Index...)
+				argument.associationTag = argument.schemaField.Field.Tag
+				if len(input.Exposure.PrimitivePairs) > 0 {
+					n, err := memberNameVisibility("lc").Resolve(argument.schemaField.Field.StructField(), argument.sourceName)
+					if err != nil {
+						return nil, err
+					}
+					argument.defaultPublicName = n.Public
+				}
 				if err := registerPublicArgument(publicNames, argument); err != nil {
 					return nil, fmt.Errorf("compile MCP tool %q: %w", name, err)
 				}
@@ -145,11 +154,20 @@ func (c *Compiler) Compile(input Input) (*Plan, error) {
 			continue
 		}
 		argument, include, err := compileField(inputField, structField)
+		argument.associationIndex = structField.Index
+		argument.associationTag = structField.Tag
 		if err != nil {
 			return nil, fmt.Errorf("compile MCP tool %q: %w", name, err)
 		}
 		if !include {
 			continue
+		}
+		if len(input.Exposure.PrimitivePairs) > 0 {
+			defaultName, err := memberNameVisibility("lc").Resolve(structField, argument.publicName)
+			if err != nil {
+				return nil, err
+			}
+			argument.defaultPublicName = defaultName.Public
 		}
 		if input.CaseFormat != "" {
 			public, err := memberNameVisibility(input.CaseFormat).Resolve(structField, argument.publicName)
@@ -287,6 +305,15 @@ func (c *Compiler) Compile(input Input) (*Plan, error) {
 		}
 	}
 	projectBinarySchema(arguments, &inputSchema, input.CaseFormat)
+	var hidden []hiddenAssociationMember
+	associations, err := compileAssociations(&hidden, input.Contract.Type(), arguments, &inputSchema, input.CaseFormat)
+	if err != nil {
+		return nil, fmt.Errorf("compile MCP tool %q associations: %w", name, err)
+	}
+	pairs, err := compilePrimitivePairs(&hidden, input.Exposure.PrimitivePairs, arguments, &inputSchema, input.CaseFormat)
+	if err != nil {
+		return nil, fmt.Errorf("compile MCP tool %q primitive pairs: %w", name, err)
+	}
 	bindingCompiler := c.binding
 	if strictArguments != c.strictArguments {
 		bindingCompiler = mcpinput.NewCompiler(mcpinput.WithStrictArguments(strictArguments))
@@ -333,7 +360,7 @@ func (c *Compiler) Compile(input Input) (*Plan, error) {
 		return nil, fmt.Errorf("compile MCP tool %q output schema: %w", name, outputErr)
 	}
 	return &Plan{
-		compilerInput: input, strictArguments: strictArguments,
+		compilerInput: input, strictArguments: strictArguments, associations: associations, primitivePairs: pairs, hiddenAssociationMembers: hidden,
 		metadata: schema.Tool{Meta: metadata, Name: name, Description: &description, InputSchema: inputSchema, OutputSchema: outputSchema},
 		target:   exec.ComponentTarget{Component: input.Component, Route: input.Contract.Route()},
 		input:    input.Contract, args: arguments, binding: binding, caseFormat: input.CaseFormat,

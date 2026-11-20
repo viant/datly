@@ -14,6 +14,7 @@ func parseComponentSettings(blocks []directiveBlock) (ret *componentSettings, er
 	defer func() { err = wrapDirectiveError(err, active) }()
 	ret = &componentSettings{}
 	constantNames := map[string]string{}
+	var primitivePairs []spec.MCPPrimitivePair
 	var internalDeclared bool
 	var cacheDeclared bool
 	for _, block := range blocks {
@@ -331,6 +332,17 @@ func parseComponentSettings(blocks []directiveBlock) (ret *componentSettings, er
 				return nil, fmt.Errorf("route_name requires a nonempty name")
 			}
 			ret.routeNames = append(ret.routeNames, routeNameSetting{ref: ref, name: value, span: SourceSpan{Start: block.start, End: block.end}})
+		case strings.EqualFold(name, "mcp_primitive_pair"):
+			if len(args) != 3 || tail != "" {
+				return nil, fmt.Errorf("mcp_primitive_pair requires a public path, add field and remove field")
+			}
+			path, p := parseQuotedLiteral(args[0])
+			add, a := parseQuotedLiteral(args[1])
+			remove, r := parseQuotedLiteral(args[2])
+			if !p || !a || !r || path == "" || add == "" || remove == "" || add == remove {
+				return nil, fmt.Errorf("invalid mcp_primitive_pair declaration")
+			}
+			primitivePairs = append(primitivePairs, spec.MCPPrimitivePair{Path: path, Add: add, Remove: remove})
 		case strings.EqualFold(name, "mcp_route"):
 			if len(args) < 2 || len(args) > 6 || tail != "" {
 				return nil, fmt.Errorf("mcp_route requires METHOD:/path, name, optional description, description path, case format and strict arguments")
@@ -627,6 +639,12 @@ func parseComponentSettings(blocks []directiveBlock) (ret *componentSettings, er
 	if ret != nil && ret.MCPOnly && ret.MCP == nil && len(ret.routeMCP) == 0 {
 		return nil, fmt.Errorf("mcpOnly requires an explicit mcp tool")
 	}
+	if len(primitivePairs) > 0 {
+		if ret.MCP == nil {
+			return nil, fmt.Errorf("mcp_primitive_pair requires a component mcp exposure")
+		}
+		ret.MCP.PrimitivePairs = primitivePairs
+	}
 	if ret.Internal && (ret.MCP != nil || len(ret.routeMCP) > 0 || ret.MCPOnly) {
 		return nil, fmt.Errorf("internal(true) cannot expose MCP; use mcpOnly(true) for an MCP-only route")
 	}
@@ -665,5 +683,6 @@ func parseComponentSettings(blocks []directiveBlock) (ret *componentSettings, er
 			return nil, fmt.Errorf("invalid cache warmup configuration: %w", err)
 		}
 	}
+
 	return ret, nil
 }
