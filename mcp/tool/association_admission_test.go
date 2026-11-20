@@ -11,6 +11,7 @@ import (
 	"github.com/viant/datly/exec"
 	"github.com/viant/datly/mcp/invocation"
 	"github.com/viant/datly/spec"
+	"github.com/viant/jsonrpc"
 	"github.com/viant/mcp-protocol/schema"
 )
 
@@ -25,7 +26,7 @@ func TestAssociationDeltaOnlyHandlerAdmission(t *testing.T) {
 	}
 	type input struct{ Body *row }
 	contract := testRouteContract(t, reflect.TypeFor[input](), []bindly.BindingSpec{{Path: "Body", Location: state.Location{Kind: "body"}}})
-	plan, err := NewCompiler().Compile(Input{Contract: contract, Exposure: &spec.MCPExposure{Name: "updates", Kind: spec.MCPExposureTool, PrimitivePairs: []spec.MCPPrimitivePair{{Path: "body", Add: "ids", Remove: "remove"}}}})
+	plan, err := NewCompiler().Compile(Input{Component: spec.Key{Kind: spec.KindComponent, Scope: "test", Name: "deltaOnly"}, Contract: contract, Exposure: &spec.MCPExposure{Name: "updates", Kind: spec.MCPExposureTool, PrimitivePairs: []spec.MCPPrimitivePair{{Path: "body", Add: "ids", Remove: "remove"}}}})
 	require.NoError(t, err)
 	props := schemaObjectNode(plan.Metadata().InputSchema.Properties["body"])["properties"].(map[string]any)
 	for _, companion := range []string{"memberIdsToBeAdded", "memberIdsToBeDeleted", "idsToBeAdded", "idsToBeDeleted", "other"} {
@@ -36,20 +37,29 @@ func TestAssociationDeltaOnlyHandlerAdmission(t *testing.T) {
 		called++
 		return map[string]any{"ok": true}, nil
 	})}))
-	call := func(args map[string]any) bool {
+	call := func(args map[string]any) *jsonrpc.Error {
 		req := &schema.CallToolRequest{}
 		req.Params.Name = plan.Metadata().Name
 		req.Params.Arguments = map[string]any{"body": args}
 		_, rpcErr := service.Handle(t.Context(), req)
-		return rpcErr == nil
+		return rpcErr
 	}
 	for _, hidden := range []string{"objects", "priorObjects", "links", "Links", "legacyLinks", "LEGACYLINKS", "ids", "Ids", "OLDIDS", "remove", "Remove", "oldRemove", "removeIds"} {
-		require.NotContains(t, props, hidden)
-		require.False(t, call(map[string]any{hidden: []any{}}), hidden)
-		require.False(t, call(map[string]any{hidden: nil, "idsToBeAdded": []any{2}}), hidden)
+		t.Run("discovery/"+hidden, func(t *testing.T) {
+			require.NotContains(t, props, hidden)
+		})
+		t.Run("admission/"+hidden, func(t *testing.T) {
+			for _, args := range []map[string]any{{hidden: []any{}}, {hidden: nil, "idsToBeAdded": []any{2}}} {
+				rpcErr := call(args)
+				require.NotNil(t, rpcErr)
+				require.EqualValues(t, -32602, rpcErr.Code)
+				require.Contains(t, rpcErr.Message, hidden)
+				require.Contains(t, rpcErr.Message, "is not public")
+			}
+		})
 	}
 	require.Zero(t, called)
-	require.True(t, call(map[string]any{"memberIdsToBeDeleted": []any{2}, "idsToBeAdded": []any{1}, "other": []any{3}}))
+	require.Nil(t, call(map[string]any{"memberIdsToBeDeleted": []any{2}, "idsToBeAdded": []any{1}, "other": []any{3}}))
 	require.Equal(t, 1, called)
 }
 

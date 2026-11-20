@@ -155,10 +155,6 @@ func (r primitivePair) translate(_ string, obj map[string]any) (map[string]any, 
 			continue
 		}
 		list := reflect.ValueOf(value)
-		// Existing fields retain their nullable policy in the native binder.
-		if !haveAlias && list.Kind() == reflect.Slice && list.IsNil() {
-			continue
-		}
 		if !list.IsValid() || (list.Kind() != reflect.Slice && list.Kind() != reflect.Array) || (list.Kind() == reflect.Slice && list.IsNil()) {
 			return nil, fmt.Errorf("%s must be an ID array", r.dest[i].names[0])
 		}
