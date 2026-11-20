@@ -469,7 +469,9 @@ func (s *packageSet) validateProjections(staged bool) error {
 		if build == nil {
 			continue
 		}
-		if len(s.plans) > 1 && plan.ExternalHandler == nil {
+		// A generated factory imports its freshly emitted child packages during
+		// both preview and staged compilation.
+		if len(s.plans) > 1 && (plan.ExternalHandler == nil || plan.ExternalHandler.GeneratedContracts && len(plan.ShapePackages) != 0) {
 			if project == nil {
 				var err error
 				project, err = s.packageBuildFiles(staged)

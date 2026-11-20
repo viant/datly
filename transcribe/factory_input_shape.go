@@ -289,7 +289,15 @@ func (c *Compiler) compileFactoryInputShape(ctx context.Context, source *Source,
 	// Resolve generated names and inherited destinations through the same planner
 	// used for publication, including children without an explicit type/dest.
 	factoryName := strings.TrimPrefix(runtime.Routes[0].Handler, prepared.TypeContext.PackagePath+".")
-	plan, err := gen.New(gen.Input{Component: runtime, Declarations: declarations, Views: linkedViews, ViewBindings: bindings, TypeResolver: resolver, Resources: source.Resources, TargetPackage: prepared.TypeContext.PackagePath, ExternalHandler: &gen.ExternalHandler{Package: prepared.TypeContext.PackagePath, Name: factoryName, GeneratedContracts: true, InputShape: shapeComponent.RootView, CompositionViews: ownership.compositionViews}}).Plan()
+	plan, err := gen.New(gen.Input{
+		Component: runtime, Declarations: declarations, Views: linkedViews, ViewBindings: bindings,
+		TypeResolver: resolver, Resources: source.Resources, TargetPackage: prepared.TypeContext.PackagePath,
+		ProjectRoot: ownership.build.Dir,
+		ExternalHandler: &gen.ExternalHandler{
+			Package: prepared.TypeContext.PackagePath, Name: factoryName, GeneratedContracts: true,
+			InputShape: shapeComponent.RootView, CompositionViews: ownership.compositionViews,
+		},
+	}).Plan()
 	if err != nil {
 		return nil, err
 	}
