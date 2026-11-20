@@ -5,8 +5,10 @@ import (
 	bindstate "github.com/viant/bindly/state"
 	"github.com/viant/datly/runtime/registry"
 	"github.com/viant/datly/spec"
+	"github.com/viant/tagly/choice"
 	"github.com/xeipuuv/gojsonschema"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -152,4 +154,33 @@ func TestScalarAliasNestedRequiredMetadata(t *testing.T) {
 	if result.Valid() {
 		t.Fatal("native alias projection restored null after required metadata removed it")
 	}
+}
+
+func TestGoJayNumberMCPInputSchema(t *testing.T) {
+	type request struct {
+		Mode string `choice:"0:ASAP" choice:"1:SPEND_EVENLY" enumAccept:"scalar" enumStyle:"literal" enumNumber:"gojayInt"`
+	}
+	field := reflect.TypeFor[request]().Field(0)
+	enum, err := choice.ParseEnum(field.Tag, field.Type)
+	if err != nil {
+		t.Fatal(err)
+	}
+	schema := wireSchemaMap(registry.EnumInputSchema(enum, false).Clone())
+	result, err := gojsonschema.Validate(gojsonschema.NewGoLoader(schema), gojsonschema.NewStringLoader("1.5"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !result.Valid() {
+		t.Fatalf("fractional pacing input rejected by tool schema: %v", result.Errors())
+	}
+	for _, raw := range schema["anyOf"].([]interface{}) {
+		branch := raw.(map[string]interface{})
+		if branch["type"] == "number" {
+			description, _ := branch["description"].(string)
+			if strings.Contains(description, "0") && strings.Contains(description, "1") {
+				return
+			}
+		}
+	}
+	t.Fatal("missing documented numeric input branch")
 }

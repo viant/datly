@@ -123,7 +123,9 @@ func (b *schemaBuilder) fieldEnum(schema *openapi3.Schema, field reflect.StructF
 				copy.Enum = nil
 				copy.AnyOf = nil
 				copy.Nullable = false
-				if domain.OpenIntegers {
+				if domain.NumberDescription != "" {
+					copy.AnyOf = append(copy.AnyOf, &openapi3.Schema{Type: "number", Description: domain.NumberDescription})
+				} else if domain.OpenIntegers {
 					copy.AnyOf = append(copy.AnyOf, &openapi3.Schema{Type: "integer", Min: registry.ExactSchemaIntegerBound(domain.Minimum), Max: registry.ExactSchemaIntegerBound(domain.Maximum)})
 				} else if len(domain.Integers) > 0 {
 					values := make([]any, len(domain.Integers))

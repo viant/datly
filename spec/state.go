@@ -56,6 +56,7 @@ type Codec struct {
 // WireSchema is discovery-only metadata for a public wire contract. Runtime
 // binding continues to use the compiled source and destination types.
 type WireSchema struct {
+	Description string `json:"description,omitempty"`
 	// Wrapper is compiled JSON input-policy metadata, not an authored wire
 	// schema keyword. Its object alternative contains the reflected array.
 	Wrapper   string        `json:"-"`

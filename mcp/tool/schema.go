@@ -267,6 +267,9 @@ func wireSchemaMap(schema *spec.WireSchema) map[string]interface{} {
 		result["anyOf"] = alternatives
 		return result
 	}
+	if schema.Description != "" {
+		result["description"] = schema.Description
+	}
 	if schema.Minimum != nil {
 		result["minimum"] = *schema.Minimum
 	}

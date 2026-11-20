@@ -19,7 +19,9 @@ func EnumInputSchema(enumeration *choice.Enum, nullable bool) *spec.WireSchema {
 	}
 	result.Type, result.Enum = "", nil
 	result.Nullable = (nullable || domain.Nullable) && enumeration.AllowsNullInput()
-	if domain.OpenIntegers {
+	if domain.NumberDescription != "" {
+		result.AnyOf = append(result.AnyOf, &spec.WireSchema{Type: "number", Description: domain.NumberDescription})
+	} else if domain.OpenIntegers {
 		result.AnyOf = append(result.AnyOf, &spec.WireSchema{Type: "integer", Minimum: ExactSchemaIntegerBound(domain.Minimum), Maximum: ExactSchemaIntegerBound(domain.Maximum)})
 	} else if len(domain.Integers) > 0 {
 		values := make([]any, len(domain.Integers))
