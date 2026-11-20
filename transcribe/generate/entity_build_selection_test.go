@@ -452,17 +452,6 @@ func TestEntityAccessorBuildSelectionPresenceConsumer(t *testing.T) {
 	}
 }
 
-func TestEntityAccessorBuildSelectionSplitBoundary(t *testing.T) {
-	p := &Plan{accessorBuild: &gobuild.Context{}, accessorSourceValidationNeeded: true}
-	s := &packageSet{plans: []*Plan{p, {}}}
-	if err := s.validateAccessorDestinations(p); err == nil || !strings.Contains(err.Error(), "source selection requires a single generated destination") {
-		t.Fatalf("source selection boundary=%v", err)
-	}
-	if p.accessorValidationNeeded {
-		t.Fatal("source selection was mislabeled as a convenience claim")
-	}
-}
-
 func TestEntityAccessorBuildSelectionOrdinarySplitGeneration(t *testing.T) {
 	root := t.TempDir()
 	const pkg = "example.com/split"
@@ -506,12 +495,12 @@ func TestEntityAccessorBuildSelectionOrdinarySplitGeneration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = EmitScaffold(target, parent); err == nil || !strings.Contains(err.Error(), "source selection requires a single generated destination") {
-		t.Fatalf("excluded authored candidate lost final safety gate: %v", err)
+	if _, err = EmitScaffold(target, parent); err != nil {
+		t.Fatalf("split writer with build-excluded setter: %v", err)
 	}
 	after, err := readScaffoldSnapshot(root)
 	if err != nil || !reflect.DeepEqual(before, after) {
-		t.Fatalf("rejected authored split changed files: %v", err)
+		t.Fatalf("excluded setter changed generated artifacts: %v", err)
 	}
 }
 

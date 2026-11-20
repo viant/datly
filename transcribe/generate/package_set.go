@@ -2,6 +2,7 @@ package generate
 
 import (
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"sort"
@@ -110,9 +111,6 @@ func (s *packageSet) validate() error {
 		if err != nil {
 			return err
 		}
-		if err = s.validateAccessorDestinations(p); err != nil {
-			return err
-		}
 		s.previews[i] = preview
 		s.files[i] = preview.files
 		s.removals[i] = preview.renames
@@ -123,31 +121,19 @@ func (s *packageSet) validate() error {
 				return err
 			}
 		}
-		if p.stagedBuild() != nil {
-			if err = s.validateSourceHandler(i); err != nil {
-				return err
-			}
-		} else if p.ProjectRoot != "" {
-			if err = s.validatePackage(i); err != nil {
-				return err
-			}
-		}
 	}
-	if len(s.plans) == 1 && s.plans[0].stagedBuild() != nil {
-		return nil // Go's build-selected graph, not an unfiltered AST graph, is authoritative.
-	}
-	return s.validateImports()
+	return s.validateProjections(false)
 }
 
-func (s *packageSet) validateSourceHandler(index int) error {
+func (s *packageSet) previewBuildFiles(index int) (map[string][]byte, error) {
 	sources, err := s.sources(index)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	files := map[string][]byte{}
 	entries, err := os.ReadDir(s.dirs[index])
 	if err != nil && !os.IsNotExist(err) {
-		return err
+		return nil, err
 	}
 	for _, entry := range entries {
 		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".go") && !strings.HasSuffix(entry.Name(), "_test.go") {
@@ -162,13 +148,16 @@ func (s *packageSet) validateSourceHandler(index int) error {
 	for _, file := range s.files[index] {
 		rel, err := filepath.Rel(s.dirs[index], file.Path)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) && !strings.HasSuffix(file.Path, ".go") {
 			files[file.Path] = []byte(file.Content)
 		}
 	}
-	return s.plans[index].stagedBuild().Validate(s.plans[index].Package, files)
+	for name := range s.removals[index] {
+		files[filepath.Join(s.dirs[index], name)] = nil
+	}
+	return files, nil
 }
 
 func (s *packageSet) sources(index int) (map[string]string, error) {
@@ -467,39 +456,94 @@ func (p Packages) Validate() error {
 }
 
 func (s *packageSet) validateProjected() error {
-	for i, p := range s.plans {
-		if err := s.validateAccessorDestinations(p); err != nil {
-			return err
+	return s.validateProjections(true)
+}
+
+// Validate after every preview or stage has been prepared. Native accessors
+// may reference a type that another package is creating or removing.
+func (s *packageSet) validateProjections(staged bool) error {
+	var project map[string]map[string][]byte
+	compiledSet := false
+	for i, plan := range s.plans {
+		build := plan.stagedBuild()
+		if build == nil {
+			continue
 		}
-		if p.stagedBuild() != nil {
-			persistence := s.templates[i].detached()
-			target, err := persistence.target()
+		if len(s.plans) > 1 && plan.ExternalHandler == nil {
+			if project == nil {
+				var err error
+				project, err = s.packageBuildFiles(staged)
+				if err != nil {
+					return err
+				}
+			}
+			selected, err := build.ValidatePackages(project)
 			if err != nil {
 				return err
 			}
-			if err = persistence.validateHandlerStage(target, s.readRoots[i]); err != nil {
-				return err
+			if staged {
+				plan.handlerGoFiles = selected[plan.Package]
 			}
-		} else if p.ProjectRoot != "" {
+			compiledSet = true
+			continue
+		}
+		files, err := s.buildFiles(i, staged)
+		if err != nil {
+			return err
+		}
+		selected, err := build.ValidateFiles(plan.Package, files)
+		if err != nil {
+			return err
+		}
+		if staged {
+			plan.handlerGoFiles = selected
+		}
+	}
+	if compiledSet || len(s.plans) == 1 && s.plans[0].stagedBuild() != nil {
+		return nil // Go validated the build-selected graph, including its imports.
+	}
+	for i, plan := range s.plans {
+		if plan.stagedBuild() == nil && plan.ProjectRoot != "" {
 			if err := s.validatePackage(i); err != nil {
 				return err
 			}
 		}
 	}
-	if len(s.plans) == 1 && s.plans[0].stagedBuild() != nil {
-		return nil
-	}
 	return s.validateImports()
 }
 
-// Stage preparation can discover a new authored accessor after preflight.
-// Both boundaries must reject validation against old sibling-package artifacts.
-func (s *packageSet) validateAccessorDestinations(p *Plan) error {
-	if (p.accessorValidationNeeded || p.accessorSourceValidationNeeded) && p.accessorBuild != nil && p.ExternalHandler == nil && len(s.plans) > 1 {
-		if p.accessorValidationNeeded {
-			return fmt.Errorf("native authored convenience accessors require a single generated destination package")
-		}
-		return fmt.Errorf("native accessor source selection requires a single generated destination package")
+func (s *packageSet) buildFiles(index int, staged bool) (map[string][]byte, error) {
+	if !staged {
+		return s.previewBuildFiles(index)
 	}
-	return nil
+	target, err := s.templates[index].target()
+	if err != nil {
+		return nil, err
+	}
+	return scaffoldBuildFiles(target, s.readRoots[index])
+}
+
+func (s *packageSet) packageBuildFiles(staged bool) (map[string]map[string][]byte, error) {
+	project := make(map[string]map[string][]byte)
+	for i, plan := range s.plans {
+		files, err := s.buildFiles(i, staged)
+		if err != nil {
+			return nil, err
+		}
+		if project[plan.Package] == nil {
+			project[plan.Package] = files
+		} else {
+			maps.Copy(project[plan.Package], files)
+		}
+	}
+	if !staged {
+		// Multiple component previews can share a directory. Apply all retirements
+		// after merging so another preview cannot reintroduce an old disk file.
+		for i, removals := range s.removals {
+			for name := range removals {
+				project[s.plans[i].Package][filepath.Join(s.dirs[i], name)] = nil
+			}
+		}
+	}
+	return project, nil
 }
