@@ -2,6 +2,7 @@
 package tool
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -9,6 +10,7 @@ import (
 	"github.com/viant/datly/runtime/output"
 	"reflect"
 
+	bindinput "github.com/viant/bindly/input"
 	requestprovider "github.com/viant/bindly/provider/request"
 	"github.com/viant/datly/exec"
 	mcpinput "github.com/viant/datly/mcp/input"
@@ -167,6 +169,33 @@ func (p *Plan) scope(ctx context.Context, arguments map[string]interface{}) (*re
 	return scope, err
 }
 
+// checkQueryArrayBounds validates the supplied JSON array before query encoding
+// flattens it. Other admitted representations retain their native conversion.
+func (a Argument) checkQueryArrayBounds(value any) error {
+	raw, err := json.Marshal(value)
+	if err != nil {
+		return err
+	}
+	bounds := a.wireSchema
+	if bytes.Equal(raw, []byte("null")) && bounds.Type == "array" && !bounds.Nullable {
+		return &bindinput.Error{Cause: fmt.Errorf("MCP argument %q cannot be null", a.publicName)}
+	}
+	if raw[0] != '[' {
+		return nil
+	}
+	var items []json.RawMessage
+	if err := json.Unmarshal(raw, &items); err != nil {
+		return err
+	}
+	if len(items) < bounds.MinItems {
+		return &bindinput.Error{Cause: fmt.Errorf("MCP argument %q requires at least %d items, got %d", a.publicName, bounds.MinItems, len(items))}
+	}
+	if bounds.MaxItems > 0 && len(items) > bounds.MaxItems {
+		return &bindinput.Error{Cause: fmt.Errorf("MCP argument %q allows at most %d items, got %d", a.publicName, bounds.MaxItems, len(items))}
+	}
+	return nil
+}
+
 func (p *Plan) requestScope(ctx context.Context, arguments map[string]any, haveAssociationEdits bool) (*requestprovider.Scope, error) {
 	normalized, synthetic, err := p.binaryArguments(arguments)
 	if err != nil {
@@ -179,6 +208,13 @@ func (p *Plan) requestScope(ctx context.Context, arguments map[string]any, haveA
 	// request/body providers and Bindly decoder. Wire representations stay owned
 	// by their declared authority; unannotated arguments retain their exact path.
 	for _, argument := range p.args {
+		if bounds := argument.wireSchema; p.strictArguments && argument.sourceKind == "query" && bounds != nil && (bounds.MinItems > 0 || bounds.MaxItems > 0) {
+			if value, supplied := normalized[argument.publicName]; supplied {
+				if err := argument.checkQueryArrayBounds(value); err != nil {
+					return nil, fmt.Errorf("invalid MCP argument %q: %w", argument.publicName, err)
+				}
+			}
+		}
 		if argument.enumeration != nil {
 			if value, present := normalized[argument.publicName]; present {
 				raw, err := json.Marshal(value)

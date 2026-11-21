@@ -1,6 +1,7 @@
 package tool
 
 import (
+	"context"
 	"encoding/json"
 	"reflect"
 	"testing"
@@ -8,7 +9,10 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/viant/bindly"
 	bindstate "github.com/viant/bindly/state"
+	"github.com/viant/datly/exec"
+	"github.com/viant/datly/mcp/invocation"
 	"github.com/viant/datly/spec"
+	"github.com/viant/mcp-protocol/schema"
 	"github.com/xeipuuv/gojsonschema"
 )
 
@@ -98,4 +102,54 @@ func TestCollectionBoundsCompiledToolSchema(t *testing.T) {
 	require.True(t, nullableResult.Valid(), "%s: %v", nullableRaw, nullableResult.Errors())
 	prop := schema.Properties["pmp_deals"]
 	require.NotNil(t, prop["items"])
+}
+
+func TestStrictSuppliedQueryArrayBounds(t *testing.T) {
+	type input struct {
+		Names []string `parameter:"Names,kind=query,in=names" mcp:"name=names,aliases=legacyNames"`
+	}
+	for _, strict := range []bool{true, false} {
+		for _, nullable := range []bool{true, false} {
+			bounds := &spec.WireSchema{Type: "array", MinItems: 1, MaxItems: 50, Nullable: nullable}
+			binding := bindly.BindingSpec{Path: "Names", Name: "Names", Location: bindstate.Location{Kind: "query", In: "names"}, Extension: &spec.Parameter{WireSchema: bounds}}
+			contract := testRouteContract(t, reflect.TypeFor[input](), []bindly.BindingSpec{binding})
+			plan, err := NewCompiler().Compile(Input{Component: spec.Key{Kind: spec.KindComponent, Name: "Names"}, Contract: contract, Exposure: &spec.MCPExposure{Kind: spec.MCPExposureTool, Name: "names", StrictArguments: &strict}})
+			require.NoError(t, err)
+			name := plan.args[0].publicName
+			for _, tc := range []struct {
+				label  string
+				args   map[string]any
+				reject bool
+			}{
+				{"omitted", nil, false},
+				{"null", map[string]any{name: nil}, !nullable},
+				{"encoded null", map[string]any{name: json.RawMessage("null")}, !nullable},
+				{"empty", map[string]any{name: []string{}}, true},
+				{"empty alias", map[string]any{"legacyNames": []any{}}, true},
+				{"scalar", map[string]any{name: "a,b"}, false},
+				{"one", map[string]any{name: []any{"a,b"}}, false},
+				{"fifty", map[string]any{name: make([]string, 50)}, false},
+				{"fifty-one", map[string]any{name: make([]string, 51)}, true},
+			} {
+				calls := 0
+				handler := NewHandler(plan, invocation.New(invocation.Config{Invoker: binaryComponentFunc(func(context.Context, exec.ComponentRequest) (any, error) {
+					calls++
+					return nil, nil
+				})}))
+				req := &schema.CallToolRequest{}
+				req.Params.Name = plan.Metadata().Name
+				req.Params.Arguments = tc.args
+				_, rpc := handler.Handle(t.Context(), req)
+				if strict && tc.reject {
+					require.NotNil(t, rpc, tc.label)
+					require.EqualValues(t, -32602, rpc.Code, tc.label)
+					require.Contains(t, rpc.Message, name)
+					require.Zero(t, calls, tc.label)
+				} else {
+					require.Nil(t, rpc, tc.label)
+					require.Equal(t, 1, calls, tc.label)
+				}
+			}
+		}
+	}
 }
