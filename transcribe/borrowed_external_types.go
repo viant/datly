@@ -2,6 +2,7 @@ package transcribe
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"sort"
@@ -20,8 +21,11 @@ func loadBorrowedExternalTypes(ctx context.Context, source *Source, local *xmodu
 		return nil
 	}
 	var patterns []string
-	for path := range imports {
+	for path, required := range imports {
 		location, err := local.Package(path)
+		if !required && errors.Is(err, os.ErrNotExist) {
+			continue
+		}
 		if err != nil {
 			return err
 		}
@@ -77,10 +81,21 @@ func addBorrowedExternalSourceImports(text string, imports map[string]bool) erro
 	if err := prepared.Err(); err != nil {
 		return err
 	}
-	if prepared.TypeContext != nil {
-		for _, imp := range prepared.TypeContext.Imports {
-			imports[imp.Package] = true
-		}
-	}
+	collectBorrowedImports(prepared, imports)
 	return nil
+}
+
+// A local index destination may first be created by generation. If another
+// source imports the same path as a dependency, its package must already exist.
+func collectBorrowedImports(prepared *dql.PreparedSource, imports map[string]bool) {
+	if prepared.TypeContext == nil {
+		return
+	}
+	var indexAlias string
+	if directives := prepared.Directives; directives != nil && directives.Settings != nil && directives.Settings.Generation != nil {
+		indexAlias = directives.Settings.Generation.IndexesPackage
+	}
+	for _, imp := range prepared.TypeContext.Imports {
+		imports[imp.Package] = imports[imp.Package] || indexAlias == "" || imp.Alias != indexAlias
+	}
 }

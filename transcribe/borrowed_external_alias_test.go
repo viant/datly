@@ -12,6 +12,7 @@ import (
 	"github.com/viant/datly/transcribe/gobuild"
 	"github.com/viant/datly/transcribe/internal/dependency"
 	"github.com/viant/datly/typecatalog"
+	xmodule "github.com/viant/x/module"
 )
 
 // A downloaded module intentionally has no local replacement. Reflection cannot
@@ -55,6 +56,8 @@ func TestBorrowedFreshExternalSourceAlias(t *testing.T) {
 	out, err := command.CombinedOutput()
 	require.NoError(t, err, string(out))
 	text := "#package('example.com/borrower')\n#import('foreign','" + module + "')\n#define($_ = $Config<*foreign.Output>(param/Config))\n"
+	// The index package is an output and does not exist on the first transcription.
+	text += "#import('idx','example.com/borrower/index')\n#setting($_ = $indexes_package('idx'))\n"
 	s := &Source{Scope: "example.com/borrower", Path: filepath.Join(root, "probe.dql"), Text: text, GoBuild: &gobuild.Context{Dir: root, Env: environment, Tags: "borrowed_alias"}}
 	require.NoError(t, os.WriteFile(s.Path, []byte(text), 0600))
 	s.Text = text + "#setting($_ = $route('/probe','GET'))\nSELECT 1 AS id"
@@ -93,4 +96,27 @@ func TestBorrowedFreshExternalSourceAlias(t *testing.T) {
 	_, found, err = catalog.Resolve(typecatalog.TranscribeAuthority, module+".Output")
 	require.NoError(t, err)
 	require.False(t, found, "build-excluded alias must not enter source authority")
+}
+
+func TestBorrowedIndexDestinationAlsoImportedByBatchMember(t *testing.T) {
+	const packagePath = "example.com/app/index"
+	destination := "#import('idx','" + packagePath + "')\n#setting($_ = $indexes_package('idx'))"
+	dependency := "#import('custom','" + packagePath + "')"
+	root := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/app\n\ngo 1.25\n"), 0600))
+	workspace, err := (xmodule.LocalWorkspace{BaseDir: root}).Resolve(t.Context())
+	require.NoError(t, err)
+	source := &Source{GoBuild: &gobuild.Context{Dir: root}}
+	for _, batch := range [][]string{{destination}, {destination, dependency}, {dependency, destination}} {
+		imports := map[string]bool{}
+		for _, source := range batch {
+			require.NoError(t, addBorrowedExternalSourceImports(source, imports))
+		}
+		err := loadBorrowedExternalTypes(t.Context(), source, workspace, typecatalog.NewCatalog(), imports)
+		if len(batch) == 1 {
+			require.NoError(t, err)
+		} else {
+			require.ErrorIs(t, err, os.ErrNotExist)
+		}
+	}
 }

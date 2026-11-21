@@ -976,9 +976,7 @@ func freshBorrowedForeignTypes(ctx context.Context, source *Source, text string,
 	}
 	loader := dependency.Loader{Workspace: workspace, Catalog: staged, Snapshot: source.dependencySnapshot}
 	imports := map[string]bool{}
-	for _, imp := range prepared.TypeContext.Imports {
-		imports[imp.Package] = true
-	}
+	collectBorrowedImports(prepared, imports)
 	if _, err := loader.LoadImports(ctx, imports); err != nil {
 		return nil, err
 	}
