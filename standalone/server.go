@@ -27,6 +27,7 @@ import (
 	"github.com/viant/mcp/server/auth"
 	"github.com/viant/x"
 	xmodule "github.com/viant/x/module"
+	xshape "github.com/viant/x/shape"
 	xauth "github.com/viant/xdatly/auth"
 	xcodec "github.com/viant/xdatly/codec"
 	xdiffer "github.com/viant/xdatly/differ"
@@ -45,6 +46,13 @@ type Options struct {
 	// LinkedArtifact is trusted immutable executable provenance, supplied by the
 	// deployment build. It is independent of Config.Version and reload counters.
 	LinkedArtifact *dexec.LinkedArtifact
+	// LinkedOutputRepresentations binds static metadata to linked output plans.
+	// The exact route verifies component identity. Each binding applies to the
+	// component's shared output plan across all its routes. Use the canonical
+	// field types, options, and visibility tags when supplying field names.
+	// A caller-selected output contract takes precedence over this static
+	// representation under the runtime's existing presentation rules.
+	LinkedOutputRepresentations map[dexec.ComponentTarget]*xshape.Representation
 	// Deprecated: MCP calls do not require component wire metadata. Setting
 	// this option fails MCP construction; use server-owned resource resolution.
 	RequireComponentBinding bool
@@ -160,7 +168,7 @@ func New(ctx context.Context, options Options) (_ *Server, err error) {
 		options.LinkedArtifact = &artifact
 	}
 	s := &Server{httpMiddleware: options.HTTPMiddleware, source: &source{authorizationProviders: maps.Clone(options.AuthorizationProviders), Workspace: options.Workspace, config: options.Config, resources: options.Resources, holders: append([]any(nil), options.Holders...), invocationLogger: options.InvocationLogger, invocationDiffer: options.InvocationDiffer, invocationMessageBus: options.InvocationMessageBus, providers: providers, requireLinked: options.RequireLinked || options.Holders != nil,
-		linkedArtifact: options.LinkedArtifact, requireComponentBinding: options.RequireComponentBinding, toolMetadata: options.ToolMetadata}, done: make(chan struct{}), ready: make(chan struct{}), mcpResourceAuthorizer: options.MCPResourceAuthorizer, mcpBackendForFrontend: options.MCPBackendForFrontend}
+		linkedArtifact: options.LinkedArtifact, linkedOutputRepresentations: maps.Clone(options.LinkedOutputRepresentations), requireComponentBinding: options.RequireComponentBinding, toolMetadata: options.ToolMetadata}, done: make(chan struct{}), ready: make(chan struct{}), mcpResourceAuthorizer: options.MCPResourceAuthorizer, mcpBackendForFrontend: options.MCPBackendForFrontend}
 	s.source.codecFactories, err = normalizeCodecs(options.Codecs)
 	if err != nil {
 		return nil, err

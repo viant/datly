@@ -18,6 +18,7 @@ import (
 	"github.com/viant/mcp/server/auth"
 	"github.com/viant/x"
 	xmodule "github.com/viant/x/module"
+	xshape "github.com/viant/x/shape"
 	xauth "github.com/viant/xdatly/auth"
 	xdiffer "github.com/viant/xdatly/differ"
 	xlogger "github.com/viant/xdatly/logger"
@@ -32,6 +33,8 @@ type Service struct {
 	MCPAuthorization      *authorization.Policy
 	MCPBackendForFrontend *auth.BackendForFrontend
 	LinkedArtifact        *exec.LinkedArtifact
+	// LinkedOutputRepresentations supplies static linked output contracts to standalone.
+	LinkedOutputRepresentations map[exec.ComponentTarget]*xshape.Representation
 	// Deprecated: passed through to the runtime, which rejects mandatory MCP
 	// component wire binding. Use server-owned resource resolution instead.
 	RequireComponentBinding bool
@@ -90,7 +93,7 @@ func (s Service) Run(ctx context.Context, args []string, stdout, stderr io.Write
 		}
 		cfg.MCP.Authorization = s.MCPAuthorization
 	}
-	server, err := standalone.New(ctx, standalone.Options{AuthorizationProviders: s.AuthorizationProviders, HTTPMiddleware: s.HTTPMiddleware, MCPBackendForFrontend: s.MCPBackendForFrontend, LinkedArtifact: s.LinkedArtifact, RequireComponentBinding: s.RequireComponentBinding, Config: cfg, Registry: s.Registry, Workspace: s.Workspace, Holders: s.Holders, Providers: s.Providers, InvocationLogger: s.InvocationLogger, InvocationDiffer: s.InvocationDiffer, DefaultAuthenticator: s.DefaultAuthenticator, RequireLinked: true, Diagnostics: stderr})
+	server, err := standalone.New(ctx, standalone.Options{AuthorizationProviders: s.AuthorizationProviders, HTTPMiddleware: s.HTTPMiddleware, MCPBackendForFrontend: s.MCPBackendForFrontend, LinkedArtifact: s.LinkedArtifact, LinkedOutputRepresentations: s.LinkedOutputRepresentations, RequireComponentBinding: s.RequireComponentBinding, Config: cfg, Registry: s.Registry, Workspace: s.Workspace, Holders: s.Holders, Providers: s.Providers, InvocationLogger: s.InvocationLogger, InvocationDiffer: s.InvocationDiffer, DefaultAuthenticator: s.DefaultAuthenticator, RequireLinked: true, Diagnostics: stderr})
 	if err != nil {
 		fmt.Fprintln(stderr, err)
 		return 1

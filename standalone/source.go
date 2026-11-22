@@ -29,6 +29,7 @@ import (
 	"github.com/viant/sqlx/io/read/cache/aerospike"
 	"github.com/viant/x"
 	xmodule "github.com/viant/x/module"
+	xshape "github.com/viant/x/shape"
 	xcodec "github.com/viant/xdatly/codec"
 	xdiffer "github.com/viant/xdatly/differ"
 	xlogger "github.com/viant/xdatly/logger"
@@ -57,9 +58,17 @@ type source struct {
 	providers               []locator.Provider
 	requireLinked           bool
 	logger                  *slog.Logger
+
+	linkedOutputRepresentations map[exec.ComponentTarget]*xshape.Representation
 }
 
 func (s *source) compile(ctx context.Context, types *typecatalog.Catalog) (*application.Build, error) {
+	if len(s.linkedOutputRepresentations) != 0 {
+		linked := s.config.GoBootstrap
+		if linked == nil || len(linked.Packages) == 0 || (!linked.LinkedOnly && !linked.EagerComponents) {
+			return nil, fmt.Errorf("linked output representations require GoBootstrap linked-only or eager components")
+		}
+	}
 	if s.config.GoBootstrap != nil && s.config.GoBootstrap.EagerComponents {
 		return s.compileEager(ctx, types)
 	}
@@ -242,6 +251,9 @@ func (s *source) compileLinked(ctx context.Context, types *typecatalog.Catalog) 
 		}
 		byKey[key] = &linkedComponent{component: component, source: linked}
 	}
+	if err := s.bindLinkedOutputRepresentations(byKey); err != nil {
+		return nil, err
+	}
 	components := make([]*spec.Component, 0, len(byKey))
 	for _, current := range byKey {
 		components = append(components, current.component)
@@ -359,11 +371,7 @@ func (s *source) compileEager(ctx context.Context, types *typecatalog.Catalog) (
 	built.MCP.LinkedArtifact, built.MCP.RequireComponentBinding, built.MCP.ToolMetadata = s.linkedArtifact, s.requireComponentBinding, s.toolMetadata
 	built.HTTP.StaticContent = append([]*spec.StaticContent(nil), s.http.StaticContent...)
 	components := &sourceComponent{source: s}
-	type reflectedComponent struct {
-		component *spec.Component
-		source    *bootstrap.RouteSource
-	}
-	byKey := map[string]*reflectedComponent{}
+	byKey := map[string]*linkedComponent{}
 	var order []string
 	for _, source := range discovered.Components {
 		component, resolveErr := source.Resolve(source.LinkedInputType, source.LinkedOutputType)
@@ -386,8 +394,11 @@ func (s *source) compileEager(ctx context.Context, types *typecatalog.Catalog) (
 			}
 			continue
 		}
-		byKey[key] = &reflectedComponent{component: component, source: source}
+		byKey[key] = &linkedComponent{component: component, source: source}
 		order = append(order, key)
+	}
+	if err := s.bindLinkedOutputRepresentations(byKey); err != nil {
+		return nil, err
 	}
 	sort.Strings(order)
 	inputs := make([]bootstrap.ArtifactInput, 0, len(order))
@@ -406,6 +417,13 @@ func (s *source) compileEager(ctx context.Context, types *typecatalog.Catalog) (
 	built.Components, err = compilation.RuntimeComponents(ctx, components)
 	if err != nil {
 		return nil, err
+	}
+	for _, registration := range built.Components {
+		if linked := byKey[registration.Component.Key.String()]; linked != nil {
+			if err := linked.applyOutputRepresentation(registration); err != nil {
+				return nil, err
+			}
+		}
 	}
 	built.Types, err = compilation.Types()
 	if err != nil {
