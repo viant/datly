@@ -17,5 +17,5 @@ func DeclarationAnalysisSource(source string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return sqlanalysis.SQL(template.AnalysisSQL, nil)
+	return sqlanalysis.DeclarationSQL(template.AnalysisSQL)
 }

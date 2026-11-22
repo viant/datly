@@ -39,9 +39,8 @@ func DiscoveryPredicates(source string) (string, error) {
 		if selector.ID != "criteria" || !ok || method.ID != "CompositeIn" {
 			continue
 		}
-		call, ok := method.X.(*veltyexpr.Call)
-		if !ok || len(call.Args) != 2 || call.X != nil {
-			return "", fmt.Errorf("discovery criteria.CompositeIn requires exactly two arguments and no chained access")
+		if err := validateCompositeIn(method); err != nil {
+			return "", fmt.Errorf("discovery criteria.CompositeIn %w", err)
 		}
 		marker := fmt.Sprintf("%s%d", prefix, len(markers))
 		markers[marker] = ""
@@ -65,4 +64,11 @@ func DiscoveryPredicates(source string) (string, error) {
 		masked = strings.ReplaceAll(masked, "("+marker+" = 1)", "(1 = 0)")
 	}
 	return masked, nil
+}
+func validateCompositeIn(method *veltyexpr.Select) error {
+	call, ok := method.X.(*veltyexpr.Call)
+	if !ok || len(call.Args) != 2 || call.X != nil {
+		return fmt.Errorf("requires exactly two arguments and no chained access")
+	}
+	return nil
 }

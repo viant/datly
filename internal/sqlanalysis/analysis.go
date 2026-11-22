@@ -22,7 +22,14 @@ type InputValidator func(*veltyexpr.Select) (string, error)
 // SQL returns an analysis-only copy. Predicate bodies never supply column or
 // table authority, and no template code is executed here.
 func SQL(source string, validate InputValidator) (string, error) {
-	text, _, err := prepare(source, validate)
+	text, _, err := prepare(source, validate, false)
+	return text, err
+}
+
+// DeclarationSQL gives declaration analysis the projection and source shape of
+// runtime tuple predicates. The declaration compiler retains the authored SQL.
+func DeclarationSQL(source string) (string, error) {
+	text, _, err := prepare(source, nil, true)
 	return text, err
 }
 
@@ -40,7 +47,7 @@ func Checked(source string, validate InputValidator) (string, *query.Select, err
 }
 
 func parse(source string, validate InputValidator, checkPlain bool) (string, *query.Select, error) {
-	text, parsed, err := prepare(source, validate)
+	text, parsed, err := prepare(source, validate, false)
 	if err != nil {
 		return "", nil, err
 	}
@@ -53,7 +60,7 @@ func parse(source string, validate InputValidator, checkPlain bool) (string, *qu
 	return text, parsed, err
 }
 
-func prepare(SQL string, validate InputValidator) (string, *query.Select, error) {
+func prepare(SQL string, validate InputValidator, allowCompositeIn bool) (string, *query.Select, error) {
 	// Parent-key calls are relation predicates, not projection identity. Use
 	// the canonical macro parser only in this detached analysis copy.
 	var err error
@@ -90,13 +97,26 @@ func prepare(SQL string, validate InputValidator) (string, *query.Select, error)
 		if err != nil {
 			return "", nil, fmt.Errorf("malformed SQL template at byte %d: %w", pos, err)
 		}
-		if selector.ID == "criteria" {
-			if method, ok := selector.X.(*veltyexpr.Select); ok && method.ID == "In" {
-				if err := validateCriteriaIn(method, validate); err != nil {
-					return "", nil, fmt.Errorf("static criteria.In at byte %d: %w", pos, err)
+		if method, ok := selector.X.(*veltyexpr.Select); selector.ID == "criteria" && ok {
+			isPredicate := true
+			var predicateErr error
+			switch method.ID {
+			case "In":
+				predicateErr = validateCriteriaIn(method, validate)
+			case "CompositeIn":
+				isPredicate = allowCompositeIn
+				if isPredicate {
+					predicateErr = validateCompositeIn(method)
 				}
-				// In emits only a condition (including false for an empty set).
-				// Mask it like an existing predicate, not a selectable SQL value.
+			default:
+				isPredicate = false
+			}
+			if predicateErr != nil {
+				return "", nil, fmt.Errorf("static criteria.%s at byte %d: %w", method.ID, pos, predicateErr)
+			}
+			if isPredicate {
+				// These calls emit SQL conditions. Their arguments contribute
+				// no projection or table metadata.
 				marker := fmt.Sprintf("%s%d", prefix, len(markers))
 				markers[marker] = ""
 				result.WriteString(SQL[previous:pos])
