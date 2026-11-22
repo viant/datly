@@ -31,12 +31,15 @@ func (e *Execution) ToolResult() *schema.CallToolResult {
 	status := e.StatusCode()
 	if invokeErr := e.Error(); invokeErr != nil {
 		if body, explicit := response.ErrorBody(invokeErr); explicit {
-			payload, err := e.errorPayload(body)
+			payload, media, err := e.explicitToolErrorPayload(body)
 			if err != nil {
 				return errorResult(http.StatusInternalServerError, err)
 			}
 			if transport, ok := body.(response.Response); ok {
 				return withToolErrorStatus(e.transportResult(transport, payload, true), status)
+			}
+			if media != "" {
+				return withToolErrorStatus(blobToolResult(media, payload, true), status)
 			}
 			isError := true
 			return withToolErrorStatus(textToolResult(payload, &isError), status)
@@ -203,6 +206,20 @@ func errorResult(status int, err error) *schema.CallToolResult {
 		Content: []schema.CallToolResultContentElem{schema.TextContent{Type: "text", Text: string(encoded)}},
 		IsError: &isError, StructuredContent: payload,
 	}
+}
+
+func (e *Execution) explicitToolErrorPayload(body any) (data []byte, media string, err error) {
+	if _, raw := body.(response.Response); !raw && e.encodeTypedError != nil {
+		data, media, matched, err := e.encodeTypedError(e.encodingContext, body)
+		if err != nil {
+			return nil, "", errors.New(http.StatusText(http.StatusInternalServerError))
+		}
+		if matched {
+			return data, media, nil
+		}
+	}
+	data, err = e.errorPayload(body)
+	return data, "", err
 }
 
 func (e *Execution) errorPayload(body any) ([]byte, error) {

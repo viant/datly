@@ -12,6 +12,10 @@ func (e *Execution) transportResult(transport response.Response, payload []byte,
 	if media == "" {
 		media = "application/octet-stream"
 	}
+	return blobToolResult(media, payload, failed)
+}
+
+func blobToolResult(media string, payload []byte, failed bool) *schema.CallToolResult {
 	result := &schema.CallToolResult{Content: []schema.CallToolResultContentElem{schema.NewEmbeddedBlob("datly://response/body", media, payload)}}
 	if failed {
 		result.IsError = &failed

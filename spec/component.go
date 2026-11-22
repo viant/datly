@@ -7,6 +7,9 @@ import (
 )
 
 type Component struct {
+	// ErrorOutputs contains linked, explicit public error payload declarations.
+	// A Go component holder can declare them with DatlyErrorOutputs() []ErrorOutput.
+	ErrorOutputs []ErrorOutput `json:"-"`
 	// ReaderGraph is immutable checked native holder/resource authority, never a wire option.
 	ReaderGraph *graphModel.Authority `json:"-"`
 	// SelectorCompanion is transient immutable checked holder metadata. The native

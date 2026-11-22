@@ -303,6 +303,19 @@ func (c *serviceCompiler) publish(ctx context.Context, catalog *Catalog, policy 
 				encoded, err := plan.Encode(ctx, "json", body)
 				return encoded.Data, true, err
 			}
+		}, TypedErrorOutput: func(target exec.ComponentTarget) invocation.TypedErrorEncoder {
+			plan := selectPlan(target)
+			if plan == nil {
+				return nil
+			}
+			return func(ctx context.Context, body any) ([]byte, string, bool, error) {
+				encoded, presentation, matched, err := plan.EncodeExplicitError(ctx, target, body, true)
+				var media string
+				if presentation == spec.ErrorOutputLegacyText {
+					media = encoded.ContentType
+				}
+				return encoded.Data, media, matched, err
+			}
 		}, ErrorOutput: func(target exec.ComponentTarget) invocation.OutputEncoder {
 			plan := selectPlan(target)
 			if plan == nil {

@@ -330,6 +330,9 @@ func (h *Handler) serveHTTP(writer stdhttp.ResponseWriter, req *stdhttp.Request)
 		return
 	}
 	if execErr != nil {
+		if hasPublicBody && h.writeTypedErrorOutput(ctx, writer, req, target, statusCode, actual, contract) {
+			return
+		}
 		h.writeHTTPErrorJSON(ctx, writer, req, statusCode, actual, contract, synthesizedLegacyEnvelope)
 		return
 	}

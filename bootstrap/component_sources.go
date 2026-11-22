@@ -3,6 +3,7 @@ package bootstrap
 import (
 	"fmt"
 	"reflect"
+	"slices"
 	"sort"
 
 	rhandler "github.com/viant/datly/runtime/handler"
@@ -150,6 +151,12 @@ func (s *PackageComponentSource) resolveDescriptors(types *typecatalog.Resolver,
 		combined.Routes = append(combined.Routes, component.Routes...)
 	}
 	for _, route := range s.Routes {
+		if declarations := route.linkedErrorOutputs(); len(declarations) > 0 {
+			if len(combined.ErrorOutputs) > 0 && !slices.Equal(combined.ErrorOutputs, declarations) {
+				return nil, fmt.Errorf("package component %s has conflicting error output declarations", authority.Key.String())
+			}
+			combined.ErrorOutputs = declarations
+		}
 		if combined.ReaderGraph != nil {
 			continue
 		}

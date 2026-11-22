@@ -11,7 +11,12 @@ import (
 	xcontract "github.com/viant/xdatly/contract"
 )
 
-type mcpFieldKey struct{ path, name string }
+type outputFieldKey struct{ path, name string }
+
+type outputFieldEdit struct {
+	owner reflect.Type
+	value xshape.FieldMetadata
+}
 
 // WithMCPVisibility applies MCP names and exclusions to transport-local metadata. The
 // native schema and encoder share this representation; HTTP retains its plan.
@@ -40,14 +45,14 @@ func (p *Plan) WithMCPVisibility() (*Plan, error) {
 	}
 	// Retain caller-selected metadata while the native walker owns storage,
 	// container traversal, recursion and custom JSON boundaries.
-	edits := map[mcpFieldKey]xshape.FieldMetadata{}
+	edits := map[outputFieldKey]outputFieldEdit{}
 	if !declaredWire {
-		mcpEffectiveFields(p.representation, "", edits)
+		effectiveOutputFields(p.representation, "", edits)
 	}
 	metadata, err := walker.RewriteRepresentation(func(path string, _ reflect.Type, original *xshape.FieldMetadata) (*xshape.FieldMetadata, error) {
 		selected := *original
-		if effective, ok := edits[mcpFieldKey{path, original.Name}]; ok {
-			selected = effective
+		if effective, ok := edits[outputFieldKey{path, original.Name}]; ok {
+			selected = effective.value
 		}
 		name, _, _ := strings.Cut(selected.Tag.Get("json"), ",")
 		if name == "-" || selected.Tag.Get("internal") == "true" {
@@ -88,7 +93,7 @@ func (p *Plan) WithMCPVisibility() (*Plan, error) {
 	return p.WithRepresentation(metadata)
 }
 
-func mcpEffectiveFields(metadata *xshape.Representation, path string, edits map[mcpFieldKey]xshape.FieldMetadata) {
+func effectiveOutputFields(metadata *xshape.Representation, path string, edits map[outputFieldKey]outputFieldEdit) {
 	if metadata == nil {
 		return
 	}
@@ -99,18 +104,21 @@ func mcpEffectiveFields(metadata *xshape.Representation, path string, edits map[
 		case reflect.Map:
 			path += "{}"
 		}
-		mcpEffectiveFields(metadata.Elem(), path, edits)
+		effectiveOutputFields(metadata.Elem(), path, edits)
 		return
 	}
 	for i := 0; i < metadata.NumField(); i++ {
 		original, field := metadata.Original().Field(i), metadata.Field(i)
 		if field.Name != original.Name || field.Tag != original.Tag {
-			edits[mcpFieldKey{path, original.Name}] = xshape.FieldMetadata{Name: field.Name, Tag: field.Tag}
+			edits[outputFieldKey{path, original.Name}] = outputFieldEdit{
+				owner: metadata.Original(),
+				value: xshape.FieldMetadata{Name: field.Name, Tag: field.Tag},
+			}
 		}
 		child := original.Name
 		if path != "" {
 			child = path + "." + child
 		}
-		mcpEffectiveFields(metadata.FieldShape(i), child, edits)
+		effectiveOutputFields(metadata.FieldShape(i), child, edits)
 	}
 }

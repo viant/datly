@@ -171,6 +171,9 @@ func (s *RouteSource) Resolve(inputType, outputType reflect.Type) (*spec.Compone
 			return nil, err
 		}
 	}
+	if declarations := s.linkedErrorOutputs(); len(declarations) > 0 {
+		component.ErrorOutputs = declarations
+	}
 	if component.ReaderGraph == nil {
 		component.SelectorCompanion, err = s.selectorAssociation(nil)
 		if err != nil {

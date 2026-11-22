@@ -16,6 +16,7 @@ type Execution struct {
 	projectError      ErrorProjector
 	encodeOutput      OutputEncoder
 	encodeErrorOutput OutputEncoder
+	encodeTypedError  TypedErrorEncoder
 	encodingContext   context.Context
 	selection         exec.OutputFieldFilter
 	value             interface{}

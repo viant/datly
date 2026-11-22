@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"strconv"
 
+	dexec "github.com/viant/datly/exec"
 	"github.com/viant/datly/runtime/output"
 	"github.com/viant/datly/spec"
 	xresponse "github.com/viant/xdatly/response"
@@ -109,4 +110,25 @@ func matchingOutputType(expected, actual reflect.Type) bool {
 		actual = actual.Elem()
 	}
 	return expected == actual
+}
+
+func (h *Handler) writeTypedErrorOutput(ctx context.Context, writer stdhttp.ResponseWriter, request *stdhttp.Request, target dexec.ComponentTarget, status int, payload any, contract *output.Plan) bool {
+	encoded, presentation, matched, err := contract.EncodeExplicitError(ctx, target, payload, false)
+	if !matched {
+		return false
+	}
+	if err != nil {
+		h.writeOutputError(ctx, writer, err)
+		return true
+	}
+	policy := contract.ResponseCompression()
+	writer.Header().Set("Content-Type", encoded.ContentType)
+	if presentation == spec.ErrorOutputLegacyText {
+		policy = nil
+		writer.Header().Set("Content-Length", strconv.Itoa(len(encoded.Data)))
+	}
+	if err = writeEncodedBytes(writer, request, status, encoded.Data, policy); err != nil {
+		h.writeOutputError(ctx, writer, err)
+	}
+	return true
 }

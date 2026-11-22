@@ -11,6 +11,7 @@ func (c *Component) Clone() *Component {
 		return nil
 	}
 	result := *c
+	result.ErrorOutputs = slices.Clone(c.ErrorOutputs)
 	result.Documentation = c.Documentation.Clone()
 	result.Static = c.Static.Clone()
 	result.Settings = c.Settings.Clone()

@@ -27,6 +27,7 @@ type CompileInput struct {
 	Type             reflect.Type
 	DataField        string
 	publicOutputRoot bool
+	explicitError    bool
 	// SelectableRows describes handlers that return a requested subset of row fields.
 	SelectableRows bool
 }
@@ -68,6 +69,7 @@ type Plan struct {
 	rowPresentation     *presentation
 	csvEncoder          cachedCSV
 	xmlEncoders         sync.Map
+	errorOutputs        map[reflect.Type]errorOutput
 	errorEnvelope       *errorEnvelope
 	lookupErrorEnvelope *errorEnvelope
 }
@@ -192,8 +194,14 @@ func (c Compiler) compile(input CompileInput, prepareFormats bool) (*Plan, error
 			}
 		}
 	}
-	p.declaredTime = declaredTimeOutput(input.Type, nil, map[reflect.Type]bool{})
 	var err error
+	if input.Component != nil && len(input.Component.ErrorOutputs) > 0 {
+		p.errorOutputs, err = c.compileErrorOutputs(input.Component)
+		if err != nil {
+			return nil, err
+		}
+	}
+	p.declaredTime = declaredTimeOutput(input.Type, nil, map[reflect.Type]bool{})
 	p.rows, err = compileRows(input)
 	if err != nil {
 		return nil, err
@@ -223,7 +231,7 @@ func (c Compiler) compile(input CompileInput, prepareFormats bool) (*Plan, error
 	if p.custom == nil && p.jsonEncoder == nil && p.typeOf != nil {
 		p.standardJSON = jsonmarshal.NewStandard(p.typeOf)
 	}
-	if !p.TransportReady() {
+	if !input.explicitError && !p.TransportReady() {
 		p.errorEnvelope, err = compileErrorEnvelope(input)
 		if err != nil {
 			return nil, err
