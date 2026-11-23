@@ -21,12 +21,16 @@ func TestPatchIndexesPackage(t *testing.T) {
 	(testharness.GeneratedModule{Path: module}).Write(t, root)
 	settings := "#import('orderidx','" + module + "/index')\n" +
 		"#setting($_ = $indexes_package('orderidx'))\n" +
-		"#setting($_ = $dest('model/rows.go'))\n" +
+		"#setting($_ = $dest('nested/model/rows.go'))\n" +
 		"#setting($_ = $support_dest('indexes','lookup.go'))\n"
 	request := GenerationRequest{Destination: root, Source: &Source{Name: "Orders", Scope: module + "/source", Text: settings + genpatch.LifecycleDQL, Connector: "main", ColumnRefiner: column.New(column.Connections{"main": db.DB})}}
 	generate := func() error {
 		_, err := (Generator{Operation: "patch"}).Generate(t.Context(), request)
 		return err
+	}
+	modelFile := filepath.Join(root, "nested", "model", "rows.go")
+	if _, err := os.Stat(filepath.Dir(modelFile)); !os.IsNotExist(err) {
+		t.Fatalf("expected a fresh model destination, got %v", err)
 	}
 	if err := generate(); err != nil {
 		t.Fatal(err)
@@ -39,6 +43,7 @@ func TestPatchIndexesPackage(t *testing.T) {
 		return string(data)
 	}
 	genpatch.ObserveHooks(t, filepath.Join(root, "api/orders"))
+	modelBefore := read("nested/model/rows.go")
 	before := read("index/lookup.go")
 	if !strings.Contains(before, "GroupById()") || strings.Contains(before, "PrepareReadIndexes(") {
 		t.Fatal("unexpected index helper ownership")
@@ -50,7 +55,7 @@ func TestPatchIndexesPackage(t *testing.T) {
 	if err := generate(); err != nil {
 		t.Fatal(err)
 	}
-	if before != read("index/lookup.go") || owner != read("api/orders/lookup.go") {
+	if modelBefore != read("nested/model/rows.go") || before != read("index/lookup.go") || owner != read("api/orders/lookup.go") {
 		t.Fatal("split index regeneration changed output")
 	}
 	writeSourceFile(t, root, "api/orders/index_api_test.go", `package orders_test
@@ -70,7 +75,6 @@ func TestIndexKeyFromOriginalPackage(t *testing.T) {
 	for _, tc := range []struct{ name, text, want string }{
 		{"unknown alias", strings.Replace(request.Source.Text, "indexes_package('orderidx')", "indexes_package('missing')", 1), "unknown import alias"},
 		{"foreign destination", strings.Replace(request.Source.Text, module+"/index", "example.org/foreign/index", 1), "outside project module"},
-		{"row imports owner", strings.Replace(request.Source.Text, "#setting($_ = $dest('model/rows.go'))", "", 1), "import cycle"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			original := request.Source.Text
@@ -84,6 +88,27 @@ func TestIndexKeyFromOriginalPackage(t *testing.T) {
 			}
 		})
 	}
+	// A read row owned by the input package must retain its typed API there.
+	// Start with a fresh destination so previous model files cannot supply it.
+	root = t.TempDir()
+	(testharness.GeneratedModule{Path: module}).Write(t, root)
+	request.Destination = root
+	request.Source.Text = strings.Replace(request.Source.Text, "#setting($_ = $dest('nested/model/rows.go'))", "", 1)
+	if err := generate(); err != nil {
+		t.Fatal(err)
+	}
+	local, generic := read("api/orders/lookup.go"), read("index/lookup.go")
+	if !strings.Contains(local, "func OrdersHandlerCurrentKindsIndexByIdKey(") ||
+		strings.Contains(generic, module+"/api/orders") || !strings.Contains(generic, "~map[") {
+		t.Fatal("owner-local index lost typed API or introduced a reverse import")
+	}
+	if err := generate(); err != nil {
+		t.Fatal(err)
+	}
+	if read("api/orders/lookup.go") != local || read("index/lookup.go") != generic {
+		t.Fatal("owner-local index regeneration drifted")
+	}
+
 }
 
 func TestIndexesPackageCLI(t *testing.T) {

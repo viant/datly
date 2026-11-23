@@ -70,6 +70,7 @@ func (g *Generation) prepareMutation(semantic *plan.Plan, config handlergo.Confi
 func configureIndexDestination(contracts *gen.Plan, config *handlergo.ReadIndexConfig) {
 	if dest := contracts.IndexesDestination; dest != nil {
 		config.HelperPackage, config.HelperPackagePath = dest.Name, dest.ImportPath
+		config.ProjectRoot = contracts.ProjectRoot
 	}
 }
 

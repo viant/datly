@@ -17,6 +17,7 @@ type ReadIndexConfig struct {
 	Package, PackagePath, InputType  string
 	Owned                            bool
 	HelperPackage, HelperPackagePath string
+	ProjectRoot                      string
 }
 
 // ReadIndexAsset is application lookup syntax, separate from Previous authority.
@@ -28,7 +29,10 @@ type ReadIndexAsset struct {
 	CacheField              string
 }
 
-type readIndexEmitter struct{ previousEmitter }
+type readIndexEmitter struct {
+	previousEmitter
+	loops *ownerIndexLoops
+}
 
 // ReadIndexes emits only the public typed read-index support used by input and
 // entity hooks. It does not emit a component-specific mutation program.
@@ -91,7 +95,34 @@ func (l *lowerer) readIndexes() (*ReadIndexAsset, error) {
 	id := ast.NewIdent
 	nilExpr := id("nil")
 	build = append(build, &ast.IfStmt{Cond: &ast.BinaryExpr{X: id("input"), Op: token.EQL, Y: nilExpr}, Body: &ast.BlockStmt{List: []ast.Stmt{returnStmt(nilExpr, e.errorExpr("read indexes require input"))}}}, &ast.AssignStmt{Lhs: []ast.Expr{id("metadata"), id("ok")}, Tok: token.DEFINE, Rhs: []ast.Expr{callExpr(selectExpr(id(l.handlerAlias), "ReadMetadataFromContext"), id("ctx"))}}, &ast.IfStmt{Cond: &ast.BinaryExpr{X: &ast.UnaryExpr{Op: token.NOT, X: id("ok")}, Op: token.LOR, Y: e.isNil(id("metadata"))}, Body: &ast.BlockStmt{List: []ast.Stmt{returnStmt(nilExpr, e.errorExpr("read indexes require bound read metadata"))}}}, defineStmt("result", &ast.UnaryExpr{Op: token.AND, X: &ast.CompositeLit{Type: id(name)}}))
+	var loops *ownerIndexLoops
+	var graph *indexImportGraph
+	if helpers != e {
+		var err error
+		graph, err = newIndexImportGraph(l.config.ReadIndexes.ProjectRoot, l.config.PackagePath)
+		if err != nil {
+			return nil, err
+		}
+	}
 	for _, read := range l.plan.ReadCollections {
+		helpers, helperFile := helpers, helperFile
+		if helpers != e {
+			local, err := graph.ownerCollection(helpers.l, read)
+			if err != nil {
+				return nil, err
+			}
+			if local {
+				if loops == nil {
+					loops, err = newOwnerIndexLoops(e.l, helpers.l)
+					if err != nil {
+						return nil, err
+					}
+				}
+				localEmitter := *e
+				localEmitter.loops = loops
+				helpers, helperFile = &localEmitter, file
+			}
+		}
 		if !token.IsIdentifier(read.Name) || !token.IsExported(read.Name) || len(read.InputPath) < 2 || read.InputPath[0] != "Input" {
 			return nil, fmt.Errorf("invalid canonical application read %q", read.Name)
 		}
@@ -194,7 +225,7 @@ func (l *lowerer) readIndexes() (*ReadIndexAsset, error) {
 		helperFile.Decls = append(helperFile.Decls, groupDecls...)
 		fields = append(fields, groupFields...)
 		initialize = append(initialize, groupInit...)
-		if helpers != e {
+		if helpers.l != e.l {
 			inputRow, err := l.typeReference(read.Type)
 			if err != nil {
 				return nil, err
@@ -221,6 +252,9 @@ func (l *lowerer) readIndexes() (*ReadIndexAsset, error) {
 	if helpers != e {
 		if err := e.retainIndexAPI(file, helperFile, helpers.l); err != nil {
 			return nil, err
+		}
+		if loops != nil {
+			helperFile.Decls = append(helperFile.Decls, loops.declarations...)
 		}
 		helperFile.Decls = append([]ast.Decl{(&entityEmitter{l: helpers.l}).importDeclaration(helperFile)}, helperFile.Decls...)
 		asset.Helpers = helperFile
@@ -337,6 +371,9 @@ func (e *readIndexEmitter) indexMethods(slice, prefix string, row recordShape, p
 			returns = append(returns, id("nil"))
 		}
 		fn := e.function(method, nil, results, []ast.Stmt{defineStmt("result", callExpr(id("make"), id(typ))), &ast.RangeStmt{Key: id("_"), Value: id("row"), Tok: token.DEFINE, X: id("rows"), Body: &ast.BlockStmt{List: loop}}, returnStmt(returns...)})
+		if e.loops != nil {
+			fn.Body.List = []ast.Stmt{returnStmt(e.loops.call(grouped, typ, keyName, slice+"."+method))}
+		}
 		fn.Recv = &ast.FieldList{List: []*ast.Field{namedField("rows", id(slice))}}
 		declarations = append(declarations, fn)
 		has := e.function("Has", []*ast.Field{namedField("key", parseExpr(keyType))}, []*ast.Field{{Type: id("bool")}}, []ast.Stmt{&ast.AssignStmt{Lhs: []ast.Expr{id("_"), id("ok")}, Tok: token.DEFINE, Rhs: []ast.Expr{&ast.IndexExpr{X: id("index"), Index: id("key")}}}, returnStmt(id("ok"))})
