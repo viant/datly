@@ -137,6 +137,7 @@ func (c *Compiler) compileAnonymousBody(inputField registry.InputField, caseForm
 			enumeration:    collection,
 			schemaField:    &selectedField,
 			representation: childMetadata,
+			bodyCodec:      binding.Transformer != nil,
 			documentation:  inputField.Documentation(), publicName: publicName, aliases: aliases, path: inputField.Path() + "." + field.Name,
 			sourceKind: "body", sourceName: projected.Name,
 			sourceType: field.Type, destinationType: field.Type,

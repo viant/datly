@@ -26,6 +26,8 @@ import (
 // Argument is an immutable public projection of one canonical input field.
 type Argument struct {
 	nullable          *bool
+	nestedNulls       *nestedNullPlan
+	bodyCodec         bool
 	enumeration       *choice.Enum
 	schemaField       *xshape.JSONField
 	representation    *xshape.Representation
@@ -269,8 +271,16 @@ func (p *Plan) requestScope(ctx context.Context, arguments map[string]any, haveA
 		if request != nil && argument.sourceKind == "body" {
 			continue
 		}
-		if _, ok := normalized[argument.publicName]; argument.required && !ok {
+		value, supplied := normalized[argument.publicName]
+		if argument.required && !supplied {
 			return nil, fmt.Errorf("missing required MCP argument %q", argument.publicName)
+		}
+		if supplied && argument.nestedNulls != nil {
+			raw, err := argument.checkNestedNulls(value)
+			if err != nil {
+				return nil, err
+			}
+			normalized[argument.publicName] = raw
 		}
 	}
 	if request != nil {

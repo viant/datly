@@ -293,6 +293,11 @@ func (c *Compiler) Compile(input Input) (*Plan, error) {
 		if argument.schemaRequired {
 			inputSchema.Required = append(inputSchema.Required, argument.publicName)
 		}
+		nested, err := compileNestedNulls(argument, format)
+		if err != nil {
+			return nil, fmt.Errorf("compile MCP tool %q argument %q: %w", name, argument.publicName, err)
+		}
+		arguments[index].nestedNulls = nested
 		bindingArguments[index] = mcpinput.Argument{
 			Nullable:       argument.nullable,
 			PublicName:     argument.publicName,
@@ -431,6 +436,7 @@ func (c *Compiler) compileExternal(inputField registry.InputField, field reflect
 	}
 	argument := Argument{
 		representation: inputField.Representation(),
+		bodyCodec:      binding.Transformer != nil,
 		publicName:     publicName, aliases: aliases, path: inputField.Path(),
 		sourceKind: strings.ToLower(strings.TrimSpace(binding.Location.Kind)), sourceName: binding.Location.In,
 		sourceType: inputField.SourceType(), destinationType: inputField.DestinationType(),

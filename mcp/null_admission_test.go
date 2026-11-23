@@ -20,9 +20,13 @@ import (
 	"github.com/viant/mcp-protocol/schema"
 )
 
+type nullAdmissionRow struct {
+	ID *int `json:"id" format:"nullable=false"`
+}
 type nullAdmissionBody struct {
-	OrderID *int    `json:"orderId" mcp:"name=orderId,aliases=legacyOrder" format:"nullable=false"`
-	Note    *string `json:"note"`
+	Rows    []nullAdmissionRow `json:"rows"`
+	OrderID *int               `json:"orderId" mcp:"name=orderId,aliases=legacyOrder" format:"nullable=false"`
+	Note    *string            `json:"note"`
 }
 type nullAdmissionInput struct {
 	Body  *nullAdmissionBody `parameter:",kind=body" anonymous:"true"`
@@ -92,7 +96,7 @@ func TestMCPAuthoredNullAdmissionAndREST(t *testing.T) {
 	require.Len(t, tools, 1)
 	properties := tools[0].(map[string]any)["inputSchema"].(map[string]any)["properties"].(map[string]any)
 	require.Equal(t, "integer", properties["orderId"].(map[string]any)["type"])
-	for _, args := range []map[string]any{{"orderId": nil}, {"legacyOrder": nil}, {"query": nil}} {
+	for _, args := range []map[string]any{{"orderId": nil}, {"legacyOrder": nil}, {"query": nil}, {"rows": []any{map[string]any{"id": nil}}}} {
 		before := calls
 		failed := rpc(schema.MethodToolsCall, args)
 		require.Equal(t, float64(-32602), failed["error"].(map[string]any)["code"])
@@ -133,6 +137,6 @@ func TestMCPAuthoredNullAdmissionAndREST(t *testing.T) {
 		})
 	}
 	response := httptest.NewRecorder()
-	gateway.NewHandler(runtime, nil, "test").ServeHTTP(response, httptest.NewRequest("POST", "/null-admission", strings.NewReader(`{"orderId":null}`)))
+	gateway.NewHandler(runtime, nil, "test").ServeHTTP(response, httptest.NewRequest("POST", "/null-admission", strings.NewReader(`{"orderId":null,"rows":[{"id":null}]}`)))
 	require.Equal(t, 200, response.Code, response.Body.String())
 }
