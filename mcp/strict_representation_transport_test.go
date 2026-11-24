@@ -28,7 +28,11 @@ import (
 )
 
 type representedJSONXRow struct {
-	Q *string `json:"q,omitempty" jsonx:"numberToString"`
+	Q      *string `json:"q,omitempty" jsonx:"numberToString"`
+	Count  int     `json:"oldCount,omitempty"`
+	Label  string  `json:"label,omitempty" format:"inputNames=visibleAlias"`
+	Secret string  `json:"privateHint,omitempty" format:"inputNames=privateAlias"`
+	Static bool    `json:"staticFlag,omitempty" internal:"true"`
 }
 type representedJSONXBody struct {
 	Secret string                                             `json:"secret,omitempty"`
@@ -66,6 +70,16 @@ func representedJSONXPolicy(ctx context.Context, binder bindly.Binder) (*xcontra
 		if parent == reflect.TypeFor[representedJSONXBody]() && field.Name == "Secret" {
 			return field.Clone().Hide(), nil
 		}
+		if parent == reflect.TypeFor[representedJSONXRow]() {
+			switch field.Name {
+			case "Secret":
+				return field.Clone().Hide(), nil
+			case "Count":
+				renamed := field.Clone()
+				renamed.Tag = `json:"count,omitempty"`
+				return renamed, nil
+			}
+		}
 		return nil, nil
 	}}, nil
 }
@@ -81,13 +95,14 @@ func (*representedJSONXNamedInput) Contract(ctx context.Context, binder bindly.B
 func TestRepresentedJSONXNativeHTTPAndREST(t *testing.T) {
 	for _, represented := range []bool{false, true} {
 		for _, strict := range []bool{false, true} {
-			for _, named := range []bool{false, true} {
-				t.Run(fmt.Sprintf("represented=%v/strict=%v/named=%v", represented, strict, named), func(t *testing.T) {
+			for _, mode := range []struct{ named, rejectHidden bool }{{}, {named: true}, {rejectHidden: true}, {named: true, rejectHidden: true}} {
+				named, rejectHidden := mode.named, mode.rejectHidden
+				t.Run(fmt.Sprintf("represented=%v/strict=%v/named=%v/rejectHidden=%v", represented, strict, named, rejectHidden), func(t *testing.T) {
 					inputType := reflect.TypeFor[representedJSONXFlatInput]()
 					if named {
 						inputType = reflect.TypeFor[representedJSONXNamedInput]()
 					}
-					component := &spec.Component{Key: spec.Key{Kind: spec.KindComponent, Name: "strict_jsonx"}, Routes: []*spec.Route{{Method: "POST", Path: "/strict-jsonx", MCP: []*spec.MCPExposure{{Kind: spec.MCPExposureTool, Name: "strict_jsonx", StrictArguments: &strict}}}}}
+					component := &spec.Component{Key: spec.Key{Kind: spec.KindComponent, Name: "strict_jsonx"}, Routes: []*spec.Route{{Method: "POST", Path: "/strict-jsonx", MCP: []*spec.MCPExposure{{Kind: spec.MCPExposureTool, Name: "strict_jsonx", StrictArguments: &strict, RejectHiddenInputs: rejectHidden}}}}}
 					artifact, err := bootstrap.BuildArtifact(bootstrap.ArtifactInput{Component: component, InputType: inputType, OutputType: reflect.TypeFor[representedJSONXOutput]()})
 					require.NoError(t, err)
 					calls := 0
@@ -213,6 +228,43 @@ func TestRepresentedJSONXNativeHTTPAndREST(t *testing.T) {
 							}
 						})
 					}
+					if represented {
+						require.NotContains(t, string(listed.Result.Tools[0].InputSchema), "privateHint")
+						require.NotContains(t, string(listed.Result.Tools[0].InputSchema), "oldCount")
+						for _, tc := range []struct{ member, name string }{
+							{`"privateHint":null`, "privateHint"},
+							{`"privateAlias":"private-example"`, "privateAlias"},
+							{`"oldCount":15`, "oldCount"},
+							{`"staticFlag":true`, ""},
+						} {
+							before := calls
+							wire := rpc(schema.MethodToolsCall, `{"rows":[{"count":1},{"count":2,"visibleAlias":"ok",`+tc.member+`}]}`)
+							var result struct {
+								Error  any
+								Result struct {
+									IsError           bool
+									StructuredContent struct{ Status int }
+								}
+							}
+							require.NoError(t, json.Unmarshal(wire, &result))
+							if rejectHidden && tc.name != "" {
+								require.True(t, result.Result.IsError, string(wire))
+								require.Equal(t, 400, result.Result.StructuredContent.Status, string(wire))
+								require.Contains(t, string(wire), "/rows/1/"+tc.name)
+								require.NotContains(t, string(wire), "private-example")
+								require.Equal(t, before, calls)
+								continue
+							}
+							require.Nil(t, result.Error, string(wire))
+							require.False(t, result.Result.IsError, string(wire))
+							require.Equal(t, before+1, calls)
+							require.Equal(t, 1, bound.Rows[0].Count)
+							require.Equal(t, 2, bound.Rows[1].Count)
+							require.Equal(t, "ok", bound.Rows[1].Label)
+							require.Empty(t, bound.Rows[1].Secret)
+							require.False(t, bound.Rows[1].Static)
+						}
+					}
 					// Repeat the complete HTTP call after plans are warm; every invocation
 					// must perform one handler call and preserve converted body state.
 					beforeWarm := calls
@@ -233,7 +285,7 @@ func TestRepresentedJSONXNativeHTTPAndREST(t *testing.T) {
 					require.Equal(t, beforePrepared, representedJSONXPreparations.Load(), "warm invocations reuse prepared representation metadata")
 					t.Logf("warm full HTTP tools/call mean: %s", time.Since(warmStart)/20)
 					// REST keeps the native JSONX owner and its existing lenient unknown policy.
-					raw := `{"q":50,"rows":[{"q":"51","unexpected":true}]}`
+					raw := `{"q":50,"rows":[{"q":"51","unexpected":true,"privateHint":"legacy"}]}`
 					if named {
 						raw = `{"payload":` + raw + `}`
 					}

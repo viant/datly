@@ -344,8 +344,8 @@ func parseComponentSettings(blocks []directiveBlock) (ret *componentSettings, er
 			}
 			primitivePairs = append(primitivePairs, spec.MCPPrimitivePair{Path: path, Add: add, Remove: remove})
 		case strings.EqualFold(name, "mcp_route"):
-			if len(args) < 2 || len(args) > 6 || tail != "" {
-				return nil, fmt.Errorf("mcp_route requires METHOD:/path, name, optional description, description path, case format and strict arguments")
+			if len(args) < 2 || len(args) > 7 || tail != "" {
+				return nil, fmt.Errorf("mcp_route requires METHOD:/path, name, optional description, description path, case format, strict arguments and hidden-input rejection")
 			}
 			ref, err := spec.ParseRouteRef(trimQuote(args[0]))
 			if err != nil {

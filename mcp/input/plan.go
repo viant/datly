@@ -36,15 +36,17 @@ type Argument struct {
 
 // Plan is an immutable argument-to-provider projection.
 type Plan struct {
-	arguments       []Argument
-	aliases         map[string]string
-	strictArguments bool
+	arguments          []Argument
+	aliases            map[string]string
+	strictArguments    bool
+	rejectHiddenInputs bool
 }
 
 // Compiler owns the supported canonical source-kind registry.
 type Compiler struct {
-	registry        map[string]bool
-	strictArguments bool
+	registry           map[string]bool
+	strictArguments    bool
+	rejectHiddenInputs bool
 }
 
 type CompilerOption func(*Compiler)
@@ -54,6 +56,11 @@ type CompilerOption func(*Compiler)
 // Known argument conversion, aliases and required inputs retain their checks.
 func WithStrictArguments(enabled bool) CompilerOption {
 	return func(c *Compiler) { c.strictArguments = enabled }
+}
+
+// WithRejectedHiddenInputs rejects known fields hidden by the caller's body projection.
+func WithRejectedHiddenInputs() CompilerOption {
+	return func(c *Compiler) { c.rejectHiddenInputs = true }
 }
 
 func NewCompiler(options ...CompilerOption) *Compiler {
@@ -75,7 +82,7 @@ func (c *Compiler) Compile(arguments []Argument) (*Plan, error) {
 	if c == nil {
 		return nil, fmt.Errorf("MCP input compiler is required")
 	}
-	result := &Plan{arguments: make([]Argument, len(arguments)), strictArguments: c.strictArguments}
+	result := &Plan{arguments: make([]Argument, len(arguments)), strictArguments: c.strictArguments, rejectHiddenInputs: c.rejectHiddenInputs}
 	publicNames := make(map[string]bool, len(arguments))
 	sources := make(map[string]bool, len(arguments))
 	for index, argument := range arguments {
