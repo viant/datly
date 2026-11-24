@@ -547,7 +547,7 @@ type factoryPackageSelection struct {
 }
 
 func selectedFactoryPackage(ctx context.Context, build *gobuild.Context, pkg string) (*factoryPackageSelection, error) {
-	args := []string{"list", "-e", "-json"}
+	args := []string{"list", "-e", "-json=Dir,GoFiles,CgoFiles"}
 	if build.Tags != "" {
 		args = append(args, "-tags", build.Tags)
 	}
