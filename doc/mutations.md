@@ -1026,6 +1026,39 @@ connector, scalar coverage, types, tags and destination. Keep real nullable-to-v
 compatibility casts explicit. Current reads cannot add fields or relations to the
 shared body type, and auxiliary parents receive no DML.
 
+## Add and remove primitive association members
+
+On a PATCH writer, opt a relation into MCP primitive additions and removals by tagging its collection holder. For example, an order can expose creative IDs through its existing creative assignments.
+
+```sql
+tag(creative,'association:"collection=creativeIds,member=CreativeId"')
+```
+
+`creative` is the SQL alias of the relation. Its source supplies the association table, and its existing join supplies the parent key mapping. `CreativeId` is the Go field on the child row that identifies the related creative. The association row can have a separate primary key. An ordinary writable relation must provide a parent-scoped Current read, the row identity, and its explicit delete marker.
+
+For a caller with access to the tagged relation and member, the MCP tool accepts both lists in a single request. Within the order object, a request can supply:
+
+```json
+{"id":17,"creativeIdsToBeAdded":[42],"creativeIdsToBeDeleted":[31]}
+```
+
+Omitted siblings are preserved. Adding an existing member or removing an absent member produces no association write. An ID appearing in both lists makes the request ambiguous and is rejected. The generated companions apply only to MCP inputs. The ordinary REST collection and its existing omission policy retain their declared behavior.
+A writer that prepares its own link rows can opt into database-generated link IDs for signed MCP additions on MySQL with transient sequencing. Declare the exact physical role on the auxiliary input and grant its table in the component.
+
+```sql
+#setting($_ = $protected_flush_tables('ci_order_creative'))
+tag(creative,'association:"collection=creativeIds,member=CreativeId,insertIdentityRole=PreparedCreatives"')
+```
+
+The named sibling must be a writable insert/delete leaf with the same row type, table, and complete parent-key mapping. Every physical writer role in this graph must be mapped. Each link needs a single autoincrement key of built-in type `int`, `int8`, `int16`, `int32`, or `int64`. The insertion applies to the exact added row after admission and runs once inside the caller’s transaction. The declared table grant is reserved for this operation. Other transports and sequence strategies continue using their original allocation path.
+
+An eligible leaf can observe its physical link with `AfterQueueRow(context.Context, *Row) error` on a fieldless receiver. It receives a detached copy containing the row’s key and scalar values, timestamps and presence flags. Treat this as a synchronous row-local audit callback. Use the context for cancellation or a row-local recorder. Do not recover or inspect the surrounding graph through captured state, enqueue other writes, or publish commit-dependent messages. A later failure still rolls back the transaction. On a successful queue, `AfterQueueInput` can inspect all generated IDs together. On failure, report the transaction error; an unattempted insert has no generated identity.
+
+Every hook in the mapped graph must support that timing. The compiler rejects whole-graph `AfterQueue`, `AfterSequence`, `WriteEligible`, reconciliation and phase/queue observers. The runtime also rejects an externally supplied phase observer or a substituted framework validator for the optimized invocation. A shallow Go validation predicate can read its complete row, including the surrogate key. Eligible link leaves therefore use native SQL checks on ordinary scalar columns, without application Go predicates, uniqueness or composite-reference rules, or an identity-dependent foreign key or zero-to-null mapping. The writer still runs both validation passes.
+
+
+For an auxiliary input relation, the existing lifecycle owns admission and effects. It can read the normalized intent with `handler.LookupAssociationDelta` and apply rules such as a maximum number of active memberships to the admitted final set. Physical inserts and deletes share the writer transaction, so a failed write rolls back the other changes.
+
 ## Explicit insert/delete leaf policy
 
 A PATCH physical leaf can opt into insert/delete semantics when an update would
