@@ -90,12 +90,14 @@ type Endpoint struct {
 
 type MCP struct {
 	// Nil defaults to five minutes; explicit zero disables tool catalog reuse.
-	ToolsListTtlMs  *int64
-	StrictArguments bool
-	Folders         []resource.Folder
-	Port            *int
-	Address         string
-	Authorization   *authorization.Policy
+	ToolsListTtlMs *int64
+	// Zero keeps the native MCP transport request-body limit.
+	MaxRequestBodyBytes int64
+	StrictArguments     bool
+	Folders             []resource.Folder
+	Port                *int
+	Address             string
+	Authorization       *authorization.Policy
 }
 
 func (e Endpoint) ListenAddress() (string, error) {
