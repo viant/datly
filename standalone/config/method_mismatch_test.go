@@ -16,9 +16,9 @@ func TestMethodMismatchLoadCloneValidation(t *testing.T) {
 			t.Run(format+"/"+mode, func(t *testing.T) {
 				var raw []byte
 				if format == "json" {
-					raw, _ = json.Marshal(map[string]any{"GoBootstrap": map[string]any{"Packages": []string{"example.com/api"}}, "MethodMismatchPolicy": mode})
+					raw, _ = json.Marshal(map[string]any{"GoBootstrap": map[string]any{"Packages": []string{"example.com/api"}}, "MethodMismatchPolicy": mode, "MethodMismatchOverrides": map[string]string{"POST /records": "method-not-allowed"}})
 				} else {
-					raw = []byte(fmt.Sprintf("GoBootstrap:\n  Packages: [example.com/api]\nMethodMismatchPolicy: %q\n", mode))
+					raw = []byte(fmt.Sprintf("GoBootstrap:\n  Packages: [example.com/api]\nMethodMismatchPolicy: %q\nMethodMismatchOverrides:\n  POST /records: method-not-allowed\n", mode))
 				}
 				file := filepath.Join(t.TempDir(), "config."+format)
 				if err := os.WriteFile(file, raw, 0600); err != nil {
@@ -35,7 +35,7 @@ func TestMethodMismatchLoadCloneValidation(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				if copy.MethodMismatchPolicy != mode {
+				if copy.MethodMismatchPolicy != mode || copy.MethodMismatchOverrides["POST /records"] != "method-not-allowed" {
 					t.Fatal("clone lost value")
 				}
 				err = copy.Validate()

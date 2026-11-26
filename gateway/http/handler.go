@@ -27,27 +27,28 @@ const (
 )
 
 type Handler struct {
-	authorization        *authorizationGate
-	methodMismatchPolicy string
-	pathSemantics        string
-	serviceTimeHeader    string
-	metrics              *MetricsConfig
-	metricPrefix         string
-	metricPrefixes       []string
-	async                *asyncRoutes
-	allowedSubnet        []string
-	statusURI            string
-	startTime            time.Time
-	documents            *documentRoutes
-	static               []*staticRoute
-	cors                 map[string]*corsPolicy
-	warmup               *warmupRoutes
-	cacheInvalidation    *cacheRoutes
-	warmupPrefix         string
-	runtime              *druntime.Runtime
-	logger               xlogger.Logger
-	version              string
-	authorize            func(context.Context, *stdhttp.Request, dexec.ComponentTarget) error
+	authorization           *authorizationGate
+	methodMismatchPolicy    string
+	methodMismatchOverrides map[string]string
+	pathSemantics           string
+	serviceTimeHeader       string
+	metrics                 *MetricsConfig
+	metricPrefix            string
+	metricPrefixes          []string
+	async                   *asyncRoutes
+	allowedSubnet           []string
+	statusURI               string
+	startTime               time.Time
+	documents               *documentRoutes
+	static                  []*staticRoute
+	cors                    map[string]*corsPolicy
+	warmup                  *warmupRoutes
+	cacheInvalidation       *cacheRoutes
+	warmupPrefix            string
+	runtime                 *druntime.Runtime
+	logger                  xlogger.Logger
+	version                 string
+	authorize               func(context.Context, *stdhttp.Request, dexec.ComponentTarget) error
 }
 
 func NewHandler(rt *druntime.Runtime, log xlogger.Logger, version string) *Handler {
@@ -135,7 +136,11 @@ func (h *Handler) serveHTTP(writer stdhttp.ResponseWriter, req *stdhttp.Request)
 		})
 		return
 	} else if _, ok := h.runtime.RouteByMethodPath(req.Method, escapedPath); !ok {
-		if h.methodMismatchPolicy == "not-found" {
+		policy := h.methodMismatchPolicy
+		if override, ok := h.methodMismatchOverrides[req.Method+" "+escapedPath]; ok {
+			policy = override
+		}
+		if policy == "not-found" {
 			writeJSON(writer, stdhttp.StatusNotFound, xresponse.Status{Status: "error", Message: "not found", Error: "not found"})
 			return
 		}

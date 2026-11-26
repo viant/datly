@@ -56,6 +56,25 @@ func TestMethodMismatchPolicy(t *testing.T) {
 					t.Fatal("method rejection invoked component or authorization")
 				}
 			}
+			overrides := map[string]string{"POST /records": "method-not-allowed", "POST /missing": "method-not-allowed", "POST /internal": "method-not-allowed"}
+			scoped, err := (Config{MethodMismatchPolicy: "not-found", MethodMismatchOverrides: overrides}).NewHandler(rt, nil, "test")
+			if err != nil {
+				t.Fatal(err)
+			}
+			delete(overrides, "POST /records")
+			for _, tc := range []struct {
+				method, path string
+				code         int
+				allow        string
+			}{
+				{"POST", "/records?x=1", 405, "GET"}, {"DELETE", "/records", 404, ""}, {"POST", "/records/1", 404, ""}, {"POST", "/missing", 404, ""}, {"POST", "/internal", 404, ""},
+			} {
+				w := httptest.NewRecorder()
+				scoped.ServeHTTP(w, httptest.NewRequest(tc.method, tc.path, nil))
+				if w.Code != tc.code || w.Header().Get("Allow") != tc.allow {
+					t.Fatalf("%s %s: status %d Allow %q", tc.method, tc.path, w.Code, w.Header().Get("Allow"))
+				}
+			}
 			w := httptest.NewRecorder()
 			h.ServeHTTP(w, httptest.NewRequest("GET", "/records", nil))
 			if w.Code != 200 || executions != 1 || authorized != 1 {
@@ -66,5 +85,15 @@ func TestMethodMismatchPolicy(t *testing.T) {
 	rt := routingConsumerRuntime(t)
 	if _, err := (Config{MethodMismatchPolicy: "invalid"}).NewHandler(rt, nil, "test"); err == nil {
 		t.Fatal("invalid policy accepted")
+	}
+}
+
+func TestInvalidMethodMismatchOverrides(t *testing.T) {
+	for key, policy := range map[string]string{
+		"POST": "not-found", "POST relative": "not-found", "POST /records?x=1": "not-found", "POST /bad%zz": "not-found", "POST /records": "unknown", "GET /records": "",
+	} {
+		if err := (Config{MethodMismatchOverrides: map[string]string{key: policy}}).ValidateMethodMismatchPolicy(); err == nil {
+			t.Errorf("accepted override %q=%q", key, policy)
+		}
 	}
 }

@@ -3,7 +3,9 @@ package http
 import (
 	"context"
 	"fmt"
+	"maps"
 	stdhttp "net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -28,6 +30,8 @@ type Config struct {
 	// MethodMismatchPolicy controls unsupported methods on public component paths.
 	// Empty or "method-not-allowed" returns 405; "not-found" returns 404.
 	MethodMismatchPolicy string `json:"MethodMismatchPolicy,omitempty" yaml:"MethodMismatchPolicy,omitempty"`
+	// MethodMismatchOverrides maps an exact "METHOD /path" to its rejection policy.
+	MethodMismatchOverrides map[string]string `json:"MethodMismatchOverrides,omitempty" yaml:"MethodMismatchOverrides,omitempty"`
 
 	// ServiceTimeHeader opts into execution-duration reporting under this name.
 	// Empty disables generated timing. Use Datly-Service-Time or a dedicated custom
@@ -195,6 +199,7 @@ func (c Config) Build(ctx context.Context, input HandlerInput) (*Handler, error)
 	}
 	h.pathSemantics = c.PathSemantics
 	h.methodMismatchPolicy = c.MethodMismatchPolicy
+	h.methodMismatchOverrides = maps.Clone(c.MethodMismatchOverrides)
 	h.serviceTimeHeader = c.ServiceTimeHeader
 	h.authorize = c.Authorize
 	h.authorization, err = c.authorizationGate()
@@ -255,10 +260,24 @@ func (h *Handler) Shutdown(ctx context.Context) error {
 
 // ValidateMethodMismatchPolicy rejects unsupported routing policies before activation.
 func (c Config) ValidateMethodMismatchPolicy() error {
-	switch c.MethodMismatchPolicy {
-	case "", "method-not-allowed", "not-found":
-		return nil
-	default:
+	if c.MethodMismatchPolicy != "" && !validMismatchPolicy(c.MethodMismatchPolicy) {
 		return fmt.Errorf("invalid MethodMismatchPolicy %q", c.MethodMismatchPolicy)
 	}
+	for key, policy := range c.MethodMismatchOverrides {
+		method, path, _ := strings.Cut(key, " ")
+		if !httpguts.ValidHeaderFieldName(method) || !strings.HasPrefix(path, "/") || strings.ContainsAny(path, " ?#\t\r\n") {
+			return fmt.Errorf("invalid MethodMismatchOverrides key %q: expected METHOD /path", key)
+		}
+		if _, err := url.ParseRequestURI(path); err != nil {
+			return fmt.Errorf("invalid MethodMismatchOverrides path %q: %w", path, err)
+		}
+		if !validMismatchPolicy(policy) {
+			return fmt.Errorf("invalid MethodMismatchOverrides policy %q for %q", policy, key)
+		}
+	}
+	return nil
+}
+
+func validMismatchPolicy(policy string) bool {
+	return policy == "method-not-allowed" || policy == "not-found"
 }
