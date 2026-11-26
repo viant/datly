@@ -54,8 +54,8 @@ func parseReportSettings(name string, args []string) (*spec.ReportSettings, erro
 }
 
 func parseMCPExposure(args []string) (*spec.MCPExposure, error) {
-	if len(args) > 5 {
-		return nil, fmt.Errorf("mcp requires name, optional description, description path, case format and strict arguments")
+	if len(args) > 6 {
+		return nil, fmt.Errorf("mcp requires name, optional description, description path, case format, strict arguments and hidden-input rejection")
 	}
 	if len(args) == 0 {
 		return nil, fmt.Errorf("invalid mcp directive: missing name")
@@ -81,6 +81,13 @@ func parseMCPExposure(args []string) (*spec.MCPExposure, error) {
 		}
 		strict := value == "true"
 		ret.StrictArguments = &strict
+	}
+	if len(args) > 5 {
+		value := strings.TrimSpace(trimQuote(args[5]))
+		if value != "true" && value != "false" {
+			return nil, fmt.Errorf("mcp hidden-input rejection requires true or false")
+		}
+		ret.RejectHiddenInputs = value == "true"
 	}
 	if err := ret.ValidateCaseFormat(); err != nil {
 		return nil, err

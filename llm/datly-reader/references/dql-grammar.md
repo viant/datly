@@ -1343,7 +1343,7 @@ do not remove entity validation tags merely to make PATCH discovery sparse.
 
 ### Per-tool strict arguments
 
-MCP remains lenient by default. The optional final boolean overrides the host’s
+MCP remains lenient by default. The optional fifth argument overrides the host’s
 existing `StrictArguments` setting for one exposure; omitting it inherits that
 setting. `true` rejects undeclared top-level MCP argument names before invocation,
 and `false` explicitly selects lenient handling. This uses the existing argument
@@ -1358,6 +1358,16 @@ The compiled exposure stores this as nullable `strictArguments`. Tools with no
 override retain their previous behavior, including when the host selects strict
 mode globally. Use strict opt-in for workflows that must reject misspelled
 side-effect controls such as `dryRun` instead of ignoring them.
+
+The optional sixth boolean enables rejection of submitted body fields removed by
+the caller’s effective MCP input contract, including retired spellings and aliases
+in nested batch rows. The default continues to drop such fields. Opt-in leaves
+ordinary unknown fields under `strictArguments` and preserves static internal
+field filtering and HTTP behavior.
+
+```sql
+#setting($_ = $mcp('save_records', 'Save records', '', 'lc', true, true))
+```
 
 ### Fluent authorization predicates
 

@@ -170,6 +170,9 @@ func (p *Plan) scope(source Source, request *http.Request, requestOptions []requ
 		if p.strictArguments {
 			bodyOptions = append(bodyOptions, bodyprovider.WithUnknownFieldPolicy(structjson.ErrorOnUnknown))
 		}
+		if p.rejectHiddenInputs {
+			bodyOptions = append(bodyOptions, bodyprovider.WithRejectedHiddenInputs())
+		}
 		body, err := bodyprovider.New(raw, "application/json", nil, bodyOptions...)
 		if err != nil {
 			return nil, err

@@ -37,8 +37,10 @@ type MCPExposure struct {
 	// StrictArguments overrides the host policy for this exposure. Nil inherits
 	// the host setting, whose default remains lenient. Strictness includes
 	// unknown members of ordinary JSON argument bodies, not only tool names.
-	StrictArguments *bool              `json:"strictArguments,omitempty"`
-	PrimitivePairs  []MCPPrimitivePair `json:"primitivePairs,omitempty"`
+	StrictArguments *bool `json:"strictArguments,omitempty"`
+	// RejectHiddenInputs rejects fields excluded from the caller's effective body contract.
+	RejectHiddenInputs bool               `json:"rejectHiddenInputs,omitempty"`
+	PrimitivePairs     []MCPPrimitivePair `json:"primitivePairs,omitempty"`
 }
 
 // EffectiveCaseFormat returns the MCP presentation policy without changing authored metadata.

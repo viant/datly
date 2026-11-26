@@ -77,6 +77,7 @@ DSNs and Scy secret content are not rewritten as relative file locations.
 | `CORS`, `DisableCors`, `APIPrefix`, `Meta` | Absent CORS allows noncredentialed cross-origin reads. Credentialed access requires explicit origins; wildcard credentials fail staging. Empty CORS disables cross-origin exposure. |
 | `Info` or `OpenAPI` | Opt into OpenAPI publication; configuring both fails. Document-access policy is separate from component authorization. |
 | `MCP.Address` or `MCP.Port` | Native MCP listener, with explicit authorization policy. Explicit MCP Port zero requests allocation. |
+| `MCP.MaxRequestBodyBytes` | Trusted MCP HTTP request limit for the encoded body. Zero or omission keeps the native 4 MiB limit. Set a positive byte limit up to 64 MiB. For base64 tool inputs, allow space for encoding and the JSON envelope. Align ingress and reverse-proxy limits with the selected bound. |
 | `MCP.StrictArguments` | Opt-in rejection of undeclared top-level MCP tool arguments. Default `false` ignores extra names; declared argument conversion, required fields, alias conflicts, authorization and projection restrictions remain enforced. |
 | `APIKeys` | Current configured component-key policy. Longest raw URI prefix wins; duplicate prefixes fail. |
 | `Warmup` | Current HTTP warmup administration bridge with required admin key and positive timeout. Startup warmup URI execution remains separate. |

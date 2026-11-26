@@ -1,6 +1,7 @@
 package exec
 
 import (
+	"context"
 	"errors"
 	"net/http"
 
@@ -22,6 +23,13 @@ func ErrorMessage(err error, status int) string {
 	}
 	if message, ok := WrapperValidationMessage(err, status); ok {
 		return message
+	}
+	// The body filter owns this public diagnostic. It contains only the
+	// submitted member's path and retains the original binding cause.
+	var hidden *bindinput.HiddenInputError
+	if status == http.StatusBadRequest && errors.As(err, &hidden) &&
+		!errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
+		return hidden.Error()
 	}
 	if status < http.StatusInternalServerError {
 		return err.Error()

@@ -14,6 +14,7 @@ require (
 	github.com/viant/authz v0.1.2-0.20261112184253-02e92dcfc66b
 	github.com/viant/gmetric v0.3.2
 	github.com/viant/govalidator v0.3.4-0.20260913213120-027a9dd54d73
+	github.com/viant/gsheets v0.1.0
 	github.com/viant/mcp v0.24.2-0.20261102163024-7166d81ea725
 	github.com/viant/mcp-protocol v0.19.2-0.20261120030440-3a539e7c1818
 	github.com/viant/parsly v0.3.3
@@ -37,7 +38,7 @@ require (
 	go.opentelemetry.io/proto/otlp v1.10.0
 	golang.org/x/mod v0.38.0
 	golang.org/x/net v0.58.0
-	google.golang.org/api v0.283.0
+	google.golang.org/api v0.288.0
 	google.golang.org/protobuf v1.36.11
 	gopkg.in/yaml.v3 v3.0.1
 )
@@ -72,7 +73,7 @@ require (
 	github.com/golang-jwt/jwt/v4 v4.5.0 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/google/s2a-go v0.1.9 // indirect
-	github.com/googleapis/enterprise-certificate-proxy v0.3.16 // indirect
+	github.com/googleapis/enterprise-certificate-proxy v0.3.17 // indirect
 	github.com/googleapis/gax-go/v2 v2.22.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.29.0 // indirect
 	github.com/hashicorp/golang-lru v0.5.1 // indirect
@@ -85,6 +86,9 @@ require (
 	github.com/lib/pq v1.10.6 // indirect
 	github.com/mazznoer/csscolorparser v0.1.3 // indirect
 	github.com/mohae/deepcopy v0.0.0-20170929034955-c48cc78d4826 // indirect
+	github.com/ncruces/go-sqlite3 v0.34.1 // indirect
+	github.com/ncruces/go-sqlite3-wasm/v2 v2.2.35301 // indirect
+	github.com/ncruces/julianday v1.0.0 // indirect
 	github.com/nxadm/tail v1.4.8 // indirect
 	github.com/planetscale/vtprotobuf v0.6.1-0.20240319094008-0393e58bdf10 // indirect
 	github.com/richardlehane/mscfb v1.0.4 // indirect
@@ -111,7 +115,7 @@ require (
 	google.golang.org/appengine/v2 v2.0.2 // indirect
 	google.golang.org/genproto v0.0.0-20260526163538-3dc84a4a5aaa // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260526163538-3dc84a4a5aaa // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20260526163538-3dc84a4a5aaa // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20260630182238-925bb5da69e7 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
 
@@ -124,7 +128,7 @@ require (
 	github.com/go-viper/mapstructure/v2 v2.2.1 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/viant/afs v1.30.1-0.20260914155934-90e95d483861
-	github.com/viant/bindly v0.5.1-0.20261121100530-40bc733089fc
+	github.com/viant/bindly v0.5.1-0.20261124233754-ed0b94afa48f
 	github.com/viant/godiff v0.4.3-0.20260914060527-9f2005ca82e8
 	github.com/viant/jsonrpc v0.25.1
 	github.com/viant/scy v0.35.1-0.20260914041206-699e6c909726
@@ -134,7 +138,7 @@ require (
 	golang.org/x/crypto v0.55.0 // indirect
 	golang.org/x/oauth2 v0.36.0
 	golang.org/x/sys v0.47.0
-	google.golang.org/grpc v1.81.1 // indirect
+	google.golang.org/grpc v1.82.0 // indirect
 )
 
 replace google.golang.org/grpc/stats/opentelemetry => google.golang.org/grpc v1.77.0

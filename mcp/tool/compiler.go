@@ -320,8 +320,12 @@ func (c *Compiler) Compile(input Input) (*Plan, error) {
 		return nil, fmt.Errorf("compile MCP tool %q primitive pairs: %w", name, err)
 	}
 	bindingCompiler := c.binding
-	if strictArguments != c.strictArguments {
-		bindingCompiler = mcpinput.NewCompiler(mcpinput.WithStrictArguments(strictArguments))
+	if strictArguments != c.strictArguments || input.Exposure.RejectHiddenInputs {
+		options := []mcpinput.CompilerOption{mcpinput.WithStrictArguments(strictArguments)}
+		if input.Exposure.RejectHiddenInputs {
+			options = append(options, mcpinput.WithRejectedHiddenInputs())
+		}
+		bindingCompiler = mcpinput.NewCompiler(options...)
 	}
 	binding, err := bindingCompiler.Compile(bindingArguments)
 	if err != nil {
