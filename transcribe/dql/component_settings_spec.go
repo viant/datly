@@ -12,6 +12,7 @@ func toSpecSettings(input *componentSettings) *spec.Settings {
 		return nil
 	}
 	ret := &spec.Settings{
+		LazyReadIndexes:              input.LazyReadIndexes,
 		ProtectedFlushTables:         slices.Clone(input.ProtectedFlushTables),
 		ResponseCompression:          input.ResponseCompression.Clone(),
 		SequenceStrategy:             input.SequenceStrategy,

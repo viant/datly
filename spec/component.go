@@ -44,6 +44,8 @@ type ImportSpec struct {
 }
 
 type Settings struct {
+	// LazyReadIndexes defers writer application index preparation until ReadIndexes is called.
+	LazyReadIndexes bool `json:"lazyReadIndexes,omitempty"`
 	// ProtectedFlushTables authorizes explicit protected prefix flushes for this
 	// component's exact normalized tables. It is never inherited by child calls.
 	ProtectedFlushTables []string `json:"protectedFlushTables,omitempty"`
@@ -213,7 +215,7 @@ func (s *Settings) IsZero() bool {
 	if s == nil {
 		return true
 	}
-	return s.ProtectedFlushTables == nil && s.ResponseCompression == nil && !s.IndependentChildTransactions && s.ComponentCallPolicy == "" && len(s.MCPFolders) == 0 && s.IgnoreEmptyQueryParameters == nil &&
+	return !s.LazyReadIndexes && s.ProtectedFlushTables == nil && s.ResponseCompression == nil && !s.IndependentChildTransactions && s.ComponentCallPolicy == "" && len(s.MCPFolders) == 0 && s.IgnoreEmptyQueryParameters == nil &&
 		s.DefaultConnector == "" && s.SequenceStrategy == "" && s.Report == nil && s.Cache == nil &&
 		(s.Generation == nil || s.Generation.IsZero()) && s.InputType == "" && s.OutputType == "" &&
 		s.JSONMarshalType == "" && s.JSONUnmarshalType == "" && s.XMLUnmarshalType == "" &&

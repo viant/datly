@@ -1903,3 +1903,7 @@ still buffered and is not database-visible: these checks never flush it or
 complete the transaction. Actual inserts and updates retain their regular
 validation policies, including matched Current/read provenance and complete
 final validation. This mode must not replace mutation validation.
+
+### Application read indexes
+
+A writer normally prepares its application read indexes before running its lifecycle. A writer whose lifecycle manages its own lookups can declare `#setting($_ = $lazy_read_indexes())`. The first call to `ReadIndexes(ctx)` prepares and validates the indexes. Explicit `PrepareReadIndexes(ctx)` refreshes the request-local snapshot. Authorized previous-row capture still runs before the write.

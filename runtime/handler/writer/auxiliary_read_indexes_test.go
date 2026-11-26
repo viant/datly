@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"reflect"
 	"testing"
+
+	"github.com/viant/datly/spec"
 )
 
 func (*auxiliaryGraphInput) PrepareReadIndexes(context.Context) error {
@@ -15,13 +17,19 @@ func TestAuxiliaryComponentDoesNotRequireIndependentReadIndexes(t *testing.T) {
 	for _, useCase := range []struct {
 		description        string
 		componentLifecycle bool
+		lazyReadIndexes    bool
 		expectedError      bool
 	}{
-		{"whole component owns reads", true, false},
-		{"ordinary writer retains eager checks", false, true},
+		{"whole component owns reads", true, false, false},
+		{"ordinary writer explicitly defers indexes", false, true, false},
+		{"ordinary writer retains eager checks", false, false, true},
 	} {
 		t.Run(useCase.description, func(t *testing.T) {
-			native, err := New(auxiliaryGraphComponent(auxiliaryGraphHookType.Name()), reflect.TypeFor[auxiliaryGraphInput](), reflect.TypeFor[auxiliaryGraphOutput](), "patch")
+			component := auxiliaryGraphComponent(auxiliaryGraphHookType.Name())
+			if useCase.lazyReadIndexes {
+				component.Settings = &spec.Settings{LazyReadIndexes: true}
+			}
+			native, err := New(component, reflect.TypeFor[auxiliaryGraphInput](), reflect.TypeFor[auxiliaryGraphOutput](), "patch")
 			if err != nil {
 				t.Fatal(err)
 			}

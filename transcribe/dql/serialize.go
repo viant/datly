@@ -70,6 +70,9 @@ func (Serializer) Export(component *spec.Component, authored string) SourceExpor
 	if component.Settings != nil && component.Settings.SequenceStrategy != "" {
 		fmt.Fprintf(&text, "#setting($_ = $sequence_strategy(%s))\n", strconv.Quote(component.Settings.SequenceStrategy))
 	}
+	if component.Settings != nil && component.Settings.LazyReadIndexes {
+		fmt.Fprintln(&text, "#setting($_ = $lazy_read_indexes())")
+	}
 	if component.Settings != nil && component.Settings.ProtectedFlushTables != nil {
 		values := make([]string, len(component.Settings.ProtectedFlushTables))
 		for i, table := range component.Settings.ProtectedFlushTables {

@@ -6,6 +6,7 @@ import (
 )
 
 type componentSettings struct {
+	LazyReadIndexes              bool
 	ProtectedFlushTables         []string
 	HandlerFactory               string
 	HandlerAdapter               string

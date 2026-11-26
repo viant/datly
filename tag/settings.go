@@ -32,6 +32,7 @@ const (
 // constants are deliberately excluded because transcription consumes or
 // materializes them before package bootstrap.
 type Settings struct {
+	LazyReadIndexes              bool
 	ProtectedFlushTables         []string
 	ComponentCallPolicy          string
 	ResponseCompression          *spec.ResponseCompression
@@ -56,6 +57,7 @@ func SettingsFromSpec(source *spec.Settings) Settings {
 	}
 	cloned := source.Clone()
 	return Settings{
+		LazyReadIndexes:              cloned.LazyReadIndexes,
 		ProtectedFlushTables:         cloned.ProtectedFlushTables,
 		ResponseCompression:          cloned.ResponseCompression,
 		IndependentChildTransactions: cloned.IndependentChildTransactions,
@@ -75,6 +77,7 @@ func (s Settings) Apply(target *spec.Settings) {
 	if target == nil {
 		return
 	}
+	target.LazyReadIndexes = s.LazyReadIndexes
 	target.ProtectedFlushTables = slices.Clone(s.ProtectedFlushTables)
 	target.IndependentChildTransactions = s.IndependentChildTransactions
 	target.ComponentCallPolicy = s.ComponentCallPolicy
@@ -132,6 +135,9 @@ func (s Settings) StructTag() (string, error) {
 			return "", err
 		}
 		appendValue(ProtectedFlushTablesTag, string(data))
+	}
+	if s.LazyReadIndexes {
+		appendValue("lazyReadIndexes", "true")
 	}
 	if s.IndependentChildTransactions {
 		appendValue("independentChildTransactions", "true")
@@ -202,6 +208,13 @@ func ParseSettings(structTag reflect.StructTag) (Settings, error) {
 			return Settings{}, fmt.Errorf("component call policy tag cannot be empty")
 		}
 		result.ComponentCallPolicy = value
+	}
+	if value, ok := structTag.Lookup("lazyReadIndexes"); ok {
+		parsed, err := strconv.ParseBool(value)
+		if err != nil {
+			return Settings{}, fmt.Errorf("parse lazyReadIndexes: %w", err)
+		}
+		result.LazyReadIndexes = parsed
 	}
 	if value, ok := structTag.Lookup("independentChildTransactions"); ok {
 		parsed, err := strconv.ParseBool(value)

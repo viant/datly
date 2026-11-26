@@ -16,6 +16,7 @@ import_line = "#import", "(", string, ",", string, ")", line_end ;
 setting = setting_keyword, "(", assignment_prefix, "$",
           (setting_name, arguments, { cache_modifier }
            | "sequence_strategy", "(", sequence_strategy_literal, ")"
+           | "lazy_read_indexes", "(", ")"
            | "protected_flush_tables", "(", string, { ",", string }, ")"), ")" ;
 (* protected_flush_tables is a component-local singleton without modifiers.
    Values are nonempty exact identifiers with optional dot/slash qualifiers;

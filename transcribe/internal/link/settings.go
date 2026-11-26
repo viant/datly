@@ -21,6 +21,7 @@ func (l *settingsLoader) Load() *spec.Settings {
 	// DQL is the current authority for this opt-in grant, including omission.
 	// Package-only loading has no DQL overlay and retains native authority.
 	if l.dqlAuthored {
+		result.LazyReadIndexes = false
 		result.ProtectedFlushTables = nil
 	}
 	// A linked companion is generated publication metadata. Re-authoring DQL
@@ -33,6 +34,9 @@ func (l *settingsLoader) Load() *spec.Settings {
 	}
 	// Package and DQL settings describe this same component. Explicit DQL
 	// authority replaces the package allowlist; it never unions table grants.
+	if l.authored.LazyReadIndexes {
+		result.LazyReadIndexes = true
+	}
 	if l.authored.ProtectedFlushTables != nil {
 		result.ProtectedFlushTables = slices.Clone(l.authored.ProtectedFlushTables)
 	}

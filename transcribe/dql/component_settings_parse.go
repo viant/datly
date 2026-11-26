@@ -27,6 +27,11 @@ func parseComponentSettings(blocks []directiveBlock) (ret *componentSettings, er
 			return nil, fmt.Errorf("invalid setting: expected a directive call")
 		}
 		switch {
+		case strings.EqualFold(name, "lazy_read_indexes"):
+			if ret.LazyReadIndexes || len(args) != 0 || tail != "" {
+				return nil, fmt.Errorf("lazy_read_indexes accepts no arguments or modifiers and may appear only once")
+			}
+			ret.LazyReadIndexes = true
 		case strings.EqualFold(name, "protected_flush_tables"):
 			if ret.ProtectedFlushTables != nil || len(args) == 0 || tail != "" {
 				return nil, fmt.Errorf("protected_flush_tables requires nonempty quoted table identifiers, once, without modifiers")
@@ -668,7 +673,7 @@ func parseComponentSettings(blocks []directiveBlock) (ret *componentSettings, er
 	if err := (&spec.Settings{ComponentCallPolicy: ret.ComponentCallPolicy, IndependentChildTransactions: ret.IndependentChildTransactions}).ValidateComponentCallPolicy(); err != nil {
 		return nil, err
 	}
-	if ret.HandlerFactory == "" && ret.HandlerAdapter == "" && ret.ProtectedFlushTables == nil && ret.ResponseCompression == nil && !ret.IndependentChildTransactions && ret.ComponentCallPolicy == "" && ret.Static == nil && len(ret.MCPFolders) == 0 && ret.Documentation.IsZero() && ret.Generation.IsZero() && ret.DefaultConnector == "" && ret.SequenceStrategy == "" && ret.Report == nil && ret.Cache == nil &&
+	if ret.HandlerFactory == "" && ret.HandlerAdapter == "" && !ret.LazyReadIndexes && ret.ProtectedFlushTables == nil && ret.ResponseCompression == nil && !ret.IndependentChildTransactions && ret.ComponentCallPolicy == "" && ret.Static == nil && len(ret.MCPFolders) == 0 && ret.Documentation.IsZero() && ret.Generation.IsZero() && ret.DefaultConnector == "" && ret.SequenceStrategy == "" && ret.Report == nil && ret.Cache == nil &&
 		ret.InputType == "" && ret.OutputType == "" &&
 		ret.MCP == nil && len(ret.routeMCP) == 0 && len(ret.routeNames) == 0 && ret.JSONMarshalType == "" &&
 		ret.JSONUnmarshalType == "" && ret.XMLUnmarshalType == "" &&
