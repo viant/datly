@@ -126,15 +126,23 @@ func (c *Compiler) compile(describe bool) (*Result, error) {
 		if bindErr != nil {
 			return nil, bindErr
 		}
-		// Native input/param dependencies run in the public stage before selectors.
+		// Canonical input binding completes before selector companions. Derived
+		// chains can finish after the default dependent provider priority.
+		companionPriority := 0
 		for _, public := range result.Bindings {
-			if public.Location.Kind == "input" || public.Location.Kind == "param" {
-				for i := range bindings {
-					if bindings[i].Location.Kind == "query" {
-						bindings[i].Priority = locator.PriorityDependent
-					}
+			switch public.Location.Kind {
+			case "view", "data_view", "input", "param":
+				companionPriority = max(companionPriority, locator.PriorityDependent)
+			}
+		}
+		if companionPriority > 0 {
+			for _, public := range result.Bindings {
+				companionPriority = max(companionPriority, public.Priority)
+			}
+			for i := range bindings {
+				if bindings[i].Location.Kind == "query" {
+					bindings[i].Priority = max(bindings[i].Priority, companionPriority)
 				}
-				break
 			}
 		}
 		companionPlan, bindErr := injector.CompilePlan(c.selection.Type, bindings...)

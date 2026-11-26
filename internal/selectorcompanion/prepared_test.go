@@ -4,8 +4,12 @@ import (
 	"context"
 	"github.com/viant/bindly/locator"
 	fixture "github.com/viant/datly/bootstrap/testdata/selectorcompanion"
+	"github.com/viant/datly/internal/selectorcompanion/model"
 	compiler "github.com/viant/datly/runtime/handler/compiler"
 	provider "github.com/viant/datly/runtime/handler/provider"
+	"github.com/viant/datly/spec"
+	"github.com/viant/x"
+	"github.com/viant/xdatly"
 	"reflect"
 	"testing"
 )
@@ -80,5 +84,66 @@ func TestDerivedPublicBindingRaisesOnlyCompanionStagePriority(t *testing.T) {
 				t.Fatal("higher public priority admitted")
 			}
 		})
+	}
+}
+
+type derivedSelectorAuthorization struct{ ID int }
+
+type derivedSelectorInput struct {
+	ID   int
+	Auth derivedSelectorAuthorization
+}
+
+type derivedSelectorSide struct {
+	Fields []string `parameter:"Fields,kind=query,in=fields,required=false" querySelector:"view=rows,property=fields"`
+	Page   int      `parameter:"Page,kind=query,in=page,required=false" querySelector:"view=rows,property=page"`
+}
+
+type derivedSelectorHolder struct {
+	Contract xdatly.Component[derivedSelectorInput, fixture.Output] `component:"ReadRecords,path=/selector-records,method=GET"`
+}
+
+func (derivedSelectorHolder) DatlyQuerySelectors() derivedSelectorSide { panic("metadata only") }
+
+func TestSelectorCompanionFollowsDerivedViewBindingPriority(t *testing.T) {
+	component := runtimeComponent(t)
+	holder := reflect.TypeFor[derivedSelectorHolder]()
+	component.Key.Scope = holder.PkgPath()
+	var err error
+	component.SelectorCompanion, err = model.New(x.NewType(holder), "Contract", x.NewType(reflect.TypeFor[derivedSelectorSide]()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	component.Parameters[0].Source = spec.BindSource{Kind: "param", Name: "Auth.ID"}
+	component.Parameters = append(component.Parameters, &spec.Parameter{
+		Name: "Auth", Source: spec.BindSource{Kind: "view", Name: "Auth"},
+	})
+	compiled, err := compiler.New(compiler.Input{Component: component, InputType: reflect.TypeFor[derivedSelectorInput]()}).Compile()
+	if err != nil {
+		t.Fatal(err)
+	}
+	priority := 0
+	for _, binding := range compiled.Bindings {
+		if binding.Path == "ID" {
+			priority = binding.Priority
+		}
+	}
+	if priority <= locator.PriorityDependent {
+		t.Fatalf("public input priority should follow its view, got %d", priority)
+	}
+	for _, binding := range compiled.SelectorPlan.Bindings() {
+		if binding.Priority != priority {
+			t.Fatalf("selector priority %d does not follow public stage %d", binding.Priority, priority)
+		}
+	}
+	query := provider.Named("query", func(context.Context, reflect.Type, string) (any, bool, error) { return nil, false, nil })
+	derived := provider.Named("param", func(context.Context, reflect.Type, string) (any, bool, error) { return 7, true, nil })
+	view := provider.Named("view", func(context.Context, reflect.Type, string) (any, bool, error) {
+		return derivedSelectorAuthorization{ID: 7}, true, nil
+	})
+	if err := compiled.SelectorPlan.ValidateProviders([]locator.Provider{
+		priorityProvider{Provider: view, priority: locator.PriorityDependent}, derived, query,
+	}); err != nil {
+		t.Fatal(err)
 	}
 }
