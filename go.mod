@@ -54,14 +54,14 @@ require (
 	github.com/viant/jsonrpc v0.25.1-0.20261021031150-a24a3b9ae218
 	github.com/viant/mcp v0.19.1-0.20260810230811-de146552d03f
 	github.com/viant/mcp-protocol v0.19.2-0.20261106071121-951fd3d1d7e0
-	github.com/viant/structology v0.10.2-0.20261106071121-906c12343bcc
+	github.com/viant/structology v0.10.2-0.20261106143941-ed3b2d84154c
 	github.com/viant/tagly v0.4.2-0.20261106060238-fe360d6f7ac4
 	github.com/viant/x v0.6.1-0.20261106041415-0487ec66884b
-	github.com/viant/xdatly v0.5.4-0.20261106070245-f15dd254a94a
-	github.com/viant/xdatly/extension v0.0.0-20231013204918-ecf3c2edf259
-	github.com/viant/xdatly/handler v0.0.0-20260922183211-34eaa9f4902b
-	github.com/viant/xdatly/types/core v0.0.0-20250307183722-8c84fc717b52
-	github.com/viant/xdatly/types/custom v0.0.0-20240801144911-4c2bfca4c23a
+	github.com/viant/xdatly v0.5.4-0.20261113075720-88fc13248650
+	github.com/viant/xdatly/extension v0.0.0-20261113075720-88fc13248650
+	github.com/viant/xdatly/handler v0.0.0-20261113075720-88fc13248650
+	github.com/viant/xdatly/types/core v0.0.0-20261113075720-88fc13248650
+	github.com/viant/xdatly/types/custom v0.0.0-20261113075720-88fc13248650
 	github.com/viant/xlsy v0.3.1
 	github.com/viant/xmlify v0.1.1
 	github.com/xuri/excelize/v2 v2.8.0

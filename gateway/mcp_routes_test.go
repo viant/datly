@@ -8,6 +8,7 @@ import (
 	"github.com/viant/datly/repository/contract"
 	dpath "github.com/viant/datly/repository/path"
 	"github.com/viant/datly/repository/version"
+	"github.com/viant/datly/view"
 	"github.com/viant/mcp-protocol/server"
 )
 
@@ -50,5 +51,39 @@ func TestContractMCPExplicitMethodRoutes(t *testing.T) {
 	mappings["DELETE:/campaigns"] = &contract.Meta{Name: "DeleteCampaign"}
 	if _, err = declaredMCPRoute(item, item.Paths[0]); err == nil {
 		t.Fatal("accepted undeclared method")
+	}
+}
+
+func TestMCPRoutesAreOptionalForActivationAndDefaultNames(t *testing.T) {
+	for _, tc := range []struct {
+		name            string
+		enabled         bool
+		routeName, want string
+	}{
+		{"view default", true, "", "CatalogItems"},
+		{"route name", true, "Items", "Items"},
+		{"not exposed", false, "", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := &repository.Component{Path: contract.Path{Method: "PATCH", URI: "/catalog/items"}, View: &view.View{Name: "CatalogItems"}}
+			provider := repository.NewProvider(c.Path, &version.Control{}, func(context.Context, ...repository.Option) (*repository.Component, error) { return c, nil })
+			path := &dpath.Path{Path: c.Path, Meta: contract.Meta{Name: tc.routeName}, ModelContextProtocol: contract.ModelContextProtocol{MCPTool: tc.enabled}}
+			registry := server.NewRegistry()
+			router := &Router{mcpRegistry: registry}
+			router.buildMCPIntegrations(t.Context(), &dpath.Item{Paths: []*dpath.Path{path}}, path, &Route{Path: &path.Path}, provider)
+			tools := registry.ListRegisteredTools()
+			if tc.want == "" {
+				if len(tools) != 0 {
+					t.Fatal("disabled component exposed")
+				}
+				return
+			}
+			if len(tools) != 1 || tools[0].Name != tc.want {
+				t.Fatalf("%+v", tools)
+			}
+			if len(path.MCPRoutes) != 0 || path.Name != tc.routeName {
+				t.Fatal("defaults mutated route configuration")
+			}
+		})
 	}
 }

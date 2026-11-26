@@ -47,7 +47,8 @@ func (r *Body) Value(ctx context.Context, rType reflect.Type, name string) (inte
 
 	// Raw non-struct body descriptors have no selectors. Decode directly
 	// into their declared storage rather than constructing a struct-only state.
-	if name == "" && rType != nil && rType.Kind() != reflect.Map && types.EnsureStruct(rType) == nil {
+	if name == "" && rType != nil && rType.Kind() != reflect.Map &&
+		(r.bodyType == nil || r.bodyType.Kind() != reflect.Map) && types.EnsureStruct(rType) == nil {
 		if r.err != nil {
 			return nil, false, r.err
 		}

@@ -42,7 +42,7 @@ func (*patchPolicy) Contract(ctx context.Context, b bindly.Binder) (*xcontract.P
 	}
 	return &xcontract.Policy{Name: "patch/" + role, Field: func(_ string, _ reflect.Type, f *xcontract.Field) (*xcontract.Field, error) {
 		if f.Name == "Secret" {
-			return f.Clone().Hide().SetDescription("nested"), nil
+			return f.Hide().SetDescription("nested"), nil
 		}
 		return nil, nil
 	}}, nil
@@ -60,7 +60,7 @@ func (*campaignPolicy) Contract(ctx context.Context, b bindly.Binder) (*xcontrac
 			if f.Tag.Get("description") != "nested" {
 				return nil, fmtCompositeOrder(path)
 			}
-			return f.Clone().SetDescription("parent wins"), nil
+			return f.SetDescription("parent wins"), nil
 		}
 		return nil, nil
 	}}, nil

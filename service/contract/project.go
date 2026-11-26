@@ -125,9 +125,9 @@ func projectTags(projected, original, selected reflect.StructTag) (reflect.Struc
 	if beforeRequired != afterRequired {
 		field := &xcontract.Field{Name: "Field", Tag: value}
 		if afterRequired {
-			field.Required()
+			field = field.Required()
 		} else {
-			field.Optional()
+			field = field.Optional()
 		}
 		return field.Tag, field.Err()
 	}

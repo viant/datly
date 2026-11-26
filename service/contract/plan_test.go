@@ -46,9 +46,9 @@ func (p *policyInput) Contract(ctx context.Context, binder bindly.Binder) (*xcon
 		}
 		switch state.Role {
 		case "hide", "hide2":
-			return f.Clone().Hide(), nil
+			return f.Hide(), nil
 		case "invalid":
-			return f.Clone().SetEnum(), nil
+			return f.SetEnum(), nil
 		case "noop":
 			return f.Clone(), nil
 		}

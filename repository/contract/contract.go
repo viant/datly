@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/viant/datly/repository/codegen"
 	"github.com/viant/datly/service"
-	"github.com/viant/datly/utils/types"
 	"github.com/viant/datly/view"
 	"github.com/viant/datly/view/state"
 	"net/http"
@@ -120,7 +119,9 @@ func (c *Contract) BodyType() reflect.Type {
 		return nil
 	}
 	rType := c.Input.Body.Schema.Type()
-	if rType != nil && types.EnsureStruct(rType) == nil {
+	// Preserve the legacy raw-map boundary. The request schema still owns
+	// the real map type used by the body locator and its query/form propagation.
+	if rType != nil && rType.Kind() == reflect.Map {
 		return reflect.TypeOf(struct {
 		}{})
 	}
