@@ -3,12 +3,14 @@ package main
 
 import (
 	"context"
-	"github.com/viant/datly/cmd/developer"
-	"github.com/viant/datly/transcribe"
 	"io"
 	"os"
 	"os/signal"
 	"syscall"
+
+	"github.com/viant/datly/cmd/developer"
+	"github.com/viant/datly/transcribe"
+	_ "github.com/viant/gsheets/metadata" // Register Google Sheets for the stock CLI.
 )
 
 func main() {

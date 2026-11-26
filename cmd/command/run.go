@@ -14,7 +14,6 @@ import (
 	gateway "github.com/viant/datly/gateway/http"
 	"github.com/viant/datly/standalone"
 	"github.com/viant/datly/standalone/config"
-	_ "github.com/viant/gsheets/metadata" // Registers the gsheets driver and its SQLX metadata provider.
 	"github.com/viant/mcp-protocol/authorization"
 	"github.com/viant/mcp/server/auth"
 	"github.com/viant/x"

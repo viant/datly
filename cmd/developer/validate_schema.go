@@ -36,7 +36,7 @@ type schemaOptions struct {
 func (o *schemaOptions) flags(flags *flag.FlagSet) {
 	flags.BoolVar(&o.enabled, "schema", false, "inspect database columns using the configured connector (no execution fixtures)")
 	flags.StringVar(&o.connector, "connector", "", "default named discovery connector")
-	flags.StringVar(&o.driver, "driver", "", "registered database/sql driver (includes sqlite3 and gsheets)")
+	flags.StringVar(&o.driver, "driver", "", "registered database/sql driver (stock Datly includes sqlite3 and gsheets)")
 	flags.StringVar(&o.dsn, "dsn", "", "discovery connection string; SQLite is opened read-only")
 	flags.StringVar(&o.connectorsFile, "schema-connectors", "", "local JSON array of named discovery connectors (name, driver, dsn)")
 }
