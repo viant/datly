@@ -259,7 +259,7 @@ type Holder struct { Route xdatly.Component[Input,Output] `+"`"+`component:"`+fi
 	if !ok {
 		t.Fatal("indexed tool was not prepared")
 	}
-	if entry.Metadata.InputSchema.Properties["Token"] == nil {
+	if entry.Metadata.InputSchema.Properties["token"] == nil {
 		t.Fatalf("transitive auth input missing from schema: %+v", entry.Metadata.InputSchema.Properties)
 	}
 	if err := manager.Shutdown(context.Background()); err != nil {
